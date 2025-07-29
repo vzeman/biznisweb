@@ -367,7 +367,10 @@ class BizniWebExporter:
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         
         # Create aggregated reports
-        self.create_aggregated_reports(df, date_from, date_to)
+        date_product_agg, date_agg = self.create_aggregated_reports(df, date_from, date_to)
+        
+        # Display aggregated data
+        self.display_aggregated_data(date_product_agg, date_agg)
         
         return filename
     
@@ -418,6 +421,61 @@ class BizniWebExporter:
         date_filename = f"data/aggregate_by_date_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
         date_agg.to_csv(date_filename, index=False, encoding='utf-8-sig')
         print(f"Date aggregation saved: {date_filename}")
+        
+        # Return aggregated data for display
+        return date_product_agg, date_agg
+    
+    def display_aggregated_data(self, date_product_agg: pd.DataFrame, date_agg: pd.DataFrame):
+        """Display aggregated data with nice formatting"""
+        print("\n" + "="*80)
+        print("DAILY SUMMARY")
+        print("="*80)
+        
+        # Display daily aggregation
+        print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Quantity':>10} {'Revenue (€)':>12}")
+        print("-"*60)
+        
+        total_orders = 0
+        total_items = 0
+        total_quantity = 0
+        total_revenue = 0
+        
+        for _, row in date_agg.iterrows():
+            date_str = str(row['date'])
+            print(f"{date_str:<12} {row['unique_orders']:>8} {row['total_items']:>8} "
+                  f"{row['total_quantity']:>10} {row['total_revenue_without_tax']:>12.2f}")
+            total_orders += row['unique_orders']
+            total_items += row['total_items']
+            total_quantity += row['total_quantity']
+            total_revenue += row['total_revenue_without_tax']
+        
+        print("-"*60)
+        print(f"{'TOTAL':<12} {total_orders:>8} {total_items:>8} "
+              f"{total_quantity:>10} {total_revenue:>12.2f}")
+        
+        # Display top products
+        print("\n" + "="*80)
+        print("TOP 10 PRODUCTS BY REVENUE")
+        print("="*80)
+        
+        # Aggregate products across all dates
+        product_summary = date_product_agg.groupby('product_name').agg({
+            'total_quantity': 'sum',
+            'total_price_without_tax': 'sum',
+            'order_count': 'sum'
+        }).reset_index()
+        
+        product_summary = product_summary.sort_values('total_price_without_tax', ascending=False).head(10)
+        
+        print(f"\n{'Product':<50} {'Quantity':>10} {'Orders':>8} {'Revenue (€)':>12}")
+        print("-"*80)
+        
+        for _, row in product_summary.iterrows():
+            product_name = row['product_name'][:50]  # Truncate long names
+            print(f"{product_name:<50} {row['total_quantity']:>10} "
+                  f"{row['order_count']:>8} {row['total_price_without_tax']:>12.2f}")
+        
+        print("\n")
 
 
 def main():
