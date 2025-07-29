@@ -201,18 +201,32 @@ class BizniWebExporter:
                 print(f"Error fetching orders: {e}")
                 break
         
-        # Filter out orders with status "Storno"
+        # Filter out orders with excluded statuses
+        excluded_statuses = [
+            'Storno',
+            'Platba online - platnosť vypršala',
+            'Platba online - platba zamietnutá',
+            'Čaká na úhradu',
+            'GoPay - platebni metoda potvrzena'
+        ]
+        
         filtered_orders = []
-        storno_count = 0
+        excluded_counts = {}
+        
         for order in all_orders:
             status = order.get('status', {}) or {}
-            if status.get('name') != 'Storno':
+            status_name = status.get('name', '')
+            
+            if status_name not in excluded_statuses:
                 filtered_orders.append(order)
             else:
-                storno_count += 1
+                excluded_counts[status_name] = excluded_counts.get(status_name, 0) + 1
         
-        if storno_count > 0:
-            print(f"Filtered out {storno_count} orders with status 'Storno'")
+        # Report excluded orders
+        if excluded_counts:
+            print("\nFiltered out orders:")
+            for status, count in excluded_counts.items():
+                print(f"  - {status}: {count} orders")
         
         return filtered_orders
     
