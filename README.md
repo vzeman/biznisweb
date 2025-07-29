@@ -89,7 +89,7 @@ python export_orders.py --from-date 2024-01-15 --to-date 2024-01-15
 
 ## Output Files
 
-The script generates three CSV files in the `data/` directory:
+The script generates four CSV files in the `data/` directory:
 
 ### 1. Main Export File
 **Filename:** `export_YYYYMMDD-YYYYMMDD.csv`
@@ -118,9 +118,18 @@ Groups sales by date and product:
 Daily totals:
 - Date
 - Total quantity of items
-- Total revenue
+- Total revenue (without tax)
 - Number of unique orders
 - Total item count
+
+### 4. Items Summary
+**Filename:** `aggregate_by_items_YYYYMMDD-YYYYMMDD.csv`
+
+Product totals across all dates:
+- Product name
+- Total quantity sold
+- Total price without tax
+- Number of unique orders containing the product
 
 ## Filtering
 

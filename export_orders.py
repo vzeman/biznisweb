@@ -367,7 +367,7 @@ class BizniWebExporter:
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         
         # Create aggregated reports
-        date_product_agg, date_agg = self.create_aggregated_reports(df, date_from, date_to)
+        date_product_agg, date_agg, items_agg = self.create_aggregated_reports(df, date_from, date_to)
         
         # Display aggregated data
         self.display_aggregated_data(date_product_agg, date_agg)
@@ -422,8 +422,29 @@ class BizniWebExporter:
         date_agg.to_csv(date_filename, index=False, encoding='utf-8-sig')
         print(f"Date aggregation saved: {date_filename}")
         
+        # 3. Group by items only (across all dates)
+        print("Creating items aggregation...")
+        items_agg = df.groupby('item_label').agg({
+            'item_quantity': 'sum',
+            'item_total_without_tax': 'sum',
+            'order_num': 'nunique'  # Count unique orders
+        }).reset_index()
+        
+        items_agg.columns = ['product_name', 'total_quantity', 'total_price_without_tax', 'order_count']
+        
+        # Round financial values
+        items_agg['total_price_without_tax'] = items_agg['total_price_without_tax'].round(2)
+        
+        # Sort by total price descending
+        items_agg = items_agg.sort_values('total_price_without_tax', ascending=False)
+        
+        # Save items aggregation
+        items_filename = f"data/aggregate_by_items_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        items_agg.to_csv(items_filename, index=False, encoding='utf-8-sig')
+        print(f"Items aggregation saved: {items_filename}")
+        
         # Return aggregated data for display
-        return date_product_agg, date_agg
+        return date_product_agg, date_agg, items_agg
     
     def display_aggregated_data(self, date_product_agg: pd.DataFrame, date_agg: pd.DataFrame):
         """Display aggregated data with nice formatting"""
