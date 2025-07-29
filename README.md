@@ -58,7 +58,7 @@ Edit `.env` and add your BizniWeb API token:
 BIZNISWEB_API_TOKEN=your_actual_token_here
 BIZNISWEB_API_URL=https://vevo.flox.sk/api/graphql
 ```
-
+Token you can generate in your BizniWeb account Settings -> BiznisWeb API -> Novy API Token button
 ## Usage
 
 ### Command Line Options
