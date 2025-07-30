@@ -25,6 +25,32 @@ API_TOKEN = os.getenv('BIZNISWEB_API_TOKEN')
 if not API_TOKEN:
     raise ValueError("BIZNISWEB_API_TOKEN not found in environment variables. Please set it in .env file.")
 
+# Product expense mapping (expense per item in EUR)
+PRODUCT_EXPENSES = {
+    'Sada vzoriek najpredávanejších vôní Vevo 6 x 10ml': 1.79,
+    'Parfum do prania Vevo No.08 Cotton Dream (500ml)': 6.53,
+    'Parfum do prania Vevo No.07 Ylang Absolute (200ml)': 2.79,
+    'Parfum do prania Vevo No.08 Cotton Dream (200ml)': 3.15,
+    'Parfum do prania Vevo No.09 Pure Garden (200ml)': 2.86,
+    'Parfum do prania Vevo No.01 Cotton Paradise (500ml)': 7.02,
+    'Parfum do prania Vevo No.01 Cotton Paradise (200ml)': 3.35,
+    'Parfum do prania Vevo No.09 Pure Garden (500ml)': 5.8,
+    'Parfum do prania Vevo No.06 Royal Cotton (200ml)': 2.46,
+    'Parfum do prania Vevo No.02 Sweet Paradise (200ml)': 4.29,
+    'Odmerka Vevo 7ml drevená na parfum do prania': 0.31,
+    'Parfum do prania Vevo No.02 Sweet Paradise (500ml)': 9.38,
+    'Parfum do prania Vevo No.07 Ylang Absolute (Vzorka 10ml)': 0.28,
+    'Parfum do prania Vevo No.06 Royal Cotton (500ml)': 4.79,
+    'Parfum do prania Vevo No.08 Cotton Dream (Vzorka 10ml)': 0.29,
+    'Parfum do prania Vevo No.07 Ylang Absolute (500ml)': 5.64,
+    'Parfum do prania Vevo No.09 Pure Garden (Vzorka 10ml)': 0.28,
+    'Parfum do prania Vevo No.02 Sweet Paradise (Vzorka 10ml)': 0.35,
+    'Parfum do prania Vevo No.06 Royal Cotton (Vzorka 10ml)': 0.26,
+    'Tringelt': 0,
+    'Parfum do prania Vevo No.01 Cotton Paradise (Vzorka 10ml)': 0.3,
+    'Poistenie proti rozbitiu': 0
+}
+
 # GraphQL query with fragments
 ORDER_QUERY = gql("""
 query GetOrders($filter: OrderFilter, $params: OrderParams) {
@@ -317,6 +343,15 @@ class BizniWebExporter:
                     item_total_without_tax = item_total_with_tax
                     item_tax_amount = 0
                 
+                # Get expense per item from mapping
+                item_label = item.get('item_label', '')
+                expense_per_item = PRODUCT_EXPENSES.get(item_label, 0)
+                total_expense = expense_per_item * item_quantity
+                
+                # Calculate profit and ROI
+                profit = item_total_without_tax - total_expense
+                roi = (profit / total_expense * 100) if total_expense > 0 else 0
+                
                 row = base_data.copy()
                 row.update({
                     'total_items_in_order': total_items,
@@ -334,6 +369,10 @@ class BizniWebExporter:
                     'item_total_without_tax': round(item_total_without_tax, 2),
                     'item_tax_amount': round(item_tax_amount, 2),
                     'item_recycle_fee': recycle_fee.get('value'),
+                    'expense_per_item': expense_per_item,
+                    'total_expense': round(total_expense, 2),
+                    'profit': round(profit, 2),
+                    'roi_percent': round(roi, 2),
                 })
                 flattened_rows.append(row)
         else:
@@ -363,6 +402,7 @@ class BizniWebExporter:
             'total_items_in_order', 'item_number',
             'item_label', 'item_ean', 'item_quantity', 
             'item_unit_price', 'item_total_without_tax', 'item_tax_rate', 'item_tax_amount', 'item_total_with_tax',
+            'expense_per_item', 'total_expense', 'profit', 'roi_percent',
             'customer_name', 'customer_email', 'customer_company_id', 'customer_vat_id',
             'order_total', 'order_currency',
             'invoice_street', 'invoice_city', 'invoice_zip', 'invoice_country',
@@ -398,13 +438,23 @@ class BizniWebExporter:
         date_product_agg = df.groupby(['purchase_date_only', 'item_label']).agg({
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
+            'total_expense': 'sum',
+            'profit': 'sum',
             'order_num': 'count'
         }).reset_index()
         
-        date_product_agg.columns = ['date', 'product_name', 'total_quantity', 'total_price_without_tax', 'order_count']
+        date_product_agg.columns = ['date', 'product_name', 'total_quantity', 'total_price_without_tax', 'total_expense', 'total_profit', 'order_count']
+        
+        # Calculate aggregated ROI
+        date_product_agg['roi_percent'] = date_product_agg.apply(
+            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            axis=1
+        )
         
         # Round financial values
         date_product_agg['total_price_without_tax'] = date_product_agg['total_price_without_tax'].round(2)
+        date_product_agg['total_expense'] = date_product_agg['total_expense'].round(2)
+        date_product_agg['total_profit'] = date_product_agg['total_profit'].round(2)
         
         # Sort by date and product
         date_product_agg = date_product_agg.sort_values(['date', 'product_name'])
@@ -419,14 +469,24 @@ class BizniWebExporter:
         date_agg = df.groupby('purchase_date_only').agg({
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
+            'total_expense': 'sum',
+            'profit': 'sum',
             'order_num': 'nunique',  # Count unique orders
             'item_label': 'count'     # Count total items
         }).reset_index()
         
-        date_agg.columns = ['date', 'total_quantity', 'total_revenue_without_tax', 'unique_orders', 'total_items']
+        date_agg.columns = ['date', 'total_quantity', 'total_revenue_without_tax', 'total_expense', 'total_profit', 'unique_orders', 'total_items']
+        
+        # Calculate aggregated ROI
+        date_agg['roi_percent'] = date_agg.apply(
+            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            axis=1
+        )
         
         # Round financial values
         date_agg['total_revenue_without_tax'] = date_agg['total_revenue_without_tax'].round(2)
+        date_agg['total_expense'] = date_agg['total_expense'].round(2)
+        date_agg['total_profit'] = date_agg['total_profit'].round(2)
         
         # Sort by date
         date_agg = date_agg.sort_values('date')
@@ -441,13 +501,23 @@ class BizniWebExporter:
         items_agg = df.groupby('item_label').agg({
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
+            'total_expense': 'sum',
+            'profit': 'sum',
             'order_num': 'nunique'  # Count unique orders
         }).reset_index()
         
-        items_agg.columns = ['product_name', 'total_quantity', 'total_price_without_tax', 'order_count']
+        items_agg.columns = ['product_name', 'total_quantity', 'total_price_without_tax', 'total_expense', 'total_profit', 'order_count']
+        
+        # Calculate aggregated ROI
+        items_agg['roi_percent'] = items_agg.apply(
+            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            axis=1
+        )
         
         # Round financial values
         items_agg['total_price_without_tax'] = items_agg['total_price_without_tax'].round(2)
+        items_agg['total_expense'] = items_agg['total_expense'].round(2)
+        items_agg['total_profit'] = items_agg['total_profit'].round(2)
         
         # Sort by total price descending
         items_agg = items_agg.sort_values('total_price_without_tax', ascending=False)
@@ -467,26 +537,35 @@ class BizniWebExporter:
         print("="*80)
         
         # Display daily aggregation
-        print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Quantity':>10} {'Revenue (€)':>12}")
-        print("-"*60)
+        print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Quantity':>10} {'Revenue (€)':>12} {'Expense (€)':>12} {'Profit (€)':>12} {'ROI %':>8}")
+        print("-"*100)
         
         total_orders = 0
         total_items = 0
         total_quantity = 0
         total_revenue = 0
+        total_expense = 0
+        total_profit = 0
         
         for _, row in date_agg.iterrows():
             date_str = str(row['date'])
             print(f"{date_str:<12} {row['unique_orders']:>8} {row['total_items']:>8} "
-                  f"{row['total_quantity']:>10} {row['total_revenue_without_tax']:>12.2f}")
+                  f"{row['total_quantity']:>10} {row['total_revenue_without_tax']:>12.2f} "
+                  f"{row['total_expense']:>12.2f} {row['total_profit']:>12.2f} {row['roi_percent']:>8.2f}")
             total_orders += row['unique_orders']
             total_items += row['total_items']
             total_quantity += row['total_quantity']
             total_revenue += row['total_revenue_without_tax']
+            total_expense += row['total_expense']
+            total_profit += row['total_profit']
         
-        print("-"*60)
+        # Calculate total ROI
+        total_roi = (total_profit / total_expense * 100) if total_expense > 0 else 0
+        
+        print("-"*100)
         print(f"{'TOTAL':<12} {total_orders:>8} {total_items:>8} "
-              f"{total_quantity:>10} {total_revenue:>12.2f}")
+              f"{total_quantity:>10} {total_revenue:>12.2f} {total_expense:>12.2f} "
+              f"{total_profit:>12.2f} {total_roi:>8.2f}")
         
         # Display top products
         print("\n" + "="*80)
@@ -497,18 +576,28 @@ class BizniWebExporter:
         product_summary = date_product_agg.groupby('product_name').agg({
             'total_quantity': 'sum',
             'total_price_without_tax': 'sum',
+            'total_expense': 'sum',
+            'total_profit': 'sum',
             'order_count': 'sum'
         }).reset_index()
         
+        # Calculate aggregated ROI
+        product_summary['roi_percent'] = product_summary.apply(
+            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            axis=1
+        )
+        
         product_summary = product_summary.sort_values('total_price_without_tax', ascending=False).head(10)
         
-        print(f"\n{'Product':<50} {'Quantity':>10} {'Orders':>8} {'Revenue (€)':>12}")
-        print("-"*80)
+        print(f"\n{'Product':<40} {'Qty':>6} {'Orders':>6} {'Revenue':>10} {'Expense':>10} {'Profit':>10} {'ROI %':>8}")
+        print("-"*100)
         
         for _, row in product_summary.iterrows():
-            product_name = row['product_name'][:50]  # Truncate long names
-            print(f"{product_name:<50} {row['total_quantity']:>10} "
-                  f"{row['order_count']:>8} {row['total_price_without_tax']:>12.2f}")
+            product_name = row['product_name'][:40]  # Truncate long names
+            print(f"{product_name:<40} {row['total_quantity']:>6} "
+                  f"{row['order_count']:>6} {row['total_price_without_tax']:>10.2f} "
+                  f"{row['total_expense']:>10.2f} {row['total_profit']:>10.2f} "
+                  f"{row['roi_percent']:>8.2f}")
         
         print("\n")
 
