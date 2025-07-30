@@ -1,15 +1,23 @@
 # BizniWeb Order Export Tool
 
-Python script to export orders from BizniWeb GraphQL API to CSV format with aggregated reports.
+Python scripts to export orders from BizniWeb GraphQL API to CSV format and automatically generate invoices.
 
 ## Features
 
+### Order Export
 - Export all order items with detailed information
 - Filter out cancelled (Storno) orders automatically
 - Generate aggregated reports by date and product
-- Generate daily summary reports
+- Generate daily summary reports with expense and ROI calculations
 - Handle pagination for large datasets
 - Robust error handling
+
+### Invoice Generation
+- Automatically generate invoices for eligible orders
+- Filter orders by status, payment method, and invoice status
+- Dry-run mode for testing
+- Cross-platform execution scripts
+- Comprehensive logging
 
 ## Quick Start
 
@@ -172,4 +180,89 @@ The script will continue with partial data if server errors occur. Check the con
 Make the script executable:
 ```bash
 chmod +x export_orders.sh
+chmod +x generate_invoices*.sh
 ```
+
+## Invoice Generation
+
+### Overview
+The `generate_invoices.py` script automatically creates invoices for orders based on specific criteria:
+- Status: "Odoslaná" (sent)
+- Payment method: "Dobierkou" (cash on delivery)
+- No existing invoice
+
+### Requirements
+
+**Web login credentials are required** for invoice creation. The script will not proceed without valid credentials.
+
+Add your BizniWeb login credentials to the `.env` file:
+```
+BIZNISWEB_USERNAME=your_username@example.com
+BIZNISWEB_PASSWORD=your_password
+```
+
+### Usage
+
+```bash
+# Create invoices for last 7 days
+python generate_invoices.py
+
+# Create invoices for specific date range
+python generate_invoices.py --from-date 2024-01-01 --to-date 2024-01-31
+
+# Dry run (preview without creating invoices)
+python generate_invoices.py --dry-run
+```
+
+### How it Works
+
+1. **Login** - Authenticates with BizniWeb web interface using provided credentials
+2. **Session Validation** - Verifies the session is active and obtains ARF token
+3. **Fetch Orders** - Retrieves orders from GraphQL API for the specified date range
+4. **Filter Orders** - Identifies orders matching the criteria (cash on delivery, no invoice)
+5. **Create Invoices** - Creates invoices for each matching order via web API
+6. **Send Emails** - Automatically sends invoice emails to customers
+
+### Output
+
+The script displays:
+- Login status and session validation
+- Number of orders fetched
+- Details of each order being processed
+- Success/failure status for each invoice
+- Summary with total processed and amounts
+
+### Cross-Platform Scripts
+
+For automated daily execution, use the appropriate script for your platform:
+
+**Unix-like systems (Linux/macOS):**
+```bash
+./generate_invoices_cross_platform.sh
+```
+
+**Windows Command Prompt:**
+```cmd
+generate_invoices.bat
+```
+
+**Windows PowerShell:**
+```powershell
+.\generate_invoices.ps1
+```
+
+All scripts support the same command-line arguments as the Python script.
+
+### Scheduling Daily Execution
+
+**Linux/macOS (cron):**
+```bash
+# Add to crontab (runs daily at 8 AM)
+0 8 * * * /path/to/generate_invoices_cross_platform.sh
+```
+
+**Windows (Task Scheduler):**
+- Use `generate_invoices.bat` or `generate_invoices.ps1`
+- Set trigger to daily at desired time
+
+See `CROSS_PLATFORM_SCRIPTS.md` for detailed platform-specific instructions.
