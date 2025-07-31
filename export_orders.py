@@ -28,6 +28,7 @@ if not API_TOKEN:
 # Product expense mapping (expense per item in EUR)
 PRODUCT_EXPENSES = {
     'Sada vzoriek najpredávanejších vôní Vevo 6 x 10ml': 1.79,
+    'Sada vzoriek všetkých vôní Vevo 6 x 10ml': 1.79,
     'Parfum do prania Vevo No.08 Cotton Dream (500ml)': 6.53,
     'Parfum do prania Vevo No.07 Ylang Absolute (200ml)': 2.79,
     'Parfum do prania Vevo No.08 Cotton Dream (200ml)': 3.15,
