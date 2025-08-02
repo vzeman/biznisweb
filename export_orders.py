@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 import pandas as pd
+from facebook_ads import FacebookAdsClient
+from html_report_generator import generate_html_report
 
 # Load environment variables
 load_dotenv()
@@ -189,6 +191,7 @@ class BizniWebExporter:
             retries=3,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
+        self.fb_client = FacebookAdsClient()
     
     def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         """Fetch all orders within the specified date range"""
@@ -349,9 +352,10 @@ class BizniWebExporter:
                 expense_per_item = PRODUCT_EXPENSES.get(item_label, 0)
                 total_expense = expense_per_item * item_quantity
                 
-                # Calculate profit and ROI
-                profit = item_total_without_tax - total_expense
-                roi = (profit / total_expense * 100) if total_expense > 0 else 0
+                # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
+                # At item level, we only have product expense
+                item_profit_before_ads = item_total_without_tax - total_expense
+                item_roi_before_ads = (item_profit_before_ads / total_expense * 100) if total_expense > 0 else 0
                 
                 row = base_data.copy()
                 row.update({
@@ -372,8 +376,8 @@ class BizniWebExporter:
                     'item_recycle_fee': recycle_fee.get('value'),
                     'expense_per_item': expense_per_item,
                     'total_expense': round(total_expense, 2),
-                    'profit': round(profit, 2),
-                    'roi_percent': round(roi, 2),
+                    'profit_before_ads': round(item_profit_before_ads, 2),
+                    'roi_before_ads': round(item_roi_before_ads, 2),
                 })
                 flattened_rows.append(row)
         else:
@@ -384,8 +388,36 @@ class BizniWebExporter:
         
         return flattened_rows
     
+    def cleanup_data_folder(self):
+        """Clean up old data files before starting new export"""
+        data_dir = Path('data')
+        if data_dir.exists():
+            # Remove all CSV and HTML files
+            for pattern in ['*.csv', '*.html']:
+                for file in data_dir.glob(pattern):
+                    try:
+                        file.unlink()
+                        print(f"Removed old file: {file.name}")
+                    except Exception as e:
+                        print(f"Warning: Could not remove {file.name}: {e}")
+        else:
+            # Create data directory if it doesn't exist
+            data_dir.mkdir(exist_ok=True)
+    
     def export_to_csv(self, orders: List[Dict[str, Any]], date_from: datetime, date_to: datetime) -> str:
         """Export orders to CSV file"""
+        # Clean up old data files first
+        print("Cleaning up old data files...")
+        self.cleanup_data_folder()
+        
+        # Fetch Facebook Ads spend data
+        fb_daily_spend = {}
+        if self.fb_client.is_configured:
+            print("Fetching Facebook Ads spend data...")
+            fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
+            if fb_daily_spend:
+                print(f"Retrieved Facebook Ads data for {len(fb_daily_spend)} days")
+        
         # Flatten all orders
         all_rows = []
         for order in orders:
@@ -397,13 +429,21 @@ class BizniWebExporter:
         # Convert to DataFrame for easier CSV export
         df = pd.DataFrame(all_rows)
         
+        # Add Facebook Ads spend column
+        if fb_daily_spend:
+            # Convert purchase_date to date format for matching
+            df['purchase_date_only'] = pd.to_datetime(df['purchase_date']).dt.strftime('%Y-%m-%d')
+            df['fb_ads_daily_spend'] = df['purchase_date_only'].map(fb_daily_spend).fillna(0)
+        else:
+            df['fb_ads_daily_spend'] = 0
+        
         # Reorder columns for better readability
         column_order = [
             'order_num', 'order_id', 'external_ref', 'purchase_date', 'status_name',
             'total_items_in_order', 'item_number',
             'item_label', 'item_ean', 'item_quantity', 
             'item_unit_price', 'item_total_without_tax', 'item_tax_rate', 'item_tax_amount', 'item_total_with_tax',
-            'expense_per_item', 'total_expense', 'profit', 'roi_percent',
+            'expense_per_item', 'total_expense', 'fb_ads_daily_spend', 'profit_before_ads', 'roi_before_ads',
             'customer_name', 'customer_email', 'customer_company_id', 'customer_vat_id',
             'order_total', 'order_currency',
             'invoice_street', 'invoice_city', 'invoice_zip', 'invoice_country',
@@ -422,17 +462,29 @@ class BizniWebExporter:
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         
         # Create aggregated reports
-        date_product_agg, date_agg, items_agg = self.create_aggregated_reports(df, date_from, date_to)
+        date_product_agg, date_agg, items_agg = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend)
         
         # Display aggregated data
         self.display_aggregated_data(date_product_agg, date_agg)
         
+        # Generate HTML report
+        print("Generating HTML report...")
+        html_content = generate_html_report(date_agg, date_product_agg, items_agg, 
+                                           date_from, date_to, fb_daily_spend)
+        html_filename = f"data/report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html"
+        with open(html_filename, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        print(f"HTML report saved: {html_filename}")
+        
         return filename
     
-    def create_aggregated_reports(self, df: pd.DataFrame, date_from: datetime, date_to: datetime):
+    def create_aggregated_reports(self, df: pd.DataFrame, date_from: datetime, date_to: datetime, fb_daily_spend: Dict[str, float] = None):
         """Create aggregated CSV reports"""
         # Convert purchase_date to datetime and extract date only
-        df['purchase_date_only'] = pd.to_datetime(df['purchase_date']).dt.date
+        if 'purchase_date_only' not in df.columns:
+            df['purchase_date_only'] = pd.to_datetime(df['purchase_date']).dt.date
+        else:
+            df['purchase_date_only'] = pd.to_datetime(df['purchase_date_only']).dt.date
         
         # 1. Group by date and product
         print("Creating date-product aggregation...")
@@ -440,22 +492,22 @@ class BizniWebExporter:
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
             'total_expense': 'sum',
-            'profit': 'sum',
+            'profit_before_ads': 'sum',
             'order_num': 'count'
         }).reset_index()
         
-        date_product_agg.columns = ['date', 'product_name', 'total_quantity', 'total_price_without_tax', 'total_expense', 'total_profit', 'order_count']
+        date_product_agg.columns = ['date', 'product_name', 'total_quantity', 'total_revenue', 'product_expense', 'profit', 'order_count']
         
-        # Calculate aggregated ROI
+        # Calculate ROI based on product expense only (no FB ads)
         date_product_agg['roi_percent'] = date_product_agg.apply(
-            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            lambda row: round((row['profit'] / row['product_expense'] * 100) if row['product_expense'] > 0 else 0, 2),
             axis=1
         )
         
         # Round financial values
-        date_product_agg['total_price_without_tax'] = date_product_agg['total_price_without_tax'].round(2)
-        date_product_agg['total_expense'] = date_product_agg['total_expense'].round(2)
-        date_product_agg['total_profit'] = date_product_agg['total_profit'].round(2)
+        date_product_agg['total_revenue'] = date_product_agg['total_revenue'].round(2)
+        date_product_agg['product_expense'] = date_product_agg['product_expense'].round(2)
+        date_product_agg['profit'] = date_product_agg['profit'].round(2)
         
         # Sort by date and product
         date_product_agg = date_product_agg.sort_values(['date', 'product_name'])
@@ -471,23 +523,32 @@ class BizniWebExporter:
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
             'total_expense': 'sum',
-            'profit': 'sum',
+            'profit_before_ads': 'sum',
+            'fb_ads_daily_spend': 'first' if 'fb_ads_daily_spend' in df.columns else lambda x: 0,
             'order_num': 'nunique',  # Count unique orders
             'item_label': 'count'     # Count total items
         }).reset_index()
         
-        date_agg.columns = ['date', 'total_quantity', 'total_revenue_without_tax', 'total_expense', 'total_profit', 'unique_orders', 'total_items']
+        date_agg.columns = ['date', 'total_quantity', 'total_revenue', 'product_expense', 'profit_before_ads', 'fb_ads_spend', 'unique_orders', 'total_items']
         
-        # Calculate aggregated ROI
+        # Calculate total cost (product expense + FB ads)
+        date_agg['total_cost'] = date_agg['product_expense'] + date_agg['fb_ads_spend']
+        
+        # Calculate actual profit: Revenue - Product Expense - FB Ads
+        date_agg['net_profit'] = date_agg['total_revenue'] - date_agg['total_cost']
+        
+        # Calculate ROI: (Profit / Total Cost) * 100
         date_agg['roi_percent'] = date_agg.apply(
-            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            lambda row: round((row['net_profit'] / row['total_cost'] * 100) if row['total_cost'] > 0 else 0, 2),
             axis=1
         )
         
         # Round financial values
-        date_agg['total_revenue_without_tax'] = date_agg['total_revenue_without_tax'].round(2)
-        date_agg['total_expense'] = date_agg['total_expense'].round(2)
-        date_agg['total_profit'] = date_agg['total_profit'].round(2)
+        date_agg['total_revenue'] = date_agg['total_revenue'].round(2)
+        date_agg['product_expense'] = date_agg['product_expense'].round(2)
+        date_agg['fb_ads_spend'] = date_agg['fb_ads_spend'].round(2)
+        date_agg['total_cost'] = date_agg['total_cost'].round(2)
+        date_agg['net_profit'] = date_agg['net_profit'].round(2)
         
         # Sort by date
         date_agg = date_agg.sort_values('date')
@@ -499,29 +560,30 @@ class BizniWebExporter:
         
         # 3. Group by items only (across all dates)
         print("Creating items aggregation...")
+        
         items_agg = df.groupby('item_label').agg({
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
             'total_expense': 'sum',
-            'profit': 'sum',
+            'profit_before_ads': 'sum',
             'order_num': 'nunique'  # Count unique orders
         }).reset_index()
         
-        items_agg.columns = ['product_name', 'total_quantity', 'total_price_without_tax', 'total_expense', 'total_profit', 'order_count']
+        items_agg.columns = ['product_name', 'total_quantity', 'total_revenue', 'product_expense', 'profit', 'order_count']
         
-        # Calculate aggregated ROI
+        # Calculate ROI based on product expense only (no FB ads)
         items_agg['roi_percent'] = items_agg.apply(
-            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            lambda row: round((row['profit'] / row['product_expense'] * 100) if row['product_expense'] > 0 else 0, 2),
             axis=1
         )
         
         # Round financial values
-        items_agg['total_price_without_tax'] = items_agg['total_price_without_tax'].round(2)
-        items_agg['total_expense'] = items_agg['total_expense'].round(2)
-        items_agg['total_profit'] = items_agg['total_profit'].round(2)
+        items_agg['total_revenue'] = items_agg['total_revenue'].round(2)
+        items_agg['product_expense'] = items_agg['product_expense'].round(2)
+        items_agg['profit'] = items_agg['profit'].round(2)
         
-        # Sort by total price descending
-        items_agg = items_agg.sort_values('total_price_without_tax', ascending=False)
+        # Sort by total revenue descending
+        items_agg = items_agg.sort_values('total_revenue', ascending=False)
         
         # Save items aggregation
         items_filename = f"data/aggregate_by_items_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
@@ -533,72 +595,75 @@ class BizniWebExporter:
     
     def display_aggregated_data(self, date_product_agg: pd.DataFrame, date_agg: pd.DataFrame):
         """Display aggregated data with nice formatting"""
-        print("\n" + "="*80)
-        print("DAILY SUMMARY")
-        print("="*80)
+        print("\n" + "="*130)
+        print("DAILY SUMMARY WITH CORRECT PROFIT CALCULATION")
+        print("Profit = Revenue - Product Costs - FB Ads | ROI = (Profit / Total Costs) × 100")
+        print("="*130)
         
-        # Display daily aggregation
-        print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Quantity':>10} {'Revenue (€)':>12} {'Expense (€)':>12} {'Profit (€)':>12} {'ROI %':>8}")
-        print("-"*100)
+        # Display daily aggregation with FB ads
+        print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Revenue (€)':>12} {'Product (€)':>12} {'FB Ads (€)':>12} {'Total Cost (€)':>14} {'Profit (€)':>12} {'ROI %':>8}")
+        print("-"*130)
         
         total_orders = 0
         total_items = 0
         total_quantity = 0
         total_revenue = 0
-        total_expense = 0
-        total_profit = 0
+        total_product_expense = 0
+        total_fb_ads = 0
+        total_net_profit = 0
         
         for _, row in date_agg.iterrows():
             date_str = str(row['date'])
             print(f"{date_str:<12} {row['unique_orders']:>8} {row['total_items']:>8} "
-                  f"{row['total_quantity']:>10} {row['total_revenue_without_tax']:>12.2f} "
-                  f"{row['total_expense']:>12.2f} {row['total_profit']:>12.2f} {row['roi_percent']:>8.2f}")
+                  f"{row['total_revenue']:>12.2f} {row['product_expense']:>12.2f} "
+                  f"{row['fb_ads_spend']:>12.2f} {row['total_cost']:>14.2f} {row['net_profit']:>12.2f} {row['roi_percent']:>8.2f}")
             total_orders += row['unique_orders']
             total_items += row['total_items']
             total_quantity += row['total_quantity']
-            total_revenue += row['total_revenue_without_tax']
-            total_expense += row['total_expense']
-            total_profit += row['total_profit']
+            total_revenue += row['total_revenue']
+            total_product_expense += row['product_expense']
+            total_fb_ads += row['fb_ads_spend']
+            total_net_profit += row['net_profit']
         
-        # Calculate total ROI
-        total_roi = (total_profit / total_expense * 100) if total_expense > 0 else 0
+        # Calculate total cost and ROI
+        total_cost = total_product_expense + total_fb_ads
+        total_roi = (total_net_profit / total_cost * 100) if total_cost > 0 else 0
         
-        print("-"*100)
+        print("-"*130)
         print(f"{'TOTAL':<12} {total_orders:>8} {total_items:>8} "
-              f"{total_quantity:>10} {total_revenue:>12.2f} {total_expense:>12.2f} "
-              f"{total_profit:>12.2f} {total_roi:>8.2f}")
+              f"{total_revenue:>12.2f} {total_product_expense:>12.2f} "
+              f"{total_fb_ads:>12.2f} {total_cost:>14.2f} {total_net_profit:>12.2f} {total_roi:>8.2f}")
         
-        # Display top products
+        # Display all products
         print("\n" + "="*80)
-        print("TOP 10 PRODUCTS BY REVENUE")
+        print("ALL PRODUCTS BY REVENUE")
         print("="*80)
         
         # Aggregate products across all dates
         product_summary = date_product_agg.groupby('product_name').agg({
             'total_quantity': 'sum',
-            'total_price_without_tax': 'sum',
-            'total_expense': 'sum',
-            'total_profit': 'sum',
+            'total_revenue': 'sum',
+            'product_expense': 'sum',
+            'profit': 'sum',
             'order_count': 'sum'
         }).reset_index()
         
-        # Calculate aggregated ROI
+        # Calculate aggregated ROI (without FB ads)
         product_summary['roi_percent'] = product_summary.apply(
-            lambda row: round((row['total_profit'] / row['total_expense'] * 100) if row['total_expense'] > 0 else 0, 2),
+            lambda row: round((row['profit'] / row['product_expense'] * 100) if row['product_expense'] > 0 else 0, 2),
             axis=1
         )
         
-        product_summary = product_summary.sort_values('total_price_without_tax', ascending=False).head(10)
+        product_summary = product_summary.sort_values('total_revenue', ascending=False)
         
-        print(f"\n{'Product':<40} {'Qty':>6} {'Orders':>6} {'Revenue':>10} {'Expense':>10} {'Profit':>10} {'ROI %':>8}")
+        print(f"\n{'Product':<40} {'Qty':>6} {'Revenue':>10} {'Product Cost':>12} {'Profit':>10} {'ROI %':>8}")
         print("-"*100)
         
         for _, row in product_summary.iterrows():
             product_name = row['product_name'][:40]  # Truncate long names
             print(f"{product_name:<40} {row['total_quantity']:>6} "
-                  f"{row['order_count']:>6} {row['total_price_without_tax']:>10.2f} "
-                  f"{row['total_expense']:>10.2f} {row['total_profit']:>10.2f} "
-                  f"{row['roi_percent']:>8.2f}")
+                  f"{row['total_revenue']:>10.2f} {row['product_expense']:>12.2f} "
+                  f"{row['profit']:>10.2f} {row['roi_percent']:>8.2f}")
         
         print("\n")
 
