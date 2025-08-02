@@ -29,12 +29,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     # Calculate totals
     total_revenue = date_agg['total_revenue'].sum()
     total_product_expense = date_agg['product_expense'].sum()
+    total_packaging = date_agg['packaging_cost'].sum()
+    total_fixed = date_agg['fixed_daily_cost'].sum()
+    total_fixed_costs = total_packaging + total_fixed
     total_fb_ads = date_agg['fb_ads_spend'].sum()
-    total_cost = total_product_expense + total_fb_ads
+    total_cost = date_agg['total_cost'].sum()
     total_profit = date_agg['net_profit'].sum()
     total_roi = (total_profit / total_cost * 100) if total_cost > 0 else 0
     total_orders = date_agg['unique_orders'].sum()
     total_items = date_agg['total_items'].sum()
+    total_aov = total_revenue / total_orders if total_orders > 0 else 0
+    total_fb_per_order = total_fb_ads / total_orders if total_orders > 0 else 0
     
     # All products sorted by revenue
     all_products = items_agg.sort_values('total_revenue', ascending=False)
@@ -252,6 +257,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value cost">€{total_product_expense:,.2f}</div>
             </div>
             <div class="card">
+                <div class="card-title">Fixed Costs</div>
+                <div class="card-value cost">€{total_fixed_costs:,.2f}</div>
+            </div>
+            <div class="card">
                 <div class="card-title">Facebook Ads</div>
                 <div class="card-value cost">€{total_fb_ads:,.2f}</div>
             </div>
@@ -274,6 +283,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Total Items</div>
                 <div class="card-value">{total_items}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Avg Order Value</div>
+                <div class="card-value">€{total_aov:.2f}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Avg FB Cost/Order</div>
+                <div class="card-value cost">€{total_fb_per_order:.2f}</div>
             </div>
         </div>
         
@@ -312,8 +329,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th>Date</th>
                         <th class="number">Orders</th>
                         <th class="number">Revenue</th>
+                        <th class="number">AOV</th>
                         <th class="number">Product Costs</th>
+                        <th class="number">Fixed Costs</th>
                         <th class="number">FB Ads</th>
+                        <th class="number">FB/Order</th>
                         <th class="number">Total Costs</th>
                         <th class="number">Profit</th>
                         <th class="number">ROI %</th>
@@ -325,13 +345,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     # Add daily rows
     for _, row in date_agg.iterrows():
         profit_class = "profit-positive" if row['net_profit'] > 0 else "profit-negative"
+        fixed_costs = row['packaging_cost'] + row['fixed_daily_cost']
+        aov = row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
+        fb_per_order = row['fb_ads_spend'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
         html_content += f"""
                     <tr>
                         <td>{row['date']}</td>
                         <td class="number">{row['unique_orders']}</td>
                         <td class="number">€{row['total_revenue']:,.2f}</td>
+                        <td class="number">€{aov:.2f}</td>
                         <td class="number">€{row['product_expense']:,.2f}</td>
+                        <td class="number">€{fixed_costs:,.2f}</td>
                         <td class="number">€{row['fb_ads_spend']:,.2f}</td>
+                        <td class="number">€{fb_per_order:.2f}</td>
                         <td class="number">€{row['total_cost']:,.2f}</td>
                         <td class="number {profit_class}">€{row['net_profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
@@ -344,8 +370,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>TOTAL</td>
                         <td class="number">{total_orders}</td>
                         <td class="number">€{total_revenue:,.2f}</td>
+                        <td class="number">€{total_aov:.2f}</td>
                         <td class="number">€{total_product_expense:,.2f}</td>
+                        <td class="number">€{total_fixed_costs:,.2f}</td>
                         <td class="number">€{total_fb_ads:,.2f}</td>
+                        <td class="number">€{total_fb_per_order:.2f}</td>
                         <td class="number">€{total_cost:,.2f}</td>
                         <td class="number profit-positive">€{total_profit:,.2f}</td>
                         <td class="number">{total_roi:.1f}%</td>
@@ -555,10 +584,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         new Chart(costPieCtx, {{
             type: 'doughnut',
             data: {{
-                labels: ['Product Costs', 'Facebook Ads'],
+                labels: ['Product Costs', 'Fixed Costs', 'Facebook Ads'],
                 datasets: [{{
-                    data: [{total_product_expense:.2f}, {total_fb_ads:.2f}],
-                    backgroundColor: ['#ed8936', '#4299e1'],
+                    data: [{total_product_expense:.2f}, {total_fixed_costs:.2f}, {total_fb_ads:.2f}],
+                    backgroundColor: ['#ed8936', '#48bb78', '#4299e1'],
                     borderWidth: 2,
                     borderColor: '#fff'
                 }}]
