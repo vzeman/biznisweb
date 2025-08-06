@@ -34,6 +34,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     total_costs_data = date_agg['total_cost'].tolist()
     packaging_costs_data = date_agg['packaging_cost'].tolist()
     fixed_daily_costs_data = date_agg['fixed_daily_cost'].tolist()
+    items_data = date_agg['total_items'].tolist()
     
     # Calculate totals
     total_revenue = date_agg['total_revenue'].sum()
@@ -332,6 +333,52 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="chart-container">
                 <h2 class="chart-title">Daily Orders</h2>
                 <canvas id="ordersChart"></canvas>
+            </div>
+        </div>
+        
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Individual Metrics</h2>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Revenue</h2>
+                <canvas id="revenueOnlyChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Total Costs</h2>
+                <canvas id="totalCostsChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Product Costs</h2>
+                <canvas id="productCostsChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Facebook Ads</h2>
+                <canvas id="fbAdsChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Packaging Costs</h2>
+                <canvas id="packagingCostsChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Fixed Costs</h2>
+                <canvas id="fixedCostsChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Average Order Value</h2>
+                <canvas id="aovChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Items Sold</h2>
+                <canvas id="itemsChart"></canvas>
             </div>
         </div>
         
@@ -855,6 +902,335 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 plugins: {{
                     legend: {{
                         display: false
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            stepSize: 10
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Individual Metric Charts
+        
+        // Revenue Only Chart
+        const revenueOnlyCtx = document.getElementById('revenueOnlyChart').getContext('2d');
+        new Chart(revenueOnlyCtx, {{
+            type: 'line',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Revenue',
+                    data: {json.dumps(revenue_data)},
+                    borderColor: '#48bb78',
+                    backgroundColor: 'rgba(72, 187, 120, 0.2)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Revenue: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Total Costs Chart
+        const totalCostsCtx = document.getElementById('totalCostsChart').getContext('2d');
+        new Chart(totalCostsCtx, {{
+            type: 'line',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Total Costs',
+                    data: {json.dumps(total_costs_data)},
+                    borderColor: '#f56565',
+                    backgroundColor: 'rgba(245, 101, 101, 0.2)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Total Costs: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Product Costs Chart
+        const productCostsCtx = document.getElementById('productCostsChart').getContext('2d');
+        new Chart(productCostsCtx, {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Product Costs',
+                    data: {json.dumps(product_expense_data)},
+                    backgroundColor: '#ed8936',
+                    borderRadius: 5
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Product Costs: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Facebook Ads Chart
+        const fbAdsCtx = document.getElementById('fbAdsChart').getContext('2d');
+        new Chart(fbAdsCtx, {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Facebook Ads',
+                    data: {json.dumps(fb_ads_data)},
+                    backgroundColor: '#4299e1',
+                    borderRadius: 5
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'FB Ads: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Packaging Costs Chart
+        const packagingCostsCtx = document.getElementById('packagingCostsChart').getContext('2d');
+        new Chart(packagingCostsCtx, {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Packaging Costs',
+                    data: {json.dumps(packaging_costs_data)},
+                    backgroundColor: '#38b2ac',
+                    borderRadius: 5
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Packaging: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Fixed Costs Chart
+        const fixedCostsCtx = document.getElementById('fixedCostsChart').getContext('2d');
+        new Chart(fixedCostsCtx, {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Fixed Daily Costs',
+                    data: {json.dumps(fixed_daily_costs_data)},
+                    backgroundColor: '#805ad5',
+                    borderRadius: 5
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Fixed Costs: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Average Order Value Chart
+        const aovCtx = document.getElementById('aovChart').getContext('2d');
+        new Chart(aovCtx, {{
+            type: 'line',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'AOV',
+                    data: {json.dumps(aov_data)},
+                    borderColor: '#f687b3',
+                    backgroundColor: 'rgba(246, 135, 179, 0.2)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'AOV: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Items Sold Chart
+        const itemsCtx = document.getElementById('itemsChart').getContext('2d');
+        new Chart(itemsCtx, {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Items Sold',
+                    data: {json.dumps(items_data)},
+                    backgroundColor: '#fc8181',
+                    borderRadius: 5
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Items: ' + context.parsed.y;
+                            }}
+                        }}
                     }}
                 }},
                 scales: {{
