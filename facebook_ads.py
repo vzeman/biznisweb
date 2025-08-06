@@ -4,7 +4,9 @@ Facebook Ads API integration for fetching marketing spend data
 """
 
 import os
+import json
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 import requests
 from dotenv import load_dotenv
@@ -24,6 +26,11 @@ class FacebookAdsClient:
         self.api_version = 'v21.0'
         self.base_url = f'https://graph.facebook.com/{self.api_version}'
         
+        # Cache configuration
+        self.cache_dir = Path('data/cache/facebook_ads')
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_days_threshold = 3  # Days from today that should always be fetched fresh
+        
         # Validate required credentials
         if not all([self.access_token, self.ad_account_id]):
             print("Warning: Facebook Ads credentials not fully configured. Ad spend data will not be available.")
@@ -34,9 +41,63 @@ class FacebookAdsClient:
             if not self.ad_account_id.startswith('act_'):
                 self.ad_account_id = f'act_{self.ad_account_id}'
     
+    def get_cache_filename(self, date_from: datetime, date_to: datetime) -> Path:
+        """Generate cache filename for a date range"""
+        from_str = date_from.strftime('%Y%m%d')
+        to_str = date_to.strftime('%Y%m%d')
+        return self.cache_dir / f"fb_ads_{from_str}_{to_str}.json"
+    
+    def should_use_cache(self, date: datetime) -> bool:
+        """Determine if cache should be used for a given date"""
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        date_normalized = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        days_ago = (today - date_normalized).days
+        
+        # Always fetch fresh data for recent days
+        return days_ago > self.cache_days_threshold
+    
+    def load_from_cache(self, date_from: datetime, date_to: datetime) -> Optional[Dict[str, float]]:
+        """Load Facebook Ads data from cache"""
+        cache_file = self.get_cache_filename(date_from, date_to)
+        if not cache_file.exists():
+            return None
+        
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Check if cache is still valid
+                cached_at = datetime.fromisoformat(data.get('cached_at', ''))
+                if (datetime.now() - cached_at).days > 30:  # Expire cache after 30 days
+                    return None
+                print(f"  Loaded Facebook Ads data from cache ({len(data.get('daily_spend', {}))} days)")
+                return data.get('daily_spend', {})
+        except Exception as e:
+            print(f"  Error loading Facebook Ads cache: {e}")
+            return None
+    
+    def save_to_cache(self, date_from: datetime, date_to: datetime, daily_spend: Dict[str, float]):
+        """Save Facebook Ads data to cache"""
+        cache_file = self.get_cache_filename(date_from, date_to)
+        
+        try:
+            cache_data = {
+                'date_from': date_from.strftime('%Y-%m-%d'),
+                'date_to': date_to.strftime('%Y-%m-%d'),
+                'cached_at': datetime.now().isoformat(),
+                'daily_spend': daily_spend
+            }
+            
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            
+            if daily_spend:
+                print(f"  Cached Facebook Ads data for {len(daily_spend)} days")
+        except Exception as e:
+            print(f"  Error saving Facebook Ads cache: {e}")
+    
     def get_daily_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, float]:
         """
-        Fetch daily ad spend from Facebook Ads API
+        Fetch daily ad spend from Facebook Ads API with caching
         
         Args:
             date_from: Start date
@@ -48,10 +109,22 @@ class FacebookAdsClient:
         if not self.is_configured:
             return {}
         
+        # Check if we should use cache for the entire date range
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # If the entire range is cacheable, try loading from cache
+        if self.should_use_cache(date_to):
+            cached_data = self.load_from_cache(date_from, date_to)
+            if cached_data is not None:
+                return cached_data
+        
+        # Otherwise, fetch from API
         try:
             # Format dates for Facebook API
             since = date_from.strftime('%Y-%m-%d')
             until = date_to.strftime('%Y-%m-%d')
+            
+            print(f"  Fetching Facebook Ads data from API for {since} to {until}...")
             
             # Build the insights endpoint URL
             url = f'{self.base_url}/{self.ad_account_id}/insights'
@@ -93,6 +166,10 @@ class FacebookAdsClient:
                     # For now, just return spend amount
                     # You can modify this to return full metrics if needed
                     daily_spend[date_str] = spend
+            
+            # Cache the data if the entire range is cacheable
+            if self.should_use_cache(date_to):
+                self.save_to_cache(date_from, date_to, daily_spend)
             
             return daily_spend
             

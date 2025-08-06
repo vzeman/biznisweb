@@ -7,9 +7,10 @@ import os
 import csv
 import argparse
 import time
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import calendar
 
 from dotenv import load_dotenv
@@ -208,6 +209,9 @@ class BizniWebExporter:
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
         self.fb_client = FacebookAdsClient()
+        self.cache_dir = Path('data/cache')
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_days_threshold = 3  # Days from today that should always be fetched fresh
     
     def get_daily_fixed_cost(self, date: datetime) -> float:
         """Calculate daily fixed cost based on days in the month"""
@@ -317,8 +321,173 @@ class BizniWebExporter:
         
         return filtered_orders
     
+    def get_cache_filename(self, date: datetime) -> Path:
+        """Generate cache filename for a specific date"""
+        date_str = date.strftime('%Y-%m-%d')
+        return self.cache_dir / f"orders_{date_str}.json"
+    
+    def should_use_cache(self, date: datetime) -> bool:
+        """Determine if cache should be used for a given date"""
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        date_normalized = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        days_ago = (today - date_normalized).days
+        
+        # Always fetch fresh data for recent days
+        if days_ago <= self.cache_days_threshold:
+            return False
+        
+        # Use cache for older data
+        cache_file = self.get_cache_filename(date)
+        return cache_file.exists()
+    
+    def load_from_cache(self, date: datetime) -> Optional[List[Dict[str, Any]]]:
+        """Load orders from cache for a specific date"""
+        cache_file = self.get_cache_filename(date)
+        if not cache_file.exists():
+            return None
+        
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                print(f"  Loaded {len(data.get('orders', []))} orders from cache for {date.strftime('%Y-%m-%d')}")
+                return data.get('orders', [])
+        except Exception as e:
+            print(f"  Error loading cache for {date.strftime('%Y-%m-%d')}: {e}")
+            return None
+    
+    def save_to_cache(self, date: datetime, orders: List[Dict[str, Any]]):
+        """Save orders to cache for a specific date"""
+        cache_file = self.get_cache_filename(date)
+        
+        try:
+            # Filter orders for this specific date
+            date_str = date.strftime('%Y-%m-%d')
+            day_orders = []
+            
+            for order in orders:
+                # Handle different date formats
+                purchase_date = order.get('purchase_date', '')
+                if purchase_date:
+                    # Extract just the date part if it includes time
+                    if ' ' in purchase_date:
+                        purchase_date = purchase_date.split(' ')[0]
+                    
+                    if purchase_date == date_str:
+                        day_orders.append(order)
+            
+            cache_data = {
+                'date': date_str,
+                'cached_at': datetime.now().isoformat(),
+                'order_count': len(day_orders),
+                'orders': day_orders
+            }
+            
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            
+            if day_orders:
+                print(f"  Cached {len(day_orders)} orders for {date_str}")
+        except Exception as e:
+            print(f"  Error saving cache for {date.strftime('%Y-%m-%d')}: {e}")
+    
+    def _group_consecutive_dates(self, dates: List[datetime]) -> List[Tuple[datetime, datetime]]:
+        """Group consecutive dates into ranges"""
+        if not dates:
+            return []
+        
+        dates = sorted(dates)
+        ranges = []
+        start = dates[0]
+        end = dates[0]
+        
+        for date in dates[1:]:
+            if (date - end).days == 1:
+                end = date
+            else:
+                ranges.append((start, end))
+                start = date
+                end = date
+        
+        ranges.append((start, end))
+        return ranges
+    
     def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        """Fetch all orders within the specified date range, breaking it into weekly chunks"""
+        """Fetch all orders within the specified date range, using cache for older data"""
+        all_orders = []
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Process each day individually
+        current_date = date_from
+        
+        print(f"\nProcessing date range: {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
+        print(f"Cache policy: Using cache for data older than {self.cache_days_threshold} days")
+        
+        # Fetch each day separately for better caching
+        while current_date <= date_to:
+            date_str = current_date.strftime('%Y-%m-%d')
+            days_ago = (today - current_date).days
+            
+            # Check if we should use cache for this date
+            if self.should_use_cache(current_date):
+                cached_orders = self.load_from_cache(current_date)
+                if cached_orders:
+                    all_orders.extend(cached_orders)
+                    current_date += timedelta(days=1)
+                    continue
+            
+            # Fetch this specific day from API
+            print(f"\nFetching {date_str} from API...")
+            
+            try:
+                # Fetch just this one day
+                day_orders = self.fetch_orders_for_period(current_date, current_date)
+                
+                if day_orders:
+                    all_orders.extend(day_orders)
+                    print(f"  Got {len(day_orders)} orders for {date_str}")
+                    
+                    # Cache if appropriate
+                    if days_ago > self.cache_days_threshold:
+                        self.save_to_cache_simple(current_date, day_orders)
+                else:
+                    print(f"  No orders for {date_str}")
+                    # Cache empty result too
+                    if days_ago > self.cache_days_threshold:
+                        self.save_to_cache_simple(current_date, [])
+                        
+            except Exception as e:
+                print(f"  Error fetching {date_str}: {e}")
+            
+            current_date += timedelta(days=1)
+            
+            # Small delay between API calls
+            if current_date <= date_to:
+                time.sleep(0.5)
+        
+        return all_orders
+    
+    def save_to_cache_simple(self, date: datetime, orders: List[Dict[str, Any]]):
+        """Save orders to cache for a specific date (simplified version for single-day fetches)"""
+        cache_file = self.get_cache_filename(date)
+        
+        try:
+            cache_data = {
+                'date': date.strftime('%Y-%m-%d'),
+                'cached_at': datetime.now().isoformat(),
+                'order_count': len(orders),
+                'orders': orders
+            }
+            
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            
+            if orders:
+                print(f"  Cached {len(orders)} orders for {date.strftime('%Y-%m-%d')}")
+        except Exception as e:
+            print(f"  Error saving cache for {date.strftime('%Y-%m-%d')}: {e}")
+    
+    def _fetch_orders_original(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        """Original fetch orders method (renamed for use in new caching logic)"""
         all_orders = []
         
         # Generate weekly ranges
@@ -329,30 +498,30 @@ class BizniWebExporter:
             # Calculate week end (7 days from current date, but not beyond date_to)
             week_end = min(current_date + timedelta(days=6), date_to)
             
-            print(f"\nFetching week {week_number} ({current_date.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')})...")
+            print(f"  Week {week_number} ({current_date.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')})...")
             
             try:
                 week_orders = self.fetch_orders_for_period(current_date, week_end)
                 if week_orders:
                     all_orders.extend(week_orders)
-                    print(f"Successfully fetched {len(week_orders)} orders for week {week_number}")
+                    print(f"  Successfully fetched {len(week_orders)} orders for week {week_number}")
                 else:
-                    print(f"No orders fetched for week {week_number}")
+                    print(f"  No orders fetched for week {week_number}")
             except Exception as e:
-                print(f"Failed to fetch week {week_number}: {e}")
+                print(f"  Failed to fetch week {week_number}: {e}")
                 # Try fetching in smaller chunks (3-day periods)
-                print(f"Trying to fetch week {week_number} in smaller chunks...")
+                print(f"  Trying to fetch week {week_number} in smaller chunks...")
                 chunk_start = current_date
                 while chunk_start <= week_end:
                     chunk_end = min(chunk_start + timedelta(days=2), week_end)
                     try:
-                        print(f"  Fetching {chunk_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')}...")
+                        print(f"    Fetching {chunk_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')}...")
                         chunk_orders = self.fetch_orders_for_period(chunk_start, chunk_end)
                         if chunk_orders:
                             all_orders.extend(chunk_orders)
-                            print(f"  Got {len(chunk_orders)} orders")
+                            print(f"    Got {len(chunk_orders)} orders")
                     except Exception as e:
-                        print(f"  Failed to fetch chunk: {e}")
+                        print(f"    Failed to fetch chunk: {e}")
                     chunk_start = chunk_end + timedelta(days=1)
             
             # Move to next week
@@ -361,7 +530,6 @@ class BizniWebExporter:
             
             # Wait 2 seconds between weekly requests to avoid overwhelming the API
             if current_date <= date_to:
-                print("Waiting 2 seconds before next request...")
                 time.sleep(2)
         
         return all_orders
@@ -1010,6 +1178,16 @@ def main():
         type=str,
         help='To date in YYYY-MM-DD format (default: today)'
     )
+    parser.add_argument(
+        '--clear-cache',
+        action='store_true',
+        help='Clear all cached data before running'
+    )
+    parser.add_argument(
+        '--no-cache',
+        action='store_true',
+        help='Disable cache and fetch all data fresh from API'
+    )
     
     args = parser.parse_args()
     
@@ -1028,6 +1206,19 @@ def main():
     
     # Initialize exporter
     exporter = BizniWebExporter(API_URL, API_TOKEN)
+    
+    # Handle cache options
+    if args.clear_cache:
+        print("Clearing cache...")
+        import shutil
+        if exporter.cache_dir.exists():
+            shutil.rmtree(exporter.cache_dir)
+            exporter.cache_dir.mkdir(parents=True, exist_ok=True)
+            print("Cache cleared.")
+    
+    if args.no_cache:
+        print("Cache disabled for this run.")
+        exporter.cache_days_threshold = float('inf')  # Never use cache
     
     # Fetch orders
     print("Fetching orders...")

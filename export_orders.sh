@@ -81,6 +81,8 @@ fi
 # Parse command line arguments
 FROM_DATE=""
 TO_DATE=""
+CLEAR_CACHE=0
+NO_CACHE=0
 HELP=0
 
 while [[ $# -gt 0 ]]; do
@@ -92,6 +94,14 @@ while [[ $# -gt 0 ]]; do
         -t|--to)
             TO_DATE="$2"
             shift 2
+            ;;
+        --clear-cache)
+            CLEAR_CACHE=1
+            shift
+            ;;
+        --no-cache)
+            NO_CACHE=1
+            shift
             ;;
         -h|--help)
             HELP=1
@@ -112,12 +122,16 @@ if [ $HELP -eq 1 ]; then
     echo "Options:"
     echo "  -f, --from DATE    Start date in YYYY-MM-DD format (default: 30 days ago)"
     echo "  -t, --to DATE      End date in YYYY-MM-DD format (default: today)"
+    echo "  --clear-cache      Clear all cached data before running"
+    echo "  --no-cache         Disable cache and fetch all data fresh from API"
     echo "  -h, --help         Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0                           # Export last 30 days"
     echo "  $0 -f 2024-01-01            # Export from Jan 1, 2024 to today"
     echo "  $0 -f 2024-01-01 -t 2024-01-31  # Export January 2024"
+    echo "  $0 --clear-cache            # Clear cache and export last 30 days"
+    echo "  $0 --no-cache -f 2024-01-01 # Force fresh data fetch"
     exit 0
 fi
 
@@ -130,6 +144,14 @@ fi
 
 if [ ! -z "$TO_DATE" ]; then
     CMD="$CMD --to-date $TO_DATE"
+fi
+
+if [ $CLEAR_CACHE -eq 1 ]; then
+    CMD="$CMD --clear-cache"
+fi
+
+if [ $NO_CACHE -eq 1 ]; then
+    CMD="$CMD --no-cache"
 fi
 
 # Run the export

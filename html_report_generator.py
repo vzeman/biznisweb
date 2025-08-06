@@ -26,6 +26,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     roi_data = date_agg['roi_percent'].tolist()
     orders_data = date_agg['unique_orders'].tolist()
     
+    # Calculate Average Order Value for each day
+    aov_data = [(row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0) 
+                for _, row in date_agg.iterrows()]
+    
+    # Calculate total costs for each day (for the all metrics chart)
+    total_costs_data = date_agg['total_cost'].tolist()
+    packaging_costs_data = date_agg['packaging_cost'].tolist()
+    fixed_daily_costs_data = date_agg['fixed_daily_cost'].tolist()
+    
     # Calculate totals
     total_revenue = date_agg['total_revenue'].sum()
     total_product_expense = date_agg['product_expense'].sum()
@@ -299,6 +308,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <canvas id="revenueChart"></canvas>
         </div>
         
+        <div class="chart-container">
+            <h2 class="chart-title">All Metrics Overview</h2>
+            <canvas id="allMetricsChart"></canvas>
+        </div>
+        
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Profit</h2>
@@ -458,6 +472,25 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         backgroundColor: 'rgba(66, 153, 225, 0.1)',
                         borderWidth: 2,
                         tension: 0.4
+                    }},
+                    {{
+                        label: 'Net Profit',
+                        data: {json.dumps(profit_data)},
+                        borderColor: '#9f7aea',
+                        backgroundColor: 'rgba(159, 122, 234, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        borderDash: [5, 5]
+                    }},
+                    {{
+                        label: 'Avg Order Value',
+                        data: {json.dumps(aov_data)},
+                        borderColor: '#f687b3',
+                        backgroundColor: 'rgba(246, 135, 179, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        yAxisID: 'y1',
+                        borderDash: [2, 2]
                     }}
                 ]
             }},
@@ -481,10 +514,200 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 }},
                 scales: {{
                     y: {{
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
                                 return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }},
+                    y1: {{
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        grid: {{
+                            drawOnChartArea: false,
+                        }},
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // All Metrics Chart
+        const allMetricsCtx = document.getElementById('allMetricsChart').getContext('2d');
+        new Chart(allMetricsCtx, {{
+            type: 'line',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [
+                    {{
+                        label: 'Revenue',
+                        data: {json.dumps(revenue_data)},
+                        borderColor: '#48bb78',
+                        backgroundColor: 'rgba(72, 187, 120, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4
+                    }},
+                    {{
+                        label: 'Total Costs',
+                        data: {json.dumps(total_costs_data)},
+                        borderColor: '#f56565',
+                        backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4
+                    }},
+                    {{
+                        label: 'Product Costs',
+                        data: {json.dumps(product_expense_data)},
+                        borderColor: '#ed8936',
+                        backgroundColor: 'rgba(237, 137, 54, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        hidden: false
+                    }},
+                    {{
+                        label: 'Facebook Ads',
+                        data: {json.dumps(fb_ads_data)},
+                        borderColor: '#4299e1',
+                        backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        hidden: false
+                    }},
+                    {{
+                        label: 'Packaging Costs',
+                        data: {json.dumps(packaging_costs_data)},
+                        borderColor: '#38b2ac',
+                        backgroundColor: 'rgba(56, 178, 172, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        hidden: false
+                    }},
+                    {{
+                        label: 'Fixed Daily Costs',
+                        data: {json.dumps(fixed_daily_costs_data)},
+                        borderColor: '#805ad5',
+                        backgroundColor: 'rgba(128, 90, 213, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        hidden: false
+                    }},
+                    {{
+                        label: 'Net Profit',
+                        data: {json.dumps(profit_data)},
+                        borderColor: '#9f7aea',
+                        backgroundColor: 'rgba(159, 122, 234, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4
+                    }},
+                    {{
+                        label: 'Avg Order Value',
+                        data: {json.dumps(aov_data)},
+                        borderColor: '#f687b3',
+                        backgroundColor: 'rgba(246, 135, 179, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }},
+                    {{
+                        label: 'ROI %',
+                        data: {json.dumps(roi_data)},
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        yAxisID: 'y2'
+                    }}
+                ]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2.5,
+                interaction: {{
+                    mode: 'index',
+                    intersect: false,
+                }},
+                plugins: {{
+                    legend: {{
+                        position: 'top',
+                        labels: {{
+                            usePointStyle: true,
+                            padding: 15
+                        }}
+                    }},
+                    tooltip: {{
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {{
+                            label: function(context) {{
+                                let label = context.dataset.label + ': ';
+                                if (context.dataset.label === 'ROI %') {{
+                                    return label + context.parsed.y.toFixed(1) + '%';
+                                }}
+                                return label + '€' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        title: {{
+                            display: true,
+                            text: 'Amount (€)'
+                        }},
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }},
+                    y1: {{
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        title: {{
+                            display: true,
+                            text: 'AOV (€)'
+                        }},
+                        grid: {{
+                            drawOnChartArea: false,
+                        }},
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }},
+                    y2: {{
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        title: {{
+                            display: true,
+                            text: 'ROI %'
+                        }},
+                        grid: {{
+                            drawOnChartArea: false,
+                        }},
+                        ticks: {{
+                            callback: function(value) {{
+                                return value.toFixed(0) + '%';
                             }}
                         }}
                     }}
