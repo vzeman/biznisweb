@@ -68,7 +68,8 @@ PRODUCT_EXPENSES = {
     'Parfum do prania Vevo No.06 Royal Cotton (Vzorka 10ml)': 0.26,
     'Tringelt': 0,
     'Parfum do prania Vevo No.01 Cotton Paradise (Vzorka 10ml)': 0.3,
-    'Poistenie proti rozbitiu': 0
+    'Poistenie proti rozbitiu': 0,
+    'Vevo Shot - koncentrát na čistenie práčky 100ml': 0.65
 }
 
 # GraphQL query with fragments
