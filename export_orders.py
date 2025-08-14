@@ -213,6 +213,7 @@ class BizniWebExporter:
         self.cache_dir = Path('data/cache')
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_days_threshold = 3  # Days from today that should always be fetched fresh
+        self.customer_first_order_dates = {}  # Track first order date for each customer
     
     def get_daily_fixed_cost(self, date: datetime) -> float:
         """Calculate daily fixed cost based on days in the month"""
@@ -846,16 +847,23 @@ class BizniWebExporter:
         # Save to CSV
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         
+        # Analyze returning customers
+        returning_customers_analysis = self.analyze_returning_customers(df)
+        
         # Create aggregated reports
         date_product_agg, date_agg, items_agg, month_agg = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend)
         
         # Display aggregated data
         self.display_aggregated_data(date_product_agg, date_agg, month_agg)
         
+        # Display returning customer analysis
+        self.display_returning_customers_analysis(returning_customers_analysis)
+        
         # Generate HTML report
         print("Generating HTML report...")
         html_content = generate_html_report(date_agg, date_product_agg, items_agg, 
-                                           date_from, date_to, fb_daily_spend)
+                                           date_from, date_to, fb_daily_spend, 
+                                           returning_customers_analysis)
         html_filename = f"data/report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html"
         with open(html_filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
@@ -1164,6 +1172,96 @@ class BizniWebExporter:
                   f"{row['profit']:>10.2f} {row['roi_percent']:>8.2f}")
         
         print("\n")
+    
+    def analyze_returning_customers(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze returning customers and calculate weekly percentages"""
+        print("\nAnalyzing returning customers...")
+        
+        # Convert purchase_date to datetime
+        df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
+        df['purchase_date_only'] = df['purchase_datetime'].dt.date
+        
+        # Extract week information
+        df['year_week'] = df['purchase_datetime'].dt.to_period('W')
+        
+        # Get unique customers per order (one row per order)
+        orders_df = df[['order_num', 'customer_email', 'purchase_datetime', 'year_week']].drop_duplicates(subset=['order_num'])
+        
+        # Track first purchase date for each customer
+        customer_first_purchase = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
+        
+        # Determine if each order is from a returning customer
+        orders_df['is_returning'] = orders_df.apply(
+            lambda row: row['purchase_datetime'] > customer_first_purchase[row['customer_email']], axis=1
+        )
+        
+        # Calculate weekly statistics
+        weekly_stats = orders_df.groupby('year_week').agg({
+            'order_num': 'count',  # Total orders
+            'is_returning': 'sum',  # Returning customer orders
+            'customer_email': 'nunique'  # Unique customers
+        }).reset_index()
+        
+        weekly_stats.columns = ['week', 'total_orders', 'returning_orders', 'unique_customers']
+        
+        # Calculate new customer orders
+        weekly_stats['new_orders'] = weekly_stats['total_orders'] - weekly_stats['returning_orders']
+        
+        # Calculate percentages
+        weekly_stats['returning_percentage'] = (weekly_stats['returning_orders'] / weekly_stats['total_orders'] * 100).round(2)
+        weekly_stats['new_percentage'] = (weekly_stats['new_orders'] / weekly_stats['total_orders'] * 100).round(2)
+        
+        # Add week start date for better visualization
+        weekly_stats['week_start'] = weekly_stats['week'].apply(lambda x: x.start_time.date())
+        
+        # Sort by week
+        weekly_stats = weekly_stats.sort_values('week')
+        
+        # Save to CSV
+        filename = f"data/returning_customers_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        weekly_stats.to_csv(filename, index=False, encoding='utf-8-sig')
+        print(f"Returning customers analysis saved: {filename}")
+        
+        return weekly_stats
+    
+    def display_returning_customers_analysis(self, analysis: pd.DataFrame):
+        """Display returning customers analysis"""
+        print("\n" + "="*120)
+        print("RETURNING CUSTOMERS ANALYSIS - WEEKLY AGGREGATION")
+        print("="*120)
+        
+        print(f"\n{'Week':>10} {'Week Start':>12} {'Total Orders':>13} {'New':>8} {'New %':>8} {'Returning':>11} {'Return %':>10} {'Unique Customers':>17}")
+        print("-"*120)
+        
+        total_orders = 0
+        total_new = 0
+        total_returning = 0
+        total_unique = 0
+        
+        for _, row in analysis.iterrows():
+            week_str = str(row['week'])
+            week_start = row['week_start'].strftime('%Y-%m-%d')
+            print(f"{week_str:>10} {week_start:>12} {row['total_orders']:>13} "
+                  f"{row['new_orders']:>8} {row['new_percentage']:>7.1f}% "
+                  f"{row['returning_orders']:>11} {row['returning_percentage']:>9.1f}% "
+                  f"{row['unique_customers']:>17}")
+            
+            total_orders += row['total_orders']
+            total_new += row['new_orders']
+            total_returning += row['returning_orders']
+            total_unique += row['unique_customers']
+        
+        # Calculate overall percentages
+        overall_new_pct = (total_new / total_orders * 100) if total_orders > 0 else 0
+        overall_returning_pct = (total_returning / total_orders * 100) if total_orders > 0 else 0
+        
+        print("-"*120)
+        print(f"{'TOTAL':>10} {' ':>12} {total_orders:>13} "
+              f"{total_new:>8} {overall_new_pct:>7.1f}% "
+              f"{total_returning:>11} {overall_returning_pct:>9.1f}% "
+              f"{total_unique:>17}")
+        
+        print("\n")
 
 
 def main():
@@ -1201,7 +1299,8 @@ def main():
     if args.from_date:
         date_from = datetime.strptime(args.from_date, '%Y-%m-%d')
     else:
-        date_from = date_to - timedelta(days=30)
+        # Changed default to start from May 1, 2023
+        date_from = datetime(2023, 5, 1)
     
     print(f"Exporting orders from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
     

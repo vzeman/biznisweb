@@ -12,7 +12,8 @@ import json
 
 def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame, 
                          items_agg: pd.DataFrame, date_from: datetime, date_to: datetime,
-                         fb_daily_spend: Dict[str, float] = None) -> str:
+                         fb_daily_spend: Dict[str, float] = None, 
+                         returning_customers_analysis: pd.DataFrame = None) -> str:
     """
     Generate a complete HTML report with charts and tables
     """
@@ -54,6 +55,28 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     # All products sorted by revenue
     all_products = items_agg.sort_values('total_revenue', ascending=False)
     
+    # Prepare returning customers data if available
+    returning_html = ""
+    returning_chart_js = ""
+    
+    if returning_customers_analysis is not None and not returning_customers_analysis.empty:
+        # Prepare data for returning customers chart
+        weeks = returning_customers_analysis['week'].astype(str).tolist()
+        week_starts = returning_customers_analysis['week_start'].astype(str).tolist()
+        returning_pct = returning_customers_analysis['returning_percentage'].tolist()
+        new_pct = returning_customers_analysis['new_percentage'].tolist()
+        returning_orders = returning_customers_analysis['returning_orders'].tolist()
+        new_orders = returning_customers_analysis['new_orders'].tolist()
+        total_orders_weekly = returning_customers_analysis['total_orders'].tolist()
+        unique_customers = returning_customers_analysis['unique_customers'].tolist()
+        
+        # Calculate totals for returning customers
+        total_returning = returning_customers_analysis['returning_orders'].sum()
+        total_new = returning_customers_analysis['new_orders'].sum()
+        total_weekly_orders = returning_customers_analysis['total_orders'].sum()
+        overall_returning_pct = (total_returning / total_weekly_orders * 100) if total_weekly_orders > 0 else 0
+        overall_new_pct = (total_new / total_weekly_orders * 100) if total_weekly_orders > 0 else 0
+        
     html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -301,7 +324,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Avg FB Cost/Order</div>
                 <div class="card-value cost">€{total_fb_per_order:.2f}</div>
-            </div>
+            </div>"""
+    
+    # Add returning customers card if data is available
+    if returning_customers_analysis is not None and not returning_customers_analysis.empty:
+        html_content += f"""
+            <div class="card">
+                <div class="card-title">Returning Customers</div>
+                <div class="card-value roi">{overall_returning_pct:.1f}%</div>
+            </div>"""
+    
+    html_content += """
         </div>
         
         <div class="chart-container">
@@ -380,7 +413,73 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="chart-title">Daily Items Sold</h2>
                 <canvas id="itemsChart"></canvas>
             </div>
+        </div>"""
+    
+    # Add returning customers charts and table if data is available
+    if returning_customers_analysis is not None and not returning_customers_analysis.empty:
+        html_content += f"""
+        
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Customer Retention Analysis</h2>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Customer Type Distribution (Weekly %)</h2>
+                <canvas id="returningPctChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Order Volume by Customer Type (Weekly)</h2>
+                <canvas id="returningVolumeChart"></canvas>
+            </div>
         </div>
+        
+        <div class="table-container">
+            <h2 class="table-title">Weekly Customer Retention Analysis</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Week</th>
+                        <th>Week Start</th>
+                        <th class="number">Total Orders</th>
+                        <th class="number">New Orders</th>
+                        <th class="number">New %</th>
+                        <th class="number">Returning Orders</th>
+                        <th class="number">Returning %</th>
+                        <th class="number">Unique Customers</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+        
+        # Add weekly rows
+        for i, row in returning_customers_analysis.iterrows():
+            returning_class = "profit-positive" if row['returning_percentage'] > 10 else ""
+            html_content += f"""
+                    <tr>
+                        <td>{row['week']}</td>
+                        <td>{row['week_start']}</td>
+                        <td class="number">{row['total_orders']}</td>
+                        <td class="number">{row['new_orders']}</td>
+                        <td class="number">{row['new_percentage']:.1f}%</td>
+                        <td class="number {returning_class}">{row['returning_orders']}</td>
+                        <td class="number {returning_class}">{row['returning_percentage']:.1f}%</td>
+                        <td class="number">{row['unique_customers']}</td>
+                    </tr>"""
+        
+        # Add total row
+        html_content += f"""
+                    <tr class="total-row">
+                        <td colspan="2">TOTAL</td>
+                        <td class="number">{total_weekly_orders}</td>
+                        <td class="number">{total_new}</td>
+                        <td class="number">{overall_new_pct:.1f}%</td>
+                        <td class="number">{total_returning}</td>
+                        <td class="number">{overall_returning_pct:.1f}%</td>
+                        <td class="number">{returning_customers_analysis['unique_customers'].sum()}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>"""
+    
+    html_content += """
         
         <div class="table-container">
             <h2 class="table-title">Daily Performance Summary</h2>
@@ -1242,7 +1341,122 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     }}
                 }}
             }}
-        }});
+        }});"""
+    
+    # Add JavaScript for returning customers charts if data is available
+    if returning_customers_analysis is not None and not returning_customers_analysis.empty:
+        html_content += f"""
+        
+        // Returning Customers Percentage Chart
+        const returningPctCtx = document.getElementById('returningPctChart');
+        if (returningPctCtx) {{
+            new Chart(returningPctCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(week_starts)},
+                    datasets: [
+                        {{
+                            label: 'Returning Customers %',
+                            data: {json.dumps(returning_pct)},
+                            borderColor: '#2E86AB',
+                            backgroundColor: 'rgba(46, 134, 171, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true
+                        }},
+                        {{
+                            label: 'New Customers %',
+                            data: {json.dumps(new_pct)},
+                            borderColor: '#A23B72',
+                            backgroundColor: 'rgba(162, 59, 114, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {{
+                        legend: {{
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {{
+                                callback: function(value) {{
+                                    return value + '%';
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // Returning Customers Volume Chart
+        const returningVolumeCtx = document.getElementById('returningVolumeChart');
+        if (returningVolumeCtx) {{
+            new Chart(returningVolumeCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(week_starts)},
+                    datasets: [
+                        {{
+                            label: 'New Customer Orders',
+                            data: {json.dumps(new_orders)},
+                            backgroundColor: '#A23B72',
+                            borderRadius: 5
+                        }},
+                        {{
+                            label: 'Returning Customer Orders',
+                            data: {json.dumps(returning_orders)},
+                            backgroundColor: '#2E86AB',
+                            borderRadius: 5
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {{
+                        legend: {{
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            stacked: true
+                        }},
+                        y: {{
+                            stacked: true,
+                            beginAtZero: true
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+    
+    html_content += """
     </script>
 </body>
 </html>
