@@ -12,8 +12,10 @@ import json
 
 def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame, 
                          items_agg: pd.DataFrame, date_from: datetime, date_to: datetime,
-                         fb_daily_spend: Dict[str, float] = None, 
-                         returning_customers_analysis: pd.DataFrame = None) -> str:
+                         fb_daily_spend: Dict[str, float] = None,
+                         google_ads_daily_spend: Dict[str, float] = None, 
+                         returning_customers_analysis: pd.DataFrame = None,
+                         clv_return_time_analysis: pd.DataFrame = None) -> str:
     """
     Generate a complete HTML report with charts and tables
     """
@@ -23,6 +25,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     revenue_data = date_agg['total_revenue'].tolist()
     product_expense_data = date_agg['product_expense'].tolist()
     fb_ads_data = date_agg['fb_ads_spend'].tolist()
+    google_ads_data = date_agg['google_ads_spend'].tolist() if 'google_ads_spend' in date_agg.columns else [0] * len(dates)
     profit_data = date_agg['net_profit'].tolist()
     roi_data = date_agg['roi_percent'].tolist()
     orders_data = date_agg['unique_orders'].tolist()
@@ -44,6 +47,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     total_fixed = date_agg['fixed_daily_cost'].sum()
     total_fixed_costs = total_packaging + total_fixed
     total_fb_ads = date_agg['fb_ads_spend'].sum()
+    total_google_ads = date_agg['google_ads_spend'].sum() if 'google_ads_spend' in date_agg.columns else 0
     total_cost = date_agg['total_cost'].sum()
     total_profit = date_agg['net_profit'].sum()
     total_roi = (total_profit / total_cost * 100) if total_cost > 0 else 0
@@ -298,6 +302,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value cost">€{total_fb_ads:,.2f}</div>
             </div>
             <div class="card">
+                <div class="card-title">Google Ads</div>
+                <div class="card-value cost">€{total_google_ads:,.2f}</div>
+            </div>
+            <div class="card">
                 <div class="card-title">Total Costs</div>
                 <div class="card-value cost">€{total_cost:,.2f}</div>
             </div>
@@ -332,6 +340,30 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Returning Customers</div>
                 <div class="card-value roi">{overall_returning_pct:.1f}%</div>
+            </div>"""
+    
+    # Add CLV and CAC cards if data is available
+    if clv_return_time_analysis is not None and not clv_return_time_analysis.empty:
+        # Get the final cumulative CLV which represents the overall average
+        overall_clv = clv_return_time_analysis['cumulative_avg_clv'].iloc[-1]
+        
+        # Calculate overall CAC
+        total_fb_spend = clv_return_time_analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in clv_return_time_analysis.columns else 0
+        total_new_customers = clv_return_time_analysis['new_customers'].sum()
+        overall_cac = total_fb_spend / total_new_customers if total_new_customers > 0 else 0
+        
+        html_content += f"""
+            <div class="card">
+                <div class="card-title">Avg Customer LTV</div>
+                <div class="card-value">€{overall_clv:.2f}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Customer Acq. Cost</div>
+                <div class="card-value cost">€{overall_cac:.2f}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">LTV/CAC Ratio</div>
+                <div class="card-value roi">{overall_clv / overall_cac if overall_cac > 0 else 0:.2f}x</div>
             </div>"""
     
     html_content += """
@@ -390,6 +422,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="chart-container">
                 <h2 class="chart-title">Daily Facebook Ads</h2>
                 <canvas id="fbAdsChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Daily Google Ads</h2>
+                <canvas id="googleAdsChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Ads Comparison (FB vs Google)</h2>
+                <canvas id="adsComparisonChart"></canvas>
             </div>
         </div>
         
@@ -479,6 +522,119 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </table>
         </div>"""
     
+    # Add CLV and return time analysis if data is available
+    if clv_return_time_analysis is not None and not clv_return_time_analysis.empty:
+        # Prepare data for CLV charts
+        clv_weeks = clv_return_time_analysis['week'].astype(str).tolist()
+        clv_week_starts = clv_return_time_analysis['week_start'].astype(str).tolist()
+        avg_clv = clv_return_time_analysis['avg_clv'].tolist()
+        cumulative_clv = clv_return_time_analysis['cumulative_avg_clv'].tolist()
+        avg_return_days = clv_return_time_analysis['avg_return_time_days'].fillna(0).tolist()
+        clv_new_customers = clv_return_time_analysis['new_customers'].tolist()
+        clv_returning_customers = clv_return_time_analysis['returning_customers'].tolist()
+        cac_data = clv_return_time_analysis['cac'].tolist() if 'cac' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
+        ltv_cac_ratio_data = clv_return_time_analysis['ltv_cac_ratio'].tolist() if 'ltv_cac_ratio' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
+        
+        # Calculate overall metrics
+        overall_avg_clv = clv_return_time_analysis['avg_clv'].mean()
+        final_cumulative_clv = clv_return_time_analysis['cumulative_avg_clv'].iloc[-1] if not clv_return_time_analysis.empty else 0
+        overall_avg_return = clv_return_time_analysis['avg_return_time_days'].mean()
+        
+        html_content += f"""
+        
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Customer Lifetime Value, CAC & Return Time Analysis</h2>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Customer Lifetime Value Trend (Weekly)</h2>
+                <canvas id="clvChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Customer Acquisition Cost Trend (Weekly)</h2>
+                <canvas id="cacChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">CLV vs CAC Comparison</h2>
+                <canvas id="clvCacComparisonChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">LTV/CAC Ratio Trend</h2>
+                <canvas id="ltvCacRatioChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2 class="chart-title">Average Customer Return Time (Days)</h2>
+            <canvas id="returnTimeChart"></canvas>
+        </div>
+        
+        <div class="table-container">
+            <h2 class="table-title">Weekly CLV, CAC & Return Time Analysis</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Week</th>
+                        <th>Week Start</th>
+                        <th class="number">Customers</th>
+                        <th class="number">New</th>
+                        <th class="number">Returning</th>
+                        <th class="number">Avg CLV (€)</th>
+                        <th class="number">Cumulative CLV (€)</th>
+                        <th class="number">CAC (€)</th>
+                        <th class="number">Avg Return Days</th>
+                        <th class="number">Revenue (€)</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+        
+        # Add weekly rows
+        for i, row in clv_return_time_analysis.iterrows():
+            return_time_str = f"{row['avg_return_time_days']:.1f}" if pd.notna(row['avg_return_time_days']) else "N/A"
+            cac = row.get('cac', 0)
+            html_content += f"""
+                    <tr>
+                        <td>{row['week']}</td>
+                        <td>{row['week_start']}</td>
+                        <td class="number">{row['unique_customers']}</td>
+                        <td class="number">{row['new_customers']}</td>
+                        <td class="number">{row['returning_customers']}</td>
+                        <td class="number">€{row['avg_clv']:.2f}</td>
+                        <td class="number">€{row['cumulative_avg_clv']:.2f}</td>
+                        <td class="number">€{cac:.2f}</td>
+                        <td class="number">{return_time_str}</td>
+                        <td class="number">€{row['total_revenue']:.2f}</td>
+                    </tr>"""
+        
+        # Add total row
+        total_customers = clv_return_time_analysis['unique_customers'].sum()
+        total_new = clv_return_time_analysis['new_customers'].sum()
+        total_returning = clv_return_time_analysis['returning_customers'].sum()
+        total_revenue = clv_return_time_analysis['total_revenue'].sum()
+        return_time_total = f"{overall_avg_return:.1f}" if pd.notna(overall_avg_return) else "N/A"
+        
+        # Calculate overall CAC for the total row
+        total_fb_spend_table = clv_return_time_analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in clv_return_time_analysis.columns else 0
+        overall_cac_table = total_fb_spend_table / total_new if total_new > 0 else 0
+        
+        html_content += f"""
+                    <tr class="total-row">
+                        <td colspan="2">TOTAL/AVG</td>
+                        <td class="number">{total_customers}</td>
+                        <td class="number">{total_new}</td>
+                        <td class="number">{total_returning}</td>
+                        <td class="number">€{overall_avg_clv:.2f}</td>
+                        <td class="number">€{final_cumulative_clv:.2f}</td>
+                        <td class="number">€{overall_cac_table:.2f}</td>
+                        <td class="number">{return_time_total}</td>
+                        <td class="number">€{total_revenue:.2f}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>"""
+    
     html_content += """
         
         <div class="table-container">
@@ -493,7 +649,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Product Costs</th>
                         <th class="number">Fixed Costs</th>
                         <th class="number">FB Ads</th>
-                        <th class="number">FB/Order</th>
+                        <th class="number">Google Ads</th>
                         <th class="number">Total Costs</th>
                         <th class="number">Profit</th>
                         <th class="number">ROI %</th>
@@ -508,6 +664,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         fixed_costs = row['packaging_cost'] + row['fixed_daily_cost']
         aov = row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
         fb_per_order = row['fb_ads_spend'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
+        google_ads = row.get('google_ads_spend', 0)
         html_content += f"""
                     <tr>
                         <td>{row['date']}</td>
@@ -517,7 +674,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">€{row['product_expense']:,.2f}</td>
                         <td class="number">€{fixed_costs:,.2f}</td>
                         <td class="number">€{row['fb_ads_spend']:,.2f}</td>
-                        <td class="number">€{fb_per_order:.2f}</td>
+                        <td class="number">€{google_ads:,.2f}</td>
                         <td class="number">€{row['total_cost']:,.2f}</td>
                         <td class="number {profit_class}">€{row['net_profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
@@ -534,7 +691,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">€{total_product_expense:,.2f}</td>
                         <td class="number">€{total_fixed_costs:,.2f}</td>
                         <td class="number">€{total_fb_ads:,.2f}</td>
-                        <td class="number">€{total_fb_per_order:.2f}</td>
+                        <td class="number">€{total_google_ads:,.2f}</td>
                         <td class="number">€{total_cost:,.2f}</td>
                         <td class="number profit-positive">€{total_profit:,.2f}</td>
                         <td class="number">{total_roi:.1f}%</td>
@@ -616,6 +773,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         data: {json.dumps(fb_ads_data)},
                         borderColor: '#4299e1',
                         backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4
+                    }},
+                    {{
+                        label: 'Google Ads',
+                        data: {json.dumps(google_ads_data)},
+                        borderColor: '#34D399',
+                        backgroundColor: 'rgba(52, 211, 153, 0.1)',
                         borderWidth: 2,
                         tension: 0.4
                     }},
@@ -725,6 +890,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         data: {json.dumps(fb_ads_data)},
                         borderColor: '#4299e1',
                         backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        hidden: false
+                    }},
+                    {{
+                        label: 'Google Ads',
+                        data: {json.dumps(google_ads_data)},
+                        borderColor: '#34D399',
+                        backgroundColor: 'rgba(52, 211, 153, 0.1)',
                         borderWidth: 2,
                         tension: 0.4,
                         hidden: false
@@ -953,10 +1127,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         new Chart(costPieCtx, {{
             type: 'doughnut',
             data: {{
-                labels: ['Product Costs', 'Fixed Costs', 'Facebook Ads'],
+                labels: ['Product Costs', 'Fixed Costs', 'Facebook Ads', 'Google Ads'],
                 datasets: [{{
-                    data: [{total_product_expense:.2f}, {total_fixed_costs:.2f}, {total_fb_ads:.2f}],
-                    backgroundColor: ['#ed8936', '#48bb78', '#4299e1'],
+                    data: [{total_product_expense:.2f}, {total_fixed_costs:.2f}, {total_fb_ads:.2f}, {total_google_ads:.2f}],
+                    backgroundColor: ['#ed8936', '#48bb78', '#4299e1', '#34D399'],
                     borderWidth: 2,
                     borderColor: '#fff'
                 }}]
@@ -1165,6 +1339,98 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         callbacks: {{
                             label: function(context) {{
                                 return 'FB Ads: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Google Ads Chart
+        const googleAdsCtx = document.getElementById('googleAdsChart').getContext('2d');
+        new Chart(googleAdsCtx, {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Google Ads',
+                    data: {json.dumps(google_ads_data)},
+                    backgroundColor: '#34D399',
+                    borderRadius: 5
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Google Ads: €' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return '€' + value.toFixed(0);
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        
+        // Ads Comparison Chart
+        const adsComparisonCtx = document.getElementById('adsComparisonChart').getContext('2d');
+        new Chart(adsComparisonCtx, {{
+            type: 'bar',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [
+                    {{
+                        label: 'Facebook Ads',
+                        data: {json.dumps(fb_ads_data)},
+                        backgroundColor: '#4299e1',
+                        borderRadius: 5
+                    }},
+                    {{
+                        label: 'Google Ads',
+                        data: {json.dumps(google_ads_data)},
+                        backgroundColor: '#34D399',
+                        borderRadius: 5
+                    }}
+                ]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {{
+                    legend: {{
+                        position: 'top'
+                    }},
+                    tooltip: {{
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {{
+                            label: function(context) {{
+                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -1450,6 +1716,317 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             stacked: true,
                             beginAtZero: true
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+    
+    # Add JavaScript for CLV and return time charts if data is available
+    if clv_return_time_analysis is not None and not clv_return_time_analysis.empty:
+        html_content += f"""
+        
+        // Customer Lifetime Value Chart
+        const clvCtx = document.getElementById('clvChart');
+        if (clvCtx) {{
+            new Chart(clvCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(clv_week_starts)},
+                    datasets: [
+                        {{
+                            label: 'Average CLV (€)',
+                            data: {json.dumps(avg_clv)},
+                            borderColor: '#48bb78',
+                            backgroundColor: 'rgba(72, 187, 120, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Cumulative Avg CLV (€)',
+                            data: {json.dumps(cumulative_clv)},
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            borderDash: [5, 5],
+                            yAxisID: 'y'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false,
+                    }},
+                    plugins: {{
+                        legend: {{
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'CLV (€)'
+                            }},
+                            ticks: {{
+                                callback: function(value) {{
+                                    return '€' + value.toFixed(0);
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // Customer Acquisition Cost Chart
+        const cacCtx = document.getElementById('cacChart');
+        if (cacCtx) {{
+            new Chart(cacCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(clv_week_starts)},
+                    datasets: [
+                        {{
+                            label: 'CAC (€)',
+                            data: {json.dumps(cac_data)},
+                            borderColor: '#f56565',
+                            backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {{
+                        legend: {{
+                            display: false
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    return 'CAC: €' + context.parsed.y.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'CAC (€)'
+                            }},
+                            ticks: {{
+                                callback: function(value) {{
+                                    return '€' + value.toFixed(0);
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // CLV vs CAC Comparison Chart
+        const clvCacComparisonCtx = document.getElementById('clvCacComparisonChart');
+        if (clvCacComparisonCtx) {{
+            new Chart(clvCacComparisonCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(clv_week_starts)},
+                    datasets: [
+                        {{
+                            label: 'CLV (€)',
+                            data: {json.dumps(avg_clv)},
+                            backgroundColor: '#48bb78',
+                            borderRadius: 5
+                        }},
+                        {{
+                            label: 'CAC (€)',
+                            data: {json.dumps(cac_data)},
+                            backgroundColor: '#f56565',
+                            borderRadius: 5
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {{
+                        legend: {{
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'Amount (€)'
+                            }},
+                            ticks: {{
+                                callback: function(value) {{
+                                    return '€' + value.toFixed(0);
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // LTV/CAC Ratio Chart
+        const ltvCacRatioCtx = document.getElementById('ltvCacRatioChart');
+        if (ltvCacRatioCtx) {{
+            new Chart(ltvCacRatioCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(clv_week_starts)},
+                    datasets: [
+                        {{
+                            label: 'LTV/CAC Ratio',
+                            data: {json.dumps(ltv_cac_ratio_data)},
+                            borderColor: '#9f7aea',
+                            backgroundColor: 'rgba(159, 122, 234, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true
+                        }},
+                        {{
+                            label: 'Break-even Line (1.0)',
+                            data: Array({len(clv_week_starts)}).fill(1),
+                            borderColor: '#718096',
+                            borderWidth: 2,
+                            borderDash: [10, 5],
+                            fill: false,
+                            pointRadius: 0
+                        }},
+                        {{
+                            label: 'Target Line (3.0)',
+                            data: Array({len(clv_week_starts)}).fill(3),
+                            borderColor: '#48bb78',
+                            borderWidth: 2,
+                            borderDash: [10, 5],
+                            fill: false,
+                            pointRadius: 0
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {{
+                        legend: {{
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('Line')) {{
+                                        return context.dataset.label;
+                                    }}
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + 'x';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'LTV/CAC Ratio'
+                            }},
+                            ticks: {{
+                                callback: function(value) {{
+                                    return value.toFixed(1) + 'x';
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // Customer Return Time Chart
+        const returnTimeCtx = document.getElementById('returnTimeChart');
+        if (returnTimeCtx) {{
+            new Chart(returnTimeCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(clv_week_starts)},
+                    datasets: [
+                        {{
+                            label: 'Average Return Time (Days)',
+                            data: {json.dumps(avg_return_days)},
+                            backgroundColor: '#ed8936',
+                            borderRadius: 5
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {{
+                        legend: {{
+                            display: false
+                        }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.parsed.y === 0) {{
+                                        return 'No returning customers';
+                                    }}
+                                    return 'Avg Return: ' + context.parsed.y.toFixed(1) + ' days';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'Days'
+                            }},
+                            ticks: {{
+                                callback: function(value) {{
+                                    return value.toFixed(0);
+                                }}
+                            }}
                         }}
                     }}
                 }}

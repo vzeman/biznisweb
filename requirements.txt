@@ -2,3 +2,8 @@ gql[all]>=3.5.0
 python-dotenv>=1.0.0
 pandas>=2.0.0
 requests>=2.31.0
+
+# Google Ads API integration
+google-ads>=24.1.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0

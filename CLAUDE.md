@@ -1,6 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+When testing, use as start date 2025-05-01 and now as end date of report
 
 ## Project Overview
 
