@@ -128,6 +128,49 @@ PRODUCT_EXPENSES = {
     'Prací gél hypoalergénny z Marseillského mydla 1L': 2.43
 }
 
+# nove ceny nakladov
+# PRODUCT_EXPENSES = {
+#     'Sada vzoriek najpredávanejších vôní Vevo 6 x 10ml': 1.38,
+#     'Sada vzoriek všetkých vôní Vevo 6 x 10ml': 1.38,
+#     'Sada najpredávanejších vzoriek Vevo 6 x 10ml': 1.38,
+#     'Sada 6 najpredávanejších vzoriek po 1ks': 1.38,
+#     'Sada najpredávanejších vzoriek 6 x 10ml': 1.38,
+#     'Sada vzorků všech vůní Vevo (6 × 10 ml)': 1.38,
+#     'Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml': 0.69,
+#     'Parfum do prania Vevo No.08 Cotton Dream (500ml)': 3.13,
+#     'Vevo No.08 Cotton Dream mosóparfüm (500ml)': 3.13,
+#     'Parfum do prania Vevo No.07 Ylang Absolute (200ml)': 1.79,
+#     'Vevo No.07 Ylang Absolute mosóparfüm (200ml)': 1.79,
+#     'Parfum do prania Vevo No.08 Cotton Dream (200ml)': 1.79,
+#     'Parfum do prania Vevo No.09 Pure Garden (200ml)': 1.79,
+#     'Parfum do prania Vevo No.01 Cotton Paradise (500ml)': 3.13,
+#     'Parfum do prania Vevo No.01 Cotton Paradise (200ml)': 1.79,
+#     'Parfum do prania Vevo No.09 Pure Garden (500ml)': 3.13,
+#     'Parfém na praní Vevo No.09 Pure Garden (500ml)': 1.79,
+#     'Parfum do prania Vevo No.06 Royal Cotton (200ml)': 1.79,
+#     'Parfum do prania Vevo No.02 Sweet Paradise (200ml)': 1.79,
+#     'Odmerka Vevo 7ml drevená na parfum do prania': 0.31,
+#     'Parfum do prania Vevo No.02 Sweet Paradise (500ml)': 3.13,
+#     'Parfum do prania Vevo No.07 Ylang Absolute (Vzorka 10ml)': 0.22,
+#     'Parfum do prania Vevo No.07 Ylang Absolute (Vzorka)': 0.22,
+#     'Parfum do prania Vevo No.06 Royal Cotton (500ml)': 3.13,
+#     'Parfum do prania Vevo No.08 Cotton Dream (Vzorka 10ml)': 0.22,
+#     'Parfum do prania Vevo No.08 Cotton Dream (Vzorka)': 0.22,
+#     'Parfum do prania Vevo No.07 Ylang Absolute (500ml)': 3.13,
+#     'Parfum do prania Vevo No.09 Pure Garden (Vzorka 10ml)': 0.22,
+#     'Parfum do prania Vevo No.09 Pure Garden (Vzorka)': 0.22,
+#     'Parfum do prania Vevo No.02 Sweet Paradise (Vzorka 10ml)': 0.22,
+#     'Parfum do prania Vevo No.02 Sweet Paradise (Vzorka)': 0.22,
+#     'Parfum do prania Vevo No.06 Royal Cotton (Vzorka 10ml)': 0.22,
+#     'Parfum do prania Vevo No.06 Royal Cotton (Vzorka)': 0.22,
+#     'Parfum do prania Vevo No.03 Lavender Kiss (Vzorka)': 0.22,
+#     'Tringelt': 0,
+#     'Parfum do prania Vevo No.01 Cotton Paradise (Vzorka 10ml)': 0.22,
+#     'Poistenie proti rozbitiu': 0,
+#     'Vevo Shot - koncentrát na čistenie práčky 100ml': 0.65,
+#     'Vevo Shot – koncentrát na čištění pračky 100 ml': 0.65
+# }
+
 # GraphQL query with fragments
 ORDER_QUERY = gql("""
 query GetOrders($filter: OrderFilter, $params: OrderParams) {
