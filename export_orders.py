@@ -8,11 +8,13 @@ import csv
 import argparse
 import time
 import json
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import calendar
 import numpy as np
+from logger_config import get_logger
 
 try:
     from dotenv import load_dotenv
@@ -63,11 +65,15 @@ from html_report_generator import generate_html_report
 # Load environment variables
 load_dotenv()
 
+# Set up logging
+logger = get_logger('export_orders')
+
 # Configuration
 API_URL = os.getenv('BIZNISWEB_API_URL', 'https://vevo.flox.sk/api/graphql')
 API_TOKEN = os.getenv('BIZNISWEB_API_TOKEN')
 
 if not API_TOKEN:
+    logger.error("BIZNISWEB_API_TOKEN not found in environment variables. Please set it in .env file.")
     raise ValueError("BIZNISWEB_API_TOKEN not found in environment variables. Please set it in .env file.")
 
 # Fixed costs
@@ -125,7 +131,8 @@ PRODUCT_EXPENSES = {
     'Poistenie proti rozbitiu': 0,
     'Vevo Shot - koncentrát na čistenie práčky 100ml': 0.65,
     'Vevo Shot – koncentrát na čištění pračky 100 ml': 0.65,
-    'Prací gél hypoalergénny z Marseillského mydla 1L': 2.43
+    'Prací gél hypoalergénny z Marseillského mydla 1L': 2.43,
+    'Perkarbonát sodný PLUS 1kg': 2.83
 }
 
 # nove ceny nakladov
@@ -221,14 +228,6 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         zip
         country
       }
-      delivery_address {
-        street
-        descriptive_number
-        orientation_number
-        city
-        zip
-        country
-      }
       items {
         item_label
         ean
@@ -249,22 +248,6 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             code
           }
         }
-        price {
-          value
-          formatted
-          is_net_price
-          currency {
-            symbol
-            code
-          }
-        }
-      }
-      price_elements {
-        id
-        title
-        type
-        tax_rate
-        value
         price {
           value
           formatted
@@ -312,7 +295,7 @@ class BizniWebExporter:
         self.google_ads_client = GoogleAdsClient()
         self.cache_dir = Path('data/cache')
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_days_threshold = 3  # Days from today that should always be fetched fresh
+        self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
     
     def get_daily_fixed_cost(self, date: datetime) -> float:
@@ -333,20 +316,23 @@ class BizniWebExporter:
         return amount * CURRENCY_RATES_TO_EUR[currency]
     
     def fetch_orders_for_month(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        """Fetch orders for a specific date range (typically one month) with retry logic"""
+        """
+        Fetch orders for a specific date range (typically one month) with retry logic
+
+        Note: API filter requires partner token, so we fetch all orders and filter client-side
+        """
         all_orders = []
         has_next_page = True
         cursor = None
         max_retries = 3
         retry_delay = 2
         consecutive_errors = 0
-        
+
+        logger.info(f"Fetching orders for month from API (will filter client-side for {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')})")
+
         while has_next_page:
+            # Remove filter parameter as it requires partner token
             variables = {
-                'filter': {
-                    'pur_date_from': date_from.strftime('%Y-%m-%d'),
-                    'pur_date_to': date_to.strftime('%Y-%m-%d')
-                },
                 'params': {
                     'limit': 30,
                     'order_by': 'pur_date',
@@ -378,22 +364,53 @@ class BizniWebExporter:
                 except Exception as e:
                     retry_count += 1
                     consecutive_errors += 1
-                    
+
+                    # Log the full error details
+                    error_msg = str(e)
+                    logger.debug(f"GraphQL error details: {error_msg}")
+
+                    # Print full stack trace for debugging
+                    if os.getenv('DEBUG'):
+                        logger.debug("Full stack trace:")
+                        logger.debug(traceback.format_exc())
+
                     if retry_count < max_retries:
-                        print(f"Error fetching orders (attempt {retry_count}/{max_retries}): {e}")
+                        logger.warning(f"Error fetching orders (attempt {retry_count}/{max_retries}): {error_msg[:200]}")
                         print(f"Retrying in {retry_delay} seconds...")
                         time.sleep(retry_delay)
                     else:
-                        print(f"Error fetching orders after {max_retries} attempts: {e}")
+                        logger.error(f"Error fetching orders after {max_retries} attempts: {error_msg[:200]}")
+                        logger.error(f"Full error: {error_msg}")
+                        logger.error(f"Stack trace:\n{traceback.format_exc()}")
+
                         # If we've had too many consecutive errors and have some data, return what we have
                         if consecutive_errors >= 3 and all_orders:
-                            print(f"Returning {len(all_orders)} orders fetched so far due to persistent errors")
+                            logger.info(f"Returning {len(all_orders)} orders fetched so far due to persistent errors")
                             has_next_page = False
                         else:
                             # Otherwise just break this pagination loop
                             has_next_page = False
                         break
-        
+
+        logger.info(f"Fetched {len(all_orders)} total orders from API for month")
+
+        # Filter by date range (client-side since API filter requires partner token)
+        date_filtered_orders = []
+        for order in all_orders:
+            pur_date_str = order.get('pur_date', '')
+            if pur_date_str:
+                try:
+                    # Parse date (format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)
+                    pur_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
+                    # Check if order is within date range
+                    if date_from <= pur_date <= date_to:
+                        date_filtered_orders.append(order)
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Could not parse date '{pur_date_str}' for order {order.get('order_num', 'unknown')}: {e}")
+                    continue
+
+        logger.info(f"Filtered to {len(date_filtered_orders)} orders within date range for month")
+
         # Filter out orders with excluded statuses
         excluded_statuses = [
             'Storno',
@@ -402,27 +419,29 @@ class BizniWebExporter:
             'Čaká na úhradu',
             'GoPay - platebni metoda potvrzena'
         ]
-        
+
         filtered_orders = []
         excluded_counts = {}
-        
-        for order in all_orders:
+
+        for order in date_filtered_orders:
             status = order.get('status', {}) or {}
             status_name = status.get('name', '')
-            
+
             if status_name not in excluded_statuses:
                 filtered_orders.append(order)
             else:
                 excluded_counts[status_name] = excluded_counts.get(status_name, 0) + 1
-        
+
         # Report excluded orders
         if excluded_counts:
             print("\nFiltered out orders:")
             for status, count in excluded_counts.items():
                 print(f"  - {status}: {count} orders")
-        
+
+        logger.info(f"Final count after status filtering for month: {len(filtered_orders)} orders")
+
         return filtered_orders
-    
+
     def get_cache_filename(self, date: datetime) -> Path:
         """Generate cache filename for a specific date"""
         date_str = date.strftime('%Y-%m-%d')
@@ -513,22 +532,92 @@ class BizniWebExporter:
         ranges.append((start, end))
         return ranges
     
+    def fetch_all_orders_bulk(self, max_orders: int = 900, start_cursor: str = None, sort_order: str = 'DESC') -> tuple[List[Dict[str, Any]], str]:
+        """
+        Fetch orders from API in bulk, stopping before hitting API limits
+
+        Args:
+            max_orders: Maximum orders to fetch (default 900 to stay under ~960 API limit)
+            start_cursor: Cursor to continue from (for pagination across batches)
+            sort_order: Sort order for orders (DESC = newest first, ASC = oldest first)
+
+        Returns:
+            Tuple of (orders list, next cursor)
+        """
+        all_orders = []
+        has_next_page = True
+        cursor = start_cursor
+        max_retries = 3
+        retry_delay = 2
+
+        logger.info(f"Fetching up to {max_orders} orders from API in bulk ({sort_order} order)" + (f", continuing from cursor" if cursor else ""))
+
+        while has_next_page and len(all_orders) < max_orders:
+            variables = {
+                'params': {
+                    'limit': 30,
+                    'order_by': 'pur_date',
+                    'sort': sort_order  # DESC = newest first (for recent orders), ASC = oldest first (for historical)
+                }
+            }
+
+            if cursor is not None:
+                variables['params']['cursor'] = cursor
+
+            retry_count = 0
+            success = False
+
+            while retry_count < max_retries and not success:
+                try:
+                    result = self.client.execute(ORDER_QUERY, variable_values=variables)
+                    orders_data = result.get('getOrderList', {})
+                    orders = orders_data.get('data', [])
+                    all_orders.extend(orders)
+
+                    page_info = orders_data.get('pageInfo', {})
+                    has_next_page = page_info.get('hasNextPage', False)
+                    cursor = page_info.get('nextCursor')
+
+                    print(f"Fetched {len(orders)} orders (total: {len(all_orders)})")
+                    success = True
+
+                    # Stop if we're approaching the limit
+                    if len(all_orders) >= max_orders:
+                        logger.info(f"Reached {len(all_orders)} orders, stopping to avoid API limits")
+                        has_next_page = False
+
+                except Exception as e:
+                    retry_count += 1
+                    error_msg = str(e)
+
+                    if retry_count < max_retries:
+                        logger.warning(f"Error fetching orders (attempt {retry_count}/{max_retries}): {error_msg[:200]}")
+                        print(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                    else:
+                        logger.error(f"Error fetching orders after {max_retries} attempts: {error_msg[:200]}")
+                        logger.info(f"Returning {len(all_orders)} orders fetched before error")
+                        has_next_page = False
+                        break
+
+        logger.info(f"Bulk fetch complete: {len(all_orders)} orders" + (f", next cursor available" if cursor else ""))
+        return all_orders, cursor
+
     def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         """Fetch all orders within the specified date range, using cache for older data"""
         all_orders = []
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        # Process each day individually
-        current_date = date_from
-        
+
         print(f"\nProcessing date range: {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
         print(f"Cache policy: Using cache for data older than {self.cache_days_threshold} days")
-        
-        # Fetch each day separately for better caching
+
+        # Check which dates need fetching (not in cache)
+        dates_to_fetch = []
+        current_date = date_from
+
         while current_date <= date_to:
-            date_str = current_date.strftime('%Y-%m-%d')
             days_ago = (today - current_date).days
-            
+
             # Check if we should use cache for this date
             if self.should_use_cache(current_date):
                 cached_orders = self.load_from_cache(current_date)
@@ -536,37 +625,137 @@ class BizniWebExporter:
                     all_orders.extend(cached_orders)
                     current_date += timedelta(days=1)
                     continue
-            
-            # Fetch this specific day from API
-            print(f"\nFetching {date_str} from API...")
-            
-            try:
-                # Fetch just this one day
-                day_orders = self.fetch_orders_for_period(current_date, current_date)
-                
-                if day_orders:
-                    all_orders.extend(day_orders)
-                    print(f"  Got {len(day_orders)} orders for {date_str}")
-                    
-                    # Cache if appropriate
-                    if days_ago > self.cache_days_threshold:
-                        self.save_to_cache_simple(current_date, day_orders)
-                else:
-                    print(f"  No orders for {date_str}")
-                    # Cache empty result too
-                    if days_ago > self.cache_days_threshold:
-                        self.save_to_cache_simple(current_date, [])
-                        
-            except Exception as e:
-                print(f"  Error fetching {date_str}: {e}")
-            
+
+            # This date needs fetching
+            dates_to_fetch.append(current_date)
             current_date += timedelta(days=1)
-            
-            # Small delay between API calls
-            if current_date <= date_to:
-                time.sleep(0.5)
-        
-        return all_orders
+
+        # If we have dates to fetch, do bulk fetches in batches
+        if dates_to_fetch:
+            print(f"\nFetching orders from API for {len(dates_to_fetch)} uncached dates...")
+
+            # Determine sort order based on what dates we're fetching
+            # If fetching recent dates (within last 7 days), use DESC to get newest first
+            # If fetching older dates, use ASC to get oldest first (more efficient for historical data)
+            recent_dates = [d for d in dates_to_fetch if (today - d).days <= self.cache_days_threshold]
+            sort_order = 'DESC' if recent_dates else 'ASC'
+
+            logger.info(f"Using {sort_order} order: {len(recent_dates)} recent dates, {len(dates_to_fetch) - len(recent_dates)} older dates")
+
+            # Fetch in multiple batches if needed (to cover all requested dates)
+            orders_by_date = {}
+            batch_num = 1
+            max_batches = 5  # Safety limit
+            next_cursor = None
+
+            while batch_num <= max_batches:
+                print(f"Batch {batch_num} ({sort_order} order)...")
+                bulk_orders, next_cursor = self.fetch_all_orders_bulk(
+                    max_orders=900,
+                    start_cursor=next_cursor,
+                    sort_order=sort_order
+                )
+
+                if not bulk_orders:
+                    break
+
+                # Organize orders by date
+                new_dates_found = 0
+                for order in bulk_orders:
+                    pur_date_str = order.get('pur_date', '')
+                    if pur_date_str:
+                        try:
+                            pur_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
+                            date_key = pur_date.strftime('%Y-%m-%d')
+
+                            # Only count orders within our date range
+                            if any(d.strftime('%Y-%m-%d') == date_key for d in dates_to_fetch):
+                                if date_key not in orders_by_date:
+                                    orders_by_date[date_key] = []
+                                    new_dates_found += 1
+                                orders_by_date[date_key].append(order)
+                        except (ValueError, IndexError):
+                            continue
+
+                # Stop if we've found all dates or no new dates in this batch
+                if len(orders_by_date) >= len(dates_to_fetch) or new_dates_found == 0:
+                    logger.info(f"Found orders for {len(orders_by_date)}/{len(dates_to_fetch)} requested dates")
+                    break
+
+                batch_num += 1
+                time.sleep(1)  # Small delay between batches
+
+            # Cache and add orders for each date
+            for date in dates_to_fetch:
+                date_str = date.strftime('%Y-%m-%d')
+                day_orders = orders_by_date.get(date_str, [])
+                days_ago = (today - date).days
+
+                # Filter by status
+                filtered_orders = self._filter_by_status(day_orders)
+
+                # Validate that all orders are actually from the requested date
+                validated_orders = []
+                for order in filtered_orders:
+                    pur_date_str = order.get('pur_date', '')
+                    if pur_date_str:
+                        try:
+                            order_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
+                            if order_date.strftime('%Y-%m-%d') == date_str:
+                                validated_orders.append(order)
+                            else:
+                                logger.warning(f"Order {order.get('order_num', 'unknown')} has date {order_date.strftime('%Y-%m-%d')} but was in {date_str} bucket")
+                        except (ValueError, IndexError) as e:
+                            logger.warning(f"Could not validate date for order {order.get('order_num', 'unknown')}: {e}")
+
+                print(f"  {date_str}: {len(validated_orders)} orders")
+                all_orders.extend(validated_orders)
+
+                # Cache if appropriate
+                if days_ago > self.cache_days_threshold:
+                    self.save_to_cache_simple(date, validated_orders)
+
+        # Final validation: ensure all orders are within the overall date range
+        final_validated_orders = []
+        out_of_range_count = 0
+        for order in all_orders:
+            pur_date_str = order.get('pur_date', '')
+            if pur_date_str:
+                try:
+                    order_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
+                    if date_from <= order_date <= date_to:
+                        final_validated_orders.append(order)
+                    else:
+                        out_of_range_count += 1
+                        logger.warning(f"Order {order.get('order_num', 'unknown')} date {order_date.strftime('%Y-%m-%d')} is outside requested range {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
+                except (ValueError, IndexError):
+                    # If we can't parse the date, skip it
+                    out_of_range_count += 1
+
+        if out_of_range_count > 0:
+            logger.warning(f"Filtered out {out_of_range_count} orders outside the requested date range")
+
+        return final_validated_orders
+
+    def _filter_by_status(self, orders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filter out orders with excluded statuses"""
+        excluded_statuses = [
+            'Storno',
+            'Platba online - platnosť vypršala',
+            'Platba online - platba zamietnutá',
+            'Čaká na úhradu',
+            'GoPay - platebni metoda potvrzena'
+        ]
+
+        filtered_orders = []
+        for order in orders:
+            status = order.get('status', {}) or {}
+            status_name = status.get('name', '')
+
+            if status_name not in excluded_statuses:
+                filtered_orders.append(order)
+
+        return filtered_orders
     
     def save_to_cache_simple(self, date: datetime, orders: List[Dict[str, Any]]):
         """Save orders to cache for a specific date (simplified version for single-day fetches)"""
@@ -637,67 +826,101 @@ class BizniWebExporter:
         return all_orders
     
     def fetch_orders_for_period(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        """Fetch orders for a specific date range (typically one week)"""
+        """
+        Fetch orders for a specific date range (typically one week)
+
+        Note: API filter requires partner token, so we fetch all orders and filter client-side
+        """
         all_orders = []
         has_next_page = True
         cursor = None
         max_retries = 3
         retry_delay = 2
         consecutive_errors = 0
-        
+
+        logger.info(f"Fetching orders from API (will filter client-side for {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')})")
+
         while has_next_page:
+            # Remove filter parameter as it requires partner token
             variables = {
-                'filter': {
-                    'pur_date_from': date_from.strftime('%Y-%m-%d'),
-                    'pur_date_to': date_to.strftime('%Y-%m-%d')
-                },
                 'params': {
                     'limit': 30,
                     'order_by': 'pur_date',
                     'sort': 'ASC'
                 }
             }
-            
+
             if cursor is not None:
                 variables['params']['cursor'] = cursor
-            
+
             retry_count = 0
             success = False
-            
+
             while retry_count < max_retries and not success:
                 try:
                     result = self.client.execute(ORDER_QUERY, variable_values=variables)
                     orders_data = result.get('getOrderList', {})
                     orders = orders_data.get('data', [])
                     all_orders.extend(orders)
-                    
+
                     page_info = orders_data.get('pageInfo', {})
                     has_next_page = page_info.get('hasNextPage', False)
                     cursor = page_info.get('nextCursor')
-                    
+
                     print(f"Fetched {len(orders)} orders (total: {len(all_orders)})")
                     success = True
                     consecutive_errors = 0  # Reset error counter on success
-                    
+
                 except Exception as e:
                     retry_count += 1
                     consecutive_errors += 1
-                    
+
+                    # Log the full error details
+                    error_msg = str(e)
+                    logger.debug(f"GraphQL error details: {error_msg}")
+
+                    # Print full stack trace for debugging
+                    if os.getenv('DEBUG'):
+                        logger.debug("Full stack trace:")
+                        logger.debug(traceback.format_exc())
+
                     if retry_count < max_retries:
-                        print(f"Error fetching orders (attempt {retry_count}/{max_retries}): {e}")
+                        logger.warning(f"Error fetching orders (attempt {retry_count}/{max_retries}): {error_msg[:200]}")
                         print(f"Retrying in {retry_delay} seconds...")
                         time.sleep(retry_delay)
                     else:
-                        print(f"Error fetching orders after {max_retries} attempts: {e}")
+                        logger.error(f"Error fetching orders after {max_retries} attempts: {error_msg[:200]}")
+                        logger.error(f"Full error: {error_msg}")
+                        logger.error(f"Stack trace:\n{traceback.format_exc()}")
+
                         # If we've had too many consecutive errors and have some data, return what we have
                         if consecutive_errors >= 3 and all_orders:
-                            print(f"Returning {len(all_orders)} orders fetched so far due to persistent errors")
+                            logger.info(f"Returning {len(all_orders)} orders fetched so far due to persistent errors")
                             has_next_page = False
                         else:
                             # Otherwise just break this pagination loop
                             has_next_page = False
                         break
-        
+
+        logger.info(f"Fetched {len(all_orders)} total orders from API")
+
+        # Filter by date range (client-side since API filter requires partner token)
+        date_filtered_orders = []
+        for order in all_orders:
+            pur_date_str = order.get('pur_date', '')
+            if pur_date_str:
+                try:
+                    # Parse date (format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)
+                    pur_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
+                    # Check if order is within date range
+                    if date_from <= pur_date <= date_to:
+                        date_filtered_orders.append(order)
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Could not parse date '{pur_date_str}' for order {order.get('order_num', 'unknown')}: {e}")
+                    continue
+
+        logger.info(f"Filtered to {len(date_filtered_orders)} orders within date range")
+
         # Filter out orders with excluded statuses
         excluded_statuses = [
             'Storno',
@@ -706,25 +929,27 @@ class BizniWebExporter:
             'Čaká na úhradu',
             'GoPay - platebni metoda potvrzena'
         ]
-        
+
         filtered_orders = []
         excluded_counts = {}
-        
-        for order in all_orders:
+
+        for order in date_filtered_orders:
             status = order.get('status', {}) or {}
             status_name = status.get('name', '')
-            
+
             if status_name not in excluded_statuses:
                 filtered_orders.append(order)
             else:
                 excluded_counts[status_name] = excluded_counts.get(status_name, 0) + 1
-        
+
         # Report excluded orders
         if excluded_counts:
             print("\nFiltered out orders:")
             for status, count in excluded_counts.items():
                 print(f"  - {status}: {count} orders")
-        
+
+        logger.info(f"Final count after status filtering: {len(filtered_orders)} orders")
+
         return filtered_orders
     
     def flatten_order(self, order: Dict[str, Any]) -> List[Dict[str, Any]]:

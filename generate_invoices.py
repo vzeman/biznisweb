@@ -8,7 +8,6 @@ import argparse
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-import logging
 import json
 import re
 from urllib.parse import urlparse, parse_qs
@@ -16,6 +15,7 @@ from urllib.parse import urlparse, parse_qs
 from dotenv import load_dotenv
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
+from logger_config import get_logger
 
 # Load environment variables
 load_dotenv()
@@ -34,11 +34,7 @@ WEB_USERNAME = os.getenv('BIZNISWEB_USERNAME')
 WEB_PASSWORD = os.getenv('BIZNISWEB_PASSWORD')
 
 # Set up logging
-logging.basicConfig(
-    level=logging.DEBUG if os.getenv('DEBUG') else logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = get_logger('generate_invoices')
 
 # GraphQL query to fetch orders with specific criteria
 ORDER_QUERY = gql("""
@@ -83,20 +79,6 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
       invoices {
         id
         invoice_num
-      }
-      price_elements {
-        id
-        title
-        type
-        price {
-          value
-          formatted
-          is_net_price
-          currency {
-            symbol
-            code
-          }
-        }
       }
       items {
         item_label
@@ -447,43 +429,183 @@ class InvoiceGenerator:
             return False
     
     def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        """Fetch all orders within the specified date range"""
+        """Fetch all orders and filter client-side (API filter requires partner token)"""
         all_orders = []
         has_next_page = True
         cursor = None
-        
+
+        logger.info("Note: Fetching all orders without date filter due to API limitations")
+        logger.info("Orders will be filtered client-side by date range")
+
         while has_next_page:
+            # Remove the filter param as it requires partner token
+            # We'll filter by date on the client side instead
             variables = {
-                'filter': {
-                    'pur_date_from': date_from.strftime('%Y-%m-%d'),
-                    'pur_date_to': date_to.strftime('%Y-%m-%d')
-                },
                 'params': {
-                    'limit': 30,
+                    'limit': 30,  # API max limit is 30
                     'order_by': 'pur_date',
-                    'sort': 'DESC'
+                    'sort': 'ASC'
                 }
             }
-            
+
             if cursor is not None:
                 variables['params']['cursor'] = cursor
-            
+
             try:
+                logger.debug(f"Executing query with variables: {json.dumps(variables, indent=2)}")
                 result = self.client.execute(ORDER_QUERY, variable_values=variables)
                 orders_data = result.get('getOrderList', {})
                 orders = orders_data.get('data', [])
-                all_orders.extend(orders)
-                
+
+                # Filter out None values (orders that failed to fetch)
+                valid_orders = [o for o in orders if o is not None]
+                all_orders.extend(valid_orders)
+
                 page_info = orders_data.get('pageInfo', {})
                 has_next_page = page_info.get('hasNextPage', False)
                 cursor = page_info.get('nextCursor')
-                
-                logger.info(f"Fetched {len(orders)} orders (total: {len(all_orders)})")
-                
+
+                skipped = len(orders) - len(valid_orders)
+                if skipped > 0:
+                    logger.warning(f"Skipped {skipped} orders with errors in this batch")
+                logger.info(f"Fetched {len(valid_orders)} orders (total: {len(all_orders)})")
+
             except Exception as e:
+                error_str = str(e)
                 logger.error(f"Error fetching orders: {e}")
+                logger.error(f"Full error details: {type(e).__name__}: {error_str}")
+
+                # Check if this is a GraphQL error with partial data
+                # The gql library might have partial results even with errors
+                partial_data = None
+                if hasattr(e, 'data') and e.data:
+                    partial_data = e.data
+                    logger.info("Error contains partial data, attempting to use it...")
+                    try:
+                        orders_data = partial_data.get('getOrderList', {})
+                        orders = orders_data.get('data', [])
+
+                        # Filter out None values and orders with errors
+                        valid_orders = [o for o in orders if o is not None]
+                        all_orders.extend(valid_orders)
+
+                        page_info = orders_data.get('pageInfo', {})
+                        has_next_page = page_info.get('hasNextPage', False)
+                        cursor = page_info.get('nextCursor')
+
+                        logger.info(f"Retrieved {len(valid_orders)} valid orders from partial response")
+                        skipped = len(orders) - len(valid_orders)
+                        if skipped > 0:
+                            logger.warning(f"Skipped {skipped} problematic orders in this batch")
+
+                        # Continue to next page
+                        continue
+                    except Exception as parse_error:
+                        logger.error(f"Failed to parse partial data: {parse_error}")
+
+                # If we can't recover from the error, check if we should continue
+                if "Internal server error" in error_str and "price_elements" in error_str:
+                    logger.warning("Encountered server error on price_elements field")
+                    logger.warning("This is a BizniWeb API issue with a specific order's data")
+                    # Skip to next page if we have a cursor
+                    if cursor:
+                        logger.info("Skipping to next page...")
+                        continue
+
+                # Try to get the underlying HTTP response from the GQL exception
+                response = None
+
+                # Check for response in the exception itself
+                if hasattr(e, 'response'):
+                    response = e.response
+                # Check for response in the cause
+                elif hasattr(e, '__cause__'):
+                    cause = e.__cause__
+                    if hasattr(cause, 'response'):
+                        response = cause.response
+                    # For requests.HTTPError, the response is in args
+                    elif hasattr(cause, 'args') and len(cause.args) > 0:
+                        if hasattr(cause.args[0], 'response'):
+                            response = cause.args[0].response
+
+                # Try to extract response from transport layer
+                if not response and hasattr(self.client, 'transport'):
+                    transport = self.client.transport
+                    if hasattr(transport, 'response_headers'):
+                        logger.error(f"Transport response headers: {transport.response_headers}")
+
+                if response:
+                    logger.error(f"HTTP Response Status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
+                    logger.error(f"HTTP Response Headers: {dict(response.headers) if hasattr(response, 'headers') else 'N/A'}")
+                    try:
+                        response_body = response.text if hasattr(response, 'text') else str(response.content if hasattr(response, 'content') else 'N/A')
+                        logger.error(f"HTTP Response Body: {response_body}")
+                    except Exception as body_err:
+                        logger.error(f"Could not read response body: {body_err}")
+                else:
+                    logger.error("No HTTP response object found in exception")
+
+                # Try making a raw request to see what we get
+                logger.error("Attempting to make a raw HTTP request to diagnose the issue...")
+                try:
+                    import requests
+                    headers = {'BW-API-Key': f'Token {self.api_token}', 'Content-Type': 'application/json'}
+
+                    # Convert GQL DocumentNode to string properly
+                    query_string = """
+query GetOrders($filter: OrderFilter, $params: OrderParams) {
+  getOrderList(filter: $filter, params: $params) {
+    data {
+      id
+      order_num
+      status {
+        name
+      }
+    }
+    pageInfo {
+      hasNextPage
+    }
+  }
+}
+"""
+                    payload = {
+                        'query': query_string,
+                        'variables': variables
+                    }
+                    logger.error(f"Making raw request to: {API_URL}")
+                    logger.error(f"With headers: {headers}")
+                    raw_response = requests.post(
+                        API_URL,
+                        json=payload,
+                        headers=headers,
+                        timeout=10
+                    )
+                    logger.error(f"Raw request status: {raw_response.status_code}")
+                    logger.error(f"Raw request headers: {dict(raw_response.headers)}")
+                    logger.error(f"Raw request body: {raw_response.text}")
+                except Exception as raw_err:
+                    logger.error(f"Raw request also failed: {raw_err}")
+
                 break
-        
+
+        # Filter orders by date client-side
+        if all_orders:
+            filtered_orders = []
+            date_from_str = date_from.strftime('%Y-%m-%d')
+            date_to_str = date_to.strftime('%Y-%m-%d')
+
+            for order in all_orders:
+                pur_date = order.get('pur_date', '')
+                # Extract just the date part if it includes time
+                if ' ' in pur_date:
+                    pur_date = pur_date.split(' ')[0]
+
+                if date_from_str <= pur_date <= date_to_str:
+                    filtered_orders.append(order)
+
+            logger.info(f"Filtered {len(filtered_orders)} orders within date range {date_from_str} to {date_to_str}")
+            return filtered_orders
+
         return all_orders
     
     def filter_orders_for_invoice(self, orders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -494,29 +616,34 @@ class InvoiceGenerator:
             status = order.get('status', {}) or {}
             status_name = status.get('name', '').lower()
             
-            # Check for payment method in price_elements
+            # Check for payment method in price_elements (if available)
+            # Note: price_elements removed from query due to API errors,
+            # so we'll match orders by status only
             price_elements = order.get('price_elements', []) or []
             payment_name = ''
             for element in price_elements:
                 if element.get('type') == 'payment':
                     payment_name = element.get('title', '').lower()
                     break
-            
+
             # Check if invoices list is empty
             invoices = order.get('invoices', []) or []
             has_invoice = len(invoices) > 0
-            
+
             # Check criteria:
-            # 1. Status is "Odoslaná" (sent)
-            # 2. Payment method is "Na dobierku" or "Dobierkou" (cash on delivery)
+            # 1. Status is "Odoslaná" (sent) OR "Čaká na vybavenie" (waiting for processing)
+            # 2. Payment method check removed (was causing API errors)
             # 3. No invoices (empty list)
-            if (status_name == 'odoslaná' and 
-                ('dobierku' in payment_name or 'dobierkou' in payment_name) and 
+            #
+            # Note: Since we removed price_elements from the query to avoid API crashes,
+            # we now match all "Odoslaná" orders without invoices.
+            # You may need to manually filter by payment method when processing.
+            if ((status_name == 'odoslaná' or 'čaká na vybavenie' in status_name) and
                 not has_invoice):
                 filtered_orders.append(order)
-                logger.info(f"Order {order.get('order_num')} matches criteria for invoice generation")
+                logger.info(f"Order {order.get('order_num')} matches criteria for invoice generation - Status: {status_name}")
             else:
-                logger.info(f"Order {order.get('order_num')} skipped - Status: {status_name}, Payment: {payment_name}, Has Invoice: {has_invoice}")
+                logger.debug(f"Order {order.get('order_num')} skipped - Status: {status_name}, Has Invoice: {has_invoice}")
         
         return filtered_orders
     

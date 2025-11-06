@@ -9,9 +9,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
+from logger_config import get_logger
 
 # Load environment variables
 load_dotenv()
+
+# Set up logging
+logger = get_logger('google_ads')
 
 class GoogleAdsClient:
     def __init__(self):
@@ -30,7 +34,7 @@ class GoogleAdsClient:
         
         # Validate required credentials
         if not all([self.developer_token, self.client_id, self.client_secret, self.refresh_token]):
-            print("Warning: Google Ads credentials not fully configured. Ad spend data will not be available.")
+            logger.warning("Google Ads credentials not fully configured. Ad spend data will not be available.")
             self.is_configured = False
             self.client = None
         else:
@@ -59,13 +63,13 @@ class GoogleAdsClient:
             # Initialize client
             self.client = GAClient.load_from_dict(config)
             self.GoogleAdsException = GoogleAdsException
-            
+
         except ImportError:
-            print("Google Ads library not installed. Please run: pip install google-ads")
+            logger.warning("Google Ads library not installed. Please run: pip install google-ads")
             self.is_configured = False
             self.client = None
         except Exception as e:
-            print(f"Error initializing Google Ads client: {e}")
+            logger.error(f"Error initializing Google Ads client: {e}")
             self.is_configured = False
             self.client = None
     
@@ -97,10 +101,10 @@ class GoogleAdsClient:
                 cached_at = datetime.fromisoformat(data.get('cached_at', ''))
                 if (datetime.now() - cached_at).days > 30:  # Expire cache after 30 days
                     return None
-                print(f"  Loaded Google Ads data from cache ({len(data.get('daily_spend', {}))} days)")
+                logger.info(f"Loaded Google Ads data from cache ({len(data.get('daily_spend', {}))} days)")
                 return data.get('daily_spend', {})
         except Exception as e:
-            print(f"  Error loading Google Ads cache: {e}")
+            logger.error(f"Error loading Google Ads cache: {e}")
             return None
     
     def save_to_cache(self, date_from: datetime, date_to: datetime, daily_spend: Dict[str, float]):
@@ -117,11 +121,11 @@ class GoogleAdsClient:
             
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            
+
             if daily_spend:
-                print(f"  Cached Google Ads data for {len(daily_spend)} days")
+                logger.info(f"Cached Google Ads data for {len(daily_spend)} days")
         except Exception as e:
-            print(f"  Error saving Google Ads cache: {e}")
+            logger.error(f"Error saving Google Ads cache: {e}")
     
     def get_daily_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, float]:
         """
@@ -148,9 +152,9 @@ class GoogleAdsClient:
             # Format dates for Google Ads API (YYYY-MM-DD format)
             since = date_from.strftime('%Y-%m-%d')
             until = date_to.strftime('%Y-%m-%d')
-            
-            print(f"  Fetching Google Ads data from API for {since} to {until}...")
-            
+
+            logger.info(f"Fetching Google Ads data from API for {since} to {until}...")
+
             # Remove hyphens from customer ID
             customer_id = self.customer_id.replace('-', '')
             
@@ -194,12 +198,12 @@ class GoogleAdsClient:
                 self.save_to_cache(date_from, date_to, daily_spend)
             
             return daily_spend
-            
+
         except self.GoogleAdsException as e:
-            print(f"Google Ads API error: {e}")
+            logger.error(f"Google Ads API error: {e}")
             return {}
         except Exception as e:
-            print(f"Unexpected error processing Google Ads data: {e}")
+            logger.error(f"Unexpected error processing Google Ads data: {e}")
             return {}
     
     def get_campaign_spend(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -261,9 +265,9 @@ class GoogleAdsClient:
                     })
             
             return campaign_spend
-            
+
         except Exception as e:
-            print(f"Error fetching campaign data: {e}")
+            logger.error(f"Error fetching campaign data: {e}")
             return []
     
     def test_connection(self) -> bool:
@@ -274,7 +278,7 @@ class GoogleAdsClient:
             True if connection successful, False otherwise
         """
         if not self.is_configured or not self.client:
-            print("Google Ads API not configured or client not initialized")
+            logger.warning("Google Ads API not configured or client not initialized")
             return False
         
         try:
@@ -302,15 +306,15 @@ class GoogleAdsClient:
             
             # Process the response
             for row in response:
-                print(f"Successfully connected to Google Ads account: {row.customer.descriptive_name}")
-                print(f"Customer ID: {row.customer.id}")
-                print(f"Currency: {row.customer.currency_code}")
+                logger.info(f"Successfully connected to Google Ads account: {row.customer.descriptive_name}")
+                logger.info(f"Customer ID: {row.customer.id}")
+                logger.info(f"Currency: {row.customer.currency_code}")
                 return True
-            
+
             return True
-            
+
         except Exception as e:
-            print(f"Failed to connect to Google Ads API: {e}")
+            logger.error(f"Failed to connect to Google Ads API: {e}")
             return False
     
     def generate_refresh_token(self):
@@ -320,16 +324,16 @@ class GoogleAdsClient:
         """
         try:
             from google_auth_oauthlib.flow import Flow
-            
-            print("\n=== Google Ads OAuth2 Setup ===")
-            print("1. First, create OAuth2 credentials in Google Cloud Console")
-            print("2. Download the credentials JSON file")
-            print("3. Run this method with the path to your credentials file")
-            
+
+            logger.info("\n=== Google Ads OAuth2 Setup ===")
+            logger.info("1. First, create OAuth2 credentials in Google Cloud Console")
+            logger.info("2. Download the credentials JSON file")
+            logger.info("3. Run this method with the path to your credentials file")
+
             credentials_path = input("Enter path to your OAuth2 credentials JSON file: ").strip()
-            
+
             if not os.path.exists(credentials_path):
-                print(f"File not found: {credentials_path}")
+                logger.error(f"File not found: {credentials_path}")
                 return
             
             # OAuth2 scope for Google Ads
@@ -344,74 +348,74 @@ class GoogleAdsClient:
             
             # Get the authorization URL
             auth_url, _ = flow.authorization_url(prompt='consent')
-            
-            print(f"\nOpen this URL in your browser:\n{auth_url}")
-            print("\nAfter authorization, you'll be redirected to localhost:8080")
-            print("Copy the full URL from your browser and paste it here:")
-            
+
+            logger.info(f"\nOpen this URL in your browser:\n{auth_url}")
+            logger.info("\nAfter authorization, you'll be redirected to localhost:8080")
+            logger.info("Copy the full URL from your browser and paste it here:")
+
             redirect_response = input("Paste the full redirect URL: ").strip()
-            
+
             # Get the token
             flow.fetch_token(authorization_response=redirect_response)
-            
+
             # Get credentials
             credentials = flow.credentials
-            
-            print("\n=== Your Google Ads Credentials ===")
-            print(f"GOOGLE_ADS_CLIENT_ID={flow.client_config['client_id']}")
-            print(f"GOOGLE_ADS_CLIENT_SECRET={flow.client_config['client_secret']}")
-            print(f"GOOGLE_ADS_REFRESH_TOKEN={credentials.refresh_token}")
-            print("\nAdd these to your .env file along with:")
-            print("GOOGLE_ADS_DEVELOPER_TOKEN=<your_developer_token>")
-            print("GOOGLE_ADS_CUSTOMER_ID=7592903323")
-            
+
+            logger.info("\n=== Your Google Ads Credentials ===")
+            logger.info(f"GOOGLE_ADS_CLIENT_ID={flow.client_config['client_id']}")
+            logger.info(f"GOOGLE_ADS_CLIENT_SECRET={flow.client_config['client_secret']}")
+            logger.info(f"GOOGLE_ADS_REFRESH_TOKEN={credentials.refresh_token}")
+            logger.info("\nAdd these to your .env file along with:")
+            logger.info("GOOGLE_ADS_DEVELOPER_TOKEN=<your_developer_token>")
+            logger.info("GOOGLE_ADS_CUSTOMER_ID=7592903323")
+
         except ImportError:
-            print("Please install required packages:")
-            print("pip install google-auth-oauthlib google-auth-httplib2")
+            logger.error("Please install required packages:")
+            logger.error("pip install google-auth-oauthlib google-auth-httplib2")
         except Exception as e:
-            print(f"Error during OAuth2 setup: {e}")
+            logger.error(f"Error during OAuth2 setup: {e}")
 
 
 def main():
     """Test function to verify Google Ads integration"""
     client = GoogleAdsClient()
-    
+
     if not client.is_configured:
-        print("\nGoogle Ads not configured. To set up:")
-        print("1. Get a developer token from https://ads.google.com/aw/apicenter")
-        print("2. Create OAuth2 credentials in Google Cloud Console")
-        print("3. Run: python google_ads.py --setup")
+        logger.info("\nGoogle Ads not configured. To set up:")
+        logger.info("1. Get a developer token from https://ads.google.com/aw/apicenter")
+        logger.info("2. Create OAuth2 credentials in Google Cloud Console")
+        logger.info("3. Run: python google_ads.py --setup")
         return
     
     if client.test_connection():
         # Test fetching last 7 days of data
         date_to = datetime.now()
         date_from = date_to - timedelta(days=7)
-        
-        print(f"\nFetching ad spend from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
-        
+
+        logger.info(f"\nFetching ad spend from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
+
         daily_spend = client.get_daily_spend(date_from, date_to)
-        
+
         if daily_spend:
-            print("\nDaily Ad Spend:")
+            logger.info("\nDaily Ad Spend:")
             total = 0
             for date, spend in sorted(daily_spend.items()):
-                print(f"  {date}: €{spend:.2f}")
+                logger.info(f"  {date}: €{spend:.2f}")
                 total += spend
-            print(f"  Total: €{total:.2f}")
+            logger.info(f"  Total: €{total:.2f}")
         else:
-            print("No spend data available")
-        
+            logger.info("No spend data available")
+
         # Test campaign data
-        print("\n" + "="*50)
+        logger.info("\n" + "="*50)
         campaign_data = client.get_campaign_spend(date_from, date_to)
         if campaign_data:
-            print("\nCampaign Performance:")
+            logger.info("\nCampaign Performance:")
             for campaign in campaign_data:
-                print(f"\n  {campaign['campaign_name']} ({campaign['status']})")
-                print(f"    Spend: €{campaign['spend']:.2f}")
-                print(f"    Clicks: {campaign['clicks']}")
-                print(f"    Impressions: {campaign['impressions']}")
+                logger.info(f"\n  {campaign['campaign_name']} ({campaign['status']})")
+                logger.info(f"    Spend: €{campaign['spend']:.2f}")
+                logger.info(f"    Clicks: {campaign['clicks']}")
+                logger.info(f"    Impressions: {campaign['impressions']}")
 
 
 if __name__ == "__main__":

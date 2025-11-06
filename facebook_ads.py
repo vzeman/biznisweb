@@ -10,9 +10,13 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 import requests
 from dotenv import load_dotenv
+from logger_config import get_logger
 
 # Load environment variables
 load_dotenv()
+
+# Set up logging
+logger = get_logger('facebook_ads')
 
 class FacebookAdsClient:
     def __init__(self):
@@ -33,7 +37,7 @@ class FacebookAdsClient:
         
         # Validate required credentials
         if not all([self.access_token, self.ad_account_id]):
-            print("Warning: Facebook Ads credentials not fully configured. Ad spend data will not be available.")
+            logger.warning("Facebook Ads credentials not fully configured. Ad spend data will not be available.")
             self.is_configured = False
         else:
             self.is_configured = True
@@ -69,10 +73,10 @@ class FacebookAdsClient:
                 cached_at = datetime.fromisoformat(data.get('cached_at', ''))
                 if (datetime.now() - cached_at).days > 30:  # Expire cache after 30 days
                     return None
-                print(f"  Loaded Facebook Ads data from cache ({len(data.get('daily_spend', {}))} days)")
+                logger.info(f"Loaded Facebook Ads data from cache ({len(data.get('daily_spend', {}))} days)")
                 return data.get('daily_spend', {})
         except Exception as e:
-            print(f"  Error loading Facebook Ads cache: {e}")
+            logger.error(f"Error loading Facebook Ads cache: {e}")
             return None
     
     def save_to_cache(self, date_from: datetime, date_to: datetime, daily_spend: Dict[str, float]):
@@ -89,11 +93,11 @@ class FacebookAdsClient:
             
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            
+
             if daily_spend:
-                print(f"  Cached Facebook Ads data for {len(daily_spend)} days")
+                logger.info(f"Cached Facebook Ads data for {len(daily_spend)} days")
         except Exception as e:
-            print(f"  Error saving Facebook Ads cache: {e}")
+            logger.error(f"Error saving Facebook Ads cache: {e}")
     
     def get_daily_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, float]:
         """
@@ -123,9 +127,9 @@ class FacebookAdsClient:
             # Format dates for Facebook API
             since = date_from.strftime('%Y-%m-%d')
             until = date_to.strftime('%Y-%m-%d')
-            
-            print(f"  Fetching Facebook Ads data from API for {since} to {until}...")
-            
+
+            logger.info(f"Fetching Facebook Ads data from API for {since} to {until}...")
+
             # Build the insights endpoint URL
             url = f'{self.base_url}/{self.ad_account_id}/insights'
             
@@ -172,12 +176,12 @@ class FacebookAdsClient:
                 self.save_to_cache(date_from, date_to, daily_spend)
             
             return daily_spend
-            
+
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching Facebook Ads data: {e}")
+            logger.error(f"Error fetching Facebook Ads data: {e}")
             return {}
         except Exception as e:
-            print(f"Unexpected error processing Facebook Ads data: {e}")
+            logger.error(f"Unexpected error processing Facebook Ads data: {e}")
             return {}
     
     def get_campaign_spend(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -243,9 +247,9 @@ class FacebookAdsClient:
                             })
             
             return campaign_spend
-            
+
         except Exception as e:
-            print(f"Error fetching campaign data: {e}")
+            logger.error(f"Error fetching campaign data: {e}")
             return []
     
     def test_connection(self) -> bool:
@@ -256,7 +260,7 @@ class FacebookAdsClient:
             True if connection successful, False otherwise
         """
         if not self.is_configured:
-            print("Facebook Ads API not configured")
+            logger.warning("Facebook Ads API not configured")
             return False
         
         try:
@@ -269,15 +273,15 @@ class FacebookAdsClient:
             
             response = requests.get(url, params=params)
             response.raise_for_status()
-            
+
             data = response.json()
-            print(f"Successfully connected to Facebook Ads account: {data.get('name', 'Unknown')}")
-            print(f"Account currency: {data.get('currency', 'Unknown')}")
-            
+            logger.info(f"Successfully connected to Facebook Ads account: {data.get('name', 'Unknown')}")
+            logger.info(f"Account currency: {data.get('currency', 'Unknown')}")
+
             return True
-            
+
         except requests.exceptions.RequestException as e:
-            print(f"Failed to connect to Facebook Ads API: {e}")
+            logger.error(f"Failed to connect to Facebook Ads API: {e}")
             return False
 
 
@@ -289,20 +293,20 @@ def main():
         # Test fetching last 7 days of data
         date_to = datetime.now()
         date_from = date_to - timedelta(days=7)
-        
-        print(f"\nFetching ad spend from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
-        
+
+        logger.info(f"\nFetching ad spend from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
+
         daily_spend = client.get_daily_spend(date_from, date_to)
-        
+
         if daily_spend:
-            print("\nDaily Ad Spend:")
+            logger.info("\nDaily Ad Spend:")
             total = 0
             for date, spend in sorted(daily_spend.items()):
-                print(f"  {date}: €{spend:.2f}")
+                logger.info(f"  {date}: €{spend:.2f}")
                 total += spend
-            print(f"  Total: €{total:.2f}")
+            logger.info(f"  Total: €{total:.2f}")
         else:
-            print("No spend data available")
+            logger.info("No spend data available")
 
 
 if __name__ == "__main__":

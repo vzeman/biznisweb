@@ -31,9 +31,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     orders_data = date_agg['unique_orders'].tolist()
     
     # Calculate Average Order Value for each day
-    aov_data = [(row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0) 
+    aov_data = [(row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0)
                 for _, row in date_agg.iterrows()]
-    
+
+    # Calculate Average Items per Order for each day
+    avg_items_per_order_data = [(row['total_items'] / row['unique_orders'] if row['unique_orders'] > 0 else 0)
+                                for _, row in date_agg.iterrows()]
+
     # Calculate total costs for each day (for the all metrics chart)
     total_costs_data = date_agg['total_cost'].tolist()
     packaging_costs_data = date_agg['packaging_cost'].tolist()
@@ -55,9 +59,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     total_items = date_agg['total_items'].sum()
     total_aov = total_revenue / total_orders if total_orders > 0 else 0
     total_fb_per_order = total_fb_ads / total_orders if total_orders > 0 else 0
+    total_avg_items_per_order = total_items / total_orders if total_orders > 0 else 0
     
     # All products sorted by revenue
     all_products = items_agg.sort_values('total_revenue', ascending=False)
+
+    # Calculate totals for share percentages
+    total_all_products_quantity = all_products['total_quantity'].sum()
+    total_all_products_revenue = all_products['total_revenue'].sum()
     
     # Prepare returning customers data if available
     returning_html = ""
@@ -456,6 +465,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="chart-title">Daily Items Sold</h2>
                 <canvas id="itemsChart"></canvas>
             </div>
+        </div>
+
+        <div class="chart-container">
+            <h2 class="chart-title">Average Items per Order</h2>
+            <canvas id="avgItemsPerOrderChart"></canvas>
         </div>"""
     
     # Add returning customers charts and table if data is available
@@ -646,6 +660,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Orders</th>
                         <th class="number">Revenue</th>
                         <th class="number">AOV</th>
+                        <th class="number">Avg Items/Order</th>
                         <th class="number">Product Costs</th>
                         <th class="number">Fixed Costs</th>
                         <th class="number">FB Ads</th>
@@ -663,6 +678,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         profit_class = "profit-positive" if row['net_profit'] > 0 else "profit-negative"
         fixed_costs = row['packaging_cost'] + row['fixed_daily_cost']
         aov = row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
+        avg_items_per_order = row['total_items'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
         fb_per_order = row['fb_ads_spend'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
         google_ads = row.get('google_ads_spend', 0)
         html_content += f"""
@@ -671,6 +687,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{row['unique_orders']}</td>
                         <td class="number">€{row['total_revenue']:,.2f}</td>
                         <td class="number">€{aov:.2f}</td>
+                        <td class="number">{avg_items_per_order:.2f}</td>
                         <td class="number">€{row['product_expense']:,.2f}</td>
                         <td class="number">€{fixed_costs:,.2f}</td>
                         <td class="number">€{row['fb_ads_spend']:,.2f}</td>
@@ -688,6 +705,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{total_orders}</td>
                         <td class="number">€{total_revenue:,.2f}</td>
                         <td class="number">€{total_aov:.2f}</td>
+                        <td class="number">{total_avg_items_per_order:.2f}</td>
                         <td class="number">€{total_product_expense:,.2f}</td>
                         <td class="number">€{total_fixed_costs:,.2f}</td>
                         <td class="number">€{total_fb_ads:,.2f}</td>
@@ -711,6 +729,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Product Cost</th>
                         <th class="number">Profit</th>
                         <th class="number">ROI %</th>
+                        <th class="number">Share (Items Sold / Revenue)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -720,6 +739,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     for _, row in all_products.iterrows():
         profit_class = "profit-positive" if row['profit'] > 0 else "profit-negative"
         product_name = row['product_name'][:50] + '...' if len(row['product_name']) > 50 else row['product_name']
+
+        # Calculate share percentages
+        quantity_share = (row['total_quantity'] / total_all_products_quantity * 100) if total_all_products_quantity > 0 else 0
+        revenue_share = (row['total_revenue'] / total_all_products_revenue * 100) if total_all_products_revenue > 0 else 0
+
         html_content += f"""
                     <tr>
                         <td>{product_name}</td>
@@ -728,6 +752,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">€{row['product_expense']:,.2f}</td>
                         <td class="number {profit_class}">€{row['profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
+                        <td class="number">{quantity_share:.1f}% / {revenue_share:.1f}%</td>
                     </tr>
 """
     
@@ -1603,6 +1628,49 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             stepSize: 10
+                        }}
+                    }}
+                }}
+            }}
+        }});
+
+        // Average Items per Order Chart
+        const avgItemsPerOrderCtx = document.getElementById('avgItemsPerOrderChart').getContext('2d');
+        new Chart(avgItemsPerOrderCtx, {{
+            type: 'line',
+            data: {{
+                labels: {json.dumps(dates)},
+                datasets: [{{
+                    label: 'Avg Items per Order',
+                    data: {json.dumps(avg_items_per_order_data)},
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2.5,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return 'Avg Items/Order: ' + context.parsed.y.toFixed(2);
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        ticks: {{
+                            callback: function(value) {{
+                                return value.toFixed(1);
+                            }}
                         }}
                     }}
                 }}
