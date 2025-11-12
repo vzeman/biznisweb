@@ -98,7 +98,7 @@ PRODUCT_EXPENSES = {
     'Sada 6 najpredávanejších vzoriek po 1ks': 1.79,
     'Sada najpredávanejších vzoriek 6 x 10ml': 1.79,
     'Sada vzorků všech vůní Vevo (6 × 10 ml)': 1.79,
-    'Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml': 1.79,
+    'Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml': 0.86,
     'Parfum do prania Vevo No.08 Cotton Dream (500ml)': 6.53,
     'Vevo No.08 Cotton Dream mosóparfüm (500ml)': 6.53,
     'Parfum do prania Vevo No.07 Ylang Absolute (200ml)': 2.79,
@@ -132,7 +132,33 @@ PRODUCT_EXPENSES = {
     'Vevo Shot - koncentrát na čistenie práčky 100ml': 0.65,
     'Vevo Shot – koncentrát na čištění pračky 100 ml': 0.65,
     'Prací gél hypoalergénny z Marseillského mydla 1L': 2.43,
-    'Perkarbonát sodný PLUS 1kg': 2.83
+    'Perkarbonát sodný PLUS 1kg': 2.83,
+    'Parfum do prania Vevo Premium No.07 Ylang Absolute (500ml)': 12.62,
+    'Parfum do prania Vevo Premium No.07 Ylang Absolute (200ml)': 5.62,
+    'Parfum do prania Vevo Premium No.07 Ylang Absolute (Vzorka 10ml)': 0.42,
+    'Parfum do prania Vevo Premium No.08 Cotton Dream (500ml)': 14.84,
+    'Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)': 6.51,
+    'Parfum do prania Vevo Premium No.08 Cotton Dream (Vzorka 10ml)': 0.47,
+    'Parfum do prania Vevo Premium No.09 Pure Garden (500ml)': 13.02,
+    'Parfum do prania Vevo Premium No.09 Pure Garden (200ml)': 5.79,
+    'Parfum do prania Vevo Premium No.09 Pure Garden (Vzorka 10ml)': 0.43,
+    'Vevo No.06 Royal Cotton mosóparfüm (500ml)': 4.79,
+    'Parfém na praní Vevo No.07 Ylang Absolute (200ml)': 2.79,
+    'Parfém na praní Vevo No.09 Pure Garden (200ml)': 2.86,
+    'Minden Vevo-illat mintakészlete (6 × 10 ml)': 1.79,
+    'Tallow\'s Original Cream 60ml': 9,
+    'Parfém do praní Vevo No.01 Cotton Paradise (500ml)': 7.02,
+    'Vevo No.09 Pure Garden mosóparfüm (500ml)': 5.80,
+    'Vevo No.02 Sweet Paradise mosóparfüm (200ml)': 4.29,
+    'Vevo No.09 Pure Garden mosóparfüm (200ml)': 2.86,
+    'Strong PINK čistiaca pasta 500g': 2.43,
+    'Čistič podláh do robotického mopu': 4.80,
+    'Vevo Shot – mosógép tisztító koncentrátum 100 ml': 0.65,
+    'Spropitné': 0,
+    'Pojištění proti rozbití': 0,
+    'Prací gél hypoalergénny z Marseillského mydla Levanduľa 1L': 2.43,
+    'Prací gél hypoalergénny z Marseillského mydla Tropical 1L': 2.43,
+    'Prací gél hypoalergénny z Marseillského mydla Lesná zmes 1L': 2.43
 }
 
 # nove ceny nakladov
@@ -1194,7 +1220,10 @@ class BizniWebExporter:
         
         # Calculate CLV and return time analysis
         clv_return_time_analysis = self.calculate_clv_and_return_time(df)
-        
+
+        # Analyze order size distribution
+        order_size_distribution = self.analyze_order_size_distribution(df)
+
         # Create aggregated reports
         date_product_agg, date_agg, items_agg, month_agg = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
         
@@ -1209,9 +1238,10 @@ class BizniWebExporter:
         
         # Generate HTML report
         print("Generating HTML report...")
-        html_content = generate_html_report(date_agg, date_product_agg, items_agg, 
+        html_content = generate_html_report(date_agg, date_product_agg, items_agg,
                                            date_from, date_to, fb_daily_spend, google_ads_daily_spend,
-                                           returning_customers_analysis, clv_return_time_analysis)
+                                           returning_customers_analysis, clv_return_time_analysis,
+                                           order_size_distribution)
         html_filename = f"data/report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html"
         with open(html_filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
@@ -1688,6 +1718,59 @@ class BizniWebExporter:
         
         return weekly_clv_df
     
+    def analyze_order_size_distribution(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze distribution of order sizes (number of items per order) grouped by day"""
+        print("\nAnalyzing order size distribution...")
+
+        # Convert purchase_date to datetime
+        df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
+        df['purchase_date_only'] = df['purchase_datetime'].dt.date
+
+        # Get unique orders with their total items count per order
+        orders_df = df[['order_num', 'purchase_date_only', 'total_items_in_order']].drop_duplicates(subset=['order_num'])
+
+        # Define order size categories
+        def categorize_order_size(items_count):
+            if items_count == 1:
+                return '1 item'
+            elif items_count == 2:
+                return '2 items'
+            elif items_count == 3:
+                return '3 items'
+            elif items_count == 4:
+                return '4 items'
+            else:
+                return '5+ items'
+
+        orders_df['order_size_category'] = orders_df['total_items_in_order'].apply(categorize_order_size)
+
+        # Group by date and order size category
+        distribution = orders_df.groupby(['purchase_date_only', 'order_size_category']).size().reset_index(name='order_count')
+
+        # Pivot to get categories as columns
+        distribution_pivot = distribution.pivot(index='purchase_date_only', columns='order_size_category', values='order_count').fillna(0)
+
+        # Ensure all categories are present (even if 0)
+        for category in ['1 item', '2 items', '3 items', '4 items', '5+ items']:
+            if category not in distribution_pivot.columns:
+                distribution_pivot[category] = 0
+
+        # Sort columns in order
+        distribution_pivot = distribution_pivot[['1 item', '2 items', '3 items', '4 items', '5+ items']]
+
+        # Reset index to get date as a column
+        distribution_pivot = distribution_pivot.reset_index()
+
+        # Sort by date
+        distribution_pivot = distribution_pivot.sort_values('purchase_date_only')
+
+        # Save to CSV
+        filename = f"data/order_size_distribution_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        distribution_pivot.to_csv(filename, index=False, encoding='utf-8-sig')
+        print(f"Order size distribution saved: {filename}")
+
+        return distribution_pivot
+
     def display_returning_customers_analysis(self, analysis: pd.DataFrame):
         """Display returning customers analysis"""
         print("\n" + "="*120)

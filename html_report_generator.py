@@ -10,12 +10,13 @@ from typing import Dict, Any
 import json
 
 
-def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame, 
+def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          items_agg: pd.DataFrame, date_from: datetime, date_to: datetime,
                          fb_daily_spend: Dict[str, float] = None,
-                         google_ads_daily_spend: Dict[str, float] = None, 
+                         google_ads_daily_spend: Dict[str, float] = None,
                          returning_customers_analysis: pd.DataFrame = None,
-                         clv_return_time_analysis: pd.DataFrame = None) -> str:
+                         clv_return_time_analysis: pd.DataFrame = None,
+                         order_size_distribution: pd.DataFrame = None) -> str:
     """
     Generate a complete HTML report with charts and tables
     """
@@ -67,7 +68,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     # Calculate totals for share percentages
     total_all_products_quantity = all_products['total_quantity'].sum()
     total_all_products_revenue = all_products['total_revenue'].sum()
-    
+    total_all_products_profit = all_products['profit'].sum()
+
     # Prepare returning customers data if available
     returning_html = ""
     returning_chart_js = ""
@@ -197,10 +199,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         .chart-title {{
             font-size: 1.5rem;
             color: #2d3748;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             text-align: center;
         }}
-        
+
+        .chart-explanation {{
+            font-size: 0.85rem;
+            color: #718096;
+            margin-bottom: 20px;
+            text-align: center;
+            padding: 0 20px;
+            line-height: 1.5;
+        }}
+
         .chart-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -380,21 +391,25 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         
         <div class="chart-container">
             <h2 class="chart-title">Daily Revenue vs Costs</h2>
+            <p class="chart-explanation">Revenue = total sales income | Product Costs = cost of goods sold | FB Ads = Facebook advertising spend | Google Ads = Google advertising spend | Net Profit = Revenue - (Product Costs + Fixed Costs + FB Ads + Google Ads) | AOV = Average Order Value (Revenue / Orders)</p>
             <canvas id="revenueChart"></canvas>
         </div>
         
         <div class="chart-container">
             <h2 class="chart-title">All Metrics Overview</h2>
+            <p class="chart-explanation">Comprehensive view of all daily metrics: Revenue, Total Costs (all expenses combined), Product Costs, Facebook Ads, Google Ads, Packaging Costs, Fixed Daily Costs, Net Profit, AOV (Average Order Value), and ROI % (Return on Investment percentage)</p>
             <canvas id="allMetricsChart"></canvas>
         </div>
         
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Profit</h2>
+                <p class="chart-explanation">Net Profit = Revenue - Total Costs (includes all product, fixed, packaging, and advertising costs)</p>
                 <canvas id="profitChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily ROI %</h2>
+                <p class="chart-explanation">ROI (Return on Investment) = (Net Profit / Total Costs) × 100. Measures profitability as percentage of total investment</p>
                 <canvas id="roiChart"></canvas>
             </div>
         </div>
@@ -402,10 +417,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Cost Breakdown</h2>
+                <p class="chart-explanation">Distribution of total costs across categories: Product Costs (COGS), Fixed Costs (packaging + daily operational), Facebook Ads, and Google Ads</p>
                 <canvas id="costPieChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily Orders</h2>
+                <p class="chart-explanation">Number of unique orders placed each day</p>
                 <canvas id="ordersChart"></canvas>
             </div>
         </div>
@@ -415,10 +432,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Revenue</h2>
+                <p class="chart-explanation">Total sales revenue (gross income before costs)</p>
                 <canvas id="revenueOnlyChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily Total Costs</h2>
+                <p class="chart-explanation">Sum of all expenses: Product Costs + Fixed Costs + Packaging + Facebook Ads + Google Ads</p>
                 <canvas id="totalCostsChart"></canvas>
             </div>
         </div>
@@ -426,10 +445,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Product Costs</h2>
+                <p class="chart-explanation">COGS (Cost of Goods Sold) - the purchase/production cost of products sold</p>
                 <canvas id="productCostsChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily Facebook Ads</h2>
+                <p class="chart-explanation">Facebook advertising spend per day</p>
                 <canvas id="fbAdsChart"></canvas>
             </div>
         </div>
@@ -437,10 +458,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Google Ads</h2>
+                <p class="chart-explanation">Google advertising spend per day</p>
                 <canvas id="googleAdsChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Ads Comparison (FB vs Google)</h2>
+                <p class="chart-explanation">Side-by-side comparison of Facebook and Google advertising spend per day</p>
                 <canvas id="adsComparisonChart"></canvas>
             </div>
         </div>
@@ -448,10 +471,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Packaging Costs</h2>
+                <p class="chart-explanation">Cost of packaging materials per order (calculated as €0.50 per order)</p>
                 <canvas id="packagingCostsChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily Fixed Costs</h2>
+                <p class="chart-explanation">Fixed daily operational costs (overhead, utilities, etc.) distributed evenly across days</p>
                 <canvas id="fixedCostsChart"></canvas>
             </div>
         </div>
@@ -459,19 +484,32 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Average Order Value</h2>
+                <p class="chart-explanation">AOV (Average Order Value) = Total Revenue / Number of Orders. Measures average spending per order</p>
                 <canvas id="aovChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily Items Sold</h2>
+                <p class="chart-explanation">Total number of individual product items sold (not orders - one order can contain multiple items)</p>
                 <canvas id="itemsChart"></canvas>
             </div>
         </div>
 
         <div class="chart-container">
             <h2 class="chart-title">Average Items per Order</h2>
+            <p class="chart-explanation">Average number of items per order = Total Items / Number of Orders. Indicates basket size</p>
             <canvas id="avgItemsPerOrderChart"></canvas>
         </div>"""
-    
+
+    # Add order size distribution chart if data is available
+    if order_size_distribution is not None and not order_size_distribution.empty:
+        html_content += """
+
+        <div class="chart-container">
+            <h2 class="chart-title">Order Size Distribution (Items per Order)</h2>
+            <p class="chart-explanation">Breakdown of orders by number of items purchased: shows how many orders contain 1, 2, 3, 4, or 5+ items</p>
+            <canvas id="orderSizeDistributionChart"></canvas>
+        </div>"""
+
     # Add returning customers charts and table if data is available
     if returning_customers_analysis is not None and not returning_customers_analysis.empty:
         html_content += f"""
@@ -481,10 +519,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Customer Type Distribution (Weekly %)</h2>
+                <p class="chart-explanation">Percentage of orders from New Customers (first-time buyers) vs Returning Customers (repeat buyers). Measured weekly</p>
                 <canvas id="returningPctChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Order Volume by Customer Type (Weekly)</h2>
+                <p class="chart-explanation">Absolute number of orders from new vs returning customers. Stacked bars show total order volume per week</p>
                 <canvas id="returningVolumeChart"></canvas>
             </div>
         </div>
@@ -561,10 +601,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Customer Lifetime Value Trend (Weekly)</h2>
+                <p class="chart-explanation">CLV (Customer Lifetime Value) = average total revenue per customer over their lifetime. Avg CLV = weekly average, Cumulative = running average across all time</p>
                 <canvas id="clvChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Customer Acquisition Cost Trend (Weekly)</h2>
+                <p class="chart-explanation">CAC (Customer Acquisition Cost) = Facebook Ads Spend / Number of New Customers. Measures cost to acquire each new customer</p>
                 <canvas id="cacChart"></canvas>
             </div>
         </div>
@@ -572,16 +614,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">CLV vs CAC Comparison</h2>
+                <p class="chart-explanation">Side-by-side comparison of Customer Lifetime Value vs Customer Acquisition Cost. CLV should exceed CAC for profitability</p>
                 <canvas id="clvCacComparisonChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">LTV/CAC Ratio Trend</h2>
+                <p class="chart-explanation">LTV/CAC Ratio = CLV ÷ CAC. Healthy ratio is 3:1 or higher. Break-even is 1:1. Shows return on customer acquisition investment</p>
                 <canvas id="ltvCacRatioChart"></canvas>
             </div>
         </div>
         
         <div class="chart-container">
             <h2 class="chart-title">Average Customer Return Time (Days)</h2>
+            <p class="chart-explanation">Average number of days between a customer's first and second purchase. Shows how quickly customers return to buy again</p>
             <canvas id="returnTimeChart"></canvas>
         </div>
         
@@ -729,7 +774,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Product Cost</th>
                         <th class="number">Profit</th>
                         <th class="number">ROI %</th>
-                        <th class="number">Share (Items Sold / Revenue)</th>
+                        <th class="number">Share (Items / Revenue / Profit)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -743,6 +788,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         # Calculate share percentages
         quantity_share = (row['total_quantity'] / total_all_products_quantity * 100) if total_all_products_quantity > 0 else 0
         revenue_share = (row['total_revenue'] / total_all_products_revenue * 100) if total_all_products_revenue > 0 else 0
+        profit_share = (row['profit'] / total_all_products_profit * 100) if total_all_products_profit > 0 else 0
 
         html_content += f"""
                     <tr>
@@ -752,7 +798,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">€{row['product_expense']:,.2f}</td>
                         <td class="number {profit_class}">€{row['profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
-                        <td class="number">{quantity_share:.1f}% / {revenue_share:.1f}%</td>
+                        <td class="number">{quantity_share:.1f}% / {revenue_share:.1f}% / {profit_share:.1f}%</td>
                     </tr>
 """
     
@@ -1676,7 +1722,97 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 }}
             }}
         }});"""
-    
+
+    # Add JavaScript for order size distribution chart if data is available
+    if order_size_distribution is not None and not order_size_distribution.empty:
+        # Prepare data for the chart
+        size_dates = order_size_distribution['purchase_date_only'].astype(str).tolist()
+        one_item = order_size_distribution['1 item'].tolist()
+        two_items = order_size_distribution['2 items'].tolist()
+        three_items = order_size_distribution['3 items'].tolist()
+        four_items = order_size_distribution['4 items'].tolist()
+        five_plus_items = order_size_distribution['5+ items'].tolist()
+
+        html_content += f"""
+
+        // Order Size Distribution Chart
+        const orderSizeDistributionCtx = document.getElementById('orderSizeDistributionChart');
+        if (orderSizeDistributionCtx) {{
+            new Chart(orderSizeDistributionCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(size_dates)},
+                    datasets: [
+                        {{
+                            label: '1 item',
+                            data: {json.dumps(one_item)},
+                            backgroundColor: '#3B82F6',
+                            borderRadius: 3
+                        }},
+                        {{
+                            label: '2 items',
+                            data: {json.dumps(two_items)},
+                            backgroundColor: '#10B981',
+                            borderRadius: 3
+                        }},
+                        {{
+                            label: '3 items',
+                            data: {json.dumps(three_items)},
+                            backgroundColor: '#F59E0B',
+                            borderRadius: 3
+                        }},
+                        {{
+                            label: '4 items',
+                            data: {json.dumps(four_items)},
+                            backgroundColor: '#EF4444',
+                            borderRadius: 3
+                        }},
+                        {{
+                            label: '5+ items',
+                            data: {json.dumps(five_plus_items)},
+                            backgroundColor: '#8B5CF6',
+                            borderRadius: 3
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.5,
+                    plugins: {{
+                        legend: {{
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    return context.dataset.label + ': ' + context.parsed.y + ' orders';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            stacked: true
+                        }},
+                        y: {{
+                            stacked: true,
+                            beginAtZero: true,
+                            title: {{
+                                display: true,
+                                text: 'Number of Orders'
+                            }},
+                            ticks: {{
+                                stepSize: 5
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
     # Add JavaScript for returning customers charts if data is available
     if returning_customers_analysis is not None and not returning_customers_analysis.empty:
         html_content += f"""
