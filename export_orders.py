@@ -1710,7 +1710,20 @@ class BizniWebExporter:
         
         weekly_clv_df['cumulative_avg_clv'] = cumulative_clv
         weekly_clv_df['cumulative_avg_clv'] = weekly_clv_df['cumulative_avg_clv'].round(2)
-        
+
+        # Calculate cumulative CAC (running average of acquisition cost across all time)
+        cumulative_cac = []
+        cumulative_fb_spend = 0
+        cumulative_new_customers = 0
+
+        for idx, row in weekly_clv_df.iterrows():
+            cumulative_fb_spend += row['fb_ads_spend']
+            cumulative_new_customers += row['new_customers']
+            avg_cac = cumulative_fb_spend / cumulative_new_customers if cumulative_new_customers > 0 else 0
+            cumulative_cac.append(round(avg_cac, 2))
+
+        weekly_clv_df['cumulative_avg_cac'] = cumulative_cac
+
         # Save to CSV
         filename = f"data/clv_return_time_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
         weekly_clv_df.to_csv(filename, index=False, encoding='utf-8-sig')

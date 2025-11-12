@@ -587,6 +587,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         clv_new_customers = clv_return_time_analysis['new_customers'].tolist()
         clv_returning_customers = clv_return_time_analysis['returning_customers'].tolist()
         cac_data = clv_return_time_analysis['cac'].tolist() if 'cac' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
+        cumulative_cac = clv_return_time_analysis['cumulative_avg_cac'].tolist() if 'cumulative_avg_cac' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
         ltv_cac_ratio_data = clv_return_time_analysis['ltv_cac_ratio'].tolist() if 'ltv_cac_ratio' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
         
         # Calculate overall metrics
@@ -606,7 +607,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Customer Acquisition Cost Trend (Weekly)</h2>
-                <p class="chart-explanation">CAC (Customer Acquisition Cost) = Facebook Ads Spend / Number of New Customers. Measures cost to acquire each new customer</p>
+                <p class="chart-explanation">CAC (Customer Acquisition Cost) = Facebook Ads Spend / Number of New Customers. Measures cost to acquire each new customer. Cumulative = running average across all time</p>
                 <canvas id="cacChart"></canvas>
             </div>
         </div>
@@ -2017,6 +2018,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             backgroundColor: 'rgba(245, 101, 101, 0.1)',
                             borderWidth: 3,
                             tension: 0.4
+                        }},
+                        {{
+                            label: 'Cumulative Avg CAC (€)',
+                            data: {json.dumps(cumulative_cac)},
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            borderDash: [5, 5]
                         }}
                     ]
                 }},
@@ -2026,12 +2036,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     aspectRatio: 2,
                     plugins: {{
                         legend: {{
-                            display: false
+                            position: 'top'
                         }},
                         tooltip: {{
+                            mode: 'index',
+                            intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CAC: €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
