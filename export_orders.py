@@ -9,6 +9,7 @@ import argparse
 import time
 import json
 import traceback
+import hashlib
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
@@ -60,7 +61,7 @@ except ImportError:
         def get_daily_spend(self, *args, **kwargs):
             return {}
 
-from html_report_generator import generate_html_report
+from html_report_generator import generate_html_report, generate_email_strategy_report
 
 # Load environment variables
 load_dotenv()
@@ -91,74 +92,61 @@ CURRENCY_RATES_TO_EUR = {
 }
 
 # Product expense mapping (expense per item in EUR)
+# Keys are SKU/EAN codes or hash-based SKUs (H-XXXXXXXX) for products without EAN
+# Products not found in this mapping will default to 1.0 EUR expense
 PRODUCT_EXPENSES = {
-    'Sada vzoriek najpredávanejších vôní Vevo 6 x 10ml': 1.79,
-    'Sada vzoriek všetkých vôní Vevo 6 x 10ml': 1.79,
-    'Sada najpredávanejších vzoriek Vevo 6 x 10ml': 1.79,
-    'Sada 6 najpredávanejších vzoriek po 1ks': 1.79,
-    'Sada najpredávanejších vzoriek 6 x 10ml': 1.79,
-    'Sada vzorků všech vůní Vevo (6 × 10 ml)': 1.79,
-    'Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml': 0.86,
-    'Parfum do prania Vevo No.08 Cotton Dream (500ml)': 6.53,
-    'Vevo No.08 Cotton Dream mosóparfüm (500ml)': 6.53,
-    'Parfum do prania Vevo No.07 Ylang Absolute (200ml)': 2.79,
-    'Vevo No.07 Ylang Absolute mosóparfüm (200ml)': 2.79,
-    'Parfum do prania Vevo No.08 Cotton Dream (200ml)': 3.15,
-    'Parfum do prania Vevo No.09 Pure Garden (200ml)': 2.86,
-    'Parfum do prania Vevo No.01 Cotton Paradise (500ml)': 7.02,
-    'Parfum do prania Vevo No.01 Cotton Paradise (200ml)': 3.35,
-    'Parfum do prania Vevo No.09 Pure Garden (500ml)': 5.8,
-    'Parfém na praní Vevo No.09 Pure Garden (500ml)': 5.8,
-    'Parfum do prania Vevo No.06 Royal Cotton (200ml)': 2.46,
-    'Parfum do prania Vevo No.02 Sweet Paradise (200ml)': 4.29,
-    'Odmerka Vevo 7ml drevená na parfum do prania': 0.31,
-    'Parfum do prania Vevo No.02 Sweet Paradise (500ml)': 9.38,
-    'Parfum do prania Vevo No.07 Ylang Absolute (Vzorka 10ml)': 0.28,
-    'Parfum do prania Vevo No.07 Ylang Absolute (Vzorka)': 0.28,
-    'Parfum do prania Vevo No.06 Royal Cotton (500ml)': 4.79,
-    'Parfum do prania Vevo No.08 Cotton Dream (Vzorka 10ml)': 0.29,
-    'Parfum do prania Vevo No.08 Cotton Dream (Vzorka)': 0.29,
-    'Parfum do prania Vevo No.07 Ylang Absolute (500ml)': 5.64,
-    'Parfum do prania Vevo No.09 Pure Garden (Vzorka 10ml)': 0.28,
-    'Parfum do prania Vevo No.09 Pure Garden (Vzorka)': 0.28,
-    'Parfum do prania Vevo No.02 Sweet Paradise (Vzorka 10ml)': 0.35,
-    'Parfum do prania Vevo No.02 Sweet Paradise (Vzorka)': 0.35,
-    'Parfum do prania Vevo No.06 Royal Cotton (Vzorka 10ml)': 0.26,
-    'Parfum do prania Vevo No.06 Royal Cotton (Vzorka)': 0.26,
-    'Parfum do prania Vevo No.03 Lavender Kiss (Vzorka)': 0.26,
-    'Tringelt': 0,
-    'Parfum do prania Vevo No.01 Cotton Paradise (Vzorka 10ml)': 0.3,
-    'Poistenie proti rozbitiu': 0,
-    'Vevo Shot - koncentrát na čistenie práčky 100ml': 0.65,
-    'Vevo Shot – koncentrát na čištění pračky 100 ml': 0.65,
-    'Prací gél hypoalergénny z Marseillského mydla 1L': 2.43,
-    'Perkarbonát sodný PLUS 1kg': 2.83,
-    'Parfum do prania Vevo Premium No.07 Ylang Absolute (500ml)': 12.62,
-    'Parfum do prania Vevo Premium No.07 Ylang Absolute (200ml)': 5.62,
-    'Parfum do prania Vevo Premium No.07 Ylang Absolute (Vzorka 10ml)': 0.42,
-    'Parfum do prania Vevo Premium No.08 Cotton Dream (500ml)': 14.84,
-    'Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)': 6.51,
-    'Parfum do prania Vevo Premium No.08 Cotton Dream (Vzorka 10ml)': 0.47,
-    'Parfum do prania Vevo Premium No.09 Pure Garden (500ml)': 13.02,
-    'Parfum do prania Vevo Premium No.09 Pure Garden (200ml)': 5.79,
-    'Parfum do prania Vevo Premium No.09 Pure Garden (Vzorka 10ml)': 0.43,
-    'Vevo No.06 Royal Cotton mosóparfüm (500ml)': 4.79,
-    'Parfém na praní Vevo No.07 Ylang Absolute (200ml)': 2.79,
-    'Parfém na praní Vevo No.09 Pure Garden (200ml)': 2.86,
-    'Minden Vevo-illat mintakészlete (6 × 10 ml)': 1.79,
-    'Tallow\'s Original Cream 60ml': 9,
-    'Parfém do praní Vevo No.01 Cotton Paradise (500ml)': 7.02,
-    'Vevo No.09 Pure Garden mosóparfüm (500ml)': 5.80,
-    'Vevo No.02 Sweet Paradise mosóparfüm (200ml)': 4.29,
-    'Vevo No.09 Pure Garden mosóparfüm (200ml)': 2.86,
-    'Strong PINK čistiaca pasta 500g': 2.43,
-    'Čistič podláh do robotického mopu': 4.80,
-    'Vevo Shot – mosógép tisztító koncentrátum 100 ml': 0.65,
-    'Spropitné': 0,
-    'Pojištění proti rozbití': 0,
-    'Prací gél hypoalergénny z Marseillského mydla Levanduľa 1L': 2.43,
-    'Prací gél hypoalergénny z Marseillského mydla Tropical 1L': 2.43,
-    'Prací gél hypoalergénny z Marseillského mydla Lesná zmes 1L': 2.43
+    # === PARFUMY 500ml ===
+    '8586024430327': 7.02,    # No.01 Cotton Paradise (500ml)
+    '8586024430358': 9.38,    # No.02 Sweet Paradise (500ml)
+    '8586024430433': 4.79,    # No.06 Royal Cotton (500ml)
+    '8586024430457': 5.64,    # No.07 Ylang Absolute (500ml)
+    '8586024430471': 6.53,    # No.08 Cotton Dream (500ml)
+    '8586024430495': 5.80,    # No.09 Pure Garden (500ml)
+
+    # === PARFUMY 200ml ===
+    '8586024430310': 3.35,    # No.01 Cotton Paradise (200ml)
+    '8586024430341': 4.29,    # No.02 Sweet Paradise (200ml)
+    '8586024430426': 2.46,    # No.06 Royal Cotton (200ml)
+    '8586024430440': 2.79,    # No.07 Ylang Absolute (200ml)
+    '8586024430464': 3.15,    # No.08 Cotton Dream (200ml)
+    '8586024430488': 2.86,    # No.09 Pure Garden (200ml)
+
+    # === SADY VZORIEK ===
+    'H-7D043A91': 1.79,       # Sada vzoriek všetkých vôní Vevo 6 x 10ml
+    'H-E77D4634': 0.86,       # Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml
+    'H-125E3A73': 1.79,       # Sada vzoriek všetkých vôní Vevo Natural 6 x 10ml
+    'H-31566B7A': 0.85,       # Sada vzoriek najpredávanejších vôní Vevo Natural 3 x 10ml
+
+    # === PREMIUM VZORKY ===
+    'H-A2620358': 0.42,       # Premium No.07 Ylang Absolute (Vzorka 10ml)
+    'H-D00F4D4A': 0.47,       # Premium No.08 Cotton Dream (Vzorka 10ml)
+    'H-45E7507C': 0.43,       # Premium No.09 Pure Garden (Vzorka 10ml)
+    'H-29C4BDE2': 1.32,       # Vzorky parfumov do prania Vevo Premium 3 x 10ml
+
+    # === NATURAL VZORKY ===
+    '8586024430334': 0.30,    # Natural No.01 Cotton Paradise (Vzorka 10ml)
+    'H-34DA3CE0': 0.35,       # Natural No.02 Sweet Paradise (Vzorka 10ml)
+    'H-B3DCA297': 0.26,       # Natural No.06 Royal Cotton (Vzorka 10ml)
+    'H-5854129C': 0.28,       # Natural No.07 Ylang Absolute (Vzorka 10ml)
+    'H-4F7230B9': 0.29,       # Natural No.08 Cotton Dream (Vzorka 10ml)
+    'H-A1EA61E5': 0.28,       # Natural No.09 Pure Garden (Vzorka 10ml)
+
+    # === DOPLNKY ===
+    'H-8F8BF46E': 0.31,       # Odmerka Vevo 7ml drevená
+    'H-3583EAEC': 0.65,       # Vevo Shot - koncentrát na čistenie práčky 100ml
+    'H-F03DF99A': 2.43,       # Prací gél hypoalergénny z Marseillského mydla 1L
+    '8594201618000': 2.43,    # Prací gél hypoalergénny (EAN variant)
+    'H-C633B766': 2.43,       # Prací gél Levanduľa 1L
+    'H-95B10CAD': 2.43,       # Prací gél Ruža 1L
+    'H-231AAF25': 2.83,       # Perkarbonát sodný PLUS 1kg
+    'H-A2C58C41': 2.43,       # Strong PINK čistiaca pasta 500g
+    'H-5916EC93': 4.80,       # Čistič podláh do robotického mopu
+    'H-65B41890': 1.00,       # Biely ocot v spreji 500 ml
+    'H-29C4BDE2': 1.00,       # Interiérový sprej Vevo Premium Škorica & Ihličie 150ml
+
+    # === NULOVÉ NÁKLADY ===
+    'H-36CA74A7': 0,          # Tringelt
+    'H-A5F3BBB3': 0,          # Poistenie proti rozbitiu
 }
 
 # nove ceny nakladov
@@ -323,6 +311,27 @@ class BizniWebExporter:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
+        self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
+
+    @staticmethod
+    def get_product_sku(ean: str, title: str) -> str:
+        """
+        Get a consistent product SKU/identifier.
+        Uses EAN if available, otherwise creates a short hash from the title.
+        """
+        if pd.notna(ean) and str(ean).strip() and str(ean).strip() != '':
+            return str(ean).strip()
+        # Create a short hash from the title (8 characters)
+        title_hash = hashlib.md5(str(title).encode()).hexdigest()[:8].upper()
+        return f"H-{title_hash}"
+
+    def add_product_sku_column(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add a consistent product_sku column to the dataframe."""
+        df['product_sku'] = df.apply(
+            lambda row: self.get_product_sku(row.get('item_ean'), row.get('item_label', 'Unknown')),
+            axis=1
+        )
+        return df
     
     def get_daily_fixed_cost(self, date: datetime) -> float:
         """Calculate daily fixed cost based on days in the month"""
@@ -351,7 +360,8 @@ class BizniWebExporter:
         has_next_page = True
         cursor = None
         max_retries = 3
-        retry_delay = 2
+        retry_delay = 10
+        page_delay = 0.5  # 500ms delay between pages
         consecutive_errors = 0
 
         logger.info(f"Fetching orders for month from API (will filter client-side for {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')})")
@@ -386,7 +396,11 @@ class BizniWebExporter:
                     print(f"Fetched {len(orders)} orders (total: {len(all_orders)})")
                     success = True
                     consecutive_errors = 0  # Reset error counter on success
-                    
+
+                    # Delay between pages to avoid overwhelming the API
+                    if has_next_page:
+                        time.sleep(page_delay)
+
                 except Exception as e:
                     retry_count += 1
                     consecutive_errors += 1
@@ -574,7 +588,8 @@ class BizniWebExporter:
         has_next_page = True
         cursor = start_cursor
         max_retries = 3
-        retry_delay = 2
+        retry_delay = 10
+        page_delay = 0.5  # 500ms delay between pages
 
         logger.info(f"Fetching up to {max_orders} orders from API in bulk ({sort_order} order)" + (f", continuing from cursor" if cursor else ""))
 
@@ -612,6 +627,10 @@ class BizniWebExporter:
                         logger.info(f"Reached {len(all_orders)} orders, stopping to avoid API limits")
                         has_next_page = False
 
+                    # Delay between pages to avoid overwhelming the API
+                    if has_next_page:
+                        time.sleep(page_delay)
+
                 except Exception as e:
                     retry_count += 1
                     error_msg = str(e)
@@ -633,6 +652,9 @@ class BizniWebExporter:
         """Fetch all orders within the specified date range, using cache for older data"""
         all_orders = []
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Clear excluded orders from previous runs
+        self.excluded_orders = []
 
         print(f"\nProcessing date range: {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
         print(f"Cache policy: Using cache for data older than {self.cache_days_threshold} days")
@@ -763,14 +785,25 @@ class BizniWebExporter:
 
         return final_validated_orders
 
-    def _filter_by_status(self, orders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Filter out orders with excluded statuses"""
+    def _filter_by_status(self, orders: List[Dict[str, Any]], track_excluded: bool = True) -> List[Dict[str, Any]]:
+        """Filter out orders with excluded statuses.
+
+        Args:
+            orders: List of orders to filter
+            track_excluded: If True, store excluded orders for later segmentation analysis
+        """
         excluded_statuses = [
             'Storno',
             'Platba online - platnosť vypršala',
             'Platba online - platba zamietnutá',
             'Čaká na úhradu',
             'GoPay - platebni metoda potvrzena'
+        ]
+
+        # Statuses for failed payment segmentation (subset of excluded)
+        failed_payment_statuses = [
+            'Platba online - platnosť vypršala',
+            'Platba online - platba zamietnutá'
         ]
 
         filtered_orders = []
@@ -780,6 +813,9 @@ class BizniWebExporter:
 
             if status_name not in excluded_statuses:
                 filtered_orders.append(order)
+            elif track_excluded and status_name in failed_payment_statuses:
+                # Track failed payment orders for segmentation
+                self.excluded_orders.append(order)
 
         return filtered_orders
     
@@ -861,7 +897,8 @@ class BizniWebExporter:
         has_next_page = True
         cursor = None
         max_retries = 3
-        retry_delay = 2
+        retry_delay = 10
+        page_delay = 0.5  # 500ms delay between pages
         consecutive_errors = 0
 
         logger.info(f"Fetching orders from API (will filter client-side for {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')})")
@@ -896,6 +933,10 @@ class BizniWebExporter:
                     print(f"Fetched {len(orders)} orders (total: {len(all_orders)})")
                     success = True
                     consecutive_errors = 0  # Reset error counter on success
+
+                    # Delay between pages to avoid overwhelming the API
+                    if has_next_page:
+                        time.sleep(page_delay)
 
                 except Exception as e:
                     retry_count += 1
@@ -1081,9 +1122,12 @@ class BizniWebExporter:
                     item_total_without_tax = item_total_with_tax
                     item_tax_amount = 0
                 
-                # Get expense per item from mapping
+                # Get expense per item from mapping (using product_sku - EAN or hash)
                 item_label = item.get('item_label', '')
-                expense_per_item = PRODUCT_EXPENSES.get(item_label, 0)
+                item_ean = item.get('ean', '')
+                product_sku = self.get_product_sku(item_ean, item_label)
+                # First try SKU, then title for backward compatibility, default to 1.0 for unknown products
+                expense_per_item = PRODUCT_EXPENSES.get(product_sku, PRODUCT_EXPENSES.get(item_label, 1.0))
                 total_expense = expense_per_item * item_quantity
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
@@ -1148,11 +1192,39 @@ class BizniWebExporter:
         
         # Fetch Facebook Ads spend data
         fb_daily_spend = {}
+        fb_detailed_metrics = {}
+        fb_campaigns = []
+        fb_hourly_stats = []
+        fb_dow_stats = []
         if self.fb_client.is_configured:
             print("Fetching Facebook Ads spend data...")
             fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
             if fb_daily_spend:
                 print(f"Retrieved Facebook Ads data for {len(fb_daily_spend)} days")
+
+            # Fetch detailed metrics for Facebook Ads report
+            print("Fetching detailed Facebook Ads metrics...")
+            fb_detailed_metrics = self.fb_client.get_daily_metrics(date_from, date_to)
+            if fb_detailed_metrics:
+                print(f"Retrieved detailed FB metrics for {len(fb_detailed_metrics)} days")
+
+            # Fetch campaign-level performance
+            print("Fetching Facebook campaign performance...")
+            fb_campaigns = self.fb_client.get_campaign_spend(date_from, date_to)
+            if fb_campaigns:
+                print(f"Retrieved data for {len(fb_campaigns)} campaigns")
+
+            # Fetch hourly stats
+            print("Fetching Facebook hourly stats...")
+            fb_hourly_stats = self.fb_client.get_hourly_stats(date_from, date_to)
+            if fb_hourly_stats:
+                print(f"Retrieved hourly stats for {len(fb_hourly_stats)} hours")
+
+            # Fetch day of week stats
+            print("Fetching Facebook day-of-week stats...")
+            fb_dow_stats = self.fb_client.get_day_of_week_stats(date_from, date_to)
+            if fb_dow_stats:
+                print(f"Retrieved day-of-week stats for {len(fb_dow_stats)} days")
         
         # Fetch Google Ads spend data
         google_ads_daily_spend = {}
@@ -1172,7 +1244,10 @@ class BizniWebExporter:
         
         # Convert to DataFrame for easier CSV export
         df = pd.DataFrame(all_rows)
-        
+
+        # Add consistent product SKU column (EAN if available, otherwise hash of title)
+        df = self.add_product_sku_column(df)
+
         # Add Facebook Ads spend column
         if fb_daily_spend:
             # Convert purchase_date to date format for matching
@@ -1194,7 +1269,7 @@ class BizniWebExporter:
         column_order = [
             'order_num', 'order_id', 'external_ref', 'purchase_date', 'status_name',
             'total_items_in_order', 'item_number',
-            'item_label', 'item_ean', 'item_quantity', 
+            'product_sku', 'item_label', 'item_ean', 'item_quantity', 
             'item_currency', 'item_unit_price_original', 'item_unit_price',
             'item_total_without_tax', 'item_tax_rate', 'item_tax_amount', 'item_total_with_tax',
             'expense_per_item', 'total_expense', 'fb_ads_daily_spend', 'google_ads_daily_spend', 'profit_before_ads', 'roi_before_ads',
@@ -1224,29 +1299,97 @@ class BizniWebExporter:
         # Analyze order size distribution
         order_size_distribution = self.analyze_order_size_distribution(df)
 
+        # Analyze item combinations
+        item_combinations = self.analyze_item_combinations(df, min_count=5)
+
+        # New analytics
+        day_of_week_analysis = self.analyze_day_of_week(df)
+        day_hour_heatmap = self.analyze_day_hour_heatmap(df)
+        country_analysis, city_analysis = self.analyze_geographic(df)
+        b2b_analysis = self.analyze_b2b_vs_b2c(df)
+        product_margins = self.analyze_product_margins(df)
+        product_trends = self.analyze_product_trends(df)
+        customer_concentration = self.analyze_customer_concentration(df)
+        order_status = self.analyze_order_status(df)
+        ads_effectiveness = self.analyze_ads_effectiveness(df)
+
+        # Cost Per Order analysis with campaign attribution
+        cost_per_order = self.analyze_cost_per_order(df, fb_campaigns)
+
+        # Repeat purchase cohort analysis
+        cohort_analysis = self.analyze_repeat_purchase_cohorts(df)
+
+        # Item-based retention analyses
+        first_item_retention = self.analyze_retention_by_first_order_item(df)
+        same_item_repurchase = self.analyze_same_item_repurchase(df)
+        time_to_nth_by_first_item = self.analyze_time_to_nth_by_first_item(df)
+
+        # Customer email segmentation analysis
+        # Combine filtered orders with excluded (failed payment) orders for complete customer view
+        all_orders_for_segmentation = orders + self.excluded_orders
+        customer_email_segments = self.analyze_customer_email_segments(df, all_orders_for_segmentation)
+
         # Create aggregated reports
-        date_product_agg, date_agg, items_agg, month_agg = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
-        
+        date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
+
+        # Calculate financial metrics
+        financial_metrics = self.calculate_financial_metrics(df, date_agg)
+
         # Display aggregated data
         self.display_aggregated_data(date_product_agg, date_agg, month_agg)
-        
+
         # Display returning customer analysis
         self.display_returning_customers_analysis(returning_customers_analysis)
-        
+
         # Display CLV and return time analysis
         self.display_clv_return_time_analysis(clv_return_time_analysis)
-        
+
         # Generate HTML report
         print("Generating HTML report...")
-        html_content = generate_html_report(date_agg, date_product_agg, items_agg,
-                                           date_from, date_to, fb_daily_spend, google_ads_daily_spend,
-                                           returning_customers_analysis, clv_return_time_analysis,
-                                           order_size_distribution)
+        html_content = generate_html_report(
+            date_agg, date_product_agg, items_agg,
+            date_from, date_to, fb_daily_spend, google_ads_daily_spend,
+            returning_customers_analysis, clv_return_time_analysis,
+            order_size_distribution, item_combinations,
+            day_of_week_analysis=day_of_week_analysis,
+            day_hour_heatmap=day_hour_heatmap,
+            country_analysis=country_analysis,
+            city_analysis=city_analysis,
+            b2b_analysis=b2b_analysis,
+            product_margins=product_margins,
+            product_trends=product_trends,
+            customer_concentration=customer_concentration,
+            financial_metrics=financial_metrics,
+            order_status=order_status,
+            ads_effectiveness=ads_effectiveness,
+            customer_email_segments=customer_email_segments,
+            cohort_analysis=cohort_analysis,
+            first_item_retention=first_item_retention,
+            same_item_repurchase=same_item_repurchase,
+            time_to_nth_by_first_item=time_to_nth_by_first_item,
+            fb_detailed_metrics=fb_detailed_metrics,
+            fb_campaigns=fb_campaigns,
+            cost_per_order=cost_per_order,
+            fb_hourly_stats=fb_hourly_stats,
+            fb_dow_stats=fb_dow_stats,
+            ltv_by_date=ltv_by_date
+        )
         html_filename = f"data/report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html"
         with open(html_filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
         print(f"HTML report saved: {html_filename}")
-        
+
+        # Generate Email Strategy Report
+        if customer_email_segments and cohort_analysis:
+            print("Generating Email Strategy Report...")
+            email_strategy_html = generate_email_strategy_report(
+                customer_email_segments, cohort_analysis, date_from, date_to
+            )
+            email_strategy_filename = f"data/email_strategy_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html"
+            with open(email_strategy_filename, 'w', encoding='utf-8') as f:
+                f.write(email_strategy_html)
+            print(f"Email Strategy Report saved: {email_strategy_filename}")
+
         return filename
     
     def create_aggregated_reports(self, df: pd.DataFrame, date_from: datetime, date_to: datetime, fb_daily_spend: Dict[str, float] = None, google_ads_daily_spend: Dict[str, float] = None):
@@ -1257,17 +1400,18 @@ class BizniWebExporter:
         else:
             df['purchase_date_only'] = pd.to_datetime(df['purchase_date_only']).dt.date
         
-        # 1. Group by date and product
+        # 1. Group by date and product (using product_sku for consistent grouping)
         print("Creating date-product aggregation...")
-        date_product_agg = df.groupby(['purchase_date_only', 'item_label']).agg({
+        date_product_agg = df.groupby(['purchase_date_only', 'product_sku']).agg({
+            'item_label': 'first',  # Keep product name for display
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
             'total_expense': 'sum',
             'profit_before_ads': 'sum',
             'order_num': 'count'
         }).reset_index()
-        
-        date_product_agg.columns = ['date', 'product_name', 'total_quantity', 'total_revenue', 'product_expense', 'profit', 'order_count']
+
+        date_product_agg.columns = ['date', 'product_sku', 'product_name', 'total_quantity', 'total_revenue', 'product_expense', 'profit', 'order_count']
         
         # Calculate ROI based on product expense only (no FB ads)
         date_product_agg['roi_percent'] = date_product_agg.apply(
@@ -1280,8 +1424,8 @@ class BizniWebExporter:
         date_product_agg['product_expense'] = date_product_agg['product_expense'].round(2)
         date_product_agg['profit'] = date_product_agg['profit'].round(2)
         
-        # Sort by date and product
-        date_product_agg = date_product_agg.sort_values(['date', 'product_name'])
+        # Sort by date and product SKU
+        date_product_agg = date_product_agg.sort_values(['date', 'product_sku'])
         
         # Save date-product aggregation
         date_product_filename = f"data/aggregate_by_date_product_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
@@ -1302,25 +1446,65 @@ class BizniWebExporter:
         }).reset_index()
         
         date_agg.columns = ['date', 'total_quantity', 'total_revenue', 'product_expense', 'profit_before_ads', 'fb_ads_spend', 'google_ads_spend', 'unique_orders', 'total_items']
-        
+
+        # Fill in missing dates with zero values for orders but preserve ad spend data
+        # Create a complete date range
+        complete_date_range = pd.date_range(start=date_from, end=date_to, freq='D').date
+        complete_date_df = pd.DataFrame({'date': complete_date_range})
+
+        # Merge with existing data to include all dates
+        date_agg = complete_date_df.merge(date_agg, on='date', how='left')
+
+        # Fill missing order-related values with 0
+        date_agg['total_quantity'] = date_agg['total_quantity'].fillna(0).astype(int)
+        date_agg['total_revenue'] = date_agg['total_revenue'].fillna(0)
+        date_agg['product_expense'] = date_agg['product_expense'].fillna(0)
+        date_agg['profit_before_ads'] = date_agg['profit_before_ads'].fillna(0)
+        date_agg['unique_orders'] = date_agg['unique_orders'].fillna(0).astype(int)
+        date_agg['total_items'] = date_agg['total_items'].fillna(0).astype(int)
+
+        # Fill ad spend from dictionaries for dates with no orders
+        # First fill NaN values with values from dictionaries, then fill any remaining with 0
+        if fb_daily_spend:
+            # Create a mapping function for date to string
+            date_agg['date_str'] = date_agg['date'].apply(lambda d: d.strftime('%Y-%m-%d'))
+            # Fill NaN fb_ads_spend values with values from dictionary
+            date_agg['fb_ads_spend'] = date_agg.apply(
+                lambda row: fb_daily_spend.get(row['date_str'], 0) if pd.isna(row['fb_ads_spend']) else row['fb_ads_spend'],
+                axis=1
+            )
+            date_agg = date_agg.drop('date_str', axis=1)
+        date_agg['fb_ads_spend'] = date_agg['fb_ads_spend'].fillna(0)
+
+        if google_ads_daily_spend:
+            # Create a mapping function for date to string
+            date_agg['date_str'] = date_agg['date'].apply(lambda d: d.strftime('%Y-%m-%d'))
+            # Fill NaN google_ads_spend values with values from dictionary
+            date_agg['google_ads_spend'] = date_agg.apply(
+                lambda row: google_ads_daily_spend.get(row['date_str'], 0) if pd.isna(row['google_ads_spend']) else row['google_ads_spend'],
+                axis=1
+            )
+            date_agg = date_agg.drop('date_str', axis=1)
+        date_agg['google_ads_spend'] = date_agg['google_ads_spend'].fillna(0)
+
         # Add packaging cost (0.3 EUR per unique order)
         date_agg['packaging_cost'] = date_agg['unique_orders'] * PACKAGING_COST_PER_ORDER
-        
+
         # Add daily fixed cost based on the date
         date_agg['fixed_daily_cost'] = date_agg['date'].apply(lambda d: round(self.get_daily_fixed_cost(pd.Timestamp(d)), 2))
-        
+
         # Calculate total cost (product expense + FB ads + Google ads + packaging + fixed daily cost)
         date_agg['total_cost'] = date_agg['product_expense'] + date_agg['fb_ads_spend'] + date_agg['google_ads_spend'] + date_agg['packaging_cost'] + date_agg['fixed_daily_cost']
-        
+
         # Calculate actual profit: Revenue - All Costs
         date_agg['net_profit'] = date_agg['total_revenue'] - date_agg['total_cost']
-        
+
         # Calculate ROI: (Profit / Total Cost) * 100
         date_agg['roi_percent'] = date_agg.apply(
             lambda row: round((row['net_profit'] / row['total_cost'] * 100) if row['total_cost'] > 0 else 0, 2),
             axis=1
         )
-        
+
         # Round financial values
         date_agg['total_revenue'] = date_agg['total_revenue'].round(2)
         date_agg['product_expense'] = date_agg['product_expense'].round(2)
@@ -1329,7 +1513,7 @@ class BizniWebExporter:
         date_agg['packaging_cost'] = date_agg['packaging_cost'].round(2)
         date_agg['total_cost'] = date_agg['total_cost'].round(2)
         date_agg['net_profit'] = date_agg['net_profit'].round(2)
-        
+
         # Sort by date
         date_agg = date_agg.sort_values('date')
         
@@ -1374,18 +1558,19 @@ class BizniWebExporter:
         month_agg.to_csv(month_filename, index=False, encoding='utf-8-sig')
         print(f"Monthly aggregation saved: {month_filename}")
         
-        # 3. Group by items only (across all dates)
+        # 3. Group by items only (across all dates) - use product_sku for consistent grouping
         print("Creating items aggregation...")
-        
-        items_agg = df.groupby('item_label').agg({
+
+        items_agg = df.groupby('product_sku').agg({
+            'item_label': 'first',  # Keep product name for display
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
             'total_expense': 'sum',
             'profit_before_ads': 'sum',
             'order_num': 'nunique'  # Count unique orders
         }).reset_index()
-        
-        items_agg.columns = ['product_name', 'total_quantity', 'total_revenue', 'product_expense', 'profit', 'order_count']
+
+        items_agg.columns = ['product_sku', 'product_name', 'total_quantity', 'total_revenue', 'product_expense', 'profit', 'order_count']
         
         # Calculate ROI based on product expense only (no FB ads)
         items_agg['roi_percent'] = items_agg.apply(
@@ -1405,9 +1590,45 @@ class BizniWebExporter:
         items_filename = f"data/aggregate_by_items_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
         items_agg.to_csv(items_filename, index=False, encoding='utf-8-sig')
         print(f"Items aggregation saved: {items_filename}")
-        
+
+        # 4. Calculate Customer Lifetime Revenue by Acquisition Date
+        print("Calculating customer lifetime revenue by acquisition date...")
+
+        # Group by customer to get their first purchase date and total lifetime revenue
+        customer_lifetime = df.groupby('customer_email').agg({
+            'purchase_date_only': 'min',  # First purchase date
+            'item_total_without_tax': 'sum',  # Total lifetime revenue
+            'order_num': 'nunique'  # Total number of orders
+        }).reset_index()
+
+        customer_lifetime.columns = ['customer_email', 'first_purchase_date', 'lifetime_revenue', 'total_orders']
+
+        # Now aggregate by first purchase date to get total lifetime revenue attributed to each acquisition date
+        ltv_by_date = customer_lifetime.groupby('first_purchase_date').agg({
+            'lifetime_revenue': 'sum',
+            'customer_email': 'count',  # Count of customers acquired
+            'total_orders': 'sum'  # Total orders these customers made over their lifetime
+        }).reset_index()
+
+        ltv_by_date.columns = ['date', 'ltv_revenue', 'customers_acquired', 'total_lifetime_orders']
+
+        # Fill in missing dates with zeros
+        ltv_complete_date_df = pd.DataFrame({'date': complete_date_range})
+        ltv_by_date = ltv_complete_date_df.merge(ltv_by_date, on='date', how='left')
+        ltv_by_date['ltv_revenue'] = ltv_by_date['ltv_revenue'].fillna(0).round(2)
+        ltv_by_date['customers_acquired'] = ltv_by_date['customers_acquired'].fillna(0).astype(int)
+        ltv_by_date['total_lifetime_orders'] = ltv_by_date['total_lifetime_orders'].fillna(0).astype(int)
+
+        # Sort by date
+        ltv_by_date = ltv_by_date.sort_values('date')
+
+        # Save LTV by acquisition date
+        ltv_filename = f"data/ltv_by_acquisition_date_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        ltv_by_date.to_csv(ltv_filename, index=False, encoding='utf-8-sig')
+        print(f"LTV by acquisition date saved: {ltv_filename}")
+
         # Return aggregated data for display
-        return date_product_agg, date_agg, items_agg, month_agg
+        return date_product_agg, date_agg, items_agg, month_agg, ltv_by_date
     
     def display_aggregated_data(self, date_product_agg: pd.DataFrame, date_agg: pd.DataFrame, month_agg: pd.DataFrame = None):
         """Display aggregated data with nice formatting"""
@@ -1610,7 +1831,738 @@ class BizniWebExporter:
         print(f"Returning customers analysis saved: {filename}")
         
         return weekly_stats
-    
+
+    def analyze_repeat_purchase_cohorts(self, df: pd.DataFrame) -> dict:
+        """
+        Analyze repeat purchase cohorts with detailed metrics:
+        - Cohort by first purchase month
+        - Time to nth order (2nd, 3rd, 4th, 5th+)
+        - Time between consecutive orders
+        - Cohort retention rates
+        - Order frequency distribution
+        - Revenue progression by order number
+        """
+        print("\nAnalyzing repeat purchase cohorts...")
+
+        # Ensure datetime column exists
+        df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
+
+        # Get unique orders with customer info (include total_items_in_order for metrics)
+        orders_df = df[['order_num', 'customer_email', 'purchase_datetime', 'order_total', 'total_items_in_order']].drop_duplicates(subset=['order_num'])
+        orders_df = orders_df.sort_values(['customer_email', 'purchase_datetime'])
+
+        # Add order number for each customer (1st, 2nd, 3rd, etc.)
+        orders_df['customer_order_num'] = orders_df.groupby('customer_email').cumcount() + 1
+
+        # Get first order date for each customer (defines their cohort)
+        customer_first_order = orders_df.groupby('customer_email').agg({
+            'purchase_datetime': 'min',
+            'order_total': 'first'
+        }).reset_index()
+        customer_first_order.columns = ['customer_email', 'first_order_date', 'first_order_value']
+        customer_first_order['cohort_month'] = customer_first_order['first_order_date'].dt.to_period('M')
+
+        # Merge cohort info back to orders
+        orders_df = orders_df.merge(
+            customer_first_order[['customer_email', 'first_order_date', 'cohort_month']],
+            on='customer_email'
+        )
+
+        # Calculate time since first order for each order
+        orders_df['days_since_first_order'] = (orders_df['purchase_datetime'] - orders_df['first_order_date']).dt.days
+
+        # Calculate time between consecutive orders
+        orders_df['prev_order_date'] = orders_df.groupby('customer_email')['purchase_datetime'].shift(1)
+        orders_df['days_since_prev_order'] = (orders_df['purchase_datetime'] - orders_df['prev_order_date']).dt.days
+
+        result = {}
+
+        # === 1. TIME TO NTH ORDER ANALYSIS ===
+        print("  Calculating time to nth order...")
+        time_to_nth_order = []
+        for order_num in range(2, 7):  # 2nd through 6th order
+            nth_orders = orders_df[orders_df['customer_order_num'] == order_num]
+            if len(nth_orders) > 0:
+                time_to_nth_order.append({
+                    'order_number': f'{order_num}{"st" if order_num == 1 else "nd" if order_num == 2 else "rd" if order_num == 3 else "th"} Order',
+                    'order_num_value': order_num,
+                    'customer_count': len(nth_orders),
+                    'avg_days_from_first': round(nth_orders['days_since_first_order'].mean(), 1),
+                    'median_days_from_first': round(nth_orders['days_since_first_order'].median(), 1),
+                    'min_days_from_first': int(nth_orders['days_since_first_order'].min()),
+                    'max_days_from_first': int(nth_orders['days_since_first_order'].max()),
+                    'avg_days_from_prev': round(nth_orders['days_since_prev_order'].mean(), 1) if order_num > 1 else 0,
+                    'median_days_from_prev': round(nth_orders['days_since_prev_order'].median(), 1) if order_num > 1 else 0,
+                    'avg_order_value': round(nth_orders['order_total'].mean(), 2)
+                })
+
+        result['time_to_nth_order'] = pd.DataFrame(time_to_nth_order)
+
+        # === 2. TIME BETWEEN ORDERS DISTRIBUTION ===
+        print("  Analyzing time between orders...")
+        repeat_orders = orders_df[orders_df['customer_order_num'] > 1].copy()
+        if len(repeat_orders) > 0:
+            # Create buckets for time between orders
+            def categorize_time_between(days):
+                if pd.isna(days):
+                    return None
+                if days <= 7:
+                    return '0-7 days'
+                elif days <= 14:
+                    return '8-14 days'
+                elif days <= 30:
+                    return '15-30 days'
+                elif days <= 60:
+                    return '31-60 days'
+                elif days <= 90:
+                    return '61-90 days'
+                else:
+                    return '90+ days'
+
+            repeat_orders['time_bucket'] = repeat_orders['days_since_prev_order'].apply(categorize_time_between)
+            time_distribution = repeat_orders.groupby('time_bucket').size().reset_index(name='count')
+
+            # Ensure proper ordering
+            bucket_order = ['0-7 days', '8-14 days', '15-30 days', '31-60 days', '61-90 days', '90+ days']
+            time_distribution['bucket_order'] = time_distribution['time_bucket'].apply(
+                lambda x: bucket_order.index(x) if x in bucket_order else 99
+            )
+            time_distribution = time_distribution.sort_values('bucket_order').drop('bucket_order', axis=1)
+            time_distribution['percentage'] = round(time_distribution['count'] / time_distribution['count'].sum() * 100, 1)
+
+            result['time_between_orders'] = time_distribution
+
+            # === 2b. TIME BETWEEN ORDERS BY ORDER NUMBER (1st→2nd, 2nd→3rd, etc.) ===
+            print("  Analyzing time between orders by order number...")
+            time_by_order_num = []
+            for order_num in range(2, 7):  # 2nd through 6th order
+                order_transitions = repeat_orders[repeat_orders['customer_order_num'] == order_num]
+                if len(order_transitions) >= 3:  # Min 3 data points
+                    transition_label = f'{order_num-1}→{order_num}'
+                    time_by_order_num.append({
+                        'transition': transition_label,
+                        'order_num': order_num,
+                        'count': len(order_transitions),
+                        'avg_days': round(order_transitions['days_since_prev_order'].mean(), 1),
+                        'median_days': round(order_transitions['days_since_prev_order'].median(), 1),
+                        'min_days': int(order_transitions['days_since_prev_order'].min()),
+                        'max_days': int(order_transitions['days_since_prev_order'].max())
+                    })
+
+            result['time_between_by_order_num'] = pd.DataFrame(time_by_order_num)
+        else:
+            result['time_between_orders'] = pd.DataFrame()
+            result['time_between_by_order_num'] = pd.DataFrame()
+
+        # === 3. COHORT RETENTION ANALYSIS ===
+        print("  Calculating cohort retention...")
+        cohort_data = []
+
+        for cohort in orders_df['cohort_month'].unique():
+            cohort_customers = orders_df[orders_df['cohort_month'] == cohort]['customer_email'].unique()
+            total_customers = len(cohort_customers)
+
+            if total_customers < 3:  # Skip very small cohorts
+                continue
+
+            # Count how many made 2nd, 3rd, 4th, 5th+ order
+            orders_per_customer = orders_df[orders_df['customer_email'].isin(cohort_customers)].groupby('customer_email').size()
+
+            cohort_data.append({
+                'cohort': str(cohort),
+                'total_customers': total_customers,
+                'made_2nd_order': len(orders_per_customer[orders_per_customer >= 2]),
+                'made_3rd_order': len(orders_per_customer[orders_per_customer >= 3]),
+                'made_4th_order': len(orders_per_customer[orders_per_customer >= 4]),
+                'made_5th_order': len(orders_per_customer[orders_per_customer >= 5]),
+                'retention_2nd_pct': round(len(orders_per_customer[orders_per_customer >= 2]) / total_customers * 100, 1),
+                'retention_3rd_pct': round(len(orders_per_customer[orders_per_customer >= 3]) / total_customers * 100, 1),
+                'retention_4th_pct': round(len(orders_per_customer[orders_per_customer >= 4]) / total_customers * 100, 1),
+                'retention_5th_pct': round(len(orders_per_customer[orders_per_customer >= 5]) / total_customers * 100, 1),
+                'avg_orders_per_customer': round(orders_per_customer.mean(), 2),
+                'total_orders': orders_per_customer.sum()
+            })
+
+        result['cohort_retention'] = pd.DataFrame(cohort_data)
+
+        # Sort cohort retention by cohort month
+        if not result['cohort_retention'].empty:
+            result['cohort_retention'] = result['cohort_retention'].sort_values('cohort').reset_index(drop=True)
+
+        # === 3b. TIME-BIAS-FREE COHORT ANALYSIS (only mature cohorts 90+ days old) ===
+        print("  Calculating time-bias-free cohort retention (90+ day cohorts only)...")
+        today = pd.Timestamp.now()
+        mature_cohort_data = []
+
+        for cohort in orders_df['cohort_month'].unique():
+            # Calculate cohort age (days since end of cohort month)
+            cohort_end = pd.Period(cohort, 'M').end_time
+            cohort_age_days = (today - cohort_end).days
+
+            # Only include cohorts that are 90+ days old
+            if cohort_age_days < 90:
+                continue
+
+            cohort_customers = orders_df[orders_df['cohort_month'] == cohort]['customer_email'].unique()
+            total_customers = len(cohort_customers)
+
+            if total_customers < 3:  # Skip very small cohorts
+                continue
+
+            # Count how many made 2nd, 3rd, 4th, 5th+ order
+            orders_per_customer = orders_df[orders_df['customer_email'].isin(cohort_customers)].groupby('customer_email').size()
+
+            mature_cohort_data.append({
+                'cohort': str(cohort),
+                'cohort_age_days': cohort_age_days,
+                'total_customers': total_customers,
+                'made_2nd_order': len(orders_per_customer[orders_per_customer >= 2]),
+                'made_3rd_order': len(orders_per_customer[orders_per_customer >= 3]),
+                'made_4th_order': len(orders_per_customer[orders_per_customer >= 4]),
+                'made_5th_order': len(orders_per_customer[orders_per_customer >= 5]),
+                'retention_2nd_pct': round(len(orders_per_customer[orders_per_customer >= 2]) / total_customers * 100, 1),
+                'retention_3rd_pct': round(len(orders_per_customer[orders_per_customer >= 3]) / total_customers * 100, 1),
+                'retention_4th_pct': round(len(orders_per_customer[orders_per_customer >= 4]) / total_customers * 100, 1),
+                'retention_5th_pct': round(len(orders_per_customer[orders_per_customer >= 5]) / total_customers * 100, 1),
+                'avg_orders_per_customer': round(orders_per_customer.mean(), 2),
+                'total_orders': orders_per_customer.sum()
+            })
+
+        result['mature_cohort_retention'] = pd.DataFrame(mature_cohort_data)
+
+        # Sort by cohort month
+        if not result['mature_cohort_retention'].empty:
+            result['mature_cohort_retention'] = result['mature_cohort_retention'].sort_values('cohort').reset_index(drop=True)
+
+            # Calculate average retention across mature cohorts (weighted by customer count)
+            total_mature_customers = result['mature_cohort_retention']['total_customers'].sum()
+            if total_mature_customers > 0:
+                weighted_2nd = (result['mature_cohort_retention']['retention_2nd_pct'] * result['mature_cohort_retention']['total_customers']).sum() / total_mature_customers
+                weighted_3rd = (result['mature_cohort_retention']['retention_3rd_pct'] * result['mature_cohort_retention']['total_customers']).sum() / total_mature_customers
+                # Store for later adding to summary
+                result['_mature_cohort_stats'] = {
+                    'true_retention_2nd_pct': round(weighted_2nd, 1),
+                    'true_retention_3rd_pct': round(weighted_3rd, 1),
+                    'mature_cohorts_count': len(result['mature_cohort_retention'])
+                }
+                print(f"    Mature cohorts (90+ days): {len(result['mature_cohort_retention'])}")
+                print(f"    True 2nd order retention: {result['_mature_cohort_stats']['true_retention_2nd_pct']}%")
+                print(f"    True 3rd order retention: {result['_mature_cohort_stats']['true_retention_3rd_pct']}%")
+
+        # === 4. ORDER FREQUENCY DISTRIBUTION ===
+        print("  Analyzing order frequency distribution...")
+        orders_per_customer = orders_df.groupby('customer_email').size().reset_index(name='order_count')
+
+        def categorize_order_count(count):
+            if count == 1:
+                return '1 order'
+            elif count == 2:
+                return '2 orders'
+            elif count == 3:
+                return '3 orders'
+            elif count == 4:
+                return '4 orders'
+            elif count == 5:
+                return '5 orders'
+            else:
+                return '6+ orders'
+
+        orders_per_customer['frequency_bucket'] = orders_per_customer['order_count'].apply(categorize_order_count)
+        frequency_dist = orders_per_customer.groupby('frequency_bucket').agg({
+            'customer_email': 'count',
+            'order_count': 'sum'
+        }).reset_index()
+        frequency_dist.columns = ['frequency', 'customer_count', 'total_orders']
+
+        # Ensure proper ordering
+        freq_order = ['1 order', '2 orders', '3 orders', '4 orders', '5 orders', '6+ orders']
+        frequency_dist['freq_order'] = frequency_dist['frequency'].apply(
+            lambda x: freq_order.index(x) if x in freq_order else 99
+        )
+        frequency_dist = frequency_dist.sort_values('freq_order').drop('freq_order', axis=1)
+        frequency_dist['customer_pct'] = round(frequency_dist['customer_count'] / frequency_dist['customer_count'].sum() * 100, 1)
+        frequency_dist['orders_pct'] = round(frequency_dist['total_orders'] / frequency_dist['total_orders'].sum() * 100, 1)
+
+        result['order_frequency'] = frequency_dist
+
+        # === 5. REVENUE BY ORDER NUMBER ===
+        print("  Analyzing revenue by order number...")
+        revenue_by_order_num = orders_df.groupby('customer_order_num').agg({
+            'order_total': ['mean', 'sum', 'count'],
+            'total_items_in_order': 'mean'
+        }).reset_index()
+        revenue_by_order_num.columns = ['order_number', 'avg_order_value', 'total_revenue', 'order_count', 'avg_items_per_order']
+        revenue_by_order_num = revenue_by_order_num[revenue_by_order_num['order_count'] >= 3]  # Min 3 orders to include
+        revenue_by_order_num['avg_order_value'] = revenue_by_order_num['avg_order_value'].round(2)
+        revenue_by_order_num['total_revenue'] = revenue_by_order_num['total_revenue'].round(2)
+        revenue_by_order_num['avg_items_per_order'] = revenue_by_order_num['avg_items_per_order'].round(2)
+        # Calculate avg price per item
+        revenue_by_order_num['avg_price_per_item'] = (revenue_by_order_num['avg_order_value'] / revenue_by_order_num['avg_items_per_order']).round(2)
+
+        # Limit to first 10 orders for display
+        revenue_by_order_num = revenue_by_order_num[revenue_by_order_num['order_number'] <= 10]
+
+        result['revenue_by_order_num'] = revenue_by_order_num
+
+        # === 6. SUMMARY STATISTICS ===
+        print("  Calculating summary statistics...")
+        total_customers = orders_df['customer_email'].nunique()
+        repeat_customers = len(orders_per_customer[orders_per_customer['order_count'] > 1])
+
+        # Average time to repeat purchase (for customers who made 2nd order)
+        second_orders = orders_df[orders_df['customer_order_num'] == 2]
+        avg_days_to_2nd = second_orders['days_since_first_order'].mean() if len(second_orders) > 0 else None
+        median_days_to_2nd = second_orders['days_since_first_order'].median() if len(second_orders) > 0 else None
+
+        # Average time between all repeat orders
+        avg_days_between = repeat_orders['days_since_prev_order'].mean() if len(repeat_orders) > 0 else None
+        median_days_between = repeat_orders['days_since_prev_order'].median() if len(repeat_orders) > 0 else None
+
+        result['summary'] = {
+            'total_customers': total_customers,
+            'repeat_customers': repeat_customers,
+            'repeat_rate_pct': round(repeat_customers / total_customers * 100, 1) if total_customers > 0 else 0,
+            'one_time_customers': total_customers - repeat_customers,
+            'avg_orders_per_customer': round(orders_df['order_num'].nunique() / total_customers, 2) if total_customers > 0 else 0,
+            'avg_days_to_2nd_order': round(avg_days_to_2nd, 1) if avg_days_to_2nd else None,
+            'median_days_to_2nd_order': round(median_days_to_2nd, 1) if median_days_to_2nd else None,
+            'avg_days_between_orders': round(avg_days_between, 1) if avg_days_between else None,
+            'median_days_between_orders': round(median_days_between, 1) if median_days_between else None,
+            'max_orders_by_customer': int(orders_per_customer['order_count'].max()),
+            'customers_with_5plus_orders': len(orders_per_customer[orders_per_customer['order_count'] >= 5])
+        }
+
+        # Add mature cohort stats to summary if available
+        if '_mature_cohort_stats' in result:
+            result['summary'].update(result['_mature_cohort_stats'])
+            del result['_mature_cohort_stats']
+
+        # Save cohort analysis to CSV
+        cohort_filename = f"data/cohort_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        if not result['cohort_retention'].empty:
+            result['cohort_retention'].to_csv(cohort_filename, index=False, encoding='utf-8-sig')
+            print(f"Cohort analysis saved: {cohort_filename}")
+
+        print(f"  Cohort analysis complete:")
+        print(f"    - Total customers: {result['summary']['total_customers']}")
+        print(f"    - Repeat customers: {result['summary']['repeat_customers']} ({result['summary']['repeat_rate_pct']}%)")
+        print(f"    - Avg days to 2nd order: {result['summary']['avg_days_to_2nd_order']}")
+        print(f"    - Avg days between orders: {result['summary']['avg_days_between_orders']}")
+
+        return result
+
+    def analyze_retention_by_first_order_item(self, df: pd.DataFrame, min_first_orders: int = 50, top_n: int = 20) -> dict:
+        """
+        Analyze customer retention based on items in their first order.
+        For top N items that appear in first orders (min occurrences), calculate:
+        - Total customers whose first order contained this item
+        - How many made 2nd, 3rd, 4th, 5th order
+        - Retention percentages
+
+        Args:
+            df: DataFrame with order data
+            min_first_orders: Minimum number of first orders containing the item to include in analysis
+            top_n: Number of top items to analyze (by first order occurrence count)
+
+        Returns:
+            dict with 'item_retention' DataFrame and 'summary' dict
+        """
+        print(f"\nAnalyzing retention by first order item (top {top_n} items, min {min_first_orders} first orders)...")
+
+        # Ensure datetime column exists
+        df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
+
+        # Get unique orders with customer info
+        orders_df = df[['order_num', 'customer_email', 'purchase_datetime', 'item_label', 'product_sku']].copy()
+        orders_df = orders_df.sort_values(['customer_email', 'purchase_datetime'])
+
+        # Get first order for each customer
+        first_order_per_customer = orders_df.groupby('customer_email')['order_num'].first().reset_index()
+        first_order_per_customer.columns = ['customer_email', 'first_order_num']
+
+        # Get items in first orders
+        first_order_items = orders_df.merge(
+            first_order_per_customer,
+            left_on=['customer_email', 'order_num'],
+            right_on=['customer_email', 'first_order_num']
+        )[['customer_email', 'item_label', 'product_sku']]
+
+        # Count how many first orders contain each item
+        item_first_order_counts = first_order_items.groupby(['item_label', 'product_sku'])['customer_email'].nunique().reset_index()
+        item_first_order_counts.columns = ['item_name', 'item_sku', 'first_order_count']
+
+        # Filter items with minimum first orders and get top N
+        qualified_items = item_first_order_counts[item_first_order_counts['first_order_count'] >= min_first_orders]
+        qualified_items = qualified_items.nlargest(top_n, 'first_order_count')
+
+        if qualified_items.empty:
+            print(f"  No items found with {min_first_orders}+ first order occurrences")
+            return {'item_retention': pd.DataFrame(), 'summary': {}}
+
+        # Calculate total orders per customer
+        orders_per_customer = orders_df.groupby('customer_email')['order_num'].nunique().reset_index()
+        orders_per_customer.columns = ['customer_email', 'total_orders']
+
+        # Calculate retention for each qualified item
+        item_retention_data = []
+
+        for _, item_row in qualified_items.iterrows():
+            item_name = item_row['item_name']
+            item_sku = item_row['item_sku']
+
+            # Get customers whose first order contained this item
+            customers_with_item = first_order_items[
+                (first_order_items['item_label'] == item_name) &
+                (first_order_items['product_sku'] == item_sku)
+            ]['customer_email'].unique()
+
+            # Get order counts for these customers
+            customer_orders = orders_per_customer[orders_per_customer['customer_email'].isin(customers_with_item)]
+            total_customers = len(customer_orders)
+
+            if total_customers == 0:
+                continue
+
+            # Calculate retention rates
+            made_2nd = len(customer_orders[customer_orders['total_orders'] >= 2])
+            made_3rd = len(customer_orders[customer_orders['total_orders'] >= 3])
+            made_4th = len(customer_orders[customer_orders['total_orders'] >= 4])
+            made_5th = len(customer_orders[customer_orders['total_orders'] >= 5])
+
+            item_retention_data.append({
+                'item_name': item_name,
+                'item_sku': item_sku,
+                'first_order_customers': total_customers,
+                'made_2nd_order': made_2nd,
+                'made_3rd_order': made_3rd,
+                'made_4th_order': made_4th,
+                'made_5th_order': made_5th,
+                'retention_2nd_pct': round(made_2nd / total_customers * 100, 1),
+                'retention_3rd_pct': round(made_3rd / total_customers * 100, 1),
+                'retention_4th_pct': round(made_4th / total_customers * 100, 1),
+                'retention_5th_pct': round(made_5th / total_customers * 100, 1),
+                'avg_orders_per_customer': round(customer_orders['total_orders'].mean(), 2)
+            })
+
+        item_retention_df = pd.DataFrame(item_retention_data)
+
+        # Sort by retention rate (2nd order) descending
+        if not item_retention_df.empty:
+            item_retention_df = item_retention_df.sort_values('retention_2nd_pct', ascending=False).reset_index(drop=True)
+
+        # Calculate summary statistics
+        summary = {}
+        if not item_retention_df.empty:
+            summary = {
+                'total_items_analyzed': len(item_retention_df),
+                'avg_retention_2nd_pct': round(item_retention_df['retention_2nd_pct'].mean(), 1),
+                'avg_retention_3rd_pct': round(item_retention_df['retention_3rd_pct'].mean(), 1),
+                'best_retention_item': item_retention_df.iloc[0]['item_name'] if len(item_retention_df) > 0 else None,
+                'best_retention_2nd_pct': item_retention_df.iloc[0]['retention_2nd_pct'] if len(item_retention_df) > 0 else 0,
+                'worst_retention_item': item_retention_df.iloc[-1]['item_name'] if len(item_retention_df) > 0 else None,
+                'worst_retention_2nd_pct': item_retention_df.iloc[-1]['retention_2nd_pct'] if len(item_retention_df) > 0 else 0,
+                'retention_spread': round(item_retention_df['retention_2nd_pct'].max() - item_retention_df['retention_2nd_pct'].min(), 1) if len(item_retention_df) > 0 else 0
+            }
+
+        print(f"  First order item retention analysis complete:")
+        print(f"    - Items analyzed: {len(item_retention_df)}")
+        if summary:
+            print(f"    - Avg 2nd order retention: {summary['avg_retention_2nd_pct']}%")
+            print(f"    - Best item: {summary['best_retention_item'][:40]}... ({summary['best_retention_2nd_pct']}%)" if summary['best_retention_item'] else "")
+            print(f"    - Retention spread: {summary['retention_spread']}%")
+
+        return {
+            'item_retention': item_retention_df,
+            'summary': summary
+        }
+
+    def analyze_same_item_repurchase(self, df: pd.DataFrame, min_orders: int = 50, top_n: int = 20) -> dict:
+        """
+        Analyze retention based on same item repurchase across multiple orders.
+        For each item, calculate how often customers who bought it buy it again.
+
+        Args:
+            df: DataFrame with order data
+            min_orders: Minimum total orders containing the item to include in analysis
+            top_n: Number of top items to analyze (by total order count)
+
+        Returns:
+            dict with:
+            - 'item_repurchase': DataFrame with repurchase rates per item
+            - 'customer_item_frequency': DataFrame with customer-item purchase frequency distribution
+            - 'summary': Summary statistics
+        """
+        print(f"\nAnalyzing same item repurchase retention (top {top_n} items, min {min_orders} orders)...")
+
+        # Ensure datetime column exists
+        df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
+
+        # Get item purchases with customer info
+        item_purchases = df[['order_num', 'customer_email', 'purchase_datetime', 'item_label', 'product_sku', 'item_quantity']].copy()
+        item_purchases = item_purchases.rename(columns={'item_label': 'item_name', 'product_sku': 'item_sku', 'item_quantity': 'quantity'})
+
+        # Count total orders per item (unique orders, not quantity)
+        item_order_counts = item_purchases.groupby(['item_name', 'item_sku'])['order_num'].nunique().reset_index()
+        item_order_counts.columns = ['item_name', 'item_sku', 'total_orders']
+
+        # Filter items with minimum orders and get top N
+        qualified_items = item_order_counts[item_order_counts['total_orders'] >= min_orders]
+        qualified_items = qualified_items.nlargest(top_n, 'total_orders')
+
+        if qualified_items.empty:
+            print(f"  No items found with {min_orders}+ orders")
+            return {'item_repurchase': pd.DataFrame(), 'customer_item_frequency': pd.DataFrame(), 'summary': {}}
+
+        # Calculate repurchase metrics for each qualified item
+        item_repurchase_data = []
+
+        for _, item_row in qualified_items.iterrows():
+            item_name = item_row['item_name']
+            item_sku = item_row['item_sku']
+
+            # Get all purchases of this item
+            item_orders = item_purchases[
+                (item_purchases['item_name'] == item_name) &
+                (item_purchases['item_sku'] == item_sku)
+            ]
+
+            # Count unique orders per customer for this item
+            customer_item_orders = item_orders.groupby('customer_email')['order_num'].nunique().reset_index()
+            customer_item_orders.columns = ['customer_email', 'item_order_count']
+
+            total_customers = len(customer_item_orders)
+            if total_customers == 0:
+                continue
+
+            # Calculate repurchase rates
+            bought_2_times = len(customer_item_orders[customer_item_orders['item_order_count'] >= 2])
+            bought_3_times = len(customer_item_orders[customer_item_orders['item_order_count'] >= 3])
+            bought_4_times = len(customer_item_orders[customer_item_orders['item_order_count'] >= 4])
+            bought_5_times = len(customer_item_orders[customer_item_orders['item_order_count'] >= 5])
+
+            # Calculate average time between repurchases for this item
+            repeat_purchasers = customer_item_orders[customer_item_orders['item_order_count'] >= 2]['customer_email'].unique()
+            avg_days_between = None
+
+            if len(repeat_purchasers) > 0:
+                days_between_list = []
+                for customer in repeat_purchasers:
+                    customer_item_dates = item_orders[item_orders['customer_email'] == customer].sort_values('purchase_datetime')['purchase_datetime'].values
+                    for i in range(1, len(customer_item_dates)):
+                        days = (customer_item_dates[i] - customer_item_dates[i-1]) / pd.Timedelta(days=1)
+                        days_between_list.append(days)
+                if days_between_list:
+                    avg_days_between = round(np.mean(days_between_list), 1)
+
+            item_repurchase_data.append({
+                'item_name': item_name,
+                'item_sku': item_sku,
+                'total_orders': item_row['total_orders'],
+                'unique_customers': total_customers,
+                'bought_2_times': bought_2_times,
+                'bought_3_times': bought_3_times,
+                'bought_4_times': bought_4_times,
+                'bought_5_times': bought_5_times,
+                'repurchase_2x_pct': round(bought_2_times / total_customers * 100, 1),
+                'repurchase_3x_pct': round(bought_3_times / total_customers * 100, 1),
+                'repurchase_4x_pct': round(bought_4_times / total_customers * 100, 1),
+                'repurchase_5x_pct': round(bought_5_times / total_customers * 100, 1),
+                'avg_purchases_per_customer': round(customer_item_orders['item_order_count'].mean(), 2),
+                'avg_days_between_repurchase': avg_days_between
+            })
+
+        item_repurchase_df = pd.DataFrame(item_repurchase_data)
+
+        # Sort by repurchase rate (2x) descending
+        if not item_repurchase_df.empty:
+            item_repurchase_df = item_repurchase_df.sort_values('repurchase_2x_pct', ascending=False).reset_index(drop=True)
+
+        # Create frequency distribution of customer-item purchases
+        all_customer_item_orders = []
+        for _, item_row in qualified_items.iterrows():
+            item_orders = item_purchases[
+                (item_purchases['item_name'] == item_row['item_name']) &
+                (item_purchases['item_sku'] == item_row['item_sku'])
+            ]
+            customer_counts = item_orders.groupby('customer_email')['order_num'].nunique()
+            all_customer_item_orders.extend(customer_counts.tolist())
+
+        frequency_dist = []
+        if all_customer_item_orders:
+            from collections import Counter
+            count_dist = Counter(all_customer_item_orders)
+            for freq in sorted(count_dist.keys())[:10]:  # Limit to first 10 frequencies
+                label = f'{freq}x' if freq < 10 else '10+x'
+                frequency_dist.append({
+                    'purchase_frequency': label,
+                    'customer_count': count_dist[freq],
+                    'percentage': round(count_dist[freq] / len(all_customer_item_orders) * 100, 1)
+                })
+
+        customer_item_freq_df = pd.DataFrame(frequency_dist)
+
+        # Calculate summary statistics
+        summary = {}
+        if not item_repurchase_df.empty:
+            summary = {
+                'total_items_analyzed': len(item_repurchase_df),
+                'avg_repurchase_2x_pct': round(item_repurchase_df['repurchase_2x_pct'].mean(), 1),
+                'avg_repurchase_3x_pct': round(item_repurchase_df['repurchase_3x_pct'].mean(), 1),
+                'best_repurchase_item': item_repurchase_df.iloc[0]['item_name'] if len(item_repurchase_df) > 0 else None,
+                'best_repurchase_2x_pct': item_repurchase_df.iloc[0]['repurchase_2x_pct'] if len(item_repurchase_df) > 0 else 0,
+                'worst_repurchase_item': item_repurchase_df.iloc[-1]['item_name'] if len(item_repurchase_df) > 0 else None,
+                'worst_repurchase_2x_pct': item_repurchase_df.iloc[-1]['repurchase_2x_pct'] if len(item_repurchase_df) > 0 else 0,
+                'avg_days_between_repurchase': round(
+                    item_repurchase_df[item_repurchase_df['avg_days_between_repurchase'].notna()]['avg_days_between_repurchase'].mean(), 1
+                ) if item_repurchase_df['avg_days_between_repurchase'].notna().any() else None,
+                'repurchase_spread': round(item_repurchase_df['repurchase_2x_pct'].max() - item_repurchase_df['repurchase_2x_pct'].min(), 1) if len(item_repurchase_df) > 0 else 0
+            }
+
+        print(f"  Same item repurchase analysis complete:")
+        print(f"    - Items analyzed: {len(item_repurchase_df)}")
+        if summary:
+            print(f"    - Avg 2x repurchase rate: {summary['avg_repurchase_2x_pct']}%")
+            print(f"    - Best item: {summary['best_repurchase_item'][:40]}... ({summary['best_repurchase_2x_pct']}%)" if summary['best_repurchase_item'] else "")
+            print(f"    - Avg days between repurchase: {summary['avg_days_between_repurchase']}")
+
+        return {
+            'item_repurchase': item_repurchase_df,
+            'customer_item_frequency': customer_item_freq_df,
+            'summary': summary
+        }
+
+    def analyze_time_to_nth_by_first_item(self, df: pd.DataFrame, min_first_orders: int = 50, top_n: int = 20) -> dict:
+        """
+        Analyze time to nth order based on items in customer's first order.
+        For top N items that appear in first orders, calculate:
+        - Average/median days to 2nd, 3rd, 4th, 5th order
+        - Comparison of timing between different first-order items
+
+        Args:
+            df: DataFrame with order data
+            min_first_orders: Minimum number of first orders containing the item
+            top_n: Number of top items to analyze
+
+        Returns:
+            dict with 'time_to_nth_by_item' DataFrame and 'summary' dict
+        """
+        print(f"\nAnalyzing time to nth order by first order item (top {top_n} items, min {min_first_orders} first orders)...")
+
+        # Ensure datetime column exists
+        df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
+
+        # Get unique orders with customer info
+        orders_df = df[['order_num', 'customer_email', 'purchase_datetime', 'item_label', 'product_sku']].copy()
+        orders_df = orders_df.sort_values(['customer_email', 'purchase_datetime'])
+
+        # Get first order for each customer
+        first_order_per_customer = orders_df.groupby('customer_email').agg({
+            'order_num': 'first',
+            'purchase_datetime': 'first'
+        }).reset_index()
+        first_order_per_customer.columns = ['customer_email', 'first_order_num', 'first_order_date']
+
+        # Get items in first orders
+        first_order_items = orders_df.merge(
+            first_order_per_customer,
+            left_on=['customer_email', 'order_num'],
+            right_on=['customer_email', 'first_order_num']
+        )[['customer_email', 'item_label', 'product_sku', 'first_order_date']]
+
+        # Count how many first orders contain each item
+        item_first_order_counts = first_order_items.groupby(['item_label', 'product_sku'])['customer_email'].nunique().reset_index()
+        item_first_order_counts.columns = ['item_name', 'item_sku', 'first_order_count']
+
+        # Filter items with minimum first orders and get top N
+        qualified_items = item_first_order_counts[item_first_order_counts['first_order_count'] >= min_first_orders]
+        qualified_items = qualified_items.nlargest(top_n, 'first_order_count')
+
+        if qualified_items.empty:
+            print(f"  No items found with {min_first_orders}+ first order occurrences")
+            return {'time_to_nth_by_item': pd.DataFrame(), 'summary': {}}
+
+        # Get all orders per customer with order numbers
+        all_orders = orders_df.drop_duplicates(subset=['customer_email', 'order_num']).copy()
+        all_orders = all_orders.sort_values(['customer_email', 'purchase_datetime'])
+        all_orders['customer_order_num'] = all_orders.groupby('customer_email').cumcount() + 1
+
+        # Merge with first order date
+        all_orders = all_orders.merge(
+            first_order_per_customer[['customer_email', 'first_order_date']],
+            on='customer_email'
+        )
+        all_orders['days_since_first_order'] = (all_orders['purchase_datetime'] - all_orders['first_order_date']).dt.days
+
+        # Calculate time to nth order for each qualified item
+        time_to_nth_data = []
+
+        for _, item_row in qualified_items.iterrows():
+            item_name = item_row['item_name']
+            item_sku = item_row['item_sku']
+
+            # Get customers whose first order contained this item
+            customers_with_item = first_order_items[
+                (first_order_items['item_label'] == item_name) &
+                (first_order_items['product_sku'] == item_sku)
+            ]['customer_email'].unique()
+
+            # Get orders for these customers
+            customer_orders = all_orders[all_orders['customer_email'].isin(customers_with_item)]
+
+            item_data = {
+                'item_name': item_name,
+                'item_sku': item_sku,
+                'first_order_customers': len(customers_with_item)
+            }
+
+            # Calculate time to nth order for orders 2-5
+            for order_num in range(2, 6):
+                nth_orders = customer_orders[customer_orders['customer_order_num'] == order_num]
+                if len(nth_orders) > 0:
+                    item_data[f'customers_{order_num}nd'] = len(nth_orders)
+                    item_data[f'avg_days_to_{order_num}nd'] = round(nth_orders['days_since_first_order'].mean(), 1)
+                    item_data[f'median_days_to_{order_num}nd'] = round(nth_orders['days_since_first_order'].median(), 1)
+                else:
+                    item_data[f'customers_{order_num}nd'] = 0
+                    item_data[f'avg_days_to_{order_num}nd'] = None
+                    item_data[f'median_days_to_{order_num}nd'] = None
+
+            time_to_nth_data.append(item_data)
+
+        time_to_nth_df = pd.DataFrame(time_to_nth_data)
+
+        # Sort by avg days to 2nd order (ascending - faster return is better)
+        if not time_to_nth_df.empty:
+            time_to_nth_df = time_to_nth_df.sort_values('avg_days_to_2nd', ascending=True, na_position='last').reset_index(drop=True)
+
+        # Calculate summary statistics
+        summary = {}
+        if not time_to_nth_df.empty:
+            valid_2nd = time_to_nth_df[time_to_nth_df['avg_days_to_2nd'].notna()]
+            if len(valid_2nd) > 0:
+                summary = {
+                    'total_items_analyzed': len(time_to_nth_df),
+                    'avg_days_to_2nd_overall': round(valid_2nd['avg_days_to_2nd'].mean(), 1),
+                    'fastest_return_item': valid_2nd.iloc[0]['item_name'] if len(valid_2nd) > 0 else None,
+                    'fastest_return_days': valid_2nd.iloc[0]['avg_days_to_2nd'] if len(valid_2nd) > 0 else None,
+                    'slowest_return_item': valid_2nd.iloc[-1]['item_name'] if len(valid_2nd) > 0 else None,
+                    'slowest_return_days': valid_2nd.iloc[-1]['avg_days_to_2nd'] if len(valid_2nd) > 0 else None,
+                    'days_spread': round(valid_2nd['avg_days_to_2nd'].max() - valid_2nd['avg_days_to_2nd'].min(), 1)
+                }
+
+        print(f"  Time to nth order by first item analysis complete:")
+        print(f"    - Items analyzed: {len(time_to_nth_df)}")
+        if summary:
+            print(f"    - Avg days to 2nd order: {summary.get('avg_days_to_2nd_overall', 'N/A')}")
+            if summary.get('fastest_return_item'):
+                print(f"    - Fastest return: {summary['fastest_return_item'][:40]}... ({summary['fastest_return_days']} days)")
+            print(f"    - Days spread: {summary.get('days_spread', 'N/A')}")
+
+        return {
+            'time_to_nth_by_item': time_to_nth_df,
+            'summary': summary
+        }
+
     def calculate_clv_and_return_time(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate Customer Lifetime Value and average return time"""
         print("\nCalculating CLV and customer return time...")
@@ -1784,6 +2736,669 @@ class BizniWebExporter:
 
         return distribution_pivot
 
+    def analyze_item_combinations(self, df: pd.DataFrame, min_count: int = 5) -> pd.DataFrame:
+        """
+        Analyze frequently ordered item combinations (grouped by product_sku).
+
+        Args:
+            df: DataFrame with order data (one row per item)
+            min_count: Minimum number of times a combination must appear to be included
+
+        Returns:
+            DataFrame with combination analysis
+        """
+        from itertools import combinations
+        from collections import Counter
+
+        print("\nAnalyzing item combinations...")
+
+        # Exclude items that should not be counted in combinations
+        excluded_items = ['Tringelt']
+        df_filtered = df[~df['item_label'].isin(excluded_items)].copy()
+        print(f"Excluded {len(df) - len(df_filtered)} items ({', '.join(excluded_items)}) from combination analysis")
+
+        # Create a mapping from product_sku to item_label for display
+        sku_to_label = df_filtered.groupby('product_sku')['item_label'].first().to_dict()
+
+        # Create a mapping from product_sku to average unit price
+        sku_to_price = df_filtered.groupby('product_sku')['item_unit_price'].mean().to_dict()
+
+        # Group items by order using product_sku
+        order_items = df_filtered.groupby('order_num')['product_sku'].apply(lambda x: frozenset(x.unique())).reset_index()
+        order_items.columns = ['order_num', 'items']
+
+        # Filter to orders with 2 or more unique items
+        multi_item_orders = order_items[order_items['items'].apply(len) >= 2]
+
+        if multi_item_orders.empty:
+            print("No orders with 2+ unique items found")
+            return pd.DataFrame()
+
+        print(f"Found {len(multi_item_orders)} orders with 2+ unique items")
+
+        # Count all combinations (2, 3, 4, 5, etc.)
+        combination_counts = Counter()
+
+        for _, row in multi_item_orders.iterrows():
+            items = sorted(row['items'])  # Sort for consistent ordering
+            # Generate combinations of different sizes (2, 3, 4, 5, etc.)
+            for combo_size in range(2, min(len(items) + 1, 6)):  # Up to 5 items in combo
+                for combo in combinations(items, combo_size):
+                    combination_counts[combo] += 1
+
+        # Filter by minimum count
+        filtered_combinations = {k: v for k, v in combination_counts.items() if v >= min_count}
+
+        if not filtered_combinations:
+            print(f"No combinations found with count >= {min_count}")
+            return pd.DataFrame()
+
+        # Create DataFrame
+        combo_data = []
+        for combo, count in filtered_combinations.items():
+            # Convert product SKUs to labels for display
+            combo_labels = [sku_to_label.get(sku, sku) for sku in combo]
+            # Calculate total price for the combination
+            combo_price = sum(sku_to_price.get(sku, 0) for sku in combo)
+            combo_data.append({
+                'combination_size': len(combo),
+                'combination': '\n'.join(combo_labels),
+                'combination_skus': '\n'.join(combo),
+                'count': count,
+                'price': round(combo_price, 2)
+            })
+
+        combo_df = pd.DataFrame(combo_data)
+        combo_df = combo_df.sort_values('count', ascending=False)
+
+        # Save to CSV
+        filename = f"data/item_combinations_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        combo_df.to_csv(filename, index=False, encoding='utf-8-sig')
+        print(f"Item combinations saved: {filename}")
+        print(f"Found {len(combo_df)} combinations with count >= {min_count}")
+
+        return combo_df
+
+    def analyze_day_of_week(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze orders and revenue by day of week"""
+        print("\nAnalyzing day of week patterns...")
+
+        df['day_of_week'] = pd.to_datetime(df['purchase_date']).dt.dayofweek
+        df['day_name'] = pd.to_datetime(df['purchase_date']).dt.day_name()
+
+        # Aggregate by day of week (using unique orders)
+        orders_per_day = df.groupby(['day_of_week', 'day_name']).agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum',
+            'fb_ads_daily_spend': lambda x: x.drop_duplicates().sum(),
+            'google_ads_daily_spend': lambda x: x.drop_duplicates().sum()
+        }).reset_index()
+
+        orders_per_day.columns = ['day_of_week', 'day_name', 'orders', 'revenue', 'profit', 'fb_spend', 'google_spend']
+        orders_per_day = orders_per_day.sort_values('day_of_week')
+
+        # Calculate averages and percentages
+        total_orders = orders_per_day['orders'].sum()
+        total_revenue = orders_per_day['revenue'].sum()
+        orders_per_day['orders_pct'] = (orders_per_day['orders'] / total_orders * 100).round(1)
+        orders_per_day['revenue_pct'] = (orders_per_day['revenue'] / total_revenue * 100).round(1)
+        orders_per_day['aov'] = (orders_per_day['revenue'] / orders_per_day['orders']).round(2)
+
+        print(f"Day of week analysis complete")
+        return orders_per_day
+
+    def analyze_day_hour_heatmap(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze orders by day of week and hour of day for heatmap visualization"""
+        print("\nAnalyzing day/hour heatmap patterns...")
+
+        # Parse purchase_date to extract day of week and hour
+        df['purchase_datetime_full'] = pd.to_datetime(df['purchase_date'])
+        df['day_of_week'] = df['purchase_datetime_full'].dt.dayofweek  # 0=Monday, 6=Sunday
+        df['hour_of_day'] = df['purchase_datetime_full'].dt.hour
+
+        # Day names for display
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+        # Aggregate by day of week and hour (using unique orders)
+        heatmap_data = df.groupby(['day_of_week', 'hour_of_day']).agg({
+            'order_num': 'nunique'
+        }).reset_index()
+        heatmap_data.columns = ['day_of_week', 'hour', 'orders']
+
+        # Create complete matrix (all combinations of day 0-6 and hour 0-23)
+        complete_matrix = []
+        for day in range(7):
+            for hour in range(24):
+                row = heatmap_data[(heatmap_data['day_of_week'] == day) & (heatmap_data['hour'] == hour)]
+                if len(row) > 0:
+                    orders = row['orders'].values[0]
+                else:
+                    orders = 0
+                complete_matrix.append({
+                    'day_of_week': day,
+                    'day_name': day_names[day],
+                    'hour': hour,
+                    'orders': orders
+                })
+
+        result = pd.DataFrame(complete_matrix)
+        print(f"Day/hour heatmap analysis complete")
+        return result
+
+    def analyze_geographic(self, df: pd.DataFrame) -> tuple:
+        """Analyze orders by geographic location"""
+        print("\nAnalyzing geographic distribution...")
+
+        # By country
+        country_agg = df.groupby('delivery_country').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum'
+        }).reset_index()
+        country_agg.columns = ['country', 'orders', 'revenue', 'profit']
+        country_agg = country_agg.sort_values('revenue', ascending=False)
+        country_agg['revenue_pct'] = (country_agg['revenue'] / country_agg['revenue'].sum() * 100).round(1)
+
+        # By city (top 20)
+        city_agg = df.groupby(['delivery_city', 'delivery_country']).agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum'
+        }).reset_index()
+        city_agg.columns = ['city', 'country', 'orders', 'revenue', 'profit']
+        city_agg = city_agg.sort_values('revenue', ascending=False).head(20)
+        city_agg['revenue_pct'] = (city_agg['revenue'] / df['item_total_without_tax'].sum() * 100).round(1)
+
+        print(f"Geographic analysis complete: {len(country_agg)} countries, showing top 20 cities")
+        return country_agg, city_agg
+
+    def analyze_b2b_vs_b2c(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze B2B vs B2C orders"""
+        print("\nAnalyzing B2B vs B2C split...")
+
+        # B2B = has company VAT ID or company ID
+        df['is_b2b'] = df.apply(
+            lambda row: pd.notna(row.get('customer_vat_id')) and str(row.get('customer_vat_id', '')).strip() != ''
+                        or pd.notna(row.get('customer_company_id')) and str(row.get('customer_company_id', '')).strip() != '',
+            axis=1
+        )
+
+        b2b_agg = df.groupby('is_b2b').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum',
+            'customer_email': 'nunique'
+        }).reset_index()
+
+        b2b_agg.columns = ['is_b2b', 'orders', 'revenue', 'profit', 'unique_customers']
+        b2b_agg['customer_type'] = b2b_agg['is_b2b'].map({True: 'B2B (Companies)', False: 'B2C (Individuals)'})
+        b2b_agg['aov'] = (b2b_agg['revenue'] / b2b_agg['orders']).round(2)
+        b2b_agg['orders_pct'] = (b2b_agg['orders'] / b2b_agg['orders'].sum() * 100).round(1)
+        b2b_agg['revenue_pct'] = (b2b_agg['revenue'] / b2b_agg['revenue'].sum() * 100).round(1)
+
+        print(f"B2B vs B2C analysis complete")
+        return b2b_agg
+
+    def analyze_product_margins(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze profit margins by product (grouped by product_sku)"""
+        print("\nAnalyzing product margins...")
+
+        product_margins = df.groupby('product_sku').agg({
+            'item_label': 'first',  # Keep product name for display
+            'item_quantity': 'sum',
+            'item_total_without_tax': 'sum',
+            'total_expense': 'sum',
+            'profit_before_ads': 'sum',
+            'order_num': 'nunique'
+        }).reset_index()
+
+        product_margins.columns = ['sku', 'product', 'quantity', 'revenue', 'cost', 'profit', 'orders']
+        product_margins['margin_pct'] = ((product_margins['profit'] / product_margins['revenue']) * 100).round(1)
+        product_margins['margin_pct'] = product_margins['margin_pct'].fillna(0)
+        product_margins = product_margins.sort_values('margin_pct', ascending=False)
+
+        print(f"Product margin analysis complete: {len(product_margins)} products")
+        return product_margins
+
+    def analyze_product_trends(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze product sales trends (growing vs declining) - grouped by product_sku"""
+        print("\nAnalyzing product trends...")
+
+        df['week'] = pd.to_datetime(df['purchase_date']).dt.isocalendar().week
+        df['year_week'] = pd.to_datetime(df['purchase_date']).dt.strftime('%Y-W%W')
+
+        # Get first and last half of the period
+        all_weeks = df['year_week'].unique()
+        if len(all_weeks) < 4:
+            print("Not enough weeks for trend analysis")
+            return pd.DataFrame()
+
+        mid_point = len(all_weeks) // 2
+        first_half_weeks = all_weeks[:mid_point]
+        second_half_weeks = all_weeks[mid_point:]
+
+        # Aggregate by product_sku for each half
+        first_half = df[df['year_week'].isin(first_half_weeks)].groupby('product_sku').agg({
+            'item_label': 'first',  # Keep product name for display
+            'item_quantity': 'sum',
+            'item_total_without_tax': 'sum'
+        }).reset_index()
+        first_half.columns = ['sku', 'product', 'qty_first', 'revenue_first']
+
+        second_half = df[df['year_week'].isin(second_half_weeks)].groupby('product_sku').agg({
+            'item_label': 'first',  # Keep product name for display
+            'item_quantity': 'sum',
+            'item_total_without_tax': 'sum'
+        }).reset_index()
+        second_half.columns = ['sku', 'product', 'qty_second', 'revenue_second']
+
+        # Merge and calculate growth - merge on sku
+        trends = first_half.merge(second_half, on='sku', how='outer', suffixes=('', '_r'))
+        # Use product name from whichever half has data
+        trends['product'] = trends['product'].combine_first(trends['product_r'])
+        trends = trends.drop(columns=['product_r'], errors='ignore')
+        trends = trends.fillna(0)
+        trends['qty_growth_pct'] = ((trends['qty_second'] - trends['qty_first']) / trends['qty_first'].replace(0, 1) * 100).round(1)
+        trends['revenue_growth_pct'] = ((trends['revenue_second'] - trends['revenue_first']) / trends['revenue_first'].replace(0, 1) * 100).round(1)
+
+        # Classify trend
+        def classify_trend(row):
+            if row['qty_first'] == 0 and row['qty_second'] > 0:
+                return 'New'
+            elif row['qty_second'] == 0 and row['qty_first'] > 0:
+                return 'Discontinued'
+            elif row['qty_growth_pct'] > 20:
+                return 'Growing'
+            elif row['qty_growth_pct'] < -20:
+                return 'Declining'
+            else:
+                return 'Stable'
+
+        trends['trend'] = trends.apply(classify_trend, axis=1)
+        trends['total_qty'] = trends['qty_first'] + trends['qty_second']
+        trends['total_revenue'] = trends['revenue_first'] + trends['revenue_second']
+        trends = trends.sort_values('total_revenue', ascending=False)
+
+        print(f"Product trends analysis complete: {len(trends)} products")
+        return trends
+
+    def analyze_customer_concentration(self, df: pd.DataFrame) -> dict:
+        """Analyze customer concentration (top customers % of revenue)"""
+        print("\nAnalyzing customer concentration...")
+
+        customer_revenue = df.groupby('customer_email').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum'
+        }).reset_index()
+        customer_revenue.columns = ['customer', 'orders', 'revenue', 'profit']
+        customer_revenue = customer_revenue.sort_values('revenue', ascending=False)
+
+        total_revenue = customer_revenue['revenue'].sum()
+        total_customers = len(customer_revenue)
+
+        # Calculate concentration metrics for 10%, 20%, 30%, 40%, 50% of customers
+        concentration_levels = [10, 20, 30, 40, 50]
+        level_counts = {}
+        level_revenue = {}
+        level_revenue_share = {}
+
+        for level in concentration_levels:
+            count = max(1, int(total_customers * level / 100))
+            level_counts[level] = count
+            level_revenue[level] = customer_revenue.head(count)['revenue'].sum()
+            level_revenue_share[level] = round(level_revenue[level] / total_revenue * 100, 1) if total_revenue > 0 else 0
+
+        # Top 10 customers by revenue (absolute, not percentage)
+        top_10_customers = customer_revenue.head(10).copy()
+        top_10_customers['revenue_pct'] = (top_10_customers['revenue'] / total_revenue * 100).round(1)
+
+        concentration = {
+            'total_customers': total_customers,
+            'level_counts': level_counts,
+            'level_revenue': level_revenue,
+            'level_revenue_share': level_revenue_share,
+            # Keep backward compatibility
+            'top_10_pct_revenue_share': level_revenue_share.get(10, 0),
+            'top_20_pct_revenue_share': level_revenue_share.get(20, 0),
+            'top_10_customers': top_10_customers,
+            'avg_revenue_per_customer': round(total_revenue / total_customers, 2) if total_customers > 0 else 0,
+            'median_revenue_per_customer': round(customer_revenue['revenue'].median(), 2)
+        }
+
+        # Repeat purchase rate
+        repeat_customers = len(customer_revenue[customer_revenue['orders'] > 1])
+        concentration['repeat_purchase_rate'] = round(repeat_customers / total_customers * 100, 1) if total_customers > 0 else 0
+        concentration['repeat_customers'] = repeat_customers
+        concentration['one_time_customers'] = total_customers - repeat_customers
+
+        print(f"Customer concentration analysis complete: {total_customers} customers")
+        return concentration
+
+    def calculate_financial_metrics(self, df: pd.DataFrame, date_agg: pd.DataFrame) -> dict:
+        """Calculate additional financial metrics"""
+        print("\nCalculating financial metrics...")
+
+        total_revenue = df.groupby('order_num')['item_total_without_tax'].sum().sum()
+        total_orders = df['order_num'].nunique()
+        total_customers = df['customer_email'].nunique()
+        total_fb_spend = df.groupby('purchase_date')['fb_ads_daily_spend'].first().sum()
+        total_google_spend = df.groupby('purchase_date')['google_ads_daily_spend'].first().sum()
+        total_ad_spend = total_fb_spend + total_google_spend
+        total_product_cost = df['total_expense'].sum()
+        total_profit = df['profit_before_ads'].sum() - total_fb_spend - total_google_spend
+
+        metrics = {
+            'roas': round(total_revenue / total_ad_spend, 2) if total_ad_spend > 0 else 0,
+            'roas_fb': round(total_revenue / total_fb_spend, 2) if total_fb_spend > 0 else 0,
+            'roas_google': round(total_revenue / total_google_spend, 2) if total_google_spend > 0 else 0,
+            'revenue_per_customer': round(total_revenue / total_customers, 2),
+            'cost_per_order': round((total_product_cost + total_ad_spend) / total_orders, 2),
+            'profit_margin_pct': round(total_profit / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'ad_spend_per_order': round(total_ad_spend / total_orders, 2),
+            'total_ad_spend': round(total_ad_spend, 2),
+            'total_revenue': round(total_revenue, 2),
+            'total_orders': total_orders,
+            'total_customers': total_customers
+        }
+
+        # Weekly profit margin trend
+        if 'net_profit' in date_agg.columns and 'total_revenue' in date_agg.columns:
+            date_agg['profit_margin_pct'] = (date_agg['net_profit'] / date_agg['total_revenue'] * 100).round(1)
+
+        print(f"Financial metrics calculated: ROAS={metrics['roas']}x")
+        return metrics
+
+    def analyze_order_status(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze order status distribution"""
+        print("\nAnalyzing order status distribution...")
+
+        status_agg = df.groupby('status_name').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum'
+        }).reset_index()
+        status_agg.columns = ['status', 'orders', 'revenue']
+        status_agg = status_agg.sort_values('orders', ascending=False)
+        status_agg['orders_pct'] = (status_agg['orders'] / status_agg['orders'].sum() * 100).round(1)
+
+        print(f"Order status analysis complete: {len(status_agg)} statuses")
+        return status_agg
+
+    def analyze_ads_effectiveness(self, df: pd.DataFrame) -> dict:
+        """Analyze relationship between ad spend and orders/revenue"""
+        print("\nAnalyzing ads effectiveness...")
+
+        # Convert to date only (remove time component)
+        df['purchase_date_only'] = pd.to_datetime(df['purchase_date']).dt.date
+
+        # Daily aggregation for correlation - use date only
+        daily_data = df.groupby('purchase_date_only').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'fb_ads_daily_spend': 'first',
+            'google_ads_daily_spend': 'first',
+            'profit_before_ads': 'sum'
+        }).reset_index()
+        daily_data.columns = ['date', 'orders', 'revenue', 'fb_spend', 'google_spend', 'profit']
+        daily_data['total_ad_spend'] = daily_data['fb_spend'] + daily_data['google_spend']
+
+        # Calculate correlations
+        correlations = {}
+        if len(daily_data) > 5:
+            correlations['fb_orders'] = round(daily_data['fb_spend'].corr(daily_data['orders']), 3)
+            correlations['fb_revenue'] = round(daily_data['fb_spend'].corr(daily_data['revenue']), 3)
+            correlations['google_orders'] = round(daily_data['google_spend'].corr(daily_data['orders']), 3)
+            correlations['google_revenue'] = round(daily_data['google_spend'].corr(daily_data['revenue']), 3)
+            correlations['total_ads_orders'] = round(daily_data['total_ad_spend'].corr(daily_data['orders']), 3)
+            correlations['total_ads_revenue'] = round(daily_data['total_ad_spend'].corr(daily_data['revenue']), 3)
+
+        # Calculate optimal spend ranges with 10€ increments
+        # Group by spend ranges and calculate average orders/revenue
+        max_spend = daily_data['fb_spend'].max()
+        # Create bins in 10€ increments up to the max spend
+        spend_bins = list(range(0, int(max_spend) + 20, 10))
+        spend_labels = [f'{spend_bins[i]}-{spend_bins[i+1]}€' for i in range(len(spend_bins) - 1)]
+        daily_data['fb_spend_range'] = pd.cut(daily_data['fb_spend'], bins=spend_bins, labels=spend_labels, include_lowest=True)
+        spend_effectiveness = daily_data.groupby('fb_spend_range', observed=True).agg({
+            'orders': 'mean',
+            'revenue': 'mean',
+            'fb_spend': 'mean',
+            'profit': 'mean'
+        }).reset_index()
+        spend_effectiveness.columns = ['spend_range', 'avg_orders', 'avg_revenue', 'avg_spend', 'avg_profit']
+
+        # Calculate ROAS per spend range
+        spend_effectiveness['roas'] = (spend_effectiveness['avg_revenue'] / spend_effectiveness['avg_spend']).round(2)
+        spend_effectiveness['roas'] = spend_effectiveness['roas'].replace([float('inf'), float('-inf')], 0).fillna(0)
+
+        # Find best performing spend range
+        best_roas_range = spend_effectiveness.loc[spend_effectiveness['roas'].idxmax(), 'spend_range'] if not spend_effectiveness.empty else 'N/A'
+        best_profit_range = spend_effectiveness.loc[spend_effectiveness['avg_profit'].idxmax(), 'spend_range'] if not spend_effectiveness.empty else 'N/A'
+
+        # Day of week ad effectiveness
+        daily_data['day_of_week'] = pd.to_datetime(daily_data['date']).dt.day_name()
+        dow_effectiveness = daily_data.groupby('day_of_week').agg({
+            'fb_spend': 'mean',
+            'orders': 'mean',
+            'revenue': 'mean'
+        }).reset_index()
+        dow_effectiveness['roas'] = (dow_effectiveness['revenue'] / dow_effectiveness['fb_spend']).round(2)
+        dow_effectiveness['roas'] = dow_effectiveness['roas'].replace([float('inf'), float('-inf')], 0).fillna(0)
+
+        # Order days by weekday
+        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        dow_effectiveness['day_order'] = dow_effectiveness['day_of_week'].map({d: i for i, d in enumerate(day_order)})
+        dow_effectiveness = dow_effectiveness.sort_values('day_order')
+
+        result = {
+            'correlations': correlations,
+            'spend_effectiveness': spend_effectiveness,
+            'dow_effectiveness': dow_effectiveness,
+            'best_roas_range': best_roas_range,
+            'best_profit_range': best_profit_range,
+            'daily_data': daily_data[['date', 'orders', 'revenue', 'fb_spend', 'google_spend', 'profit']].copy()
+        }
+
+        # Recommendations
+        recommendations = []
+        if correlations.get('fb_orders', 0) > 0.3:
+            recommendations.append("Strong positive correlation between FB spend and orders - increasing spend likely effective")
+        elif correlations.get('fb_orders', 0) < 0:
+            recommendations.append("Negative correlation between FB spend and orders - consider optimizing ad targeting")
+
+        if correlations.get('fb_revenue', 0) > correlations.get('fb_orders', 0):
+            recommendations.append("FB ads drive higher value orders - focus on revenue optimization")
+
+        result['recommendations'] = recommendations
+
+        print(f"Ads effectiveness analysis complete. FB-Orders correlation: {correlations.get('fb_orders', 'N/A')}")
+        return result
+
+    def analyze_cost_per_order(self, df: pd.DataFrame, fb_campaigns: list = None) -> dict:
+        """
+        Analyze estimated Cost Per Order (CPO) using time-based correlation.
+        Since we don't have direct attribution, we estimate which campaigns drive orders.
+        """
+        print("\nAnalyzing Cost Per Order estimation...")
+
+        # Convert to date only
+        df['purchase_date_only'] = pd.to_datetime(df['purchase_date']).dt.date
+
+        # Daily aggregation
+        daily_data = df.groupby('purchase_date_only').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'fb_ads_daily_spend': 'first',
+            'google_ads_daily_spend': 'first'
+        }).reset_index()
+        daily_data.columns = ['date', 'orders', 'revenue', 'fb_spend', 'google_spend']
+        daily_data['total_ad_spend'] = daily_data['fb_spend'] + daily_data['google_spend']
+        daily_data['date'] = pd.to_datetime(daily_data['date'])
+
+        result = {
+            'daily_cpo': [],
+            'overall_cpo': 0,
+            'fb_cpo': 0,
+            'time_lagged_analysis': {},
+            'campaign_attribution': [],
+            'cpo_trend': [],
+            'best_cpo_days': [],
+            'worst_cpo_days': []
+        }
+
+        total_orders = daily_data['orders'].sum()
+        total_fb_spend = daily_data['fb_spend'].sum()
+        total_google_spend = daily_data['google_spend'].sum()
+        total_ad_spend = total_fb_spend + total_google_spend
+        total_revenue = daily_data['revenue'].sum()
+
+        # Overall CPO
+        result['overall_cpo'] = total_ad_spend / total_orders if total_orders > 0 else 0
+        result['fb_cpo'] = total_fb_spend / total_orders if total_orders > 0 else 0
+        result['google_cpo'] = total_google_spend / total_orders if total_orders > 0 else 0
+        result['total_orders'] = total_orders
+        result['total_fb_spend'] = total_fb_spend
+        result['total_revenue'] = total_revenue
+
+        # Daily CPO trend
+        daily_cpo = []
+        for _, row in daily_data.iterrows():
+            if row['orders'] > 0:
+                cpo = row['fb_spend'] / row['orders']
+                daily_cpo.append({
+                    'date': row['date'].strftime('%Y-%m-%d'),
+                    'orders': int(row['orders']),
+                    'fb_spend': row['fb_spend'],
+                    'revenue': row['revenue'],
+                    'cpo': cpo,
+                    'roas': row['revenue'] / row['fb_spend'] if row['fb_spend'] > 0 else 0
+                })
+        result['daily_cpo'] = daily_cpo
+
+        # Time-lagged correlation analysis (do orders follow spend with delay?)
+        if len(daily_data) > 7:
+            # Calculate correlation with different time lags
+            time_lags = {}
+            for lag in range(0, 4):  # 0 to 3 day lag
+                if lag == 0:
+                    orders_shifted = daily_data['orders']
+                else:
+                    orders_shifted = daily_data['orders'].shift(-lag)
+
+                valid_mask = ~orders_shifted.isna()
+                if valid_mask.sum() > 5:
+                    corr = daily_data.loc[valid_mask, 'fb_spend'].corr(orders_shifted[valid_mask])
+                    time_lags[f'{lag}_day'] = round(corr, 3) if not pd.isna(corr) else 0
+
+            result['time_lagged_analysis'] = time_lags
+
+            # Find best lag
+            if time_lags:
+                best_lag = max(time_lags, key=lambda k: time_lags[k])
+                result['best_attribution_lag'] = best_lag
+                result['best_lag_correlation'] = time_lags[best_lag]
+
+        # Weekly CPO trend (smoother than daily)
+        daily_data['week'] = daily_data['date'].dt.isocalendar().week
+        daily_data['year'] = daily_data['date'].dt.year
+        weekly_data = daily_data.groupby(['year', 'week']).agg({
+            'orders': 'sum',
+            'fb_spend': 'sum',
+            'revenue': 'sum',
+            'date': 'min'
+        }).reset_index()
+        weekly_data['cpo'] = weekly_data['fb_spend'] / weekly_data['orders']
+        weekly_data['cpo'] = weekly_data['cpo'].replace([float('inf'), float('-inf')], 0).fillna(0)
+
+        result['weekly_cpo'] = [
+            {
+                'week_start': row['date'].strftime('%Y-%m-%d'),
+                'orders': int(row['orders']),
+                'fb_spend': row['fb_spend'],
+                'cpo': row['cpo']
+            }
+            for _, row in weekly_data.iterrows()
+        ]
+
+        # Campaign attribution estimation (proportional to clicks/spend)
+        if fb_campaigns:
+            total_campaign_spend = sum(c.get('spend', 0) for c in fb_campaigns)
+            total_campaign_clicks = sum(c.get('clicks', 0) for c in fb_campaigns)
+
+            campaign_attribution = []
+            for campaign in fb_campaigns:
+                spend = campaign.get('spend', 0)
+                clicks = campaign.get('clicks', 0)
+
+                if spend > 0:
+                    # Estimate orders proportionally to spend
+                    spend_share = spend / total_campaign_spend if total_campaign_spend > 0 else 0
+                    estimated_orders_by_spend = total_orders * spend_share
+
+                    # Estimate orders proportionally to clicks
+                    click_share = clicks / total_campaign_clicks if total_campaign_clicks > 0 else 0
+                    estimated_orders_by_clicks = total_orders * click_share
+
+                    # Weighted average (60% clicks, 40% spend as clicks are better signal)
+                    estimated_orders = estimated_orders_by_clicks * 0.6 + estimated_orders_by_spend * 0.4
+
+                    # Calculate estimated CPO for campaign
+                    estimated_cpo = spend / estimated_orders if estimated_orders > 0 else 0
+
+                    # Calculate estimated revenue share
+                    revenue_share = estimated_orders / total_orders if total_orders > 0 else 0
+                    estimated_revenue = total_revenue * revenue_share
+
+                    # ROAS for campaign
+                    estimated_roas = estimated_revenue / spend if spend > 0 else 0
+
+                    campaign_attribution.append({
+                        'campaign_name': campaign.get('campaign_name', 'Unknown'),
+                        'campaign_id': campaign.get('campaign_id', ''),
+                        'spend': spend,
+                        'clicks': clicks,
+                        'impressions': campaign.get('impressions', 0),
+                        'ctr': campaign.get('ctr', 0),
+                        'cpc': campaign.get('cpc', 0),
+                        'estimated_orders': round(estimated_orders, 1),
+                        'estimated_cpo': round(estimated_cpo, 2),
+                        'estimated_revenue': round(estimated_revenue, 2),
+                        'estimated_roas': round(estimated_roas, 2),
+                        'spend_share_pct': round(spend_share * 100, 1),
+                        'click_share_pct': round(click_share * 100, 1)
+                    })
+
+            # Sort by estimated CPO (best first)
+            campaign_attribution.sort(key=lambda x: x['estimated_cpo'] if x['estimated_cpo'] > 0 else float('inf'))
+            result['campaign_attribution'] = campaign_attribution
+
+        # Find best and worst CPO days
+        if daily_cpo:
+            sorted_by_cpo = sorted([d for d in daily_cpo if d['cpo'] > 0], key=lambda x: x['cpo'])
+            result['best_cpo_days'] = sorted_by_cpo[:5]  # 5 best days
+            result['worst_cpo_days'] = sorted_by_cpo[-5:][::-1]  # 5 worst days
+
+        # Hourly order analysis (aggregate orders by hour of day)
+        df['purchase_hour'] = pd.to_datetime(df['purchase_date']).dt.hour
+        hourly_orders = df.groupby('purchase_hour').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum'
+        }).reset_index()
+        hourly_orders.columns = ['hour', 'orders', 'revenue']
+
+        result['hourly_orders'] = [
+            {
+                'hour': int(row['hour']),
+                'orders': int(row['orders']),
+                'revenue': float(row['revenue'])
+            }
+            for _, row in hourly_orders.iterrows()
+        ]
+
+        print(f"Cost Per Order analysis complete. Overall FB CPO: €{result['fb_cpo']:.2f}")
+        return result
+
     def display_returning_customers_analysis(self, analysis: pd.DataFrame):
         """Display returning customers analysis"""
         print("\n" + "="*120)
@@ -1873,6 +3488,391 @@ class BizniWebExporter:
         
         print("\n")
 
+    def analyze_customer_email_segments(self, df: pd.DataFrame, all_orders_raw: list = None) -> dict:
+        """
+        Analyze customers and segment them for email marketing campaigns.
+
+        Segments:
+        1. One-time buyers (inactive 30+ days): Bought once with status "Odoslaná",
+           order was at least 30 days ago
+        2. Repeat buyers (inactive 90+ days): Bought 2+ times with status "Odoslaná",
+           last order was 90+ days ago
+        3. Failed payment customers: All orders have status "Platba online - platnosť vypršala"
+           or "Platba online - platba zamietnutá"
+        4. Additional segments discovered from data patterns
+
+        Returns dict with DataFrames for each segment
+        """
+        print("\nAnalyzing customer segments for email marketing...")
+
+        today = datetime.now()
+
+        # Convert purchase_date to datetime if not already
+        df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
+
+        # Get unique orders with customer info
+        orders_df = df[['order_num', 'customer_email', 'customer_name', 'purchase_datetime',
+                        'status_name', 'order_total', 'invoice_city', 'invoice_country']].drop_duplicates(subset=['order_num'])
+
+        # Filter to only "Odoslaná" (shipped) orders for segments 1 and 2
+        shipped_orders = orders_df[orders_df['status_name'] == 'Odoslaná'].copy()
+
+        # Calculate per-customer stats from shipped orders
+        customer_stats = shipped_orders.groupby('customer_email').agg({
+            'order_num': 'count',
+            'purchase_datetime': ['min', 'max'],
+            'order_total': 'sum',
+            'customer_name': 'first',
+            'invoice_city': 'first',
+            'invoice_country': 'first'
+        }).reset_index()
+        customer_stats.columns = ['email', 'order_count', 'first_order_date', 'last_order_date',
+                                   'total_revenue', 'name', 'city', 'country']
+
+        # Calculate days since last order
+        customer_stats['days_since_last_order'] = (today - customer_stats['last_order_date']).dt.days
+        customer_stats['days_since_first_order'] = (today - customer_stats['first_order_date']).dt.days
+
+        segments = {}
+
+        # ==== SEGMENT 1: One-time buyers inactive 30+ days ====
+        # Customers with exactly 1 order, first order was 30+ days ago
+        one_time_inactive = customer_stats[
+            (customer_stats['order_count'] == 1) &
+            (customer_stats['days_since_first_order'] >= 30)
+        ].copy()
+        one_time_inactive = one_time_inactive.sort_values('days_since_first_order', ascending=False)
+        segments['one_time_buyers_30_days'] = {
+            'data': one_time_inactive,
+            'description': 'Zákazníci, ktorí nakúpili raz (objednávka "Odoslaná") a od objednávky uplynulo viac ako 30 dní',
+            'description_en': 'Customers who bought once (status "Shipped") and order was 30+ days ago',
+            'count': len(one_time_inactive),
+            'email_purpose': 'Re-engagement - motivácia k druhému nákupu',
+            'send_timing': '30-45 dní po prvej objednávke',
+            'send_timing_en': '30-45 days after first order',
+            'priority': 3,
+            'discount_suggestion': '15% na druhú objednávku',
+            'email_template': 'Chýbate nám! Tu je 15% zľava na Vašu ďalšiu objednávku.'
+        }
+        print(f"  Segment 1 (One-time buyers, 30+ days inactive): {len(one_time_inactive)} customers")
+
+        # ==== SEGMENT 2: Repeat buyers inactive 90+ days ====
+        # Customers with 2+ orders, last order was 90+ days ago
+        repeat_inactive = customer_stats[
+            (customer_stats['order_count'] >= 2) &
+            (customer_stats['days_since_last_order'] >= 90)
+        ].copy()
+        repeat_inactive = repeat_inactive.sort_values('days_since_last_order', ascending=False)
+        segments['repeat_buyers_90_days'] = {
+            'data': repeat_inactive,
+            'description': 'Zákazníci, ktorí nakúpili 2x a viac (objednávky "Odoslaná") ale posledná objednávka bola pred 90+ dňami',
+            'description_en': 'Customers who bought 2+ times (status "Shipped") but last order was 90+ days ago',
+            'count': len(repeat_inactive),
+            'email_purpose': 'Win-back - návrat verných zákazníkov',
+            'send_timing': 'Ihneď - sú v riziku odchodu',
+            'send_timing_en': 'Immediately - at risk of churning',
+            'priority': 2,
+            'discount_suggestion': '20% + doprava zadarmo',
+            'email_template': 'Váš obľúbený parfum čaká! Špeciálna ponuka pre verných zákazníkov.'
+        }
+        print(f"  Segment 2 (Repeat buyers, 90+ days inactive): {len(repeat_inactive)} customers")
+
+        # ==== SEGMENT 3: Failed payment customers ====
+        # Process raw orders to find customers with ONLY failed payments
+        failed_payment_customers = pd.DataFrame()
+
+        if all_orders_raw:
+            # Extract customer emails from failed payment orders
+            failed_statuses = ['Platba online - platnosť vypršala', 'Platba online - platba zamietnutá']
+
+            failed_orders = []
+            all_customer_orders = {}  # Track all orders per customer email
+
+            for order in all_orders_raw:
+                customer = order.get('customer', {}) or {}
+                email = customer.get('email', '')
+                status = (order.get('status', {}) or {}).get('name', '')
+
+                if email:
+                    if email not in all_customer_orders:
+                        all_customer_orders[email] = {'failed': 0, 'other': 0, 'orders': []}
+
+                    if status in failed_statuses:
+                        all_customer_orders[email]['failed'] += 1
+                        all_customer_orders[email]['orders'].append(order)
+                    else:
+                        all_customer_orders[email]['other'] += 1
+
+            # Find customers with ONLY failed orders (no successful ones)
+            failed_only_customers = []
+            for email, data in all_customer_orders.items():
+                if data['failed'] > 0 and data['other'] == 0:
+                    # Get the latest order for customer info
+                    latest_order = max(data['orders'], key=lambda x: x.get('pur_date', ''))
+                    customer = latest_order.get('customer', {}) or {}
+                    name = customer.get('company_name', '')
+                    if not name:
+                        name = f"{customer.get('name', '')} {customer.get('surname', '')}".strip()
+
+                    failed_only_customers.append({
+                        'email': email,
+                        'name': name,
+                        'failed_order_count': data['failed'],
+                        'last_attempt_date': latest_order.get('pur_date', ''),
+                        'city': (latest_order.get('invoice_address', {}) or {}).get('city', ''),
+                        'country': (latest_order.get('invoice_address', {}) or {}).get('country', '')
+                    })
+
+            if failed_only_customers:
+                failed_payment_customers = pd.DataFrame(failed_only_customers)
+                failed_payment_customers['last_attempt_date'] = pd.to_datetime(failed_payment_customers['last_attempt_date'])
+                failed_payment_customers = failed_payment_customers.sort_values('last_attempt_date', ascending=False)
+
+        segments['failed_payment_only'] = {
+            'data': failed_payment_customers,
+            'description': 'Zákazníci, ktorí nedokončili žiadnu objednávku - všetky ich objednávky majú stav "Platba online - platnosť vypršala" alebo "Platba online - platba zamietnutá"',
+            'description_en': 'Customers who never completed any order - all their orders have failed payment status',
+            'count': len(failed_payment_customers),
+            'email_purpose': 'Recovery - pomoc s dokončením objednávky',
+            'send_timing': '24-48 hodín po neúspešnej platbe',
+            'send_timing_en': '24-48 hours after failed payment',
+            'priority': 1,
+            'discount_suggestion': '10% + pomoc s platbou',
+            'email_template': 'Vaša objednávka čaká! Pomôžeme Vám dokončiť nákup.'
+        }
+        print(f"  Segment 3 (Failed payment only): {len(failed_payment_customers)} customers")
+
+        # ==== ADDITIONAL SEGMENTS ====
+
+        # Segment 4: High-value one-time buyers (spent above average, haven't returned)
+        avg_order_value = customer_stats['total_revenue'].mean()
+        high_value_one_time = customer_stats[
+            (customer_stats['order_count'] == 1) &
+            (customer_stats['total_revenue'] > avg_order_value) &
+            (customer_stats['days_since_first_order'] >= 14)  # At least 2 weeks ago
+        ].copy()
+        high_value_one_time = high_value_one_time.sort_values('total_revenue', ascending=False)
+        segments['high_value_one_time'] = {
+            'data': high_value_one_time,
+            'description': f'Zákazníci s jednou objednávkou nad priemernou hodnotu (€{avg_order_value:.2f}), ktorí sa nevrátili',
+            'description_en': f'One-time buyers who spent above average (€{avg_order_value:.2f}) but never returned',
+            'count': len(high_value_one_time),
+            'email_purpose': 'VIP re-engagement - osobnejší prístup k hodnotným zákazníkom',
+            'send_timing': '14-21 dní po prvej objednávke',
+            'send_timing_en': '14-21 days after first order',
+            'priority': 2,
+            'discount_suggestion': '15% + osobná správa',
+            'email_template': 'Ďakujeme za veľkú objednávku! Pripravili sme pre Vás exkluzívnu ponuku.'
+        }
+        print(f"  Segment 4 (High-value one-time): {len(high_value_one_time)} customers")
+
+        # Segment 5: Recent buyers who might need refill (bought 14-60 days ago)
+        recent_buyers = customer_stats[
+            (customer_stats['days_since_last_order'] >= 14) &
+            (customer_stats['days_since_last_order'] <= 60)
+        ].copy()
+        recent_buyers = recent_buyers.sort_values('days_since_last_order', ascending=True)
+        segments['recent_buyers_14_60_days'] = {
+            'data': recent_buyers,
+            'description': 'Zákazníci, ktorí nakúpili pred 14-60 dňami - ideálny čas na pripomenutie',
+            'description_en': 'Customers who bought 14-60 days ago - perfect time for a reminder',
+            'count': len(recent_buyers),
+            'email_purpose': 'Reminder - pripomenutie produktu, cross-sell',
+            'send_timing': 'Segmentovať podľa dní a posielať priebežne',
+            'send_timing_en': 'Segment by days and send continuously',
+            'priority': 3,
+            'discount_suggestion': 'Doprava zadarmo nad X€',
+            'email_template': 'Nezabudnite na doplnenie zásob! Máme pre Vás novinky.'
+        }
+        print(f"  Segment 5 (Recent 14-60 days): {len(recent_buyers)} customers")
+
+        # Segment 6: VIP customers (3+ orders) - for loyalty program
+        vip_customers = customer_stats[
+            customer_stats['order_count'] >= 3
+        ].copy()
+        vip_customers = vip_customers.sort_values('total_revenue', ascending=False)
+        segments['vip_customers'] = {
+            'data': vip_customers,
+            'description': 'VIP zákazníci - nakúpili 3x a viac, najvernejší zákazníci',
+            'description_en': 'VIP customers - bought 3+ times, most loyal customers',
+            'count': len(vip_customers),
+            'email_purpose': 'Loyalty - špeciálne ponuky, poďakovanie, program lojality',
+            'send_timing': 'Pravidelne 1x mesačne',
+            'send_timing_en': 'Regularly once a month',
+            'priority': 4,
+            'discount_suggestion': 'VIP zľava 15-20%, prednostný prístup k novinkám',
+            'email_template': 'Exkluzívne pre VIP: Nová vôňa ešte pred ostatnými!'
+        }
+        print(f"  Segment 6 (VIP 3+ orders): {len(vip_customers)} customers")
+
+        # Segment 7: Churning customers (2+ orders, last 60-90 days ago)
+        churning_customers = customer_stats[
+            (customer_stats['order_count'] >= 2) &
+            (customer_stats['days_since_last_order'] >= 60) &
+            (customer_stats['days_since_last_order'] < 90)
+        ].copy()
+        churning_customers = churning_customers.sort_values('days_since_last_order', ascending=False)
+        segments['churning_customers'] = {
+            'data': churning_customers,
+            'description': 'Zákazníci v riziku odchodu - nakúpili 2x+, posledná objednávka pred 60-90 dňami',
+            'description_en': 'At-risk customers - bought 2+ times, last order 60-90 days ago',
+            'count': len(churning_customers),
+            'email_purpose': 'Prevention - zabrániť strate zákazníka',
+            'send_timing': 'Ihneď - posledná šanca pred stratou',
+            'send_timing_en': 'Immediately - last chance before losing them',
+            'priority': 1,
+            'discount_suggestion': '20% + limitovaná ponuka',
+            'email_template': 'Všimli sme si, že dlhšie nenakupujete. Máme pre Vás špeciálnu ponuku!'
+        }
+        print(f"  Segment 7 (Churning 60-90 days): {len(churning_customers)} customers")
+
+        # Segment 8: Long-term dormant (180+ days since last order)
+        long_dormant = customer_stats[
+            customer_stats['days_since_last_order'] >= 180
+        ].copy()
+        long_dormant = long_dormant.sort_values('total_revenue', ascending=False)
+        segments['long_dormant'] = {
+            'data': long_dormant,
+            'description': 'Dlhodobo neaktívni zákazníci - posledná objednávka pred 180+ dňami',
+            'description_en': 'Long-term dormant customers - last order 180+ days ago',
+            'count': len(long_dormant),
+            'email_purpose': 'Re-activation - agresívna zľava alebo špeciálna ponuka',
+            'send_timing': 'Ihneď',
+            'send_timing_en': 'Immediately',
+            'priority': 5,
+            'discount_suggestion': '20-30%'
+        }
+        print(f"  Segment 8 (Long dormant 180+ days): {len(long_dormant)} customers")
+
+        # ==== NEW SEGMENTS BASED ON COHORT ANALYSIS ====
+
+        # Segment 9: Sample buyers who haven't converted (bought sample set, no full-size)
+        # Get orders with product info
+        orders_with_products = df[['order_num', 'customer_email', 'item_label', 'purchase_datetime']].copy()
+
+        # Identify sample set purchases
+        sample_keywords = ['vzor', 'sample', 'sada vzor', 'vzoriek', 'vzorky']
+        orders_with_products['is_sample'] = orders_with_products['item_label'].str.lower().apply(
+            lambda x: any(kw in str(x).lower() for kw in sample_keywords) if pd.notna(x) else False
+        )
+
+        # Full-size products (200ml, 500ml bottles)
+        fullsize_keywords = ['200ml', '500ml', '200 ml', '500 ml']
+        orders_with_products['is_fullsize'] = orders_with_products['item_label'].str.lower().apply(
+            lambda x: any(kw in str(x).lower() for kw in fullsize_keywords) if pd.notna(x) else False
+        )
+
+        # Group by customer
+        customer_products = orders_with_products.groupby('customer_email').agg({
+            'is_sample': 'any',
+            'is_fullsize': 'any',
+            'purchase_datetime': 'max'
+        }).reset_index()
+        customer_products.columns = ['email', 'bought_sample', 'bought_fullsize', 'last_order_date']
+        customer_products['days_since_last'] = (today - customer_products['last_order_date']).dt.days
+
+        # Sample buyers who never bought full-size, 7-30 days ago
+        sample_not_converted = customer_products[
+            (customer_products['bought_sample'] == True) &
+            (customer_products['bought_fullsize'] == False) &
+            (customer_products['days_since_last'] >= 7) &
+            (customer_products['days_since_last'] <= 60)
+        ].copy()
+
+        # Merge with customer stats for more info
+        sample_not_converted = sample_not_converted.merge(
+            customer_stats[['email', 'name', 'order_count', 'total_revenue', 'city', 'country']],
+            on='email', how='left'
+        )
+        sample_not_converted = sample_not_converted.sort_values('days_since_last', ascending=True)
+
+        segments['sample_not_converted'] = {
+            'data': sample_not_converted,
+            'description': 'Zákazníci, ktorí kúpili vzorky ale ešte nekúpili plnú veľkosť (7-60 dní)',
+            'description_en': 'Customers who bought samples but never bought full-size products (7-60 days ago)',
+            'count': len(sample_not_converted),
+            'email_purpose': 'Conversion - konverzia zo vzoriek na plnú veľkosť',
+            'send_timing': '7-14 dní po nákupe vzoriek',
+            'send_timing_en': '7-14 days after sample purchase',
+            'priority': 1,
+            'discount_suggestion': '10-15% na prvú plnú veľkosť',
+            'email_template': 'Ktorá vôňa sa Vám najviac páčila? Teraz so zľavou X%!'
+        }
+        print(f"  Segment 9 (Sample not converted): {len(sample_not_converted)} customers")
+
+        # Segment 10: Optimal reorder timing (approaching 20-day avg reorder time)
+        # Customers with last order 15-25 days ago (sweet spot for reorder reminder)
+        optimal_reorder = customer_stats[
+            (customer_stats['days_since_last_order'] >= 15) &
+            (customer_stats['days_since_last_order'] <= 25)
+        ].copy()
+        optimal_reorder = optimal_reorder.sort_values('days_since_last_order', ascending=True)
+        segments['optimal_reorder_timing'] = {
+            'data': optimal_reorder,
+            'description': 'Zákazníci v optimálnom čase na opätovný nákup (15-25 dní od poslednej objednávky)',
+            'description_en': 'Customers at optimal reorder timing (15-25 days since last order)',
+            'count': len(optimal_reorder),
+            'email_purpose': 'Reorder - pripomenutie na doplnenie zásob',
+            'send_timing': 'Ihneď (sú v optimálnom okne)',
+            'send_timing_en': 'Immediately (within optimal window)',
+            'priority': 2,
+            'discount_suggestion': '5-10% alebo doprava zadarmo',
+            'email_template': 'Dochádza Vám parfum do prania? Objednajte teraz!'
+        }
+        print(f"  Segment 10 (Optimal reorder 15-25 days): {len(optimal_reorder)} customers")
+
+        # Segment 11: New customers welcome sequence (0-7 days)
+        new_customers = customer_stats[
+            (customer_stats['order_count'] == 1) &
+            (customer_stats['days_since_first_order'] <= 7)
+        ].copy()
+        new_customers = new_customers.sort_values('first_order_date', ascending=False)
+        segments['new_customers_welcome'] = {
+            'data': new_customers,
+            'description': 'Noví zákazníci - prvá objednávka v posledných 7 dňoch',
+            'description_en': 'New customers - first order within last 7 days',
+            'count': len(new_customers),
+            'email_purpose': 'Welcome - privítanie, tipy na použitie produktu',
+            'send_timing': '3 dni po doručení',
+            'send_timing_en': '3 days after delivery',
+            'priority': 3,
+            'discount_suggestion': 'Žiadna zľava, len hodnota',
+            'email_template': 'Ako sa Vám páči váš nový parfum? Tipy na použitie...'
+        }
+        print(f"  Segment 11 (New customers 0-7 days): {len(new_customers)} customers")
+
+        # Segment 12: Second order encouragement (8-14 days, first-timers)
+        second_order_timing = customer_stats[
+            (customer_stats['order_count'] == 1) &
+            (customer_stats['days_since_first_order'] >= 8) &
+            (customer_stats['days_since_first_order'] <= 14)
+        ].copy()
+        second_order_timing = second_order_timing.sort_values('days_since_first_order', ascending=True)
+        segments['second_order_encouragement'] = {
+            'data': second_order_timing,
+            'description': 'Zákazníci pripravení na druhý nákup (8-14 dní po prvej objednávke)',
+            'description_en': 'Customers ready for second order (8-14 days after first purchase)',
+            'count': len(second_order_timing),
+            'email_purpose': 'Second order - motivácia k druhému nákupu',
+            'send_timing': '10-12 dní po prvej objednávke',
+            'send_timing_en': '10-12 days after first order',
+            'priority': 2,
+            'discount_suggestion': '10% na druhú objednávku',
+            'email_template': 'Páčil sa Vám náš produkt? Získajte 10% na ďalší nákup!'
+        }
+        print(f"  Segment 12 (Second order timing 8-14 days): {len(second_order_timing)} customers")
+
+        # Save segments to CSV files
+        for segment_name, segment_data in segments.items():
+            if not segment_data['data'].empty:
+                filename = f"data/email_segment_{segment_name}.csv"
+                segment_data['data'].to_csv(filename, index=False, encoding='utf-8-sig')
+                print(f"    Saved: {filename}")
+
+        print(f"\nCustomer segmentation complete: {len(segments)} segments created")
+
+        return segments
+
 
 def main():
     """Main function to handle command line arguments and run the export"""
@@ -1880,7 +3880,7 @@ def main():
     parser.add_argument(
         '--from-date',
         type=str,
-        help='From date in YYYY-MM-DD format (default: 2025-05-01)'
+        help='From date in YYYY-MM-DD format (default: 2025-05-06)'
     )
     parser.add_argument(
         '--to-date',
@@ -1909,9 +3909,9 @@ def main():
     if args.from_date:
         date_from = datetime.strptime(args.from_date, '%Y-%m-%d')
     else:
-        # Default to start from June 23, 2025
-        date_from = datetime(2025, 7, 23)
-    
+        # Default to start from May 11, 2025
+        date_from = datetime(2025, 5, 11)
+
     print(f"Exporting orders from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
     
     # Initialize exporter

@@ -102,26 +102,26 @@ class FacebookAdsClient:
     def get_daily_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, float]:
         """
         Fetch daily ad spend from Facebook Ads API with caching
-        
+
         Args:
             date_from: Start date
             date_to: End date
-            
+
         Returns:
             Dictionary mapping date strings to spend amounts in EUR
         """
+        # Always try to load from cache first (even if credentials not configured)
+        cached_data = self.load_from_cache(date_from, date_to)
+        if cached_data is not None:
+            return cached_data
+
+        # If not configured, return empty after checking cache
         if not self.is_configured:
             return {}
-        
+
         # Check if we should use cache for the entire date range
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        # If the entire range is cacheable, try loading from cache
-        if self.should_use_cache(date_to):
-            cached_data = self.load_from_cache(date_from, date_to)
-            if cached_data is not None:
-                return cached_data
-        
+
         # Otherwise, fetch from API
         try:
             # Format dates for Facebook API
@@ -132,7 +132,7 @@ class FacebookAdsClient:
 
             # Build the insights endpoint URL
             url = f'{self.base_url}/{self.ad_account_id}/insights'
-            
+
             # Parameters for the API request
             params = {
                 'access_token': self.access_token,
@@ -142,21 +142,21 @@ class FacebookAdsClient:
                 'level': 'account',
                 'limit': 500
             }
-            
+
             # Make the API request
             response = requests.get(url, params=params)
             response.raise_for_status()
-            
+
             data = response.json()
-            
+
             # Process the response
             daily_spend = {}
-            
+
             if 'data' in data:
                 for day_data in data['data']:
                     date_str = day_data.get('date_start', '')
                     spend = float(day_data.get('spend', 0))
-                    
+
                     # Store additional metrics if needed
                     daily_metrics = {
                         'spend': spend,
@@ -166,15 +166,15 @@ class FacebookAdsClient:
                         'cpm': float(day_data.get('cpm', 0)),
                         'ctr': float(day_data.get('ctr', 0))
                     }
-                    
+
                     # For now, just return spend amount
                     # You can modify this to return full metrics if needed
                     daily_spend[date_str] = spend
-            
+
             # Cache the data if the entire range is cacheable
             if self.should_use_cache(date_to):
                 self.save_to_cache(date_from, date_to, daily_spend)
-            
+
             return daily_spend
 
         except requests.exceptions.RequestException as e:
@@ -183,75 +183,471 @@ class FacebookAdsClient:
         except Exception as e:
             logger.error(f"Unexpected error processing Facebook Ads data: {e}")
             return {}
-    
-    def get_campaign_spend(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+
+    def get_daily_metrics(self, date_from: datetime, date_to: datetime) -> Dict[str, Dict[str, Any]]:
         """
-        Fetch campaign-level spend data
-        
+        Fetch detailed daily metrics from Facebook Ads API
+
         Args:
             date_from: Start date
             date_to: End date
-            
+
         Returns:
-            List of campaign spend data
+            Dictionary mapping date strings to full metrics dict
         """
         if not self.is_configured:
-            return []
-        
+            return {}
+
         try:
             since = date_from.strftime('%Y-%m-%d')
             until = date_to.strftime('%Y-%m-%d')
-            
+
+            logger.info(f"Fetching detailed Facebook Ads metrics from API for {since} to {until}...")
+
+            url = f'{self.base_url}/{self.ad_account_id}/insights'
+
+            params = {
+                'access_token': self.access_token,
+                'fields': 'spend,impressions,clicks,cpc,cpm,ctr,reach,frequency,unique_clicks,cost_per_unique_click',
+                'time_range': f'{{"since":"{since}","until":"{until}"}}',
+                'time_increment': 1,
+                'level': 'account',
+                'limit': 500
+            }
+
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+
+            data = response.json()
+            daily_metrics = {}
+
+            if 'data' in data:
+                for day_data in data['data']:
+                    date_str = day_data.get('date_start', '')
+                    daily_metrics[date_str] = {
+                        'spend': float(day_data.get('spend', 0)),
+                        'impressions': int(day_data.get('impressions', 0)),
+                        'clicks': int(day_data.get('clicks', 0)),
+                        'cpc': float(day_data.get('cpc', 0)),
+                        'cpm': float(day_data.get('cpm', 0)),
+                        'ctr': float(day_data.get('ctr', 0)),
+                        'reach': int(day_data.get('reach', 0)),
+                        'frequency': float(day_data.get('frequency', 0)),
+                        'unique_clicks': int(day_data.get('unique_clicks', 0)),
+                        'cost_per_unique_click': float(day_data.get('cost_per_unique_click', 0))
+                    }
+
+            logger.info(f"Retrieved detailed metrics for {len(daily_metrics)} days")
+            return daily_metrics
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching detailed Facebook Ads metrics: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Unexpected error processing detailed Facebook Ads metrics: {e}")
+            return {}
+    
+    def get_campaign_spend(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        """
+        Fetch campaign-level spend data with full metrics
+
+        Args:
+            date_from: Start date
+            date_to: End date
+
+        Returns:
+            List of campaign spend data with metrics
+        """
+        if not self.is_configured:
+            return []
+
+        try:
+            since = date_from.strftime('%Y-%m-%d')
+            until = date_to.strftime('%Y-%m-%d')
+
+            logger.info(f"Fetching campaign-level data for {since} to {until}...")
+
             # First get campaigns
             campaigns_url = f'{self.base_url}/{self.ad_account_id}/campaigns'
             campaigns_params = {
                 'access_token': self.access_token,
-                'fields': 'id,name,status',
+                'fields': 'id,name,status,objective',
                 'limit': 500
             }
-            
+
             campaigns_response = requests.get(campaigns_url, params=campaigns_params)
             campaigns_response.raise_for_status()
             campaigns_data = campaigns_response.json()
-            
+
             campaign_spend = []
-            
+
             if 'data' in campaigns_data:
                 for campaign in campaigns_data['data']:
                     campaign_id = campaign['id']
                     campaign_name = campaign['name']
-                    
+                    campaign_status = campaign.get('status', 'UNKNOWN')
+                    campaign_objective = campaign.get('objective', 'UNKNOWN')
+
                     # Get insights for each campaign
                     insights_url = f'{self.base_url}/{campaign_id}/insights'
                     insights_params = {
                         'access_token': self.access_token,
-                        'fields': 'spend,impressions,clicks,reach',
+                        'fields': 'spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,unique_clicks,cost_per_unique_click,actions,conversions,cost_per_action_type,conversion_values',
                         'time_range': f'{{"since":"{since}","until":"{until}"}}',
                         'level': 'campaign'
                     }
-                    
+
                     insights_response = requests.get(insights_url, params=insights_params)
-                    
+
                     if insights_response.status_code == 200:
                         insights_data = insights_response.json()
-                        
+
                         if 'data' in insights_data and insights_data['data']:
                             data = insights_data['data'][0]
+                            spend = float(data.get('spend', 0))
+                            impressions = int(data.get('impressions', 0))
+                            clicks = int(data.get('clicks', 0))
+                            reach = int(data.get('reach', 0))
+
+                            # Extract conversion data
+                            actions = data.get('actions', [])
+                            conversions_count = 0
+                            purchases_count = 0
+                            add_to_cart_count = 0
+
+                            for action in actions:
+                                action_type = action.get('action_type', '')
+                                value = int(action.get('value', 0))
+
+                                if 'purchase' in action_type or 'conversion' in action_type:
+                                    conversions_count += value
+                                if action_type == 'offsite_conversion.fb_pixel_purchase':
+                                    purchases_count = value
+                                if action_type == 'offsite_conversion.fb_pixel_add_to_cart':
+                                    add_to_cart_count = value
+
+                            # Extract cost per action
+                            cost_per_action_types = data.get('cost_per_action_type', [])
+                            cost_per_conversion = 0
+                            cost_per_purchase = 0
+
+                            for cpa in cost_per_action_types:
+                                action_type = cpa.get('action_type', '')
+                                value = float(cpa.get('value', 0))
+
+                                if action_type == 'offsite_conversion.fb_pixel_purchase':
+                                    cost_per_purchase = value
+                                elif 'purchase' in action_type or 'conversion' in action_type:
+                                    cost_per_conversion = value if cost_per_conversion == 0 else cost_per_conversion
+
+                            # Calculate conversion rate
+                            conversion_rate = (conversions_count / clicks * 100) if clicks > 0 else 0
+                            purchase_rate = (purchases_count / clicks * 100) if clicks > 0 else 0
+
                             campaign_spend.append({
                                 'campaign_id': campaign_id,
                                 'campaign_name': campaign_name,
-                                'spend': float(data.get('spend', 0)),
-                                'impressions': int(data.get('impressions', 0)),
-                                'clicks': int(data.get('clicks', 0)),
-                                'reach': int(data.get('reach', 0))
+                                'status': campaign_status,
+                                'objective': campaign_objective,
+                                'spend': spend,
+                                'impressions': impressions,
+                                'clicks': clicks,
+                                'reach': reach,
+                                'cpc': float(data.get('cpc', 0)),
+                                'cpm': float(data.get('cpm', 0)),
+                                'ctr': float(data.get('ctr', 0)),
+                                'frequency': float(data.get('frequency', 0)),
+                                'unique_clicks': int(data.get('unique_clicks', 0)),
+                                'cost_per_unique_click': float(data.get('cost_per_unique_click', 0)),
+                                'conversions': conversions_count,
+                                'purchases': purchases_count,
+                                'add_to_cart': add_to_cart_count,
+                                'conversion_rate': conversion_rate,
+                                'purchase_rate': purchase_rate,
+                                'cost_per_conversion': cost_per_conversion,
+                                'cost_per_purchase': cost_per_purchase
                             })
-            
+
+            # Sort by spend descending
+            campaign_spend.sort(key=lambda x: x['spend'], reverse=True)
+            logger.info(f"Retrieved data for {len(campaign_spend)} campaigns")
             return campaign_spend
 
         except Exception as e:
             logger.error(f"Error fetching campaign data: {e}")
             return []
-    
+
+    def get_adset_performance(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        """
+        Fetch ad set level performance data
+
+        Args:
+            date_from: Start date
+            date_to: End date
+
+        Returns:
+            List of ad set performance data
+        """
+        if not self.is_configured:
+            return []
+
+        try:
+            since = date_from.strftime('%Y-%m-%d')
+            until = date_to.strftime('%Y-%m-%d')
+
+            logger.info(f"Fetching ad set performance data for {since} to {until}...")
+
+            # Get ad sets with insights
+            url = f'{self.base_url}/{self.ad_account_id}/adsets'
+            params = {
+                'access_token': self.access_token,
+                'fields': 'id,name,status,campaign_id,targeting',
+                'limit': 500
+            }
+
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            adsets_data = response.json()
+
+            adset_performance = []
+
+            if 'data' in adsets_data:
+                for adset in adsets_data['data']:
+                    adset_id = adset['id']
+
+                    # Get insights for each ad set
+                    insights_url = f'{self.base_url}/{adset_id}/insights'
+                    insights_params = {
+                        'access_token': self.access_token,
+                        'fields': 'spend,impressions,clicks,reach,cpc,cpm,ctr,frequency',
+                        'time_range': f'{{"since":"{since}","until":"{until}"}}',
+                        'level': 'adset'
+                    }
+
+                    insights_response = requests.get(insights_url, params=insights_params)
+
+                    if insights_response.status_code == 200:
+                        insights_data = insights_response.json()
+
+                        if 'data' in insights_data and insights_data['data']:
+                            data = insights_data['data'][0]
+                            spend = float(data.get('spend', 0))
+
+                            if spend > 0:  # Only include ad sets with spend
+                                adset_performance.append({
+                                    'adset_id': adset_id,
+                                    'adset_name': adset['name'],
+                                    'status': adset.get('status', 'UNKNOWN'),
+                                    'campaign_id': adset.get('campaign_id', ''),
+                                    'spend': spend,
+                                    'impressions': int(data.get('impressions', 0)),
+                                    'clicks': int(data.get('clicks', 0)),
+                                    'reach': int(data.get('reach', 0)),
+                                    'cpc': float(data.get('cpc', 0)),
+                                    'cpm': float(data.get('cpm', 0)),
+                                    'ctr': float(data.get('ctr', 0)),
+                                    'frequency': float(data.get('frequency', 0))
+                                })
+
+            # Sort by spend descending
+            adset_performance.sort(key=lambda x: x['spend'], reverse=True)
+            logger.info(f"Retrieved data for {len(adset_performance)} ad sets")
+            return adset_performance
+
+        except Exception as e:
+            logger.error(f"Error fetching ad set data: {e}")
+            return []
+
+    def get_ads_performance(self, date_from: datetime, date_to: datetime, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Fetch individual ad level performance data
+
+        Args:
+            date_from: Start date
+            date_to: End date
+            limit: Maximum number of ads to return
+
+        Returns:
+            List of ad performance data
+        """
+        if not self.is_configured:
+            return []
+
+        try:
+            since = date_from.strftime('%Y-%m-%d')
+            until = date_to.strftime('%Y-%m-%d')
+
+            logger.info(f"Fetching individual ad performance data for {since} to {until}...")
+
+            # Get ads with insights directly using the insights endpoint
+            url = f'{self.base_url}/{self.ad_account_id}/insights'
+            params = {
+                'access_token': self.access_token,
+                'fields': 'ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency',
+                'time_range': f'{{"since":"{since}","until":"{until}"}}',
+                'level': 'ad',
+                'limit': limit,
+                'sort': 'spend_descending'
+            }
+
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            ads_performance = []
+
+            if 'data' in data:
+                for ad_data in data['data']:
+                    spend = float(ad_data.get('spend', 0))
+                    if spend > 0:
+                        ads_performance.append({
+                            'ad_id': ad_data.get('ad_id', ''),
+                            'ad_name': ad_data.get('ad_name', 'Unknown'),
+                            'spend': spend,
+                            'impressions': int(ad_data.get('impressions', 0)),
+                            'clicks': int(ad_data.get('clicks', 0)),
+                            'reach': int(ad_data.get('reach', 0)),
+                            'cpc': float(ad_data.get('cpc', 0)),
+                            'cpm': float(ad_data.get('cpm', 0)),
+                            'ctr': float(ad_data.get('ctr', 0)),
+                            'frequency': float(ad_data.get('frequency', 0))
+                        })
+
+            logger.info(f"Retrieved data for {len(ads_performance)} individual ads")
+            return ads_performance
+
+        except Exception as e:
+            logger.error(f"Error fetching individual ad data: {e}")
+            return []
+
+    def get_hourly_stats(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        """
+        Fetch hourly aggregated stats from Facebook Ads API
+
+        Args:
+            date_from: Start date
+            date_to: End date
+
+        Returns:
+            List of hourly stats with metrics aggregated by hour of day
+        """
+        if not self.is_configured:
+            return []
+
+        try:
+            since = date_from.strftime('%Y-%m-%d')
+            until = date_to.strftime('%Y-%m-%d')
+
+            logger.info(f"Fetching hourly stats for {since} to {until}...")
+
+            url = f'{self.base_url}/{self.ad_account_id}/insights'
+            params = {
+                'access_token': self.access_token,
+                'fields': 'spend,impressions,clicks,cpc,cpm,ctr,reach',
+                'time_range': f'{{"since":"{since}","until":"{until}"}}',
+                'breakdowns': 'hourly_stats_aggregated_by_advertiser_time_zone',
+                'level': 'account',
+                'limit': 500
+            }
+
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+
+            data = response.json()
+            hourly_stats = []
+
+            if 'data' in data:
+                for hour_data in data['data']:
+                    hour_range = hour_data.get('hourly_stats_aggregated_by_advertiser_time_zone', '')
+                    # Parse hour from format "00:00:00 - 00:59:59"
+                    hour = int(hour_range.split(':')[0]) if hour_range else 0
+
+                    hourly_stats.append({
+                        'hour': hour,
+                        'hour_range': hour_range,
+                        'spend': float(hour_data.get('spend', 0)),
+                        'impressions': int(hour_data.get('impressions', 0)),
+                        'clicks': int(hour_data.get('clicks', 0)),
+                        'cpc': float(hour_data.get('cpc', 0)),
+                        'cpm': float(hour_data.get('cpm', 0)),
+                        'ctr': float(hour_data.get('ctr', 0)),
+                        'reach': int(hour_data.get('reach', 0))
+                    })
+
+            # Sort by hour
+            hourly_stats.sort(key=lambda x: x['hour'])
+            logger.info(f"Retrieved hourly stats for {len(hourly_stats)} hours")
+            return hourly_stats
+
+        except Exception as e:
+            logger.error(f"Error fetching hourly stats: {e}")
+            return []
+
+    def get_day_of_week_stats(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        """
+        Calculate stats aggregated by day of week
+
+        Args:
+            date_from: Start date
+            date_to: End date
+
+        Returns:
+            List of day-of-week stats
+        """
+        if not self.is_configured:
+            return []
+
+        try:
+            # Get daily metrics first
+            daily_metrics = self.get_daily_metrics(date_from, date_to)
+
+            if not daily_metrics:
+                return []
+
+            # Aggregate by day of week
+            dow_stats = {i: {'spend': 0, 'impressions': 0, 'clicks': 0, 'days': 0} for i in range(7)}
+            dow_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+            for date_str, metrics in daily_metrics.items():
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                dow = date_obj.weekday()  # 0 = Monday
+                dow_stats[dow]['spend'] += metrics.get('spend', 0)
+                dow_stats[dow]['impressions'] += metrics.get('impressions', 0)
+                dow_stats[dow]['clicks'] += metrics.get('clicks', 0)
+                dow_stats[dow]['days'] += 1
+
+            result = []
+            for dow, stats in dow_stats.items():
+                if stats['days'] > 0:
+                    avg_spend = stats['spend'] / stats['days']
+                    avg_impressions = stats['impressions'] / stats['days']
+                    avg_clicks = stats['clicks'] / stats['days']
+                    ctr = (stats['clicks'] / stats['impressions'] * 100) if stats['impressions'] > 0 else 0
+                    cpc = stats['spend'] / stats['clicks'] if stats['clicks'] > 0 else 0
+                    cpm = (stats['spend'] / stats['impressions'] * 1000) if stats['impressions'] > 0 else 0
+
+                    result.append({
+                        'day_of_week': dow_names[dow],
+                        'day_num': dow,
+                        'total_spend': stats['spend'],
+                        'total_impressions': stats['impressions'],
+                        'total_clicks': stats['clicks'],
+                        'avg_spend': avg_spend,
+                        'avg_impressions': avg_impressions,
+                        'avg_clicks': avg_clicks,
+                        'ctr': ctr,
+                        'cpc': cpc,
+                        'cpm': cpm,
+                        'days_count': stats['days']
+                    })
+
+            logger.info(f"Calculated day-of-week stats for {len(result)} days")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error calculating day-of-week stats: {e}")
+            return []
+
     def test_connection(self) -> bool:
         """
         Test if the Facebook Ads API connection is working

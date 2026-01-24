@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-When testing, use as start date 2025-05-01 and now as end date of report
+When testing, use as start date 2025-05-11 and now as end date of report
 
 ## Project Overview
 
@@ -18,11 +18,9 @@ cp .env.example .env
 
 ### Run export
 ```bash
-# Export last 30 days
+# Export orders
 python export_orders.py
 
-# Export specific date range
-python export_orders.py --from-date 2024-01-01 --to-date 2024-01-31
 ```
 
 ### Identify orders needing invoices

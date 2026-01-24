@@ -967,7 +967,7 @@ def main():
     if args.from_date:
         date_from = datetime.strptime(args.from_date, '%Y-%m-%d')
     else:
-        date_from = date_to - timedelta(days=7)
+        date_from = datetime(2025, 5, 11)
     
     # Initialize generator with web credentials if available and not disabled
     if args.no_web_login:
