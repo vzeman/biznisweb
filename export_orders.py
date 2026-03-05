@@ -3910,7 +3910,7 @@ def main():
         date_from = datetime.strptime(args.from_date, '%Y-%m-%d')
     else:
         # Default to start from May 11, 2025
-        date_from = datetime(2025, 5, 11)
+        date_from = datetime(2025, 5, 03)
 
     print(f"Exporting orders from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
     
