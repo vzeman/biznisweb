@@ -79,7 +79,7 @@ if not API_TOKEN:
 
 # Fixed costs
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
-FIXED_MONTHLY_COST = 3000.0  # EUR per month (Marek, Uctovnictvo)
+FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
 
 # Currency conversion rates to EUR
 # These should be updated regularly or fetched from an API
