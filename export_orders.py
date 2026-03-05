@@ -725,10 +725,26 @@ class BizniWebExporter:
                         except (ValueError, IndexError):
                             continue
 
-                # Stop if we've found all dates or no new dates in this batch
-                if len(orders_by_date) >= len(dates_to_fetch) or new_dates_found == 0:
-                    logger.info(f"Found orders for {len(orders_by_date)}/{len(dates_to_fetch)} requested dates")
-                    break
+                # Get the latest date seen in this batch
+            latest_in_batch = None
+            if bulk_orders:
+                latest_in_batch = max(
+                    datetime.strptime(o.get('pur_date', '2000-01-01').split()[0], '%Y-%m-%d')
+                    for o in bulk_orders if o.get('pur_date')
+                )
+
+            earliest_needed = min(dates_to_fetch)
+
+            # Stop if all dates found
+            if len(orders_by_date) >= len(dates_to_fetch):
+                logger.info(f"Found orders for {len(orders_by_date)}/{len(dates_to_fetch)} requested dates")
+                break
+
+            # Stop on no progress ONLY if batch has already reached our date range
+            # (prevents premature stop when batch contains only older pre-range orders)
+            if new_dates_found == 0 and latest_in_batch is not None and latest_in_batch >= earliest_needed:
+                logger.info(f"No new dates found and batch reached {latest_in_batch.strftime('%Y-%m-%d')}, stopping")
+                break
 
                 batch_num += 1
                 time.sleep(1)  # Small delay between batches
