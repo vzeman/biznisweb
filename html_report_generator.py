@@ -726,11 +726,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         cac_if_orders = consistency_checks.get('cac_if_orders_denominator', 0)
         html_content += f"""
             <div class="card">
-                <div class="card-title">ROAS Check Î”</div>
+                <div class="card-title">ROAS Check &#916;</div>
                 <div class="card-value {'profit' if abs(roas_delta) <= 0.01 else 'cost'}">{roas_delta:+.4f}</div>
             </div>
             <div class="card">
-                <div class="card-title">Margin Check Î” (pp)</div>
+                <div class="card-title">Margin Check &#916; (pp)</div>
                 <div class="card-value {'profit' if abs(margin_delta) <= 0.05 else 'cost'}">{margin_delta:+.4f}</div>
             </div>
             <div class="card">
@@ -738,7 +738,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value">€{cac_expected:.2f}</div>
             </div>
             <div class="card">
-                <div class="card-title">CAC Check Î”</div>
+                <div class="card-title">CAC Check &#916;</div>
                 <div class="card-value {'profit' if abs(cac_delta) <= 0.01 else 'cost'}">{cac_delta:+.4f}</div>
             </div>
             <div class="card">
