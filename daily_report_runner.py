@@ -8,6 +8,7 @@ Optional S3 upload is supported.
 """
 
 import argparse
+import csv
 import mimetypes
 import os
 import subprocess
@@ -113,6 +114,8 @@ def get_output_paths(from_date: str, to_date: str) -> Dict[str, Path]:
         "report_html": DATA_DIR / f"report_{compact_range}.html",
         "email_strategy_html": DATA_DIR / f"email_strategy_{compact_range}.html",
         "export_csv": DATA_DIR / f"export_{compact_range}.csv",
+        "aggregate_by_date_csv": DATA_DIR / f"aggregate_by_date_{compact_range}.csv",
+        "aggregate_by_month_csv": DATA_DIR / f"aggregate_by_month_{compact_range}.csv",
     }
 
 
@@ -157,12 +160,91 @@ def build_email_subject() -> str:
     return os.getenv("REPORT_EMAIL_SUBJECT", "Daily Vevo report").strip()
 
 
-def build_email_body(from_date: str, to_date: str) -> str:
+def _to_float(value: str) -> float:
+    try:
+        return float((value or "").strip())
+    except (ValueError, TypeError, AttributeError):
+        return 0.0
+
+
+def _to_int(value: str) -> int:
+    try:
+        return int(float((value or "").strip()))
+    except (ValueError, TypeError, AttributeError):
+        return 0
+
+
+def _fmt_eur(value: float) -> str:
+    return f"€{value:,.2f}".replace(",", " ")
+
+
+def _fmt_pct(value: float) -> str:
+    return f"{value:.2f}%"
+
+
+def build_report_summary(file_paths: Dict[str, Path]) -> str:
+    date_csv = file_paths.get("aggregate_by_date_csv")
+    if not date_csv or not date_csv.exists():
+        return "Súhrn metrík nebol dostupný (chýba aggregate_by_date CSV)."
+
+    rows: List[Dict[str, str]] = []
+    with date_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("date"):
+                rows.append(row)
+
+    if not rows:
+        return "Súhrn metrík nebol dostupný (aggregate_by_date CSV je prázdny)."
+
+    rows = sorted(rows, key=lambda r: r["date"])
+    total_revenue = sum(_to_float(r.get("total_revenue", "")) for r in rows)
+    total_net_profit = sum(_to_float(r.get("net_profit", "")) for r in rows)
+    total_orders = sum(_to_int(r.get("unique_orders", "")) for r in rows)
+    total_fb_spend = sum(_to_float(r.get("fb_ads_spend", "")) for r in rows)
+    total_google_spend = sum(_to_float(r.get("google_ads_spend", "")) for r in rows)
+    total_ads = total_fb_spend + total_google_spend
+    total_roas = (total_revenue / total_ads) if total_ads > 0 else 0.0
+    aov = (total_revenue / total_orders) if total_orders > 0 else 0.0
+
+    last = rows[-1]
+    last_date = last["date"]
+    last_orders = _to_int(last.get("unique_orders", ""))
+    last_revenue = _to_float(last.get("total_revenue", ""))
+    last_profit = _to_float(last.get("net_profit", ""))
+    last_fb = _to_float(last.get("fb_ads_spend", ""))
+
+    last_7 = rows[-7:]
+    prev_7 = rows[-14:-7] if len(rows) >= 14 else []
+    last_7_revenue = sum(_to_float(r.get("total_revenue", "")) for r in last_7)
+    last_7_profit = sum(_to_float(r.get("net_profit", "")) for r in last_7)
+    last_7_orders = sum(_to_int(r.get("unique_orders", "")) for r in last_7)
+    prev_7_revenue = sum(_to_float(r.get("total_revenue", "")) for r in prev_7)
+    prev_7_profit = sum(_to_float(r.get("net_profit", "")) for r in prev_7)
+    revenue_trend = ((last_7_revenue - prev_7_revenue) / prev_7_revenue * 100) if prev_7_revenue > 0 else 0.0
+    profit_trend = ((last_7_profit - prev_7_profit) / prev_7_profit * 100) if prev_7_profit > 0 else 0.0
+
     return (
-        "Hello,\n\n"
-        "Attached is your Daily Vevo report in HTML format.\n"
-        f"Reporting period: {from_date} to {to_date}.\n\n"
-        "This message was sent automatically by Vevo reporting.\n"
+        "Kľúčový slovný súhrn:\n"
+        f"- Celé obdobie: {total_orders} objednávok, tržby {_fmt_eur(total_revenue)}, "
+        f"netto zisk {_fmt_eur(total_net_profit)}, AOV {_fmt_eur(aov)}.\n"
+        f"- Reklama: FB {_fmt_eur(total_fb_spend)}, Google {_fmt_eur(total_google_spend)}, "
+        f"spolu {_fmt_eur(total_ads)}, ROAS {total_roas:.2f}x.\n"
+        f"- Posledný deň ({last_date}): {last_orders} objednávok, tržby {_fmt_eur(last_revenue)}, "
+        f"netto zisk {_fmt_eur(last_profit)}, FB spend {_fmt_eur(last_fb)}.\n"
+        f"- Posledných 7 dní: {last_7_orders} objednávok, tržby {_fmt_eur(last_7_revenue)}, "
+        f"netto zisk {_fmt_eur(last_7_profit)}, trend tržieb {_fmt_pct(revenue_trend)}, "
+        f"trend zisku {_fmt_pct(profit_trend)}."
+    )
+
+
+def build_email_body(from_date: str, to_date: str, summary_text: str) -> str:
+    return (
+        "Dobrý deň,\n\n"
+        "v prílohe posielam denný Vevo report v HTML formáte.\n"
+        f"Sledované obdobie: {from_date} až {to_date}.\n\n"
+        f"{summary_text}\n\n"
+        "Tento email bol odoslaný automaticky zo systému Vevo reporting.\n"
     )
 
 
@@ -264,7 +346,8 @@ def main() -> None:
         return
 
     subject = build_email_subject()
-    body_text = build_email_body(from_date, to_date)
+    summary_text = build_report_summary(output_paths)
+    body_text = build_email_body(from_date, to_date, summary_text)
     message_id = send_email_ses(
         subject=subject,
         body_text=body_text,
