@@ -10,6 +10,7 @@ Optional S3 upload is supported.
 import argparse
 import calendar
 import csv
+import json
 import mimetypes
 import os
 import subprocess
@@ -118,6 +119,11 @@ def get_output_paths(from_date: str, to_date: str) -> Dict[str, Path]:
         "aggregate_by_date_csv": DATA_DIR / f"aggregate_by_date_{compact_range}.csv",
         "aggregate_by_month_csv": DATA_DIR / f"aggregate_by_month_{compact_range}.csv",
     }
+
+
+def get_cfo_graph_path(from_date: str, to_date: str) -> Path:
+    compact_range = f"{from_date.replace('-', '')}-{to_date.replace('-', '')}"
+    return DATA_DIR / f"cfo_graphs_{compact_range}.html"
 
 
 def s3_upload_outputs(paths: Dict[str, Path]) -> Dict[str, str]:
@@ -771,6 +777,382 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     ])
 
 
+def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date: str) -> Path:
+    date_csv = file_paths.get("aggregate_by_date_csv")
+    if not date_csv or not date_csv.exists():
+        raise FileNotFoundError("Cannot build CFO graph HTML, missing aggregate_by_date CSV.")
+
+    daily_rows = _load_daily_rows(date_csv)
+    if not daily_rows:
+        raise ValueError("Cannot build CFO graph HTML, aggregate_by_date CSV is empty.")
+
+    export_csv = file_paths.get("export_csv")
+    order_records = _load_order_records(export_csv)
+    customer_by_date = _load_customer_dynamics(order_records)
+    row_by_date: Dict[date, Dict[str, Any]] = {row["date"]: row for row in daily_rows}
+
+    last_date = daily_rows[-1]["date"]
+    prev_day = last_date - timedelta(days=1)
+    same_weekday_last_week = last_date - timedelta(days=7)
+    same_day_last_month = _shift_months(last_date, -1)
+    same_day_last_year = _shift_years(last_date, -1)
+
+    day_cur = _window_aggregate(row_by_date, last_date, 1, customer_by_date, order_records)
+    day_prev = _window_aggregate(row_by_date, prev_day, 1, customer_by_date, order_records) if prev_day in row_by_date else None
+    day_week = _window_aggregate(row_by_date, same_weekday_last_week, 1, customer_by_date, order_records) if same_weekday_last_week in row_by_date else None
+    day_month = _window_aggregate(row_by_date, same_day_last_month, 1, customer_by_date, order_records) if same_day_last_month in row_by_date else None
+    day_year = _window_aggregate(row_by_date, same_day_last_year, 1, customer_by_date, order_records) if same_day_last_year in row_by_date else None
+
+    w7 = _window_aggregate(row_by_date, last_date, 7, customer_by_date, order_records)
+    w7_prev = _window_aggregate(row_by_date, last_date - timedelta(days=7), 7, customer_by_date, order_records)
+    w30 = _window_aggregate(row_by_date, last_date, 30, customer_by_date, order_records)
+    w30_prev = _window_aggregate(row_by_date, last_date - timedelta(days=30), 30, customer_by_date, order_records)
+
+    metric_defs = [
+        ("Revenue", "revenue"),
+        ("Orders", "orders"),
+        ("AOV", "aov"),
+        ("CAC", "cac"),
+        ("ROAS", "roas"),
+        ("Contribution Margin", "contribution_margin"),
+        ("Profit", "profit"),
+        ("LTV", "ltv"),
+    ]
+
+    daily_labels: List[str] = []
+    revenue_series: List[float] = []
+    profit_series: List[float] = []
+    orders_series: List[int] = []
+    aov_series: List[float] = []
+    cac_series: List[Optional[float]] = []
+    roas_series: List[float] = []
+    cm_series: List[float] = []
+    ltv30_series: List[Optional[float]] = []
+
+    for row in daily_rows:
+        d = row["date"]
+        daily_labels.append(d.strftime("%Y-%m-%d"))
+        revenue_series.append(round(float(row["revenue"]), 2))
+        profit_series.append(round(float(row["profit"]), 2))
+        orders_series.append(int(row["orders"]))
+        aov_series.append(round(float(row["aov"]), 2))
+        roas_series.append(round(float(row["roas"]), 3))
+        cm_series.append(round(float(row["contribution_margin_percent"]), 2))
+
+        new_customers = int(customer_by_date.get(d, {}).get("new_customers", 0))
+        day_cac = (float(row["total_ads"]) / new_customers) if new_customers > 0 else None
+        cac_series.append(round(day_cac, 2) if day_cac is not None else None)
+
+        ltv30 = _window_aggregate(row_by_date, d, 30, customer_by_date, order_records).get("ltv")
+        ltv30_series.append(round(float(ltv30), 2) if ltv30 is not None else None)
+
+    daily_comparison: Dict[str, Dict[str, Optional[float]]] = {}
+    weekly_comparison: Dict[str, Dict[str, Optional[float]]] = {}
+    monthly_comparison: Dict[str, Dict[str, Optional[float]]] = {}
+
+    for metric_name, metric_key in metric_defs:
+        day_current = day_cur.get(metric_key)
+        day_prev_value = day_prev.get(metric_key) if day_prev else None
+        day_week_value = day_week.get(metric_key) if day_week else None
+        day_month_value = day_month.get(metric_key) if day_month else None
+        day_year_value = day_year.get(metric_key) if day_year else None
+
+        daily_comparison[metric_name] = {
+            "vs_prev_day": _pct_change(float(day_current), float(day_prev_value)) if (day_current is not None and day_prev_value is not None) else None,
+            "vs_week": _pct_change(float(day_current), float(day_week_value)) if (day_current is not None and day_week_value is not None) else None,
+            "vs_month": _pct_change(float(day_current), float(day_month_value)) if (day_current is not None and day_month_value is not None) else None,
+            "vs_year": _pct_change(float(day_current), float(day_year_value)) if (day_current is not None and day_year_value is not None) else None,
+        }
+
+        w7_current = w7.get(metric_key)
+        w7_previous = w7_prev.get(metric_key)
+        weekly_comparison[metric_name] = {
+            "vs_prev_7d": _pct_change(float(w7_current), float(w7_previous)) if (w7_current is not None and w7_previous is not None) else None,
+        }
+
+        w30_current = w30.get(metric_key)
+        w30_previous = w30_prev.get(metric_key)
+        monthly_comparison[metric_name] = {
+            "vs_prev_30d": _pct_change(float(w30_current), float(w30_previous)) if (w30_current is not None and w30_previous is not None) else None,
+        }
+
+    anomaly_thresholds = {
+        "Revenue": 20.0,
+        "Orders": 20.0,
+        "AOV": 10.0,
+        "CAC": 15.0,
+        "ROAS": 20.0,
+        "Contribution Margin": 5.0,
+        "Profit": 20.0,
+        "LTV": 20.0,
+    }
+    anomaly_current = []
+    for metric_name, metric_changes in daily_comparison.items():
+        current_change = metric_changes.get("vs_prev_day")
+        threshold = anomaly_thresholds[metric_name]
+        ratio = None
+        if current_change is not None and threshold > 0:
+            ratio = abs(current_change) / threshold
+        anomaly_current.append({
+            "metric": metric_name,
+            "daily_change": round(float(current_change), 2) if current_change is not None else None,
+            "threshold": threshold,
+            "ratio": round(float(ratio), 3) if ratio is not None else None,
+        })
+
+    graph_payload = {
+        "meta": {
+            "from_date": from_date,
+            "to_date": to_date,
+            "generated_at_utc": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "series": {
+            "labels": daily_labels,
+            "revenue": revenue_series,
+            "profit": profit_series,
+            "orders": orders_series,
+            "aov": aov_series,
+            "cac": cac_series,
+            "roas": roas_series,
+            "contribution_margin": cm_series,
+            "ltv30": ltv30_series,
+        },
+        "windows": {
+            "w7": {k: (round(float(v), 4) if v is not None else None) for k, v in w7.items()},
+            "w30": {k: (round(float(v), 4) if v is not None else None) for k, v in w30.items()},
+        },
+        "comparisons": {
+            "daily": daily_comparison,
+            "weekly": weekly_comparison,
+            "monthly": monthly_comparison,
+        },
+        "anomalies": anomaly_current,
+    }
+
+    payload_json = json.dumps(graph_payload, ensure_ascii=False)
+    html = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CFO Graph Summary</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f6f8fc;
+      --card: #ffffff;
+      --ink: #1f2d3d;
+      --muted: #6b7a90;
+      --line: #e5e9f0;
+      --accent: #2563eb;
+      --good: #10b981;
+      --bad: #ef4444;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 28px;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .card h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+    .canvas-wrap {
+      height: 280px;
+    }
+    .canvas-wrap.tall {
+      height: 360px;
+    }
+  </style>
+</head>
+<body>
+  <h1>CFO Summary in Charts</h1>
+  <div class="meta" id="meta"></div>
+  <div class="grid">
+    <div class="card">
+      <h3>Revenue and Profit (Daily)</h3>
+      <div class="canvas-wrap"><canvas id="revenueProfitChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Orders and AOV (Daily)</h3>
+      <div class="canvas-wrap"><canvas id="ordersAovChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>CAC and ROAS (Daily)</h3>
+      <div class="canvas-wrap"><canvas id="cacRoasChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Contribution Margin and LTV (30d rolling)</h3>
+      <div class="canvas-wrap"><canvas id="marginLtvChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Comparison Framework (Daily, Weekly, Monthly %)</h3>
+      <div class="canvas-wrap tall"><canvas id="comparisonChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Anomaly Pressure (|daily change| / threshold)</h3>
+      <div class="canvas-wrap"><canvas id="anomalyChart"></canvas></div>
+    </div>
+  </div>
+
+  <script>
+    const DATA = __DATA__;
+    const labels = DATA.series.labels;
+
+    document.getElementById("meta").textContent =
+      `Range: ${DATA.meta.from_date} -> ${DATA.meta.to_date} | Generated UTC: ${DATA.meta.generated_at_utc}`;
+
+    const commonOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { position: "bottom" } }
+    };
+
+    new Chart(document.getElementById("revenueProfitChart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "Revenue (EUR)", data: DATA.series.revenue, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.12)", fill: true, pointRadius: 0 },
+          { label: "Profit (EUR)", data: DATA.series.profit, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.12)", fill: true, pointRadius: 0 }
+        ]
+      },
+      options: commonOptions
+    });
+
+    new Chart(document.getElementById("ordersAovChart"), {
+      data: {
+        labels,
+        datasets: [
+          { type: "bar", label: "Orders", data: DATA.series.orders, yAxisID: "yOrders", backgroundColor: "rgba(99,102,241,0.5)" },
+          { type: "line", label: "AOV (EUR)", data: DATA.series.aov, yAxisID: "yAov", borderColor: "#ec4899", pointRadius: 0 }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          yOrders: { type: "linear", position: "left", beginAtZero: true },
+          yAov: { type: "linear", position: "right", grid: { drawOnChartArea: false }, beginAtZero: true }
+        }
+      }
+    });
+
+    new Chart(document.getElementById("cacRoasChart"), {
+      data: {
+        labels,
+        datasets: [
+          { type: "line", label: "CAC (EUR)", data: DATA.series.cac, yAxisID: "yCac", borderColor: "#ef4444", spanGaps: true, pointRadius: 0 },
+          { type: "line", label: "ROAS (x)", data: DATA.series.roas, yAxisID: "yRoas", borderColor: "#f59e0b", pointRadius: 0 }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          yCac: { type: "linear", position: "left", beginAtZero: true },
+          yRoas: { type: "linear", position: "right", grid: { drawOnChartArea: false }, beginAtZero: true }
+        }
+      }
+    });
+
+    new Chart(document.getElementById("marginLtvChart"), {
+      data: {
+        labels,
+        datasets: [
+          { type: "line", label: "Contribution Margin (%)", data: DATA.series.contribution_margin, yAxisID: "yMargin", borderColor: "#0ea5e9", pointRadius: 0 },
+          { type: "line", label: "LTV 30d rolling (EUR)", data: DATA.series.ltv30, yAxisID: "yLtv", borderColor: "#8b5cf6", spanGaps: true, pointRadius: 0 }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          yMargin: { type: "linear", position: "left", beginAtZero: true },
+          yLtv: { type: "linear", position: "right", grid: { drawOnChartArea: false }, beginAtZero: true }
+        }
+      }
+    });
+
+    const comparisonMetrics = Object.keys(DATA.comparisons.daily);
+    const dailyCmp = comparisonMetrics.map((m) => DATA.comparisons.daily[m].vs_prev_day ?? null);
+    const weeklyCmp = comparisonMetrics.map((m) => DATA.comparisons.weekly[m].vs_prev_7d ?? null);
+    const monthlyCmp = comparisonMetrics.map((m) => DATA.comparisons.monthly[m].vs_prev_30d ?? null);
+
+    new Chart(document.getElementById("comparisonChart"), {
+      type: "bar",
+      data: {
+        labels: comparisonMetrics,
+        datasets: [
+          { label: "Daily %", data: dailyCmp, backgroundColor: "rgba(37,99,235,0.65)" },
+          { label: "Weekly %", data: weeklyCmp, backgroundColor: "rgba(16,185,129,0.65)" },
+          { label: "Monthly %", data: monthlyCmp, backgroundColor: "rgba(245,158,11,0.65)" }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          y: { beginAtZero: false, title: { display: true, text: "Percent change (%)" } }
+        }
+      }
+    });
+
+    const anomalyLabels = DATA.anomalies.map((x) => x.metric);
+    const anomalyRatios = DATA.anomalies.map((x) => x.ratio ?? null);
+
+    new Chart(document.getElementById("anomalyChart"), {
+      type: "bar",
+      data: {
+        labels: anomalyLabels,
+        datasets: [
+          {
+            label: "Threshold utilization ratio",
+            data: anomalyRatios,
+            backgroundColor: anomalyRatios.map((v) => (v !== null && v > 1 ? "rgba(239,68,68,0.75)" : "rgba(37,99,235,0.55)"))
+          }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: "ratio (1.0 = anomaly threshold)" }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
+""".replace("__DATA__", payload_json)
+
+    output_path = get_cfo_graph_path(from_date, to_date)
+    output_path.write_text(html, encoding="utf-8")
+    return output_path
+
+
 def build_email_body(from_date: str, to_date: str, summary_text: str) -> str:
     return (
         "Dobry den,\n\n"
@@ -785,6 +1167,7 @@ def send_email_ses(
     subject: str,
     body_text: str,
     file_paths: Dict[str, Path],
+    extra_attachments: Optional[List[Path]] = None,
 ) -> str:
     region = os.getenv("AWS_REGION", "eu-central-1").strip()
     source = os.getenv("REPORT_EMAIL_FROM", "").strip()
@@ -823,6 +1206,10 @@ def send_email_ses(
     if not file_paths["report_html"].exists():
         raise FileNotFoundError(f"Missing HTML report attachment: {file_paths['report_html']}")
     attach_file(file_paths["report_html"])
+    for extra in extra_attachments or []:
+        if not extra.exists():
+            raise FileNotFoundError(f"Missing extra attachment: {extra}")
+        attach_file(extra)
 
     try:
         import boto3  # type: ignore
@@ -880,11 +1267,13 @@ def main() -> None:
 
     subject = build_email_subject()
     summary_text = build_report_summary(output_paths)
+    cfo_graph_html = generate_cfo_graph_html(output_paths, from_date, to_date)
     body_text = build_email_body(from_date, to_date, summary_text)
     message_id = send_email_ses(
         subject=subject,
         body_text=body_text,
         file_paths=output_paths,
+        extra_attachments=[cfo_graph_html],
     )
     print(f"SES message sent. MessageId={message_id}")
 
