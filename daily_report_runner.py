@@ -936,91 +936,251 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CFO Graph Summary</title>
+  <title>CFO Analytics Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
-      --bg: #f6f8fc;
-      --card: #ffffff;
-      --ink: #1f2d3d;
-      --muted: #6b7a90;
-      --line: #e5e9f0;
-      --accent: #2563eb;
-      --good: #10b981;
-      --bad: #ef4444;
+      --revenue: #2563EB;
+      --profit: #10B981;
+      --orders: #7C3AED;
+      --aov: #EC4899;
+      --cac: #EF4444;
+      --roas: #F59E0B;
+      --margin: #06B6D4;
+      --ltv: #8B5CF6;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --ink: #0F172A;
+      --muted: #64748B;
+      --grid: #E5E7EB;
+      --border: #E2E8F0;
     }
     body {
       margin: 0;
-      padding: 20px;
+      padding: 28px;
       background: var(--bg);
       color: var(--ink);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    h1 {
+    .header {
+      margin-bottom: 22px;
+    }
+    .header h1 {
       margin: 0 0 6px 0;
-      font-size: 28px;
+      font-size: 30px;
+      letter-spacing: -0.02em;
     }
-    .meta {
+    .header p {
+      margin: 0;
       color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 16px;
+      font-size: 14px;
     }
-    .grid {
+
+    .section-title {
+      margin: 28px 0 12px 0;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .dashboard-grid {
       display: grid;
-      gap: 14px;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 18px;
     }
+
     .card {
       background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 16px 12px 16px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     }
     .card h3 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .card .subtitle {
       margin: 0 0 10px 0;
-      font-size: 16px;
+      font-size: 13px;
+      color: var(--muted);
     }
-    .canvas-wrap {
-      height: 280px;
+    .span-4 {
+      grid-column: span 4;
     }
-    .canvas-wrap.tall {
+    .span-12 {
+      grid-column: span 12;
+    }
+    .chart-wrap {
       height: 360px;
+      width: 100%;
+    }
+    .chart-wrap.tall {
+      height: 390px;
+    }
+
+    @media (max-width: 1240px) {
+      .span-4 {
+        grid-column: span 6;
+      }
+    }
+    @media (max-width: 860px) {
+      body {
+        padding: 16px;
+      }
+      .span-4,
+      .span-12 {
+        grid-column: span 12;
+      }
+      .chart-wrap,
+      .chart-wrap.tall {
+        height: 330px;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>CFO Summary in Charts</h1>
-  <div class="meta" id="meta"></div>
-  <div class="grid">
-    <div class="card">
+  <div class="header">
+    <h1>CFO Analytics Dashboard</h1>
+    <p id="meta"></p>
+  </div>
+
+  <div class="section-title">Core Revenue Metrics</div>
+  <div class="dashboard-grid">
+    <div class="card span-4">
       <h3>Revenue and Profit (Daily)</h3>
-      <div class="canvas-wrap"><canvas id="revenueProfitChart"></canvas></div>
+      <p class="subtitle">Revenue and profit trend with 7d/30d revenue moving averages.</p>
+      <div class="chart-wrap"><canvas id="revenueProfitChart"></canvas></div>
     </div>
-    <div class="card">
+    <div class="card span-4">
       <h3>Orders and AOV (Daily)</h3>
-      <div class="canvas-wrap"><canvas id="ordersAovChart"></canvas></div>
+      <p class="subtitle">Order volume bars, AOV line, and smoothed orders trajectory.</p>
+      <div class="chart-wrap"><canvas id="ordersAovChart"></canvas></div>
     </div>
-    <div class="card">
+    <div class="card span-4">
       <h3>CAC and ROAS (Daily)</h3>
-      <div class="canvas-wrap"><canvas id="cacRoasChart"></canvas></div>
+      <p class="subtitle">CAC (left axis), ROAS (right axis), with CAC spike highlighting.</p>
+      <div class="chart-wrap"><canvas id="cacRoasChart"></canvas></div>
     </div>
-    <div class="card">
+  </div>
+
+  <div class="section-title">Unit Economics</div>
+  <div class="dashboard-grid">
+    <div class="card span-4">
       <h3>Contribution Margin and LTV (30d rolling)</h3>
-      <div class="canvas-wrap"><canvas id="marginLtvChart"></canvas></div>
+      <p class="subtitle">Unit economics stability and customer value evolution over time.</p>
+      <div class="chart-wrap"><canvas id="marginLtvChart"></canvas></div>
     </div>
-    <div class="card">
-      <h3>Comparison Framework (Daily, Weekly, Monthly %)</h3>
-      <div class="canvas-wrap tall"><canvas id="comparisonChart"></canvas></div>
+
+    <div class="card span-4">
+      <h3>Profit Trend</h3>
+      <p class="subtitle">Daily profitability, 7d smoothing, and cumulative profit trajectory.</p>
+      <div class="chart-wrap"><canvas id="profitTrendChart"></canvas></div>
     </div>
-    <div class="card">
-      <h3>Anomaly Pressure (|daily change| / threshold)</h3>
-      <div class="canvas-wrap"><canvas id="anomalyChart"></canvas></div>
+
+    <div class="card span-4">
+      <h3>Business Health Trend (Indexed Base=100)</h3>
+      <p class="subtitle">Normalized multi-metric trajectory for CFO-level health monitoring.</p>
+      <div class="chart-wrap tall"><canvas id="businessHealthChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-title">Diagnostics</div>
+  <div class="dashboard-grid">
+    <div class="card span-12">
+      <h3>Metric Volatility and Anomaly Pressure</h3>
+      <p class="subtitle">Pressure ratio = abs(daily change) / anomaly threshold. Values above 1.0 exceed threshold.</p>
+      <div class="chart-wrap"><canvas id="anomalyChart"></canvas></div>
     </div>
   </div>
 
   <script>
     const DATA = __DATA__;
+    const COLORS = {
+      revenue: '#2563EB',
+      profit: '#10B981',
+      orders: '#7C3AED',
+      aov: '#EC4899',
+      cac: '#EF4444',
+      roas: '#F59E0B',
+      margin: '#06B6D4',
+      ltv: '#8B5CF6',
+      grid: '#E5E7EB'
+    };
+
+    Chart.defaults.font.family = '"IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    Chart.defaults.font.size = 13;
+    Chart.defaults.color = '#334155';
+    Chart.defaults.borderColor = COLORS.grid;
+
+    function movingAverage(series, windowSize) {
+      return series.map((_, idx) => {
+        const from = Math.max(0, idx - windowSize + 1);
+        const values = series
+          .slice(from, idx + 1)
+          .filter((v) => Number.isFinite(v));
+        if (!values.length) return null;
+        return values.reduce((a, b) => a + b, 0) / values.length;
+      });
+    }
+
+    function percentile(values, p) {
+      const arr = values.filter((v) => Number.isFinite(v)).slice().sort((a, b) => a - b);
+      if (!arr.length) return null;
+      const index = Math.min(arr.length - 1, Math.max(0, Math.floor((arr.length - 1) * p)));
+      return arr[index];
+    }
+
+    function mean(values) {
+      const arr = values.filter((v) => Number.isFinite(v));
+      if (!arr.length) return null;
+      return arr.reduce((a, b) => a + b, 0) / arr.length;
+    }
+
+    function std(values) {
+      const m = mean(values);
+      const arr = values.filter((v) => Number.isFinite(v));
+      if (m === null || !arr.length) return null;
+      const variance = arr.reduce((acc, v) => acc + ((v - m) ** 2), 0) / arr.length;
+      return Math.sqrt(variance);
+    }
+
+    function formatNum(value, digits = 2) {
+      if (!Number.isFinite(value)) return 'N/A';
+      return value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    }
+
+    function toIndexSeries(series, invert = false) {
+      const base = series.find((v) => Number.isFinite(v) && Math.abs(v) > 1e-9);
+      if (!Number.isFinite(base)) return series.map(() => null);
+      return series.map((v) => {
+        if (!Number.isFinite(v) || Math.abs(v) < 1e-9) return null;
+        return invert ? (base / v) * 100 : (v / base) * 100;
+      });
+    }
+
+    function safeSeries(name) {
+      return (DATA.series[name] || []).map((v) => (Number.isFinite(v) ? Number(v) : null));
+    }
+
     const labels = DATA.series.labels;
+    const revenue = safeSeries('revenue');
+    const profit = safeSeries('profit');
+    const orders = safeSeries('orders');
+    const aov = safeSeries('aov');
+    const cac = safeSeries('cac');
+    const roas = safeSeries('roas');
+    const margin = safeSeries('contribution_margin');
+    const ltv30 = safeSeries('ltv30');
+
+    const revenue7 = movingAverage(revenue, 7);
+    const revenue30 = movingAverage(revenue, 30);
+    const orders7 = movingAverage(orders, 7);
+    const cac7 = movingAverage(cac, 7);
+    const profit7 = movingAverage(profit, 7);
 
     document.getElementById("meta").textContent =
       `Range: ${DATA.meta.from_date} -> ${DATA.meta.to_date} | Generated UTC: ${DATA.meta.generated_at_utc}`;
@@ -1029,7 +1189,21 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
-      plugins: { legend: { position: "bottom" } }
+      animation: { duration: 900, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { position: "bottom", labels: { boxWidth: 14, usePointStyle: true, pointStyle: 'line' } },
+        tooltip: {
+          titleFont: { size: 14 },
+          bodyFont: { size: 14 }
+        }
+      },
+      elements: {
+        line: { tension: 0.35, borderWidth: 2.5 },
+        point: { radius: 0, hoverRadius: 4 }
+      },
+      scales: {
+        x: { grid: { color: COLORS.grid }, ticks: { maxTicksLimit: 10 } },
+      }
     };
 
     new Chart(document.getElementById("revenueProfitChart"), {
@@ -1037,89 +1211,410 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       data: {
         labels,
         datasets: [
-          { label: "Revenue (EUR)", data: DATA.series.revenue, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.12)", fill: true, pointRadius: 0 },
-          { label: "Profit (EUR)", data: DATA.series.profit, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.12)", fill: true, pointRadius: 0 }
+          {
+            label: "Revenue (EUR)",
+            data: revenue,
+            borderColor: COLORS.revenue,
+            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+            fill: false
+          },
+          {
+            label: "Profit (EUR)",
+            data: profit,
+            borderColor: COLORS.profit,
+            backgroundColor: 'rgba(16, 185, 129, 0.16)',
+            fill: 'origin'
+          },
+          {
+            label: "Revenue 7d MA",
+            data: revenue7,
+            borderColor: 'rgba(37, 99, 235, 0.65)',
+            borderDash: [6, 4],
+            fill: false
+          },
+          {
+            label: "Revenue 30d MA",
+            data: revenue30,
+            borderColor: 'rgba(37, 99, 235, 0.35)',
+            borderDash: [2, 6],
+            fill: false
+          }
         ]
       },
-      options: commonOptions
+      options: {
+        ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`
+            }
+          }
+        },
+        scales: {
+          ...commonOptions.scales,
+          y: { grid: { color: COLORS.grid }, title: { display: true, text: 'EUR', font: { size: 13 } } }
+        }
+      }
     });
 
     new Chart(document.getElementById("ordersAovChart"), {
       data: {
         labels,
         datasets: [
-          { type: "bar", label: "Orders", data: DATA.series.orders, yAxisID: "yOrders", backgroundColor: "rgba(99,102,241,0.5)" },
-          { type: "line", label: "AOV (EUR)", data: DATA.series.aov, yAxisID: "yAov", borderColor: "#ec4899", pointRadius: 0 }
+          {
+            type: "bar",
+            label: "Orders",
+            data: orders,
+            yAxisID: "yOrders",
+            backgroundColor: 'rgba(124, 58, 237, 0.5)',
+            borderColor: COLORS.orders,
+            borderWidth: 0
+          },
+          {
+            type: "line",
+            label: "Orders 7d MA",
+            data: orders7,
+            yAxisID: "yOrders",
+            borderColor: 'rgba(124, 58, 237, 0.9)',
+            borderDash: [5, 4],
+            fill: false
+          },
+          {
+            type: "line",
+            label: "AOV (EUR)",
+            data: aov,
+            yAxisID: "yAov",
+            borderColor: COLORS.aov,
+            fill: false
+          }
         ]
       },
       options: {
         ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+              label: (ctx) => {
+                if (ctx.dataset.yAxisID === 'yAov') return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
+                return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y, 0)}`;
+              }
+            }
+          }
+        },
         scales: {
-          yOrders: { type: "linear", position: "left", beginAtZero: true },
-          yAov: { type: "linear", position: "right", grid: { drawOnChartArea: false }, beginAtZero: true }
+          x: commonOptions.scales.x,
+          yOrders: {
+            type: "linear",
+            position: "left",
+            beginAtZero: true,
+            grid: { color: COLORS.grid },
+            title: { display: true, text: 'Orders', font: { size: 13 } }
+          },
+          yAov: {
+            type: "linear",
+            position: "right",
+            grid: { drawOnChartArea: false },
+            beginAtZero: true,
+            title: { display: true, text: 'EUR', font: { size: 13 } }
+          }
         }
       }
     });
+
+    const cacAvg = mean(cac);
+    const cacSd = std(cac);
+    const cacThreshold = (cacAvg !== null && cacSd !== null) ? (cacAvg + 1.5 * cacSd) : null;
+    const cacSpikes = cac.map((v) => (cacThreshold !== null && Number.isFinite(v) && v > cacThreshold ? v : null));
+    const thresholdLine = labels.map(() => cacThreshold);
+    const roasP90 = percentile(roas, 0.9);
+    const roasCap = Number.isFinite(roasP90) ? Math.max(1.5, Number(roasP90) * 1.25) : undefined;
 
     new Chart(document.getElementById("cacRoasChart"), {
       data: {
         labels,
         datasets: [
-          { type: "line", label: "CAC (EUR)", data: DATA.series.cac, yAxisID: "yCac", borderColor: "#ef4444", spanGaps: true, pointRadius: 0 },
-          { type: "line", label: "ROAS (x)", data: DATA.series.roas, yAxisID: "yRoas", borderColor: "#f59e0b", pointRadius: 0 }
+          {
+            type: "line",
+            label: "CAC (EUR)",
+            data: cac,
+            yAxisID: "yCac",
+            borderColor: COLORS.cac,
+            spanGaps: true
+          },
+          {
+            type: "line",
+            label: "CAC 7d MA",
+            data: cac7,
+            yAxisID: "yCac",
+            borderColor: 'rgba(239, 68, 68, 0.65)',
+            borderDash: [6, 4],
+            spanGaps: true
+          },
+          {
+            type: "line",
+            label: "ROAS (x)",
+            data: roas,
+            yAxisID: "yRoas",
+            borderColor: COLORS.roas
+          },
+          {
+            type: "line",
+            label: "CAC Spike Points",
+            data: cacSpikes,
+            yAxisID: "yCac",
+            borderColor: 'transparent',
+            backgroundColor: 'rgba(239, 68, 68, 0.95)',
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            showLine: false,
+            spanGaps: true
+          },
+          {
+            type: "line",
+            label: "CAC Spike Threshold",
+            data: thresholdLine,
+            yAxisID: "yCac",
+            borderColor: 'rgba(239, 68, 68, 0.4)',
+            borderDash: [2, 6],
+            pointRadius: 0,
+            spanGaps: true
+          }
         ]
       },
       options: {
         ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+              label: (ctx) => {
+                if (ctx.dataset.label.includes('ROAS')) return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y, 3)}x`;
+                if (ctx.dataset.label.includes('Threshold')) return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
+                return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
+              }
+            }
+          }
+        },
         scales: {
-          yCac: { type: "linear", position: "left", beginAtZero: true },
-          yRoas: { type: "linear", position: "right", grid: { drawOnChartArea: false }, beginAtZero: true }
+          x: commonOptions.scales.x,
+          yCac: {
+            type: "linear",
+            position: "left",
+            beginAtZero: true,
+            grid: { color: COLORS.grid },
+            title: { display: true, text: 'CAC (EUR)', font: { size: 13 } }
+          },
+          yRoas: {
+            type: "linear",
+            position: "right",
+            grid: { drawOnChartArea: false },
+            beginAtZero: true,
+            max: roasCap,
+            title: { display: true, text: 'ROAS (x)', font: { size: 13 } }
+          }
         }
       }
     });
+
+    const marginAvg = mean(margin);
+    const marginSd = std(margin);
+    const marginDipThreshold = (marginAvg !== null && marginSd !== null) ? (marginAvg - marginSd) : null;
+    const marginDips = margin.map((v) => (marginDipThreshold !== null && Number.isFinite(v) && v < marginDipThreshold ? v : null));
+    const window30 = DATA.windows?.w30 || {};
 
     new Chart(document.getElementById("marginLtvChart"), {
       data: {
         labels,
         datasets: [
-          { type: "line", label: "Contribution Margin (%)", data: DATA.series.contribution_margin, yAxisID: "yMargin", borderColor: "#0ea5e9", pointRadius: 0 },
-          { type: "line", label: "LTV 30d rolling (EUR)", data: DATA.series.ltv30, yAxisID: "yLtv", borderColor: "#8b5cf6", spanGaps: true, pointRadius: 0 }
+          {
+            type: "line",
+            label: "Contribution Margin (%)",
+            data: margin,
+            yAxisID: "yMargin",
+            borderColor: COLORS.margin
+          },
+          {
+            type: "line",
+            label: "Margin Dip Points",
+            data: marginDips,
+            yAxisID: "yMargin",
+            borderColor: 'transparent',
+            backgroundColor: 'rgba(239, 68, 68, 0.95)',
+            pointRadius: 4,
+            showLine: false
+          },
+          {
+            type: "line",
+            label: "LTV rolling (EUR)",
+            data: ltv30,
+            yAxisID: "yLtv",
+            borderColor: COLORS.ltv,
+            spanGaps: true
+          }
         ]
       },
       options: {
         ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+              label: (ctx) => {
+                if (ctx.dataset.yAxisID === 'yMargin') return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)}%`;
+                return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
+              },
+              footer: () => {
+                const cpo = Number.isFinite(window30.contribution_per_order) ? formatNum(window30.contribution_per_order) : 'N/A';
+                const ppo = Number.isFinite(window30.profit_per_order) ? formatNum(window30.profit_per_order) : 'N/A';
+                return `30d Contribution/Order: ${cpo} EUR | 30d Profit/Order: ${ppo} EUR`;
+              }
+            }
+          }
+        },
         scales: {
-          yMargin: { type: "linear", position: "left", beginAtZero: true },
-          yLtv: { type: "linear", position: "right", grid: { drawOnChartArea: false }, beginAtZero: true }
+          x: commonOptions.scales.x,
+          yMargin: {
+            type: "linear",
+            position: "left",
+            beginAtZero: true,
+            grid: { color: COLORS.grid },
+            title: { display: true, text: 'Contribution Margin (%)', font: { size: 13 } }
+          },
+          yLtv: {
+            type: "linear",
+            position: "right",
+            beginAtZero: true,
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: 'LTV (EUR)', font: { size: 13 } }
+          }
         }
       }
     });
 
-    const comparisonMetrics = Object.keys(DATA.comparisons.daily);
-    const dailyCmp = comparisonMetrics.map((m) => DATA.comparisons.daily[m].vs_prev_day ?? null);
-    const weeklyCmp = comparisonMetrics.map((m) => DATA.comparisons.weekly[m].vs_prev_7d ?? null);
-    const monthlyCmp = comparisonMetrics.map((m) => DATA.comparisons.monthly[m].vs_prev_30d ?? null);
+    const cumulativeProfit = profit.reduce((acc, value, idx) => {
+      const prev = idx === 0 ? 0 : (acc[idx - 1] ?? 0);
+      acc.push(Number.isFinite(value) ? prev + value : prev);
+      return acc;
+    }, []);
 
-    new Chart(document.getElementById("comparisonChart"), {
-      type: "bar",
+    new Chart(document.getElementById("profitTrendChart"), {
       data: {
-        labels: comparisonMetrics,
+        labels,
         datasets: [
-          { label: "Daily %", data: dailyCmp, backgroundColor: "rgba(37,99,235,0.65)" },
-          { label: "Weekly %", data: weeklyCmp, backgroundColor: "rgba(16,185,129,0.65)" },
-          { label: "Monthly %", data: monthlyCmp, backgroundColor: "rgba(245,158,11,0.65)" }
+          {
+            type: "line",
+            label: "Daily Profit (EUR)",
+            data: profit,
+            yAxisID: "yProfit",
+            borderColor: COLORS.profit,
+            backgroundColor: 'rgba(16, 185, 129, 0.14)',
+            fill: 'origin'
+          },
+          {
+            type: "line",
+            label: "Profit 7d MA",
+            data: profit7,
+            yAxisID: "yProfit",
+            borderColor: 'rgba(16, 185, 129, 0.65)',
+            borderDash: [6, 4],
+            fill: false
+          },
+          {
+            type: "line",
+            label: "Cumulative Profit (EUR)",
+            data: cumulativeProfit,
+            yAxisID: "yCumProfit",
+            borderColor: 'rgba(37, 99, 235, 0.7)',
+            borderDash: [3, 3],
+            fill: false
+          }
         ]
       },
       options: {
         ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`
+            }
+          }
+        },
         scales: {
-          y: { beginAtZero: false, title: { display: true, text: "Percent change (%)" } }
+          x: commonOptions.scales.x,
+          yProfit: {
+            type: "linear",
+            position: "left",
+            beginAtZero: false,
+            grid: { color: COLORS.grid },
+            title: { display: true, text: 'Daily Profit (EUR)', font: { size: 13 } }
+          },
+          yCumProfit: {
+            type: "linear",
+            position: "right",
+            beginAtZero: false,
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: 'Cumulative Profit (EUR)', font: { size: 13 } }
+          }
+        }
+      }
+    });
+
+    const revenueIndex = toIndexSeries(revenue);
+    const ordersIndex = toIndexSeries(orders);
+    const aovIndex = toIndexSeries(aov);
+    const cacIndex = toIndexSeries(cac, true);
+    const marginIndex = toIndexSeries(margin);
+    const profitIndex = toIndexSeries(profit);
+    const baseline100 = labels.map(() => 100);
+
+    new Chart(document.getElementById("businessHealthChart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "Revenue Index", data: revenueIndex, borderColor: COLORS.revenue, fill: false },
+          { label: "Orders Index", data: ordersIndex, borderColor: COLORS.orders, fill: false },
+          { label: "AOV Index", data: aovIndex, borderColor: COLORS.aov, fill: false },
+          { label: "CAC Index (inverse)", data: cacIndex, borderColor: COLORS.cac, fill: false },
+          { label: "Contribution Margin Index", data: marginIndex, borderColor: COLORS.margin, fill: false },
+          { label: "Profit Index", data: profitIndex, borderColor: COLORS.profit, fill: false },
+          { label: "Base 100", data: baseline100, borderColor: 'rgba(100, 116, 139, 0.55)', borderDash: [4, 4], pointRadius: 0, fill: false }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)}`
+            }
+          }
+        },
+        scales: {
+          x: commonOptions.scales.x,
+          y: {
+            beginAtZero: false,
+            grid: { color: COLORS.grid },
+            title: { display: true, text: 'Index (Base=100)', font: { size: 13 } }
+          }
         }
       }
     });
 
     const anomalyLabels = DATA.anomalies.map((x) => x.metric);
     const anomalyRatios = DATA.anomalies.map((x) => x.ratio ?? null);
+    const anomalyChanges = DATA.anomalies.map((x) => x.daily_change ?? null);
+    const anomalyThresholds = DATA.anomalies.map((x) => x.threshold ?? null);
 
     new Chart(document.getElementById("anomalyChart"), {
       type: "bar",
@@ -1129,16 +1624,51 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
           {
             label: "Threshold utilization ratio",
             data: anomalyRatios,
-            backgroundColor: anomalyRatios.map((v) => (v !== null && v > 1 ? "rgba(239,68,68,0.75)" : "rgba(37,99,235,0.55)"))
+            backgroundColor: anomalyRatios.map((v) => {
+              if (!Number.isFinite(v)) return 'rgba(148, 163, 184, 0.35)';
+              const capped = Math.min(2, Math.max(0, v));
+              const alpha = 0.3 + (capped / 2) * 0.65;
+              return `rgba(239, 68, 68, ${alpha})`;
+            }),
+            borderColor: 'rgba(220, 38, 38, 0.9)',
+            borderWidth: 1.2
           }
         ]
       },
       options: {
         ...commonOptions,
+        indexAxis: 'y',
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+              label: (ctx) => {
+                const ratio = anomalyRatios[ctx.dataIndex];
+                const change = anomalyChanges[ctx.dataIndex];
+                const threshold = anomalyThresholds[ctx.dataIndex];
+                if (!Number.isFinite(ratio) || !Number.isFinite(change) || !Number.isFinite(threshold)) {
+                  return 'No comparison baseline for this metric.';
+                }
+                const dir = change >= 0 ? 'increase' : 'decrease';
+                return [
+                  `Pressure ratio: ${formatNum(ratio, 3)}`,
+                  `Daily ${dir}: ${formatNum(Math.abs(change), 2)}%`,
+                  `Threshold: ${formatNum(threshold, 2)}%`
+                ];
+              }
+            }
+          }
+        },
         scales: {
-          y: {
+          x: {
             beginAtZero: true,
+            suggestedMax: 2,
+            grid: { color: COLORS.grid },
             title: { display: true, text: "ratio (1.0 = anomaly threshold)" }
+          },
+          y: {
+            grid: { display: false }
           }
         }
       }
