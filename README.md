@@ -95,6 +95,63 @@ python export_orders.py --from-date 2024-01-01
 python export_orders.py --from-date 2024-01-15 --to-date 2024-01-15
 ```
 
+## Daily Email Automation
+
+Use `daily_report_runner.py` to:
+- calculate `to_date` as yesterday in `REPORT_TIMEZONE`,
+- generate a fresh full-history report (`REPORT_FROM_DATE` -> yesterday),
+- optionally upload files to S3 and send email via AWS SES.
+- send email with empty body and only HTML report as attachment.
+
+### Quick run
+
+```bash
+python daily_report_runner.py
+```
+
+### Useful flags
+
+```bash
+# only generate files (no email)
+python daily_report_runner.py --skip-email
+
+# fixed date range override
+python daily_report_runner.py --from-date 2025-05-03 --to-date 2026-03-05
+```
+
+### Required env vars for email
+
+```env
+AWS_REGION=eu-central-1
+REPORT_EMAIL_FROM=reports@example.com
+REPORT_EMAIL_TO=owner@example.com
+REPORT_EMAIL_SUBJECT=Denný report Vevo
+```
+
+Optional S3 link support:
+
+```env
+REPORT_S3_BUCKET=my-report-bucket
+REPORT_S3_PREFIX=daily-reports
+REPORT_S3_PRESIGN_EXPIRES_SEC=604800
+```
+
+Optional fresh-fetch controls:
+
+```env
+REPORT_FORCE_CLEAR_CACHE=false
+REPORT_FORCE_NO_CACHE=false
+```
+
+### Docker
+
+Build and run:
+
+```bash
+docker build -t biznisweb-reporting .
+docker run --rm --env-file .env biznisweb-reporting
+```
+
 ## Output Files
 
 The script generates four CSV files in the `data/` directory:

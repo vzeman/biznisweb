@@ -7,3 +7,6 @@ requests>=2.31.0
 google-ads>=24.1.0
 google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
+
+# AWS integrations (SES/S3 automation runner)
+boto3>=1.35.0
