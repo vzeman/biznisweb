@@ -311,16 +311,16 @@ def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
     return sorted(rows, key=lambda r: r["date"])
 
 
-def _load_customer_dynamics(export_csv: Optional[Path]) -> Dict[date, Dict[str, int]]:
+def _load_order_records(export_csv: Optional[Path]) -> List[Dict[str, Any]]:
     if not export_csv or not export_csv.exists():
-        return {}
+        return []
 
-    orders: Dict[str, Dict[str, Any]] = {}
+    orders_map: Dict[str, Dict[str, Any]] = {}
     with export_csv.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             order_num = (row.get("order_num") or "").strip()
-            if not order_num or order_num in orders:
+            if not order_num or order_num in orders_map:
                 continue
             date_str = (row.get("purchase_date") or "").split(" ")[0].strip()
             if not date_str:
@@ -332,20 +332,23 @@ def _load_customer_dynamics(export_csv: Optional[Path]) -> Dict[date, Dict[str, 
             email = (row.get("customer_email") or "").strip().lower()
             if not email:
                 continue
-            orders[order_num] = {"date": d, "email": email}
+            orders_map[order_num] = {"date": d, "email": email}
+    return list(orders_map.values())
 
-    if not orders:
+
+def _load_customer_dynamics(order_records: List[Dict[str, Any]]) -> Dict[date, Dict[str, int]]:
+    if not order_records:
         return {}
 
     first_order_date: Dict[str, date] = {}
-    for order in orders.values():
+    for order in order_records:
         email = order["email"]
         d = order["date"]
         if email not in first_order_date or d < first_order_date[email]:
             first_order_date[email] = d
 
     buckets: Dict[date, Dict[str, Any]] = {}
-    for order in orders.values():
+    for order in order_records:
         d = order["date"]
         email = order["email"]
         if d not in buckets:
@@ -373,11 +376,22 @@ def _load_customer_dynamics(export_csv: Optional[Path]) -> Dict[date, Dict[str, 
     return result
 
 
+def _window_unique_customers(order_records: List[Dict[str, Any]], end_date: date, days: int) -> int:
+    start_date = end_date - timedelta(days=days - 1)
+    customers = {
+        rec["email"]
+        for rec in order_records
+        if start_date <= rec["date"] <= end_date
+    }
+    return len(customers)
+
+
 def _window_aggregate(
     row_by_date: Dict[date, Dict[str, Any]],
     end_date: date,
     days: int,
     customer_by_date: Dict[date, Dict[str, int]],
+    order_records: List[Dict[str, Any]],
 ) -> Dict[str, Optional[float]]:
     revenue = 0.0
     orders = 0
@@ -415,6 +429,8 @@ def _window_aggregate(
     cac = (ads / new_customers) if new_customers > 0 else None
     returning_customer_rate = (returning_orders / orders * 100) if orders > 0 else None
     payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
+    unique_customers = _window_unique_customers(order_records, end_date, days)
+    ltv = (revenue / unique_customers) if unique_customers > 0 else None
 
     return {
         "revenue": revenue,
@@ -435,12 +451,20 @@ def _window_aggregate(
         "returning_customer_rate": returning_customer_rate,
         "cac": cac,
         "payback_orders": payback_orders,
+        "unique_customers": float(unique_customers),
+        "ltv": ltv,
     }
 
 
 def _comparison_line(label: str, current: float, previous: float) -> str:
     change = _pct_change(current, previous)
     return f"- {label}: {_format_change(change)} ({_classify_comparison(change)})"
+
+
+def _comparison_line_optional(label: str, current: Optional[float], previous: Optional[float]) -> str:
+    if current is None or previous is None:
+        return f"- {label}: Nedostatok dat"
+    return _comparison_line(label, float(current), float(previous))
 
 
 def build_report_summary(file_paths: Dict[str, Path]) -> str:
@@ -453,7 +477,8 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         return "EXECUTIVE SUMMARY\nNie je mozne vytvorit slovny suhrn, aggregate_by_date CSV je prazdny."
 
     export_csv = file_paths.get("export_csv")
-    customer_by_date = _load_customer_dynamics(export_csv)
+    order_records = _load_order_records(export_csv)
+    customer_by_date = _load_customer_dynamics(order_records)
     row_by_date: Dict[date, Dict[str, Any]] = {row["date"]: row for row in daily_rows}
 
     last_row = daily_rows[-1]
@@ -461,11 +486,11 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     prev_day = last_date - timedelta(days=1)
     d_prev = row_by_date.get(prev_day)
 
-    total = _window_aggregate(row_by_date, last_date, len(daily_rows), customer_by_date)
-    w7 = _window_aggregate(row_by_date, last_date, 7, customer_by_date)
-    w7_prev = _window_aggregate(row_by_date, last_date - timedelta(days=7), 7, customer_by_date)
-    w30 = _window_aggregate(row_by_date, last_date, 30, customer_by_date)
-    w30_prev = _window_aggregate(row_by_date, last_date - timedelta(days=30), 30, customer_by_date)
+    total = _window_aggregate(row_by_date, last_date, len(daily_rows), customer_by_date, order_records)
+    w7 = _window_aggregate(row_by_date, last_date, 7, customer_by_date, order_records)
+    w7_prev = _window_aggregate(row_by_date, last_date - timedelta(days=7), 7, customer_by_date, order_records)
+    w30 = _window_aggregate(row_by_date, last_date, 30, customer_by_date, order_records)
+    w30_prev = _window_aggregate(row_by_date, last_date - timedelta(days=30), 30, customer_by_date, order_records)
 
     same_weekday_last_week = last_date - timedelta(days=7)
     same_day_last_month = _shift_months(last_date, -1)
@@ -475,9 +500,9 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     d_month = row_by_date.get(same_day_last_month)
     d_year = row_by_date.get(same_day_last_year)
 
-    w7_month = _window_aggregate(row_by_date, _shift_months(last_date, -1), 7, customer_by_date)
-    w7_year = _window_aggregate(row_by_date, _shift_years(last_date, -1), 7, customer_by_date)
-    w30_year = _window_aggregate(row_by_date, _shift_years(last_date, -1), 30, customer_by_date)
+    w7_month = _window_aggregate(row_by_date, _shift_months(last_date, -1), 7, customer_by_date, order_records)
+    w7_year = _window_aggregate(row_by_date, _shift_years(last_date, -1), 7, customer_by_date, order_records)
+    w30_year = _window_aggregate(row_by_date, _shift_years(last_date, -1), 30, customer_by_date, order_records)
 
     revenue_daily_change = _pct_change(float(last_row["revenue"]), float(d_prev["revenue"])) if d_prev else None
     revenue_7_change = _pct_change(float(w7["revenue"] or 0), float(w7_prev["revenue"] or 0))
@@ -595,20 +620,105 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     daily_cac = (float(last_row["total_ads"]) / today_new) if today_new > 0 else None
     daily_payback = (daily_cac / float(last_row["contribution_per_order"])) if (daily_cac is not None and float(last_row["contribution_per_order"]) > 0) else None
 
-    comparisons = [
-        "Daily comparisons:",
-        _comparison_line("Last day vs previous day (Revenue)", float(last_row["revenue"]), float(d_prev["revenue"])) if d_prev else "- Last day vs previous day (Revenue): Nedostatok dat",
-        _comparison_line("Last day vs same weekday last week (Revenue)", float(last_row["revenue"]), float(d_week["revenue"])) if d_week else "- Last day vs same weekday last week (Revenue): Nedostatok dat",
-        _comparison_line("Last day vs same day last month (Revenue)", float(last_row["revenue"]), float(d_month["revenue"])) if d_month else "- Last day vs same day last month (Revenue): Nedostatok dat",
-        _comparison_line("Last day vs same day last year (Revenue)", float(last_row["revenue"]), float(d_year["revenue"])) if d_year else "- Last day vs same day last year (Revenue): Nedostatok dat",
-        "Weekly comparisons:",
-        _comparison_line("Last 7 days vs previous 7 days (Revenue)", float(w7["revenue"] or 0), float(w7_prev["revenue"] or 0)),
-        _comparison_line("Last 7 days vs same week last month (Revenue)", float(w7["revenue"] or 0), float(w7_month["revenue"] or 0)),
-        _comparison_line("Last 7 days vs same week last year (Revenue)", float(w7["revenue"] or 0), float(w7_year["revenue"] or 0)),
-        "Monthly comparisons:",
-        _comparison_line("Last 30 days vs previous 30 days (Revenue)", float(w30["revenue"] or 0), float(w30_prev["revenue"] or 0)),
-        _comparison_line("Last 30 days vs same month last year (Revenue)", float(w30["revenue"] or 0), float(w30_year["revenue"] or 0)),
+    def has_window_data(end_date: date, days: int) -> bool:
+        for i in range(days):
+            d = end_date - timedelta(days=(days - 1 - i))
+            if d in row_by_date:
+                return True
+        return False
+
+    day_cur = _window_aggregate(row_by_date, last_date, 1, customer_by_date, order_records)
+    day_prev_agg = _window_aggregate(row_by_date, prev_day, 1, customer_by_date, order_records) if d_prev else None
+    day_week_agg = _window_aggregate(row_by_date, same_weekday_last_week, 1, customer_by_date, order_records) if d_week else None
+    day_month_agg = _window_aggregate(row_by_date, same_day_last_month, 1, customer_by_date, order_records) if d_month else None
+    day_year_agg = _window_aggregate(row_by_date, same_day_last_year, 1, customer_by_date, order_records) if d_year else None
+
+    w7_month_cmp = w7_month if has_window_data(_shift_months(last_date, -1), 7) else None
+    w7_year_cmp = w7_year if has_window_data(_shift_years(last_date, -1), 7) else None
+    w30_year_cmp = w30_year if has_window_data(_shift_years(last_date, -1), 30) else None
+
+    metric_defs = [
+        ("Revenue", "revenue"),
+        ("Orders", "orders"),
+        ("AOV", "aov"),
+        ("CAC", "cac"),
+        ("ROAS", "roas"),
+        ("Contribution Margin", "contribution_margin"),
+        ("Profit", "profit"),
+        ("LTV", "ltv"),
     ]
+
+    comparisons = ["Daily comparisons:"]
+    for metric_name, metric_key in metric_defs:
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last day vs previous day ({metric_name})",
+                day_cur.get(metric_key),
+                day_prev_agg.get(metric_key) if day_prev_agg else None,
+            )
+        )
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last day vs same weekday last week ({metric_name})",
+                day_cur.get(metric_key),
+                day_week_agg.get(metric_key) if day_week_agg else None,
+            )
+        )
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last day vs same day last month ({metric_name})",
+                day_cur.get(metric_key),
+                day_month_agg.get(metric_key) if day_month_agg else None,
+            )
+        )
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last day vs same day last year ({metric_name})",
+                day_cur.get(metric_key),
+                day_year_agg.get(metric_key) if day_year_agg else None,
+            )
+        )
+
+    comparisons.append("Weekly comparisons:")
+    for metric_name, metric_key in metric_defs:
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last 7 days vs previous 7 days ({metric_name})",
+                w7.get(metric_key),
+                w7_prev.get(metric_key),
+            )
+        )
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last 7 days vs same week last month ({metric_name})",
+                w7.get(metric_key),
+                w7_month_cmp.get(metric_key) if w7_month_cmp else None,
+            )
+        )
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last 7 days vs same week last year ({metric_name})",
+                w7.get(metric_key),
+                w7_year_cmp.get(metric_key) if w7_year_cmp else None,
+            )
+        )
+
+    comparisons.append("Monthly comparisons:")
+    for metric_name, metric_key in metric_defs:
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last 30 days vs previous 30 days ({metric_name})",
+                w30.get(metric_key),
+                w30_prev.get(metric_key),
+            )
+        )
+        comparisons.append(
+            _comparison_line_optional(
+                f"Last 30 days vs same month last year ({metric_name})",
+                w30.get(metric_key),
+                w30_year_cmp.get(metric_key) if w30_year_cmp else None,
+            )
+        )
 
     exec_summary = (
         "EXECUTIVE SUMMARY\n"
