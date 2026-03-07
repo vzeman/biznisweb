@@ -733,84 +733,141 @@ class BizniWebExporter:
             # If fetching recent dates (within last 7 days), use DESC to get newest first
             # If fetching older dates, use ASC to get oldest first (more efficient for historical data)
             recent_dates = [d for d in dates_to_fetch if (today - d).days <= self.cache_days_threshold]
-            sort_order = 'DESC' if recent_dates else 'ASC'
+            primary_sort_order = 'DESC' if recent_dates else 'ASC'
 
-            logger.info(f"Using {sort_order} order: {len(recent_dates)} recent dates, {len(dates_to_fetch) - len(recent_dates)} older dates")
+            logger.info(
+                f"Using {primary_sort_order} order: {len(recent_dates)} recent dates, "
+                f"{len(dates_to_fetch) - len(recent_dates)} older dates"
+            )
 
             # Fetch in multiple batches until we truly cover the requested boundary.
             # NOTE: We cannot stop based on "all dates found" because some dates may
             # legitimately have zero orders.
             orders_by_date = {}
-            batch_num = 1
             max_batches = 200  # Safety limit for pathological pagination loops
-            next_cursor = None
+            earliest_needed = min(dates_to_fetch)
+            latest_needed = max(dates_to_fetch)
 
-            while batch_num <= max_batches:
-                print(f"Batch {batch_num} ({sort_order} order)...")
-                bulk_orders, next_cursor = self.fetch_all_orders_bulk(
-                    max_orders=900,
-                    start_cursor=next_cursor,
-                    sort_order=sort_order
-                )
+            def run_bulk_pass(
+                sort_order: str,
+                target_earliest: Optional[datetime] = None,
+                target_latest: Optional[datetime] = None,
+            ) -> Dict[str, Any]:
+                """Run one directional bulk pass and collect orders by date."""
+                next_cursor = None
+                batch_num = 1
+                reached_boundary = False
+                oldest_seen = None
+                latest_seen = None
 
-                if not bulk_orders:
-                    break
-
-                # Organize orders by date and track batch date boundaries
-                new_dates_found = 0
-                parsed_batch_dates = []
-                for order in bulk_orders:
-                    pur_date_str = order.get('pur_date', '')
-                    if pur_date_str:
-                        try:
-                            pur_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
-                            parsed_batch_dates.append(pur_date)
-                            date_key = pur_date.strftime('%Y-%m-%d')
-
-                            # Only count orders within our date range
-                            if date_key in dates_to_fetch_set:
-                                if date_key not in orders_by_date:
-                                    orders_by_date[date_key] = []
-                                    new_dates_found += 1
-                                orders_by_date[date_key].append(order)
-                        except (ValueError, IndexError):
-                            continue
-
-                latest_in_batch = max(parsed_batch_dates) if parsed_batch_dates else None
-                oldest_in_batch = min(parsed_batch_dates) if parsed_batch_dates else None
-                earliest_needed = min(dates_to_fetch)
-                latest_needed = max(dates_to_fetch)
-
-                # Stop once pagination reached the requested boundary.
-                # DESC: newest -> oldest, so we need to reach date_from.
-                if sort_order == 'DESC' and oldest_in_batch is not None and oldest_in_batch <= earliest_needed:
-                    logger.info(
-                        f"Reached start boundary in DESC mode (oldest_in_batch={oldest_in_batch.strftime('%Y-%m-%d')}, "
-                        f"needed={earliest_needed.strftime('%Y-%m-%d')})"
+                while batch_num <= max_batches:
+                    print(f"Batch {batch_num} ({sort_order} order)...")
+                    bulk_orders, next_cursor = self.fetch_all_orders_bulk(
+                        max_orders=900,
+                        start_cursor=next_cursor,
+                        sort_order=sort_order
                     )
-                    break
 
-                # ASC: oldest -> newest, so we need to reach date_to.
-                if sort_order == 'ASC' and latest_in_batch is not None and latest_in_batch >= latest_needed:
-                    logger.info(
-                        f"Reached end boundary in ASC mode (latest_in_batch={latest_in_batch.strftime('%Y-%m-%d')}, "
-                        f"needed={latest_needed.strftime('%Y-%m-%d')})"
+                    if not bulk_orders:
+                        logger.warning(
+                            f"Empty batch returned in {sort_order} mode (cursor_present={bool(next_cursor)}). "
+                            "Stopping current pass."
+                        )
+                        break
+
+                    parsed_batch_dates = []
+                    for order in bulk_orders:
+                        pur_date_str = order.get('pur_date', '')
+                        if pur_date_str:
+                            try:
+                                pur_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
+                                parsed_batch_dates.append(pur_date)
+                                date_key = pur_date.strftime('%Y-%m-%d')
+
+                                # Only keep orders within requested range
+                                if date_key in dates_to_fetch_set:
+                                    if date_key not in orders_by_date:
+                                        orders_by_date[date_key] = []
+                                    orders_by_date[date_key].append(order)
+                            except (ValueError, IndexError):
+                                continue
+
+                    latest_in_batch = max(parsed_batch_dates) if parsed_batch_dates else None
+                    oldest_in_batch = min(parsed_batch_dates) if parsed_batch_dates else None
+
+                    if oldest_in_batch is not None:
+                        oldest_seen = oldest_in_batch if oldest_seen is None else min(oldest_seen, oldest_in_batch)
+                    if latest_in_batch is not None:
+                        latest_seen = latest_in_batch if latest_seen is None else max(latest_seen, latest_in_batch)
+
+                    # Stop once pagination reached pass target boundary.
+                    if sort_order == 'DESC' and target_earliest is not None and oldest_in_batch is not None and oldest_in_batch <= target_earliest:
+                        logger.info(
+                            f"Reached start boundary in DESC mode (oldest_in_batch={oldest_in_batch.strftime('%Y-%m-%d')}, "
+                            f"needed={target_earliest.strftime('%Y-%m-%d')})"
+                        )
+                        reached_boundary = True
+                        break
+
+                    if sort_order == 'ASC' and target_latest is not None and latest_in_batch is not None and latest_in_batch >= target_latest:
+                        logger.info(
+                            f"Reached end boundary in ASC mode (latest_in_batch={latest_in_batch.strftime('%Y-%m-%d')}, "
+                            f"needed={target_latest.strftime('%Y-%m-%d')})"
+                        )
+                        reached_boundary = True
+                        break
+
+                    if not next_cursor:
+                        logger.info(f"No next cursor available in {sort_order} mode, stopping current pass")
+                        break
+
+                    batch_num += 1
+                    time.sleep(1)  # Small delay between batches
+
+                if batch_num > max_batches:
+                    logger.warning(
+                        f"Stopped after max_batches={max_batches} in {sort_order} mode without fully confirming range boundary "
+                        f"({date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')})"
                     )
-                    break
 
-                # If no new dates in range and there is no next cursor, there is nothing more to fetch.
-                if new_dates_found == 0 and not next_cursor:
-                    logger.info("No new dates found and no next cursor available, stopping")
-                    break
+                return {
+                    'reached_boundary': reached_boundary,
+                    'oldest_seen': oldest_seen,
+                    'latest_seen': latest_seen,
+                }
 
-                batch_num += 1
-                time.sleep(1)  # Small delay between batches
+            # Primary pass
+            primary_stats = run_bulk_pass(
+                sort_order=primary_sort_order,
+                target_earliest=earliest_needed if primary_sort_order == 'DESC' else None,
+                target_latest=latest_needed if primary_sort_order == 'ASC' else None,
+            )
 
-            if batch_num > max_batches:
-                logger.warning(
-                    f"Stopped after max_batches={max_batches} without fully confirming range boundary "
-                    f"({date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')})"
-                )
+            # Fallback pass from the opposite side when primary direction fails to reach boundary.
+            # This protects full-history exports from intermittent cursor/page failures.
+            if not primary_stats['reached_boundary']:
+                if primary_sort_order == 'DESC':
+                    # We already have newest side; fetch oldest side up to overlap with DESC data.
+                    fallback_target_latest = primary_stats['oldest_seen'] or latest_needed
+                    logger.warning(
+                        "Primary DESC pass did not reach full historical boundary. "
+                        f"Running ASC fallback up to {fallback_target_latest.strftime('%Y-%m-%d')}."
+                    )
+                    run_bulk_pass(
+                        sort_order='ASC',
+                        target_latest=fallback_target_latest,
+                    )
+                else:
+                    # We already have oldest side; fetch newest side down to overlap with ASC data.
+                    fallback_target_earliest = primary_stats['latest_seen'] or earliest_needed
+                    logger.warning(
+                        "Primary ASC pass did not reach latest boundary. "
+                        f"Running DESC fallback down to {fallback_target_earliest.strftime('%Y-%m-%d')}."
+                    )
+                    run_bulk_pass(
+                        sort_order='DESC',
+                        target_earliest=fallback_target_earliest,
+                    )
 
             # Cache and add orders for each date
             for date in dates_to_fetch:
@@ -823,12 +880,17 @@ class BizniWebExporter:
 
                 # Validate that all orders are actually from the requested date
                 validated_orders = []
+                seen_day_order_keys = set()
                 for order in filtered_orders:
                     pur_date_str = order.get('pur_date', '')
                     if pur_date_str:
                         try:
                             order_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
                             if order_date.strftime('%Y-%m-%d') == date_str:
+                                dedupe_key = order.get('order_num') or order.get('id')
+                                if dedupe_key in seen_day_order_keys:
+                                    continue
+                                seen_day_order_keys.add(dedupe_key)
                                 validated_orders.append(order)
                             else:
                                 logger.warning(f"Order {order.get('order_num', 'unknown')} has date {order_date.strftime('%Y-%m-%d')} but was in {date_str} bucket")
@@ -844,6 +906,7 @@ class BizniWebExporter:
 
         # Final validation: ensure all orders are within the overall date range
         final_validated_orders = []
+        seen_final_order_keys = set()
         out_of_range_count = 0
         for order in all_orders:
             pur_date_str = order.get('pur_date', '')
@@ -851,6 +914,10 @@ class BizniWebExporter:
                 try:
                     order_date = datetime.strptime(pur_date_str.split()[0], '%Y-%m-%d')
                     if date_from <= order_date <= date_to:
+                        dedupe_key = order.get('order_num') or order.get('id')
+                        if dedupe_key in seen_final_order_keys:
+                            continue
+                        seen_final_order_keys.add(dedupe_key)
                         final_validated_orders.append(order)
                     else:
                         out_of_range_count += 1
