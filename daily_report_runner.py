@@ -8,18 +8,19 @@ Optional S3 upload is supported.
 """
 
 import argparse
+import calendar
 import csv
 import mimetypes
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate, make_msgid
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -175,76 +176,498 @@ def _to_int(value: str) -> int:
 
 
 def _fmt_eur(value: float) -> str:
-    return f"€{value:,.2f}".replace(",", " ")
+    return f"{value:,.2f} EUR".replace(",", " ")
 
 
 def _fmt_pct(value: float) -> str:
     return f"{value:.2f}%"
 
 
-def build_report_summary(file_paths: Dict[str, Path]) -> str:
-    date_csv = file_paths.get("aggregate_by_date_csv")
-    if not date_csv or not date_csv.exists():
-        return "Súhrn metrík nebol dostupný (chýba aggregate_by_date CSV)."
+def _pct_change(current: float, previous: float) -> Optional[float]:
+    if previous == 0:
+        if current == 0:
+            return 0.0
+        return None
+    return ((current - previous) / abs(previous)) * 100
 
-    rows: List[Dict[str, str]] = []
+
+def _format_change(change: Optional[float]) -> str:
+    if change is None:
+        return "N/A"
+    sign = "+" if change >= 0 else ""
+    return f"{sign}{change:.2f}%"
+
+
+def _classify_comparison(change: Optional[float]) -> str:
+    if change is None:
+        return "Nedostatok dat"
+    if change > 20:
+        return "Strong Growth"
+    if change > 5:
+        return "Moderate Growth"
+    if -5 <= change <= 5:
+        return "Stable"
+    if change >= -20:
+        return "Moderate Decline"
+    return "Strong Decline"
+
+
+def _classify_trend(
+    daily_change: Optional[float],
+    change_7d: Optional[float],
+    change_30d: Optional[float],
+    lower_is_better: bool = False,
+) -> str:
+    score = 0
+
+    def score_from_change(value: Optional[float], threshold: float) -> int:
+        if value is None:
+            return 0
+        adjusted = -value if lower_is_better else value
+        if adjusted > threshold:
+            return 1
+        if adjusted < -threshold:
+            return -1
+        return 0
+
+    score += score_from_change(daily_change, 3.0)
+    score += score_from_change(change_7d, 5.0)
+    score += score_from_change(change_30d, 5.0)
+
+    if score >= 2:
+        return "Improving"
+    if score <= -2:
+        return "Deteriorating"
+    return "Stable"
+
+
+def _shift_months(d: date, months: int) -> date:
+    month_index = (d.month - 1) + months
+    year = d.year + (month_index // 12)
+    month = (month_index % 12) + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(d.day, last_day))
+
+
+def _shift_years(d: date, years: int) -> date:
+    target_year = d.year + years
+    try:
+        return d.replace(year=target_year)
+    except ValueError:
+        return d.replace(year=target_year, day=28)
+
+
+def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
     with date_csv.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            if row.get("date"):
-                rows.append(row)
+            date_str = (row.get("date") or "").strip()
+            if not date_str:
+                continue
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                continue
 
-    if not rows:
-        return "Súhrn metrík nebol dostupný (aggregate_by_date CSV je prázdny)."
+            revenue = _to_float(row.get("total_revenue", ""))
+            orders = _to_int(row.get("unique_orders", ""))
+            product_costs = _to_float(row.get("product_expense", ""))
+            packaging_costs = _to_float(row.get("packaging_cost", ""))
+            shipping_subsidy = _to_float(row.get("shipping_subsidy_cost", ""))
+            facebook_ads = _to_float(row.get("fb_ads_spend", ""))
+            google_ads = _to_float(row.get("google_ads_spend", ""))
+            total_ads = facebook_ads + google_ads
+            profit = _to_float(row.get("net_profit", ""))
+            pre_ad_contribution = _to_float(row.get("pre_ad_contribution_profit", ""))
+            contribution_margin_percent = _to_float(row.get("pre_ad_contribution_margin_pct", ""))
 
-    rows = sorted(rows, key=lambda r: r["date"])
-    total_revenue = sum(_to_float(r.get("total_revenue", "")) for r in rows)
-    total_net_profit = sum(_to_float(r.get("net_profit", "")) for r in rows)
-    total_orders = sum(_to_int(r.get("unique_orders", "")) for r in rows)
-    total_fb_spend = sum(_to_float(r.get("fb_ads_spend", "")) for r in rows)
-    total_google_spend = sum(_to_float(r.get("google_ads_spend", "")) for r in rows)
-    total_ads = total_fb_spend + total_google_spend
-    total_roas = (total_revenue / total_ads) if total_ads > 0 else 0.0
-    aov = (total_revenue / total_orders) if total_orders > 0 else 0.0
+            aov = (revenue / orders) if orders > 0 else 0.0
+            roas = (revenue / total_ads) if total_ads > 0 else 0.0
+            contribution_per_order = (pre_ad_contribution / orders) if orders > 0 else 0.0
+            post_ad_contribution_per_order = (profit / orders) if orders > 0 else 0.0
 
-    last = rows[-1]
-    last_date = last["date"]
-    last_orders = _to_int(last.get("unique_orders", ""))
-    last_revenue = _to_float(last.get("total_revenue", ""))
-    last_profit = _to_float(last.get("net_profit", ""))
-    last_fb = _to_float(last.get("fb_ads_spend", ""))
+            rows.append(
+                {
+                    "date": d,
+                    "revenue": revenue,
+                    "orders": orders,
+                    "units_sold": _to_int(row.get("total_quantity", "")),
+                    "aov": aov,
+                    "product_costs": product_costs,
+                    "packaging_costs": packaging_costs,
+                    "shipping_subsidy": shipping_subsidy,
+                    "facebook_ads": facebook_ads,
+                    "google_ads": google_ads,
+                    "total_ads": total_ads,
+                    "profit": profit,
+                    "roas": roas,
+                    "contribution_margin_percent": contribution_margin_percent,
+                    "pre_ad_contribution": pre_ad_contribution,
+                    "contribution_per_order": contribution_per_order,
+                    "post_ad_contribution_per_order": post_ad_contribution_per_order,
+                }
+            )
+    return sorted(rows, key=lambda r: r["date"])
 
-    last_7 = rows[-7:]
-    prev_7 = rows[-14:-7] if len(rows) >= 14 else []
-    last_7_revenue = sum(_to_float(r.get("total_revenue", "")) for r in last_7)
-    last_7_profit = sum(_to_float(r.get("net_profit", "")) for r in last_7)
-    last_7_orders = sum(_to_int(r.get("unique_orders", "")) for r in last_7)
-    prev_7_revenue = sum(_to_float(r.get("total_revenue", "")) for r in prev_7)
-    prev_7_profit = sum(_to_float(r.get("net_profit", "")) for r in prev_7)
-    revenue_trend = ((last_7_revenue - prev_7_revenue) / prev_7_revenue * 100) if prev_7_revenue > 0 else 0.0
-    profit_trend = ((last_7_profit - prev_7_profit) / prev_7_profit * 100) if prev_7_profit > 0 else 0.0
 
-    return (
-        "Kľúčový slovný súhrn:\n"
-        f"- Celé obdobie: {total_orders} objednávok, tržby {_fmt_eur(total_revenue)}, "
-        f"netto zisk {_fmt_eur(total_net_profit)}, AOV {_fmt_eur(aov)}.\n"
-        f"- Reklama: FB {_fmt_eur(total_fb_spend)}, Google {_fmt_eur(total_google_spend)}, "
-        f"spolu {_fmt_eur(total_ads)}, ROAS {total_roas:.2f}x.\n"
-        f"- Posledný deň ({last_date}): {last_orders} objednávok, tržby {_fmt_eur(last_revenue)}, "
-        f"netto zisk {_fmt_eur(last_profit)}, FB spend {_fmt_eur(last_fb)}.\n"
-        f"- Posledných 7 dní: {last_7_orders} objednávok, tržby {_fmt_eur(last_7_revenue)}, "
-        f"netto zisk {_fmt_eur(last_7_profit)}, trend tržieb {_fmt_pct(revenue_trend)}, "
-        f"trend zisku {_fmt_pct(profit_trend)}."
+def _load_customer_dynamics(export_csv: Optional[Path]) -> Dict[date, Dict[str, int]]:
+    if not export_csv or not export_csv.exists():
+        return {}
+
+    orders: Dict[str, Dict[str, Any]] = {}
+    with export_csv.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            order_num = (row.get("order_num") or "").strip()
+            if not order_num or order_num in orders:
+                continue
+            date_str = (row.get("purchase_date") or "").split(" ")[0].strip()
+            if not date_str:
+                continue
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            email = (row.get("customer_email") or "").strip().lower()
+            if not email:
+                continue
+            orders[order_num] = {"date": d, "email": email}
+
+    if not orders:
+        return {}
+
+    first_order_date: Dict[str, date] = {}
+    for order in orders.values():
+        email = order["email"]
+        d = order["date"]
+        if email not in first_order_date or d < first_order_date[email]:
+            first_order_date[email] = d
+
+    buckets: Dict[date, Dict[str, Any]] = {}
+    for order in orders.values():
+        d = order["date"]
+        email = order["email"]
+        if d not in buckets:
+            buckets[d] = {
+                "new_customers_set": set(),
+                "returning_customers_set": set(),
+                "new_orders": 0,
+                "returning_orders": 0,
+            }
+        if first_order_date[email] == d:
+            buckets[d]["new_customers_set"].add(email)
+            buckets[d]["new_orders"] += 1
+        else:
+            buckets[d]["returning_customers_set"].add(email)
+            buckets[d]["returning_orders"] += 1
+
+    result: Dict[date, Dict[str, int]] = {}
+    for d, data in buckets.items():
+        result[d] = {
+            "new_customers": len(data["new_customers_set"]),
+            "returning_customers": len(data["returning_customers_set"]),
+            "new_orders": int(data["new_orders"]),
+            "returning_orders": int(data["returning_orders"]),
+        }
+    return result
+
+
+def _window_aggregate(
+    row_by_date: Dict[date, Dict[str, Any]],
+    end_date: date,
+    days: int,
+    customer_by_date: Dict[date, Dict[str, int]],
+) -> Dict[str, Optional[float]]:
+    revenue = 0.0
+    orders = 0
+    ads = 0.0
+    fb_ads = 0.0
+    google_ads = 0.0
+    profit = 0.0
+    pre_ad_contribution = 0.0
+    new_customers = 0
+    returning_orders = 0
+    returning_customers = 0
+
+    for i in range(days):
+        d = end_date - timedelta(days=(days - 1 - i))
+        row = row_by_date.get(d)
+        if row:
+            revenue += float(row["revenue"])
+            orders += int(row["orders"])
+            ads += float(row["total_ads"])
+            fb_ads += float(row["facebook_ads"])
+            google_ads += float(row["google_ads"])
+            profit += float(row["profit"])
+            pre_ad_contribution += float(row["pre_ad_contribution"])
+
+        customer = customer_by_date.get(d, {})
+        new_customers += int(customer.get("new_customers", 0))
+        returning_orders += int(customer.get("returning_orders", 0))
+        returning_customers += int(customer.get("returning_customers", 0))
+
+    aov = (revenue / orders) if orders > 0 else 0.0
+    roas = (revenue / ads) if ads > 0 else 0.0
+    contribution_margin = (pre_ad_contribution / revenue * 100) if revenue > 0 else 0.0
+    contribution_per_order = (pre_ad_contribution / orders) if orders > 0 else 0.0
+    profit_per_order = (profit / orders) if orders > 0 else 0.0
+    cac = (ads / new_customers) if new_customers > 0 else None
+    returning_customer_rate = (returning_orders / orders * 100) if orders > 0 else None
+    payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
+
+    return {
+        "revenue": revenue,
+        "orders": float(orders),
+        "ads": ads,
+        "fb_ads": fb_ads,
+        "google_ads": google_ads,
+        "profit": profit,
+        "pre_ad_contribution": pre_ad_contribution,
+        "aov": aov,
+        "roas": roas,
+        "contribution_margin": contribution_margin,
+        "contribution_per_order": contribution_per_order,
+        "profit_per_order": profit_per_order,
+        "new_customers": float(new_customers),
+        "returning_orders": float(returning_orders),
+        "returning_customers": float(returning_customers),
+        "returning_customer_rate": returning_customer_rate,
+        "cac": cac,
+        "payback_orders": payback_orders,
+    }
+
+
+def _comparison_line(label: str, current: float, previous: float) -> str:
+    change = _pct_change(current, previous)
+    return f"- {label}: {_format_change(change)} ({_classify_comparison(change)})"
+
+
+def build_report_summary(file_paths: Dict[str, Path]) -> str:
+    date_csv = file_paths.get("aggregate_by_date_csv")
+    if not date_csv or not date_csv.exists():
+        return "EXECUTIVE SUMMARY\nNie je mozne vytvorit slovny suhrn, chyba aggregate_by_date CSV."
+
+    daily_rows = _load_daily_rows(date_csv)
+    if not daily_rows:
+        return "EXECUTIVE SUMMARY\nNie je mozne vytvorit slovny suhrn, aggregate_by_date CSV je prazdny."
+
+    export_csv = file_paths.get("export_csv")
+    customer_by_date = _load_customer_dynamics(export_csv)
+    row_by_date: Dict[date, Dict[str, Any]] = {row["date"]: row for row in daily_rows}
+
+    last_row = daily_rows[-1]
+    last_date: date = last_row["date"]
+    prev_day = last_date - timedelta(days=1)
+    d_prev = row_by_date.get(prev_day)
+
+    total = _window_aggregate(row_by_date, last_date, len(daily_rows), customer_by_date)
+    w7 = _window_aggregate(row_by_date, last_date, 7, customer_by_date)
+    w7_prev = _window_aggregate(row_by_date, last_date - timedelta(days=7), 7, customer_by_date)
+    w30 = _window_aggregate(row_by_date, last_date, 30, customer_by_date)
+    w30_prev = _window_aggregate(row_by_date, last_date - timedelta(days=30), 30, customer_by_date)
+
+    same_weekday_last_week = last_date - timedelta(days=7)
+    same_day_last_month = _shift_months(last_date, -1)
+    same_day_last_year = _shift_years(last_date, -1)
+
+    d_week = row_by_date.get(same_weekday_last_week)
+    d_month = row_by_date.get(same_day_last_month)
+    d_year = row_by_date.get(same_day_last_year)
+
+    w7_month = _window_aggregate(row_by_date, _shift_months(last_date, -1), 7, customer_by_date)
+    w7_year = _window_aggregate(row_by_date, _shift_years(last_date, -1), 7, customer_by_date)
+    w30_year = _window_aggregate(row_by_date, _shift_years(last_date, -1), 30, customer_by_date)
+
+    revenue_daily_change = _pct_change(float(last_row["revenue"]), float(d_prev["revenue"])) if d_prev else None
+    revenue_7_change = _pct_change(float(w7["revenue"] or 0), float(w7_prev["revenue"] or 0))
+    revenue_30_change = _pct_change(float(w30["revenue"] or 0), float(w30_prev["revenue"] or 0))
+
+    orders_daily_change = _pct_change(float(last_row["orders"]), float(d_prev["orders"])) if d_prev else None
+    orders_7_change = _pct_change(float(w7["orders"] or 0), float(w7_prev["orders"] or 0))
+    orders_30_change = _pct_change(float(w30["orders"] or 0), float(w30_prev["orders"] or 0))
+
+    aov_daily_change = _pct_change(float(last_row["aov"]), float(d_prev["aov"])) if d_prev else None
+    aov_7_change = _pct_change(float(w7["aov"] or 0), float(w7_prev["aov"] or 0))
+    aov_30_change = _pct_change(float(w30["aov"] or 0), float(w30_prev["aov"] or 0))
+
+    cac_daily_change = None
+    if d_prev:
+        prev_new = int(customer_by_date.get(prev_day, {}).get("new_customers", 0))
+        today_new = int(customer_by_date.get(last_date, {}).get("new_customers", 0))
+        prev_cac = (float(d_prev["total_ads"]) / prev_new) if prev_new > 0 else None
+        today_cac = (float(last_row["total_ads"]) / today_new) if today_new > 0 else None
+        if today_cac is not None and prev_cac is not None:
+            cac_daily_change = _pct_change(today_cac, prev_cac)
+
+    cac_7_change = _pct_change(float(w7["cac"]), float(w7_prev["cac"])) if (w7["cac"] is not None and w7_prev["cac"] is not None) else None
+    cac_30_change = _pct_change(float(w30["cac"]), float(w30_prev["cac"])) if (w30["cac"] is not None and w30_prev["cac"] is not None) else None
+
+    roas_daily_change = _pct_change(float(last_row["roas"]), float(d_prev["roas"])) if d_prev else None
+    roas_7_change = _pct_change(float(w7["roas"] or 0), float(w7_prev["roas"] or 0))
+    roas_30_change = _pct_change(float(w30["roas"] or 0), float(w30_prev["roas"] or 0))
+
+    cm_daily_change_pp = (float(last_row["contribution_margin_percent"]) - float(d_prev["contribution_margin_percent"])) if d_prev else None
+    cm_7_change = _pct_change(float(w7["contribution_margin"] or 0), float(w7_prev["contribution_margin"] or 0))
+    cm_30_change = _pct_change(float(w30["contribution_margin"] or 0), float(w30_prev["contribution_margin"] or 0))
+
+    profit_daily_change = _pct_change(float(last_row["profit"]), float(d_prev["profit"])) if d_prev else None
+    profit_7_change = _pct_change(float(w7["profit"] or 0), float(w7_prev["profit"] or 0))
+    profit_30_change = _pct_change(float(w30["profit"] or 0), float(w30_prev["profit"] or 0))
+
+    ret_7_change = _pct_change(float(w7["returning_customer_rate"] or 0), float(w7_prev["returning_customer_rate"] or 0))
+    ret_30_change = _pct_change(float(w30["returning_customer_rate"] or 0), float(w30_prev["returning_customer_rate"] or 0))
+
+    anomalies: List[str] = []
+
+    def add_anomaly(metric_name: str, change: Optional[float], threshold: float, extra: str = "") -> None:
+        if change is None:
+            return
+        if abs(change) > threshold:
+            direction = "narastol" if change > 0 else "klesol"
+            anomalies.append(f"- {metric_name} {direction} o {_fmt_pct(abs(change))}. {extra}".strip())
+
+    add_anomaly("Revenue (last day vs previous day)", revenue_daily_change, 20, "Signal je nad anomaly prahom 20%.")
+    add_anomaly("Orders (last day vs previous day)", orders_daily_change, 20, "Signal je nad anomaly prahom 20%.")
+    add_anomaly("AOV (last day vs previous day)", aov_daily_change, 10, "Signal je nad anomaly prahom 10%.")
+    add_anomaly("CAC (7d vs previous 7d)", cac_7_change, 15, "Rast CAC nad 15% zhorsuje akvizicnu efektivitu.")
+    add_anomaly("ROAS (7d vs previous 7d)", roas_7_change, 20, "Pokles ROAS nad 20% znizuje navratnost reklamy.")
+    if cm_daily_change_pp is not None and abs(cm_daily_change_pp) > 5:
+        direction = "narastla" if cm_daily_change_pp > 0 else "klesla"
+        anomalies.append(f"- Contribution margin (daily) {direction} o {abs(cm_daily_change_pp):.2f} p.b., co je nad prahom 5 p.b.")
+
+    positive_signals: List[str] = []
+    if (w7["roas"] or 0) > 2.5:
+        positive_signals.append(f"- 7d ROAS je {w7['roas']:.2f}x, co podporuje financnu udrzatelnost platenych kanalov.")
+    if (w7["profit"] or 0) > 0:
+        positive_signals.append(f"- Poslednych 7 dni je netto zisk {_fmt_eur(float(w7['profit'] or 0))}.")
+    if (w30["contribution_margin"] or 0) > 40:
+        positive_signals.append(f"- 30d pre-ad contribution margin je {_fmt_pct(float(w30['contribution_margin'] or 0))}, co vytvara priestor pre akviziciu.")
+    if (w30["returning_customer_rate"] or 0) > 20:
+        positive_signals.append(f"- Podiel returning objednavok za 30 dni je {_fmt_pct(float(w30['returning_customer_rate'] or 0))}, co zlepsuje kvalitu revenue.")
+    if not positive_signals:
+        positive_signals.append("- V analyzovanom horizonte nevidim silny pozitivny signal nad beznym sumom.")
+
+    cfo_warnings: List[str] = []
+    if w30["cac"] is not None and (w30["contribution_per_order"] or 0) > 0:
+        if float(w30["cac"]) >= float(w30["contribution_per_order"] or 0):
+            cfo_warnings.append(
+                f"- CAC {_fmt_eur(float(w30['cac']))} je >= contribution/order {_fmt_eur(float(w30['contribution_per_order'] or 0))}. "
+                "Skalovanie paid traffic je rizikove."
+            )
+    if w30["payback_orders"] is not None and float(w30["payback_orders"]) > 1:
+        cfo_warnings.append(f"- Payback period je {float(w30['payback_orders']):.2f} objednavky (>1), navratnost je pomalsia.")
+    if (w30["profit"] or 0) < 0:
+        cfo_warnings.append("- Poslednych 30 dni je netto strata, treba znizit spend alebo zvysit contribution/order.")
+    if (w7["ads"] or 0) > 0 and (w7_prev["ads"] or 0) > 0:
+        ads_change_7 = _pct_change(float(w7["ads"] or 0), float(w7_prev["ads"] or 0))
+        rev_change_7 = _pct_change(float(w7["revenue"] or 0), float(w7_prev["revenue"] or 0))
+        if ads_change_7 is not None and rev_change_7 is not None and ads_change_7 > 20 and rev_change_7 < 5:
+            cfo_warnings.append("- Rast trzieb je zavisly od rastuceho ad spendu bez adekvatneho revenue multiplikatora.")
+    if not cfo_warnings:
+        cfo_warnings.append("- Kriticky warning signal nebol detegovany pri aktualnych thresholdoch.")
+
+    if orders_7_change is not None and aov_7_change is not None:
+        if abs(orders_7_change) >= abs(aov_7_change):
+            revenue_driver = (
+                f"Rast/pokles revenue je primarne tahany objemom objednavok ({_format_change(orders_7_change)}) "
+                f"viac ako AOV ({_format_change(aov_7_change)})."
+            )
+        else:
+            revenue_driver = (
+                f"Rast/pokles revenue je primarne tahany AOV ({_format_change(aov_7_change)}) "
+                f"viac ako poctom objednavok ({_format_change(orders_7_change)})."
+            )
+    else:
+        revenue_driver = "Nedostatok dat pre attribution revenue quality."
+
+    trend_lines = [
+        f"- Revenue: {_classify_trend(revenue_daily_change, revenue_7_change, revenue_30_change)} (D {_format_change(revenue_daily_change)}, 7D {_format_change(revenue_7_change)}, 30D {_format_change(revenue_30_change)})",
+        f"- Orders: {_classify_trend(orders_daily_change, orders_7_change, orders_30_change)} (D {_format_change(orders_daily_change)}, 7D {_format_change(orders_7_change)}, 30D {_format_change(orders_30_change)})",
+        f"- AOV: {_classify_trend(aov_daily_change, aov_7_change, aov_30_change)} (D {_format_change(aov_daily_change)}, 7D {_format_change(aov_7_change)}, 30D {_format_change(aov_30_change)})",
+        f"- CAC: {_classify_trend(cac_daily_change, cac_7_change, cac_30_change, lower_is_better=True)} (D {_format_change(cac_daily_change)}, 7D {_format_change(cac_7_change)}, 30D {_format_change(cac_30_change)})",
+        f"- ROAS: {_classify_trend(roas_daily_change, roas_7_change, roas_30_change)} (D {_format_change(roas_daily_change)}, 7D {_format_change(roas_7_change)}, 30D {_format_change(roas_30_change)})",
+        f"- Contribution Margin: {_classify_trend(cm_daily_change_pp, cm_7_change, cm_30_change)} (D {('+' if (cm_daily_change_pp or 0) >= 0 else '')}{(cm_daily_change_pp or 0):.2f} p.b., 7D {_format_change(cm_7_change)}, 30D {_format_change(cm_30_change)})",
+        f"- Profit: {_classify_trend(profit_daily_change, profit_7_change, profit_30_change)} (D {_format_change(profit_daily_change)}, 7D {_format_change(profit_7_change)}, 30D {_format_change(profit_30_change)})",
+    ]
+
+    today_new = int(customer_by_date.get(last_date, {}).get("new_customers", 0))
+    daily_cac = (float(last_row["total_ads"]) / today_new) if today_new > 0 else None
+    daily_payback = (daily_cac / float(last_row["contribution_per_order"])) if (daily_cac is not None and float(last_row["contribution_per_order"]) > 0) else None
+
+    comparisons = [
+        "Daily comparisons:",
+        _comparison_line("Last day vs previous day (Revenue)", float(last_row["revenue"]), float(d_prev["revenue"])) if d_prev else "- Last day vs previous day (Revenue): Nedostatok dat",
+        _comparison_line("Last day vs same weekday last week (Revenue)", float(last_row["revenue"]), float(d_week["revenue"])) if d_week else "- Last day vs same weekday last week (Revenue): Nedostatok dat",
+        _comparison_line("Last day vs same day last month (Revenue)", float(last_row["revenue"]), float(d_month["revenue"])) if d_month else "- Last day vs same day last month (Revenue): Nedostatok dat",
+        _comparison_line("Last day vs same day last year (Revenue)", float(last_row["revenue"]), float(d_year["revenue"])) if d_year else "- Last day vs same day last year (Revenue): Nedostatok dat",
+        "Weekly comparisons:",
+        _comparison_line("Last 7 days vs previous 7 days (Revenue)", float(w7["revenue"] or 0), float(w7_prev["revenue"] or 0)),
+        _comparison_line("Last 7 days vs same week last month (Revenue)", float(w7["revenue"] or 0), float(w7_month["revenue"] or 0)),
+        _comparison_line("Last 7 days vs same week last year (Revenue)", float(w7["revenue"] or 0), float(w7_year["revenue"] or 0)),
+        "Monthly comparisons:",
+        _comparison_line("Last 30 days vs previous 30 days (Revenue)", float(w30["revenue"] or 0), float(w30_prev["revenue"] or 0)),
+        _comparison_line("Last 30 days vs same month last year (Revenue)", float(w30["revenue"] or 0), float(w30_year["revenue"] or 0)),
+    ]
+
+    exec_summary = (
+        "EXECUTIVE SUMMARY\n"
+        f"Biznis v sledovanom obdobi generoval {int(total['orders'] or 0)} objednavok, revenue {_fmt_eur(float(total['revenue'] or 0))} "
+        f"a netto profit {_fmt_eur(float(total['profit'] or 0))}. "
+        f"Poslednych 7 dni dosiahli revenue {_fmt_eur(float(w7['revenue'] or 0))} a profit {_fmt_eur(float(w7['profit'] or 0))}, "
+        f"co znamena zmenu vs predchadzajucich 7 dni: revenue {_format_change(revenue_7_change)}, profit {_format_change(profit_7_change)}. "
+        f"Marketingova efektivita je na 7d ROAS {float(w7['roas'] or 0):.2f}x a CAC "
+        f"{_fmt_eur(float(w7['cac'])) if w7['cac'] is not None else 'N/A'}, "
+        f"pri contribution/order {_fmt_eur(float(w7['contribution_per_order'] or 0))}. "
+        f"Trend returning order rate je 7D {_format_change(ret_7_change)} a 30D {_format_change(ret_30_change)}."
     )
+
+    positive_section = "POSITIVE SIGNALS\n" + "\n".join(positive_signals)
+    risk_section = "RISKS & ANOMALIES\n" + ("\n".join(anomalies) if anomalies else "- Nad definovanymi anomaly thresholdmi sa nenasiel kriticky vykyv.")
+
+    key_insights_lines = [
+        "KEY INSIGHTS",
+        f"- Revenue quality: {revenue_driver}",
+        f"- Unit economics: contribution/order (pre-ads) {_fmt_eur(float(w30['contribution_per_order'] or 0))}, contribution po ads/profit per order {_fmt_eur(float(w30['profit_per_order'] or 0))}.",
+    ]
+    if w30["payback_orders"] is not None:
+        daily_part = f", daily estimate {float(daily_payback):.2f} objednavky" if daily_payback is not None else ""
+        key_insights_lines.append(f"- Payback: {float(w30['payback_orders']):.2f} objednavky (30D){daily_part}.")
+    else:
+        key_insights_lines.append("- Payback: Nedostatok dat pre vypocet.")
+    key_insights = "\n".join(key_insights_lines)
+
+    trends_section = "METRIC TRENDS\n" + "\n".join(trend_lines)
+    cfo_warning_section = "CFO WARNING SIGNALS\n" + "\n".join(cfo_warnings)
+    comparison_section = "COMPARISON FRAMEWORK\n" + "\n".join(comparisons)
+
+    data_gaps = [
+        "DATA LIMITS",
+        "- Refund rate a cancellation rate momentalne nie su v dostupnom datasete, preto nie su vyhodnotene.",
+    ]
+    if w30["cac"] is None:
+        data_gaps.append("- CAC pre 30D nemoze byt spolahlivo vyhodnotene, lebo chyba dostatok new customer datapointov.")
+    gaps_section = "\n".join(data_gaps)
+
+    return "\n\n".join([
+        exec_summary,
+        positive_section,
+        risk_section,
+        key_insights,
+        trends_section,
+        cfo_warning_section,
+        comparison_section,
+        gaps_section,
+    ])
 
 
 def build_email_body(from_date: str, to_date: str, summary_text: str) -> str:
     return (
-        "Dobrý deň,\n\n"
-        "v prílohe posielam denný Vevo report v HTML formáte.\n"
-        f"Sledované obdobie: {from_date} až {to_date}.\n\n"
+        "Dobry den,\n\n"
+        "v prilohe posielam denny Vevo report v HTML formate.\n"
+        f"Sledovane obdobie: {from_date} az {to_date}.\n\n"
         f"{summary_text}\n\n"
-        "Tento email bol odoslaný automaticky zo systému Vevo reporting.\n"
+        "Tento email bol odoslany automaticky zo systemu Vevo reporting.\n"
     )
 
 
