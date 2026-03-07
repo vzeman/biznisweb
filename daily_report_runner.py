@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 from pathlib import Path
 from typing import Dict, List
 from zoneinfo import ZoneInfo
@@ -153,11 +154,21 @@ def s3_upload_outputs(paths: Dict[str, Path]) -> Dict[str, str]:
 
 
 def build_email_subject() -> str:
-    return os.getenv("REPORT_EMAIL_SUBJECT", "Denný report Vevo").strip()
+    return os.getenv("REPORT_EMAIL_SUBJECT", "Daily Vevo report").strip()
+
+
+def build_email_body(from_date: str, to_date: str) -> str:
+    return (
+        "Hello,\n\n"
+        "Attached is your Daily Vevo report in HTML format.\n"
+        f"Reporting period: {from_date} to {to_date}.\n\n"
+        "This message was sent automatically by Vevo reporting.\n"
+    )
 
 
 def send_email_ses(
     subject: str,
+    body_text: str,
     file_paths: Dict[str, Path],
 ) -> str:
     region = os.getenv("AWS_REGION", "eu-central-1").strip()
@@ -177,13 +188,20 @@ def send_email_ses(
     msg["Subject"] = subject
     msg["From"] = source
     msg["To"] = ", ".join(destinations)
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="amazonses.com")
+    msg["Reply-To"] = source
 
-    # Empty email body by requirement: report is delivered only as attachment.
-    msg.attach(MIMEText("", "plain", "utf-8"))
+    # Keep a short non-empty body to reduce spam score.
+    msg.attach(MIMEText(body_text, "plain", "utf-8"))
 
     def attach_file(path: Path) -> None:
-        with path.open("rb") as f:
-            part = MIMEApplication(f.read(), Name=path.name)
+        if path.suffix.lower() in {".html", ".htm"}:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            part = MIMEText(text, "html", "utf-8")
+        else:
+            with path.open("rb") as f:
+                part = MIMEApplication(f.read(), Name=path.name)
         part["Content-Disposition"] = f'attachment; filename="{path.name}"'
         msg.attach(part)
 
@@ -246,8 +264,10 @@ def main() -> None:
         return
 
     subject = build_email_subject()
+    body_text = build_email_body(from_date, to_date)
     message_id = send_email_ses(
         subject=subject,
+        body_text=body_text,
         file_paths=output_paths,
     )
     print(f"SES message sent. MessageId={message_id}")
@@ -255,3 +275,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
