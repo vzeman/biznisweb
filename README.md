@@ -152,6 +152,29 @@ docker build -t biznisweb-reporting .
 docker run --rm --env-file .env biznisweb-reporting
 ```
 
+### GitHub Actions -> ECR (without local Docker)
+
+Repository contains workflow:
+
+`/.github/workflows/build-and-push-ecr.yml`
+
+It builds Docker image and pushes it to:
+
+`919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+
+Required GitHub repository secrets:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+How to run:
+
+1. Open GitHub repository -> `Settings` -> `Secrets and variables` -> `Actions`.
+2. Add both AWS secrets (IAM user with ECR push permissions).
+3. Open `Actions` tab -> `Build and Push ECR` -> `Run workflow`.
+
+The ECS scheduled task already points to `vevo-reporting:latest`, so after successful push, next scheduled run will use the new image.
+
 ## Output Files
 
 The script generates four CSV files in the `data/` directory:
