@@ -430,6 +430,7 @@ def _window_aggregate(
     aov = (revenue / orders) if orders > 0 else 0.0
     roas = (revenue / ads) if ads > 0 else 0.0
     contribution_margin = (pre_ad_contribution / revenue * 100) if revenue > 0 else 0.0
+    post_ad_margin = (profit / revenue * 100) if revenue > 0 else 0.0
     contribution_per_order = (pre_ad_contribution / orders) if orders > 0 else 0.0
     profit_per_order = (profit / orders) if orders > 0 else 0.0
     cac = (ads / new_customers) if new_customers > 0 else None
@@ -448,7 +449,9 @@ def _window_aggregate(
         "pre_ad_contribution": pre_ad_contribution,
         "aov": aov,
         "roas": roas,
+        "pre_ad_contribution_margin": contribution_margin,
         "contribution_margin": contribution_margin,
+        "post_ad_margin": post_ad_margin,
         "contribution_per_order": contribution_per_order,
         "profit_per_order": profit_per_order,
         "new_customers": float(new_customers),
@@ -649,7 +652,8 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         ("AOV", "aov"),
         ("CAC", "cac"),
         ("ROAS", "roas"),
-        ("Contribution Margin", "contribution_margin"),
+        ("Pre-Ad Contribution Margin", "pre_ad_contribution_margin"),
+        ("Post-Ad Margin", "post_ad_margin"),
         ("Profit", "profit"),
         ("LTV", "ltv"),
     ]
@@ -794,8 +798,22 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
     last_date = daily_rows[-1]["date"]
     prev_day = last_date - timedelta(days=1)
     same_weekday_last_week = last_date - timedelta(days=7)
-    same_day_last_month = _shift_months(last_date, -1)
-    same_day_last_year = _shift_years(last_date, -1)
+    same_day_last_month = last_date - timedelta(days=30)
+    same_day_last_year = last_date - timedelta(days=365)
+
+    weekly_prev_end = last_date - timedelta(days=7)
+    weekly_last_month_end = last_date - timedelta(days=30)
+    weekly_last_year_end = last_date - timedelta(days=365)
+
+    monthly_prev_end = last_date - timedelta(days=30)
+    monthly_last_year_end = last_date - timedelta(days=365)
+
+    def _has_window_data(end_date: date, days: int) -> bool:
+        for i in range(days):
+            d = end_date - timedelta(days=(days - 1 - i))
+            if d in row_by_date:
+                return True
+        return False
 
     day_cur = _window_aggregate(row_by_date, last_date, 1, customer_by_date, order_records)
     day_prev = _window_aggregate(row_by_date, prev_day, 1, customer_by_date, order_records) if prev_day in row_by_date else None
@@ -804,9 +822,13 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
     day_year = _window_aggregate(row_by_date, same_day_last_year, 1, customer_by_date, order_records) if same_day_last_year in row_by_date else None
 
     w7 = _window_aggregate(row_by_date, last_date, 7, customer_by_date, order_records)
-    w7_prev = _window_aggregate(row_by_date, last_date - timedelta(days=7), 7, customer_by_date, order_records)
+    w7_prev = _window_aggregate(row_by_date, weekly_prev_end, 7, customer_by_date, order_records) if _has_window_data(weekly_prev_end, 7) else None
+    w7_month = _window_aggregate(row_by_date, weekly_last_month_end, 7, customer_by_date, order_records) if _has_window_data(weekly_last_month_end, 7) else None
+    w7_year = _window_aggregate(row_by_date, weekly_last_year_end, 7, customer_by_date, order_records) if _has_window_data(weekly_last_year_end, 7) else None
+
     w30 = _window_aggregate(row_by_date, last_date, 30, customer_by_date, order_records)
-    w30_prev = _window_aggregate(row_by_date, last_date - timedelta(days=30), 30, customer_by_date, order_records)
+    w30_prev = _window_aggregate(row_by_date, monthly_prev_end, 30, customer_by_date, order_records) if _has_window_data(monthly_prev_end, 30) else None
+    w30_year = _window_aggregate(row_by_date, monthly_last_year_end, 30, customer_by_date, order_records) if _has_window_data(monthly_last_year_end, 30) else None
 
     metric_defs = [
         ("Revenue", "revenue"),
@@ -814,10 +836,50 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         ("AOV", "aov"),
         ("CAC", "cac"),
         ("ROAS", "roas"),
-        ("Contribution Margin", "contribution_margin"),
+        ("Pre-Ad Contribution Margin", "pre_ad_contribution_margin"),
+        ("Post-Ad Margin", "post_ad_margin"),
         ("Profit", "profit"),
         ("LTV", "ltv"),
     ]
+    kpi_metric_defs = [
+        {"key": "revenue", "label": "Revenue", "direction": "up"},
+        {"key": "profit", "label": "Profit", "direction": "up"},
+        {"key": "orders", "label": "Orders", "direction": "up"},
+        {"key": "aov", "label": "AOV", "direction": "up"},
+        {"key": "cac", "label": "CAC", "direction": "down"},
+        {"key": "roas", "label": "ROAS", "direction": "up"},
+        {"key": "pre_ad_contribution_margin", "label": "Pre-Ad Contribution Margin", "direction": "up"},
+        {"key": "post_ad_margin", "label": "Post-Ad Margin", "direction": "up"},
+    ]
+    all_metric_keys = list(dict.fromkeys([metric_key for _, metric_key in metric_defs] + [m["key"] for m in kpi_metric_defs]))
+    kpi_metric_keys = [m["key"] for m in kpi_metric_defs]
+
+    def _safe_kpi_value(metric_key: str, aggregate: Optional[Dict[str, Optional[float]]], window_days: int) -> Optional[float]:
+        if not aggregate:
+            return None
+        value = aggregate.get(metric_key)
+        if value is None:
+            return None
+
+        if metric_key == "roas":
+            return min(float(value), 15.0)
+
+        if metric_key == "cac":
+            ads_spend = float(aggregate.get("ads") or 0.0)
+            if ads_spend <= 0:
+                return None
+            if aggregate.get("cac") is None:
+                return None
+            return float(aggregate["cac"])
+
+        return float(value)
+
+    def _snapshot(
+        aggregate: Optional[Dict[str, Optional[float]]],
+        window_days: int,
+        metric_keys: List[str],
+    ) -> Dict[str, Optional[float]]:
+        return {metric_key: _safe_kpi_value(metric_key, aggregate, window_days) for metric_key in metric_keys}
 
     daily_labels: List[str] = []
     revenue_series: List[float] = []
@@ -828,6 +890,8 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
     roas_series: List[float] = []
     cm_series: List[float] = []
     ltv30_series: List[Optional[float]] = []
+    pre_margin30_series: List[Optional[float]] = []
+    post_margin30_series: List[Optional[float]] = []
 
     for row in daily_rows:
         d = row["date"]
@@ -836,45 +900,86 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         profit_series.append(round(float(row["profit"]), 2))
         orders_series.append(int(row["orders"]))
         aov_series.append(round(float(row["aov"]), 2))
-        roas_series.append(round(float(row["roas"]), 3))
+        roas_series.append(round(min(float(row["roas"]), 15.0), 3))
         cm_series.append(round(float(row["contribution_margin_percent"]), 2))
 
         new_customers = int(customer_by_date.get(d, {}).get("new_customers", 0))
         day_cac = (float(row["total_ads"]) / new_customers) if new_customers > 0 else None
         cac_series.append(round(day_cac, 2) if day_cac is not None else None)
 
-        ltv30 = _window_aggregate(row_by_date, d, 30, customer_by_date, order_records).get("ltv")
+        rolling30 = _window_aggregate(row_by_date, d, 30, customer_by_date, order_records)
+        ltv30 = rolling30.get("ltv")
+        pre_m30 = rolling30.get("pre_ad_contribution_margin")
+        post_m30 = rolling30.get("post_ad_margin")
         ltv30_series.append(round(float(ltv30), 2) if ltv30 is not None else None)
+        pre_margin30_series.append(round(float(pre_m30), 2) if pre_m30 is not None else None)
+        post_margin30_series.append(round(float(post_m30), 2) if post_m30 is not None else None)
+
+    day_vals = _snapshot(day_cur, 1, all_metric_keys)
+    day_prev_vals = _snapshot(day_prev, 1, all_metric_keys) if day_prev else {}
+    day_week_vals = _snapshot(day_week, 1, all_metric_keys) if day_week else {}
+    day_month_vals = _snapshot(day_month, 1, all_metric_keys) if day_month else {}
+    day_year_vals = _snapshot(day_year, 1, all_metric_keys) if day_year else {}
+
+    w7_vals = _snapshot(w7, 7, all_metric_keys)
+    w7_prev_vals = _snapshot(w7_prev, 7, all_metric_keys) if w7_prev else {}
+    w7_month_vals = _snapshot(w7_month, 7, all_metric_keys) if w7_month else {}
+    w7_year_vals = _snapshot(w7_year, 7, all_metric_keys) if w7_year else {}
+
+    w30_vals = _snapshot(w30, 30, all_metric_keys)
+    w30_prev_vals = _snapshot(w30_prev, 30, all_metric_keys) if w30_prev else {}
+    w30_year_vals = _snapshot(w30_year, 30, all_metric_keys) if w30_year else {}
+
+    def _delta(current: Optional[float], reference: Optional[float]) -> Optional[float]:
+        if current is None or reference is None:
+            return None
+        return _pct_change(float(current), float(reference))
 
     daily_comparison: Dict[str, Dict[str, Optional[float]]] = {}
     weekly_comparison: Dict[str, Dict[str, Optional[float]]] = {}
     monthly_comparison: Dict[str, Dict[str, Optional[float]]] = {}
+    kpi_comparisons: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {
+        "daily": {},
+        "weekly": {},
+        "monthly": {},
+    }
 
     for metric_name, metric_key in metric_defs:
-        day_current = day_cur.get(metric_key)
-        day_prev_value = day_prev.get(metric_key) if day_prev else None
-        day_week_value = day_week.get(metric_key) if day_week else None
-        day_month_value = day_month.get(metric_key) if day_month else None
-        day_year_value = day_year.get(metric_key) if day_year else None
+        day_current = day_vals.get(metric_key)
+        day_prev_value = day_prev_vals.get(metric_key)
+        day_week_value = day_week_vals.get(metric_key)
+        day_month_value = day_month_vals.get(metric_key)
+        day_year_value = day_year_vals.get(metric_key)
 
         daily_comparison[metric_name] = {
-            "vs_prev_day": _pct_change(float(day_current), float(day_prev_value)) if (day_current is not None and day_prev_value is not None) else None,
-            "vs_week": _pct_change(float(day_current), float(day_week_value)) if (day_current is not None and day_week_value is not None) else None,
-            "vs_month": _pct_change(float(day_current), float(day_month_value)) if (day_current is not None and day_month_value is not None) else None,
-            "vs_year": _pct_change(float(day_current), float(day_year_value)) if (day_current is not None and day_year_value is not None) else None,
+            "vs_prev_day": _delta(day_current, day_prev_value),
+            "vs_week": _delta(day_current, day_week_value),
+            "vs_month": _delta(day_current, day_month_value),
+            "vs_year": _delta(day_current, day_year_value),
         }
 
-        w7_current = w7.get(metric_key)
-        w7_previous = w7_prev.get(metric_key)
+        w7_current = w7_vals.get(metric_key)
+        w7_previous = w7_prev_vals.get(metric_key)
+        w7_month_value = w7_month_vals.get(metric_key)
+        w7_year_value = w7_year_vals.get(metric_key)
         weekly_comparison[metric_name] = {
-            "vs_prev_7d": _pct_change(float(w7_current), float(w7_previous)) if (w7_current is not None and w7_previous is not None) else None,
+            "vs_prev_7d": _delta(w7_current, w7_previous),
+            "vs_month": _delta(w7_current, w7_month_value),
+            "vs_year": _delta(w7_current, w7_year_value),
         }
 
-        w30_current = w30.get(metric_key)
-        w30_previous = w30_prev.get(metric_key)
+        w30_current = w30_vals.get(metric_key)
+        w30_previous = w30_prev_vals.get(metric_key)
+        w30_year_value = w30_year_vals.get(metric_key)
         monthly_comparison[metric_name] = {
-            "vs_prev_30d": _pct_change(float(w30_current), float(w30_previous)) if (w30_current is not None and w30_previous is not None) else None,
+            "vs_prev_30d": _delta(w30_current, w30_previous),
+            "vs_year": _delta(w30_current, w30_year_value),
         }
+
+        if metric_key in kpi_metric_keys:
+            kpi_comparisons["daily"][metric_key] = daily_comparison[metric_name]
+            kpi_comparisons["weekly"][metric_key] = weekly_comparison[metric_name]
+            kpi_comparisons["monthly"][metric_key] = monthly_comparison[metric_name]
 
     anomaly_thresholds = {
         "Revenue": 20.0,
@@ -882,7 +987,8 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         "AOV": 10.0,
         "CAC": 15.0,
         "ROAS": 20.0,
-        "Contribution Margin": 5.0,
+        "Pre-Ad Contribution Margin": 5.0,
+        "Post-Ad Margin": 5.0,
         "Profit": 20.0,
         "LTV": 20.0,
     }
@@ -916,10 +1022,22 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             "roas": roas_series,
             "contribution_margin": cm_series,
             "ltv30": ltv30_series,
+            "pre_margin30": pre_margin30_series,
+            "post_margin30": post_margin30_series,
         },
         "windows": {
             "w7": {k: (round(float(v), 4) if v is not None else None) for k, v in w7.items()},
             "w30": {k: (round(float(v), 4) if v is not None else None) for k, v in w30.items()},
+        },
+        "kpi": {
+            "default_window": "monthly",
+            "metric_defs": kpi_metric_defs,
+            "windows": {
+                "daily": {"label": "Last day", "metrics": {k: day_vals.get(k) for k in kpi_metric_keys}},
+                "weekly": {"label": "Last 7 days", "metrics": {k: w7_vals.get(k) for k in kpi_metric_keys}},
+                "monthly": {"label": "Last 30 days", "metrics": {k: w30_vals.get(k) for k in kpi_metric_keys}},
+            },
+            "comparisons": kpi_comparisons,
         },
         "comparisons": {
             "daily": daily_comparison,
@@ -950,10 +1068,9 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       --ltv: #8B5CF6;
       --bg: #F8FAFC;
       --card: #FFFFFF;
+      --border: #E5E7EB;
       --ink: #0F172A;
       --muted: #64748B;
-      --grid: #E5E7EB;
-      --border: #E2E8F0;
     }
     body {
       margin: 0;
@@ -962,138 +1079,204 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       color: var(--ink);
       font-family: "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
     .header {
-      margin-bottom: 22px;
+      margin-bottom: 20px;
     }
     .header h1 {
-      margin: 0 0 6px 0;
+      margin: 0;
       font-size: 30px;
       letter-spacing: -0.02em;
     }
     .header p {
-      margin: 0;
+      margin: 6px 0 0 0;
       color: var(--muted);
       font-size: 14px;
     }
-
     .section-title {
-      margin: 28px 0 12px 0;
-      font-size: 14px;
+      margin: 24px 0 10px;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.07em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--muted);
     }
-
-    .dashboard-grid {
+    .kpi-grid {
       display: grid;
       grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 18px;
+      gap: 12px;
     }
-
-    .card {
+    .kpi-window-switch {
+      display: inline-flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      background: #F1F5F9;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+    }
+    .kpi-window-btn {
+      border: 0;
+      background: transparent;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .kpi-window-btn.active {
+      background: #FFFFFF;
+      color: #0F172A;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+    }
+    .kpi-card {
+      grid-column: span 12;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .kpi-title {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+    .kpi-period {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .kpi-comparisons {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .kpi-cmp-row {
+      font-size: 12px;
+      line-height: 1.25;
+      color: #64748B;
+    }
+    .kpi-cmp-row .delta {
+      font-weight: 700;
+      margin-right: 4px;
+    }
+    .tone-good { color: #10B981; }
+    .tone-bad { color: #EF4444; }
+    .tone-neutral { color: #64748B; }
+    .kpi-cmp-split {
+      display: inline-flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .chart-card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 16px 16px 12px 16px;
+      padding: 16px 18px 12px;
+      margin-bottom: 16px;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     }
-    .card h3 {
+    .chart-title {
       margin: 0 0 4px 0;
       font-size: 18px;
       letter-spacing: -0.01em;
     }
-    .card .subtitle {
+    .chart-subtitle {
       margin: 0 0 10px 0;
       font-size: 13px;
       color: var(--muted);
     }
-    .span-4 {
-      grid-column: span 4;
-    }
-    .span-12 {
-      grid-column: span 12;
-    }
     .chart-wrap {
-      height: 360px;
       width: 100%;
     }
-    .chart-wrap.tall {
-      height: 390px;
+    .h420 { height: 420px; }
+    .h320 { height: 320px; }
+    .h260 { height: 260px; }
+    @media (min-width: 920px) {
+      .kpi-card { grid-column: span 4; }
     }
-
-    @media (max-width: 1240px) {
-      .span-4 {
-        grid-column: span 6;
-      }
+    @media (min-width: 1240px) {
+      .kpi-grid { grid-template-columns: repeat(14, minmax(0, 1fr)); }
+      .kpi-card { grid-column: span 2; }
     }
-    @media (max-width: 860px) {
-      body {
-        padding: 16px;
-      }
-      .span-4,
-      .span-12 {
-        grid-column: span 12;
-      }
-      .chart-wrap,
-      .chart-wrap.tall {
-        height: 330px;
-      }
+    @media (max-width: 780px) {
+      body { padding: 14px; }
+      .kpi-value { font-size: 24px; }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>CFO Analytics Dashboard</h1>
-    <p id="meta"></p>
-  </div>
-
-  <div class="section-title">Core Revenue Metrics</div>
-  <div class="dashboard-grid">
-    <div class="card span-4">
-      <h3>Revenue and Profit (Daily)</h3>
-      <p class="subtitle">Revenue and profit trend with 7d/30d revenue moving averages.</p>
-      <div class="chart-wrap"><canvas id="revenueProfitChart"></canvas></div>
-    </div>
-    <div class="card span-4">
-      <h3>Orders and AOV (Daily)</h3>
-      <p class="subtitle">Order volume bars, AOV line, and smoothed orders trajectory.</p>
-      <div class="chart-wrap"><canvas id="ordersAovChart"></canvas></div>
-    </div>
-    <div class="card span-4">
-      <h3>CAC and ROAS (Daily)</h3>
-      <p class="subtitle">CAC (left axis), ROAS (right axis), with CAC spike highlighting.</p>
-      <div class="chart-wrap"><canvas id="cacRoasChart"></canvas></div>
-    </div>
-  </div>
-
-  <div class="section-title">Unit Economics</div>
-  <div class="dashboard-grid">
-    <div class="card span-4">
-      <h3>Contribution Margin and LTV (30d rolling)</h3>
-      <p class="subtitle">Unit economics stability and customer value evolution over time.</p>
-      <div class="chart-wrap"><canvas id="marginLtvChart"></canvas></div>
+  <div class="container">
+    <div class="header">
+      <h1>CFO Executive Dashboard</h1>
+      <p id="meta"></p>
     </div>
 
-    <div class="card span-4">
-      <h3>Profit Trend</h3>
-      <p class="subtitle">Daily profitability, 7d smoothing, and cumulative profit trajectory.</p>
-      <div class="chart-wrap"><canvas id="profitTrendChart"></canvas></div>
+    <div class="section-title">Core KPIs</div>
+    <div class="kpi-window-switch" id="kpiWindowSwitch">
+      <button class="kpi-window-btn" data-window="daily">Daily</button>
+      <button class="kpi-window-btn" data-window="weekly">Weekly</button>
+      <button class="kpi-window-btn" data-window="monthly">Monthly</button>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card" data-metric="revenue"><div class="kpi-title">Revenue</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="profit"><div class="kpi-title">Profit</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="orders"><div class="kpi-title">Orders</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="aov"><div class="kpi-title">AOV</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="cac"><div class="kpi-title">CAC</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="roas"><div class="kpi-title">ROAS</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="pre_ad_contribution_margin"><div class="kpi-title">Pre-Ad Contribution Margin</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="post_ad_margin"><div class="kpi-title">Post-Ad Margin</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
     </div>
 
-    <div class="card span-4">
-      <h3>Business Health Trend (Indexed Base=100)</h3>
-      <p class="subtitle">Normalized multi-metric trajectory for CFO-level health monitoring.</p>
-      <div class="chart-wrap tall"><canvas id="businessHealthChart"></canvas></div>
+    <div class="section-title">Revenue</div>
+    <div class="chart-card">
+      <h3 class="chart-title">Revenue vs Profit</h3>
+      <p class="chart-subtitle">Daily revenue and profit with 7-day smoothing.</p>
+      <div class="chart-wrap h420"><canvas id="revenueProfitChart"></canvas></div>
     </div>
-  </div>
 
-  <div class="section-title">Diagnostics</div>
-  <div class="dashboard-grid">
-    <div class="card span-12">
-      <h3>Metric Volatility and Anomaly Pressure</h3>
-      <p class="subtitle">Pressure ratio = abs(daily change) / anomaly threshold. Values above 1.0 exceed threshold.</p>
-      <div class="chart-wrap"><canvas id="anomalyChart"></canvas></div>
+    <div class="section-title">Sales Dynamics</div>
+    <div class="chart-card">
+      <h3 class="chart-title">Orders and AOV</h3>
+      <p class="chart-subtitle">Orders (daily bars), AOV rolling weekly signal, and orders 7-day average.</p>
+      <div class="chart-wrap h420"><canvas id="ordersAovChart"></canvas></div>
+    </div>
+
+    <div class="section-title">Marketing Efficiency</div>
+    <div class="chart-card">
+      <h3 class="chart-title">Marketing Efficiency (Weekly)</h3>
+      <p class="chart-subtitle">Weekly-smoothed CAC and ROAS to reduce daily volatility.</p>
+      <div class="chart-wrap h420"><canvas id="cacRoasChart"></canvas></div>
+    </div>
+
+    <div class="section-title">Unit Economics</div>
+    <div class="chart-card">
+      <h3 class="chart-title">Unit Economics</h3>
+      <p class="chart-subtitle">Rolling 30-day pre-ad and post-ad margins.</p>
+      <div class="chart-wrap h420"><canvas id="marginLtvChart"></canvas></div>
+    </div>
+
+    <div class="section-title">Profit Trajectory</div>
+    <div class="chart-card">
+      <h3 class="chart-title">Profit Trend</h3>
+      <p class="chart-subtitle">Daily profit, 7-day smoothing, and cumulative trend.</p>
+      <div class="chart-wrap h420"><canvas id="profitTrendChart"></canvas></div>
     </div>
   </div>
 
@@ -1108,13 +1291,15 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       roas: '#F59E0B',
       margin: '#06B6D4',
       ltv: '#8B5CF6',
-      grid: '#E5E7EB'
+      hGrid: 'rgba(229, 231, 235, 0.12)'
     };
 
     Chart.defaults.font.family = '"IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
     Chart.defaults.font.size = 13;
     Chart.defaults.color = '#334155';
-    Chart.defaults.borderColor = COLORS.grid;
+    Chart.defaults.elements.line.tension = 0.35;
+    Chart.defaults.elements.point.radius = 0;
+    Chart.defaults.elements.point.hoverRadius = 4;
 
     function movingAverage(series, windowSize) {
       return series.map((_, idx) => {
@@ -1125,13 +1310,6 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         if (!values.length) return null;
         return values.reduce((a, b) => a + b, 0) / values.length;
       });
-    }
-
-    function percentile(values, p) {
-      const arr = values.filter((v) => Number.isFinite(v)).slice().sort((a, b) => a - b);
-      if (!arr.length) return null;
-      const index = Math.min(arr.length - 1, Math.max(0, Math.floor((arr.length - 1) * p)));
-      return arr[index];
     }
 
     function mean(values) {
@@ -1153,15 +1331,6 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       return value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
     }
 
-    function toIndexSeries(series, invert = false) {
-      const base = series.find((v) => Number.isFinite(v) && Math.abs(v) > 1e-9);
-      if (!Number.isFinite(base)) return series.map(() => null);
-      return series.map((v) => {
-        if (!Number.isFinite(v) || Math.abs(v) < 1e-9) return null;
-        return invert ? (base / v) * 100 : (v / base) * 100;
-      });
-    }
-
     function safeSeries(name) {
       return (DATA.series[name] || []).map((v) => (Number.isFinite(v) ? Number(v) : null));
     }
@@ -1173,38 +1342,171 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
     const aov = safeSeries('aov');
     const cac = safeSeries('cac');
     const roas = safeSeries('roas');
-    const margin = safeSeries('contribution_margin');
-    const ltv30 = safeSeries('ltv30');
+    const preMargin30 = safeSeries('pre_margin30');
+    const postMargin30 = safeSeries('post_margin30');
 
     const revenue7 = movingAverage(revenue, 7);
-    const revenue30 = movingAverage(revenue, 30);
-    const orders7 = movingAverage(orders, 7);
-    const cac7 = movingAverage(cac, 7);
     const profit7 = movingAverage(profit, 7);
+    const orders7 = movingAverage(orders, 7);
+    const aov7 = movingAverage(aov, 7);
+    const cac7 = movingAverage(cac, 7);
+    const roas7 = movingAverage(roas, 7);
+
+    function anomalyPoints(series, zThreshold = 2.5) {
+      const points = series.map(() => null);
+      const changes = [];
+      const idxByChange = [];
+      for (let i = 1; i < series.length; i++) {
+        const prev = series[i - 1];
+        const cur = series[i];
+        if (!Number.isFinite(prev) || !Number.isFinite(cur) || Math.abs(prev) < 1e-9) continue;
+        const change = ((cur - prev) / Math.abs(prev)) * 100;
+        if (Number.isFinite(change)) {
+          changes.push(change);
+          idxByChange.push(i);
+        }
+      }
+      const m = mean(changes);
+      const s = std(changes);
+      if (!Number.isFinite(m) || !Number.isFinite(s) || s <= 0) return points;
+      const limit = zThreshold * s;
+      for (let j = 0; j < changes.length; j++) {
+        if (Math.abs(changes[j] - m) > limit) {
+          const idx = idxByChange[j];
+          points[idx] = series[idx];
+        }
+      }
+      return points;
+    }
+
+    const revenueAnomalies = anomalyPoints(revenue);
+    const profitAnomalies = anomalyPoints(profit);
+    const ordersAnomalies = anomalyPoints(orders);
+    const cacAnomalies = anomalyPoints(cac7);
+    const roasAnomalies = anomalyPoints(roas7);
+    const preMarginAnomalies = anomalyPoints(preMargin30);
+    const postMarginAnomalies = anomalyPoints(postMargin30);
 
     document.getElementById("meta").textContent =
       `Range: ${DATA.meta.from_date} -> ${DATA.meta.to_date} | Generated UTC: ${DATA.meta.generated_at_utc}`;
+    const KPI = DATA.kpi || {};
 
     const commonOptions = {
       responsive: true,
       maintainAspectRatio: false,
+      normalized: true,
       interaction: { mode: "index", intersect: false },
-      animation: { duration: 900, easing: 'easeOutQuart' },
+      animation: { duration: 650, easing: 'easeOutQuart' },
       plugins: {
-        legend: { position: "bottom", labels: { boxWidth: 14, usePointStyle: true, pointStyle: 'line' } },
+        legend: { position: "bottom", labels: { boxWidth: 16, usePointStyle: true, pointStyle: 'line', font: { size: 13 } } },
         tooltip: {
           titleFont: { size: 14 },
-          bodyFont: { size: 14 }
+          bodyFont: { size: 14 },
+          padding: 10
         }
       },
-      elements: {
-        line: { tension: 0.35, borderWidth: 2.5 },
-        point: { radius: 0, hoverRadius: 4 }
-      },
       scales: {
-        x: { grid: { color: COLORS.grid }, ticks: { maxTicksLimit: 10 } },
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+        y: { grid: { color: COLORS.hGrid, lineWidth: 1 }, title: { display: true, font: { size: 13 } } }
       }
     };
+
+    function fmtEur(value, digits = 2) {
+      return Number.isFinite(value) ? `${formatNum(value, digits)} EUR` : 'N/A';
+    }
+
+    function fmtMetricValue(metricKey, value) {
+      if (!Number.isFinite(value)) return 'N/A';
+      if (metricKey === 'orders') return formatNum(value, 0);
+      if (metricKey === 'roas') return `${formatNum(value, 2)}x`;
+      if (metricKey === 'contribution_margin' || metricKey === 'pre_ad_contribution_margin' || metricKey === 'post_ad_margin') return `${formatNum(value, 2)}%`;
+      return fmtEur(value, 2);
+    }
+
+    function metricDirection(metricKey) {
+      return metricKey === 'cac' ? 'down' : 'up';
+    }
+
+    function toneForDelta(metricKey, delta) {
+      if (!Number.isFinite(delta) || Math.abs(delta) < 0.5) return 'tone-neutral';
+      const isGood = metricDirection(metricKey) === 'down' ? delta < 0 : delta > 0;
+      return isGood ? 'tone-good' : 'tone-bad';
+    }
+
+    function deltaLabel(delta) {
+      if (!Number.isFinite(delta)) return 'N/A';
+      if (delta > 0) return `UP +${formatNum(delta, 1)}%`;
+      if (delta < 0) return `DOWN ${formatNum(delta, 1)}%`;
+      return `FLAT ${formatNum(delta, 1)}%`;
+    }
+
+    function comparisonRows(windowKey, metricKey, cmpObj) {
+      const cmp = cmpObj || {};
+      if (windowKey === 'daily') {
+        return [
+          { label: 'vs previous day', delta: cmp.vs_prev_day },
+          { label: 'vs same weekday last week', delta: cmp.vs_week },
+        ];
+      }
+      if (windowKey === 'weekly') {
+        return [
+          { label: 'vs previous 7d', delta: cmp.vs_prev_7d },
+          { label: 'vs same week last month', delta: cmp.vs_month },
+          { label: 'vs same week last year', delta: cmp.vs_year },
+        ];
+      }
+      return [
+        { label: 'vs previous 30d', delta: cmp.vs_prev_30d },
+        { label: 'vs same month last year', delta: cmp.vs_year },
+      ];
+    }
+
+    function renderKpiCards(windowKey) {
+      const windowData = KPI.windows?.[windowKey] || {};
+      const metricValues = windowData.metrics || {};
+      const comparisons = KPI.comparisons?.[windowKey] || {};
+      const periodLabel = windowData.label || 'Selected period';
+
+      document.querySelectorAll('.kpi-window-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.window === windowKey);
+      });
+
+      document.querySelectorAll('.kpi-card').forEach((card) => {
+        const metricKey = card.dataset.metric;
+        if (!metricKey) return;
+        const valueEl = card.querySelector('.kpi-value');
+        const periodEl = card.querySelector('.kpi-period');
+        const rowsEl = card.querySelector('.kpi-comparisons');
+        if (!valueEl || !periodEl || !rowsEl) return;
+
+        valueEl.textContent = fmtMetricValue(metricKey, metricValues?.[metricKey]);
+        periodEl.textContent = periodLabel;
+        rowsEl.innerHTML = '';
+
+        const rows = comparisonRows(windowKey, metricKey, comparisons?.[metricKey]).slice(0, 3);
+        rows.forEach((row) => {
+          const div = document.createElement('div');
+          div.className = 'kpi-cmp-row';
+          if (row.split) {
+            const month = row.split[0];
+            const year = row.split[1];
+            const monthTone = toneForDelta(metricKey, month);
+            const yearTone = toneForDelta(metricKey, year);
+            div.innerHTML = `<span>${row.label}</span>: <span class="kpi-cmp-split"><span class="delta ${monthTone}">M ${deltaLabel(month)}</span><span class="delta ${yearTone}">Y ${deltaLabel(year)}</span></span>`;
+          } else {
+            const tone = toneForDelta(metricKey, row.delta);
+            div.innerHTML = `<span class="delta ${tone}">${deltaLabel(row.delta)}</span><span>${row.label}</span>`;
+          }
+          rowsEl.appendChild(div);
+        });
+      });
+    }
+
+    const activeKpiWindow = KPI.default_window || 'monthly';
+    renderKpiCards(activeKpiWindow);
+    document.querySelectorAll('.kpi-window-btn').forEach((btn) => {
+      btn.addEventListener('click', () => renderKpiCards(btn.dataset.window || 'monthly'));
+    });
 
     new Chart(document.getElementById("revenueProfitChart"), {
       type: "line",
@@ -1216,6 +1518,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             data: revenue,
             borderColor: COLORS.revenue,
             backgroundColor: 'rgba(37, 99, 235, 0.08)',
+            borderWidth: 3.4,
             fill: false
           },
           {
@@ -1223,6 +1526,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             data: profit,
             borderColor: COLORS.profit,
             backgroundColor: 'rgba(16, 185, 129, 0.16)',
+            borderWidth: 2.2,
             fill: 'origin'
           },
           {
@@ -1230,14 +1534,36 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             data: revenue7,
             borderColor: 'rgba(37, 99, 235, 0.65)',
             borderDash: [6, 4],
+            borderWidth: 2,
             fill: false
           },
           {
-            label: "Revenue 30d MA",
-            data: revenue30,
-            borderColor: 'rgba(37, 99, 235, 0.35)',
-            borderDash: [2, 6],
+            label: "Profit 7d MA",
+            data: profit7,
+            borderColor: 'rgba(16, 185, 129, 0.72)',
+            borderDash: [6, 4],
+            borderWidth: 2,
             fill: false
+          },
+          {
+            label: "Revenue Anomaly (>2.5 SD)",
+            data: revenueAnomalies,
+            borderColor: "transparent",
+            backgroundColor: "rgba(37, 99, 235, 0.95)",
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            showLine: false,
+            spanGaps: true
+          },
+          {
+            label: "Profit Anomaly (>2.5 SD)",
+            data: profitAnomalies,
+            borderColor: "transparent",
+            backgroundColor: "rgba(239, 68, 68, 0.95)",
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            showLine: false,
+            spanGaps: true
           }
         ]
       },
@@ -1248,13 +1574,21 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
           tooltip: {
             ...commonOptions.plugins.tooltip,
             callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`
+              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y, 2)} EUR`,
+              afterBody: (items) => {
+                if (!items.length) return '';
+                const idx = items[0].dataIndex;
+                return [
+                  `Revenue 7d MA: ${Number.isFinite(revenue7[idx]) ? `${formatNum(revenue7[idx], 2)} EUR` : 'N/A'}`,
+                  `Profit 7d MA: ${Number.isFinite(profit7[idx]) ? `${formatNum(profit7[idx], 2)} EUR` : 'N/A'}`
+                ];
+              }
             }
           }
         },
         scales: {
-          ...commonOptions.scales,
-          y: { grid: { color: COLORS.grid }, title: { display: true, text: 'EUR', font: { size: 13 } } }
+          x: commonOptions.scales.x,
+          y: { ...commonOptions.scales.y, title: { ...commonOptions.scales.y.title, text: 'EUR' } }
         }
       }
     });
@@ -1270,7 +1604,8 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             yAxisID: "yOrders",
             backgroundColor: 'rgba(124, 58, 237, 0.5)',
             borderColor: COLORS.orders,
-            borderWidth: 0
+            borderWidth: 0,
+            borderRadius: 4
           },
           {
             type: "line",
@@ -1283,11 +1618,24 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
           },
           {
             type: "line",
-            label: "AOV (EUR)",
-            data: aov,
+            label: "AOV 7d Avg (EUR)",
+            data: aov7,
             yAxisID: "yAov",
             borderColor: COLORS.aov,
+            borderWidth: 2.4,
             fill: false
+          },
+          {
+            type: "line",
+            label: "Orders Anomaly (>2.5 SD)",
+            data: ordersAnomalies,
+            yAxisID: "yOrders",
+            borderColor: "transparent",
+            backgroundColor: "rgba(239, 68, 68, 0.95)",
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            showLine: false,
+            spanGaps: true
           }
         ]
       },
@@ -1301,7 +1649,15 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
               label: (ctx) => {
                 if (ctx.dataset.yAxisID === 'yAov') return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
                 return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y, 0)}`;
-              }
+              },
+              afterBody: (items) => {
+                if (!items.length) return '';
+                const idx = items[0].dataIndex;
+                return [
+                  `Orders 7d MA: ${Number.isFinite(orders7[idx]) ? formatNum(orders7[idx], 2) : 'N/A'}`,
+                  `AOV 7d Avg: ${Number.isFinite(aov7[idx]) ? `${formatNum(aov7[idx], 2)} EUR` : 'N/A'}`
+                ];
+              },
             }
           }
         },
@@ -1311,27 +1667,19 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             type: "linear",
             position: "left",
             beginAtZero: true,
-            grid: { color: COLORS.grid },
+            grid: { color: COLORS.hGrid },
             title: { display: true, text: 'Orders', font: { size: 13 } }
           },
           yAov: {
             type: "linear",
             position: "right",
-            grid: { drawOnChartArea: false },
+            grid: { display: false },
             beginAtZero: true,
-            title: { display: true, text: 'EUR', font: { size: 13 } }
+            title: { display: true, text: 'AOV (EUR)', font: { size: 13 } }
           }
         }
       }
     });
-
-    const cacAvg = mean(cac);
-    const cacSd = std(cac);
-    const cacThreshold = (cacAvg !== null && cacSd !== null) ? (cacAvg + 1.5 * cacSd) : null;
-    const cacSpikes = cac.map((v) => (cacThreshold !== null && Number.isFinite(v) && v > cacThreshold ? v : null));
-    const thresholdLine = labels.map(() => cacThreshold);
-    const roasP90 = percentile(roas, 0.9);
-    const roasCap = Number.isFinite(roasP90) ? Math.max(1.5, Number(roasP90) * 1.25) : undefined;
 
     new Chart(document.getElementById("cacRoasChart"), {
       data: {
@@ -1339,32 +1687,24 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         datasets: [
           {
             type: "line",
-            label: "CAC (EUR)",
-            data: cac,
+            label: "CAC Weekly Avg (7d)",
+            data: cac7,
             yAxisID: "yCac",
             borderColor: COLORS.cac,
             spanGaps: true
           },
           {
             type: "line",
-            label: "CAC 7d MA",
-            data: cac7,
-            yAxisID: "yCac",
-            borderColor: 'rgba(239, 68, 68, 0.65)',
-            borderDash: [6, 4],
+            label: "ROAS Weekly Avg (7d)",
+            data: roas7,
+            yAxisID: "yRoas",
+            borderColor: COLORS.roas,
             spanGaps: true
           },
           {
             type: "line",
-            label: "ROAS (x)",
-            data: roas,
-            yAxisID: "yRoas",
-            borderColor: COLORS.roas
-          },
-          {
-            type: "line",
-            label: "CAC Spike Points",
-            data: cacSpikes,
+            label: "CAC Anomaly (>2.5 SD)",
+            data: cacAnomalies,
             yAxisID: "yCac",
             borderColor: 'transparent',
             backgroundColor: 'rgba(239, 68, 68, 0.95)',
@@ -1375,12 +1715,14 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
           },
           {
             type: "line",
-            label: "CAC Spike Threshold",
-            data: thresholdLine,
-            yAxisID: "yCac",
-            borderColor: 'rgba(239, 68, 68, 0.4)',
-            borderDash: [2, 6],
-            pointRadius: 0,
+            label: "ROAS Anomaly (>2.5 SD)",
+            data: roasAnomalies,
+            yAxisID: "yRoas",
+            borderColor: 'transparent',
+            backgroundColor: 'rgba(245, 158, 11, 0.95)',
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            showLine: false,
             spanGaps: true
           }
         ]
@@ -1394,8 +1736,15 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             callbacks: {
               label: (ctx) => {
                 if (ctx.dataset.label.includes('ROAS')) return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y, 3)}x`;
-                if (ctx.dataset.label.includes('Threshold')) return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
                 return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
+              },
+              afterBody: (items) => {
+                if (!items.length) return '';
+                const idx = items[0].dataIndex;
+                return [
+                  `CAC 7d Avg: ${Number.isFinite(cac7[idx]) ? `${formatNum(cac7[idx], 2)} EUR` : 'N/A'}`,
+                  `ROAS 7d Avg: ${Number.isFinite(roas7[idx]) ? `${formatNum(roas7[idx], 3)}x` : 'N/A'}`
+                ];
               }
             }
           }
@@ -1406,7 +1755,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             type: "linear",
             position: "left",
             beginAtZero: true,
-            grid: { color: COLORS.grid },
+            grid: { color: COLORS.hGrid },
             title: { display: true, text: 'CAC (EUR)', font: { size: 13 } }
           },
           yRoas: {
@@ -1414,17 +1763,12 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             position: "right",
             grid: { drawOnChartArea: false },
             beginAtZero: true,
-            max: roasCap,
             title: { display: true, text: 'ROAS (x)', font: { size: 13 } }
           }
         }
       }
     });
 
-    const marginAvg = mean(margin);
-    const marginSd = std(margin);
-    const marginDipThreshold = (marginAvg !== null && marginSd !== null) ? (marginAvg - marginSd) : null;
-    const marginDips = margin.map((v) => (marginDipThreshold !== null && Number.isFinite(v) && v < marginDipThreshold ? v : null));
     const window30 = DATA.windows?.w30 || {};
 
     new Chart(document.getElementById("marginLtvChart"), {
@@ -1433,27 +1777,42 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         datasets: [
           {
             type: "line",
-            label: "Contribution Margin (%)",
-            data: margin,
-            yAxisID: "yMargin",
-            borderColor: COLORS.margin
+            label: "Pre-Ad Contribution Margin 30d (%)",
+            data: preMargin30,
+            yAxisID: "yPct",
+            borderColor: COLORS.margin,
+            spanGaps: true
           },
           {
             type: "line",
-            label: "Margin Dip Points",
-            data: marginDips,
-            yAxisID: "yMargin",
+            label: "Post-Ad Margin 30d (%)",
+            data: postMargin30,
+            yAxisID: "yPct",
+            borderColor: COLORS.profit,
+            spanGaps: true
+          },
+          {
+            type: "line",
+            label: "Pre-Ad Margin Anomaly (>2.5 SD)",
+            data: preMarginAnomalies,
+            yAxisID: "yPct",
             borderColor: 'transparent',
             backgroundColor: 'rgba(239, 68, 68, 0.95)',
             pointRadius: 4,
-            showLine: false
+            pointHoverRadius: 5,
+            showLine: false,
+            spanGaps: true
           },
           {
             type: "line",
-            label: "LTV rolling (EUR)",
-            data: ltv30,
-            yAxisID: "yLtv",
-            borderColor: COLORS.ltv,
+            label: "Post-Ad Margin Anomaly (>2.5 SD)",
+            data: postMarginAnomalies,
+            yAxisID: "yPct",
+            borderColor: 'transparent',
+            backgroundColor: 'rgba(245, 158, 11, 0.95)',
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            showLine: false,
             spanGaps: true
           }
         ]
@@ -1466,8 +1825,15 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             ...commonOptions.plugins.tooltip,
             callbacks: {
               label: (ctx) => {
-                if (ctx.dataset.yAxisID === 'yMargin') return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)}%`;
-                return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`;
+                return `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)}%`;
+              },
+              afterBody: (items) => {
+                if (!items.length) return '';
+                const idx = items[0].dataIndex;
+                return [
+                  `Pre-Ad Margin 30d: ${Number.isFinite(preMargin30[idx]) ? `${formatNum(preMargin30[idx], 2)}%` : 'N/A'}`,
+                  `Post-Ad Margin 30d: ${Number.isFinite(postMargin30[idx]) ? `${formatNum(postMargin30[idx], 2)}%` : 'N/A'}`
+                ];
               },
               footer: () => {
                 const cpo = Number.isFinite(window30.contribution_per_order) ? formatNum(window30.contribution_per_order) : 'N/A';
@@ -1479,19 +1845,12 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         },
         scales: {
           x: commonOptions.scales.x,
-          yMargin: {
-            type: "linear",
-            position: "left",
-            beginAtZero: true,
-            grid: { color: COLORS.grid },
-            title: { display: true, text: 'Contribution Margin (%)', font: { size: 13 } }
-          },
-          yLtv: {
+          yPct: {
             type: "linear",
             position: "right",
             beginAtZero: true,
-            grid: { drawOnChartArea: false },
-            title: { display: true, text: 'LTV (EUR)', font: { size: 13 } }
+            grid: { color: COLORS.hGrid },
+            title: { display: true, text: 'Margin (%)', font: { size: 13 } }
           }
         }
       }
@@ -1533,6 +1892,18 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             borderColor: 'rgba(37, 99, 235, 0.7)',
             borderDash: [3, 3],
             fill: false
+          },
+          {
+            type: "line",
+            label: "Profit Anomaly (>2.5 SD)",
+            data: profitAnomalies,
+            yAxisID: "yProfit",
+            borderColor: "transparent",
+            backgroundColor: "rgba(239, 68, 68, 0.95)",
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            showLine: false,
+            spanGaps: true
           }
         ]
       },
@@ -1543,7 +1914,12 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
           tooltip: {
             ...commonOptions.plugins.tooltip,
             callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`
+              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)} EUR`,
+              afterBody: (items) => {
+                if (!items.length) return '';
+                const idx = items[0].dataIndex;
+                return `Profit 7d MA: ${Number.isFinite(profit7[idx]) ? `${formatNum(profit7[idx], 2)} EUR` : 'N/A'}`;
+              }
             }
           }
         },
@@ -1553,7 +1929,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             type: "linear",
             position: "left",
             beginAtZero: false,
-            grid: { color: COLORS.grid },
+            grid: { color: COLORS.hGrid },
             title: { display: true, text: 'Daily Profit (EUR)', font: { size: 13 } }
           },
           yCumProfit: {
@@ -1567,112 +1943,6 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       }
     });
 
-    const revenueIndex = toIndexSeries(revenue);
-    const ordersIndex = toIndexSeries(orders);
-    const aovIndex = toIndexSeries(aov);
-    const cacIndex = toIndexSeries(cac, true);
-    const marginIndex = toIndexSeries(margin);
-    const profitIndex = toIndexSeries(profit);
-    const baseline100 = labels.map(() => 100);
-
-    new Chart(document.getElementById("businessHealthChart"), {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: "Revenue Index", data: revenueIndex, borderColor: COLORS.revenue, fill: false },
-          { label: "Orders Index", data: ordersIndex, borderColor: COLORS.orders, fill: false },
-          { label: "AOV Index", data: aovIndex, borderColor: COLORS.aov, fill: false },
-          { label: "CAC Index (inverse)", data: cacIndex, borderColor: COLORS.cac, fill: false },
-          { label: "Contribution Margin Index", data: marginIndex, borderColor: COLORS.margin, fill: false },
-          { label: "Profit Index", data: profitIndex, borderColor: COLORS.profit, fill: false },
-          { label: "Base 100", data: baseline100, borderColor: 'rgba(100, 116, 139, 0.55)', borderDash: [4, 4], pointRadius: 0, fill: false }
-        ]
-      },
-      options: {
-        ...commonOptions,
-        plugins: {
-          ...commonOptions.plugins,
-          tooltip: {
-            ...commonOptions.plugins.tooltip,
-            callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${formatNum(ctx.parsed.y)}`
-            }
-          }
-        },
-        scales: {
-          x: commonOptions.scales.x,
-          y: {
-            beginAtZero: false,
-            grid: { color: COLORS.grid },
-            title: { display: true, text: 'Index (Base=100)', font: { size: 13 } }
-          }
-        }
-      }
-    });
-
-    const anomalyLabels = DATA.anomalies.map((x) => x.metric);
-    const anomalyRatios = DATA.anomalies.map((x) => x.ratio ?? null);
-    const anomalyChanges = DATA.anomalies.map((x) => x.daily_change ?? null);
-    const anomalyThresholds = DATA.anomalies.map((x) => x.threshold ?? null);
-
-    new Chart(document.getElementById("anomalyChart"), {
-      type: "bar",
-      data: {
-        labels: anomalyLabels,
-        datasets: [
-          {
-            label: "Threshold utilization ratio",
-            data: anomalyRatios,
-            backgroundColor: anomalyRatios.map((v) => {
-              if (!Number.isFinite(v)) return 'rgba(148, 163, 184, 0.35)';
-              const capped = Math.min(2, Math.max(0, v));
-              const alpha = 0.3 + (capped / 2) * 0.65;
-              return `rgba(239, 68, 68, ${alpha})`;
-            }),
-            borderColor: 'rgba(220, 38, 38, 0.9)',
-            borderWidth: 1.2
-          }
-        ]
-      },
-      options: {
-        ...commonOptions,
-        indexAxis: 'y',
-        plugins: {
-          ...commonOptions.plugins,
-          tooltip: {
-            ...commonOptions.plugins.tooltip,
-            callbacks: {
-              label: (ctx) => {
-                const ratio = anomalyRatios[ctx.dataIndex];
-                const change = anomalyChanges[ctx.dataIndex];
-                const threshold = anomalyThresholds[ctx.dataIndex];
-                if (!Number.isFinite(ratio) || !Number.isFinite(change) || !Number.isFinite(threshold)) {
-                  return 'No comparison baseline for this metric.';
-                }
-                const dir = change >= 0 ? 'increase' : 'decrease';
-                return [
-                  `Pressure ratio: ${formatNum(ratio, 3)}`,
-                  `Daily ${dir}: ${formatNum(Math.abs(change), 2)}%`,
-                  `Threshold: ${formatNum(threshold, 2)}%`
-                ];
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            beginAtZero: true,
-            suggestedMax: 2,
-            grid: { color: COLORS.grid },
-            title: { display: true, text: "ratio (1.0 = anomaly threshold)" }
-          },
-          y: {
-            grid: { display: false }
-          }
-        }
-      }
-    });
   </script>
 </body>
 </html>
@@ -1810,4 +2080,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
