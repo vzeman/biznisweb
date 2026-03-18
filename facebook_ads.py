@@ -20,6 +20,9 @@ load_dotenv()
 # Set up logging
 logger = get_logger('facebook_ads')
 
+class FacebookTokenError(RuntimeError):
+    """Raised when Facebook OAuth token is invalid or expired."""
+
 class FacebookAdsClient:
     def __init__(self):
         """Initialize Facebook Ads client with credentials from environment"""
@@ -60,14 +63,22 @@ class FacebookAdsClient:
             # Fallback redaction for raw strings.
             return re.sub(r"access_token=[^&\\s]+", "access_token=***", url)
 
-    def _log_request_exception(self, context: str, exc: requests.exceptions.RequestException) -> None:
+    def _log_request_exception(self, context: str, exc: requests.exceptions.RequestException) -> Dict[str, Any]:
         """
         Log structured Facebook API error details without leaking access token.
         """
         response = getattr(exc, "response", None)
+        details: Dict[str, Any] = {
+            "status_code": None,
+            "code": None,
+            "subcode": None,
+            "type": None,
+            "message": str(exc),
+            "endpoint": None,
+        }
         if response is None:
             logger.error(f"{context}: {exc.__class__.__name__}: {exc}")
-            return
+            return details
 
         safe_url = self._sanitize_url(getattr(response, "url", ""))
         status_code = response.status_code
@@ -96,6 +107,16 @@ class FacebookAdsClient:
                 "Facebook access token is invalid/expired (OAuth code 190). "
                 "Please generate a new token and update FACEBOOK_ACCESS_TOKEN."
             )
+
+        details.update({
+            "status_code": status_code,
+            "code": error_code,
+            "subcode": error_subcode,
+            "type": error_type,
+            "message": error_message,
+            "endpoint": safe_url,
+        })
+        return details
     
     def get_cache_filename(self, date_from: datetime, date_to: datetime) -> Path:
         """Generate cache filename for a date range"""
@@ -230,7 +251,11 @@ class FacebookAdsClient:
             return daily_spend
 
         except requests.exceptions.RequestException as e:
-            self._log_request_exception("Error fetching Facebook Ads data", e)
+            details = self._log_request_exception("Error fetching Facebook Ads data", e)
+            if details.get("code") == 190:
+                raise FacebookTokenError(
+                    f"Facebook token invalid/expired: {details.get('message', 'OAuth error')}"
+                ) from e
             return {}
         except Exception as e:
             logger.error(f"Unexpected error processing Facebook Ads data: {e}")
