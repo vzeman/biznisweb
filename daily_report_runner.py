@@ -28,7 +28,36 @@ from dotenv import load_dotenv
 
 
 ROOT_DIR = Path(__file__).resolve().parent
-DATA_DIR = ROOT_DIR / "data"
+PROJECTS_DIR = ROOT_DIR / "projects"
+DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", "vevo").strip() or "vevo"
+CFO_FIXED_DAILY_COST_EUR = float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70"))
+
+
+def project_data_dir(project: str) -> Path:
+    data_dir = ROOT_DIR / "data" / project
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+def bootstrap_project_from_argv(argv: List[str]) -> str:
+    for idx, arg in enumerate(argv):
+        if arg == "--project" and idx + 1 < len(argv):
+            return argv[idx + 1].strip() or DEFAULT_PROJECT
+        if arg.startswith("--project="):
+            return arg.split("=", 1)[1].strip() or DEFAULT_PROJECT
+    return DEFAULT_PROJECT
+
+
+def load_project_env(project: str) -> None:
+    env_path = PROJECTS_DIR / project / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=True)
+        print(f"Loaded project env: {env_path}")
+    elif project != DEFAULT_PROJECT:
+        raise FileNotFoundError(
+            f"Project env file not found: {env_path}. "
+            f"Create projects/{project}/.env from projects/{project}/.env.example."
+        )
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -40,6 +69,11 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and email daily report")
+    parser.add_argument(
+        "--project",
+        default=os.getenv("REPORT_PROJECT", DEFAULT_PROJECT),
+        help="Project name (uses projects/<project>/.env and data/<project>/ outputs)",
+    )
     parser.add_argument(
         "--from-date",
         default=os.getenv("REPORT_FROM_DATE", "2025-05-03"),
@@ -90,10 +124,21 @@ def resolve_to_date(to_date_arg: str, tz_name: str) -> str:
     return yesterday
 
 
-def run_export(from_date: str, to_date: str, clear_cache: bool, no_cache: bool) -> None:
+def normalize_date(value: str) -> str:
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    raise ValueError(f"Unsupported date format '{value}'. Use YYYY-MM-DD.")
+
+
+def run_export(project: str, from_date: str, to_date: str, clear_cache: bool, no_cache: bool) -> None:
     cmd: List[str] = [
         sys.executable,
         str(ROOT_DIR / "export_orders.py"),
+        "--project",
+        project,
         "--from-date",
         from_date,
         "--to-date",
@@ -110,25 +155,28 @@ def run_export(from_date: str, to_date: str, clear_cache: bool, no_cache: bool) 
         raise RuntimeError(f"export_orders.py failed with exit code {proc.returncode}")
 
 
-def get_output_paths(from_date: str, to_date: str) -> Dict[str, Path]:
+def get_output_paths(project: str, from_date: str, to_date: str) -> Dict[str, Path]:
     compact_range = f"{from_date.replace('-', '')}-{to_date.replace('-', '')}"
+    data_dir = project_data_dir(project)
     return {
-        "report_html": DATA_DIR / f"report_{compact_range}.html",
-        "email_strategy_html": DATA_DIR / f"email_strategy_{compact_range}.html",
-        "export_csv": DATA_DIR / f"export_{compact_range}.csv",
-        "aggregate_by_date_csv": DATA_DIR / f"aggregate_by_date_{compact_range}.csv",
-        "aggregate_by_month_csv": DATA_DIR / f"aggregate_by_month_{compact_range}.csv",
+        "report_html": data_dir / f"report_{compact_range}.html",
+        "email_strategy_html": data_dir / f"email_strategy_{compact_range}.html",
+        "export_csv": data_dir / f"export_{compact_range}.csv",
+        "aggregate_by_date_csv": data_dir / f"aggregate_by_date_{compact_range}.csv",
+        "aggregate_by_month_csv": data_dir / f"aggregate_by_month_{compact_range}.csv",
     }
 
 
-def get_cfo_graph_path(from_date: str, to_date: str) -> Path:
+def get_cfo_graph_path(project: str, from_date: str, to_date: str) -> Path:
     compact_range = f"{from_date.replace('-', '')}-{to_date.replace('-', '')}"
-    return DATA_DIR / f"cfo_graphs_{compact_range}.html"
+    return project_data_dir(project) / f"cfo_graphs_{compact_range}.html"
 
 
-def s3_upload_outputs(paths: Dict[str, Path]) -> Dict[str, str]:
+def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
     bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
-    prefix = os.getenv("REPORT_S3_PREFIX", "daily-reports").strip().strip("/")
+    prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
+    if not prefix:
+        prefix = f"daily-reports/{project}"
     region = os.getenv("AWS_REGION", "eu-central-1").strip()
 
     if not bucket:
@@ -163,8 +211,8 @@ def s3_upload_outputs(paths: Dict[str, Path]) -> Dict[str, str]:
     return uploaded_links
 
 
-def build_email_subject() -> str:
-    return os.getenv("REPORT_EMAIL_SUBJECT", "Daily Vevo report").strip()
+def build_email_subject(project: str) -> str:
+    return os.getenv("REPORT_EMAIL_SUBJECT", f"Daily {project} report").strip()
 
 
 def _to_float(value: str) -> float:
@@ -438,6 +486,8 @@ def _window_aggregate(
     payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
     unique_customers = _window_unique_customers(order_records, end_date, days)
     ltv = (revenue / unique_customers) if unique_customers > 0 else None
+    company_profit_with_fixed = profit - (CFO_FIXED_DAILY_COST_EUR * days)
+    company_margin_with_fixed = (company_profit_with_fixed / revenue * 100) if revenue > 0 else 0.0
 
     return {
         "revenue": revenue,
@@ -452,6 +502,8 @@ def _window_aggregate(
         "pre_ad_contribution_margin": contribution_margin,
         "contribution_margin": contribution_margin,
         "post_ad_margin": post_ad_margin,
+        "company_margin_with_fixed": company_margin_with_fixed,
+        "company_profit_with_fixed": company_profit_with_fixed,
         "contribution_per_order": contribution_per_order,
         "profit_per_order": profit_per_order,
         "new_customers": float(new_customers),
@@ -654,6 +706,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         ("ROAS", "roas"),
         ("Pre-Ad Contribution Margin", "pre_ad_contribution_margin"),
         ("Post-Ad Margin", "post_ad_margin"),
+        ("Company Margin (incl. fixed)", "company_margin_with_fixed"),
         ("Profit", "profit"),
         ("LTV", "ltv"),
     ]
@@ -781,7 +834,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     ])
 
 
-def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date: str) -> Path:
+def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date: str, to_date: str) -> Path:
     date_csv = file_paths.get("aggregate_by_date_csv")
     if not date_csv or not date_csv.exists():
         raise FileNotFoundError("Cannot build CFO graph HTML, missing aggregate_by_date CSV.")
@@ -850,8 +903,13 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         {"key": "roas", "label": "ROAS", "direction": "up"},
         {"key": "pre_ad_contribution_margin", "label": "Pre-Ad Contribution Margin", "direction": "up"},
         {"key": "post_ad_margin", "label": "Post-Ad Margin", "direction": "up"},
+        {"key": "company_margin_with_fixed", "label": f"Company Margin (incl. EUR {int(CFO_FIXED_DAILY_COST_EUR)}/day fixed)", "direction": "up"},
     ]
-    all_metric_keys = list(dict.fromkeys([metric_key for _, metric_key in metric_defs] + [m["key"] for m in kpi_metric_defs]))
+    all_metric_keys = list(dict.fromkeys(
+        [metric_key for _, metric_key in metric_defs] +
+        [m["key"] for m in kpi_metric_defs] +
+        ["company_profit_with_fixed"]
+    ))
     kpi_metric_keys = [m["key"] for m in kpi_metric_defs]
 
     def _safe_kpi_value(metric_key: str, aggregate: Optional[Dict[str, Optional[float]]], window_days: int) -> Optional[float]:
@@ -989,6 +1047,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         "ROAS": 20.0,
         "Pre-Ad Contribution Margin": 5.0,
         "Post-Ad Margin": 5.0,
+        "Company Margin (incl. fixed)": 5.0,
         "Profit": 20.0,
         "LTV": 20.0,
     }
@@ -1033,9 +1092,27 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
             "default_window": "monthly",
             "metric_defs": kpi_metric_defs,
             "windows": {
-                "daily": {"label": "Last day", "metrics": {k: day_vals.get(k) for k in kpi_metric_keys}},
-                "weekly": {"label": "Last 7 days", "metrics": {k: w7_vals.get(k) for k in kpi_metric_keys}},
-                "monthly": {"label": "Last 30 days", "metrics": {k: w30_vals.get(k) for k in kpi_metric_keys}},
+                "daily": {
+                    "label": "Last day",
+                    "metrics": {
+                        **{k: day_vals.get(k) for k in kpi_metric_keys},
+                        "company_profit_with_fixed": day_vals.get("company_profit_with_fixed"),
+                    },
+                },
+                "weekly": {
+                    "label": "Last 7 days",
+                    "metrics": {
+                        **{k: w7_vals.get(k) for k in kpi_metric_keys},
+                        "company_profit_with_fixed": w7_vals.get("company_profit_with_fixed"),
+                    },
+                },
+                "monthly": {
+                    "label": "Last 30 days",
+                    "metrics": {
+                        **{k: w30_vals.get(k) for k in kpi_metric_keys},
+                        "company_profit_with_fixed": w30_vals.get("company_profit_with_fixed"),
+                    },
+                },
             },
             "comparisons": kpi_comparisons,
         },
@@ -1242,6 +1319,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       <div class="kpi-card" data-metric="roas"><div class="kpi-title">ROAS</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
       <div class="kpi-card" data-metric="pre_ad_contribution_margin"><div class="kpi-title">Pre-Ad Contribution Margin</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
       <div class="kpi-card" data-metric="post_ad_margin"><div class="kpi-title">Post-Ad Margin</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
+      <div class="kpi-card" data-metric="company_margin_with_fixed"><div class="kpi-title">Company Margin (incl. fixed)</div><div class="kpi-value"></div><div class="kpi-period"></div><div class="kpi-comparisons"></div></div>
     </div>
 
     <div class="section-title">Revenue</div>
@@ -1415,10 +1493,17 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
       return Number.isFinite(value) ? `${formatNum(value, digits)} EUR` : 'N/A';
     }
 
-    function fmtMetricValue(metricKey, value) {
+    function fmtMetricValue(metricKey, value, allMetricValues) {
       if (!Number.isFinite(value)) return 'N/A';
       if (metricKey === 'orders') return formatNum(value, 0);
       if (metricKey === 'roas') return `${formatNum(value, 2)}x`;
+      if (metricKey === 'company_margin_with_fixed') {
+        const nominal = allMetricValues?.company_profit_with_fixed;
+        if (Number.isFinite(nominal)) {
+          return `${formatNum(value, 2)}% (${fmtEur(nominal, 2)})`;
+        }
+        return `${formatNum(value, 2)}%`;
+      }
       if (metricKey === 'contribution_margin' || metricKey === 'pre_ad_contribution_margin' || metricKey === 'post_ad_margin') return `${formatNum(value, 2)}%`;
       return fmtEur(value, 2);
     }
@@ -1479,7 +1564,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
         const rowsEl = card.querySelector('.kpi-comparisons');
         if (!valueEl || !periodEl || !rowsEl) return;
 
-        valueEl.textContent = fmtMetricValue(metricKey, metricValues?.[metricKey]);
+        valueEl.textContent = fmtMetricValue(metricKey, metricValues?.[metricKey], metricValues);
         periodEl.textContent = periodLabel;
         rowsEl.innerHTML = '';
 
@@ -1948,7 +2033,7 @@ def generate_cfo_graph_html(file_paths: Dict[str, Path], from_date: str, to_date
 </html>
 """.replace("__DATA__", payload_json)
 
-    output_path = get_cfo_graph_path(from_date, to_date)
+    output_path = get_cfo_graph_path(project, from_date, to_date)
     output_path.write_text(html, encoding="utf-8")
     return output_path
 
@@ -1963,6 +2048,33 @@ def build_email_body(from_date: str, to_date: str, summary_text: str) -> str:
     )
 
 
+def put_metric(metric_name: str, value: float, project: str, unit: str = "Count") -> None:
+    """Publish a custom CloudWatch metric for reporting job observability."""
+    region = os.getenv("AWS_REGION", "eu-central-1").strip()
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ImportError:
+        print("WARN: boto3 not available, skipping CloudWatch metric publishing.")
+        return
+
+    try:
+        cloudwatch = boto3.client("cloudwatch", region_name=region)
+        cloudwatch.put_metric_data(
+            Namespace="VevoReporting",
+            MetricData=[
+                {
+                    "MetricName": metric_name,
+                    "Dimensions": [{"Name": "Project", "Value": project}],
+                    "Value": float(value),
+                    "Unit": unit,
+                }
+            ],
+        )
+    except (ClientError, BotoCoreError) as exc:
+        print(f"WARN: failed to publish CloudWatch metric {metric_name}: {exc}")
+
+
 def send_email_ses(
     subject: str,
     body_text: str,
@@ -1970,6 +2082,7 @@ def send_email_ses(
     extra_attachments: Optional[List[Path]] = None,
 ) -> str:
     region = os.getenv("AWS_REGION", "eu-central-1").strip()
+    configuration_set = os.getenv("SES_CONFIGURATION_SET", "vevo-reporting").strip()
     source = os.getenv("REPORT_EMAIL_FROM", "").strip()
     to_raw = os.getenv("REPORT_EMAIL_TO", "").strip()
 
@@ -2019,11 +2132,15 @@ def send_email_ses(
 
     ses = boto3.client("ses", region_name=region)
     try:
-        response = ses.send_raw_email(
-            Source=source,
-            Destinations=destinations,
-            RawMessage={"Data": msg.as_string()},
-        )
+        send_args: Dict[str, Any] = {
+            "Source": source,
+            "Destinations": destinations,
+            "RawMessage": {"Data": msg.as_string()},
+        }
+        if configuration_set:
+            send_args["ConfigurationSetName"] = configuration_set
+
+        response = ses.send_raw_email(**send_args)
     except (ClientError, BotoCoreError) as exc:
         raise RuntimeError(f"SES send failed: {exc}") from exc
 
@@ -2031,14 +2148,20 @@ def send_email_ses(
 
 
 def main() -> None:
+    # Load root env first.
     load_dotenv()
+    # Then load project env selected via CLI (or REPORT_PROJECT) before full arg parsing.
+    bootstrap_project = bootstrap_project_from_argv(sys.argv[1:])
+    os.environ["REPORT_PROJECT"] = bootstrap_project
+    load_project_env(bootstrap_project)
+
     args = parse_args()
+    project = (args.project or bootstrap_project).strip() or DEFAULT_PROJECT
+    os.environ["REPORT_PROJECT"] = project
+    os.environ["REPORT_DATA_DIR"] = str(project_data_dir(project).resolve())
 
-    to_date = resolve_to_date(args.to_date, args.timezone)
-    from_date = args.from_date
-
-    datetime.strptime(from_date, "%Y-%m-%d")
-    datetime.strptime(to_date, "%Y-%m-%d")
+    to_date = normalize_date(resolve_to_date(args.to_date, args.timezone))
+    from_date = normalize_date(args.from_date)
 
     if from_date > to_date:
         raise ValueError(f"from_date ({from_date}) cannot be after to_date ({to_date})")
@@ -2048,26 +2171,27 @@ def main() -> None:
 
     if not args.skip_export:
         run_export(
+            project=project,
             from_date=from_date,
             to_date=to_date,
             clear_cache=use_clear_cache,
             no_cache=use_no_cache,
         )
 
-    output_paths = get_output_paths(from_date, to_date)
+    output_paths = get_output_paths(project, from_date, to_date)
     missing = [str(path) for path in output_paths.values() if not path.exists()]
     if missing:
         raise FileNotFoundError(f"Expected output files not found: {missing}")
 
-    s3_upload_outputs(output_paths)
+    s3_upload_outputs(project, output_paths)
 
     if args.skip_email:
         print("Email sending skipped by flag.")
         return
 
-    subject = build_email_subject()
+    subject = build_email_subject(project)
     summary_text = build_report_summary(output_paths)
-    cfo_graph_html = generate_cfo_graph_html(output_paths, from_date, to_date)
+    cfo_graph_html = generate_cfo_graph_html(project, output_paths, from_date, to_date)
     body_text = build_email_body(from_date, to_date, summary_text)
     message_id = send_email_ses(
         subject=subject,
@@ -2075,10 +2199,14 @@ def main() -> None:
         file_paths=output_paths,
         extra_attachments=[cfo_graph_html],
     )
+    put_metric("ReportEmailSent", 1, project)
+    put_metric("ReportRunSucceeded", 1, project)
     print(f"SES message sent. MessageId={message_id}")
 
 
 if __name__ == "__main__":
-    main()
-
-
+    try:
+        main()
+    except Exception:
+        put_metric("ReportRunFailed", 1, os.getenv("REPORT_PROJECT", DEFAULT_PROJECT))
+        raise
