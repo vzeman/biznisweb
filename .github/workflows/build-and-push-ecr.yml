@@ -11,6 +11,8 @@ on:
       - export_orders.py
       - html_report_generator.py
       - daily_report_runner.py
+      - facebook_ads.py
+      - google_ads.py
       - .github/workflows/build-and-push-ecr.yml
 
 env:
