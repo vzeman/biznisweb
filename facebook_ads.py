@@ -5,9 +5,11 @@ Facebook Ads API integration for fetching marketing spend data
 
 import os
 import json
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from urllib.parse import urlparse, urlunparse
 import requests
 from dotenv import load_dotenv
 from logger_config import get_logger
@@ -30,8 +32,9 @@ class FacebookAdsClient:
         self.api_version = 'v21.0'
         self.base_url = f'https://graph.facebook.com/{self.api_version}'
         
-        # Cache configuration
-        self.cache_dir = Path('data/cache/facebook_ads')
+        # Cache configuration (project-aware if REPORT_DATA_DIR is provided)
+        base_data_dir = Path(os.getenv('REPORT_DATA_DIR', 'data'))
+        self.cache_dir = base_data_dir / 'cache' / 'facebook_ads'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_days_threshold = 3  # Days from today that should always be fetched fresh
         
@@ -44,6 +47,55 @@ class FacebookAdsClient:
             # Ensure ad_account_id has correct format
             if not self.ad_account_id.startswith('act_'):
                 self.ad_account_id = f'act_{self.ad_account_id}'
+
+    @staticmethod
+    def _sanitize_url(url: str) -> str:
+        """Remove query string (incl. access_token) from URLs before logging."""
+        if not url:
+            return ""
+        try:
+            parsed = urlparse(url)
+            return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+        except Exception:
+            # Fallback redaction for raw strings.
+            return re.sub(r"access_token=[^&\\s]+", "access_token=***", url)
+
+    def _log_request_exception(self, context: str, exc: requests.exceptions.RequestException) -> None:
+        """
+        Log structured Facebook API error details without leaking access token.
+        """
+        response = getattr(exc, "response", None)
+        if response is None:
+            logger.error(f"{context}: {exc.__class__.__name__}: {exc}")
+            return
+
+        safe_url = self._sanitize_url(getattr(response, "url", ""))
+        status_code = response.status_code
+        error_code = None
+        error_subcode = None
+        error_type = None
+        error_message = ""
+
+        try:
+            payload = response.json()
+            error_obj = payload.get("error", {}) if isinstance(payload, dict) else {}
+            error_code = error_obj.get("code")
+            error_subcode = error_obj.get("error_subcode")
+            error_type = error_obj.get("type")
+            error_message = error_obj.get("message", "")
+        except Exception:
+            error_message = response.text[:500] if response.text else str(exc)
+
+        logger.error(
+            f"{context}: status={status_code} code={error_code} subcode={error_subcode} "
+            f"type={error_type} message={error_message} endpoint={safe_url}"
+        )
+
+        if error_code == 190:
+            logger.error(
+                "Facebook access token is invalid/expired (OAuth code 190). "
+                "Please generate a new token and update FACEBOOK_ACCESS_TOKEN."
+            )
     
     def get_cache_filename(self, date_from: datetime, date_to: datetime) -> Path:
         """Generate cache filename for a date range"""
@@ -178,7 +230,7 @@ class FacebookAdsClient:
             return daily_spend
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching Facebook Ads data: {e}")
+            self._log_request_exception("Error fetching Facebook Ads data", e)
             return {}
         except Exception as e:
             logger.error(f"Unexpected error processing Facebook Ads data: {e}")
@@ -241,7 +293,7 @@ class FacebookAdsClient:
             return daily_metrics
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching detailed Facebook Ads metrics: {e}")
+            self._log_request_exception("Error fetching detailed Facebook Ads metrics", e)
             return {}
         except Exception as e:
             logger.error(f"Unexpected error processing detailed Facebook Ads metrics: {e}")
@@ -373,8 +425,11 @@ class FacebookAdsClient:
             logger.info(f"Retrieved data for {len(campaign_spend)} campaigns")
             return campaign_spend
 
+        except requests.exceptions.RequestException as e:
+            self._log_request_exception("Error fetching campaign data", e)
+            return []
         except Exception as e:
-            logger.error(f"Error fetching campaign data: {e}")
+            logger.error(f"Unexpected error fetching campaign data: {e}")
             return []
 
     def get_adset_performance(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -454,8 +509,11 @@ class FacebookAdsClient:
             logger.info(f"Retrieved data for {len(adset_performance)} ad sets")
             return adset_performance
 
+        except requests.exceptions.RequestException as e:
+            self._log_request_exception("Error fetching ad set data", e)
+            return []
         except Exception as e:
-            logger.error(f"Error fetching ad set data: {e}")
+            logger.error(f"Unexpected error fetching ad set data: {e}")
             return []
 
     def get_ads_performance(self, date_from: datetime, date_to: datetime, limit: int = 50) -> List[Dict[str, Any]]:
@@ -516,8 +574,11 @@ class FacebookAdsClient:
             logger.info(f"Retrieved data for {len(ads_performance)} individual ads")
             return ads_performance
 
+        except requests.exceptions.RequestException as e:
+            self._log_request_exception("Error fetching individual ad data", e)
+            return []
         except Exception as e:
-            logger.error(f"Error fetching individual ad data: {e}")
+            logger.error(f"Unexpected error fetching individual ad data: {e}")
             return []
 
     def get_hourly_stats(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -579,8 +640,11 @@ class FacebookAdsClient:
             logger.info(f"Retrieved hourly stats for {len(hourly_stats)} hours")
             return hourly_stats
 
+        except requests.exceptions.RequestException as e:
+            self._log_request_exception("Error fetching hourly stats", e)
+            return []
         except Exception as e:
-            logger.error(f"Error fetching hourly stats: {e}")
+            logger.error(f"Unexpected error fetching hourly stats: {e}")
             return []
 
     def get_day_of_week_stats(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -677,7 +741,7 @@ class FacebookAdsClient:
             return True
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to connect to Facebook Ads API: {e}")
+            self._log_request_exception("Failed to connect to Facebook Ads API", e)
             return False
 
 
