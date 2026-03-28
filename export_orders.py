@@ -12,6 +12,7 @@ import traceback
 import hashlib
 import re
 import unicodedata
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
@@ -65,24 +66,37 @@ except ImportError:
 
 from html_report_generator import generate_html_report, generate_email_strategy_report
 
-# Load environment variables
+# Load base environment variables from repo root .env (if present).
 load_dotenv()
 
 # Set up logging
 logger = get_logger('export_orders')
 
-# Configuration
-API_URL = os.getenv('BIZNISWEB_API_URL', 'https://vevo.flox.sk/api/graphql')
-API_TOKEN = os.getenv('BIZNISWEB_API_TOKEN')
+# Prevent UnicodeEncodeError on Windows consoles with legacy codepages.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(errors="replace")
+        sys.stderr.reconfigure(errors="replace")
+    except Exception:
+        pass
 
-if not API_TOKEN:
-    logger.error("BIZNISWEB_API_TOKEN not found in environment variables. Please set it in .env file.")
-    raise ValueError("BIZNISWEB_API_TOKEN not found in environment variables. Please set it in .env file.")
+ROOT_DIR = Path(__file__).resolve().parent
+PROJECTS_DIR = ROOT_DIR / "projects"
+DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", "vevo").strip() or "vevo"
+DEFAULT_API_URL = "https://vevo.flox.sk/api/graphql"
 
 # Fixed costs
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
 SHIPPING_SUBSIDY_PER_ORDER = 0.2  # EUR per order (shipping subsidy)
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
+ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
+ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
+ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
+MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
+MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15% product margin
+EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
+MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
+MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
 
 # Currency conversion rates to EUR
 # These should be updated regularly or fetched from an API
@@ -151,6 +165,119 @@ PRODUCT_EXPENSES = {
     'H-36CA74A7': 0,          # Tringelt
     'H-A5F3BBB3': 0,          # Poistenie proti rozbitiu
 }
+
+
+def _project_dir(project_name: str) -> Path:
+    return PROJECTS_DIR / project_name
+
+
+def load_project_env(project_name: str) -> None:
+    """
+    Load per-project env file from projects/<project>/.env if it exists.
+    Values override root .env so project configs remain isolated.
+    """
+    if os.getenv("REPORT_SKIP_PROJECT_ENV", "").strip().lower() in {"1", "true", "yes", "y", "on"}:
+        logger.info("Skipping project .env load (REPORT_SKIP_PROJECT_ENV=true)")
+        return
+
+    env_path = _project_dir(project_name) / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=True)
+        logger.info(f"Loaded project env: {env_path}")
+    else:
+        if project_name != DEFAULT_PROJECT:
+            raise FileNotFoundError(
+                f"Project env file not found: {env_path}. "
+                f"Create projects/{project_name}/.env (you can start from .env.example)."
+            )
+        logger.info(f"Project env not found for default project '{project_name}' ({env_path}), using current environment")
+
+
+def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
+    """
+    Load project settings from projects/<project>/settings.json and optional
+    product_expenses.json. Falls back to legacy in-file defaults.
+    """
+    settings: Dict[str, Any] = {}
+    project_dir = _project_dir(project_name)
+    settings_path = project_dir / "settings.json"
+    if settings_path.exists():
+        with open(settings_path, "r", encoding="utf-8") as f:
+            settings = json.load(f) or {}
+
+    product_expenses = PRODUCT_EXPENSES
+    product_expenses_file = settings.get("product_expenses_file", "product_expenses.json")
+    product_expenses_path = project_dir / product_expenses_file
+    if product_expenses_path.exists():
+        with open(product_expenses_path, "r", encoding="utf-8") as f:
+            raw_map = json.load(f) or {}
+            product_expenses = {str(k): float(v) for k, v in raw_map.items()}
+    elif project_name != "vevo":
+        # Non-vevo projects should not accidentally use vevo costs.
+        product_expenses = {}
+
+    return {
+        "project_name": project_name,
+        "api_url": os.getenv("BIZNISWEB_API_URL", settings.get("biznisweb_api_url", DEFAULT_API_URL)),
+        "api_token": os.getenv("BIZNISWEB_API_TOKEN", ""),
+        "packaging_cost_per_order": float(settings.get("packaging_cost_per_order", PACKAGING_COST_PER_ORDER)),
+        "shipping_subsidy_per_order": float(settings.get("shipping_subsidy_per_order", SHIPPING_SUBSIDY_PER_ORDER)),
+        "fixed_monthly_cost": float(settings.get("fixed_monthly_cost", FIXED_MONTHLY_COST)),
+        "currency_rates_to_eur": settings.get("currency_rates_to_eur", CURRENCY_RATES_TO_EUR),
+        "product_expenses": product_expenses,
+        "zero_margin_brands": [str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
+        "zero_cost_brands": [str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
+        "zero_cost_label_patterns": [str(v).strip() for v in settings.get("zero_cost_label_patterns", []) if str(v).strip()],
+        "margin_15_brands": [str(v).strip() for v in settings.get("margin_15_brands", []) if str(v).strip()],
+        "margin_15_label_patterns": [str(v).strip() for v in settings.get("margin_15_label_patterns", []) if str(v).strip()],
+        "exclude_zero_price_label_patterns": [
+            str(v).strip() for v in settings.get("exclude_zero_price_label_patterns", []) if str(v).strip()
+        ],
+        "manual_fb_ads_total": (
+            float(settings.get("manual_fb_ads_total"))
+            if settings.get("manual_fb_ads_total") is not None
+            else None
+        ),
+        "manual_google_ads_total": (
+            float(settings.get("manual_google_ads_total"))
+            if settings.get("manual_google_ads_total") is not None
+            else None
+        ),
+    }
+
+
+def apply_runtime_settings(runtime: Dict[str, Any]) -> None:
+    """Apply project runtime settings to global constants used across calculations."""
+    global PACKAGING_COST_PER_ORDER, SHIPPING_SUBSIDY_PER_ORDER, FIXED_MONTHLY_COST
+    global CURRENCY_RATES_TO_EUR, PRODUCT_EXPENSES, ZERO_MARGIN_BRANDS, ZERO_COST_BRANDS
+    global ZERO_COST_LABEL_PATTERNS, MARGIN_15_BRANDS, MARGIN_15_LABEL_PATTERNS, EXCLUDE_ZERO_PRICE_LABEL_PATTERNS
+    global MANUAL_FB_ADS_TOTAL, MANUAL_GOOGLE_ADS_TOTAL
+
+    PACKAGING_COST_PER_ORDER = float(runtime["packaging_cost_per_order"])
+    SHIPPING_SUBSIDY_PER_ORDER = float(runtime["shipping_subsidy_per_order"])
+    FIXED_MONTHLY_COST = float(runtime["fixed_monthly_cost"])
+    CURRENCY_RATES_TO_EUR = {str(k).upper(): float(v) for k, v in dict(runtime["currency_rates_to_eur"]).items()}
+    PRODUCT_EXPENSES = {str(k): float(v) for k, v in dict(runtime["product_expenses"]).items()}
+    ZERO_MARGIN_BRANDS = [str(v).strip().lower() for v in runtime.get("zero_margin_brands", []) if str(v).strip()]
+    ZERO_COST_BRANDS = [str(v).strip().lower() for v in runtime.get("zero_cost_brands", []) if str(v).strip()]
+    ZERO_COST_LABEL_PATTERNS = [str(v).strip() for v in runtime.get("zero_cost_label_patterns", []) if str(v).strip()]
+    MARGIN_15_BRANDS = [str(v).strip().lower() for v in runtime.get("margin_15_brands", []) if str(v).strip()]
+    MARGIN_15_LABEL_PATTERNS = [str(v).strip() for v in runtime.get("margin_15_label_patterns", []) if str(v).strip()]
+    EXCLUDE_ZERO_PRICE_LABEL_PATTERNS = [
+        str(v).strip() for v in runtime.get("exclude_zero_price_label_patterns", []) if str(v).strip()
+    ]
+    MANUAL_FB_ADS_TOTAL = runtime.get("manual_fb_ads_total")
+    MANUAL_GOOGLE_ADS_TOTAL = runtime.get("manual_google_ads_total")
+
+
+def parse_input_date(value: str) -> datetime:
+    """Parse common CLI/env date formats for safer project onboarding."""
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Unsupported date format '{value}'. Use YYYY-MM-DD.")
 
 # nove ceny nakladov
 # PRODUCT_EXPENSES = {
@@ -221,19 +348,16 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
           vat_id2
           name
           surname
-          phone
           email
         }
         ... on Person {
           name
           surname
-          phone
           email
         }
         ... on UnauthenticatedEmail {
           name
           surname
-          phone
           email
         }
       }
@@ -299,8 +423,16 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 
 
 class BizniWebExporter:
-    def __init__(self, api_url: str, api_token: str):
+    def __init__(self, api_url: str, api_token: str, project_name: str = DEFAULT_PROJECT):
         """Initialize the exporter with API credentials"""
+        self.project_name = project_name
+        self.data_dir = Path("data") / project_name
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+
+        # Share project data directory with optional ad clients for cache isolation.
+        os.environ["REPORT_PROJECT"] = project_name
+        os.environ["REPORT_DATA_DIR"] = str(self.data_dir.resolve())
+
         transport = RequestsHTTPTransport(
             url=api_url,
             headers={'BW-API-Key': f'Token {api_token}'},
@@ -310,11 +442,15 @@ class BizniWebExporter:
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
         self.fb_client = FacebookAdsClient()
         self.google_ads_client = GoogleAdsClient()
-        self.cache_dir = Path('data/cache')
+        self.cache_dir = self.data_dir / 'cache'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
+
+    def output_path(self, filename: str) -> Path:
+        """Build a path inside project-specific output directory."""
+        return self.data_dir / filename
 
     @staticmethod
     def get_product_sku(ean: str, title: str) -> str:
@@ -335,6 +471,49 @@ class BizniWebExporter:
             axis=1
         )
         return df
+
+    @staticmethod
+    def _normalize_match_text(value: Any) -> str:
+        """Normalize strings for robust contains-based matching across accents/encoding/punctuation."""
+        text = unicodedata.normalize('NFKD', str(value or ''))
+        text = ''.join(ch for ch in text if not unicodedata.combining(ch)).lower()
+        text = re.sub(r'[^a-z0-9]+', ' ', text)
+        return re.sub(r'\s+', ' ', text).strip()
+
+    @classmethod
+    def _matches_patterns(cls, label: str, patterns: List[str]) -> bool:
+        if not label or not patterns:
+            return False
+        normalized_label = cls._normalize_match_text(label)
+        for pattern in patterns:
+            normalized_pattern = cls._normalize_match_text(pattern)
+            if normalized_pattern and normalized_pattern in normalized_label:
+                return True
+        return False
+
+    @staticmethod
+    def _distribute_total_spend(total: float, date_from: datetime, date_to: datetime) -> Dict[str, float]:
+        """
+        Distribute a fixed total spend across all dates in the selected period.
+        Uses cent-level allocation so the sum matches the requested total exactly.
+        """
+        total = float(total or 0)
+        if date_to < date_from:
+            return {}
+        days = (date_to.date() - date_from.date()).days + 1
+        if days <= 0:
+            return {}
+
+        total_cents = int(round(total * 100))
+        base_cents = total_cents // days
+        remainder = total_cents % days
+
+        distributed: Dict[str, float] = {}
+        for idx in range(days):
+            day = date_from.date() + timedelta(days=idx)
+            cents = base_cents + (1 if idx < remainder else 0)
+            distributed[day.strftime('%Y-%m-%d')] = cents / 100.0
+        return distributed
 
     def add_order_revenue_net_column(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1238,10 +1417,10 @@ class BizniWebExporter:
         
         # Create a row for each item
         items = order.get('items', [])
-        total_items = len(items)
         
         if items:
-            for idx, item in enumerate(items, 1):
+            item_rows = []
+            for item in items:
                 item_price = item.get('price', {}) or {}
                 weight = item.get('weight', {}) or {}
                 recycle_fee = item.get('recycle_fee', {}) or {}
@@ -1272,8 +1451,38 @@ class BizniWebExporter:
                 item_label = item.get('item_label', '')
                 item_ean = item.get('ean', '')
                 product_sku = self.get_product_sku(item_ean, item_label)
-                # First try SKU, then title for backward compatibility, default to 1.0 for unknown products
-                expense_per_item = PRODUCT_EXPENSES.get(product_sku, PRODUCT_EXPENSES.get(item_label, 1.0))
+
+                # Optional exclusion for zero-priced gift lines (e.g. free promo gifts).
+                if (
+                    EXCLUDE_ZERO_PRICE_LABEL_PATTERNS
+                    and self._matches_patterns(item_label, EXCLUDE_ZERO_PRICE_LABEL_PATTERNS)
+                    and round(item_total_with_tax, 2) == 0
+                ):
+                    continue
+
+                # Force 0 cost for configured brands, then optional 0 margin brands, otherwise use configured costs.
+                force_zero_cost = False
+                force_zero_margin = False
+                force_margin_15 = False
+                if (ZERO_COST_BRANDS or ZERO_MARGIN_BRANDS or MARGIN_15_BRANDS) and item_label:
+                    label_lc = str(item_label).lower()
+                    force_zero_cost = any(brand in label_lc for brand in ZERO_COST_BRANDS)
+                    force_zero_margin = any(brand in label_lc for brand in ZERO_MARGIN_BRANDS)
+                    force_margin_15 = any(brand in label_lc for brand in MARGIN_15_BRANDS)
+                if item_label and not force_zero_cost:
+                    force_zero_cost = self._matches_patterns(item_label, ZERO_COST_LABEL_PATTERNS)
+                if item_label and not force_margin_15:
+                    force_margin_15 = self._matches_patterns(item_label, MARGIN_15_LABEL_PATTERNS)
+                if force_zero_cost:
+                    expense_per_item = 0.0
+                elif force_zero_margin and item_quantity:
+                    expense_per_item = item_total_without_tax / item_quantity
+                elif force_margin_15 and item_quantity:
+                    # Keep product margin at 15%: cost = 85% of net unit selling price.
+                    expense_per_item = (item_total_without_tax / item_quantity) * 0.85
+                else:
+                    # First try SKU, then title for backward compatibility, default to 1.0 for unknown products.
+                    expense_per_item = PRODUCT_EXPENSES.get(product_sku, PRODUCT_EXPENSES.get(item_label, 1.0))
                 total_expense = expense_per_item * item_quantity
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
@@ -1283,8 +1492,8 @@ class BizniWebExporter:
                 
                 row = base_data.copy()
                 row.update({
-                    'total_items_in_order': total_items,
-                    'item_number': idx,
+                    'total_items_in_order': None,
+                    'item_number': None,
                     'item_label': item.get('item_label'),
                     'item_ean': item.get('ean'),
                     'item_import_code': item.get('import_code'),
@@ -1305,6 +1514,16 @@ class BizniWebExporter:
                     'profit_before_ads': round(item_profit_before_ads, 2),
                     'roi_before_ads': round(item_roi_before_ads, 2),
                 })
+                item_rows.append(row)
+
+            # If all order rows were excluded (e.g. zero-price gifts only), skip this order in export.
+            if not item_rows:
+                return flattened_rows
+
+            total_items = len(item_rows)
+            for idx, row in enumerate(item_rows, 1):
+                row['total_items_in_order'] = total_items
+                row['item_number'] = idx
                 flattened_rows.append(row)
         else:
             # If no items, create one row with order data only
@@ -1316,7 +1535,7 @@ class BizniWebExporter:
     
     def cleanup_data_folder(self):
         """Clean up old data files before starting new export"""
-        data_dir = Path('data')
+        data_dir = self.data_dir
         if data_dir.exists():
             # Remove all CSV and HTML files
             for pattern in ['*.csv', '*.html']:
@@ -1345,7 +1564,13 @@ class BizniWebExporter:
         fb_campaigns = []
         fb_hourly_stats = []
         fb_dow_stats = []
-        if self.fb_client.is_configured:
+        if MANUAL_FB_ADS_TOTAL is not None:
+            fb_daily_spend = self._distribute_total_spend(MANUAL_FB_ADS_TOTAL, date_from, date_to)
+            print(
+                f"Using manual Facebook Ads total: {MANUAL_FB_ADS_TOTAL:.2f} EUR "
+                f"distributed across {len(fb_daily_spend)} days"
+            )
+        elif self.fb_client.is_configured:
             print("Fetching Facebook Ads spend data...")
             fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
             if fb_daily_spend:
@@ -1377,7 +1602,13 @@ class BizniWebExporter:
         
         # Fetch Google Ads spend data
         google_ads_daily_spend = {}
-        if self.google_ads_client.is_configured:
+        if MANUAL_GOOGLE_ADS_TOTAL is not None:
+            google_ads_daily_spend = self._distribute_total_spend(MANUAL_GOOGLE_ADS_TOTAL, date_from, date_to)
+            print(
+                f"Using manual Google Ads total: {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR "
+                f"distributed across {len(google_ads_daily_spend)} days"
+            )
+        elif self.google_ads_client.is_configured:
             print("Fetching Google Ads spend data...")
             google_ads_daily_spend = self.google_ads_client.get_daily_spend(date_from, date_to)
             if google_ads_daily_spend:
@@ -1389,7 +1620,7 @@ class BizniWebExporter:
             all_rows.extend(self.flatten_order(order))
         
         # Create filename
-        filename = f"data/export_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        filename = self.output_path(f"export_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv")
         
         # Convert to DataFrame for easier CSV export
         df = pd.DataFrame(all_rows)
@@ -1559,7 +1790,7 @@ class BizniWebExporter:
             ltv_by_date=ltv_by_date,
             consistency_checks=consistency_checks
         )
-        html_filename = f"data/report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html"
+        html_filename = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
         # Write with UTF-8 BOM to avoid mojibake when a server/browser mis-detects charset
         with open(html_filename, 'w', encoding='utf-8-sig') as f:
             f.write(html_content)
@@ -1571,13 +1802,13 @@ class BizniWebExporter:
             email_strategy_html = generate_email_strategy_report(
                 customer_email_segments, cohort_analysis, date_from, date_to
             )
-            email_strategy_filename = f"data/email_strategy_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html"
+            email_strategy_filename = self.output_path(f"email_strategy_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
             # Keep the same robust encoding strategy for secondary HTML report
             with open(email_strategy_filename, 'w', encoding='utf-8-sig') as f:
                 f.write(email_strategy_html)
             print(f"Email Strategy Report saved: {email_strategy_filename}")
 
-        return filename
+        return str(filename)
     
     def create_aggregated_reports(self, df: pd.DataFrame, date_from: datetime, date_to: datetime, fb_daily_spend: Dict[str, float] = None, google_ads_daily_spend: Dict[str, float] = None):
         """Create aggregated CSV reports"""
@@ -1615,7 +1846,7 @@ class BizniWebExporter:
         date_product_agg = date_product_agg.sort_values(['date', 'product_sku'])
         
         # Save date-product aggregation
-        date_product_filename = f"data/aggregate_by_date_product_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        date_product_filename = self.output_path(f"aggregate_by_date_product_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv")
         date_product_agg.to_csv(date_product_filename, index=False, encoding='utf-8-sig')
         print(f"Date-product aggregation saved: {date_product_filename}")
         
@@ -1763,7 +1994,7 @@ class BizniWebExporter:
         date_agg = date_agg.sort_values('date')
         
         # Save date aggregation
-        date_filename = f"data/aggregate_by_date_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        date_filename = self.output_path(f"aggregate_by_date_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv")
         date_agg.to_csv(date_filename, index=False, encoding='utf-8-sig')
         print(f"Date aggregation saved: {date_filename}")
         
@@ -1823,7 +2054,7 @@ class BizniWebExporter:
         month_agg['month'] = month_agg['month'].astype(str)
         
         # Save monthly aggregation
-        month_filename = f"data/aggregate_by_month_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        month_filename = self.output_path(f"aggregate_by_month_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv")
         month_agg.to_csv(month_filename, index=False, encoding='utf-8-sig')
         print(f"Monthly aggregation saved: {month_filename}")
         
@@ -1856,7 +2087,7 @@ class BizniWebExporter:
         items_agg = items_agg.sort_values('total_revenue', ascending=False)
         
         # Save items aggregation
-        items_filename = f"data/aggregate_by_items_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        items_filename = self.output_path(f"aggregate_by_items_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv")
         items_agg.to_csv(items_filename, index=False, encoding='utf-8-sig')
         print(f"Items aggregation saved: {items_filename}")
 
@@ -1892,7 +2123,7 @@ class BizniWebExporter:
         ltv_by_date = ltv_by_date.sort_values('date')
 
         # Save LTV by acquisition date
-        ltv_filename = f"data/ltv_by_acquisition_date_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        ltv_filename = self.output_path(f"ltv_by_acquisition_date_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv")
         ltv_by_date.to_csv(ltv_filename, index=False, encoding='utf-8-sig')
         print(f"LTV by acquisition date saved: {ltv_filename}")
 
@@ -2100,7 +2331,7 @@ class BizniWebExporter:
         weekly_stats = weekly_stats.sort_values('week')
         
         # Save to CSV
-        filename = f"data/returning_customers_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        filename = self.output_path(f"returning_customers_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv")
         weekly_stats.to_csv(filename, index=False, encoding='utf-8-sig')
         print(f"Returning customers analysis saved: {filename}")
         
@@ -2475,7 +2706,7 @@ class BizniWebExporter:
             del result['_mature_cohort_stats']
 
         # Save cohort analysis to CSV
-        cohort_filename = f"data/cohort_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        cohort_filename = self.output_path(f"cohort_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv")
         if not result['cohort_retention'].empty:
             result['cohort_retention'].to_csv(cohort_filename, index=False, encoding='utf-8-sig')
             print(f"Cohort analysis saved: {cohort_filename}")
@@ -3023,7 +3254,7 @@ class BizniWebExporter:
         weekly_clv_df['cumulative_avg_cac'] = cumulative_cac
 
         # Save to CSV
-        filename = f"data/clv_return_time_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        filename = self.output_path(f"clv_return_time_analysis_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv")
         weekly_clv_df.to_csv(filename, index=False, encoding='utf-8-sig')
         print(f"CLV and return time analysis saved: {filename}")
         
@@ -3076,7 +3307,7 @@ class BizniWebExporter:
         distribution_pivot = distribution_pivot.sort_values('purchase_date_only')
 
         # Save to CSV
-        filename = f"data/order_size_distribution_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        filename = self.output_path(f"order_size_distribution_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv")
         distribution_pivot.to_csv(filename, index=False, encoding='utf-8-sig')
         print(f"Order size distribution saved: {filename}")
 
@@ -3158,7 +3389,7 @@ class BizniWebExporter:
         combo_df = combo_df.sort_values('count', ascending=False)
 
         # Save to CSV
-        filename = f"data/item_combinations_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        filename = self.output_path(f"item_combinations_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv")
         combo_df.to_csv(filename, index=False, encoding='utf-8-sig')
         print(f"Item combinations saved: {filename}")
         print(f"Found {len(combo_df)} combinations with count >= {min_count}")
@@ -4613,7 +4844,7 @@ class BizniWebExporter:
         # Save segments to CSV files
         for segment_name, segment_data in segments.items():
             if not segment_data['data'].empty:
-                filename = f"data/email_segment_{segment_name}.csv"
+                filename = self.output_path(f"email_segment_{segment_name}.csv")
                 segment_data['data'].to_csv(filename, index=False, encoding='utf-8-sig')
                 print(f"    Saved: {filename}")
 
@@ -4625,6 +4856,12 @@ class BizniWebExporter:
 def main():
     """Main function to handle command line arguments and run the export"""
     parser = argparse.ArgumentParser(description='Export orders from BizniWeb API')
+    parser.add_argument(
+        '--project',
+        type=str,
+        default=os.getenv('REPORT_PROJECT', DEFAULT_PROJECT),
+        help='Project name (loads projects/<project>/settings.json and optional .env)'
+    )
     parser.add_argument(
         '--from-date',
         type=str,
@@ -4645,25 +4882,46 @@ def main():
         action='store_true',
         help='Disable cache and fetch all data fresh from API'
     )
-    
+
     args = parser.parse_args()
+    project_name = (args.project or DEFAULT_PROJECT).strip()
+
+    # Load project-specific env first so API credentials are isolated per shop.
+    load_project_env(project_name)
+    runtime = load_project_runtime_settings(project_name)
+    apply_runtime_settings(runtime)
+
+    api_url = runtime['api_url']
+    api_token = runtime['api_token']
+    if not api_token:
+        logger.error(
+            f"BIZNISWEB_API_TOKEN not found for project '{project_name}'. "
+            f"Set it in projects/{project_name}/.env or environment variables."
+        )
+        raise ValueError(
+            f"BIZNISWEB_API_TOKEN not found for project '{project_name}'. "
+            f"Please configure credentials."
+        )
     
     # Parse dates
     if args.to_date:
-        date_to = datetime.strptime(args.to_date, '%Y-%m-%d')
+        date_to = parse_input_date(args.to_date)
     else:
         date_to = datetime.now()
-    
-    if args.from_date:
-        date_from = datetime.strptime(args.from_date, '%Y-%m-%d')
-    else:
-        # Default to start from May 11, 2025
-        date_from = datetime(2025, 5, 3)
 
-    print(f"Exporting orders from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
+    if args.from_date:
+        date_from = parse_input_date(args.from_date)
+    else:
+        default_from_raw = os.getenv("REPORT_FROM_DATE", "2025-05-03")
+        date_from = parse_input_date(default_from_raw)
+
+    print(
+        f"Exporting project '{project_name}' orders from "
+        f"{date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}"
+    )
     
     # Initialize exporter
-    exporter = BizniWebExporter(API_URL, API_TOKEN)
+    exporter = BizniWebExporter(api_url, api_token, project_name=project_name)
     
     # Handle cache options
     if args.clear_cache:

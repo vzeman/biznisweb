@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+projects/*/.env
+*.env.runtime
 
 # Python
 __pycache__/

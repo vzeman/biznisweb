@@ -54,6 +54,10 @@ def bootstrap_project_from_argv(argv: List[str]) -> str:
 
 
 def load_project_env(project: str) -> None:
+    if os.getenv("REPORT_SKIP_PROJECT_ENV", "").strip().lower() in {"1", "true", "yes", "y", "on"}:
+        print("Skipping project .env load (REPORT_SKIP_PROJECT_ENV=true)")
+        return
+
     env_path = PROJECTS_DIR / project / ".env"
     if env_path.exists():
         load_dotenv(dotenv_path=env_path, override=True)

@@ -1,0 +1,15 @@
+{
+  "biznisweb_api_url": "https://vevo.flox.sk/api/graphql",
+  "report_from_date": "2025-05-03",
+  "packaging_cost_per_order": 0.3,
+  "shipping_subsidy_per_order": 0.2,
+  "fixed_monthly_cost": 0,
+  "product_expenses_file": "product_expenses.json",
+  "currency_rates_to_eur": {
+    "EUR": 1.0,
+    "CZK": 0.04,
+    "HUF": 0.0025,
+    "PLN": 0.23,
+    "USD": 0.92
+  }
+}
