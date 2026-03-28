@@ -30,13 +30,14 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).resolve().parent
 ROOT_DATA_DIR = ROOT_DIR / "data"
 PROJECTS_DIR = ROOT_DIR / "projects"
-DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", "vevo").strip() or "vevo"
+LEGACY_DEFAULT_PROJECT = "vevo"
+DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", LEGACY_DEFAULT_PROJECT).strip() or LEGACY_DEFAULT_PROJECT
 CFO_FIXED_DAILY_COST_EUR = float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70"))
 
 
 def project_data_dir(project: str) -> Path:
     # Backward compatibility: default project historically writes to data/ (no subfolder).
-    if project == DEFAULT_PROJECT:
+    if project == LEGACY_DEFAULT_PROJECT:
         data_dir = ROOT_DATA_DIR
     else:
         data_dir = ROOT_DATA_DIR / project
@@ -62,7 +63,7 @@ def load_project_env(project: str) -> None:
     if env_path.exists():
         load_dotenv(dotenv_path=env_path, override=True)
         print(f"Loaded project env: {env_path}")
-    elif project != DEFAULT_PROJECT:
+    elif project != LEGACY_DEFAULT_PROJECT:
         raise FileNotFoundError(
             f"Project env file not found: {env_path}. "
             f"Create projects/{project}/.env from projects/{project}/.env.example."
@@ -151,8 +152,8 @@ def run_export(project: str, from_date: str, to_date: str, clear_cache: bool, no
         "--to-date",
         to_date,
     ]
-    # Keep compatibility with older export_orders.py that has no --project arg.
-    if project != DEFAULT_PROJECT:
+    # Keep compatibility with legacy vevo default where --project used to be absent.
+    if project != LEGACY_DEFAULT_PROJECT:
         cmd[2:2] = ["--project", project]
     if clear_cache:
         cmd.append("--clear-cache")
