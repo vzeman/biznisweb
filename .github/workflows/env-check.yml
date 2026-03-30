@@ -1,0 +1,42 @@
+name: Env Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - opan-claw
+
+jobs:
+  env-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required env keys against template
+        run: |
+          chmod +x scripts/check_env.sh
+          # CI validates the template contract itself (required keys must exist in .env.example)
+          scripts/check_env.sh .env.example .env.example .env.required
+
+      - name: Ensure no secret env files are tracked
+        run: |
+          set -euo pipefail
+          bad_files=""
+          while IFS= read -r f; do
+            case "$f" in
+              .env|.env.local|projects/*/.env|*.env.runtime)
+                bad_files+="$f\n"
+                ;;
+            esac
+          done < <(git ls-files)
+
+          if [[ -n "$bad_files" ]]; then
+            echo "Tracked secret env files are not allowed:"
+            printf "%b" "$bad_files"
+            exit 1
+          fi
+
+          echo "OK: no tracked secret env files detected."
