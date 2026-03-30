@@ -28,7 +28,8 @@ class GoogleAdsClient:
         self.login_customer_id = os.getenv('GOOGLE_ADS_LOGIN_CUSTOMER_ID')  # Optional, for MCC accounts
         
         # Cache configuration
-        self.cache_dir = Path('data/cache/google_ads')
+        base_data_dir = Path(os.getenv('REPORT_DATA_DIR', 'data'))
+        self.cache_dir = base_data_dir / 'cache' / 'google_ads'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_days_threshold = 3  # Days from today that should always be fetched fresh
         

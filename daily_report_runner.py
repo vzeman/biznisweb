@@ -857,15 +857,15 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
     last_date = daily_rows[-1]["date"]
     prev_day = last_date - timedelta(days=1)
     same_weekday_last_week = last_date - timedelta(days=7)
-    same_day_last_month = last_date - timedelta(days=30)
-    same_day_last_year = last_date - timedelta(days=365)
+    same_day_last_month = _shift_months(last_date, -1)
+    same_day_last_year = _shift_years(last_date, -1)
 
     weekly_prev_end = last_date - timedelta(days=7)
-    weekly_last_month_end = last_date - timedelta(days=30)
-    weekly_last_year_end = last_date - timedelta(days=365)
+    weekly_last_month_end = _shift_months(last_date, -1)
+    weekly_last_year_end = _shift_years(last_date, -1)
 
     monthly_prev_end = last_date - timedelta(days=30)
-    monthly_last_year_end = last_date - timedelta(days=365)
+    monthly_last_year_end = _shift_years(last_date, -1)
 
     def _has_window_data(end_date: date, days: int) -> bool:
         for i in range(days):

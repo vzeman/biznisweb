@@ -183,17 +183,15 @@ class FacebookAdsClient:
         Returns:
             Dictionary mapping date strings to spend amounts in EUR
         """
-        # Always try to load from cache first (even if credentials not configured)
-        cached_data = self.load_from_cache(date_from, date_to)
-        if cached_data is not None:
-            return cached_data
+        use_cache = self.should_use_cache(date_to)
+        if use_cache:
+            cached_data = self.load_from_cache(date_from, date_to)
+            if cached_data is not None:
+                return cached_data
 
         # If not configured, return empty after checking cache
         if not self.is_configured:
             return {}
-
-        # Check if we should use cache for the entire date range
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Otherwise, fetch from API
         try:
@@ -245,7 +243,7 @@ class FacebookAdsClient:
                     daily_spend[date_str] = spend
 
             # Cache the data if the entire range is cacheable
-            if self.should_use_cache(date_to):
+            if use_cache:
                 self.save_to_cache(date_from, date_to, daily_spend)
 
             return daily_spend
