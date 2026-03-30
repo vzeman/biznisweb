@@ -1,0 +1,125 @@
+# PROJECT_STATE
+
+Last updated: 2026-03-30
+Owner: Patrik
+Purpose: Single source of truth pre priebezny stav, aby sa nestracal kontext medzi session.
+
+## 1) Portfolio Map
+
+### Doklady
+- Type: multi-tenant web app (MVP), session-based
+- Core purpose: zber, analyza, kontrola, archivacia uctovnych dokladov
+- Inputs: manual upload + email intake
+- Outputs: Google Drive originals + CSV evidence + app history + DPH sums
+- Core files:
+  - `server.js`
+  - `imap-intake.js`
+  - `doklady-v3 (2).html`
+
+### OpenClaw
+- Type: agent runtime/orchestration
+- Current host:
+  - EC2 instance: `i-00dc7eeb66278c47e`
+  - Public IP: `98.88.77.70`
+  - Gateway port: `18789`
+- Local launcher:
+  - `C:\Users\Patrik jankech\Desktop\openclaw-tunnel.bat`
+
+### Reporting
+- Type: reporting platform
+- Active domains/clients: VEVO, ROY
+- Goal: reusable reporting layer predajna aj pre dalsich klientov
+
+## 2) Repositories And Branches
+
+### biznisweb
+- Local path: `C:\Users\Patrik jankech\Desktop\biznisweb`
+- Remote: `https://github.com/vzeman/biznisweb.git`
+- Active branch for OpenClaw work: `opan-claw`
+
+### Playground
+- Local path: `C:\Users\Patrik jankech\Documents\Playground`
+- Note: tu bola vytvorena lokalna vetva, ale bez GitHub remote
+
+## 3) Architecture Direction (Agenti + SaaS)
+
+Target model:
+- Doklady = system of record
+- OpenClaw = execution layer (agents)
+- Agenti nikdy nezapisuju data mimo Doklady backend API
+
+Isolation baseline:
+- 1 tenant = izolovane data, secrets, audit trail
+- Tenant-sensitive data sa urcuju zo session/service identity, nie z client tenantId
+- Cross-tenant leakage = blocker
+
+## 4) Non-Negotiable Invariants (Do Not Break)
+
+1. Google OAuth je login/session vrstva, nie email import vrstva.
+2. 1 Google login = 1 tenant.
+3. 1 tenant = 1 import email adresa (admin-managed).
+4. 1 tenant = 1 mailbox config (v aktualnom MVP).
+5. Tenant-sensitive endpointy nesmu verit client tenantId ako source of truth.
+6. IMAP candidates musia byt filtrovane podla `tenantId` + route match:
+   - `routing.importEmail`
+   - `routing.mailboxUser`
+7. Dedupe nesmie blokovat novy import len kvoli starym `skipped/processed` candidate.
+8. Reset musi mazat aj serverovy tenant stav (nie len local browser state).
+
+## 5) Current OpenClaw Ops State
+
+- Gateway auth mode: token
+- Known symptom fixed: `unauthorized: gateway token missing`
+- Required access pattern:
+  - open dashboard with tokenized URL:
+  - `http://127.0.0.1:18789/#token=<token>`
+- Service persistence:
+  - `openclaw-gateway` is enabled/active
+  - user linger enabled on host
+
+## 6) Next Build Steps (Execution Queue)
+
+1. Doklady backend: add Agent Jobs API contract
+   - `POST /agent/jobs`
+   - `POST /agent/jobs/:id/events`
+   - `POST /agent/jobs/:id/result`
+2. Add service-to-service auth (signed token incl. `tenant_id`)
+3. Add immutable audit logs for each agent action
+4. OpenClaw: implement first agent workflow `manual-document-collector`
+5. Human approval gate before final write to Doklady history/Drive
+6. Pilot on 1 tenant, then template-ize for cloneable client onboarding
+
+## 7) Risks / Watchlist
+
+- Frontend is monolithic single HTML + inline JS (maintenance risk)
+- JSON file storage (no relational DB yet)
+- Browser-side Anthropic calls (security + governance risk)
+- Mailbox credentials currently in JSON store (needs hardened secrets strategy)
+
+## 8) Session Handoff Template (Copy Per Session)
+
+Use this block at end of each major session:
+
+```text
+Date:
+Repo + branch:
+What was changed:
+Why it was changed:
+What is verified:
+Known issues:
+Next exact step:
+```
+
+## 9) Change Log
+
+### 2026-03-30
+- Created unified PROJECT_STATE baseline.
+- Confirmed branch strategy for OpenClaw work in `biznisweb` on `opan-claw`.
+- Captured OpenClaw token/tunnel operational constraints.
+
+## 10) Update Policy
+
+- Rule: Po kazdom vacsom kroku alebo po ukonceni session aktualizujeme PROJECT_STATE.md.
+- Minimum update: datum, co sa zmenilo, co je overene, dalsi presny krok.
+- Ak sa zmeni infra/auth/tenant logika, update je povinny v ten isty den.
+
