@@ -33,7 +33,8 @@ Purpose: repo-scoped handoff and execution state for this codebase.
 
 ## 3) Current Branching / Workflow Rules
 
-- Active integration branch for current workflow hardening: `opan-claw`
+- Reporting work stays on `main`
+- OpenClaw work was moved out to the standalone `openclaw-agents-platform` repository
 - `main` only through reviewed merge
 - Before work: `git fetch --all --prune && git pull --rebase`
 - After major step: commit + push immediately

@@ -17,7 +17,6 @@ The goal is to keep one source of truth, avoid cross-PC drift, and prevent branc
 - Reporting: `biznisweb` repo, branch `main`
 - Doklady: `biznisweb` repo, branch `codex/doklady-saas-clean`
 - OpenClaw: `openclaw-agents-platform` repo, branch `main`
-- Temporary legacy branch: `biznisweb` repo, branch `opan-claw`
 
 ## Session Start Rules
 
