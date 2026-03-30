@@ -95,6 +95,16 @@ python export_orders.py --from-date 2024-01-01
 python export_orders.py --from-date 2024-01-15 --to-date 2024-01-15
 ```
 
+
+## Developer Workflow
+
+For repeatable setup across Mac and Windows, use the repo-local bootstrap scripts instead of one-off local helpers:
+
+- macOS / Linux: `./scripts/bootstrap.sh`
+- Windows PowerShell: `./scripts/bootstrap.ps1`
+
+Detailed multi-PC workflow rules are in `README_DEV.md` and the repo-scoped handoff state is in `PROJECT_STATE.md`.
+
 ## Daily Email Automation
 
 Use `daily_report_runner.py` to:

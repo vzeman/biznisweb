@@ -69,3 +69,9 @@ site/
 *.bak
 *.backup
 *~
+
+# Local multi-tool/runtime artifacts
+node_modules/
+downloads/
+.env.imap
+.env.oauth
