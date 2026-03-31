@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Execute `P2.3` OpenClaw infra/env cleanup in the standalone OpenClaw repository: remove unnecessary environment-surface leakage, tighten examples/bootstrap, and verify tunnel/bootstrap reproducibility without single-PC assumptions.
+- Start `P3.1` reusable reporting core extraction: separate shared reporting core from client adapters without changing current VEVO/ROY runtime behavior.
 
 ## 9) Change Log
 
@@ -198,3 +198,8 @@ Bootstrap entrypoints:
   - verified ROY smoke export on `2026-03-01..2026-03-02`,
   - verified VEVO smoke export on `2026-03-01..2026-03-02`,
   - verified project-aware invoice bootstrap on ROY with `python generate_invoices.py --project roy --from-date 2026-03-01 --to-date 2026-03-02 --dry-run --no-web-login`.
+- Completed `P2.4` reporting security CI baseline:
+  - extended `.github/workflows/env-check.yml` to run on the active reporting branch and added `secret-scan` + `security-baseline` jobs,
+  - added `scripts/security_ci.py` with repo-local assertions for shared HTTP hardening (`Authorization` header usage, shared retry session, partial-data/source-health invariants),
+  - wired CI to fail fast if reporting core loses the partial-data markers or Meta auth hardening contract,
+  - verified the local baseline script with `python scripts/security_ci.py`.
