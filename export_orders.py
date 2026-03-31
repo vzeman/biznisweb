@@ -1707,6 +1707,7 @@ class BizniWebExporter:
 
         # New analytics
         day_of_week_analysis = self.analyze_day_of_week(df)
+        week_of_month_analysis = self.analyze_week_of_month(df)
         day_hour_heatmap = self.analyze_day_hour_heatmap(df)
         country_analysis, city_analysis = self.analyze_geographic(df)
         geo_profitability = self.analyze_geo_profitability(df, fb_campaigns)
@@ -1764,6 +1765,7 @@ class BizniWebExporter:
             returning_customers_analysis, clv_return_time_analysis,
             order_size_distribution, item_combinations,
             day_of_week_analysis=day_of_week_analysis,
+            week_of_month_analysis=week_of_month_analysis,
             day_hour_heatmap=day_hour_heatmap,
             country_analysis=country_analysis,
             city_analysis=city_analysis,
@@ -3425,6 +3427,63 @@ class BizniWebExporter:
         print(f"Day of week analysis complete")
         return orders_per_day
 
+    def analyze_week_of_month(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze orders, revenue, and profitability by week position within month."""
+        print("\nAnalyzing week-of-month patterns...")
+
+        wom_df = df.copy()
+        wom_df['purchase_datetime_wom'] = pd.to_datetime(wom_df['purchase_date'])
+        wom_df['purchase_date_only'] = wom_df['purchase_datetime_wom'].dt.date
+        wom_df['year_month'] = wom_df['purchase_datetime_wom'].dt.to_period('M').astype(str)
+
+        # Week index inside month:
+        # days 1-7 => week 1, 8-14 => week 2, 15-21 => week 3, 22+ => week 4.
+        wom_df['week_of_month'] = ((wom_df['purchase_datetime_wom'].dt.day - 1) // 7) + 1
+        wom_df['week_of_month'] = wom_df['week_of_month'].clip(upper=4)
+
+        wom_agg = wom_df.groupby('week_of_month').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum',
+            'purchase_date_only': 'nunique',
+            'year_month': 'nunique'
+        }).reset_index()
+
+        wom_agg.columns = [
+            'week_of_month', 'orders', 'revenue', 'profit', 'active_days', 'active_months'
+        ]
+        wom_agg['week_label'] = wom_agg['week_of_month'].apply(lambda w: f'Week {int(w)}')
+
+        total_orders = wom_agg['orders'].sum()
+        total_revenue = wom_agg['revenue'].sum()
+
+        wom_agg['orders_pct'] = (
+            (wom_agg['orders'] / total_orders * 100).round(1) if total_orders > 0 else 0
+        )
+        wom_agg['revenue_pct'] = (
+            (wom_agg['revenue'] / total_revenue * 100).round(1) if total_revenue > 0 else 0
+        )
+        wom_agg['aov'] = (wom_agg['revenue'] / wom_agg['orders']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['profit_margin_pct'] = ((wom_agg['profit'] / wom_agg['revenue']) * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+
+        wom_agg['avg_daily_revenue'] = (wom_agg['revenue'] / wom_agg['active_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['avg_daily_profit'] = (wom_agg['profit'] / wom_agg['active_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['avg_orders_per_day'] = (wom_agg['orders'] / wom_agg['active_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+
+        wom_agg = wom_agg.sort_values('week_of_month').reset_index(drop=True)
+
+        print(f"Week-of-month analysis complete")
+        return wom_agg
     def analyze_day_hour_heatmap(self, df: pd.DataFrame) -> pd.DataFrame:
         """Analyze orders by day of week and hour of day for heatmap visualization"""
         print("\nAnalyzing day/hour heatmap patterns...")
@@ -4955,4 +5014,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

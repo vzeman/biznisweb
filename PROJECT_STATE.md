@@ -86,7 +86,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Add repo-local operator runbook for scheduled jobs, ECR deploy, and recovery steps
+- Deploy branch with Week-of-Month metric and validate charts in freshly generated VEVO + ROY HTML reports
 
 ## 9) Change Log
 
@@ -95,3 +95,9 @@ Bootstrap entrypoints:
 - Added cross-platform bootstrap scripts for macOS/Linux and Windows PowerShell.
 - Narrowed `PROJECT_STATE.md` to this repository only.
 - Removed cross-project state ownership from this repo; left only integration notes.
+
+### 2026-03-31
+- Added new Week-of-Month analytics (Week 1-4) into reporting pipeline in export_orders.py.
+- Wired Week-of-Month outputs into HTML report generation (html_report_generator.py) with 2 charts and performance table.
+- Added aggregation for week-level pattern visibility: orders, revenue, profit, margin, AOV, avg daily revenue/profit, active days/months.
+- Verified syntax via python -m py_compile export_orders.py html_report_generator.py.

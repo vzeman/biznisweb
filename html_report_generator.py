@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 HTML Report Generator for BizniWeb Order Export
 Generates beautiful HTML reports with charts and tables
@@ -19,6 +19,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          order_size_distribution: pd.DataFrame = None,
                          item_combinations: pd.DataFrame = None,
                          day_of_week_analysis: pd.DataFrame = None,
+                         week_of_month_analysis: pd.DataFrame = None,
                          day_hour_heatmap: pd.DataFrame = None,
                          country_analysis: pd.DataFrame = None,
                          city_analysis: pd.DataFrame = None,
@@ -2831,6 +2832,75 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
+
+    # Week of Month Analysis
+    if week_of_month_analysis is not None and not week_of_month_analysis.empty:
+        wom_labels = week_of_month_analysis['week_label'].tolist()
+
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Week of Month Analysis</h2>
+
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Revenue & Profit by Week of Month</h2>
+                <p class="chart-explanation">Shows total turnover and profitability for week positions (1st, 2nd, 3rd, 4th, 5th week) across the selected period.</p>
+                <canvas id="womRevenueProfitChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Average Daily Revenue & Profit by Week of Month</h2>
+                <p class="chart-explanation">Normalized view of performance pattern by week position using average daily values.</p>
+                <canvas id="womAvgDailyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Week of Month Performance</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Week in Month</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Orders %</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Revenue %</th>
+                        <th class="number">Profit (before ads)</th>
+                        <th class="number">Profit Margin</th>
+                        <th class="number">AOV</th>
+                        <th class="number">Avg Daily Revenue</th>
+                        <th class="number">Avg Daily Profit</th>
+                        <th class="number">Active Days</th>
+                        <th class="number">Active Months</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+
+        for _, row in week_of_month_analysis.iterrows():
+            html_content += f"""
+                    <tr>
+                        <td>{row['week_label']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">{row['orders_pct']:.1f}%</td>
+                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">{row['revenue_pct']:.1f}%</td>
+                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">{row['profit_margin_pct']:.1f}%</td>
+                        <td class="number">€{row['aov']:.2f}</td>
+                        <td class="number">€{row['avg_daily_revenue']:,.2f}</td>
+                        <td class="number">€{row['avg_daily_profit']:,.2f}</td>
+                        <td class="number">{int(row['active_days'])}</td>
+                        <td class="number">{int(row['active_months'])}</td>
+                    </tr>"""
+
+        html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
     # Day/Hour Heatmap (add after day of week analysis)
     if day_hour_heatmap is not None and not day_hour_heatmap.empty:
         # Prepare heatmap data as JSON for JavaScript
@@ -7618,6 +7688,91 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             }});
         }}"""
 
+
+    # Week of Month Charts
+    if week_of_month_analysis is not None and not week_of_month_analysis.empty:
+        wom_labels = week_of_month_analysis['week_label'].tolist()
+        wom_revenue = week_of_month_analysis['revenue'].tolist()
+        wom_profit = week_of_month_analysis['profit'].tolist()
+        wom_avg_daily_revenue = week_of_month_analysis['avg_daily_revenue'].tolist()
+        wom_avg_daily_profit = week_of_month_analysis['avg_daily_profit'].tolist()
+
+        html_content += f"""
+
+        // Week of Month Revenue & Profit Chart
+        const womRevenueProfitCtx = document.getElementById('womRevenueProfitChart');
+        if (womRevenueProfitCtx) {{
+            new Chart(womRevenueProfitCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(wom_labels)},
+                    datasets: [{{
+                        label: 'Revenue',
+                        data: {json.dumps(wom_revenue)},
+                        backgroundColor: '#10B981',
+                        borderRadius: 5,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Profit (before ads)',
+                        data: {json.dumps(wom_profit)},
+                        type: 'line',
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#3B82F6',
+                        fill: true,
+                        yAxisID: 'y'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'EUR' }},
+                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        // Week of Month Average Daily Revenue & Profit Chart
+        const womAvgDailyCtx = document.getElementById('womAvgDailyChart');
+        if (womAvgDailyCtx) {{
+            new Chart(womAvgDailyCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(wom_labels)},
+                    datasets: [{{
+                        label: 'Avg Daily Revenue',
+                        data: {json.dumps(wom_avg_daily_revenue)},
+                        backgroundColor: '#8B5CF6',
+                        borderRadius: 5,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Avg Daily Profit (before ads)',
+                        data: {json.dumps(wom_avg_daily_profit)},
+                        backgroundColor: '#F59E0B',
+                        borderRadius: 5,
+                        yAxisID: 'y'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'EUR / day' }},
+                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
     # Country Chart
     if country_analysis is not None and not country_analysis.empty:
         country_labels = country_analysis['country'].tolist()[:10]
@@ -9639,5 +9794,3 @@ Tím Vevo''',
 """
 
     return html_content
-
-
