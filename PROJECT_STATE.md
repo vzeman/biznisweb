@@ -83,14 +83,11 @@ Bootstrap entrypoints:
 - No formal API contract package yet for cross-project integrations
 - No container/bootstrap parity check in CI yet
 - Runtime/deploy docs for separate OpenClaw infra still belong in another repo and are not defined there yet
-- Partial upstream failures (ads/weather/etc.) still need explicit product-level handling policy
+- Partial upstream failures (ads/weather/etc.) now surface explicit source-health metadata in HTML/CFO outputs and JSON sidecars; downstream email/ops policy still needs alert tightening.
 
 ## 8) Next Exact Step
 
-- Implement explicit partial-data handling for upstream failures:
-  - detect/report missing FB/Google/weather sources as partial data instead of silent zeros,
-  - surface source-health markers in HTML/CFO outputs,
-  - define when report generation should continue vs fail hard.
+- Define and implement the next OpenClaw auth baseline hardening step (P1.5): replace long-lived URL-fragment style access patterns with a stricter session/signed-grant direction and document the migration path.
 
 ## 9) Change Log
 
@@ -124,6 +121,14 @@ Bootstrap entrypoints:
   - `.gitattributes` enforces LF for Python/Markdown/template files,
   - added safe tracked template `.env.roy.sk.template`,
   - cleared CRLF-only working tree noise before continuing.
+- Completed `P1.4` partial-data handling for reporting outputs:
+  - added source-health contract per run (`source_health`) with per-source status/mode/detail fields,
+  - export now writes `data_quality_<range>.json` sidecar metadata next to report artifacts,
+  - main HTML report renders a visible Data Quality banner/table before KPI cards,
+  - CFO HTML runner loads the same sidecar and renders the same source-health banner,
+  - runner keeps backward compatibility by not requiring the JSON sidecar for legacy artifact existence checks,
+  - verified syntax with `python -m py_compile export_orders.py html_report_generator.py daily_report_runner.py google_ads.py weather_client.py facebook_ads.py generate_invoices.py http_client.py`,
+  - verified ROY smoke run end-to-end on `2026-03-01..2026-03-03`, including generated `data_quality_*.json`, main HTML report, and CFO HTML banner rendering.
 - Completed `P1.3` reporting integration hardening:
   - added shared `http_client.py` with default timeout + retry policy for external integrations,
   - moved Facebook Ads API auth to `Authorization: Bearer` header instead of query params,

@@ -20,6 +20,7 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate, make_msgid
+from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -170,12 +171,33 @@ def get_output_paths(project: str, from_date: str, to_date: str) -> Dict[str, Pa
         "export_csv": data_dir / f"export_{compact_range}.csv",
         "aggregate_by_date_csv": data_dir / f"aggregate_by_date_{compact_range}.csv",
         "aggregate_by_month_csv": data_dir / f"aggregate_by_month_{compact_range}.csv",
+        "data_quality_json": data_dir / f"data_quality_{compact_range}.json",
     }
 
 
 def get_cfo_graph_path(project: str, from_date: str, to_date: str) -> Path:
     compact_range = f"{from_date.replace('-', '')}-{to_date.replace('-', '')}"
     return project_data_dir(project) / f"cfo_graphs_{compact_range}.html"
+
+
+def load_data_quality(path: Optional[Path]) -> Dict[str, Any]:
+    if not path or not path.exists():
+        return {
+            "overall_status": "partial",
+            "is_partial": True,
+            "summary": "Data quality metadata file is missing for this run. Source completeness cannot be verified.",
+            "sources": {},
+        }
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {
+            "overall_status": "partial",
+            "is_partial": True,
+            "summary": f"Data quality metadata could not be parsed ({exc}). Source completeness cannot be verified.",
+            "sources": {},
+        }
 
 
 def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
@@ -853,6 +875,25 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
     order_records = _load_order_records(export_csv)
     customer_by_date = _load_customer_dynamics(order_records)
     row_by_date: Dict[date, Dict[str, Any]] = {row["date"]: row for row in daily_rows}
+    source_health = load_data_quality(file_paths.get("data_quality_json"))
+
+    def _source_status_label(status: str) -> str:
+        labels = {
+            "ok": "OK",
+            "manual": "Manual",
+            "disabled": "Disabled",
+            "warning": "Warning",
+            "error": "Error",
+        }
+        return labels.get(str(status or "").lower(), str(status or "Unknown").title())
+
+    def _source_status_class(status: str) -> str:
+        normalized = str(status or "").lower()
+        if normalized in {"ok", "manual"}:
+            return "status-ok"
+        if normalized == "disabled":
+            return "status-disabled"
+        return "status-error"
 
     last_date = daily_rows[-1]["date"]
     prev_day = last_date - timedelta(days=1)
@@ -1131,6 +1172,28 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
     }
 
     payload_json = json.dumps(graph_payload, ensure_ascii=False)
+    source_rows = []
+    for source in list((source_health.get("sources") or {}).values()):
+        source_rows.append(
+            f"""
+            <tr>
+              <td>{escape(str(source.get('label', 'Source')))}</td>
+              <td><span class="status-pill {_source_status_class(source.get('status', 'unknown'))}">{escape(_source_status_label(source.get('status', 'unknown')))}</span></td>
+              <td>{escape(str(source.get('mode', 'n/a')))}</td>
+              <td>{escape(str(source.get('message', '')))}</td>
+            </tr>"""
+        )
+    quality_label = "Partial Data" if source_health.get("is_partial") else "Full Data"
+    quality_class = "data-quality-partial" if source_health.get("is_partial") else "data-quality-full"
+    data_quality_banner_html = f"""
+    <div class="data-quality-banner {quality_class}">
+      <div class="data-quality-title">Data Quality: {quality_label}</div>
+      <div class="data-quality-message">{escape(str(source_health.get('summary', '')))}</div>
+      <div class="data-quality-meta">Generated UTC: {escape(str(source_health.get('generated_at_utc', 'N/A')))}</div>
+      {"<table class=\"data-quality-table\"><thead><tr><th>Source</th><th>Status</th><th>Mode</th><th>Detail</th></tr></thead><tbody>" + "".join(source_rows) + "</tbody></table>" if source_rows else ""}
+    </div>
+    """
+
     html = """
 <!doctype html>
 <html lang="en">
@@ -1178,6 +1241,73 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
       margin: 6px 0 0 0;
       color: var(--muted);
       font-size: 14px;
+    }
+    .data-quality-banner {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 6px solid #10B981;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .data-quality-banner.data-quality-partial {
+      border-left-color: #EF4444;
+    }
+    .data-quality-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .data-quality-message {
+      color: #334155;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 6px;
+    }
+    .data-quality-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .data-quality-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .data-quality-table th,
+    .data-quality-table td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .data-quality-table th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .status-pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .status-pill.status-ok {
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+    }
+    .status-pill.status-disabled {
+      background: rgba(100, 116, 139, 0.12);
+      color: #475569;
+    }
+    .status-pill.status-error {
+      background: rgba(239, 68, 68, 0.12);
+      color: #B91C1C;
     }
     .section-title {
       margin: 24px 0 10px;
@@ -1309,6 +1439,7 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
       <h1>CFO Executive Dashboard</h1>
       <p id="meta"></p>
     </div>
+    __DATA_QUALITY_BANNER__
 
     <div class="section-title">Core KPIs</div>
     <div class="kpi-window-switch" id="kpiWindowSwitch">
@@ -2037,7 +2168,7 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
   </script>
 </body>
 </html>
-""".replace("__DATA__", payload_json)
+""".replace("__DATA__", payload_json).replace("__DATA_QUALITY_BANNER__", data_quality_banner_html)
 
     output_path = get_cfo_graph_path(project, from_date, to_date)
     output_path.write_text(html, encoding="utf-8")
@@ -2185,7 +2316,14 @@ def main() -> None:
         )
 
     output_paths = get_output_paths(project, from_date, to_date)
-    missing = [str(path) for path in output_paths.values() if not path.exists()]
+    required_output_keys = [
+        "report_html",
+        "email_strategy_html",
+        "export_csv",
+        "aggregate_by_date_csv",
+        "aggregate_by_month_csv",
+    ]
+    missing = [str(output_paths[key]) for key in required_output_keys if not output_paths[key].exists()]
     if missing:
         raise FileNotFoundError(f"Expected output files not found: {missing}")
 

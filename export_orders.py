@@ -493,6 +493,57 @@ class BizniWebExporter:
         return self.data_dir / filename
 
     @staticmethod
+    def _build_source_entry(
+        *,
+        key: str,
+        label: str,
+        status: str,
+        mode: str,
+        message: str,
+        healthy: bool,
+        **extra: Any,
+    ) -> Dict[str, Any]:
+        entry: Dict[str, Any] = {
+            "key": key,
+            "label": label,
+            "status": status,
+            "mode": mode,
+            "message": message,
+            "healthy": healthy,
+        }
+        entry.update(extra)
+        return entry
+
+    @staticmethod
+    def _finalize_source_health(source_health: Dict[str, Any]) -> Dict[str, Any]:
+        sources = list((source_health.get("sources") or {}).values())
+        degraded = [source["label"] for source in sources if source.get("status") in {"warning", "error"}]
+        source_health["overall_status"] = "partial" if degraded else "full"
+        source_health["is_partial"] = bool(degraded)
+        source_health["partial_sources"] = degraded
+        if degraded:
+            source_health["summary"] = (
+                "Partial data: "
+                + ", ".join(degraded)
+                + " did not load cleanly in this run. Metrics depending on these sources may be incomplete or zero-filled."
+            )
+        else:
+            source_health["summary"] = "All enabled external sources loaded successfully for this run."
+        return source_health
+
+    def _write_data_quality_file(
+        self,
+        source_health: Dict[str, Any],
+        date_from: datetime,
+        date_to: datetime,
+    ) -> Path:
+        quality_path = self.output_path(f"data_quality_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.json")
+        with open(quality_path, "w", encoding="utf-8") as f:
+            json.dump(source_health, f, ensure_ascii=False, indent=2)
+        print(f"Data quality metadata saved: {quality_path}")
+        return quality_path
+
+    @staticmethod
     def get_product_sku(ean: str, title: str) -> str:
         """
         Get a consistent product SKU/identifier.
@@ -1597,6 +1648,26 @@ class BizniWebExporter:
 
         # Safety dedup for long historical runs / cursor overlap edge cases.
         orders = self.deduplicate_orders(orders)
+
+        source_health: Dict[str, Any] = {
+            "project": self.project_name,
+            "generated_at_utc": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            "date_range": {
+                "from": date_from.strftime("%Y-%m-%d"),
+                "to": date_to.strftime("%Y-%m-%d"),
+            },
+            "sources": {
+                "biznisweb_orders": self._build_source_entry(
+                    key="biznisweb_orders",
+                    label="BizniWeb Orders",
+                    status="ok",
+                    mode="api",
+                    message=f"Fetched and deduplicated {len(orders)} orders from BizniWeb GraphQL.",
+                    healthy=True,
+                    orders=len(orders),
+                ),
+            },
+        }
         
         # Fetch Facebook Ads spend data
         fb_daily_spend = {}
@@ -1610,35 +1681,79 @@ class BizniWebExporter:
                 f"Using manual Facebook Ads total: {MANUAL_FB_ADS_TOTAL:.2f} EUR "
                 f"distributed across {len(fb_daily_spend)} days"
             )
+            source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                key="facebook_ads",
+                label="Facebook Ads",
+                status="manual",
+                mode="manual_total_distribution",
+                message=f"Manual Facebook Ads total {MANUAL_FB_ADS_TOTAL:.2f} EUR distributed across the selected date range.",
+                healthy=True,
+                active_days=len(fb_daily_spend),
+                total_eur=round(float(MANUAL_FB_ADS_TOTAL), 2),
+            )
         elif self.fb_client.is_configured:
-            print("Fetching Facebook Ads spend data...")
-            fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
-            if fb_daily_spend:
-                print(f"Retrieved Facebook Ads data for {len(fb_daily_spend)} days")
+            print("Testing Facebook Ads connection...")
+            if not self.fb_client.test_connection():
+                logger.warning("Facebook Ads connection test failed; report will continue with zero-filled FB metrics.")
+                source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                    key="facebook_ads",
+                    label="Facebook Ads",
+                    status="error",
+                    mode="api",
+                    message="Configured, but API connection test failed. FB-based metrics in this run may be incomplete or zero-filled.",
+                    healthy=False,
+                )
+            else:
+                print("Fetching Facebook Ads spend data...")
+                fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
+                if fb_daily_spend:
+                    print(f"Retrieved Facebook Ads data for {len(fb_daily_spend)} days")
 
-            # Fetch detailed metrics for Facebook Ads report
-            print("Fetching detailed Facebook Ads metrics...")
-            fb_detailed_metrics = self.fb_client.get_daily_metrics(date_from, date_to)
-            if fb_detailed_metrics:
-                print(f"Retrieved detailed FB metrics for {len(fb_detailed_metrics)} days")
+                # Fetch detailed metrics for Facebook Ads report
+                print("Fetching detailed Facebook Ads metrics...")
+                fb_detailed_metrics = self.fb_client.get_daily_metrics(date_from, date_to)
+                if fb_detailed_metrics:
+                    print(f"Retrieved detailed FB metrics for {len(fb_detailed_metrics)} days")
 
-            # Fetch campaign-level performance
-            print("Fetching Facebook campaign performance...")
-            fb_campaigns = self.fb_client.get_campaign_spend(date_from, date_to)
-            if fb_campaigns:
-                print(f"Retrieved data for {len(fb_campaigns)} campaigns")
+                # Fetch campaign-level performance
+                print("Fetching Facebook campaign performance...")
+                fb_campaigns = self.fb_client.get_campaign_spend(date_from, date_to)
+                if fb_campaigns:
+                    print(f"Retrieved data for {len(fb_campaigns)} campaigns")
 
-            # Fetch hourly stats
-            print("Fetching Facebook hourly stats...")
-            fb_hourly_stats = self.fb_client.get_hourly_stats(date_from, date_to)
-            if fb_hourly_stats:
-                print(f"Retrieved hourly stats for {len(fb_hourly_stats)} hours")
+                # Fetch hourly stats
+                print("Fetching Facebook hourly stats...")
+                fb_hourly_stats = self.fb_client.get_hourly_stats(date_from, date_to)
+                if fb_hourly_stats:
+                    print(f"Retrieved hourly stats for {len(fb_hourly_stats)} hours")
 
-            # Fetch day of week stats
-            print("Fetching Facebook day-of-week stats...")
-            fb_dow_stats = self.fb_client.get_day_of_week_stats(date_from, date_to)
-            if fb_dow_stats:
-                print(f"Retrieved day-of-week stats for {len(fb_dow_stats)} days")
+                # Fetch day of week stats
+                print("Fetching Facebook day-of-week stats...")
+                fb_dow_stats = self.fb_client.get_day_of_week_stats(date_from, date_to)
+                if fb_dow_stats:
+                    print(f"Retrieved day-of-week stats for {len(fb_dow_stats)} days")
+
+                source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                    key="facebook_ads",
+                    label="Facebook Ads",
+                    status="ok",
+                    mode="api",
+                    message=f"Facebook Ads API connected successfully. Daily spend loaded for {len(fb_daily_spend)} active days.",
+                    healthy=True,
+                    active_days=len(fb_daily_spend),
+                    detailed_days=len(fb_detailed_metrics),
+                    campaign_count=len(fb_campaigns),
+                    hourly_rows=len(fb_hourly_stats),
+                )
+        else:
+            source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                key="facebook_ads",
+                label="Facebook Ads",
+                status="disabled",
+                mode="not_configured",
+                message="Facebook Ads integration is not configured for this project/runtime.",
+                healthy=True,
+            )
         
         # Fetch Google Ads spend data
         google_ads_daily_spend = {}
@@ -1648,11 +1763,51 @@ class BizniWebExporter:
                 f"Using manual Google Ads total: {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR "
                 f"distributed across {len(google_ads_daily_spend)} days"
             )
+            source_health["sources"]["google_ads"] = self._build_source_entry(
+                key="google_ads",
+                label="Google Ads",
+                status="manual",
+                mode="manual_total_distribution",
+                message=f"Manual Google Ads total {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR distributed across the selected date range.",
+                healthy=True,
+                active_days=len(google_ads_daily_spend),
+                total_eur=round(float(MANUAL_GOOGLE_ADS_TOTAL), 2),
+            )
         elif self.google_ads_client.is_configured:
-            print("Fetching Google Ads spend data...")
-            google_ads_daily_spend = self.google_ads_client.get_daily_spend(date_from, date_to)
-            if google_ads_daily_spend:
-                print(f"Retrieved Google Ads data for {len(google_ads_daily_spend)} days")
+            print("Testing Google Ads connection...")
+            if not self.google_ads_client.test_connection():
+                logger.warning("Google Ads connection test failed; report will continue with zero-filled Google metrics.")
+                source_health["sources"]["google_ads"] = self._build_source_entry(
+                    key="google_ads",
+                    label="Google Ads",
+                    status="error",
+                    mode="api",
+                    message="Configured, but API connection test failed. Google Ads metrics in this run may be incomplete or zero-filled.",
+                    healthy=False,
+                )
+            else:
+                print("Fetching Google Ads spend data...")
+                google_ads_daily_spend = self.google_ads_client.get_daily_spend(date_from, date_to)
+                if google_ads_daily_spend:
+                    print(f"Retrieved Google Ads data for {len(google_ads_daily_spend)} days")
+                source_health["sources"]["google_ads"] = self._build_source_entry(
+                    key="google_ads",
+                    label="Google Ads",
+                    status="ok",
+                    mode="api",
+                    message=f"Google Ads API connected successfully. Daily spend loaded for {len(google_ads_daily_spend)} active days.",
+                    healthy=True,
+                    active_days=len(google_ads_daily_spend),
+                )
+        else:
+            source_health["sources"]["google_ads"] = self._build_source_entry(
+                key="google_ads",
+                label="Google Ads",
+                status="disabled",
+                mode="not_configured",
+                message="Google Ads integration is not configured for this project/runtime.",
+                healthy=True,
+            )
         
         # Flatten all orders
         all_rows = []
@@ -1778,6 +1933,39 @@ class BizniWebExporter:
         # Create aggregated reports
         date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
         weather_analysis = self.analyze_weather_impact(date_agg, date_from, date_to)
+        if self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
+            if weather_analysis:
+                weather_days = len(weather_analysis.get("daily", [])) if weather_analysis.get("daily") is not None else 0
+                source_health["sources"]["weather"] = self._build_source_entry(
+                    key="weather",
+                    label="Weather",
+                    status="ok",
+                    mode="api",
+                    message=f"Weather enrichment loaded successfully for {weather_days} daily rows.",
+                    healthy=True,
+                    active_days=weather_days,
+                    provider=weather_analysis.get("source", "Open-Meteo Historical Weather API"),
+                    location=weather_analysis.get("location_label", ""),
+                )
+            else:
+                source_health["sources"]["weather"] = self._build_source_entry(
+                    key="weather",
+                    label="Weather",
+                    status="error",
+                    mode="api",
+                    message="Weather enrichment was enabled, but no usable weather dataset was produced for this run.",
+                    healthy=False,
+                )
+        else:
+            source_health["sources"]["weather"] = self._build_source_entry(
+                key="weather",
+                label="Weather",
+                status="disabled",
+                mode="not_configured",
+                message="Weather enrichment is not configured for this project/runtime.",
+                healthy=True,
+            )
+        source_health = self._finalize_source_health(source_health)
 
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(df, date_agg, clv_return_time_analysis)
@@ -1836,13 +2024,15 @@ class BizniWebExporter:
             fb_hourly_stats=fb_hourly_stats,
             fb_dow_stats=fb_dow_stats,
             ltv_by_date=ltv_by_date,
-            consistency_checks=consistency_checks
+            consistency_checks=consistency_checks,
+            source_health=source_health,
         )
         html_filename = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
         # Write with UTF-8 BOM to avoid mojibake when a server/browser mis-detects charset
         with open(html_filename, 'w', encoding='utf-8-sig') as f:
             f.write(html_content)
         print(f"HTML report saved: {html_filename}")
+        self._write_data_quality_file(source_health, date_from, date_to)
 
         # Generate Email Strategy Report
         if customer_email_segments and cohort_analysis:

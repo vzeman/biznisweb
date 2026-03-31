@@ -8,6 +8,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, Any
 import json
+from html import escape
 
 
 def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
@@ -42,12 +43,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          same_item_repurchase: dict = None,
                          time_to_nth_by_first_item: dict = None,
                          fb_detailed_metrics: dict = None,
-                         fb_campaigns: list = None,
-                         cost_per_order: dict = None,
-                         fb_hourly_stats: list = None,
-                         fb_dow_stats: list = None,
-                         ltv_by_date: pd.DataFrame = None,
-                         consistency_checks: dict = None) -> str:
+                          fb_campaigns: list = None,
+                          cost_per_order: dict = None,
+                          fb_hourly_stats: list = None,
+                          fb_dow_stats: list = None,
+                          ltv_by_date: pd.DataFrame = None,
+                          consistency_checks: dict = None,
+                          source_health: dict = None) -> str:
     """
     Generate a complete HTML report with charts and tables
     """
@@ -138,6 +140,63 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     total_cost = date_agg['total_cost'].sum()
     total_profit = date_agg['net_profit'].sum()
     total_roi = (total_profit / total_cost * 100) if total_cost > 0 else 0
+
+    source_health = source_health or {}
+    source_entries = list((source_health.get("sources") or {}).values())
+
+    def _source_status_label(status: str) -> str:
+        labels = {
+            "ok": "OK",
+            "manual": "Manual",
+            "disabled": "Disabled",
+            "warning": "Warning",
+            "error": "Error",
+        }
+        return labels.get(str(status or "").lower(), str(status or "Unknown").title())
+
+    def _source_status_class(status: str) -> str:
+        normalized = str(status or "").lower()
+        if normalized in {"ok", "manual"}:
+            return "status-ok"
+        if normalized == "disabled":
+            return "status-disabled"
+        return "status-error"
+
+    data_quality_section = ""
+    if source_entries:
+        overall_partial = bool(source_health.get("is_partial"))
+        overall_label = "Partial Data" if overall_partial else "Full Data"
+        overall_class = "data-quality-partial" if overall_partial else "data-quality-full"
+        source_rows = []
+        for source in source_entries:
+            source_rows.append(
+                f"""
+                    <tr>
+                        <td>{escape(str(source.get('label', 'Source')))}</td>
+                        <td><span class="status-pill {_source_status_class(source.get('status', 'unknown'))}">{escape(_source_status_label(source.get('status', 'unknown')))}</span></td>
+                        <td>{escape(str(source.get('mode', 'n/a')))}</td>
+                        <td>{escape(str(source.get('message', '')))}</td>
+                    </tr>"""
+            )
+        data_quality_section = f"""
+        <div class="data-quality-banner {overall_class}">
+            <div class="data-quality-title">Data Quality: {overall_label}</div>
+            <div class="data-quality-message">{escape(str(source_health.get('summary', '')))}</div>
+            <div class="data-quality-meta">Generated UTC: {escape(str(source_health.get('generated_at_utc', 'N/A')))}</div>
+            <table class="data-quality-table">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th>Mode</th>
+                        <th>Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(source_rows)}
+                </tbody>
+            </table>
+        </div>"""
     total_orders = date_agg['unique_orders'].sum()
     total_items = date_agg['total_items'].sum()
     total_aov = total_revenue / total_orders if total_orders > 0 else 0
@@ -242,6 +301,84 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         .header .date-range {{
             color: #718096;
             font-size: 1.2rem;
+        }}
+
+        .data-quality-banner {{
+            background: white;
+            border-radius: 15px;
+            padding: 22px 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-left: 6px solid #48bb78;
+        }}
+
+        .data-quality-banner.data-quality-partial {{
+            border-left-color: #f56565;
+        }}
+
+        .data-quality-title {{
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }}
+
+        .data-quality-message {{
+            color: #4a5568;
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }}
+
+        .data-quality-meta {{
+            color: #718096;
+            font-size: 0.85rem;
+            margin-bottom: 14px;
+        }}
+
+        .data-quality-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }}
+
+        .data-quality-table th,
+        .data-quality-table td {{
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid #edf2f7;
+            vertical-align: top;
+        }}
+
+        .data-quality-table th {{
+            color: #718096;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }}
+
+        .status-pill {{
+            display: inline-block;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }}
+
+        .status-pill.status-ok {{
+            background: rgba(72, 187, 120, 0.12);
+            color: #2f855a;
+        }}
+
+        .status-pill.status-disabled {{
+            background: rgba(113, 128, 150, 0.12);
+            color: #4a5568;
+        }}
+
+        .status-pill.status-error {{
+            background: rgba(245, 101, 101, 0.12);
+            color: #c53030;
         }}
         
         .summary-cards {{
@@ -465,6 +602,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="date-range">{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}</div>
             <button id="toggleAllBtn" class="expand-all-btn" onclick="toggleAllTables(true)" style="margin-top: 15px;">Expand All Tables</button>
         </div>
+        {data_quality_section}
         
         <div class="summary-cards">
             <div class="card">
