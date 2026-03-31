@@ -21,6 +21,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          day_of_week_analysis: pd.DataFrame = None,
                          week_of_month_analysis: pd.DataFrame = None,
                          day_of_month_analysis: pd.DataFrame = None,
+                         advanced_dtc_metrics: dict = None,
                          day_hour_heatmap: pd.DataFrame = None,
                          country_analysis: pd.DataFrame = None,
                          city_analysis: pd.DataFrame = None,
@@ -2973,6 +2974,294 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     </tr>"""
 
         html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+    # Advanced DTC Metrics
+    if advanced_dtc_metrics:
+        adv_summary = advanced_dtc_metrics.get('summary', {}) or {}
+        adv_basket = advanced_dtc_metrics.get('basket_contribution')
+        adv_payday = advanced_dtc_metrics.get('payday_window')
+        adv_payback = advanced_dtc_metrics.get('cohort_payback')
+        adv_sku_pareto = advanced_dtc_metrics.get('sku_pareto')
+        adv_attach = advanced_dtc_metrics.get('attach_rate')
+
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Advanced DTC Unit Economics</h2>
+
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-title">First-Order Contribution Margin</div>
+                <div class="card-value {'profit' if adv_summary.get('first_order_contribution_margin_pct', 0) >= 0 else 'cost'}">{adv_summary.get('first_order_contribution_margin_pct', 0):.2f}%</div>
+            </div>
+            <div class="card">
+                <div class="card-title">First-Order Contribution / Order</div>
+                <div class="card-value {'profit' if adv_summary.get('first_order_contribution_per_order', 0) >= 0 else 'cost'}">€{adv_summary.get('first_order_contribution_per_order', 0):,.2f}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Repeat Contribution / Order</div>
+                <div class="card-value {'profit' if adv_summary.get('repeat_order_contribution_per_order', 0) >= 0 else 'cost'}">€{adv_summary.get('repeat_order_contribution_per_order', 0):,.2f}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Contribution LTV/CAC</div>
+                <div class="card-value {'profit' if adv_summary.get('contribution_ltv_cac', 0) > 1 else 'cost'}">{adv_summary.get('contribution_ltv_cac', 0):.2f}x</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Margin Stability Index</div>
+                <div class="card-value {'profit' if adv_summary.get('margin_stability_index', 0) >= 70 else 'cost'}">{adv_summary.get('margin_stability_index', 0):.1f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Std dev: {adv_summary.get('margin_std_pp', 0):.2f} p.b.</div>
+            </div>
+            <div class="card">
+                <div class="card-title">SKU Pareto (80%)</div>
+                <div class="card-value">{int(adv_summary.get('sku_pareto_80_count', 0))} / {int(adv_summary.get('sku_total_count', 0))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">SKUs needed for 80% contribution</div>
+            </div>
+        </div>
+        """
+
+        has_adv_charts = (
+            (adv_basket is not None and not adv_basket.empty)
+            or (adv_payday is not None and not adv_payday.empty)
+            or (adv_payback is not None and not adv_payback.empty)
+            or (adv_sku_pareto is not None and not adv_sku_pareto.empty)
+            or (advanced_dtc_metrics.get('daily_margin') is not None and not advanced_dtc_metrics.get('daily_margin').empty)
+        )
+        if has_adv_charts:
+            html_content += """
+        <div class="chart-grid">"""
+            if adv_basket is not None and not adv_basket.empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Contribution by Basket Size</h2>
+                <p class="chart-explanation">Pre-ad contribution/order and margin across basket-size buckets.</p>
+                <canvas id="advBasketContributionChart"></canvas>
+            </div>"""
+            if adv_payday is not None and not adv_payday.empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Payday Window Index</h2>
+                <p class="chart-explanation">Revenue/profit index by month phase windows (1-7, 8-14, 15-21, 22-28, 29-31).</p>
+                <canvas id="advPaydayWindowChart"></canvas>
+            </div>"""
+            if adv_payback is not None and not adv_payback.empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Cohort Payback Days</h2>
+                <p class="chart-explanation">Average and median payback period by acquisition cohort month.</p>
+                <canvas id="advCohortPaybackChart"></canvas>
+            </div>"""
+            if advanced_dtc_metrics.get('daily_margin') is not None and not advanced_dtc_metrics.get('daily_margin').empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Margin Stability (Daily)</h2>
+                <p class="chart-explanation">Daily pre-ad margin with 7-day moving average to monitor volatility.</p>
+                <canvas id="advMarginStabilityChart"></canvas>
+            </div>"""
+            if adv_sku_pareto is not None and not adv_sku_pareto.empty:
+                html_content += """
+            <div class="chart-container" style="grid-column: 1 / -1;">
+                <h2 class="chart-title">SKU Contribution Pareto</h2>
+                <p class="chart-explanation">Top SKU contribution bars with cumulative share line to identify 80/20 concentration.</p>
+                <canvas id="advSkuParetoChart"></canvas>
+            </div>"""
+            html_content += """
+        </div>"""
+
+        if adv_basket is not None and not adv_basket.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Contribution by Basket Size</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Basket Size</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Pre-Ad Contribution</th>
+                        <th class="number">Contribution / Order</th>
+                        <th class="number">Contribution Margin</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_basket.iterrows():
+                html_content += f"""
+                    <tr>
+                        <td>{row['basket_size']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">€{row['pre_ad_contribution']:,.2f}</td>
+                        <td class="number">€{row['contribution_per_order']:,.2f}</td>
+                        <td class="number">{row['contribution_margin_pct']:.1f}%</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_payday is not None and not adv_payday.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Payday Window Index (Phase of Month)</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Window</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Calendar Days</th>
+                        <th class="number">Avg Orders/Day</th>
+                        <th class="number">Avg Revenue/Day</th>
+                        <th class="number">Avg Profit/Day</th>
+                        <th class="number">Revenue Index</th>
+                        <th class="number">Profit Index</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_payday.iterrows():
+                html_content += f"""
+                    <tr>
+                        <td>{row['window']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">{int(row['calendar_days'])}</td>
+                        <td class="number">{row['avg_orders_per_day']:.2f}</td>
+                        <td class="number">€{row['avg_revenue_per_day']:,.2f}</td>
+                        <td class="number">€{row['avg_profit_per_day']:,.2f}</td>
+                        <td class="number">{row['revenue_index']:.1f}</td>
+                        <td class="number">{row['profit_index']:.1f}</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_payback is not None and not adv_payback.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Cohort Payback (Days)</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Cohort Month</th>
+                        <th class="number">New Customers</th>
+                        <th class="number">Cohort FB Spend</th>
+                        <th class="number">Cohort CAC</th>
+                        <th class="number">Recovered Customers</th>
+                        <th class="number">Recovery Rate</th>
+                        <th class="number">Avg Payback Days</th>
+                        <th class="number">Median Payback Days</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_payback.iterrows():
+                avg_days = "N/A" if pd.isna(row['avg_payback_days']) else f"{row['avg_payback_days']:.1f}"
+                med_days = "N/A" if pd.isna(row['median_payback_days']) else f"{row['median_payback_days']:.1f}"
+                html_content += f"""
+                    <tr>
+                        <td>{row['cohort_month']}</td>
+                        <td class="number">{int(row['new_customers'])}</td>
+                        <td class="number">€{row['cohort_fb_spend']:,.2f}</td>
+                        <td class="number">€{row['cohort_cac']:,.2f}</td>
+                        <td class="number">{int(row['recovered_customers'])}</td>
+                        <td class="number">{row['recovery_rate_pct']:.1f}%</td>
+                        <td class="number">{avg_days}</td>
+                        <td class="number">{med_days}</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_attach is not None and not adv_attach.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Attach Rate (Top Key Products)</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Key Product</th>
+                        <th class="number">Key Orders</th>
+                        <th class="number">Key Penetration</th>
+                        <th>Attached Product</th>
+                        <th class="number">Attached Orders</th>
+                        <th class="number">Attach Rate</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_attach.head(60).iterrows():
+                key_name = row['key_product'][:40] + '...' if len(str(row['key_product'])) > 40 else row['key_product']
+                att_name = row['attached_product'][:40] + '...' if len(str(row['attached_product'])) > 40 else row['attached_product']
+                html_content += f"""
+                    <tr>
+                        <td>{key_name}</td>
+                        <td class="number">{int(row['key_orders'])}</td>
+                        <td class="number">{row['key_penetration_pct']:.1f}%</td>
+                        <td>{att_name}</td>
+                        <td class="number">{int(row['attached_orders'])}</td>
+                        <td class="number">{row['attach_rate_pct']:.1f}%</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_sku_pareto is not None and not adv_sku_pareto.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">SKU Contribution Pareto (Top 40)</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>SKU</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Cost</th>
+                        <th class="number">Pre-Ad Contribution</th>
+                        <th class="number">Share</th>
+                        <th class="number">Cum Share</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_sku_pareto.head(40).iterrows():
+                product_name = row['product'][:42] + '...' if len(str(row['product'])) > 42 else row['product']
+                html_content += f"""
+                    <tr>
+                        <td>{product_name}</td>
+                        <td>{row['sku']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">€{row['cost']:,.2f}</td>
+                        <td class="number">€{row['pre_ad_contribution']:,.2f}</td>
+                        <td class="number">{row['contribution_share_pct']:.2f}%</td>
+                        <td class="number">{row['cum_contribution_share_pct']:.2f}%</td>
+                    </tr>"""
+            html_content += """
                 </tbody>
             </table>
             </div>
@@ -9303,6 +9592,413 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 callback: function(value) {{
                                     return value + '%';
                                 }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+    # Advanced DTC charts (metrics 1/2/3/4/7/8/9/10/11 support)
+    if advanced_dtc_metrics:
+        adv_basket = advanced_dtc_metrics.get('basket_contribution')
+        adv_payday = advanced_dtc_metrics.get('payday_window')
+        adv_payback = advanced_dtc_metrics.get('cohort_payback')
+        adv_margin = advanced_dtc_metrics.get('daily_margin')
+        adv_sku_pareto = advanced_dtc_metrics.get('sku_pareto')
+
+        if adv_basket is not None and not adv_basket.empty:
+            basket_labels = adv_basket['basket_size'].astype(str).tolist()
+            basket_contrib_per_order = [float(v) for v in adv_basket['contribution_per_order'].tolist()]
+            basket_margin_pct = [float(v) for v in adv_basket['contribution_margin_pct'].tolist()]
+            basket_orders = [int(v) for v in adv_basket['orders'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Contribution by Basket Size
+        const advBasketContributionCtx = document.getElementById('advBasketContributionChart');
+        if (advBasketContributionCtx) {{
+            new Chart(advBasketContributionCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(basket_labels)},
+                    datasets: [
+                        {{
+                            label: 'Contribution / Order (EUR)',
+                            data: {json.dumps(basket_contrib_per_order)},
+                            backgroundColor: 'rgba(6, 182, 212, 0.65)',
+                            borderColor: '#0891b2',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Contribution Margin (%)',
+                            data: {json.dumps(basket_margin_pct)},
+                            type: 'line',
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y1'
+                        }},
+                        {{
+                            label: 'Orders',
+                            data: {json.dumps(basket_orders)},
+                            type: 'line',
+                            borderColor: '#7C3AED',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            tension: 0.35,
+                            pointRadius: 2,
+                            yAxisID: 'y2'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('(%)')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                    if (context.dataset.label.includes('Orders')) return context.dataset.label + ': ' + context.parsed.y.toFixed(0);
+                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            position: 'left',
+                            beginAtZero: true,
+                            ticks: {{
+                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                            }}
+                        }},
+                        y1: {{
+                            position: 'right',
+                            beginAtZero: true,
+                            grid: {{ drawOnChartArea: false }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
+                            }}
+                        }},
+                        y2: {{
+                            position: 'right',
+                            beginAtZero: true,
+                            grid: {{ drawOnChartArea: false }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0); }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_payday is not None and not adv_payday.empty:
+            payday_labels = adv_payday['window'].astype(str).tolist()
+            payday_revenue_idx = [float(v) for v in adv_payday['revenue_index'].tolist()]
+            payday_profit_idx = [float(v) for v in adv_payday['profit_index'].tolist()]
+            payday_orders_per_day = [float(v) for v in adv_payday['avg_orders_per_day'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Payday Window Index
+        const advPaydayWindowCtx = document.getElementById('advPaydayWindowChart');
+        if (advPaydayWindowCtx) {{
+            new Chart(advPaydayWindowCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(payday_labels)},
+                    datasets: [
+                        {{
+                            label: 'Revenue Index',
+                            data: {json.dumps(payday_revenue_idx)},
+                            backgroundColor: 'rgba(37, 99, 235, 0.65)',
+                            borderColor: '#2563EB',
+                            borderWidth: 1
+                        }},
+                        {{
+                            label: 'Profit Index',
+                            data: {json.dumps(payday_profit_idx)},
+                            backgroundColor: 'rgba(16, 185, 129, 0.65)',
+                            borderColor: '#10B981',
+                            borderWidth: 1
+                        }},
+                        {{
+                            label: 'Avg Orders / Day',
+                            data: {json.dumps(payday_orders_per_day)},
+                            type: 'line',
+                            borderColor: '#7C3AED',
+                            backgroundColor: 'rgba(124, 58, 237, 0.15)',
+                            borderWidth: 2,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y1'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('Orders')) return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Index (100 = baseline)' }}
+                        }},
+                        y1: {{
+                            beginAtZero: true,
+                            position: 'right',
+                            grid: {{ drawOnChartArea: false }},
+                            title: {{ display: true, text: 'Orders / Day' }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_payback is not None and not adv_payback.empty:
+            payback_months = adv_payback['cohort_month'].astype(str).tolist()
+            payback_avg = [None if pd.isna(v) else float(v) for v in adv_payback['avg_payback_days'].tolist()]
+            payback_median = [None if pd.isna(v) else float(v) for v in adv_payback['median_payback_days'].tolist()]
+            payback_recovery = [float(v) for v in adv_payback['recovery_rate_pct'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Cohort Payback Days
+        const advCohortPaybackCtx = document.getElementById('advCohortPaybackChart');
+        if (advCohortPaybackCtx) {{
+            new Chart(advCohortPaybackCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(payback_months)},
+                    datasets: [
+                        {{
+                            label: 'Avg Payback Days',
+                            data: {json.dumps(payback_avg)},
+                            borderColor: '#F59E0B',
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Median Payback Days',
+                            data: {json.dumps(payback_median)},
+                            borderColor: '#8B5CF6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                            borderWidth: 2,
+                            borderDash: [4, 4],
+                            tension: 0.35,
+                            pointRadius: 2,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Recovery Rate %',
+                            data: {json.dumps(payback_recovery)},
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            borderWidth: 2,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y1'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('Rate')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + ' days';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Days' }}
+                        }},
+                        y1: {{
+                            beginAtZero: true,
+                            position: 'right',
+                            max: 100,
+                            grid: {{ drawOnChartArea: false }},
+                            title: {{ display: true, text: 'Recovery Rate (%)' }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_margin is not None and not adv_margin.empty:
+            margin_dates = pd.to_datetime(adv_margin['date']).dt.strftime('%Y-%m-%d').tolist()
+            margin_daily = [float(v) for v in adv_margin['pre_ad_margin_pct'].tolist()]
+            margin_ma7 = [float(v) for v in adv_margin['pre_ad_margin_7d_ma'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Margin Stability
+        const advMarginStabilityCtx = document.getElementById('advMarginStabilityChart');
+        if (advMarginStabilityCtx) {{
+            new Chart(advMarginStabilityCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(margin_dates)},
+                    datasets: [
+                        {{
+                            label: 'Daily Pre-Ad Margin %',
+                            data: {json.dumps(margin_daily)},
+                            borderColor: '#06B6D4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.10)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 0
+                        }},
+                        {{
+                            label: 'Pre-Ad Margin 7d MA',
+                            data: {json.dumps(margin_ma7)},
+                            borderColor: '#2563EB',
+                            backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            pointRadius: 0
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            title: {{ display: true, text: 'Margin (%)' }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_sku_pareto is not None and not adv_sku_pareto.empty:
+            sku_top = adv_sku_pareto.head(20).copy()
+            sku_labels = [
+                (str(v)[:22] + '...') if len(str(v)) > 22 else str(v)
+                for v in sku_top['product'].tolist()
+            ]
+            sku_contrib = [float(v) for v in sku_top['pre_ad_contribution'].tolist()]
+            sku_cum_share = [float(v) for v in sku_top['cum_contribution_share_pct'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - SKU Pareto
+        const advSkuParetoCtx = document.getElementById('advSkuParetoChart');
+        if (advSkuParetoCtx) {{
+            new Chart(advSkuParetoCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(sku_labels)},
+                    datasets: [
+                        {{
+                            label: 'Pre-Ad Contribution (EUR)',
+                            data: {json.dumps(sku_contrib)},
+                            backgroundColor: 'rgba(37, 99, 235, 0.70)',
+                            borderColor: '#1D4ED8',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Cumulative Share %',
+                            data: {json.dumps(sku_cum_share)},
+                            type: 'line',
+                            borderColor: '#EF4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                            borderWidth: 3,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            yAxisID: 'y1'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.8,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('Share')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            position: 'left',
+                            ticks: {{
+                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                            }}
+                        }},
+                        y1: {{
+                            beginAtZero: true,
+                            position: 'right',
+                            max: 100,
+                            grid: {{ drawOnChartArea: false }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
                             }}
                         }}
                     }}

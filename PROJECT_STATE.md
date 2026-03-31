@@ -86,9 +86,9 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Regenerate VEVO + ROY reports and validate both phase metrics in HTML outputs:
-  - Week-of-Month (equalized 4x7)
-  - Day-of-Month (1-31 normalized by calendar occurrences)
+- Regenerate VEVO + ROY reports and validate new Advanced DTC metrics in HTML outputs:
+  - 1/2/3/4/7/8/9/10/11 cards + charts + tables
+  - verify readability and value sanity for each section
 
 ## 9) Change Log
 
@@ -113,3 +113,16 @@ Bootstrap entrypoints:
   - uses full months only for unbiased phase-of-month comparisons,
   - normalizes by calendar occurrences for each day number (1..31),
   - added 2 charts + normalized performance table in HTML report.
+- Added Advanced DTC metrics pack (1/2/3/4/7/8/9/10/11) into reporting pipeline:
+  - new analyzer in export_orders.py: `analyze_advanced_dtc_metrics(df)`,
+  - wired to `generate_html_report(..., advanced_dtc_metrics=...)`,
+  - added summary KPI cards for first-order/repeat contribution, contribution LTV/CAC, margin stability, SKU Pareto concentration.
+- Added new Advanced DTC visual outputs in html_report_generator.py:
+  - Contribution by Basket Size chart + table,
+  - Payday Window Index chart + table,
+  - Cohort Payback Days chart + table,
+  - Margin Stability chart,
+  - SKU Contribution Pareto chart + table,
+  - Attach Rate table for key products.
+- Smoke-tested analyzer on synthetic dataset and verified syntax with:
+  - `python -m py_compile export_orders.py html_report_generator.py`

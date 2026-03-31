@@ -1709,6 +1709,7 @@ class BizniWebExporter:
         day_of_week_analysis = self.analyze_day_of_week(df)
         week_of_month_analysis = self.analyze_week_of_month(df)
         day_of_month_analysis = self.analyze_day_of_month(df)
+        advanced_dtc_metrics = self.analyze_advanced_dtc_metrics(df)
         day_hour_heatmap = self.analyze_day_hour_heatmap(df)
         country_analysis, city_analysis = self.analyze_geographic(df)
         geo_profitability = self.analyze_geo_profitability(df, fb_campaigns)
@@ -1768,6 +1769,7 @@ class BizniWebExporter:
             day_of_week_analysis=day_of_week_analysis,
             week_of_month_analysis=week_of_month_analysis,
             day_of_month_analysis=day_of_month_analysis,
+            advanced_dtc_metrics=advanced_dtc_metrics,
             day_hour_heatmap=day_hour_heatmap,
             country_analysis=country_analysis,
             city_analysis=city_analysis,
@@ -3660,6 +3662,354 @@ class BizniWebExporter:
         else:
             print("Day-of-month analysis complete (fallback: no full-month window in range)")
         return dom_agg
+
+    def analyze_advanced_dtc_metrics(self, df: pd.DataFrame) -> dict:
+        """
+        Advanced DTC unit-economics metrics:
+        1) First-order contribution margin
+        2) First-order vs repeat contribution/order
+        3) Contribution LTV/CAC (customer-level, pre-ad contribution)
+        4) Cohort payback in days
+        7) Contribution by basket size
+        8) SKU contribution Pareto (80/20)
+        9) Attach-rate for key products
+        10) Margin stability index
+        11) Payday window index
+        """
+        print("\nAnalyzing advanced DTC metrics...")
+        revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'
+
+        # ---- Build robust order-level frame
+        orders_df = df[['order_num', 'customer_email', 'purchase_date', revenue_col, 'total_items_in_order']].drop_duplicates(subset=['order_num']).copy()
+        orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
+        orders_df['purchase_date_only'] = orders_df['purchase_datetime'].dt.date
+        orders_df['cohort_month'] = orders_df['purchase_datetime'].dt.to_period('M').astype(str)
+
+        product_cost_by_order = df.groupby('order_num')['total_expense'].sum()
+        orders_df['product_cost'] = orders_df['order_num'].map(product_cost_by_order).fillna(0)
+        orders_df['packaging_cost'] = PACKAGING_COST_PER_ORDER
+        orders_df['shipping_subsidy_cost'] = SHIPPING_SUBSIDY_PER_ORDER
+        orders_df['pre_ad_contribution'] = (
+            orders_df[revenue_col] - orders_df['product_cost'] - orders_df['packaging_cost'] - orders_df['shipping_subsidy_cost']
+        )
+
+        # Mark first vs repeat orders
+        first_order_date = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
+        orders_df['is_returning'] = orders_df.apply(
+            lambda row: row['purchase_datetime'] > first_order_date.get(row['customer_email'], row['purchase_datetime']),
+            axis=1
+        )
+        first_orders = orders_df[~orders_df['is_returning']].copy()
+        repeat_orders = orders_df[orders_df['is_returning']].copy()
+
+        # ---- 1) + 2) first-order contribution metrics
+        first_orders_revenue = float(first_orders[revenue_col].sum())
+        first_orders_contribution = float(first_orders['pre_ad_contribution'].sum())
+        first_order_contribution_margin_pct = (
+            (first_orders_contribution / first_orders_revenue * 100) if first_orders_revenue > 0 else 0.0
+        )
+        first_order_contribution_per_order = (
+            (first_orders_contribution / len(first_orders)) if len(first_orders) > 0 else 0.0
+        )
+        repeat_orders_contribution = float(repeat_orders['pre_ad_contribution'].sum())
+        repeat_order_contribution_per_order = (
+            (repeat_orders_contribution / len(repeat_orders)) if len(repeat_orders) > 0 else 0.0
+        )
+
+        # ---- 3) contribution LTV/CAC (customer-level)
+        total_pre_ad_contribution = float(orders_df['pre_ad_contribution'].sum())
+        total_customers = int(orders_df['customer_email'].nunique())
+        contribution_ltv = (total_pre_ad_contribution / total_customers) if total_customers > 0 else 0.0
+        new_customers = int(len(first_orders))
+        daily_fb_spend = (
+            df.assign(_d=pd.to_datetime(df['purchase_date']).dt.date)
+            .groupby('_d')['fb_ads_daily_spend']
+            .first()
+            .sum()
+        )
+        paid_cac_fb = (daily_fb_spend / new_customers) if new_customers > 0 else 0.0
+        contribution_ltv_cac = (contribution_ltv / paid_cac_fb) if paid_cac_fb > 0 else 0.0
+
+        # ---- 4) cohort payback in days (monthly acquisition cohorts)
+        # Cohort CAC is estimated as monthly FB spend / new customers acquired in that month.
+        daily_spend_df = (
+            df.assign(_d=pd.to_datetime(df['purchase_date']).dt.normalize())
+            .groupby('_d')[['fb_ads_daily_spend']]
+            .first()
+            .reset_index()
+        )
+        daily_spend_df['cohort_month'] = daily_spend_df['_d'].dt.to_period('M').astype(str)
+        monthly_fb_spend = daily_spend_df.groupby('cohort_month')['fb_ads_daily_spend'].sum().to_dict()
+
+        first_order_map = (
+            orders_df.sort_values(['customer_email', 'purchase_datetime'])
+            .groupby('customer_email')
+            .first()[['purchase_datetime', 'cohort_month']]
+            .rename(columns={'purchase_datetime': 'first_purchase_datetime'})
+        )
+        customer_orders = orders_df.sort_values(['customer_email', 'purchase_datetime']).copy()
+        customer_orders = customer_orders.merge(
+            first_order_map[['first_purchase_datetime', 'cohort_month']],
+            left_on='customer_email', right_index=True, how='left', suffixes=('', '_first')
+        )
+        customer_orders['days_since_first'] = (
+            customer_orders['purchase_datetime'] - customer_orders['first_purchase_datetime']
+        ).dt.days
+
+        cohort_rows = []
+        for cohort_month, group in first_order_map.groupby('cohort_month'):
+            cohort_customers = group.index.tolist()
+            cohort_new_customers = len(cohort_customers)
+            cohort_spend = float(monthly_fb_spend.get(cohort_month, 0.0))
+            cohort_cac = (cohort_spend / cohort_new_customers) if cohort_new_customers > 0 else 0.0
+
+            payback_days_list = []
+            for customer in cohort_customers:
+                c_orders = customer_orders[customer_orders['customer_email'] == customer].sort_values('purchase_datetime')
+                c_orders = c_orders[['days_since_first', 'pre_ad_contribution']].copy()
+                if c_orders.empty:
+                    continue
+                c_orders['cum_contribution'] = c_orders['pre_ad_contribution'].cumsum()
+                reached = c_orders[c_orders['cum_contribution'] >= cohort_cac]
+                if cohort_cac <= 0:
+                    payback_days_list.append(0)
+                elif not reached.empty:
+                    payback_days_list.append(int(reached.iloc[0]['days_since_first']))
+
+            recovered_customers = len(payback_days_list)
+            recovery_rate_pct = (recovered_customers / cohort_new_customers * 100) if cohort_new_customers > 0 else 0.0
+            cohort_rows.append({
+                'cohort_month': cohort_month,
+                'new_customers': cohort_new_customers,
+                'cohort_fb_spend': round(cohort_spend, 2),
+                'cohort_cac': round(cohort_cac, 2),
+                'recovered_customers': recovered_customers,
+                'recovery_rate_pct': round(recovery_rate_pct, 1),
+                'avg_payback_days': round(float(np.mean(payback_days_list)), 1) if payback_days_list else np.nan,
+                'median_payback_days': round(float(np.median(payback_days_list)), 1) if payback_days_list else np.nan,
+            })
+
+        cohort_payback = pd.DataFrame(cohort_rows).sort_values('cohort_month') if cohort_rows else pd.DataFrame()
+
+        # ---- 7) contribution by basket size
+        def basket_bucket(items_count):
+            try:
+                v = int(items_count)
+            except (TypeError, ValueError):
+                return 'unknown'
+            if v <= 1:
+                return '1 item'
+            if v == 2:
+                return '2 items'
+            if v == 3:
+                return '3 items'
+            if v == 4:
+                return '4 items'
+            return '5+ items'
+
+        orders_df['basket_size'] = orders_df['total_items_in_order'].apply(basket_bucket)
+        basket_contrib = orders_df.groupby('basket_size').agg({
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'pre_ad_contribution': 'sum'
+        }).reset_index()
+        basket_contrib.columns = ['basket_size', 'orders', 'revenue', 'pre_ad_contribution']
+        basket_contrib['contribution_per_order'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution'] / row['orders']) if row['orders'] > 0 else 0, 2), axis=1
+        )
+        basket_contrib['contribution_margin_pct'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 1), axis=1
+        )
+        basket_order = {'1 item': 1, '2 items': 2, '3 items': 3, '4 items': 4, '5+ items': 5, 'unknown': 99}
+        basket_contrib['basket_order'] = basket_contrib['basket_size'].map(basket_order).fillna(99)
+        basket_contrib = basket_contrib.sort_values('basket_order').drop(columns=['basket_order'])
+
+        # ---- 8) SKU Pareto on pre-ad contribution (with proportional order overhead allocation)
+        item_df = df[['order_num', 'product_sku', 'item_label', 'item_total_without_tax', 'total_expense']].copy()
+        order_item_revenue = item_df.groupby('order_num')['item_total_without_tax'].sum().rename('order_item_revenue')
+        item_df = item_df.merge(order_item_revenue, on='order_num', how='left')
+        item_df['item_rev_share'] = item_df.apply(
+            lambda row: (row['item_total_without_tax'] / row['order_item_revenue']) if row['order_item_revenue'] > 0 else 0,
+            axis=1
+        )
+        overhead_per_order = PACKAGING_COST_PER_ORDER + SHIPPING_SUBSIDY_PER_ORDER
+        item_df['allocated_overhead'] = item_df['item_rev_share'] * overhead_per_order
+        item_df['pre_ad_contribution'] = item_df['item_total_without_tax'] - item_df['total_expense'] - item_df['allocated_overhead']
+
+        sku_pareto = item_df.groupby('product_sku').agg({
+            'item_label': 'first',
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'total_expense': 'sum',
+            'pre_ad_contribution': 'sum'
+        }).reset_index()
+        sku_pareto.columns = ['sku', 'product', 'orders', 'revenue', 'cost', 'pre_ad_contribution']
+        sku_pareto = sku_pareto.sort_values('pre_ad_contribution', ascending=False).reset_index(drop=True)
+        total_contrib_sku = float(sku_pareto['pre_ad_contribution'].sum())
+        if total_contrib_sku != 0:
+            sku_pareto['contribution_share_pct'] = (sku_pareto['pre_ad_contribution'] / total_contrib_sku * 100).round(2)
+            sku_pareto['cum_contribution_share_pct'] = sku_pareto['contribution_share_pct'].cumsum().round(2)
+        else:
+            sku_pareto['contribution_share_pct'] = 0.0
+            sku_pareto['cum_contribution_share_pct'] = 0.0
+        sku_pareto_80_count = int((sku_pareto['cum_contribution_share_pct'] < 80).sum() + 1) if not sku_pareto.empty else 0
+
+        # ---- 9) attach rate for key products (top 10 by order penetration)
+        order_sku = item_df.groupby('order_num')['product_sku'].apply(lambda x: set(x.dropna().astype(str))).reset_index()
+        total_orders = len(order_sku)
+        sku_order_count = {}
+        for skus in order_sku['product_sku']:
+            for sku in skus:
+                sku_order_count[sku] = sku_order_count.get(sku, 0) + 1
+
+        key_skus = sorted(sku_order_count.keys(), key=lambda s: sku_order_count[s], reverse=True)[:10]
+        sku_to_label = item_df.groupby('product_sku')['item_label'].first().to_dict()
+        attach_rows = []
+        order_sku_sets = order_sku['product_sku'].tolist()
+        for key_sku in key_skus:
+            key_orders = sku_order_count.get(key_sku, 0)
+            if key_orders == 0:
+                continue
+            co_counts = {}
+            for skus in order_sku_sets:
+                if key_sku in skus:
+                    for other in skus:
+                        if other == key_sku:
+                            continue
+                        co_counts[other] = co_counts.get(other, 0) + 1
+            top_attach = sorted(co_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+            for other_sku, co_count in top_attach:
+                attach_rows.append({
+                    'key_sku': key_sku,
+                    'key_product': sku_to_label.get(key_sku, key_sku),
+                    'key_orders': key_orders,
+                    'attached_sku': other_sku,
+                    'attached_product': sku_to_label.get(other_sku, other_sku),
+                    'attached_orders': int(co_count),
+                    'attach_rate_pct': round((co_count / key_orders * 100), 1),
+                    'key_penetration_pct': round((key_orders / total_orders * 100), 1) if total_orders > 0 else 0.0
+                })
+        attach_rate = pd.DataFrame(attach_rows).sort_values(['key_orders', 'attach_rate_pct'], ascending=[False, False]) if attach_rows else pd.DataFrame()
+
+        # ---- 10) margin stability index (daily pre-ad margin volatility)
+        daily_margin = orders_df.groupby('purchase_date_only').agg({
+            revenue_col: 'sum',
+            'pre_ad_contribution': 'sum',
+            'order_num': 'count'
+        }).reset_index()
+        daily_margin.columns = ['date', 'revenue', 'pre_ad_contribution', 'orders']
+        daily_margin['pre_ad_margin_pct'] = daily_margin.apply(
+            lambda row: (row['pre_ad_contribution'] / row['revenue'] * 100) if row['revenue'] > 0 else 0,
+            axis=1
+        )
+        daily_margin = daily_margin.sort_values('date')
+        daily_margin['pre_ad_margin_7d_ma'] = daily_margin['pre_ad_margin_pct'].rolling(window=7, min_periods=1).mean()
+
+        margin_mean = float(daily_margin['pre_ad_margin_pct'].mean()) if not daily_margin.empty else 0.0
+        margin_std = float(daily_margin['pre_ad_margin_pct'].std(ddof=0)) if len(daily_margin) > 1 else 0.0
+        margin_cv_pct = (margin_std / abs(margin_mean) * 100) if abs(margin_mean) > 1e-9 else 0.0
+        margin_stability_index = max(0.0, min(100.0, 100.0 - (margin_std * 2.0)))
+
+        # ---- 11) payday window index (phase-of-month windows)
+        window_defs = [
+            (1, 7, '1-7'),
+            (8, 14, '8-14'),
+            (15, 21, '15-21'),
+            (22, 28, '22-28'),
+            (29, 31, '29-31')
+        ]
+        orders_df['day_in_month'] = orders_df['purchase_datetime'].dt.day
+        min_dt = orders_df['purchase_datetime'].dt.normalize().min()
+        max_dt = orders_df['purchase_datetime'].dt.normalize().max()
+        full_start = min_dt if min_dt.day == 1 else (min_dt + pd.offsets.MonthBegin(1))
+        max_month_last_day = (max_dt + pd.offsets.MonthEnd(0)).day
+        full_end = max_dt if max_dt.day == max_month_last_day else (max_dt - pd.offsets.MonthEnd(1))
+        if full_start <= full_end:
+            phase_orders = orders_df[
+                (orders_df['purchase_datetime'].dt.normalize() >= full_start) &
+                (orders_df['purchase_datetime'].dt.normalize() <= full_end)
+            ].copy()
+            phase_calendar = pd.DataFrame({'date': pd.date_range(start=full_start, end=full_end, freq='D')})
+        else:
+            phase_orders = orders_df.copy()
+            phase_calendar = pd.DataFrame({'date': pd.date_range(start=min_dt, end=max_dt, freq='D')})
+        phase_orders['window'] = phase_orders['day_in_month'].apply(
+            lambda d: '1-7' if d <= 7 else ('8-14' if d <= 14 else ('15-21' if d <= 21 else ('22-28' if d <= 28 else '29-31')))
+        )
+        phase_calendar['window'] = phase_calendar['date'].dt.day.apply(
+            lambda d: '1-7' if d <= 7 else ('8-14' if d <= 14 else ('15-21' if d <= 21 else ('22-28' if d <= 28 else '29-31')))
+        )
+
+        payday_window = phase_orders.groupby('window').agg({
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'pre_ad_contribution': 'sum'
+        }).reset_index()
+        payday_window.columns = ['window', 'orders', 'revenue', 'pre_ad_contribution']
+        cal_days = phase_calendar.groupby('window')['date'].count().reset_index().rename(columns={'date': 'calendar_days'})
+        payday_window = payday_window.merge(cal_days, on='window', how='right').fillna(0)
+        payday_window['orders'] = payday_window['orders'].astype(int)
+        payday_window['calendar_days'] = payday_window['calendar_days'].astype(int)
+        payday_window['avg_orders_per_day'] = payday_window.apply(
+            lambda row: (row['orders'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
+        payday_window['avg_revenue_per_day'] = payday_window.apply(
+            lambda row: (row['revenue'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
+        payday_window['avg_profit_per_day'] = payday_window.apply(
+            lambda row: (row['pre_ad_contribution'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
+        overall_avg_revenue = (
+            (payday_window['revenue'].sum() / payday_window['calendar_days'].sum())
+            if payday_window['calendar_days'].sum() > 0 else 0
+        )
+        overall_avg_profit = (
+            (payday_window['pre_ad_contribution'].sum() / payday_window['calendar_days'].sum())
+            if payday_window['calendar_days'].sum() > 0 else 0
+        )
+        payday_window['revenue_index'] = payday_window.apply(
+            lambda row: (row['avg_revenue_per_day'] / overall_avg_revenue * 100) if overall_avg_revenue > 0 else 0,
+            axis=1
+        )
+        payday_window['profit_index'] = payday_window.apply(
+            lambda row: (row['avg_profit_per_day'] / overall_avg_profit * 100) if overall_avg_profit != 0 else 0,
+            axis=1
+        )
+        window_order = {'1-7': 1, '8-14': 2, '15-21': 3, '22-28': 4, '29-31': 5}
+        payday_window['window_order'] = payday_window['window'].map(window_order).fillna(99)
+        payday_window = payday_window.sort_values('window_order').drop(columns=['window_order'])
+
+        result = {
+            'summary': {
+                'first_order_contribution_margin_pct': round(first_order_contribution_margin_pct, 2),
+                'first_order_contribution_per_order': round(first_order_contribution_per_order, 2),
+                'repeat_order_contribution_per_order': round(repeat_order_contribution_per_order, 2),
+                'contribution_ltv': round(contribution_ltv, 2),
+                'paid_cac_fb': round(paid_cac_fb, 2),
+                'contribution_ltv_cac': round(contribution_ltv_cac, 2),
+                'margin_mean_pct': round(margin_mean, 2),
+                'margin_std_pp': round(margin_std, 2),
+                'margin_cv_pct': round(margin_cv_pct, 2),
+                'margin_stability_index': round(margin_stability_index, 1),
+                'sku_pareto_80_count': sku_pareto_80_count,
+                'sku_total_count': int(len(sku_pareto)),
+            },
+            'cohort_payback': cohort_payback,
+            'basket_contribution': basket_contrib,
+            'sku_pareto': sku_pareto,
+            'attach_rate': attach_rate,
+            'daily_margin': daily_margin,
+            'payday_window': payday_window,
+        }
+
+        print(
+            f"Advanced DTC metrics complete: first-order margin={result['summary']['first_order_contribution_margin_pct']:.2f}%, "
+            f"contribution LTV/CAC={result['summary']['contribution_ltv_cac']:.2f}x"
+        )
+        return result
     def analyze_day_hour_heatmap(self, df: pd.DataFrame) -> pd.DataFrame:
         """Analyze orders by day of week and hour of day for heatmap visualization"""
         print("\nAnalyzing day/hour heatmap patterns...")
