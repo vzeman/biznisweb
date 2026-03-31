@@ -26,8 +26,9 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from project_config import (
+from reporting_core import (
     BASE_DEFAULT_PROJECT,
+    build_artifact_set,
     load_project_env,
     load_project_settings,
     project_data_dir,
@@ -142,24 +143,6 @@ def run_export(project: str, from_date: str, to_date: str, clear_cache: bool, no
     proc = subprocess.run(cmd, cwd=str(ROOT_DIR), check=False)
     if proc.returncode != 0:
         raise RuntimeError(f"export_orders.py failed with exit code {proc.returncode}")
-
-
-def get_output_paths(project: str, from_date: str, to_date: str) -> Dict[str, Path]:
-    compact_range = f"{from_date.replace('-', '')}-{to_date.replace('-', '')}"
-    data_dir = project_data_dir(project)
-    return {
-        "report_html": data_dir / f"report_{compact_range}.html",
-        "email_strategy_html": data_dir / f"email_strategy_{compact_range}.html",
-        "export_csv": data_dir / f"export_{compact_range}.csv",
-        "aggregate_by_date_csv": data_dir / f"aggregate_by_date_{compact_range}.csv",
-        "aggregate_by_month_csv": data_dir / f"aggregate_by_month_{compact_range}.csv",
-        "data_quality_json": data_dir / f"data_quality_{compact_range}.json",
-    }
-
-
-def get_cfo_graph_path(project: str, from_date: str, to_date: str) -> Path:
-    compact_range = f"{from_date.replace('-', '')}-{to_date.replace('-', '')}"
-    return project_data_dir(project) / f"cfo_graphs_{compact_range}.html"
 
 
 def load_data_quality(path: Optional[Path]) -> Dict[str, Any]:
@@ -2152,7 +2135,7 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
 </html>
 """.replace("__DATA__", payload_json).replace("__DATA_QUALITY_BANNER__", data_quality_banner_html)
 
-    output_path = get_cfo_graph_path(project, from_date, to_date)
+    output_path = build_artifact_set(project, from_date, to_date).cfo_graph_html
     output_path.write_text(html, encoding="utf-8")
     return output_path
 
@@ -2301,14 +2284,13 @@ def main() -> None:
             no_cache=use_no_cache,
         )
 
-    output_paths = get_output_paths(project, from_date, to_date)
-    required_output_keys = [
-        "report_html",
-        "export_csv",
-        "aggregate_by_date_csv",
-        "aggregate_by_month_csv",
+    artifact_set = build_artifact_set(project, from_date, to_date)
+    output_paths = artifact_set.as_dict()
+    missing = [
+        str(path)
+        for path in artifact_set.required_daily_runner_outputs().values()
+        if not path.exists()
     ]
-    missing = [str(output_paths[key]) for key in required_output_keys if not output_paths[key].exists()]
     if missing:
         raise FileNotFoundError(f"Expected output files not found: {missing}")
 

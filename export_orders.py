@@ -21,9 +21,11 @@ import calendar
 import numpy as np
 from logger_config import get_logger
 from weather_client import WeatherClient
-from project_config import (
+from reporting_core import (
     BASE_DEFAULT_PROJECT,
+    apply_project_runtime,
     load_project_env,
+    load_project_runtime,
     load_project_settings,
     resolve_biznisweb_api_url,
     resolve_reporting_defaults,
@@ -89,8 +91,6 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-ROOT_DIR = Path(__file__).resolve().parent
-PROJECTS_DIR = ROOT_DIR / "projects"
 DEFAULT_PROJECT = BASE_DEFAULT_PROJECT
 GRAPHQL_TIMEOUT_SEC = int(
     os.getenv("BIZNISWEB_API_TIMEOUT_SEC", os.getenv("REPORT_HTTP_READ_TIMEOUT_SEC", "30"))
@@ -183,99 +183,6 @@ LEGACY_VEVO_PRODUCT_EXPENSES = {
     'H-A5F3BBB3': 0,          # Poistenie proti rozbitiu
 }
 PRODUCT_EXPENSES = dict(LEGACY_VEVO_PRODUCT_EXPENSES)
-
-
-def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
-    """
-    Load project settings from projects/<project>/settings.json and optional
-    product_expenses.json. Falls back to legacy in-file defaults.
-    """
-    settings: Dict[str, Any] = load_project_settings(project_name)
-    project_dir = PROJECTS_DIR / project_name
-
-    product_expenses = dict(LEGACY_VEVO_PRODUCT_EXPENSES) if project_name == "vevo" else {}
-    product_expenses_file = settings.get("product_expenses_file", "product_expenses.json")
-    product_expenses_path = project_dir / product_expenses_file
-    if product_expenses_path.exists():
-        with open(product_expenses_path, "r", encoding="utf-8") as f:
-            raw_map = json.load(f) or {}
-            product_expenses = {str(k): float(v) for k, v in raw_map.items()}
-
-    raw_weather = settings.get("weather", {}) or {}
-    normalized_locations = []
-    for location in raw_weather.get("locations", []) or []:
-        try:
-            normalized_locations.append({
-                "name": str(location.get("name", "Location")).strip() or "Location",
-                "latitude": float(location["latitude"]),
-                "longitude": float(location["longitude"]),
-                "weight": float(location.get("weight", 1.0)),
-            })
-        except (KeyError, TypeError, ValueError):
-            continue
-    weather_settings = {
-        "enabled": bool(raw_weather.get("enabled", False) and normalized_locations),
-        "timezone": str(raw_weather.get("timezone", "Europe/Bratislava")).strip() or "Europe/Bratislava",
-        "locations": normalized_locations,
-    }
-
-    return {
-        "project_name": project_name,
-        "api_url": resolve_biznisweb_api_url(project_name, settings),
-        "api_token": os.getenv("BIZNISWEB_API_TOKEN", ""),
-        "packaging_cost_per_order": float(settings.get("packaging_cost_per_order", PACKAGING_COST_PER_ORDER)),
-        "shipping_subsidy_per_order": float(settings.get("shipping_subsidy_per_order", SHIPPING_SUBSIDY_PER_ORDER)),
-        "fixed_monthly_cost": float(settings.get("fixed_monthly_cost", FIXED_MONTHLY_COST)),
-        "currency_rates_to_eur": settings.get("currency_rates_to_eur", CURRENCY_RATES_TO_EUR),
-        "product_expenses": product_expenses,
-        "zero_margin_brands": [str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
-        "zero_cost_brands": [str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
-        "zero_cost_label_patterns": [str(v).strip() for v in settings.get("zero_cost_label_patterns", []) if str(v).strip()],
-        "margin_15_brands": [str(v).strip() for v in settings.get("margin_15_brands", []) if str(v).strip()],
-        "margin_15_label_patterns": [str(v).strip() for v in settings.get("margin_15_label_patterns", []) if str(v).strip()],
-        "exclude_zero_price_label_patterns": [
-            str(v).strip() for v in settings.get("exclude_zero_price_label_patterns", []) if str(v).strip()
-        ],
-        "manual_fb_ads_total": (
-            float(settings.get("manual_fb_ads_total"))
-            if settings.get("manual_fb_ads_total") is not None
-            else None
-        ),
-        "manual_google_ads_total": (
-            float(settings.get("manual_google_ads_total"))
-            if settings.get("manual_google_ads_total") is not None
-            else None
-        ),
-        "weather": weather_settings,
-        "reporting_defaults": resolve_reporting_defaults(project_name, settings),
-    }
-
-
-def apply_runtime_settings(runtime: Dict[str, Any]) -> None:
-    """Apply project runtime settings to global constants used across calculations."""
-    global PACKAGING_COST_PER_ORDER, SHIPPING_SUBSIDY_PER_ORDER, FIXED_MONTHLY_COST
-    global CURRENCY_RATES_TO_EUR, PRODUCT_EXPENSES, ZERO_MARGIN_BRANDS, ZERO_COST_BRANDS
-    global ZERO_COST_LABEL_PATTERNS, MARGIN_15_BRANDS, MARGIN_15_LABEL_PATTERNS, EXCLUDE_ZERO_PRICE_LABEL_PATTERNS
-    global MANUAL_FB_ADS_TOTAL, MANUAL_GOOGLE_ADS_TOTAL, WEATHER_SETTINGS, ENABLE_EMAIL_STRATEGY_REPORT
-
-    PACKAGING_COST_PER_ORDER = float(runtime["packaging_cost_per_order"])
-    SHIPPING_SUBSIDY_PER_ORDER = float(runtime["shipping_subsidy_per_order"])
-    FIXED_MONTHLY_COST = float(runtime["fixed_monthly_cost"])
-    CURRENCY_RATES_TO_EUR = {str(k).upper(): float(v) for k, v in dict(runtime["currency_rates_to_eur"]).items()}
-    PRODUCT_EXPENSES = {str(k): float(v) for k, v in dict(runtime["product_expenses"]).items()}
-    ZERO_MARGIN_BRANDS = [str(v).strip().lower() for v in runtime.get("zero_margin_brands", []) if str(v).strip()]
-    ZERO_COST_BRANDS = [str(v).strip().lower() for v in runtime.get("zero_cost_brands", []) if str(v).strip()]
-    ZERO_COST_LABEL_PATTERNS = [str(v).strip() for v in runtime.get("zero_cost_label_patterns", []) if str(v).strip()]
-    MARGIN_15_BRANDS = [str(v).strip().lower() for v in runtime.get("margin_15_brands", []) if str(v).strip()]
-    MARGIN_15_LABEL_PATTERNS = [str(v).strip() for v in runtime.get("margin_15_label_patterns", []) if str(v).strip()]
-    EXCLUDE_ZERO_PRICE_LABEL_PATTERNS = [
-        str(v).strip() for v in runtime.get("exclude_zero_price_label_patterns", []) if str(v).strip()
-    ]
-    MANUAL_FB_ADS_TOTAL = runtime.get("manual_fb_ads_total")
-    MANUAL_GOOGLE_ADS_TOTAL = runtime.get("manual_google_ads_total")
-    WEATHER_SETTINGS = copy.deepcopy(runtime.get("weather", WEATHER_SETTINGS))
-    ENABLE_EMAIL_STRATEGY_REPORT = bool(runtime.get("reporting_defaults", {}).get("enable_email_strategy_report", False))
-
 
 def parse_input_date(value: str) -> datetime:
     """Parse common CLI/env date formats for safer project onboarding."""
@@ -5903,11 +5810,19 @@ def main():
 
     # Load project-specific env first so API credentials are isolated per shop.
     load_project_env(project_name, logger=logger)
-    runtime = load_project_runtime_settings(project_name)
-    apply_runtime_settings(runtime)
+    runtime = load_project_runtime(
+        project_name,
+        settings=load_project_settings(project_name),
+        legacy_product_expenses=LEGACY_VEVO_PRODUCT_EXPENSES,
+        default_currency_rates=CURRENCY_RATES_TO_EUR,
+        default_packaging_cost_per_order=PACKAGING_COST_PER_ORDER,
+        default_shipping_subsidy_per_order=SHIPPING_SUBSIDY_PER_ORDER,
+        default_fixed_monthly_cost=FIXED_MONTHLY_COST,
+    )
+    apply_project_runtime(runtime, globals())
 
-    api_url = runtime['api_url']
-    api_token = runtime['api_token']
+    api_url = runtime.api_url
+    api_token = runtime.api_token
     if not api_token:
         logger.error(
             f"BIZNISWEB_API_TOKEN not found for project '{project_name}'. "

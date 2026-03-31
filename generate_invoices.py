@@ -15,7 +15,7 @@ from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
-from project_config import (
+from reporting_core import (
     BASE_DEFAULT_PROJECT,
     derive_biznisweb_base_url,
     load_project_env,

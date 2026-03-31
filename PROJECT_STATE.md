@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Start `P3.1` reusable reporting core extraction: separate shared reporting core from client adapters without changing current VEVO/ROY runtime behavior.
+- Start `P3.2` reporting-productization follow-up only after Doklady/OpenClaw `P3` baselines; current reporting core extraction is complete enough for reuse and needs no further structural changes before cross-repo work catches up.
 
 ## 9) Change Log
 
@@ -98,6 +98,16 @@ Bootstrap entrypoints:
 - Removed cross-project state ownership from this repo; left only integration notes.
 
 ### 2026-03-31
+- Completed `P3.1` reusable reporting core foundation:
+  - added package `reporting_core/` as the shared source of truth for project config + runtime loading,
+  - moved project config helpers behind `reporting_core.config` and kept `project_config.py` as a backward-compatible shim,
+  - added `reporting_core.runtime` with `ProjectRuntime` and reusable runtime application/loading helpers,
+  - added `reporting_core.contracts` with `ReportingArtifactSet` + canonical output artifact builder,
+  - switched `export_orders.py`, `daily_report_runner.py`, and `generate_invoices.py` to import from `reporting_core`,
+  - updated daily runner to consume the shared artifact contract instead of rebuilding output paths ad hoc,
+  - verified syntax with `python -m py_compile export_orders.py daily_report_runner.py generate_invoices.py project_config.py reporting_core\\__init__.py reporting_core\\config.py reporting_core\\runtime.py reporting_core\\contracts.py`,
+  - verified ROY smoke export on `2026-03-01..2026-03-02`,
+  - verified project-aware daily runner on `2026-03-01..2026-03-02` with `--skip-export --skip-email`.
 - Added new Week-of-Month analytics (Week 1-4) into reporting pipeline in export_orders.py.
 - Wired Week-of-Month outputs into HTML report generation (html_report_generator.py) with 2 charts and performance table.
 - Added aggregation for week-level pattern visibility: orders, revenue, profit, margin, AOV, avg daily revenue/profit, active days/months.
