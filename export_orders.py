@@ -21,6 +21,13 @@ import calendar
 import numpy as np
 from logger_config import get_logger
 from weather_client import WeatherClient
+from project_config import (
+    BASE_DEFAULT_PROJECT,
+    load_project_env,
+    load_project_settings,
+    resolve_biznisweb_api_url,
+    resolve_reporting_defaults,
+)
 
 try:
     from dotenv import load_dotenv
@@ -84,8 +91,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT_DIR = Path(__file__).resolve().parent
 PROJECTS_DIR = ROOT_DIR / "projects"
-DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", "vevo").strip() or "vevo"
-DEFAULT_API_URL = "https://vevo.flox.sk/api/graphql"
+DEFAULT_PROJECT = BASE_DEFAULT_PROJECT
 GRAPHQL_TIMEOUT_SEC = int(
     os.getenv("BIZNISWEB_API_TIMEOUT_SEC", os.getenv("REPORT_HTTP_READ_TIMEOUT_SEC", "30"))
 )
@@ -107,6 +113,7 @@ WEATHER_SETTINGS: Dict[str, Any] = {
     "timezone": "Europe/Bratislava",
     "locations": []
 }
+ENABLE_EMAIL_STRATEGY_REPORT = False
 
 # Currency conversion rates to EUR
 # These should be updated regularly or fetched from an API
@@ -121,7 +128,7 @@ CURRENCY_RATES_TO_EUR = {
 # Product expense mapping (expense per item in EUR)
 # Keys are SKU/EAN codes or hash-based SKUs (H-XXXXXXXX) for products without EAN
 # Products not found in this mapping will default to 1.0 EUR expense
-PRODUCT_EXPENSES = {
+LEGACY_VEVO_PRODUCT_EXPENSES = {
     # === PARFUMY 500ml ===
     '8586024430327': 7.02,    # No.01 Cotton Paradise (500ml)
     '8586024430358': 9.38,    # No.02 Sweet Paradise (500ml)
@@ -175,32 +182,7 @@ PRODUCT_EXPENSES = {
     'H-36CA74A7': 0,          # Tringelt
     'H-A5F3BBB3': 0,          # Poistenie proti rozbitiu
 }
-
-
-def _project_dir(project_name: str) -> Path:
-    return PROJECTS_DIR / project_name
-
-
-def load_project_env(project_name: str) -> None:
-    """
-    Load per-project env file from projects/<project>/.env if it exists.
-    Values override root .env so project configs remain isolated.
-    """
-    if os.getenv("REPORT_SKIP_PROJECT_ENV", "").strip().lower() in {"1", "true", "yes", "y", "on"}:
-        logger.info("Skipping project .env load (REPORT_SKIP_PROJECT_ENV=true)")
-        return
-
-    env_path = _project_dir(project_name) / ".env"
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path, override=True)
-        logger.info(f"Loaded project env: {env_path}")
-    else:
-        if project_name != DEFAULT_PROJECT:
-            raise FileNotFoundError(
-                f"Project env file not found: {env_path}. "
-                f"Create projects/{project_name}/.env (you can start from .env.example)."
-            )
-        logger.info(f"Project env not found for default project '{project_name}' ({env_path}), using current environment")
+PRODUCT_EXPENSES = dict(LEGACY_VEVO_PRODUCT_EXPENSES)
 
 
 def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
@@ -208,23 +190,16 @@ def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
     Load project settings from projects/<project>/settings.json and optional
     product_expenses.json. Falls back to legacy in-file defaults.
     """
-    settings: Dict[str, Any] = {}
-    project_dir = _project_dir(project_name)
-    settings_path = project_dir / "settings.json"
-    if settings_path.exists():
-        with open(settings_path, "r", encoding="utf-8") as f:
-            settings = json.load(f) or {}
+    settings: Dict[str, Any] = load_project_settings(project_name)
+    project_dir = PROJECTS_DIR / project_name
 
-    product_expenses = PRODUCT_EXPENSES
+    product_expenses = dict(LEGACY_VEVO_PRODUCT_EXPENSES) if project_name == "vevo" else {}
     product_expenses_file = settings.get("product_expenses_file", "product_expenses.json")
     product_expenses_path = project_dir / product_expenses_file
     if product_expenses_path.exists():
         with open(product_expenses_path, "r", encoding="utf-8") as f:
             raw_map = json.load(f) or {}
             product_expenses = {str(k): float(v) for k, v in raw_map.items()}
-    elif project_name != "vevo":
-        # Non-vevo projects should not accidentally use vevo costs.
-        product_expenses = {}
 
     raw_weather = settings.get("weather", {}) or {}
     normalized_locations = []
@@ -246,7 +221,7 @@ def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
 
     return {
         "project_name": project_name,
-        "api_url": os.getenv("BIZNISWEB_API_URL", settings.get("biznisweb_api_url", DEFAULT_API_URL)),
+        "api_url": resolve_biznisweb_api_url(project_name, settings),
         "api_token": os.getenv("BIZNISWEB_API_TOKEN", ""),
         "packaging_cost_per_order": float(settings.get("packaging_cost_per_order", PACKAGING_COST_PER_ORDER)),
         "shipping_subsidy_per_order": float(settings.get("shipping_subsidy_per_order", SHIPPING_SUBSIDY_PER_ORDER)),
@@ -272,6 +247,7 @@ def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
             else None
         ),
         "weather": weather_settings,
+        "reporting_defaults": resolve_reporting_defaults(project_name, settings),
     }
 
 
@@ -280,7 +256,7 @@ def apply_runtime_settings(runtime: Dict[str, Any]) -> None:
     global PACKAGING_COST_PER_ORDER, SHIPPING_SUBSIDY_PER_ORDER, FIXED_MONTHLY_COST
     global CURRENCY_RATES_TO_EUR, PRODUCT_EXPENSES, ZERO_MARGIN_BRANDS, ZERO_COST_BRANDS
     global ZERO_COST_LABEL_PATTERNS, MARGIN_15_BRANDS, MARGIN_15_LABEL_PATTERNS, EXCLUDE_ZERO_PRICE_LABEL_PATTERNS
-    global MANUAL_FB_ADS_TOTAL, MANUAL_GOOGLE_ADS_TOTAL, WEATHER_SETTINGS
+    global MANUAL_FB_ADS_TOTAL, MANUAL_GOOGLE_ADS_TOTAL, WEATHER_SETTINGS, ENABLE_EMAIL_STRATEGY_REPORT
 
     PACKAGING_COST_PER_ORDER = float(runtime["packaging_cost_per_order"])
     SHIPPING_SUBSIDY_PER_ORDER = float(runtime["shipping_subsidy_per_order"])
@@ -298,6 +274,7 @@ def apply_runtime_settings(runtime: Dict[str, Any]) -> None:
     MANUAL_FB_ADS_TOTAL = runtime.get("manual_fb_ads_total")
     MANUAL_GOOGLE_ADS_TOTAL = runtime.get("manual_google_ads_total")
     WEATHER_SETTINGS = copy.deepcopy(runtime.get("weather", WEATHER_SETTINGS))
+    ENABLE_EMAIL_STRATEGY_REPORT = bool(runtime.get("reporting_defaults", {}).get("enable_email_strategy_report", False))
 
 
 def parse_input_date(value: str) -> datetime:
@@ -2035,7 +2012,7 @@ class BizniWebExporter:
         self._write_data_quality_file(source_health, date_from, date_to)
 
         # Generate Email Strategy Report
-        if customer_email_segments and cohort_analysis:
+        if ENABLE_EMAIL_STRATEGY_REPORT and customer_email_segments and cohort_analysis:
             print("Generating Email Strategy Report...")
             email_strategy_html = generate_email_strategy_report(
                 customer_email_segments, cohort_analysis, date_from, date_to
@@ -5925,7 +5902,7 @@ def main():
     project_name = (args.project or DEFAULT_PROJECT).strip()
 
     # Load project-specific env first so API credentials are isolated per shop.
-    load_project_env(project_name)
+    load_project_env(project_name, logger=logger)
     runtime = load_project_runtime_settings(project_name)
     apply_runtime_settings(runtime)
 

@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Define and implement the next OpenClaw auth baseline hardening step (P1.5): replace long-lived URL-fragment style access patterns with a stricter session/signed-grant direction and document the migration path.
+- Execute `P2.3` OpenClaw infra/env cleanup in the standalone OpenClaw repository: remove unnecessary environment-surface leakage, tighten examples/bootstrap, and verify tunnel/bootstrap reproducibility without single-PC assumptions.
 
 ## 9) Change Log
 
@@ -183,3 +183,18 @@ Bootstrap entrypoints:
   - `.gitignore` now ignores arbitrary local `.env.*` runtime variants while preserving tracked safe templates
   - `.gitattributes` now enforces LF for python/markdown/env-template files to avoid false CRLF-only diffs
   - added safe tracked template `/.env.roy.sk.template` for roy-specific local bootstrap without committing secrets
+- Completed `P2.2` reporting client-boundary refactor:
+  - added shared `project_config.py` to centralize per-project env loading, project settings, display-name/reporting defaults, API URL resolution, and BizniWeb base URL derivation,
+  - removed remaining Vevo-specific runtime defaults from generic reporting flow in `export_orders.py`,
+  - kept Vevo legacy product-cost fallback scoped only to Vevo; non-Vevo projects no longer inherit Vevo costs implicitly,
+  - gated Vevo-only email strategy HTML behind per-project config (`enable_email_strategy_report`) so ROY and future clients do not generate Vevo-branded strategy output,
+  - made `daily_report_runner.py` project-driven for email subject/body text, SES configuration-set fallback, and CloudWatch namespace selection,
+  - removed `email_strategy_html` from required daily-runner outputs so non-Vevo projects can run cleanly without Vevo-only artifacts,
+  - made `generate_invoices.py` project-aware via `--project`, per-project env bootstrap, and BizniWeb base URL derivation from the selected project API endpoint instead of hardcoded Vevo URLs,
+  - extended project settings:
+    - `projects/vevo/settings.json` now declares display/reporting defaults and explicitly enables the Vevo email-strategy artifact,
+    - `projects/roy/settings.json` now declares project display/reporting defaults and explicitly disables the Vevo-only strategy artifact,
+  - verified syntax with `python -m py_compile project_config.py export_orders.py daily_report_runner.py generate_invoices.py`,
+  - verified ROY smoke export on `2026-03-01..2026-03-02`,
+  - verified VEVO smoke export on `2026-03-01..2026-03-02`,
+  - verified project-aware invoice bootstrap on ROY with `python generate_invoices.py --project roy --from-date 2026-03-01 --to-date 2026-03-02 --dry-run --no-web-login`.

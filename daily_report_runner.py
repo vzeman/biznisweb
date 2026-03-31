@@ -26,20 +26,18 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
+from project_config import (
+    BASE_DEFAULT_PROJECT,
+    load_project_env,
+    load_project_settings,
+    project_data_dir,
+    resolve_reporting_defaults,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parent
-ROOT_DATA_DIR = ROOT_DIR / "data"
-PROJECTS_DIR = ROOT_DIR / "projects"
-BASE_DEFAULT_PROJECT = "vevo"
 DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
 CFO_FIXED_DAILY_COST_EUR = float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70"))
-
-
-def project_data_dir(project: str) -> Path:
-    data_dir = ROOT_DATA_DIR / project
-    data_dir.mkdir(parents=True, exist_ok=True)
-    return data_dir
 
 
 def bootstrap_project_from_argv(argv: List[str]) -> str:
@@ -49,22 +47,6 @@ def bootstrap_project_from_argv(argv: List[str]) -> str:
         if arg.startswith("--project="):
             return arg.split("=", 1)[1].strip() or DEFAULT_PROJECT
     return DEFAULT_PROJECT
-
-
-def load_project_env(project: str) -> None:
-    if os.getenv("REPORT_SKIP_PROJECT_ENV", "").strip().lower() in {"1", "true", "yes", "y", "on"}:
-        print("Skipping project .env load (REPORT_SKIP_PROJECT_ENV=true)")
-        return
-
-    env_path = PROJECTS_DIR / project / ".env"
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path, override=True)
-        print(f"Loaded project env: {env_path}")
-    elif project != BASE_DEFAULT_PROJECT:
-        raise FileNotFoundError(
-            f"Project env file not found: {env_path}. "
-            f"Create projects/{project}/.env from projects/{project}/.env.example."
-        )
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -239,8 +221,8 @@ def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
     return uploaded_links
 
 
-def build_email_subject(project: str) -> str:
-    return os.getenv("REPORT_EMAIL_SUBJECT", f"Daily {project} report").strip()
+def build_email_subject(reporting_defaults: Dict[str, Any]) -> str:
+    return os.getenv("REPORT_EMAIL_SUBJECT", reporting_defaults["email_subject"]).strip()
 
 
 def _to_float(value: str) -> float:
@@ -2175,17 +2157,19 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
     return output_path
 
 
-def build_email_body(from_date: str, to_date: str, summary_text: str) -> str:
+def build_email_body(from_date: str, to_date: str, summary_text: str, reporting_defaults: Dict[str, Any]) -> str:
+    display_name = reporting_defaults["display_name"]
+    reporting_system_name = reporting_defaults["reporting_system_name"]
     return (
         "Dobry den,\n\n"
-        "v prilohe posielam denny Vevo report v HTML formate.\n"
+        f"v prilohe posielam denny {display_name} report v HTML formate.\n"
         f"Sledovane obdobie: {from_date} az {to_date}.\n\n"
         f"{summary_text}\n\n"
-        "Tento email bol odoslany automaticky zo systemu Vevo reporting.\n"
+        f"Tento email bol odoslany automaticky zo systemu {reporting_system_name}.\n"
     )
 
 
-def put_metric(metric_name: str, value: float, project: str, unit: str = "Count") -> None:
+def put_metric(metric_name: str, value: float, project: str, reporting_defaults: Dict[str, Any], unit: str = "Count") -> None:
     """Publish a custom CloudWatch metric for reporting job observability."""
     region = os.getenv("AWS_REGION", "eu-central-1").strip()
     try:
@@ -2198,7 +2182,7 @@ def put_metric(metric_name: str, value: float, project: str, unit: str = "Count"
     try:
         cloudwatch = boto3.client("cloudwatch", region_name=region)
         cloudwatch.put_metric_data(
-            Namespace="VevoReporting",
+            Namespace=reporting_defaults["cloudwatch_namespace"],
             MetricData=[
                 {
                     "MetricName": metric_name,
@@ -2216,10 +2200,11 @@ def send_email_ses(
     subject: str,
     body_text: str,
     file_paths: Dict[str, Path],
+    reporting_defaults: Dict[str, Any],
     extra_attachments: Optional[List[Path]] = None,
 ) -> str:
     region = os.getenv("AWS_REGION", "eu-central-1").strip()
-    configuration_set = os.getenv("SES_CONFIGURATION_SET", "vevo-reporting").strip()
+    configuration_set = os.getenv("SES_CONFIGURATION_SET", reporting_defaults["ses_configuration_set"]).strip()
     source = os.getenv("REPORT_EMAIL_FROM", "").strip()
     to_raw = os.getenv("REPORT_EMAIL_TO", "").strip()
 
@@ -2296,6 +2281,7 @@ def main() -> None:
     project = (args.project or bootstrap_project).strip() or DEFAULT_PROJECT
     os.environ["REPORT_PROJECT"] = project
     os.environ["REPORT_DATA_DIR"] = str(project_data_dir(project).resolve())
+    reporting_defaults = resolve_reporting_defaults(project, load_project_settings(project))
 
     to_date = normalize_date(resolve_to_date(args.to_date, args.timezone))
     from_date = normalize_date(args.from_date)
@@ -2318,7 +2304,6 @@ def main() -> None:
     output_paths = get_output_paths(project, from_date, to_date)
     required_output_keys = [
         "report_html",
-        "email_strategy_html",
         "export_csv",
         "aggregate_by_date_csv",
         "aggregate_by_month_csv",
@@ -2333,18 +2318,19 @@ def main() -> None:
         print("Email sending skipped by flag.")
         return
 
-    subject = build_email_subject(project)
+    subject = build_email_subject(reporting_defaults)
     summary_text = build_report_summary(output_paths)
     cfo_graph_html = generate_cfo_graph_html(project, output_paths, from_date, to_date)
-    body_text = build_email_body(from_date, to_date, summary_text)
+    body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults)
     message_id = send_email_ses(
         subject=subject,
         body_text=body_text,
         file_paths=output_paths,
+        reporting_defaults=reporting_defaults,
         extra_attachments=[cfo_graph_html],
     )
-    put_metric("ReportEmailSent", 1, project)
-    put_metric("ReportRunSucceeded", 1, project)
+    put_metric("ReportEmailSent", 1, project, reporting_defaults)
+    put_metric("ReportRunSucceeded", 1, project, reporting_defaults)
     print(f"SES message sent. MessageId={message_id}")
 
 
@@ -2352,5 +2338,11 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
-        put_metric("ReportRunFailed", 1, os.getenv("REPORT_PROJECT", DEFAULT_PROJECT))
+        failed_project = os.getenv("REPORT_PROJECT", DEFAULT_PROJECT)
+        put_metric(
+            "ReportRunFailed",
+            1,
+            failed_project,
+            resolve_reporting_defaults(failed_project, load_project_settings(failed_project)),
+        )
         raise
