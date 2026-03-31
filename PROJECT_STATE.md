@@ -86,7 +86,9 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Regenerate VEVO + ROY reports and validate equalized Week-of-Month section directly in HTML outputs
+- Regenerate VEVO + ROY reports and validate both phase metrics in HTML outputs:
+  - Week-of-Month (equalized 4x7)
+  - Day-of-Month (1-31 normalized by calendar occurrences)
 
 ## 9) Change Log
 
@@ -106,3 +108,8 @@ Bootstrap entrypoints:
   - uses full months only (drops partial first/last month for this metric),
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
+- Added new Day-of-Month analytics (1-31) to reporting pipeline:
+  - integrated in export_orders.py (`analyze_day_of_month`) and HTML generation,
+  - uses full months only for unbiased phase-of-month comparisons,
+  - normalizes by calendar occurrences for each day number (1..31),
+  - added 2 charts + normalized performance table in HTML report.

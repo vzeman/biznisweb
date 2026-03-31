@@ -20,6 +20,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          item_combinations: pd.DataFrame = None,
                          day_of_week_analysis: pd.DataFrame = None,
                          week_of_month_analysis: pd.DataFrame = None,
+                         day_of_month_analysis: pd.DataFrame = None,
                          day_hour_heatmap: pd.DataFrame = None,
                          country_analysis: pd.DataFrame = None,
                          city_analysis: pd.DataFrame = None,
@@ -2898,6 +2899,77 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{int(row['active_days'])}</td>
                         <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
                         <td class="number">{int(row['active_months'])}</td>
+                    </tr>"""
+
+        html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+    # Day of Month Analysis
+    if day_of_month_analysis is not None and not day_of_month_analysis.empty:
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Day of Month Analysis</h2>
+
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Orders & Revenue by Day of Month</h2>
+                <p class="chart-explanation">Total performance by calendar day number (1-31) within month across selected period.</p>
+                <canvas id="domOrdersRevenueChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Average Revenue/Profit per Occurrence</h2>
+                <p class="chart-explanation">Normalized by number of calendar occurrences of each day (fair phase-of-month comparison).</p>
+                <canvas id="domAvgDailyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Day of Month Performance (Normalized)</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Day in Month</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Orders %</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Revenue %</th>
+                        <th class="number">Profit (before ads)</th>
+                        <th class="number">Profit Margin</th>
+                        <th class="number">AOV</th>
+                        <th class="number">Avg Orders / Occurrence</th>
+                        <th class="number">Avg Revenue / Occurrence</th>
+                        <th class="number">Avg Profit / Occurrence</th>
+                        <th class="number">Calendar Occurrences</th>
+                        <th class="number">Active Days</th>
+                        <th class="number">Active Day Rate</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+
+        for _, row in day_of_month_analysis.iterrows():
+            html_content += f"""
+                    <tr>
+                        <td>{row['day_label']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">{row['orders_pct']:.1f}%</td>
+                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">{row['revenue_pct']:.1f}%</td>
+                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">{row['profit_margin_pct']:.1f}%</td>
+                        <td class="number">€{row['aov']:.2f}</td>
+                        <td class="number">{row['avg_orders_per_occurrence']:.2f}</td>
+                        <td class="number">€{row['avg_revenue_per_occurrence']:,.2f}</td>
+                        <td class="number">€{row['avg_profit_per_occurrence']:,.2f}</td>
+                        <td class="number">{int(row['calendar_days'])}</td>
+                        <td class="number">{int(row['active_days'])}</td>
+                        <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
                     </tr>"""
 
         html_content += """
@@ -7771,6 +7843,100 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             title: {{ display: true, text: 'EUR / day' }},
+                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+    # Day of Month Charts
+    if day_of_month_analysis is not None and not day_of_month_analysis.empty:
+        dom_labels = day_of_month_analysis['day_label'].tolist()
+        dom_orders = day_of_month_analysis['orders'].tolist()
+        dom_revenue = day_of_month_analysis['revenue'].tolist()
+        dom_avg_revenue = day_of_month_analysis['avg_revenue_per_occurrence'].tolist()
+        dom_avg_profit = day_of_month_analysis['avg_profit_per_occurrence'].tolist()
+
+        html_content += f"""
+
+        // Day of Month Orders & Revenue Chart
+        const domOrdersRevenueCtx = document.getElementById('domOrdersRevenueChart');
+        if (domOrdersRevenueCtx) {{
+            new Chart(domOrdersRevenueCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(dom_labels)},
+                    datasets: [{{
+                        label: 'Orders',
+                        data: {json.dumps(dom_orders)},
+                        backgroundColor: '#8B5CF6',
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Revenue',
+                        data: {json.dumps(dom_revenue)},
+                        type: 'line',
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#10B981',
+                        fill: true,
+                        yAxisID: 'y1'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Orders' }}
+                        }},
+                        y1: {{
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Revenue (€)' }},
+                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }},
+                            grid: {{ drawOnChartArea: false }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        // Day of Month Normalized Revenue/Profit Chart
+        const domAvgDailyCtx = document.getElementById('domAvgDailyChart');
+        if (domAvgDailyCtx) {{
+            new Chart(domAvgDailyCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(dom_labels)},
+                    datasets: [{{
+                        label: 'Avg Revenue / Occurrence',
+                        data: {json.dumps(dom_avg_revenue)},
+                        backgroundColor: '#3B82F6',
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Avg Profit / Occurrence (before ads)',
+                        data: {json.dumps(dom_avg_profit)},
+                        backgroundColor: '#F59E0B',
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'EUR / occurrence' }},
                             ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
                         }}
                     }}

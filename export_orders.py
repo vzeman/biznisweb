@@ -1708,6 +1708,7 @@ class BizniWebExporter:
         # New analytics
         day_of_week_analysis = self.analyze_day_of_week(df)
         week_of_month_analysis = self.analyze_week_of_month(df)
+        day_of_month_analysis = self.analyze_day_of_month(df)
         day_hour_heatmap = self.analyze_day_hour_heatmap(df)
         country_analysis, city_analysis = self.analyze_geographic(df)
         geo_profitability = self.analyze_geo_profitability(df, fb_campaigns)
@@ -1766,6 +1767,7 @@ class BizniWebExporter:
             order_size_distribution, item_combinations,
             day_of_week_analysis=day_of_week_analysis,
             week_of_month_analysis=week_of_month_analysis,
+            day_of_month_analysis=day_of_month_analysis,
             day_hour_heatmap=day_hour_heatmap,
             country_analysis=country_analysis,
             city_analysis=city_analysis,
@@ -3548,6 +3550,116 @@ class BizniWebExporter:
         else:
             print("Week-of-month analysis complete (fallback: no full-month window in range)")
         return wom_agg
+
+    def analyze_day_of_month(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze orders, revenue, and profitability by day number within month (1-31)."""
+        print("\nAnalyzing day-of-month patterns...")
+
+        dom_df = df.copy()
+        dom_df['purchase_datetime_dom'] = pd.to_datetime(dom_df['purchase_date'])
+        dom_df['purchase_date_only'] = dom_df['purchase_datetime_dom'].dt.date
+        dom_df['day_in_month'] = dom_df['purchase_datetime_dom'].dt.day
+        dom_df['year_month'] = dom_df['purchase_datetime_dom'].dt.to_period('M').astype(str)
+        dom_df['date_only_ts'] = dom_df['purchase_datetime_dom'].dt.normalize()
+
+        min_date = dom_df['date_only_ts'].min()
+        max_date = dom_df['date_only_ts'].max()
+        if pd.isna(min_date) or pd.isna(max_date):
+            base = pd.DataFrame({'day_in_month': list(range(1, 32))})
+            base['orders'] = 0
+            base['revenue'] = 0.0
+            base['profit'] = 0.0
+            base['active_days'] = 0
+            base['calendar_days'] = 0
+            base['day_label'] = base['day_in_month'].apply(lambda d: f"{int(d)}.")
+            base['orders_pct'] = 0.0
+            base['revenue_pct'] = 0.0
+            base['aov'] = 0.0
+            base['profit_margin_pct'] = 0.0
+            base['avg_revenue_per_occurrence'] = 0.0
+            base['avg_profit_per_occurrence'] = 0.0
+            base['avg_orders_per_occurrence'] = 0.0
+            base['active_day_ratio_pct'] = 0.0
+            print("Day-of-month analysis complete (empty dataset)")
+            return base
+
+        # Use full months only for unbiased phase-of-month comparison.
+        full_start = min_date if min_date.day == 1 else (min_date + pd.offsets.MonthBegin(1))
+        max_month_last_day = (max_date + pd.offsets.MonthEnd(0)).day
+        full_end = max_date if max_date.day == max_month_last_day else (max_date - pd.offsets.MonthEnd(1))
+
+        has_full_month_window = full_start <= full_end
+        if has_full_month_window:
+            dom_df = dom_df[(dom_df['date_only_ts'] >= full_start) & (dom_df['date_only_ts'] <= full_end)].copy()
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=full_start, end=full_end, freq='D')})
+        else:
+            # Fallback for short ranges that don't contain any full month.
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=min_date, end=max_date, freq='D')})
+
+        calendar_df['day_in_month'] = calendar_df['date'].dt.day
+
+        dom_orders_agg = dom_df.groupby('day_in_month').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum',
+            'purchase_date_only': 'nunique'
+        }).reset_index()
+        dom_orders_agg.columns = ['day_in_month', 'orders', 'revenue', 'profit', 'active_days']
+
+        calendar_days = calendar_df.groupby('day_in_month').agg({
+            'date': 'nunique'
+        }).reset_index().rename(columns={'date': 'calendar_days'})
+
+        dom_agg = pd.DataFrame({'day_in_month': list(range(1, 32))})
+        dom_agg = dom_agg.merge(dom_orders_agg, on='day_in_month', how='left')
+        dom_agg = dom_agg.merge(calendar_days, on='day_in_month', how='left')
+
+        for col in ['orders', 'revenue', 'profit', 'active_days', 'calendar_days']:
+            dom_agg[col] = dom_agg[col].fillna(0)
+        dom_agg['orders'] = dom_agg['orders'].astype(int)
+        dom_agg['active_days'] = dom_agg['active_days'].astype(int)
+        dom_agg['calendar_days'] = dom_agg['calendar_days'].astype(int)
+        dom_agg['day_label'] = dom_agg['day_in_month'].apply(lambda d: f"{int(d)}.")
+
+        total_orders = dom_agg['orders'].sum()
+        total_revenue = dom_agg['revenue'].sum()
+
+        dom_agg['orders_pct'] = (
+            (dom_agg['orders'] / total_orders * 100).round(1) if total_orders > 0 else 0
+        )
+        dom_agg['revenue_pct'] = (
+            (dom_agg['revenue'] / total_revenue * 100).round(1) if total_revenue > 0 else 0
+        )
+        dom_agg['aov'] = (dom_agg['revenue'] / dom_agg['orders']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['profit_margin_pct'] = ((dom_agg['profit'] / dom_agg['revenue']) * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+
+        # Fair phase comparison: normalize by number of calendar occurrences of each day.
+        dom_agg['avg_revenue_per_occurrence'] = (dom_agg['revenue'] / dom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['avg_profit_per_occurrence'] = (dom_agg['profit'] / dom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['avg_orders_per_occurrence'] = (dom_agg['orders'] / dom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['active_day_ratio_pct'] = (dom_agg['active_days'] / dom_agg['calendar_days'] * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+
+        dom_agg = dom_agg.sort_values('day_in_month').reset_index(drop=True)
+
+        if has_full_month_window:
+            print(
+                f"Day-of-month analysis complete (full months window: {full_start.strftime('%Y-%m-%d')} to {full_end.strftime('%Y-%m-%d')})"
+            )
+        else:
+            print("Day-of-month analysis complete (fallback: no full-month window in range)")
+        return dom_agg
     def analyze_day_hour_heatmap(self, df: pd.DataFrame) -> pd.DataFrame:
         """Analyze orders by day of week and hour of day for heatmap visualization"""
         print("\nAnalyzing day/hour heatmap patterns...")
