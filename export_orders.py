@@ -3428,20 +3428,60 @@ class BizniWebExporter:
         return orders_per_day
 
     def analyze_week_of_month(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Analyze orders, revenue, and profitability by week position within month."""
+        """Analyze orders, revenue, and profitability by week-in-month using equal 4x7-day windows."""
         print("\nAnalyzing week-of-month patterns...")
 
         wom_df = df.copy()
         wom_df['purchase_datetime_wom'] = pd.to_datetime(wom_df['purchase_date'])
         wom_df['purchase_date_only'] = wom_df['purchase_datetime_wom'].dt.date
         wom_df['year_month'] = wom_df['purchase_datetime_wom'].dt.to_period('M').astype(str)
+        wom_df['day_in_month'] = wom_df['purchase_datetime_wom'].dt.day
+        wom_df['date_only_ts'] = wom_df['purchase_datetime_wom'].dt.normalize()
 
-        # Week index inside month:
-        # days 1-7 => week 1, 8-14 => week 2, 15-21 => week 3, 22+ => week 4.
-        wom_df['week_of_month'] = ((wom_df['purchase_datetime_wom'].dt.day - 1) // 7) + 1
-        wom_df['week_of_month'] = wom_df['week_of_month'].clip(upper=4)
+        # Use only days 1..28 => exact 4 equal 7-day buckets each month.
+        wom_df = wom_df[wom_df['day_in_month'] <= 28].copy()
 
-        wom_agg = wom_df.groupby('week_of_month').agg({
+        # Use full months only (remove partial first/last month from selected range).
+        min_date = wom_df['date_only_ts'].min()
+        max_date = wom_df['date_only_ts'].max()
+        if pd.isna(min_date) or pd.isna(max_date):
+            base = pd.DataFrame({'week_of_month': [1, 2, 3, 4]})
+            base['orders'] = 0
+            base['revenue'] = 0.0
+            base['profit'] = 0.0
+            base['active_days'] = 0
+            base['active_months'] = 0
+            base['calendar_days'] = 0
+            base['week_label'] = base['week_of_month'].apply(lambda w: f'Week {int(w)}')
+            base['orders_pct'] = 0.0
+            base['revenue_pct'] = 0.0
+            base['aov'] = 0.0
+            base['profit_margin_pct'] = 0.0
+            base['avg_daily_revenue'] = 0.0
+            base['avg_daily_profit'] = 0.0
+            base['avg_orders_per_day'] = 0.0
+            base['active_day_ratio_pct'] = 0.0
+            print("Week-of-month analysis complete (empty dataset)")
+            return base
+
+        full_start = min_date if min_date.day == 1 else (min_date + pd.offsets.MonthBegin(1))
+        max_month_last_day = (max_date + pd.offsets.MonthEnd(0)).day
+        full_end = max_date if max_date.day == max_month_last_day else (max_date - pd.offsets.MonthEnd(1))
+
+        has_full_month_window = full_start <= full_end
+        if has_full_month_window:
+            wom_df = wom_df[(wom_df['date_only_ts'] >= full_start) & (wom_df['date_only_ts'] <= full_end)].copy()
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=full_start, end=full_end, freq='D')})
+        else:
+            # Fallback for short ranges that don't contain any full month.
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=min_date, end=max_date, freq='D')})
+
+        calendar_df = calendar_df[calendar_df['date'].dt.day <= 28].copy()
+
+        wom_df['week_of_month'] = ((wom_df['day_in_month'] - 1) // 7) + 1
+        calendar_df['week_of_month'] = ((calendar_df['date'].dt.day - 1) // 7) + 1
+
+        wom_orders_agg = wom_df.groupby('week_of_month').agg({
             'order_num': 'nunique',
             'item_total_without_tax': 'sum',
             'profit_before_ads': 'sum',
@@ -3449,9 +3489,24 @@ class BizniWebExporter:
             'year_month': 'nunique'
         }).reset_index()
 
-        wom_agg.columns = [
+        wom_orders_agg.columns = [
             'week_of_month', 'orders', 'revenue', 'profit', 'active_days', 'active_months'
         ]
+
+        calendar_days = calendar_df.groupby('week_of_month').agg({
+            'date': 'nunique'
+        }).reset_index().rename(columns={'date': 'calendar_days'})
+
+        wom_agg = pd.DataFrame({'week_of_month': [1, 2, 3, 4]})
+        wom_agg = wom_agg.merge(wom_orders_agg, on='week_of_month', how='left')
+        wom_agg = wom_agg.merge(calendar_days, on='week_of_month', how='left')
+
+        for col in ['orders', 'revenue', 'profit', 'active_days', 'active_months', 'calendar_days']:
+            wom_agg[col] = wom_agg[col].fillna(0)
+        wom_agg['orders'] = wom_agg['orders'].astype(int)
+        wom_agg['active_days'] = wom_agg['active_days'].astype(int)
+        wom_agg['active_months'] = wom_agg['active_months'].astype(int)
+        wom_agg['calendar_days'] = wom_agg['calendar_days'].astype(int)
         wom_agg['week_label'] = wom_agg['week_of_month'].apply(lambda w: f'Week {int(w)}')
 
         total_orders = wom_agg['orders'].sum()
@@ -3470,19 +3525,28 @@ class BizniWebExporter:
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(1)
 
-        wom_agg['avg_daily_revenue'] = (wom_agg['revenue'] / wom_agg['active_days']).replace(
+        # Normalize by total calendar days in each month phase (not only active order days).
+        wom_agg['avg_daily_revenue'] = (wom_agg['revenue'] / wom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
-        wom_agg['avg_daily_profit'] = (wom_agg['profit'] / wom_agg['active_days']).replace(
+        wom_agg['avg_daily_profit'] = (wom_agg['profit'] / wom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
-        wom_agg['avg_orders_per_day'] = (wom_agg['orders'] / wom_agg['active_days']).replace(
+        wom_agg['avg_orders_per_day'] = (wom_agg['orders'] / wom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
+        wom_agg['active_day_ratio_pct'] = (wom_agg['active_days'] / wom_agg['calendar_days'] * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
 
         wom_agg = wom_agg.sort_values('week_of_month').reset_index(drop=True)
 
-        print(f"Week-of-month analysis complete")
+        if has_full_month_window:
+            print(
+                f"Week-of-month analysis complete (full months window: {full_start.strftime('%Y-%m-%d')} to {full_end.strftime('%Y-%m-%d')})"
+            )
+        else:
+            print("Week-of-month analysis complete (fallback: no full-month window in range)")
         return wom_agg
     def analyze_day_hour_heatmap(self, df: pd.DataFrame) -> pd.DataFrame:
         """Analyze orders by day of week and hour of day for heatmap visualization"""

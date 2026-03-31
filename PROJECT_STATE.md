@@ -86,7 +86,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Deploy branch with Week-of-Month metric and validate charts in freshly generated VEVO + ROY HTML reports
+- Regenerate VEVO + ROY reports and validate equalized Week-of-Month section directly in HTML outputs
 
 ## 9) Change Log
 
@@ -101,3 +101,8 @@ Bootstrap entrypoints:
 - Wired Week-of-Month outputs into HTML report generation (html_report_generator.py) with 2 charts and performance table.
 - Added aggregation for week-level pattern visibility: orders, revenue, profit, margin, AOV, avg daily revenue/profit, active days/months.
 - Verified syntax via python -m py_compile export_orders.py html_report_generator.py.
+- Revised Week-of-Month methodology to remove day-count bias:
+  - uses only days 1-28 (4x7 equal windows),
+  - uses full months only (drops partial first/last month for this metric),
+  - daily normalization uses calendar_days (includes zero-order days).
+- Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.

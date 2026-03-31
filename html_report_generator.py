@@ -2839,24 +2839,24 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Week of Month Analysis</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Week of Month Analysis (Equalized 4x7)</h2>
 
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Revenue & Profit by Week of Month</h2>
-                <p class="chart-explanation">Shows total turnover and profitability for week positions (1st, 2nd, 3rd, 4th, 5th week) across the selected period.</p>
+                <p class="chart-explanation">Uses days 1-28 only (4x7 days) and full months only, so each week bucket has the same calendar-day length.</p>
                 <canvas id="womRevenueProfitChart"></canvas>
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Average Daily Revenue & Profit by Week of Month</h2>
-                <p class="chart-explanation">Normalized view of performance pattern by week position using average daily values.</p>
+                <p class="chart-explanation">Normalized by calendar days in each equalized week bucket (includes zero-order days), so phase comparison is fair.</p>
                 <canvas id="womAvgDailyChart"></canvas>
             </div>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Week of Month Performance</h2>
+                <h2 class="table-title">Week of Month Performance (Equalized)</h2>
                 <span class="toggle-icon">▼</span>
             </div>
             <div class="collapsible-content">
@@ -2873,7 +2873,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">AOV</th>
                         <th class="number">Avg Daily Revenue</th>
                         <th class="number">Avg Daily Profit</th>
+                        <th class="number">Calendar Days</th>
                         <th class="number">Active Days</th>
+                        <th class="number">Active Day Rate</th>
                         <th class="number">Active Months</th>
                     </tr>
                 </thead>
@@ -2892,7 +2894,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">€{row['aov']:.2f}</td>
                         <td class="number">€{row['avg_daily_revenue']:,.2f}</td>
                         <td class="number">€{row['avg_daily_profit']:,.2f}</td>
+                        <td class="number">{int(row['calendar_days'])}</td>
                         <td class="number">{int(row['active_days'])}</td>
+                        <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
                         <td class="number">{int(row['active_months'])}</td>
                     </tr>"""
 
