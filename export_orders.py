@@ -8,6 +8,7 @@ import csv
 import argparse
 import time
 import json
+import copy
 import traceback
 import hashlib
 import re
@@ -19,6 +20,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import calendar
 import numpy as np
 from logger_config import get_logger
+from weather_client import WeatherClient
 
 try:
     from dotenv import load_dotenv
@@ -97,6 +99,11 @@ MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
+WEATHER_SETTINGS: Dict[str, Any] = {
+    "enabled": False,
+    "timezone": "Europe/Bratislava",
+    "locations": []
+}
 
 # Currency conversion rates to EUR
 # These should be updated regularly or fetched from an API
@@ -216,6 +223,24 @@ def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
         # Non-vevo projects should not accidentally use vevo costs.
         product_expenses = {}
 
+    raw_weather = settings.get("weather", {}) or {}
+    normalized_locations = []
+    for location in raw_weather.get("locations", []) or []:
+        try:
+            normalized_locations.append({
+                "name": str(location.get("name", "Location")).strip() or "Location",
+                "latitude": float(location["latitude"]),
+                "longitude": float(location["longitude"]),
+                "weight": float(location.get("weight", 1.0)),
+            })
+        except (KeyError, TypeError, ValueError):
+            continue
+    weather_settings = {
+        "enabled": bool(raw_weather.get("enabled", False) and normalized_locations),
+        "timezone": str(raw_weather.get("timezone", "Europe/Bratislava")).strip() or "Europe/Bratislava",
+        "locations": normalized_locations,
+    }
+
     return {
         "project_name": project_name,
         "api_url": os.getenv("BIZNISWEB_API_URL", settings.get("biznisweb_api_url", DEFAULT_API_URL)),
@@ -243,6 +268,7 @@ def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
             if settings.get("manual_google_ads_total") is not None
             else None
         ),
+        "weather": weather_settings,
     }
 
 
@@ -251,7 +277,7 @@ def apply_runtime_settings(runtime: Dict[str, Any]) -> None:
     global PACKAGING_COST_PER_ORDER, SHIPPING_SUBSIDY_PER_ORDER, FIXED_MONTHLY_COST
     global CURRENCY_RATES_TO_EUR, PRODUCT_EXPENSES, ZERO_MARGIN_BRANDS, ZERO_COST_BRANDS
     global ZERO_COST_LABEL_PATTERNS, MARGIN_15_BRANDS, MARGIN_15_LABEL_PATTERNS, EXCLUDE_ZERO_PRICE_LABEL_PATTERNS
-    global MANUAL_FB_ADS_TOTAL, MANUAL_GOOGLE_ADS_TOTAL
+    global MANUAL_FB_ADS_TOTAL, MANUAL_GOOGLE_ADS_TOTAL, WEATHER_SETTINGS
 
     PACKAGING_COST_PER_ORDER = float(runtime["packaging_cost_per_order"])
     SHIPPING_SUBSIDY_PER_ORDER = float(runtime["shipping_subsidy_per_order"])
@@ -268,6 +294,7 @@ def apply_runtime_settings(runtime: Dict[str, Any]) -> None:
     ]
     MANUAL_FB_ADS_TOTAL = runtime.get("manual_fb_ads_total")
     MANUAL_GOOGLE_ADS_TOTAL = runtime.get("manual_google_ads_total")
+    WEATHER_SETTINGS = copy.deepcopy(runtime.get("weather", WEATHER_SETTINGS))
 
 
 def parse_input_date(value: str) -> datetime:
@@ -444,6 +471,15 @@ class BizniWebExporter:
         self.google_ads_client = GoogleAdsClient()
         self.cache_dir = self.data_dir / 'cache'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.weather_settings = copy.deepcopy(WEATHER_SETTINGS)
+        self.weather_cache_dir = self.data_dir / 'weather_cache'
+        self.weather_cache_dir.mkdir(parents=True, exist_ok=True)
+        self.weather_client = None
+        if self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
+            self.weather_client = WeatherClient(
+                cache_dir=self.weather_cache_dir,
+                timezone=self.weather_settings.get("timezone", "Europe/Bratislava"),
+            )
         self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
@@ -1737,6 +1773,7 @@ class BizniWebExporter:
 
         # Create aggregated reports
         date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
+        weather_analysis = self.analyze_weather_impact(date_agg, date_from, date_to)
 
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(df, date_agg, clv_return_time_analysis)
@@ -1769,6 +1806,7 @@ class BizniWebExporter:
             day_of_week_analysis=day_of_week_analysis,
             week_of_month_analysis=week_of_month_analysis,
             day_of_month_analysis=day_of_month_analysis,
+            weather_analysis=weather_analysis,
             advanced_dtc_metrics=advanced_dtc_metrics,
             day_hour_heatmap=day_hour_heatmap,
             country_analysis=country_analysis,
@@ -3662,6 +3700,211 @@ class BizniWebExporter:
         else:
             print("Day-of-month analysis complete (fallback: no full-month window in range)")
         return dom_agg
+
+    def analyze_weather_impact(
+        self,
+        date_agg: pd.DataFrame,
+        date_from: datetime,
+        date_to: datetime
+    ) -> Optional[dict]:
+        """Analyze whether weather conditions correlate with daily business performance."""
+        print("\nAnalyzing weather impact...")
+
+        if not self.weather_client or not self.weather_settings.get("enabled"):
+            print("Weather analysis skipped: weather integration disabled")
+            return None
+
+        try:
+            weather_df = self.weather_client.get_daily_weather(
+                date_from=date_from,
+                date_to=date_to,
+                locations=self.weather_settings.get("locations", []),
+            )
+        except Exception as exc:
+            logger.warning(f"Weather analysis skipped due to fetch error: {exc}")
+            return None
+
+        if weather_df.empty:
+            print("Weather analysis skipped: no weather data returned")
+            return None
+
+        weather_df = weather_df.copy()
+        weather_df["date"] = pd.to_datetime(weather_df["date"]).dt.date
+
+        analysis_df = date_agg.copy()
+        analysis_df["date"] = pd.to_datetime(analysis_df["date"]).dt.date
+        analysis_df["aov"] = analysis_df.apply(
+            lambda row: round((row["total_revenue"] / row["unique_orders"]) if row["unique_orders"] > 0 else 0, 2),
+            axis=1
+        )
+        analysis_df["weekday"] = pd.to_datetime(analysis_df["date"]).dt.day_name()
+
+        weekday_baseline = analysis_df.groupby("weekday").agg({
+            "total_revenue": "mean",
+            "net_profit": "mean",
+            "unique_orders": "mean",
+            "aov": "mean",
+        }).rename(columns={
+            "total_revenue": "weekday_expected_revenue",
+            "net_profit": "weekday_expected_profit",
+            "unique_orders": "weekday_expected_orders",
+            "aov": "weekday_expected_aov",
+        }).reset_index()
+
+        merged = analysis_df.merge(weather_df, on="date", how="left")
+        merged = merged.merge(weekday_baseline, on="weekday", how="left")
+
+        valid = merged[merged["temperature_2m_mean"].notna()].copy()
+        if valid.empty:
+            print("Weather analysis skipped: merged dataset has no valid weather rows")
+            return None
+
+        valid["weather_code"] = pd.to_numeric(valid["weather_code"], errors="coerce").fillna(0).astype(int)
+        valid["precipitation_sum"] = pd.to_numeric(valid["precipitation_sum"], errors="coerce").fillna(0.0)
+        valid["precipitation_hours"] = pd.to_numeric(valid["precipitation_hours"], errors="coerce").fillna(0.0)
+        valid["wind_speed_10m_max"] = pd.to_numeric(valid["wind_speed_10m_max"], errors="coerce").fillna(0.0)
+
+        valid["weather_bad_score"] = (
+            (valid["precipitation_sum"] >= 1.0).astype(int) * 2
+            + (valid["precipitation_hours"] >= 2.0).astype(int)
+            + (valid["temperature_2m_mean"] <= 5.0).astype(int)
+            + (valid["wind_speed_10m_max"] >= 25.0).astype(int)
+            + (valid["weather_code"] >= 50).astype(int)
+        )
+
+        def classify_weather_bucket(row: pd.Series) -> str:
+            if row["weather_bad_score"] >= 3:
+                return "Bad"
+            if (
+                row["precipitation_sum"] <= 0.1
+                and row["weather_code"] < 50
+                and 10.0 <= row["temperature_2m_mean"] <= 25.0
+                and row["wind_speed_10m_max"] < 20.0
+            ):
+                return "Good"
+            return "Neutral"
+
+        valid["weather_bucket"] = valid.apply(classify_weather_bucket, axis=1)
+        valid["revenue_vs_weekday_baseline"] = valid["total_revenue"] - valid["weekday_expected_revenue"]
+        valid["profit_vs_weekday_baseline"] = valid["net_profit"] - valid["weekday_expected_profit"]
+        valid["orders_vs_weekday_baseline"] = valid["unique_orders"] - valid["weekday_expected_orders"]
+        valid["aov_vs_weekday_baseline"] = valid["aov"] - valid["weekday_expected_aov"]
+
+        overall_avg_revenue = valid["total_revenue"].mean()
+        overall_avg_profit = valid["net_profit"].mean()
+        overall_avg_orders = valid["unique_orders"].mean()
+
+        bucket_summary = valid.groupby("weather_bucket").agg({
+            "date": "count",
+            "total_revenue": "mean",
+            "net_profit": "mean",
+            "unique_orders": "mean",
+            "aov": "mean",
+            "temperature_2m_mean": "mean",
+            "precipitation_sum": "mean",
+            "revenue_vs_weekday_baseline": "mean",
+            "profit_vs_weekday_baseline": "mean",
+            "orders_vs_weekday_baseline": "mean",
+            "aov_vs_weekday_baseline": "mean",
+        }).reset_index().rename(columns={
+            "date": "days",
+            "total_revenue": "avg_daily_revenue",
+            "net_profit": "avg_daily_profit",
+            "unique_orders": "avg_daily_orders",
+            "aov": "avg_aov",
+            "temperature_2m_mean": "avg_temperature",
+            "precipitation_sum": "avg_precipitation",
+        })
+
+        bucket_summary["revenue_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_revenue"] / overall_avg_revenue - 1) * 100, 2) if overall_avg_revenue else 0,
+            axis=1
+        )
+        bucket_summary["profit_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_profit"] / overall_avg_profit - 1) * 100, 2) if overall_avg_profit else 0,
+            axis=1
+        )
+        bucket_summary["orders_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_orders"] / overall_avg_orders - 1) * 100, 2) if overall_avg_orders else 0,
+            axis=1
+        )
+
+        bucket_order = ["Good", "Neutral", "Bad"]
+        bucket_summary["bucket_order"] = bucket_summary["weather_bucket"].map({label: idx for idx, label in enumerate(bucket_order)})
+        bucket_summary = bucket_summary.sort_values("bucket_order").drop(columns=["bucket_order"]).reset_index(drop=True)
+
+        def safe_corr(series_a: pd.Series, series_b: pd.Series) -> Optional[float]:
+            mask = series_a.notna() & series_b.notna()
+            if mask.sum() < 5:
+                return None
+            clean_a = series_a[mask]
+            clean_b = series_b[mask]
+            if clean_a.nunique() < 2 or clean_b.nunique() < 2:
+                return None
+            corr = clean_a.corr(clean_b)
+            if pd.isna(corr):
+                return None
+            return round(float(corr), 3)
+
+        correlations = {
+            "rain_revenue": safe_corr(valid["precipitation_sum"], valid["total_revenue"]),
+            "rain_profit": safe_corr(valid["precipitation_sum"], valid["net_profit"]),
+            "rain_orders": safe_corr(valid["precipitation_sum"], valid["unique_orders"]),
+            "temp_revenue": safe_corr(valid["temperature_2m_mean"], valid["total_revenue"]),
+            "temp_profit": safe_corr(valid["temperature_2m_mean"], valid["net_profit"]),
+            "temp_orders": safe_corr(valid["temperature_2m_mean"], valid["unique_orders"]),
+            "bad_score_revenue": safe_corr(valid["weather_bad_score"], valid["total_revenue"]),
+            "bad_score_profit": safe_corr(valid["weather_bad_score"], valid["net_profit"]),
+            "bad_score_orders": safe_corr(valid["weather_bad_score"], valid["unique_orders"]),
+        }
+
+        lag_correlations: Dict[str, Dict[str, Optional[float]]] = {}
+        valid = valid.sort_values("date").reset_index(drop=True)
+        for lag in (0, 1, 2):
+            weather_score = valid["weather_bad_score"].shift(lag) if lag > 0 else valid["weather_bad_score"]
+            lag_correlations[f"lag_{lag}_day"] = {
+                "revenue": safe_corr(weather_score, valid["total_revenue"]),
+                "profit": safe_corr(weather_score, valid["net_profit"]),
+                "orders": safe_corr(weather_score, valid["unique_orders"]),
+            }
+
+        analysis_csv = valid[[
+            "date",
+            "weekday",
+            "weather_bucket",
+            "weather_bad_score",
+            "weather_code",
+            "temperature_2m_mean",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "precipitation_sum",
+            "precipitation_hours",
+            "wind_speed_10m_max",
+            "total_revenue",
+            "net_profit",
+            "unique_orders",
+            "aov",
+            "revenue_vs_weekday_baseline",
+            "profit_vs_weekday_baseline",
+            "orders_vs_weekday_baseline",
+            "aov_vs_weekday_baseline",
+        ]].copy()
+        analysis_filename = self.output_path(
+            f"weather_impact_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        )
+        analysis_csv.to_csv(analysis_filename, index=False, encoding="utf-8-sig")
+        print(f"Weather impact analysis saved: {analysis_filename}")
+
+        location_names = [str(location.get("name", "Location")) for location in self.weather_settings.get("locations", [])]
+        return {
+            "daily": valid,
+            "bucket_summary": bucket_summary,
+            "correlations": correlations,
+            "lag_correlations": lag_correlations,
+            "location_label": ", ".join(location_names),
+            "timezone": self.weather_settings.get("timezone", "Europe/Bratislava"),
+            "source": "Open-Meteo Historical Weather API",
+        }
 
     def analyze_advanced_dtc_metrics(self, df: pd.DataFrame) -> dict:
         """

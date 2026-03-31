@@ -21,6 +21,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          day_of_week_analysis: pd.DataFrame = None,
                          week_of_month_analysis: pd.DataFrame = None,
                          day_of_month_analysis: pd.DataFrame = None,
+                         weather_analysis: dict = None,
                          advanced_dtc_metrics: dict = None,
                          day_hour_heatmap: pd.DataFrame = None,
                          country_analysis: pd.DataFrame = None,
@@ -2971,6 +2972,115 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{int(row['calendar_days'])}</td>
                         <td class="number">{int(row['active_days'])}</td>
                         <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
+                    </tr>"""
+
+        html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+    # Weather Impact Analysis
+    if weather_analysis and weather_analysis.get('bucket_summary') is not None and not weather_analysis.get('bucket_summary').empty:
+        weather_bucket_summary = weather_analysis.get('bucket_summary')
+        weather_correlations = weather_analysis.get('correlations', {}) or {}
+        weather_lag_correlations = weather_analysis.get('lag_correlations', {}) or {}
+
+        def _corr_text(value):
+            return "N/A" if value is None else f"{value:.3f}"
+
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Weather Impact</h2>
+
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-title">Rain vs Revenue Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('rain_revenue'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Daily precipitation vs revenue</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Rain vs Profit Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('rain_profit'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Daily precipitation vs net profit</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Temp vs Revenue Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('temp_revenue'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Mean temperature vs revenue</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Bad Score vs Profit Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('bad_score_profit'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Weather badness vs net profit</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Lag 1 Revenue Corr</div>
+                <div class="card-value">{_corr_text((weather_lag_correlations.get('lag_1_day') or {}).get('revenue'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Yesterday weather score vs today revenue</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Lag 1 Profit Corr</div>
+                <div class="card-value">{_corr_text((weather_lag_correlations.get('lag_1_day') or {}).get('profit'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Yesterday weather score vs today net profit</div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Precipitation vs Revenue & Profit</h2>
+                <p class="chart-explanation">Daily precipitation overlaid with revenue and net profit. Weather source: {weather_analysis.get('source', 'Open-Meteo')} | Location: {weather_analysis.get('location_label', 'N/A')} | Timezone: {weather_analysis.get('timezone', 'Europe/Bratislava')}</p>
+                <canvas id="weatherRevenueChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Weather Bucket Uplift vs Weekday Baseline</h2>
+                <p class="chart-explanation">Average revenue/profit delta against expected weekday baseline, grouped into Good / Neutral / Bad weather buckets.</p>
+                <canvas id="weatherBucketChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Weather Bucket Performance</h2>
+                <span class="toggle-icon">v</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Weather Bucket</th>
+                        <th class="number">Days</th>
+                        <th class="number">Avg Daily Revenue</th>
+                        <th class="number">Revenue vs Baseline</th>
+                        <th class="number">Revenue Uplift</th>
+                        <th class="number">Avg Daily Profit</th>
+                        <th class="number">Profit vs Baseline</th>
+                        <th class="number">Profit Uplift</th>
+                        <th class="number">Avg Daily Orders</th>
+                        <th class="number">Orders vs Baseline</th>
+                        <th class="number">Avg AOV</th>
+                        <th class="number">Avg Temp</th>
+                        <th class="number">Avg Rain</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+
+        for _, row in weather_bucket_summary.iterrows():
+            html_content += f"""
+                    <tr>
+                        <td>{row['weather_bucket']}</td>
+                        <td class="number">{int(row['days'])}</td>
+                        <td class="number">EUR {row['avg_daily_revenue']:,.2f}</td>
+                        <td class="number">EUR {row['revenue_vs_weekday_baseline']:,.2f}</td>
+                        <td class="number">{row['revenue_uplift_pct']:+.2f}%</td>
+                        <td class="number">EUR {row['avg_daily_profit']:,.2f}</td>
+                        <td class="number">EUR {row['profit_vs_weekday_baseline']:,.2f}</td>
+                        <td class="number">{row['profit_uplift_pct']:+.2f}%</td>
+                        <td class="number">{row['avg_daily_orders']:.2f}</td>
+                        <td class="number">{row['orders_vs_weekday_baseline']:.2f}</td>
+                        <td class="number">EUR {row['avg_aov']:,.2f}</td>
+                        <td class="number">{row['avg_temperature']:.2f} C</td>
+                        <td class="number">{row['avg_precipitation']:.2f} mm</td>
                     </tr>"""
 
         html_content += """
@@ -8227,6 +8337,111 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{ display: true, text: 'EUR / occurrence' }},
                             ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+    if weather_analysis and weather_analysis.get('daily') is not None and not weather_analysis.get('daily').empty:
+        weather_daily = weather_analysis.get('daily')
+        weather_bucket_summary = weather_analysis.get('bucket_summary')
+        weather_labels = pd.to_datetime(weather_daily['date']).dt.strftime('%Y-%m-%d').tolist()
+        weather_precipitation = weather_daily['precipitation_sum'].round(2).tolist()
+        weather_revenue = weather_daily['total_revenue'].round(2).tolist()
+        weather_profit = weather_daily['net_profit'].round(2).tolist()
+        weather_bucket_labels = weather_bucket_summary['weather_bucket'].tolist()
+        weather_bucket_revenue_delta = weather_bucket_summary['revenue_vs_weekday_baseline'].round(2).tolist()
+        weather_bucket_profit_delta = weather_bucket_summary['profit_vs_weekday_baseline'].round(2).tolist()
+
+        html_content += f"""
+
+        // Weather Revenue / Profit vs Precipitation Chart
+        const weatherRevenueCtx = document.getElementById('weatherRevenueChart');
+        if (weatherRevenueCtx) {{
+            new Chart(weatherRevenueCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(weather_labels)},
+                    datasets: [{{
+                        label: 'Precipitation (mm)',
+                        data: {json.dumps(weather_precipitation)},
+                        backgroundColor: 'rgba(59, 130, 246, 0.28)',
+                        borderColor: 'rgba(59, 130, 246, 0.65)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Revenue',
+                        data: {json.dumps(weather_revenue)},
+                        type: 'line',
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        borderWidth: 3,
+                        pointRadius: 2,
+                        tension: 0.25,
+                        yAxisID: 'y1'
+                    }}, {{
+                        label: 'Net Profit',
+                        data: {json.dumps(weather_profit)},
+                        type: 'line',
+                        borderColor: '#EF4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                        borderWidth: 2,
+                        pointRadius: 2,
+                        tension: 0.25,
+                        yAxisID: 'y1'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    interaction: {{ mode: 'index', intersect: false }},
+                    scales: {{
+                        y: {{
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Rain (mm)' }}
+                        }},
+                        y1: {{
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Revenue / Profit (EUR)' }},
+                            ticks: {{ callback: function(v) {{ return 'EUR ' + v.toLocaleString(); }} }},
+                            grid: {{ drawOnChartArea: false }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        // Weather bucket uplift chart
+        const weatherBucketCtx = document.getElementById('weatherBucketChart');
+        if (weatherBucketCtx) {{
+            new Chart(weatherBucketCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(weather_bucket_labels)},
+                    datasets: [{{
+                        label: 'Revenue vs Weekday Baseline',
+                        data: {json.dumps(weather_bucket_revenue_delta)},
+                        backgroundColor: '#10B981',
+                        borderRadius: 5
+                    }}, {{
+                        label: 'Profit vs Weekday Baseline',
+                        data: {json.dumps(weather_bucket_profit_delta)},
+                        backgroundColor: '#EF4444',
+                        borderRadius: 5
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            title: {{ display: true, text: 'Delta vs baseline (EUR)' }},
+                            ticks: {{ callback: function(v) {{ return 'EUR ' + v.toLocaleString(); }} }}
                         }}
                     }}
                 }}

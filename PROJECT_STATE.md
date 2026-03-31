@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-03-30
+Last updated: 2026-03-31
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -86,9 +86,10 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Regenerate VEVO + ROY reports and validate new Advanced DTC metrics in HTML outputs:
-  - 1/2/3/4/7/8/9/10/11 cards + charts + tables
-  - verify readability and value sanity for each section
+- Regenerate VEVO + ROY full-range reports with weather analytics enabled:
+  - validate weather bucket uplift on both projects,
+  - compare weekday-baseline deltas against raw correlations,
+  - unblock VEVO runtime validation by replacing expired Meta token if ads enrichment is required.
 
 ## 9) Change Log
 
@@ -113,6 +114,28 @@ Bootstrap entrypoints:
   - uses full months only for unbiased phase-of-month comparisons,
   - normalizes by calendar occurrences for each day number (1..31),
   - added 2 charts + normalized performance table in HTML report.
+- Added project-scoped weather configuration for VEVO and ROY in `projects/<project>/settings.json`.
+- Added `weather_client.py`:
+  - historical daily weather fetch from Open-Meteo archive API,
+  - monthly local cache per project/location,
+  - weighted location support prepared for future multi-city rollout.
+- Added V1 weather impact analytics into `export_orders.py`:
+  - merges daily weather with `date_agg`,
+  - computes weather buckets (`Good / Neutral / Bad`),
+  - computes weekday baseline deltas for revenue, profit, orders, AOV,
+  - computes direct and lagged weather correlations,
+  - exports project-scoped `weather_impact_<range>.csv`.
+- Added Weather Impact section into `html_report_generator.py`:
+  - correlation KPI cards,
+  - precipitation vs revenue/profit time-series chart,
+  - weather bucket uplift vs weekday baseline chart,
+  - weather bucket performance table.
+- Verified syntax with:
+  - `python -m py_compile export_orders.py html_report_generator.py weather_client.py`
+- Verified ROY runtime smoke test end-to-end on:
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-07`
+  - confirmed Weather Impact section rendered in generated HTML.
+- VEVO runtime smoke test remains blocked by expired Facebook token during ads fetch; weather implementation itself is not the blocker.
 - Added Advanced DTC metrics pack (1/2/3/4/7/8/9/10/11) into reporting pipeline:
   - new analyzer in export_orders.py: `analyze_advanced_dtc_metrics(df)`,
   - wired to `generate_html_report(..., advanced_dtc_metrics=...)`,
