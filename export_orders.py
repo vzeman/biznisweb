@@ -4295,8 +4295,23 @@ class BizniWebExporter:
         """Analyze orders by geographic location"""
         print("\nAnalyzing geographic distribution...")
 
+        geo_df = df.copy()
+        geo_df['geo_country'] = geo_df.get('delivery_country')
+        geo_df['geo_country'] = geo_df['geo_country'].replace('', np.nan)
+        if 'invoice_country' in geo_df.columns:
+            geo_df['geo_country'] = geo_df['geo_country'].fillna(geo_df['invoice_country'])
+        geo_df['geo_country'] = geo_df['geo_country'].fillna('Unknown')
+
+        geo_df['geo_city'] = geo_df.get('delivery_city')
+        geo_df['geo_city'] = geo_df['geo_city'].replace('', np.nan)
+        if 'invoice_city' in geo_df.columns:
+            geo_df['geo_city'] = geo_df['geo_city'].fillna(geo_df['invoice_city'])
+        geo_df['geo_city'] = geo_df['geo_city'].apply(
+            lambda value: str(value).strip() if pd.notna(value) and str(value).strip() else np.nan
+        )
+
         # By country
-        country_agg = df.groupby('delivery_country').agg({
+        country_agg = geo_df.groupby('geo_country').agg({
             'order_num': 'nunique',
             'item_total_without_tax': 'sum',
             'profit_before_ads': 'sum'
@@ -4305,15 +4320,16 @@ class BizniWebExporter:
         country_agg = country_agg.sort_values('revenue', ascending=False)
         country_agg['revenue_pct'] = (country_agg['revenue'] / country_agg['revenue'].sum() * 100).round(1)
 
-        # By city (top 20)
-        city_agg = df.groupby(['delivery_city', 'delivery_country']).agg({
+        # By city (top 20), prefer delivery city and fallback to invoice city if delivery is missing.
+        city_source = geo_df[geo_df['geo_city'].notna()].copy()
+        city_agg = city_source.groupby(['geo_city', 'geo_country']).agg({
             'order_num': 'nunique',
             'item_total_without_tax': 'sum',
             'profit_before_ads': 'sum'
         }).reset_index()
         city_agg.columns = ['city', 'country', 'orders', 'revenue', 'profit']
-        city_agg = city_agg.sort_values('revenue', ascending=False).head(20)
-        city_agg['revenue_pct'] = (city_agg['revenue'] / df['item_total_without_tax'].sum() * 100).round(1)
+        city_agg = city_agg.sort_values(['revenue', 'orders'], ascending=[False, False]).head(20)
+        city_agg['revenue_pct'] = (city_agg['revenue'] / geo_df['item_total_without_tax'].sum() * 100).round(1)
 
         print(f"Geographic analysis complete: {len(country_agg)} countries, showing top 20 cities")
         return country_agg, city_agg

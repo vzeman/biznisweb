@@ -114,6 +114,11 @@ Bootstrap entrypoints:
   - uses full months only for unbiased phase-of-month comparisons,
   - normalizes by calendar occurrences for each day number (1..31),
   - added 2 charts + normalized performance table in HTML report.
+- Hardened geographic reporting for Top Cities:
+  - country now prefers `delivery_country` and falls back to `invoice_country`,
+  - city now prefers `delivery_city` and falls back to `invoice_city`,
+  - blank city values are excluded from ranking,
+  - ties are sorted by revenue first and order count second.
 - Added project-scoped weather configuration for VEVO and ROY in `projects/<project>/settings.json`.
 - Added `weather_client.py`:
   - historical daily weather fetch from Open-Meteo archive API,
@@ -136,6 +141,10 @@ Bootstrap entrypoints:
   - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-07`
   - confirmed Weather Impact section rendered in generated HTML.
 - VEVO runtime smoke test remains blocked by expired Facebook token during ads fetch; weather implementation itself is not the blocker.
+- Regenerated full-range client outputs without email sending:
+  - ROY: `data/roy/report_20250922-20260330.html` and `data/roy/export_20250922-20260330.csv`
+  - VEVO: `data/vevo/report_20250503-20260330.html` and `data/vevo/export_20250503-20260330.csv`
+- Verified VEVO full-range regeneration again with working Facebook Ads enrichment after providing a valid runtime Meta token for the process.
 - Added Advanced DTC metrics pack (1/2/3/4/7/8/9/10/11) into reporting pipeline:
   - new analyzer in export_orders.py: `analyze_advanced_dtc_metrics(df)`,
   - wired to `generate_html_report(..., advanced_dtc_metrics=...)`,
