@@ -86,6 +86,9 @@ ROOT_DIR = Path(__file__).resolve().parent
 PROJECTS_DIR = ROOT_DIR / "projects"
 DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", "vevo").strip() or "vevo"
 DEFAULT_API_URL = "https://vevo.flox.sk/api/graphql"
+GRAPHQL_TIMEOUT_SEC = int(
+    os.getenv("BIZNISWEB_API_TIMEOUT_SEC", os.getenv("REPORT_HTTP_READ_TIMEOUT_SEC", "30"))
+)
 
 # Fixed costs
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
@@ -465,6 +468,7 @@ class BizniWebExporter:
             headers={'BW-API-Key': f'Token {api_token}'},
             verify=True,
             retries=3,
+            timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
         self.fb_client = FacebookAdsClient()

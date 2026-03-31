@@ -6,13 +6,15 @@ Historical weather client with local cache for reporting analytics.
 from __future__ import annotations
 
 import json
+import os
 from calendar import monthrange
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 import pandas as pd
-import requests
+
+from http_client import build_retry_session, resolve_timeout
 
 
 class WeatherClient:
@@ -33,6 +35,8 @@ class WeatherClient:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.timezone = timezone
+        self.request_timeout = resolve_timeout(os.getenv("WEATHER_API_TIMEOUT_SEC"))
+        self.session = build_retry_session(timeout=self.request_timeout)
 
     def get_daily_weather(
         self,
@@ -167,7 +171,7 @@ class WeatherClient:
         start_date = date(year, month, 1).strftime("%Y-%m-%d")
         end_date = date(year, month, last_day).strftime("%Y-%m-%d")
 
-        response = requests.get(
+        response = self.session.get(
             self.BASE_URL,
             params={
                 "latitude": location["latitude"],
@@ -177,7 +181,6 @@ class WeatherClient:
                 "daily": ",".join(self.DAILY_FIELDS),
                 "timezone": self.timezone,
             },
-            timeout=30,
         )
         response.raise_for_status()
         return response.json()

@@ -15,6 +15,7 @@ from urllib.parse import urlparse, parse_qs
 from dotenv import load_dotenv
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
+from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
 
 # Load environment variables
@@ -28,6 +29,8 @@ LOGIN_URL = f'{BASE_URL}/admin/login/authenticate/'
 INVOICE_CREATE_URL = f'{BASE_URL}/erp/orders/invoices/create/{{order_num}}'
 INVOICE_FINALIZE_URL = f'{BASE_URL}/erp/orders/invoices/finalize/{{order_num}}'
 INVOICE_SEND_URL = f'{BASE_URL}/erp/orders/invoices/sendEmail/{{invoice_id}}'
+GRAPHQL_TIMEOUT_SEC = int(os.getenv('BIZNISWEB_API_TIMEOUT_SEC', os.getenv('REPORT_HTTP_READ_TIMEOUT_SEC', '30')))
+WEB_TIMEOUT = resolve_timeout(os.getenv('BIZNISWEB_WEB_TIMEOUT_SEC'))
 
 # Web authentication credentials
 WEB_USERNAME = os.getenv('BIZNISWEB_USERNAME')
@@ -124,6 +127,7 @@ class InvoiceGenerator:
             headers={'BW-API-Key': f'Token {api_token}'},
             verify=True,
             retries=3,
+            timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
         self.api_token = api_token
@@ -132,7 +136,7 @@ class InvoiceGenerator:
         
         # Initialize web session if credentials provided
         if username and password:
-            self.web_session = requests.Session()
+            self.web_session = build_retry_session(timeout=WEB_TIMEOUT)
             logger.info("Attempting to login to web interface...")
             if self.login_web_session(username, password):
                 logger.info("✓ Successfully logged in to web session")

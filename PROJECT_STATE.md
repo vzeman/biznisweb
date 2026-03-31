@@ -83,15 +83,14 @@ Bootstrap entrypoints:
 - No formal API contract package yet for cross-project integrations
 - No container/bootstrap parity check in CI yet
 - Runtime/deploy docs for separate OpenClaw infra still belong in another repo and are not defined there yet
-- External integration HTTP clients are still not unified under a shared timeout/retry/error-policy layer
 - Partial upstream failures (ads/weather/etc.) still need explicit product-level handling policy
 
 ## 8) Next Exact Step
 
-- Implement reporting integration hardening:
-  - unify external HTTP/API calls under a shared timeout/retry/error wrapper,
-  - keep secrets/runtime env variants out of git while preserving safe templates,
-  - prepare explicit partial-data handling for upstream failures without changing business calculations.
+- Implement explicit partial-data handling for upstream failures:
+  - detect/report missing FB/Google/weather sources as partial data instead of silent zeros,
+  - surface source-health markers in HTML/CFO outputs,
+  - define when report generation should continue vs fail hard.
 
 ## 9) Change Log
 
@@ -118,6 +117,21 @@ Bootstrap entrypoints:
   - added 2 charts + normalized performance table in HTML report.
 - Hardened geographic reporting for Top Cities:
   - country now prefers `delivery_country` and falls back to `invoice_country`,
+  - city now prefers `delivery_city` and falls back to `invoice_city`,
+  - empty cities are excluded from ranking.
+- Hardened reporting repo hygiene for multi-PC work:
+  - `.gitignore` now blocks local `.env.*` runtime files while preserving safe templates,
+  - `.gitattributes` enforces LF for Python/Markdown/template files,
+  - added safe tracked template `.env.roy.sk.template`,
+  - cleared CRLF-only working tree noise before continuing.
+- Completed `P1.3` reporting integration hardening:
+  - added shared `http_client.py` with default timeout + retry policy for external integrations,
+  - moved Facebook Ads API auth to `Authorization: Bearer` header instead of query params,
+  - removed direct `requests.get` usage from Facebook Ads client in favor of shared session helper,
+  - added configurable timeouts for BizniWeb GraphQL transport in reporting and invoice flows,
+  - moved weather client to shared retry/timeout session,
+  - documented HTTP timeout/retry knobs in `.env.example`,
+  - verified syntax with `python -m py_compile http_client.py weather_client.py facebook_ads.py export_orders.py generate_invoices.py`.
   - city now prefers `delivery_city` and falls back to `invoice_city`,
   - blank city values are excluded from ranking,
   - ties are sorted by revenue first and order count second.
