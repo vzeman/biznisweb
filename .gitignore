@@ -1,7 +1,11 @@
-# Environment variables
+# Environment variables / local runtime secrets
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+!.env.required
+!.env.*.template
 projects/*/.env
 *.env.runtime
 

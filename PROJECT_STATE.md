@@ -83,13 +83,15 @@ Bootstrap entrypoints:
 - No formal API contract package yet for cross-project integrations
 - No container/bootstrap parity check in CI yet
 - Runtime/deploy docs for separate OpenClaw infra still belong in another repo and are not defined there yet
+- External integration HTTP clients are still not unified under a shared timeout/retry/error-policy layer
+- Partial upstream failures (ads/weather/etc.) still need explicit product-level handling policy
 
 ## 8) Next Exact Step
 
-- Regenerate VEVO + ROY full-range reports with weather analytics enabled:
-  - validate weather bucket uplift on both projects,
-  - compare weekday-baseline deltas against raw correlations,
-  - unblock VEVO runtime validation by replacing expired Meta token if ads enrichment is required.
+- Implement reporting integration hardening:
+  - unify external HTTP/API calls under a shared timeout/retry/error wrapper,
+  - keep secrets/runtime env variants out of git while preserving safe templates,
+  - prepare explicit partial-data handling for upstream failures without changing business calculations.
 
 ## 9) Change Log
 
@@ -158,3 +160,7 @@ Bootstrap entrypoints:
   - Attach Rate table for key products.
 - Smoke-tested analyzer on synthetic dataset and verified syntax with:
   - `python -m py_compile export_orders.py html_report_generator.py`
+- Hardened local repo hygiene for reporting runtime secrets:
+  - `.gitignore` now ignores arbitrary local `.env.*` runtime variants while preserving tracked safe templates
+  - `.gitattributes` now enforces LF for python/markdown/env-template files to avoid false CRLF-only diffs
+  - added safe tracked template `/.env.roy.sk.template` for roy-specific local bootstrap without committing secrets
