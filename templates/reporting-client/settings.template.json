@@ -1,0 +1,26 @@
+{
+  "biznisweb_api_url": "https://__CLIENT_SLUG__.flox.sk/api/graphql",
+  "project_display_name": "__CLIENT_DISPLAY_NAME__",
+  "reporting_system_name": "__CLIENT_DISPLAY_NAME__ reporting",
+  "enable_email_strategy_report": false,
+  "report_from_date": "2026-01-01",
+  "packaging_cost_per_order": 0.3,
+  "shipping_subsidy_per_order": 0.0,
+  "fixed_monthly_cost": 0,
+  "weather": {
+    "enabled": false,
+    "timezone": "Europe/Bratislava",
+    "locations": [
+      {
+        "name": "Bratislava",
+        "latitude": 48.14816,
+        "longitude": 17.10674,
+        "weight": 1.0
+      }
+    ]
+  },
+  "product_expenses_file": "product_expenses.json",
+  "currency_rates_to_eur": {
+    "EUR": 1.0
+  }
+}

@@ -30,6 +30,10 @@ def main() -> int:
         daily_runner = read("daily_report_runner.py")
         http_client = read("http_client.py")
         weather_client = read("weather_client.py")
+        read("templates/reporting-client/settings.template.json")
+        read("templates/reporting-client/.env.example")
+        read("templates/reporting-client/product_expenses.json")
+        read("templates/reporting-client/README_CLIENT_SETUP.md")
 
         require(
             facebook_ads,
@@ -76,6 +80,11 @@ def main() -> int:
             "Partial Data",
             "daily_report_runner.py must render partial-data status for generated reports.",
         )
+        require(
+            read(".github/workflows/observability-check.yml"),
+            "observability_snapshot.py",
+            "Reporting repo must keep an observability workflow baseline.",
+        )
 
         for rel_path in [
             "http_client.py",
@@ -85,6 +94,8 @@ def main() -> int:
             "export_orders.py",
             "daily_report_runner.py",
             "generate_invoices.py",
+            "scripts/observability_snapshot.py",
+            "scripts/scaffold_client.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)
 

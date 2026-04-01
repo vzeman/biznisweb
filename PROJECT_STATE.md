@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Start `P3.2` reporting-productization follow-up only after Doklady/OpenClaw `P3` baselines; current reporting core extraction is complete enough for reuse and needs no further structural changes before cross-repo work catches up.
+- Start `P4.x` reporting polish follow-up after cross-repo observability/template baselines. The reusable core is now in place; next safe step is operator docs + compliance cleanup, not another structural rewrite.
 
 ## 9) Change Log
 
@@ -118,6 +118,16 @@ Bootstrap entrypoints:
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
+
+### 2026-04-01
+- Completed `P4.2` observability baseline for reporting:
+  - added `scripts/observability_snapshot.py` for project-level artifact + source-health snapshots,
+  - added `.github/workflows/observability-check.yml` to generate/upload a JSON observability artifact in CI,
+  - extended `scripts/security_ci.py` to require and syntax-check the observability baseline.
+- Completed `P4.4` reporting templates baseline:
+  - added `templates/reporting-client/` with `settings.template.json`, `.env.example`, `product_expenses.json`, and onboarding README,
+  - added `scripts/scaffold_client.py` to scaffold a new client bundle under `projects/<slug>/`,
+  - updated `README_DEV.md` with observability and client-template usage.
   - integrated in export_orders.py (`analyze_day_of_month`) and HTML generation,
   - uses full months only for unbiased phase-of-month comparisons,
   - normalizes by calendar occurrences for each day number (1..31),
