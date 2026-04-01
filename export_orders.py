@@ -78,7 +78,8 @@ except ImportError:
 from html_report_generator import generate_html_report, generate_email_strategy_report
 
 # Load base environment variables from repo root .env (if present).
-load_dotenv()
+# Accept UTF-8 BOM so local PowerShell rewrites do not break the first key.
+load_dotenv(encoding="utf-8-sig")
 
 # Set up logging
 logger = get_logger('export_orders')

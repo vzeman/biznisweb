@@ -24,7 +24,7 @@ from reporting_core import (
 )
 
 # Load environment variables
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")
 
 GRAPHQL_TIMEOUT_SEC = int(os.getenv('BIZNISWEB_API_TIMEOUT_SEC', os.getenv('REPORT_HTTP_READ_TIMEOUT_SEC', '30')))
 WEB_TIMEOUT = resolve_timeout(os.getenv('BIZNISWEB_WEB_TIMEOUT_SEC'))

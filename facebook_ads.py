@@ -16,7 +16,7 @@ from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
 
 # Load environment variables
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")
 
 # Set up logging
 logger = get_logger('facebook_ads')

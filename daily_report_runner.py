@@ -2262,7 +2262,7 @@ def send_email_ses(
 
 def main() -> None:
     # Load root env first.
-    load_dotenv()
+    load_dotenv(encoding="utf-8-sig")
     # Then load project env selected via CLI (or REPORT_PROJECT) before full arg parsing.
     bootstrap_project = bootstrap_project_from_argv(sys.argv[1:])
     os.environ["REPORT_PROJECT"] = bootstrap_project

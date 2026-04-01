@@ -49,7 +49,7 @@ def load_project_env(project_name: str, logger: Optional[Any] = None) -> None:
 
     env_path = project_dir(project_name) / ".env"
     if env_path.exists():
-        load_dotenv(dotenv_path=env_path, override=True)
+        load_dotenv(dotenv_path=env_path, override=True, encoding="utf-8-sig")
         _log(logger, f"Loaded project env: {env_path}")
         return
 

@@ -238,3 +238,10 @@ Bootstrap entrypoints:
   - added `scripts/security_ci.py` with repo-local assertions for shared HTTP hardening (`Authorization` header usage, shared retry session, partial-data/source-health invariants),
   - wired CI to fail fast if reporting core loses the partial-data markers or Meta auth hardening contract,
   - verified the local baseline script with `python scripts/security_ci.py`.
+
+- Fixed VEVO local Meta token/bootstrap drift on 2026-04-01:
+  - confirmed AWS runtime secret `vevo/reporting/runtime-env` still contains a valid Facebook Ads token,
+  - synced local root `.env` VEVO token with the valid runtime token,
+  - rewrote `.env` without UTF-8 BOM after a local PowerShell write introduced BOM and broke the first env key (`BIZNISWEB_API_TOKEN`),
+  - hardened all reporting-side `load_dotenv(...)` calls to use `encoding="utf-8-sig"` so BOM-prefixed `.env` files no longer break the first key,
+  - verified VEVO smoke export on `2026-03-31..2026-03-31` with successful Facebook Ads enrichment (`Successfully connected to Facebook Ads account: Wachman`, spend fetched, ROAS restored).
