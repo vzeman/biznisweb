@@ -3,7 +3,7 @@
   "project_display_name": "Roy",
   "reporting_system_name": "Roy reporting",
   "enable_email_strategy_report": false,
-  "report_from_date": "2025-08-06",
+  "report_from_date": "2025-09-24",
   "packaging_cost_per_order": 0.05,
   "shipping_subsidy_per_order": -0.2,
   "fixed_monthly_cost": 4900,

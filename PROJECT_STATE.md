@@ -120,6 +120,8 @@ Bootstrap entrypoints:
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
 
 ### 2026-04-01
+- Updated ROY project baseline `report_from_date` from `2025-08-06` to `2025-09-24` in `projects/roy/settings.json`.
+- Re-generated ROY reporting outputs for `2025-09-24..2026-03-31` without email delivery so current artifacts match the new start boundary.
 - Fixed report headings to use project-level `reporting_system_name` across generated HTML outputs.
 - Main HTML reports now render `Vevo reporting`, `Roy reporting`, and future client names from project config instead of a hardcoded BizniWeb title.
 - CFO dashboards now use the same project reporting title in the HTML `<title>` and visible header, with `CFO Executive Dashboard` kept as a subtitle.
