@@ -245,3 +245,9 @@ Bootstrap entrypoints:
   - rewrote `.env` without UTF-8 BOM after a local PowerShell write introduced BOM and broke the first env key (`BIZNISWEB_API_TOKEN`),
   - hardened all reporting-side `load_dotenv(...)` calls to use `encoding="utf-8-sig"` so BOM-prefixed `.env` files no longer break the first key,
   - verified VEVO smoke export on `2026-03-31..2026-03-31` with successful Facebook Ads enrichment (`Successfully connected to Facebook Ads account: Wachman`, spend fetched, ROAS restored).
+- Fixed VEVO Google Ads runtime hygiene on 2026-04-01:
+  - normalized AWS Secrets Manager entry `vevo/reporting/runtime-env` from malformed pseudo-JSON into valid JSON,
+  - aligned runtime `GOOGLE_ADS_LOGIN_CUSTOMER_ID` to an empty value because VEVO Google Ads API access works directly on customer `7592903323` and fails when the old MCC login header is forced,
+  - verified Google Ads API connectivity locally with `test_connection=True` against `Vevo.sk (7592903323)`,
+  - verified that March 2026 Google Ads spend is correctly `0.00` because both `Vevo.sk (7592903323)` and `Vevo.sk - old (1025163995)` return zero March campaign rows via GAQL,
+  - confirmed the zero Google Ads spend in the VEVO March report is a real account state, not an integration bug.
