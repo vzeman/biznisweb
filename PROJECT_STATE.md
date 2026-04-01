@@ -279,3 +279,24 @@ Bootstrap entrypoints:
   - regenerated side-by-side test artifacts (no email) with `--output-tag ui_test`:
     - VEVO: `data/vevo/report_20250503-20260331__ui_test.html`
     - ROY: `data/roy/report_20250922-20260331__ui_test.html`.
+
+- SK/EN full-translation + user-friendly pass completed on 2026-04-01:
+  - strengthened bilingual rendering in `html_report_generator.py` with explicit `data-en`/`data-sk` coverage for guidance and quick-read sections so language switch is end-to-end usable,
+  - added plain-language onboarding block for non-finance users (`metric-cheatsheet`) explaining Revenue, Net Profit, ROAS, and CAC vs Break-even CAC in business-friendly wording,
+  - corrected Slovak readability/diacritics in key guidance text (`Ako čítať tento report (jednoducho)`),
+  - normalized confusing delta KPI labels to explicit text:
+    - `ROAS Check Delta`
+    - `Margin Check Delta (pp)`
+    - `CAC Check Delta`
+    with corresponding SK mappings (`Kontrola ... delta`),
+  - updated translation dictionaries and replacement maps to match the new labels and avoid previous symbol-encoding drift.
+- Validation executed:
+  - `python -m py_compile html_report_generator.py`,
+  - full regenerate (no email) with final outputs tag `lang_full3`:
+    - VEVO: `data/vevo/report_20250503-20260331__lang_full3.html`
+    - ROY: `data/roy/report_20250922-20260331__lang_full3.html`
+  - verified generated HTML contains:
+    - project title headers (`Vevo reporting` / `Roy reporting`),
+    - language switch texts with SK+EN variants,
+    - user-friendly KPI cheat-sheet block,
+    - updated Delta KPI labels.

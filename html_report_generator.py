@@ -11,6 +11,34 @@ import json
 from html import escape
 
 
+def _fix_common_mojibake(text: str) -> str:
+    """
+    Repair common mojibake artifacts that appear when UTF-8 text was
+    accidentally interpreted with a legacy codepage.
+    """
+    if not text:
+        return text
+
+    replacements = {
+        "â°": "Time",
+        "â†’": "->",
+        "â†”": "<->",
+        "â‰Ą": ">=",
+        "ðŸ”´": "[HIGH]",
+        "ðŸŸ¡": "[MED]",
+        "ðŸŸ¢": "[LOW]",
+        "đź’¬": "",
+        "Ä‘Ĺşâ€śâ€ą": "Info",
+        "2ÄÂ¸Å¹Ã¢Â\x83Å\x81": "Second",
+        "2Ă„ĹąĂ‚Â¸ÄąÄ…Ä‚ËĂ‚ÂÄąÂ": "Second",
+    }
+
+    fixed = text
+    for bad, good in replacements.items():
+        fixed = fixed.replace(bad, good)
+    return fixed
+
+
 def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          items_agg: pd.DataFrame, date_from: datetime, date_to: datetime,
                          report_title: str = "BizniWeb reporting",
@@ -208,6 +236,126 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     avg_daily_revenue = total_revenue / total_days if total_days > 0 else 0
     avg_daily_profit = total_profit / total_days if total_days > 0 else 0
 
+    def _safe_pct_change(current: float, previous: float) -> float:
+        if previous is None or abs(previous) < 1e-9:
+            return 0.0
+        return ((current - previous) / previous) * 100.0
+
+    def _sum_tail(values: list[float], tail: int, offset: int = 0) -> float:
+        if not values:
+            return 0.0
+        end = len(values) - offset
+        start = max(0, end - tail)
+        return float(sum(values[start:end]))
+
+    revenue_last_7 = _sum_tail(revenue_data, 7)
+    revenue_prev_7 = _sum_tail(revenue_data, 7, offset=7)
+    profit_last_7 = _sum_tail(profit_data, 7)
+    profit_prev_7 = _sum_tail(profit_data, 7, offset=7)
+    orders_last_7 = _sum_tail(orders_data, 7)
+    orders_prev_7 = _sum_tail(orders_data, 7, offset=7)
+
+    revenue_change_7d_pct = _safe_pct_change(revenue_last_7, revenue_prev_7)
+    profit_change_7d_pct = _safe_pct_change(profit_last_7, profit_prev_7)
+    orders_change_7d_pct = _safe_pct_change(orders_last_7, orders_prev_7)
+
+    roas_value = float(financial_metrics.get('roas', 0)) if financial_metrics else 0.0
+    company_margin_value = (
+        float(financial_metrics.get('company_profit_margin_pct', 0))
+        if financial_metrics else total_roi
+    )
+
+    def _trend_level(delta_pct: float, higher_is_better: bool = True) -> str:
+        normalized = delta_pct if higher_is_better else -delta_pct
+        if normalized >= 8:
+            return "good"
+        if normalized >= -4:
+            return "warn"
+        return "bad"
+
+    revenue_level = _trend_level(revenue_change_7d_pct, higher_is_better=True)
+    profit_level = _trend_level(profit_change_7d_pct, higher_is_better=True)
+    orders_level = _trend_level(orders_change_7d_pct, higher_is_better=True)
+    roas_level = "good" if roas_value >= 3 else ("warn" if roas_value >= 1.5 else "bad")
+    margin_level = "good" if company_margin_value >= 20 else ("warn" if company_margin_value >= 8 else "bad")
+
+    def _level_labels(level: str) -> tuple[str, str]:
+        if level == "good":
+            return "Strong", "Silné"
+        if level == "warn":
+            return "Watch", "Sledovať"
+        return "Risk", "Riziko"
+
+    rev_en, rev_sk = _level_labels(revenue_level)
+    profit_en, profit_sk = _level_labels(profit_level)
+    orders_en, orders_sk = _level_labels(orders_level)
+    roas_en, roas_sk = _level_labels(roas_level)
+    margin_en, margin_sk = _level_labels(margin_level)
+
+    quick_insights_html = f"""
+        <div class="quick-insights">
+            <div class="quick-insights-header">
+                <h3 data-en="Quick Health Check (easy summary)" data-sk="Rýchly zdravotný check (jednoduché zhrnutie)">Quick Health Check (easy summary)</h3>
+                <p data-en="Use this section first: green = good, orange = watch, red = action needed." data-sk="Začni touto sekciou: zelená = dobré, oranžová = sledovať, červená = treba riešiť.">Use this section first: green = good, orange = watch, red = action needed.</p>
+            </div>
+            <div class="quick-insights-grid">
+                <div class="quick-insight-card level-{revenue_level}">
+                    <div class="quick-insight-title" data-en="Revenue momentum (last 7 days)" data-sk="Dynamika obratu (posledných 7 dní)">Revenue momentum (last 7 days)</div>
+                    <div class="quick-insight-value" data-en="{rev_en}" data-sk="{rev_sk}">{rev_en}</div>
+                    <div class="quick-insight-desc" data-en="Revenue moved {revenue_change_7d_pct:+.1f}% vs previous 7 days." data-sk="Obrat sa zmenil o {revenue_change_7d_pct:+.1f}% oproti predchádzajúcim 7 dňom.">Revenue moved {revenue_change_7d_pct:+.1f}% vs previous 7 days.</div>
+                </div>
+                <div class="quick-insight-card level-{profit_level}">
+                    <div class="quick-insight-title" data-en="Profit momentum (last 7 days)" data-sk="Dynamika zisku (posledných 7 dní)">Profit momentum (last 7 days)</div>
+                    <div class="quick-insight-value" data-en="{profit_en}" data-sk="{profit_sk}">{profit_en}</div>
+                    <div class="quick-insight-desc" data-en="Profit moved {profit_change_7d_pct:+.1f}% vs previous 7 days." data-sk="Zisk sa zmenil o {profit_change_7d_pct:+.1f}% oproti predchádzajúcim 7 dňom.">Profit moved {profit_change_7d_pct:+.1f}% vs previous 7 days.</div>
+                </div>
+                <div class="quick-insight-card level-{roas_level}">
+                    <div class="quick-insight-title" data-en="Ad efficiency (ROAS)" data-sk="Efektivita reklamy (ROAS)">Ad efficiency (ROAS)</div>
+                    <div class="quick-insight-value" data-en="{roas_en}" data-sk="{roas_sk}">{roas_en}</div>
+                    <div class="quick-insight-desc" data-en="Current ROAS is {roas_value:.2f}x. Above 3x is usually healthy." data-sk="Aktuálny ROAS je {roas_value:.2f}x. Nad 3x je to zvyčajne zdravé.">Current ROAS is {roas_value:.2f}x. Above 3x is usually healthy.</div>
+                </div>
+                <div class="quick-insight-card level-{margin_level}">
+                    <div class="quick-insight-title" data-en="Business margin safety" data-sk="Bezpečnosť firemnej marže">Business margin safety</div>
+                    <div class="quick-insight-value" data-en="{margin_en}" data-sk="{margin_sk}">{margin_en}</div>
+                    <div class="quick-insight-desc" data-en="Company margin is {company_margin_value:.1f}% and orders moved {orders_change_7d_pct:+.1f}% in last 7 days." data-sk="Firemná marža je {company_margin_value:.1f}% a počet objednávok sa za 7 dní zmenil o {orders_change_7d_pct:+.1f}%.">Company margin is {company_margin_value:.1f}% and orders moved {orders_change_7d_pct:+.1f}% in last 7 days.</div>
+                </div>
+            </div>
+        </div>
+    """
+
+    report_guide_html = """
+        <div class="report-guide">
+            <h3 data-en="How to read this report (simple)" data-sk="Ako čítať tento report (jednoducho)">How to read this report (simple)</h3>
+            <ul>
+                <li data-en="Start with the quick health cards above. Green means healthy trend, orange means watch, red means action needed." data-sk="Začni hornými rýchlymi kartami. Zelená znamená zdravý trend, oranžová sledovať, červená treba riešiť.">Start with the quick health cards above. Green means healthy trend, orange means watch, red means action needed.</li>
+                <li data-en="Then check Revenue, Net Profit, and Total Costs cards. This gives the fastest business reality check." data-sk="Potom pozri karty Revenue, Net Profit a Total Costs. Toto je najrýchlejší reality check firmy.">Then check Revenue, Net Profit, and Total Costs cards. This gives the fastest business reality check.</li>
+                <li data-en="Use daily charts only for direction: up/down trend is more important than one-day spikes." data-sk="Denné grafy čítaj hlavne trendovo: smer hore/dole je dôležitejší ako jednodňové výkyvy.">Use daily charts only for direction: up/down trend is more important than one-day spikes.</li>
+                <li data-en="If ROAS drops under 2x or CAC rises close to Break-even CAC, marketing needs immediate review." data-sk="Ak ROAS klesne pod 2x alebo CAC rastie blízko Break-even CAC, marketing treba hneď skontrolovať.">If ROAS drops under 2x or CAC rises close to Break-even CAC, marketing needs immediate review.</li>
+            </ul>
+        </div>
+        <div class="metric-cheatsheet">
+            <h3 data-en="KPI cheat sheet for non-finance users" data-sk="KPI ťahák pre ľudí mimo financií">KPI cheat sheet for non-finance users</h3>
+            <div class="metric-cheatsheet-grid">
+                <div class="metric-tip">
+                    <h4 data-en="Revenue" data-sk="Obrat">Revenue</h4>
+                    <p data-en="How much money came in from orders. More is good if profit also stays healthy." data-sk="Koľko peňazí prišlo z objednávok. Viac je dobré, ak ostáva zdravý aj zisk.">How much money came in from orders. More is good if profit also stays healthy.</p>
+                </div>
+                <div class="metric-tip">
+                    <h4 data-en="Net Profit" data-sk="Čistý zisk">Net Profit</h4>
+                    <p data-en="What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast." data-sk="Čo ostane po všetkých sledovaných nákladoch. Ak klesá pri raste obratu, náklady rastú prirýchlo.">What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast.</p>
+                </div>
+                <div class="metric-tip">
+                    <h4 data-en="ROAS" data-sk="ROAS">ROAS</h4>
+                    <p data-en="Revenue divided by ad spend. Around 3x+ is usually healthy for scaling ads." data-sk="Obrat delený výdavkami na reklamu. Okolo 3x+ je zvyčajne zdravé pre škálovanie reklamy.">Revenue divided by ad spend. Around 3x+ is usually healthy for scaling ads.</p>
+                </div>
+                <div class="metric-tip">
+                    <h4 data-en="CAC vs Break-even CAC" data-sk="CAC vs bod zvratu CAC">CAC vs Break-even CAC</h4>
+                    <p data-en="CAC is customer acquisition cost. If CAC gets close to break-even CAC, ad efficiency risk is high." data-sk="CAC je cena za získanie zákazníka. Keď sa blíži k bodu zvratu CAC, riziko neefektívnej reklamy je vysoké.">CAC is customer acquisition cost. If CAC gets close to break-even CAC, ad efficiency risk is high.</p>
+                </div>
+            </div>
+        </div>
+    """
+
     new_ret_dates = []
     new_ret_new_revenue = []
     new_ret_returning_revenue = []
@@ -326,6 +474,51 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             font-weight: 500;
         }}
 
+        .header-toolbar {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }}
+
+        .lang-switch {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--card-border);
+            border-radius: 999px;
+            background: #f8fafc;
+            padding: 4px;
+        }}
+
+        .lang-switch-label {{
+            font-size: 0.73rem;
+            color: var(--muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-right: 4px;
+            margin-left: 8px;
+        }}
+
+        .lang-switch button {{
+            border: 0;
+            background: transparent;
+            border-radius: 999px;
+            padding: 5px 11px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            color: #475569;
+            font-weight: 700;
+            transition: background 0.15s ease, color 0.15s ease;
+        }}
+
+        .lang-switch button.active {{
+            background: #2563eb;
+            color: #fff;
+        }}
+
         .data-quality-banner {{
             background: var(--card);
             border-radius: 16px;
@@ -412,6 +605,153 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
             gap: 14px;
             margin-bottom: 24px;
+        }}
+
+        .quick-insights {{
+            background: var(--card);
+            border-radius: 16px;
+            padding: 18px 18px 16px;
+            margin-bottom: 22px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
+        }}
+
+        .quick-insights-header h3 {{
+            font-size: 1.08rem;
+            letter-spacing: -0.01em;
+            margin-bottom: 4px;
+            color: var(--ink);
+        }}
+
+        .quick-insights-header p {{
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin-bottom: 12px;
+        }}
+
+        .quick-insights-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+        }}
+
+        .quick-insight-card {{
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            padding: 12px 12px 10px;
+        }}
+
+        .quick-insight-card.level-good {{
+            border-color: rgba(16, 185, 129, 0.28);
+            background: rgba(16, 185, 129, 0.08);
+        }}
+
+        .quick-insight-card.level-warn {{
+            border-color: rgba(245, 158, 11, 0.3);
+            background: rgba(245, 158, 11, 0.1);
+        }}
+
+        .quick-insight-card.level-bad {{
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.08);
+        }}
+
+        .quick-insight-title {{
+            color: #334155;
+            font-size: 0.77rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }}
+
+        .quick-insight-value {{
+            color: #0f172a;
+            font-size: 1.05rem;
+            line-height: 1.1;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }}
+
+        .quick-insight-desc {{
+            color: #475569;
+            font-size: 0.8rem;
+            line-height: 1.38;
+        }}
+
+        .report-guide {{
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            padding: 16px 18px 14px;
+            margin-bottom: 20px;
+        }}
+
+        .report-guide h3 {{
+            font-size: 1rem;
+            margin-bottom: 8px;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+        }}
+
+        .report-guide ul {{
+            margin: 0;
+            padding-left: 18px;
+            color: #334155;
+        }}
+
+        .report-guide li {{
+            margin-bottom: 6px;
+            line-height: 1.38;
+            font-size: 0.86rem;
+        }}
+
+
+        .metric-cheatsheet {{
+            background: #f8fafc;
+            border: 1px solid #dbeafe;
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            padding: 16px 18px 14px;
+            margin-bottom: 20px;
+        }}
+
+        .metric-cheatsheet h3 {{
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+        }}
+
+        .metric-cheatsheet-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }}
+
+        .metric-tip {{
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 11px;
+        }}
+
+        .metric-tip h4 {{
+            margin: 0 0 6px;
+            font-size: 0.83rem;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+
+        .metric-tip p {{
+            margin: 0;
+            font-size: 0.81rem;
+            line-height: 1.4;
+            color: #475569;
         }}
 
         .card {{
@@ -666,10 +1006,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     <div class="container">
         <div class="header">
             <h1>{report_title}</h1>
-            <div class="date-range">{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}</div>
+            <div class="header-toolbar">
+                <div class="date-range" data-en="{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}" data-sk="{date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%d.%m.%Y')}">{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}</div>
+                <div class="lang-switch" id="langSwitch" role="group" aria-label="Language switch">
+                    <span class="lang-switch-label" data-en="Language" data-sk="Jazyk">Language</span>
+                    <button id="langEnBtn" type="button" class="active" data-lang="en">EN</button>
+                    <button id="langSkBtn" type="button" data-lang="sk">SK</button>
+                </div>
+            </div>
             <button id="toggleAllBtn" class="expand-all-btn" onclick="toggleAllTables(true)" style="margin-top: 15px;">Expand All Tables</button>
         </div>
         {data_quality_section}
+        {quick_insights_html}
+        {report_guide_html}
         
         <div class="summary-cards">
             <div class="card">
@@ -935,11 +1284,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         cac_if_orders = consistency_checks.get('cac_if_orders_denominator', 0)
         html_content += f"""
             <div class="card">
-                <div class="card-title">ROAS Check &#916;</div>
+                <div class="card-title">ROAS Check Delta</div>
                 <div class="card-value {'profit' if abs(roas_delta) <= 0.01 else 'cost'}">{roas_delta:+.4f}</div>
             </div>
             <div class="card">
-                <div class="card-title">Margin Check &#916; (pp)</div>
+                <div class="card-title">Margin Check Delta (pp)</div>
                 <div class="card-value {'profit' if abs(margin_delta) <= 0.05 else 'cost'}">{margin_delta:+.4f}</div>
             </div>
             <div class="card">
@@ -947,7 +1296,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value">&#8364;{cac_expected:.2f}</div>
             </div>
             <div class="card">
-                <div class="card-title">CAC Check &#916;</div>
+                <div class="card-title">CAC Check Delta</div>
                 <div class="card-value {'profit' if abs(cac_delta) <= 0.01 else 'cost'}">{cac_delta:+.4f}</div>
             </div>
             <div class="card">
@@ -2451,54 +2800,54 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             html_content += f"""
 
         <div class="table-container" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); margin-top: 30px;">
-            <h2 class="table-title" style="color: white;">âś… SkutoÄŤnĂˇ retencia (bez ÄŤasovĂ©ho skreslenia) - Len kohorty 90+ dnĂ­</h2>
+            <h2 class="table-title" style="color: white;">True Retention (Time-Bias Free) - Mature Cohorts Only (90+ days)</h2>
             <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr); background: rgba(255,255,255,0.95); padding: 20px; border-radius: 8px; margin: 15px;">
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">SkutoÄŤnĂˇ 2nd Order Retencia</div>
+                    <div class="card-title">True 2nd Order Retention</div>
                     <div class="card-value" style="color: #059669;">{true_retention_2nd}%</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">SkutoÄŤnĂˇ 3rd Order Retencia</div>
+                    <div class="card-title">True 3rd Order Retention</div>
                     <div class="card-value" style="color: #059669;">{true_retention_3rd}%</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">PoÄŤet zrelĂ˝ch kohort</div>
+                    <div class="card-title">Mature Cohorts Count</div>
                     <div class="card-value" style="color: #059669;">{len(mature_cohorts)}</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Celkom zĂˇkaznĂ­kov</div>
+                    <div class="card-title">Total Customers</div>
                     <div class="card-value" style="color: #059669;">{mature_cohorts['total_customers'].sum()}</div>
                 </div>
             </div>
             <p style="color: white; padding: 0 15px 15px; font-size: 0.9rem;">
                 <strong>Note:</strong> These values are more accurate because they include only cohorts that had enough time (90+ days) for a repeat purchase.
-                NovĂ© kohorty (menej ako 90 dnĂ­) nie sĂş zahrnutĂ©, aby nedochĂˇdzalo k skresleniu vĂ˝sledkov.
+                Newer cohorts (younger than 90 days) are excluded to avoid time bias.
             </p>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">SkutoÄŤnĂˇ retencia podÄľa zrelĂ˝ch kohort (90+ dnĂ­)</h2>
-            <p class="chart-explanation">Retencia len pre kohorty, ktorĂ© mali dostatok ÄŤasu na opĂ¤tovnĂ˝ nĂˇkup. Tieto ÄŤĂ­sla sĂş presnejĹˇie ako celkovĂ© Ĺˇtatistiky.</p>
+            <h2 class="chart-title">True Retention by Mature Cohorts (90+ days)</h2>
+            <p class="chart-explanation">Retention measured only on cohorts that had enough time for repeat purchases. These values are less biased than all-cohort averages.</p>
             <canvas id="matureCohortRetentionChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">ZrelĂ© kohorty - PodrobnĂˇ retencia (90+ dnĂ­ starĂ©)</h2>
+                <h2 class="table-title">Mature Cohorts - Detailed Retention (90+ days old)</h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Kohorta</th>
-                        <th class="number">Vek (dnĂ­)</th>
-                        <th class="number">ZĂˇkaznĂ­ci</th>
+                        <th>Cohort</th>
+                        <th class="number">Age (days)</th>
+                        <th class="number">Customers</th>
                         <th class="number">2nd Order %</th>
                         <th class="number">3rd Order %</th>
                         <th class="number">4th Order %</th>
                         <th class="number">5th Order %</th>
-                        <th class="number">Priemer obj.</th>
+                        <th class="number">Avg Orders</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -2543,50 +2892,50 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not item_retention_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Retencia podÄľa prvĂ©ho zakĂşpenĂ©ho produktu</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Porovnanie retencie zĂˇkaznĂ­kov podÄľa toho, akĂ˝ produkt mali v prvej objednĂˇvke (top {len(item_retention_df)} produktov s min. 50 prvĂ˝mi objednĂˇvkami)</p>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Retention by First Purchased Product</h2>
+        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Customer retention comparison by first purchased product (top {len(item_retention_df)} products with at least 50 first orders).</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">AnalyzovanĂ˝ch produktov</div>
+                <div class="card-title">Products Analyzed</div>
                 <div class="card-value">{first_item_summary.get('total_items_analyzed', 0)}</div>
             </div>
             <div class="card">
-                <div class="card-title">PriemernĂˇ 2nd retencia</div>
+                <div class="card-title">Average 2nd Order Retention</div>
                 <div class="card-value roi">{first_item_summary.get('avg_retention_2nd_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">NajlepĹˇia 2nd retencia</div>
+                <div class="card-title">Best 2nd Order Retention</div>
                 <div class="card-value profit">{first_item_summary.get('best_retention_2nd_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Rozptyl retencie</div>
+                <div class="card-title">Retention Spread</div>
                 <div class="card-value">{first_item_summary.get('retention_spread', 0):.1f}%</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Retencia podÄľa prvĂ©ho produktu (2nd Order %)</h2>
-            <p class="chart-explanation">PercentuĂˇlna pravdepodobnosĹĄ opĂ¤tovnĂ©ho nĂˇkupu zĂˇkaznĂ­kov podÄľa toho, akĂ˝ produkt si kĂşpili v prvej objednĂˇvke</p>
+            <h2 class="chart-title">Retention by First Product (2nd Order %)</h2>
+            <p class="chart-explanation">Probability of repeat purchase based on which product the customer bought in their first order.</p>
             <canvas id="firstItemRetentionChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">DetailnĂˇ retencia podÄľa prvĂ©ho produktu</h2>
+                <h2 class="table-title">Detailed Retention by First Product</h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt v prvej objednĂˇvke</th>
-                        <th class="number">ZĂˇkaznĂ­ci</th>
+                        <th>Product in First Order</th>
+                        <th class="number">Customers</th>
                         <th class="number">2nd Order %</th>
                         <th class="number">3rd Order %</th>
                         <th class="number">4th Order %</th>
                         <th class="number">5th Order %</th>
-                        <th class="number">Priemer obj.</th>
+                        <th class="number">Avg Orders</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -2635,48 +2984,48 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not time_to_nth_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">ÄŚas do ÄŹalĹˇej objednĂˇvky podÄľa prvĂ©ho produktu</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Time to Next Order by First Product</h2>
         <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Comparison of average time (in days) to 2nd, 3rd, and 4th order by first-order product.</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">PriemernĂ˝ ÄŤas do 2. obj.</div>
-                <div class="card-value">{time_nth_summary.get('avg_days_to_2nd_overall', 'N/A')} dnĂ­</div>
+                <div class="card-title">Average Time to 2nd Order</div>
+                <div class="card-value">{time_nth_summary.get('avg_days_to_2nd_overall', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">NajrĂ˝chlejĹˇĂ­ nĂˇvrat</div>
-                <div class="card-value profit">{time_nth_summary.get('fastest_return_days', 'N/A')} dnĂ­</div>
+                <div class="card-title">Fastest Return</div>
+                <div class="card-value profit">{time_nth_summary.get('fastest_return_days', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">NajpomalĹˇĂ­ nĂˇvrat</div>
-                <div class="card-value cost">{time_nth_summary.get('slowest_return_days', 'N/A')} dnĂ­</div>
+                <div class="card-title">Slowest Return</div>
+                <div class="card-value cost">{time_nth_summary.get('slowest_return_days', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">Rozptyl (dnĂ­)</div>
+                <div class="card-title">Spread (days)</div>
                 <div class="card-value">{time_nth_summary.get('days_spread', 0):.1f}</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">PriemernĂ˝ ÄŤas do 2. objednĂˇvky podÄľa prvĂ©ho produktu</h2>
-            <p class="chart-explanation">ZĂˇkaznĂ­ci, ktorĂ­ si kĂşpili tento produkt v prvej objednĂˇvke, sa vrĂˇtili v priemere za uvedenĂ˝ poÄŤet dnĂ­</p>
+            <h2 class="chart-title">Average Time to 2nd Order by First Product</h2>
+            <p class="chart-explanation">Average time for customers to place a second order after starting with each first-order product.</p>
             <canvas id="timeToNthByFirstItemChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">ÄŚas do N-tej objednĂˇvky podÄľa prvĂ©ho produktu</h2>
+                <h2 class="table-title">Time to Nth Order by First Product</h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt v prvej objednĂˇvke</th>
-                        <th class="number">ZĂˇkaznĂ­ci</th>
-                        <th class="number">ÄŚas do 2. obj. (dnĂ­)</th>
-                        <th class="number">ÄŚas do 3. obj. (dnĂ­)</th>
-                        <th class="number">ÄŚas do 4. obj. (dnĂ­)</th>
+                        <th>Product in First Order</th>
+                        <th class="number">Customers</th>
+                        <th class="number">Days to 2nd (avg)</th>
+                        <th class="number">Days to 3rd (avg)</th>
+                        <th class="number">Days to 4th (avg)</th>
                         <th class="number">ÄŚas do 5. obj. (dnĂ­)</th>
                     </tr>
                 </thead>
@@ -2712,46 +3061,46 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not item_repurchase_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">OpakovanĂ˝ nĂˇkup rovnakĂ©ho produktu</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">AnalĂ˝za toho, ako ÄŤasto zĂˇkaznĂ­ci kupujĂş ten istĂ˝ produkt opakovane v ÄŹalĹˇĂ­ch objednĂˇvkach (top {len(item_repurchase_df)} produktov)</p>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Same Product Repurchase</h2>
+        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">How often customers buy the same product repeatedly in later orders (top {len(item_repurchase_df)} products).</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">PriemernĂˇ 2x repurchase</div>
+                <div class="card-title">Average 2x Repurchase</div>
                 <div class="card-value roi">{repurchase_summary.get('avg_repurchase_2x_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">NajlepĹˇia repurchase</div>
+                <div class="card-title">Best Repurchase</div>
                 <div class="card-value profit">{repurchase_summary.get('best_repurchase_2x_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Priem. dni medzi nĂˇkupmi</div>
-                <div class="card-value">{repurchase_summary.get('avg_days_between_repurchase', 'N/A')} dnĂ­</div>
+                <div class="card-title">Avg Days Between Purchases</div>
+                <div class="card-value">{repurchase_summary.get('avg_days_between_repurchase', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">Rozptyl repurchase</div>
+                <div class="card-title">Repurchase Spread</div>
                 <div class="card-value">{repurchase_summary.get('repurchase_spread', 0):.1f}%</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">OpakovanĂ˝ nĂˇkup rovnakĂ©ho produktu (2x+)</h2>
-            <p class="chart-explanation">Percento zĂˇkaznĂ­kov, ktorĂ­ si kĂşpili tento produkt minimĂˇlne dvakrĂˇt v rĂ´znych objednĂˇvkach</p>
+            <h2 class="chart-title">Same Product Repurchase (2x+)</h2>
+            <p class="chart-explanation">Share of customers who purchased the same product at least twice in different orders.</p>
             <canvas id="sameItemRepurchaseChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">DetailnĂˇ analĂ˝za opakovanĂ˝ch nĂˇkupov produktov</h2>
+                <h2 class="table-title">Detailed Same Product Repurchase Analysis</h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt</th>
-                        <th class="number">Celkom obj.</th>
-                        <th class="number">ZĂˇkaznĂ­ci</th>
+                        <th>Product</th>
+                        <th class="number">Total Orders</th>
+                        <th class="number">Customers</th>
                         <th class="number">2x+ %</th>
                         <th class="number">3x+ %</th>
                         <th class="number">4x+ %</th>
@@ -4250,39 +4599,39 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     if customer_email_segments:
         html_content += """
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">đź“§ SegmentĂˇcia zĂˇkaznĂ­kov pre email marketing</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.9;">TabuÄľky zĂˇkaznĂ­kov rozdelenĂ˝ch podÄľa nĂˇkupnĂ©ho sprĂˇvania. KaĹľdĂ˝ segment je vhodnĂ˝ na inĂ˝ typ emailovej kampane.</p>
+        <h2 class="chart-title" data-en="Customer Segmentation For Email Marketing" data-sk="Segmentacia zakaznikov pre email marketing" style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Customer Segmentation For Email Marketing</h2>
+        <p class="chart-explanation" data-en="Customers are grouped by buying behavior so each segment can get the right type of email campaign." data-sk="Zakaznici su rozdeleni podla nakupneho spravania, aby kazdy segment dostal vhodny typ emailovej kampane." style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.9;">Customers are grouped by buying behavior so each segment can get the right type of email campaign.</p>
 """
 
         # Define segment display order and styling
         segment_configs = {
-            'sample_not_converted': {'color': '#EC4899', 'icon': 'đź§Ş', 'priority': 1},
-            'second_order_encouragement': {'color': '#8B5CF6', 'icon': '2ÄŹÂ¸ĹąĂ˘ÂĹ', 'priority': 2},
-            'optimal_reorder_timing': {'color': '#10B981', 'icon': 'đźŽŻ', 'priority': 3},
-            'churning_customers': {'color': '#F97316', 'icon': 'âš ď¸Ź', 'priority': 4},
-            'repeat_buyers_90_days': {'color': '#EF4444', 'icon': 'đź”„', 'priority': 5},
-            'one_time_buyers_30_days': {'color': '#F59E0B', 'icon': 'đź›’', 'priority': 6},
-            'high_value_one_time': {'color': '#06B6D4', 'icon': 'đź’Ž', 'priority': 7},
-            'new_customers_welcome': {'color': '#22C55E', 'icon': 'đź‘‹', 'priority': 8},
-            'vip_customers': {'color': '#A855F7', 'icon': 'đź‘‘', 'priority': 9},
-            'failed_payment_only': {'color': '#DC2626', 'icon': 'âťŚ', 'priority': 10},
-            'recent_buyers_14_60_days': {'color': '#3B82F6', 'icon': 'âŹ°', 'priority': 11},
-            'long_dormant': {'color': '#6B7280', 'icon': 'đź’¤', 'priority': 12}
+            'sample_not_converted': {'color': '#EC4899', 'icon': '&#129514;', 'priority': 1},
+            'second_order_encouragement': {'color': '#8B5CF6', 'icon': '&#10145;', 'priority': 2},
+            'optimal_reorder_timing': {'color': '#10B981', 'icon': '&#9200;', 'priority': 3},
+            'churning_customers': {'color': '#F97316', 'icon': '&#9888;', 'priority': 4},
+            'repeat_buyers_90_days': {'color': '#EF4444', 'icon': '&#128257;', 'priority': 5},
+            'one_time_buyers_30_days': {'color': '#F59E0B', 'icon': '&#128337;', 'priority': 6},
+            'high_value_one_time': {'color': '#06B6D4', 'icon': '&#128176;', 'priority': 7},
+            'new_customers_welcome': {'color': '#22C55E', 'icon': '&#127881;', 'priority': 8},
+            'vip_customers': {'color': '#A855F7', 'icon': '&#11088;', 'priority': 9},
+            'failed_payment_only': {'color': '#DC2626', 'icon': '&#10060;', 'priority': 10},
+            'recent_buyers_14_60_days': {'color': '#3B82F6', 'icon': '&#128293;', 'priority': 11},
+            'long_dormant': {'color': '#6B7280', 'icon': '&#128164;', 'priority': 12}
         }
 
         # First, show Email Campaign Calendar
         html_content += """
         <div class="table-container" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-bottom: 30px;">
-            <h2 class="table-title" style="color: white;">đź“… PlĂˇn emailovĂ˝ch kampanĂ­ - Kedy komu poslaĹĄ</h2>
+            <h2 class="table-title" data-en="Email Campaign Plan - Who to Send and When" data-sk="Plan email kampani - komu a kedy poslat" style="color: white;">Email Campaign Plan - Who to Send and When</h2>
             <table style="background: rgba(255,255,255,0.95);">
                 <thead>
                     <tr>
-                        <th>Priorita</th>
+                        <th>Priority</th>
                         <th>Segment</th>
-                        <th class="number">PoÄŤet</th>
-                        <th>Kedy poslaĹĄ</th>
-                        <th>OdporĂşÄŤanĂˇ zÄľava</th>
-                        <th>Ĺ ablĂłna emailu</th>
+                        <th class="number">Count</th>
+                        <th>Send Timing</th>
+                        <th>Suggested Discount</th>
+                        <th>Email Template</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -4294,20 +4643,25 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         for segment_name, segment_info in priority_sorted:
             if segment_info['count'] == 0:
                 continue
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': 'đź“‹'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '&#128203;'})
             priority = segment_info.get('priority', 99)
-            timing = segment_info.get('send_timing', 'Nie je definovanĂ©')
+            timing = segment_info.get('send_timing', 'Not defined')
+            timing_en = segment_info.get('send_timing_en', timing)
             discount = segment_info.get('discount_suggestion', '-')
             template = segment_info.get('email_template', '-')
+            desc_en = str(segment_info.get('description_en', segment_name.replace('_', ' ')))
+            desc_sk = str(segment_info.get('description', desc_en))
+            desc_en_short = (desc_en[:60] + '...') if len(desc_en) > 60 else desc_en
+            desc_sk_short = (desc_sk[:60] + '...') if len(desc_sk) > 60 else desc_sk
 
-            priority_badge = 'đź”´' if priority <= 2 else ('đźźˇ' if priority <= 4 else 'đźź˘')
+            priority_badge = 'HIGH' if priority <= 2 else ('MED' if priority <= 4 else 'LOW')
 
             html_content += f"""
                     <tr>
                         <td style="text-align: center;">{priority_badge} {priority}</td>
-                        <td><span style="color: {config['color']}; font-weight: bold;">{config['icon']} {segment_info.get('description_en', segment_name)[:60]}...</span></td>
+                        <td><span style="color: {config['color']}; font-weight: bold;" data-en="{escape(config['icon'] + ' ' + desc_en_short)}" data-sk="{escape(config['icon'] + ' ' + desc_sk_short)}">{config['icon']} {desc_en_short}</span></td>
                         <td class="number" style="font-weight: bold; color: {config['color']};">{segment_info['count']}</td>
-                        <td style="font-weight: 500;">{timing}</td>
+                        <td style="font-weight: 500;" data-en="{escape(str(timing_en))}" data-sk="{escape(str(timing))}">{escape(str(timing_en))}</td>
                         <td>{discount}</td>
                         <td style="font-size: 0.85rem; font-style: italic;">"{template[:50]}..."</td>
                     </tr>"""
@@ -4316,9 +4670,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 </tbody>
             </table>
             <p style="color: white; padding: 15px; font-size: 0.9rem;">
-                <strong>đź”´ VysokĂˇ priorita</strong> = PoslaĹĄ ihneÄŹ |
-                <strong>đźźˇ StrednĂˇ priorita</strong> = NaplĂˇnovanĂ© kampane |
-                <strong>đźź˘ NĂ­zka priorita</strong> = PravidelnĂ© kampane
+                <strong>HIGH priority</strong> = send immediately |
+                <strong>MED priority</strong> = scheduled campaigns |
+                <strong>LOW priority</strong> = regular campaigns
             </p>
         </div>
 """
@@ -4329,36 +4683,47 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         for segment_name, segment_info in sorted_segments:
             segment_data = segment_info['data']
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': 'đź“‹'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '&#128203;'})
+            desc_en = str(segment_info.get('description_en', segment_name.replace('_', ' ')))
+            desc_sk = str(segment_info.get('description', desc_en))
+            title_en = f"{desc_en} ({segment_info['count']} customers)"
+            title_sk = f"{desc_sk} ({segment_info['count']} zakaznikov)"
+            purpose_en = str(segment_info.get('email_purpose_en', segment_info.get('email_purpose', '-')))
+            purpose_sk = str(segment_info.get('email_purpose', purpose_en))
+            timing_en = str(segment_info.get('send_timing_en', segment_info.get('send_timing', 'Not defined')))
+            timing_sk = str(segment_info.get('send_timing', timing_en))
+            discount_en = str(segment_info.get('discount_suggestion_en', segment_info.get('discount_suggestion', '-')))
+            discount_sk = str(segment_info.get('discount_suggestion', discount_en))
+            template_text = str(segment_info.get('email_template', 'Template not defined'))
 
             if segment_data is not None and not segment_data.empty:
                 # Determine columns based on segment type
                 if segment_name == 'failed_payment_only':
                     columns = ['email', 'name', 'failed_order_count', 'last_attempt_date', 'city', 'country']
-                    headers = ['Email', 'Meno', 'PoÄŤet pokusov', 'PoslednĂ˝ pokus', 'Mesto', 'Krajina']
+                    headers = ['Email', 'Name', 'Failed attempts', 'Last attempt', 'City', 'Country']
                 else:
                     columns = ['email', 'name', 'order_count', 'total_revenue', 'days_since_last_order', 'city', 'country']
-                    headers = ['Email', 'Meno', 'PoÄŤet obj.', 'CelkovĂˇ trĹľba', 'DnĂ­ od posl. obj.', 'Mesto', 'Krajina']
+                    headers = ['Email', 'Name', 'Orders', 'Total revenue', 'Days since last order', 'City', 'Country']
 
                 html_content += f"""
         <div class="table-container" style="border-left: 4px solid {config['color']};">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">{config['icon']} {segment_info['description']} ({segment_info['count']} zĂˇkaznĂ­kov)</h2>
+                <h2 class="table-title"><span>{config['icon']}</span> <span data-en="{escape(title_en)}" data-sk="{escape(title_sk)}">{escape(title_en)}</span></h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <div style="background: #f8fafc; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>đźŽŻ ĂšÄŤel:</strong> {segment_info['email_purpose']}
+                    <strong data-en="Purpose:" data-sk="Ucel:">Purpose:</strong> <span data-en="{escape(purpose_en)}" data-sk="{escape(purpose_sk)}">{escape(purpose_en)}</span>
                 </p>
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>âŹ° Kedy poslaĹĄ:</strong> {segment_info.get('send_timing', 'Nie je definovanĂ©')}
+                    <strong data-en="Send timing:" data-sk="Kedy odoslat:">Send timing:</strong> <span data-en="{escape(timing_en)}" data-sk="{escape(timing_sk)}">{escape(timing_en)}</span>
                 </p>
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>đźŹ·ď¸Ź ZÄľava:</strong> {segment_info.get('discount_suggestion', '-')}
+                    <strong data-en="Discount:" data-sk="Zlava:">Discount:</strong> <span data-en="{escape(discount_en)}" data-sk="{escape(discount_sk)}">{escape(discount_en)}</span>
                 </p>
                 <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-style: italic;">
-                    đź’¬ "{segment_info.get('email_template', 'Ĺ ablĂłna nie je definovanĂˇ')}"
+                    "<span data-en="{escape(template_text)}" data-sk="{escape(template_text)}">{escape(template_text)}</span>"
                 </p>
             </div>
             <table>
@@ -4366,7 +4731,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>"""
 
                 for header in headers:
-                    align_class = 'number' if header in ['PoÄŤet obj.', 'CelkovĂˇ trĹľba', 'DnĂ­ od posl. obj.', 'PoÄŤet pokusov'] else ''
+                    align_class = 'number' if header in ['Orders', 'Total revenue', 'Days since last order', 'Failed attempts'] else ''
                     html_content += f"""
                         <th class="{align_class}">{header}</th>"""
 
@@ -4407,7 +4772,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 if len(segment_data) > 100:
                     html_content += f"""
                     <tr class="total-row">
-                        <td colspan="{len(columns)}">... a ÄŹalĹˇĂ­ch {len(segment_data) - 100} zĂˇkaznĂ­kov (celkovĂ˝ export v CSV sĂşbore)</td>
+                        <td colspan="{len(columns)}">... and {len(segment_data) - 100} more customers (full export in CSV file)</td>
                     </tr>"""
 
                 html_content += """
@@ -4416,11 +4781,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
             else:
-                # Empty segment - show placeholder
                 html_content += f"""
         <div class="table-container" style="border-left: 4px solid {config['color']}; opacity: 0.7;">
-            <h2 class="table-title">{config['icon']} {segment_info['description']} (0 zĂˇkaznĂ­kov)</h2>
-            <p style="color: #718096; padding: 15px;">Ĺ˝iadni zĂˇkaznĂ­ci v tomto segmente.</p>
+            <h2 class="table-title"><span>{config['icon']}</span> <span data-en="{escape(desc_en + ' (0 customers)')}" data-sk="{escape(desc_sk + ' (0 zakaznikov)')}">{escape(desc_en + ' (0 customers)')}</span></h2>
+            <p style="color: #718096; padding: 15px;" data-en="No customers in this segment." data-sk="V tomto segmente nie su ziadni zakaznici.">No customers in this segment.</p>
         </div>"""
 
         # Summary card for all segments
@@ -4428,11 +4792,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
 
         <div class="table-container" style="background: #f0fdf4; border-left: 4px solid #10B981;">
-            <h2 class="table-title">Customer Segmentation Summary</h2>
+            <h2 class="table-title" data-en="Customer Segmentation Summary" data-sk="Suhrn segmentacie zakaznikov">Customer Segmentation Summary</h2>
             <div class="summary-cards" style="margin-top: 15px;">"""
 
         for segment_name, segment_info in sorted_segments:
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': 'đź“‹'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '&#128196;'})
             html_content += f"""
                 <div class="card" style="border-left: 3px solid {config['color']};">
                     <div class="card-title">{config['icon']} {segment_name.replace('_', ' ').title()}</div>
@@ -4442,7 +4806,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
             </div>
             <p style="color: #065f46; margin-top: 15px; padding: 0 15px;">
-                <strong>PoznĂˇmka:</strong> KompletnĂ© zoznamy emailov pre kaĹľdĂ˝ segment sĂş uloĹľenĂ© v CSV sĂşboroch v prieÄŤinku <code>data/</code> s nĂˇzvom <code>email_segment_[nĂˇzov].csv</code>
+                <strong data-en="Note:" data-sk="Poznamka:">Note:</strong> <span data-en="Full email lists for each segment are saved in CSV files in" data-sk="Kompletne email zoznamy pre kazdy segment sa ukladaju do CSV suborov v">Full email lists for each segment are saved in CSV files in</span> <code>data/</code> <span data-en="as" data-sk="ako">as</span> <code>email_segment_[name].csv</code>
             </p>
         </div>"""
 
@@ -4454,6 +4818,422 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     </div>
 
     <script>
+        let currentLang = localStorage.getItem('reportLang') || 'en';
+        let toggleAllStateExpanded = false;
+
+        const I18N_SK = {{
+            "Expand All Tables": "Rozbalit vsetky tabulky",
+            "Collapse All Tables": "Zbalit vsetky tabulky",
+            "Language": "Jazyk",
+            "Data Quality: Full Data": "Kvalita dat: Kompletne data",
+            "Data Quality: Partial Data": "Kvalita dat: Ciastocne data",
+            "Generated UTC:": "Generovane UTC:",
+            "Source": "Zdroj",
+            "Status": "Stav",
+            "Mode": "Rezim",
+            "Detail": "Detail",
+            "How to read this report (simple)": "Ako čítať tento report (jednoducho)",
+            "Total Revenue (Net)": "Celkovy obrat (bez DPH)",
+            "Product Costs": "Naklady na produkty",
+            "Packaging Costs": "Naklady na balenie",
+            "Shipping Subsidy": "Prispevok na dopravu",
+            "Fixed Overhead": "Fixne naklady",
+            "Facebook Ads": "Facebook reklama",
+            "Google Ads": "Google reklama",
+            "Total Costs": "Celkove naklady",
+            "Net Profit": "Cisty zisk",
+            "Avg Daily Revenue": "Priemerny denny obrat",
+            "Avg Daily Profit/Loss": "Priemerny denny zisk/strata",
+            "Total Orders": "Pocet objednavok",
+            "Total Items": "Pocet poloziek",
+            "Avg Order Value": "Priemerna hodnota objednavky",
+            "Avg FB Cost/Order": "Priemerny FB naklad/objednavka",
+            "Returning Customers": "Vracajuci sa zakaznici",
+            "Avg Customer LTV (Revenue)": "Priemerne LTV zakaznika (trzba)",
+            "Customer Acq. Cost (FB)": "Naklad na ziskanie zakaznika (FB)",
+            "Revenue LTV/CAC": "LTV/CAC podla trzby",
+            "ROAS (All Ads)": "ROAS (vsetky reklamy)",
+            "Revenue/Customer (Net)": "Trzba na zakaznika (bez DPH)",
+            "Orders / Customer": "Objednavky na zakaznika",
+            "Company Profit Margin": "Firemna marza",
+            "Product Gross Margin": "Hruba marza produktov",
+            "Pre-Ad Contribution Profit": "Pre-Ad kontribucny zisk",
+            "Pre-Ad Contribution Margin": "Pre-Ad kontribucna marza",
+            "Pre-Ad Contribution / Order": "Pre-Ad kontribucia / objednavka",
+            "Post-Ad Contribution Profit": "Post-Ad kontribucny zisk",
+            "Post-Ad Contribution Margin": "Post-Ad kontribucna marza",
+            "Post-Ad Contribution / Order": "Post-Ad kontribucia / objednavka",
+            "Break-even CAC": "Bod zvratu CAC",
+            "Pre-Ad Contribution / Customer": "Pre-Ad kontribucia / zakaznik",
+            "Current FB CAC": "Aktualny FB CAC",
+            "Paid CAC (FB)": "Plateny CAC (FB)",
+            "Blended CAC (Tracked Ads)": "Kombinovany CAC (sledovane reklamy)",
+            "CAC Headroom": "Rezerva CAC",
+            "CAC / Break-even": "CAC / bod zvratu",
+            "Contribution LTV/CAC": "Kontribucne LTV/CAC",
+            "New Cust. Revenue": "Trzba novych zakaznikov",
+            "Returning Cust. Revenue": "Trzba vracajucich sa zakaznikov",
+            "Payback Period (Orders)": "Payback obdobie (objednavky)",
+            "Payback Period (Days est.)": "Payback obdobie (odhad dni)",
+            "Post-Ad Payback (Orders est.)": "Post-Ad payback (odhad objednavok)",
+            "Post-Ad Payback (Days est.)": "Post-Ad payback (odhad dni)",
+            "ROAS Check Delta": "Kontrola ROAS delta",
+            "Margin Check Delta (pp)": "Kontrola marže delta (p. b.)",
+            "CAC (FB/New Cust.)": "CAC (FB/novi zakaznici)",
+            "CAC Check Delta": "Kontrola CAC delta",
+            "FB Spend / Orders": "FB spend / objednavky",
+            "Refund Orders": "Refundovane objednavky",
+            "Refund Rate": "Miera refundov",
+            "Refund Amount": "Suma refundov",
+            "Repeat Purchase Rate": "Miera opakovanych nakupov",
+            "Revenue": "Obrat",
+            "Daily Revenue": "Denny obrat",
+            "Daily Total Costs": "Denne celkove naklady",
+            "Daily Product Costs": "Denne naklady na produkty",
+            "Daily Product Gross Margin": "Denna hruba marza produktov",
+            "Daily Facebook Ads": "Denne Facebook Ads",
+            "Daily Google Ads": "Denne Google Ads",
+            "Daily Packaging Costs": "Denne naklady na balenie",
+            "Daily Shipping Subsidy": "Denny prispevok na dopravu",
+            "Daily Fixed Costs": "Denne fixne naklady",
+            "Daily Average Order Value": "Denna priemerna hodnota objednavky",
+            "Daily Items Sold": "Denny pocet predanych poloziek",
+            "Average Items per Order": "Priemer poloziek na objednavku",
+            "Average Daily Revenue and Profit Trend": "Trend priemerneho denneho obratu a zisku",
+            "New vs Returning Revenue Split": "Pomer obratu: novi vs vracajuci sa",
+            "New vs Returning Revenue Trend": "Trend obratu: novi vs vracajuci sa",
+            "Refund Rate Trend": "Trend refundov",
+            "Refund Amount Trend": "Trend sumy refundov",
+            "Customer Segmentation Summary": "Suhrn segmentacie zakaznikov",
+            "Email Campaign Plan - Who to Send and When": "Plan emailovych kampani - komu a kedy poslat",
+            "Customer Segmentation For Email Marketing": "Segmentacia zakaznikov pre email marketing",
+            "Priority": "Priorita",
+            "Segment": "Segment",
+            "Count": "Pocet",
+            "Send Timing": "Kedy odoslat",
+            "Suggested Discount": "Odporucana zlava",
+            "Email Template": "Email sablona",
+            "HIGH priority": "VYSOKA priorita",
+            "MED priority": "STREDNA priorita",
+            "LOW priority": "NIZKA priorita",
+            "Purpose:": "Ucel:",
+            "Send timing:": "Kedy odoslat:",
+            "Discount:": "Zlava:",
+            "Template not defined": "Sablona nie je definovana",
+            "No customers in this segment.": "V tomto segmente nie su ziadni zakaznici.",
+            "customers": "zakaznici",
+            "Customers are grouped by buying behavior so each segment can get the right type of email campaign.": "Zakaznici su rozdeleni podla nakupneho spravania, aby kazdy segment dostal vhodny typ emailovej kampane.",
+            "HIGH priority = send immediately |": "VYSOKA priorita = poslat okamzite |",
+            "MED priority = scheduled campaigns |": "STREDNA priorita = planovane kampane |",
+            "LOW priority = regular campaigns": "NIZKA priorita = pravidelne kampane",
+            "Note:": "Poznamka:",
+            "Mature Cohorts - Detailed Retention (90+ days old)": "Zrele kohorty - detailna retencia (90+ dni)",
+            "True Retention (Time-Bias Free) - Mature Cohorts Only (90+ days)": "Skutocna retencia (bez casoveho biasu) - len zrele kohorty (90+ dni)",
+            "True Retention by Mature Cohorts (90+ days)": "Skutocna retencia podla zrelych kohort (90+ dni)",
+            "Retention by First Purchased Product": "Retencia podla prveho zakupeneho produktu",
+            "Detailed Retention by First Product": "Detailna retencia podla prveho produktu",
+            "Time to Next Order by First Product": "Cas do dalsej objednavky podla prveho produktu",
+            "Time to Nth Order by First Product": "Cas do N-tej objednavky podla prveho produktu",
+            "Same Product Repurchase": "Opakovany nakup rovnakeho produktu",
+            "Detailed Same Product Repurchase Analysis": "Detailna analyza opakovanych nakupov rovnakeho produktu",
+            "Generated on": "Vygenerovane:",
+            "BizniWeb Order Export System": "BizniWeb export reportovaci system"
+        }};
+
+        const I18N_EN = {{
+            "Rozbalit vsetky tabulky": "Expand All Tables",
+            "Zbalit vsetky tabulky": "Collapse All Tables",
+            "Jazyk": "Language",
+            "Segmentacia zakaznikov pre email marketing": "Customer Segmentation For Email Marketing",
+            "Priorita": "Priority",
+            "Pocet": "Count",
+            "Kedy odoslat": "Send Timing",
+            "Odporucana zlava": "Suggested Discount",
+            "Email sablona": "Email Template",
+            "VYSOKA priorita": "HIGH priority",
+            "STREDNA priorita": "MED priority",
+            "NIZKA priorita": "LOW priority",
+            "Ucel:": "Purpose:",
+            "Kedy odoslat:": "Send timing:",
+            "Zlava:": "Discount:",
+            "Sablona nie je definovana": "Template not defined",
+            "V tomto segmente nie su ziadni zakaznici.": "No customers in this segment.",
+            "zakaznici": "customers",
+            "Zakaznici su rozdeleni podla nakupneho spravania, aby kazdy segment dostal vhodny typ emailovej kampane.": "Customers are grouped by buying behavior so each segment can get the right type of email campaign.",
+            "VYSOKA priorita = poslat okamzite |": "HIGH priority = send immediately |",
+            "STREDNA priorita = planovane kampane |": "MED priority = scheduled campaigns |",
+            "NIZKA priorita = pravidelne kampane": "LOW priority = regular campaigns",
+            "Poznamka:": "Note:",
+            "Ako čítať tento report (jednoducho)": "How to read this report (simple)",
+            "Kontrola ROAS delta": "ROAS Check Delta",
+            "Kontrola marže delta (p. b.)": "Margin Check Delta (pp)",
+            "Kontrola CAC delta": "CAC Check Delta",
+            "Skutocna retencia (bez casoveho biasu) - len zrele kohorty (90+ dni)": "True Retention (Time-Bias Free) - Mature Cohorts Only (90+ days)",
+            "Retencia podla prveho zakupeneho produktu": "Retention by First Purchased Product",
+            "Cas do dalsej objednavky podla prveho produktu": "Time to Next Order by First Product",
+            "Opakovany nakup rovnakeho produktu": "Same Product Repurchase"
+        }};
+
+        const EN_TO_SK_REPLACE = [
+            ["No customers in this segment.", "V tomto segmente nie su ziadni zakaznici."],
+            ["How to read this report", "Ako čítať tento report"],
+            ["quick health", "rychle zdravie"],
+            ["action needed", "treba riesit"],
+            ["last 7 days", "poslednych 7 dni"],
+            ["previous 7 days", "predchadzajucich 7 dni"],
+            ["Daily", "Denn"],
+            ["Total", "Celkovy"],
+            ["Revenue", "Obrat"],
+            ["Profit", "Zisk"],
+            ["Orders", "Objednavky"],
+            ["Order", "Objednavka"],
+            ["Costs", "Naklady"],
+            ["Cost", "Naklad"],
+            ["Customers", "Zakaznici"],
+            ["Customer", "Zakaznik"],
+            ["Campaign", "Kampan"],
+            ["Comparison", "Porovnanie"],
+            ["Trend", "Trend"],
+            ["Distribution", "Rozdelenie"],
+            ["Performance", "Vykonnost"],
+            ["Average", "Priemer"],
+            ["Contribution", "Kontribucia"],
+            ["Margin", "Marza"],
+            ["Retention", "Retencia"],
+            ["Source", "Zdroj"],
+            ["Status", "Stav"],
+            ["Mode", "Rezim"],
+            ["Detail", "Detail"],
+            ["Data", "Data"],
+            ["Quality", "Kvalita"],
+            ["Full", "Kompletne"],
+            ["Partial", "Ciastocne"],
+            ["Amount", "Suma"],
+            ["Rate", "Miera"],
+            ["Value", "Hodnota"],
+            ["Items", "Polozky"],
+            ["Item", "Polozka"],
+            ["Cities", "Mesta"],
+            ["City", "Mesto"],
+            ["Country", "Krajina"],
+            ["Generated", "Vygenerovane"],
+            ["Summary", "Suhrn"],
+            ["Table", "Tabulka"],
+            ["Tables", "Tabulky"],
+            ["Priority", "Priorita"],
+            ["Suggested", "Odporucana"],
+            ["Discount", "Zlava"],
+            ["Template", "Sablona"],
+            ["Timing", "Cas odoslania"],
+            ["New", "Novi"],
+            ["Returning", "Vracajuci sa"],
+            ["true", "pravda"],
+            ["false", "nepravda"],
+            [" by ", " podla "],
+            [" with ", " s "],
+            [" without ", " bez "],
+            [" per ", " na "],
+            [" and ", " a "],
+            [" of ", " "],
+            [" to ", " na "]
+        ];
+
+        const SK_TO_EN_REPLACE = [
+            ["V tomto segmente nie su ziadni zakaznici.", "No customers in this segment."],
+            ["Ako čítať tento report", "How to read this report"],
+            ["poslednych 7 dni", "last 7 days"],
+            ["predchadzajucich 7 dni", "previous 7 days"],
+            ["Celkovy", "Total"],
+            ["Obrat", "Revenue"],
+            ["Zisk", "Profit"],
+            ["Objednavky", "Orders"],
+            ["Objednavka", "Order"],
+            ["Naklady", "Costs"],
+            ["Naklad", "Cost"],
+            ["Zakaznici", "Customers"],
+            ["Zakaznik", "Customer"],
+            ["Kampan", "Campaign"],
+            ["Porovnanie", "Comparison"],
+            ["Vykonnost", "Performance"],
+            ["Priemer", "Average"],
+            ["Kontribucia", "Contribution"],
+            ["Marza", "Margin"],
+            ["Retencia", "Retention"],
+            ["Zdroj", "Source"],
+            ["Stav", "Status"],
+            ["Rezim", "Mode"],
+            ["Detail", "Detail"],
+            ["Kvalita", "Quality"],
+            ["Kompletne", "Full"],
+            ["Ciastocne", "Partial"],
+            ["Suma", "Amount"],
+            ["Miera", "Rate"],
+            ["Hodnota", "Value"],
+            ["Polozky", "Items"],
+            ["Polozka", "Item"],
+            ["Mesta", "Cities"],
+            ["Mesto", "City"],
+            ["Krajina", "Country"],
+            ["Vygenerovane", "Generated"],
+            ["Suhrn", "Summary"],
+            ["Tabulky", "Tables"],
+            ["Tabulka", "Table"],
+            ["Priorita", "Priority"],
+            ["Odporucana", "Suggested"],
+            ["Zlava", "Discount"],
+            ["Sablona", "Template"],
+            ["Novi", "New"],
+            ["Vracajuci sa", "Returning"],
+            [" podla ", " by "],
+            [" s ", " with "],
+            [" bez ", " without "],
+            [" na ", " to "],
+            [" a ", " and "]
+        ];
+
+        function escapeRegex(value) {{
+            return value.replace(/[.*+?^${{}}()|[\\\\]\\\\]/g, '\\\\$&');
+        }}
+
+        function replaceAllInsensitive(text, pairs) {{
+            let out = text || '';
+            pairs.forEach(([from, to]) => {{
+                if (!from) return;
+                const escaped = escapeRegex(from);
+                const useWordBoundary = /^[A-Za-z0-9]+$/.test(from);
+                const pattern = useWordBoundary
+                    ? new RegExp(`\\\\b${{escaped}}\\\\b`, 'gi')
+                    : new RegExp(escaped, 'gi');
+                out = out.replace(pattern, to);
+            }});
+            return out;
+        }}
+
+        function fallbackTranslateEnToSk(text) {{
+            return replaceAllInsensitive(text, EN_TO_SK_REPLACE);
+        }}
+
+        function fallbackTranslateSkToEn(text) {{
+            return replaceAllInsensitive(text, SK_TO_EN_REPLACE);
+        }}
+
+        function getSkText(enText) {{
+            if (!enText) return '';
+            return I18N_SK[enText] || fallbackTranslateEnToSk(enText);
+        }}
+
+        function getEnText(sourceText) {{
+            if (!sourceText) return '';
+            return I18N_EN[sourceText] || fallbackTranslateSkToEn(sourceText);
+        }}
+
+        function setToggleButtonLabel(expand) {{
+            const btn = document.getElementById('toggleAllBtn');
+            if (!btn) return;
+            const enLabel = expand ? 'Collapse All Tables' : 'Expand All Tables';
+            const skLabel = expand ? 'Zbalit vsetky tabulky' : 'Rozbalit vsetky tabulky';
+            btn.dataset.en = enLabel;
+            btn.dataset.sk = skLabel;
+            btn.textContent = currentLang === 'sk' ? skLabel : enLabel;
+        }}
+
+        function translateElement(el) {{
+            if (!el) return;
+            const raw = (el.textContent || '').trim();
+            if (!el.dataset.en && !el.dataset.sk) {{
+                const inferredEn = getEnText(raw);
+                el.dataset.en = inferredEn || raw;
+                el.dataset.sk = getSkText(el.dataset.en);
+            }} else if (!el.dataset.en) {{
+                el.dataset.en = getEnText(raw) || raw;
+            }} else if (!el.dataset.sk) {{
+                el.dataset.sk = getSkText(el.dataset.en);
+            }}
+
+            if (currentLang === 'sk') {{
+                el.textContent = el.dataset.sk || el.dataset.en || raw;
+            }} else {{
+                el.textContent = el.dataset.en || raw;
+            }}
+        }}
+
+        function translateChartLabels() {{
+            if (typeof Chart === 'undefined' || !Chart.instances) return;
+            const instances = Array.isArray(Chart.instances)
+                ? Chart.instances
+                : Object.values(Chart.instances);
+
+            instances.forEach((chart) => {{
+                if (!chart || !chart.data || !Array.isArray(chart.data.datasets)) return;
+                chart.data.datasets.forEach((dataset) => {{
+                    if (!dataset) return;
+                    if (typeof dataset._labelEn === 'undefined') {{
+                        const baseLabel = dataset.label || '';
+                        dataset._labelEn = getEnText(baseLabel) || baseLabel;
+                        dataset._labelSk = getSkText(dataset._labelEn) || dataset._labelEn;
+                    }}
+                    dataset.label = currentLang === 'sk' ? dataset._labelSk : dataset._labelEn;
+                }});
+                if (typeof chart.update === 'function') {{
+                    chart.update('none');
+                }}
+            }});
+        }}
+
+        function applyLanguage(lang) {{
+            currentLang = lang === 'sk' ? 'sk' : 'en';
+            localStorage.setItem('reportLang', currentLang);
+            document.documentElement.lang = currentLang;
+
+            document.querySelectorAll('#langSwitch button[data-lang]').forEach((btn) => {{
+                btn.classList.toggle('active', btn.dataset.lang === currentLang);
+            }});
+
+            const dateRangeEl = document.querySelector('.date-range');
+            if (dateRangeEl && dateRangeEl.dataset.en && dateRangeEl.dataset.sk) {{
+                dateRangeEl.textContent = currentLang === 'sk' ? dateRangeEl.dataset.sk : dateRangeEl.dataset.en;
+            }}
+
+            const textSelectors = [
+                '.lang-switch-label',
+                '.data-quality-title',
+                '.data-quality-message',
+                '.data-quality-meta',
+                '.card-title',
+                '.chart-title',
+                '.chart-explanation',
+                '.table-title',
+                '.collapsible-header h2',
+                '.table-container p',
+                '.table-container strong',
+                '.quick-insights-header h3',
+                '.quick-insights-header p',
+                '.quick-insight-title',
+                '.quick-insight-value',
+                '.quick-insight-desc',
+                '.report-guide h3',
+                '.report-guide li',
+                '.metric-cheatsheet h3',
+                '.metric-tip h4',
+                '.metric-tip p',
+                '.footer'
+            ];
+            document.querySelectorAll('[data-en], [data-sk]').forEach(translateElement);
+            document.querySelectorAll(textSelectors.join(',')).forEach(translateElement);
+            document.querySelectorAll('th').forEach(translateElement);
+            document.querySelectorAll('.status-pill').forEach(translateElement);
+
+            setToggleButtonLabel(toggleAllStateExpanded);
+            translateChartLabels();
+        }}
+
+        document.addEventListener('DOMContentLoaded', () => {{
+            document.querySelectorAll('#langSwitch button[data-lang]').forEach((btn) => {{
+                btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+            }});
+            applyLanguage(currentLang);
+        }});
+
         // Collapsible table functionality
         function toggleCollapse(header) {{
             header.classList.toggle('expanded');
@@ -4462,6 +5242,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         }}
 
         function toggleAllTables(expand) {{
+            const btn = document.getElementById('toggleAllBtn');
             const headers = document.querySelectorAll('.collapsible-header');
             const contents = document.querySelectorAll('.collapsible-content');
             headers.forEach(header => {{
@@ -4478,10 +5259,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     content.classList.remove('expanded');
                 }}
             }});
-            // Update button text
-            const btn = document.getElementById('toggleAllBtn');
-            btn.textContent = expand ? 'Collapse All Tables' : 'Expand All Tables';
-            btn.onclick = () => toggleAllTables(!expand);
+            toggleAllStateExpanded = !!expand;
+            setToggleButtonLabel(toggleAllStateExpanded);
+            if (btn) {{
+                btn.onclick = () => toggleAllTables(!expand);
+            }}
         }}
 
         // Chart defaults
@@ -10461,7 +11243,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 </html>
 """
 
-    return html_content
+    return _fix_common_mojibake(html_content)
 
 
 def generate_email_strategy_report(customer_email_segments: dict, cohort_analysis: dict,
@@ -11109,7 +11891,7 @@ TĂ­m Vevo''',
 </html>
 """
 
-    return html_content
+    return _fix_common_mojibake(html_content)
 
 
 
