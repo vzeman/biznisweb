@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Start `P4.x` reporting polish follow-up after cross-repo observability/template baselines. The reusable core is now in place; next safe step is operator docs + compliance cleanup, not another structural rewrite.
+- Use the new `--output-tag ui_test` side-by-side variant flow for the upcoming CFO/main-report UI redesign so production artifacts stay untouched while layout changes are tested.
 
 ## 9) Change Log
 
@@ -120,6 +120,24 @@ Bootstrap entrypoints:
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
 
 ### 2026-04-01
+- Added side-by-side output variant support for safe UI redesign/testing without overwriting working report artifacts:
+  - new optional `output_tag` support in `reporting_core.contracts.build_artifact_set(...)`,
+  - tagged artifacts render as `__<tag>` before file extension, e.g. `report_...__ui_test.html`,
+  - `export_orders.py` now accepts `--output-tag` and isolates cleanup to the active output variant only,
+  - `daily_report_runner.py` now accepts `--output-tag` and generates tagged CFO outputs against the same tagged artifact set,
+  - verified syntax with `python -m py_compile reporting_core\\contracts.py reporting_core\\__init__.py export_orders.py daily_report_runner.py`,
+  - verified smoke exports for VEVO and ROY on `2026-03-30..2026-03-31` with `--output-tag ui_test`,
+  - verified tagged CFO generation for both projects:
+    - `data\\vevo\\cfo_graphs_20260330-20260331__ui_test.html`
+    - `data\\roy\\cfo_graphs_20260330-20260331__ui_test.html`,
+  - generated full-range side-by-side test artifacts without email sending:
+    - VEVO:
+      - `data\\vevo\\report_20250503-20260331__ui_test.html`
+      - `data\\vevo\\cfo_graphs_20250503-20260331__ui_test.html`
+      - `data\\vevo\\email_strategy_20250503-20260331__ui_test.html`
+    - ROY:
+      - `data\\roy\\report_20250924-20260331__ui_test.html`
+      - `data\\roy\\cfo_graphs_20250924-20260331__ui_test.html`.
 - Updated ROY project baseline `report_from_date` from `2025-08-06` to `2025-09-24` in `projects/roy/settings.json`.
 - Re-generated ROY reporting outputs for `2025-09-24..2026-03-31` without email delivery so current artifacts match the new start boundary.
 - Fixed report headings to use project-level `reporting_system_name` across generated HTML outputs.

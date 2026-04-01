@@ -33,6 +33,7 @@ from reporting_core import (
     load_project_settings,
     project_data_dir,
     resolve_reporting_defaults,
+    sanitize_output_tag,
 )
 
 
@@ -101,6 +102,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip email sending",
     )
+    parser.add_argument(
+        "--output-tag",
+        default=os.getenv("REPORT_OUTPUT_TAG", ""),
+        help="Optional output tag for side-by-side test artifacts (e.g. ui_test).",
+    )
     return parser.parse_args()
 
 
@@ -123,7 +129,14 @@ def normalize_date(value: str) -> str:
     raise ValueError(f"Unsupported date format '{value}'. Use YYYY-MM-DD.")
 
 
-def run_export(project: str, from_date: str, to_date: str, clear_cache: bool, no_cache: bool) -> None:
+def run_export(
+    project: str,
+    from_date: str,
+    to_date: str,
+    clear_cache: bool,
+    no_cache: bool,
+    output_tag: str = "",
+) -> None:
     cmd: List[str] = [
         sys.executable,
         str(ROOT_DIR / "export_orders.py"),
@@ -138,6 +151,8 @@ def run_export(project: str, from_date: str, to_date: str, clear_cache: bool, no
         cmd.append("--clear-cache")
     if no_cache:
         cmd.append("--no-cache")
+    if output_tag:
+        cmd.extend(["--output-tag", output_tag])
 
     print("Running export:", " ".join(cmd))
     proc = subprocess.run(cmd, cwd=str(ROOT_DIR), check=False)
@@ -833,6 +848,7 @@ def generate_cfo_graph_html(
     from_date: str,
     to_date: str,
     reporting_title: Optional[str] = None,
+    output_tag: str = "",
 ) -> Path:
     date_csv = file_paths.get("aggregate_by_date_csv")
     if not date_csv or not date_csv.exists():
@@ -2143,7 +2159,7 @@ def generate_cfo_graph_html(
 </html>
 """.replace("__DATA__", payload_json).replace("__DATA_QUALITY_BANNER__", data_quality_banner_html).replace("__REPORTING_TITLE__", escape(reporting_title))
 
-    output_path = build_artifact_set(project, from_date, to_date).cfo_graph_html
+    output_path = build_artifact_set(project, from_date, to_date, output_tag=output_tag).cfo_graph_html
     output_path.write_text(html, encoding="utf-8")
     return output_path
 
@@ -2270,8 +2286,10 @@ def main() -> None:
 
     args = parse_args()
     project = (args.project or bootstrap_project).strip() or DEFAULT_PROJECT
+    output_tag = sanitize_output_tag(args.output_tag)
     os.environ["REPORT_PROJECT"] = project
     os.environ["REPORT_DATA_DIR"] = str(project_data_dir(project).resolve())
+    os.environ["REPORT_OUTPUT_TAG"] = output_tag
     reporting_defaults = resolve_reporting_defaults(project, load_project_settings(project))
 
     to_date = normalize_date(resolve_to_date(args.to_date, args.timezone))
@@ -2290,9 +2308,10 @@ def main() -> None:
             to_date=to_date,
             clear_cache=use_clear_cache,
             no_cache=use_no_cache,
+            output_tag=output_tag,
         )
 
-    artifact_set = build_artifact_set(project, from_date, to_date)
+    artifact_set = build_artifact_set(project, from_date, to_date, output_tag=output_tag)
     output_paths = artifact_set.as_dict()
     missing = [
         str(path)
@@ -2316,6 +2335,7 @@ def main() -> None:
         from_date,
         to_date,
         reporting_title=reporting_defaults["reporting_system_name"],
+        output_tag=output_tag,
     )
     body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults)
     message_id = send_email_ses(

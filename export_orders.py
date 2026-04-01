@@ -29,6 +29,7 @@ from reporting_core import (
     load_project_settings,
     resolve_biznisweb_api_url,
     resolve_reporting_defaults,
+    sanitize_output_tag,
 )
 
 try:
@@ -338,9 +339,16 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 
 
 class BizniWebExporter:
-    def __init__(self, api_url: str, api_token: str, project_name: str = DEFAULT_PROJECT):
+    def __init__(
+        self,
+        api_url: str,
+        api_token: str,
+        project_name: str = DEFAULT_PROJECT,
+        output_tag: str = "",
+    ):
         """Initialize the exporter with API credentials"""
         self.project_name = project_name
+        self.output_tag = sanitize_output_tag(output_tag)
         self.reporting_defaults = resolve_reporting_defaults(project_name, load_project_settings(project_name))
         self.data_dir = Path("data") / project_name
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -348,6 +356,7 @@ class BizniWebExporter:
         # Share project data directory with optional ad clients for cache isolation.
         os.environ["REPORT_PROJECT"] = project_name
         os.environ["REPORT_DATA_DIR"] = str(self.data_dir.resolve())
+        os.environ["REPORT_OUTPUT_TAG"] = self.output_tag
 
         transport = RequestsHTTPTransport(
             url=api_url,
@@ -376,7 +385,15 @@ class BizniWebExporter:
 
     def output_path(self, filename: str) -> Path:
         """Build a path inside project-specific output directory."""
-        return self.data_dir / filename
+        path = self.data_dir / filename
+        if not self.output_tag:
+            return path
+        return path.with_name(f"{path.stem}__{self.output_tag}{path.suffix}")
+
+    def _belongs_to_active_output_variant(self, file: Path) -> bool:
+        if self.output_tag:
+            return file.stem.endswith(f"__{self.output_tag}")
+        return "__" not in file.stem
 
     @staticmethod
     def _build_source_entry(
@@ -1514,9 +1531,11 @@ class BizniWebExporter:
         """Clean up old data files before starting new export"""
         data_dir = self.data_dir
         if data_dir.exists():
-            # Remove all CSV and HTML files
-            for pattern in ['*.csv', '*.html']:
+            # Remove only files that belong to the active output variant.
+            for pattern in ['*.csv', '*.html', '*.json']:
                 for file in data_dir.glob(pattern):
+                    if not self._belongs_to_active_output_variant(file):
+                        continue
                     try:
                         file.unlink()
                         print(f"Removed old file: {file.name}")
@@ -5807,6 +5826,12 @@ def main():
         action='store_true',
         help='Disable cache and fetch all data fresh from API'
     )
+    parser.add_argument(
+        '--output-tag',
+        type=str,
+        default=os.getenv('REPORT_OUTPUT_TAG', ''),
+        help='Optional output tag for parallel test artifacts (e.g. ui_test)'
+    )
 
     args = parser.parse_args()
     project_name = (args.project or DEFAULT_PROJECT).strip()
@@ -5854,7 +5879,12 @@ def main():
     )
     
     # Initialize exporter
-    exporter = BizniWebExporter(api_url, api_token, project_name=project_name)
+    exporter = BizniWebExporter(
+        api_url,
+        api_token,
+        project_name=project_name,
+        output_tag=args.output_tag,
+    )
     
     # Handle cache options
     if args.clear_cache:

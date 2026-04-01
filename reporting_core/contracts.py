@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+import re
+from typing import Dict, Optional
 
 from .config import project_data_dir
 
@@ -17,6 +18,7 @@ class ReportingArtifactSet:
     project_name: str
     from_date: str
     to_date: str
+    output_tag: str
     data_dir: Path
     report_html: Path
     email_strategy_html: Path
@@ -50,21 +52,36 @@ class ReportingArtifactSet:
         }
 
 
-def build_artifact_set(project: str, from_date: str, to_date: str) -> ReportingArtifactSet:
+def sanitize_output_tag(output_tag: Optional[str]) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9_-]+", "_", str(output_tag or "").strip())
+    normalized = normalized.strip("._-")
+    return normalized
+
+
+def apply_output_tag(path: Path, output_tag: Optional[str]) -> Path:
+    tag = sanitize_output_tag(output_tag)
+    if not tag:
+        return path
+    return path.with_name(f"{path.stem}__{tag}{path.suffix}")
+
+
+def build_artifact_set(project: str, from_date: str, to_date: str, output_tag: Optional[str] = None) -> ReportingArtifactSet:
     compact_range = f"{from_date.replace('-', '')}-{to_date.replace('-', '')}"
     data_dir = project_data_dir(project)
+    tag = sanitize_output_tag(output_tag)
     return ReportingArtifactSet(
         project_name=project,
         from_date=from_date,
         to_date=to_date,
+        output_tag=tag,
         data_dir=data_dir,
-        report_html=data_dir / f"report_{compact_range}.html",
-        email_strategy_html=data_dir / f"email_strategy_{compact_range}.html",
-        export_csv=data_dir / f"export_{compact_range}.csv",
-        aggregate_by_date_csv=data_dir / f"aggregate_by_date_{compact_range}.csv",
-        aggregate_by_month_csv=data_dir / f"aggregate_by_month_{compact_range}.csv",
-        aggregate_by_date_product_csv=data_dir / f"aggregate_by_date_product_{compact_range}.csv",
-        data_quality_json=data_dir / f"data_quality_{compact_range}.json",
-        weather_impact_csv=data_dir / f"weather_impact_{compact_range}.csv",
-        cfo_graph_html=data_dir / f"cfo_graphs_{compact_range}.html",
+        report_html=apply_output_tag(data_dir / f"report_{compact_range}.html", tag),
+        email_strategy_html=apply_output_tag(data_dir / f"email_strategy_{compact_range}.html", tag),
+        export_csv=apply_output_tag(data_dir / f"export_{compact_range}.csv", tag),
+        aggregate_by_date_csv=apply_output_tag(data_dir / f"aggregate_by_date_{compact_range}.csv", tag),
+        aggregate_by_month_csv=apply_output_tag(data_dir / f"aggregate_by_month_{compact_range}.csv", tag),
+        aggregate_by_date_product_csv=apply_output_tag(data_dir / f"aggregate_by_date_product_{compact_range}.csv", tag),
+        data_quality_json=apply_output_tag(data_dir / f"data_quality_{compact_range}.json", tag),
+        weather_impact_csv=apply_output_tag(data_dir / f"weather_impact_{compact_range}.csv", tag),
+        cfo_graph_html=apply_output_tag(data_dir / f"cfo_graphs_{compact_range}.html", tag),
     )

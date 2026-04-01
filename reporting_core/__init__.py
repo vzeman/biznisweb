@@ -17,7 +17,7 @@ from .config import (
     resolve_biznisweb_api_url,
     resolve_reporting_defaults,
 )
-from .contracts import ReportingArtifactSet, build_artifact_set
+from .contracts import ReportingArtifactSet, apply_output_tag, build_artifact_set, sanitize_output_tag
 from .runtime import ProjectRuntime, apply_project_runtime, load_project_runtime
 
 __all__ = [
@@ -26,6 +26,7 @@ __all__ = [
     "ReportingProjectContext",
     "ReportingArtifactSet",
     "ProjectRuntime",
+    "apply_output_tag",
     "apply_project_runtime",
     "build_artifact_set",
     "build_project_context",
@@ -38,4 +39,5 @@ __all__ = [
     "project_dir",
     "resolve_biznisweb_api_url",
     "resolve_reporting_defaults",
+    "sanitize_output_tag",
 ]
