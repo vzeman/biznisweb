@@ -340,6 +340,7 @@ class BizniWebExporter:
     def __init__(self, api_url: str, api_token: str, project_name: str = DEFAULT_PROJECT):
         """Initialize the exporter with API credentials"""
         self.project_name = project_name
+        self.reporting_defaults = resolve_reporting_defaults(project_name, load_project_settings(project_name))
         self.data_dir = Path("data") / project_name
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1876,7 +1877,7 @@ class BizniWebExporter:
         print("Generating HTML report...")
         html_content = generate_html_report(
             date_agg, date_product_agg, items_agg,
-            date_from, date_to, fb_daily_spend, google_ads_daily_spend,
+            date_from, date_to, self.reporting_defaults["reporting_system_name"], fb_daily_spend, google_ads_daily_spend,
             returning_customers_analysis, clv_return_time_analysis,
             order_size_distribution, item_combinations,
             day_of_week_analysis=day_of_week_analysis,
@@ -1922,7 +1923,8 @@ class BizniWebExporter:
         if ENABLE_EMAIL_STRATEGY_REPORT and customer_email_segments and cohort_analysis:
             print("Generating Email Strategy Report...")
             email_strategy_html = generate_email_strategy_report(
-                customer_email_segments, cohort_analysis, date_from, date_to
+                customer_email_segments, cohort_analysis, date_from, date_to,
+                report_title=self.reporting_defaults["reporting_system_name"],
             )
             email_strategy_filename = self.output_path(f"email_strategy_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
             # Keep the same robust encoding strategy for secondary HTML report

@@ -120,6 +120,12 @@ Bootstrap entrypoints:
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
 
 ### 2026-04-01
+- Fixed report headings to use project-level `reporting_system_name` across generated HTML outputs.
+- Main HTML reports now render `Vevo reporting`, `Roy reporting`, and future client names from project config instead of a hardcoded BizniWeb title.
+- CFO dashboards now use the same project reporting title in the HTML `<title>` and visible header, with `CFO Executive Dashboard` kept as a subtitle.
+- Email strategy HTML now also uses the project reporting title in the document title and main heading.
+- Verified regeneration for VEVO (`2025-05-03..2026-03-31`) and ROY (`2025-08-06..2026-03-31`) without email delivery.
+
 - Fixed Daily Orders chart visibility issue in shared HTML generator:
   - date coverage in `aggregate_by_date_*` was already complete, including zero-order days,
   - pure bar rendering made zero-order days look like "missing days" at the start of sparse client timelines,

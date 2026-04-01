@@ -827,7 +827,13 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     ])
 
 
-def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date: str, to_date: str) -> Path:
+def generate_cfo_graph_html(
+    project: str,
+    file_paths: Dict[str, Path],
+    from_date: str,
+    to_date: str,
+    reporting_title: Optional[str] = None,
+) -> Path:
     date_csv = file_paths.get("aggregate_by_date_csv")
     if not date_csv or not date_csv.exists():
         raise FileNotFoundError("Cannot build CFO graph HTML, missing aggregate_by_date CSV.")
@@ -841,6 +847,7 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
     customer_by_date = _load_customer_dynamics(order_records)
     row_by_date: Dict[date, Dict[str, Any]] = {row["date"]: row for row in daily_rows}
     source_health = load_data_quality(file_paths.get("data_quality_json"))
+    reporting_title = (reporting_title or resolve_reporting_defaults(project, load_project_settings(project))["reporting_system_name"]).strip()
 
     def _source_status_label(status: str) -> str:
         labels = {
@@ -1165,7 +1172,7 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CFO Analytics Dashboard</title>
+  <title>__REPORTING_TITLE__ - CFO Analytics Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -1401,7 +1408,8 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
 <body>
   <div class="container">
     <div class="header">
-      <h1>CFO Executive Dashboard</h1>
+      <h1>__REPORTING_TITLE__</h1>
+      <div class="section-title" style="margin-top: 6px; margin-bottom: 0;">CFO Executive Dashboard</div>
       <p id="meta"></p>
     </div>
     __DATA_QUALITY_BANNER__
@@ -2133,7 +2141,7 @@ def generate_cfo_graph_html(project: str, file_paths: Dict[str, Path], from_date
   </script>
 </body>
 </html>
-""".replace("__DATA__", payload_json).replace("__DATA_QUALITY_BANNER__", data_quality_banner_html)
+""".replace("__DATA__", payload_json).replace("__DATA_QUALITY_BANNER__", data_quality_banner_html).replace("__REPORTING_TITLE__", escape(reporting_title))
 
     output_path = build_artifact_set(project, from_date, to_date).cfo_graph_html
     output_path.write_text(html, encoding="utf-8")
@@ -2302,7 +2310,13 @@ def main() -> None:
 
     subject = build_email_subject(reporting_defaults)
     summary_text = build_report_summary(output_paths)
-    cfo_graph_html = generate_cfo_graph_html(project, output_paths, from_date, to_date)
+    cfo_graph_html = generate_cfo_graph_html(
+        project,
+        output_paths,
+        from_date,
+        to_date,
+        reporting_title=reporting_defaults["reporting_system_name"],
+    )
     body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults)
     message_id = send_email_ses(
         subject=subject,

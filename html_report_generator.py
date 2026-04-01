@@ -13,6 +13,7 @@ from html import escape
 
 def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          items_agg: pd.DataFrame, date_from: datetime, date_to: datetime,
+                         report_title: str = "BizniWeb reporting",
                          fb_daily_spend: Dict[str, float] = None,
                          google_ads_daily_spend: Dict[str, float] = None,
                          returning_customers_analysis: pd.DataFrame = None,
@@ -53,6 +54,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     """
     Generate a complete HTML report with charts and tables
     """
+    report_title = escape((report_title or "BizniWeb reporting").strip())
     
     # Prepare data for charts
     dates = date_agg['date'].astype(str).tolist()
@@ -263,7 +265,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BizniWeb Sales Report - {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}</title>
+    <title>{report_title} - {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {{
@@ -598,7 +600,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 <body>
     <div class="container">
         <div class="header">
-            <h1>BizniWeb Sales Report</h1>
+            <h1>{report_title}</h1>
             <div class="date-range">{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}</div>
             <button id="toggleAllBtn" class="expand-all-btn" onclick="toggleAllTables(true)" style="margin-top: 15px;">Expand All Tables</button>
         </div>
@@ -10398,12 +10400,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
 
 def generate_email_strategy_report(customer_email_segments: dict, cohort_analysis: dict,
-                                    date_from: datetime, date_to: datetime) -> str:
+                                    date_from: datetime, date_to: datetime,
+                                    report_title: str = "BizniWeb reporting") -> str:
     """
     Generate a separate HTML report with complete email marketing strategy in Slovak
     including email templates and customer lists for each segment.
     """
-
+    report_title = escape((report_title or "BizniWeb reporting").strip())
     summary = cohort_analysis.get('summary', {}) if cohort_analysis else {}
 
     html_content = f"""<!DOCTYPE html>
@@ -10411,7 +10414,7 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Marketing Stratégia - Vevo | {date_from.strftime('%Y-%m-%d')} až {date_to.strftime('%Y-%m-%d')}</title>
+    <title>Email Marketing Stratégia - {report_title} | {date_from.strftime('%Y-%m-%d')} až {date_to.strftime('%Y-%m-%d')}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
@@ -10463,7 +10466,7 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
 <body>
     <div class="container">
         <div class="header">
-            <h1>📧 Email Marketing Stratégia - Vevo</h1>
+            <h1>📧 Email Marketing Stratégia - {report_title}</h1>
             <p>Obdobie: {date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%Y.%m.%d')}</p>
 
             <div class="summary-grid">
