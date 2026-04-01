@@ -269,3 +269,13 @@ Bootstrap entrypoints:
   - verified Google Ads API connectivity locally with `test_connection=True` against `Vevo.sk (7592903323)`,
   - verified that March 2026 Google Ads spend is correctly `0.00` because both `Vevo.sk (7592903323)` and `Vevo.sk - old (1025163995)` return zero March campaign rows via GAQL,
   - confirmed the zero Google Ads spend in the VEVO March report is a real account state, not an integration bug.
+
+- UI redesign baseline for main HTML reporting (test track) on 2026-04-01:
+  - replaced legacy purple-gradient dashboard skin in `html_report_generator.py` with a modern analytics layout (neutral background, stronger typography hierarchy, denser KPI cards, cleaner tables, larger chart canvases),
+  - increased chart readability (`max-height` up to 420px, improved spacing, better responsive behavior),
+  - standardized euro symbol rendering by replacing mojibake `â‚¬` occurrences with HTML entity `&#8364;` in report output templates,
+  - normalized collapsible toggle glyph to `&#9662;` to avoid encoding drift in generated HTML,
+  - validated syntax with `python -m py_compile html_report_generator.py daily_report_runner.py`,
+  - regenerated side-by-side test artifacts (no email) with `--output-tag ui_test`:
+    - VEVO: `data/vevo/report_20250503-20260331__ui_test.html`
+    - ROY: `data/roy/report_20250922-20260331__ui_test.html`.

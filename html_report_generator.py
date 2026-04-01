@@ -268,298 +268,341 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     <title>{report_title} - {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {{
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --card-border: #e2e8f0;
+            --ink: #0f172a;
+            --muted: #64748b;
+            --grid: rgba(148, 163, 184, 0.22);
+            --profit: #10b981;
+            --cost: #ef4444;
+            --accent: #2563eb;
+        }}
+
         * {{
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }}
-        
+
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background:
+                radial-gradient(circle at 15% 0%, rgba(37, 99, 235, 0.08), transparent 35%),
+                radial-gradient(circle at 90% 5%, rgba(14, 165, 233, 0.08), transparent 28%),
+                var(--bg);
             min-height: 100vh;
-            padding: 20px;
+            padding: 22px;
+            color: var(--ink);
         }}
-        
+
         .container {{
-            max-width: 1400px;
+            max-width: 1680px;
             margin: 0 auto;
         }}
-        
+
         .header {{
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            padding: 32px 34px 22px;
+            margin-bottom: 22px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
         }}
-        
+
         .header h1 {{
-            color: #2d3748;
-            margin-bottom: 10px;
-            font-size: 2.5rem;
+            color: var(--ink);
+            margin-bottom: 8px;
+            font-size: clamp(2.1rem, 4.2vw, 3rem);
+            line-height: 1.05;
+            letter-spacing: -0.03em;
         }}
-        
+
         .header .date-range {{
-            color: #718096;
-            font-size: 1.2rem;
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.45;
+            font-weight: 500;
         }}
 
         .data-quality-banner {{
-            background: white;
-            border-radius: 15px;
-            padding: 22px 24px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            border-left: 6px solid #48bb78;
+            background: var(--card);
+            border-radius: 16px;
+            padding: 18px 20px;
+            margin-bottom: 22px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+            border-left: 5px solid #10b981;
         }}
 
         .data-quality-banner.data-quality-partial {{
-            border-left-color: #f56565;
+            border-left-color: #ef4444;
         }}
 
         .data-quality-title {{
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 700;
-            color: #2d3748;
+            color: var(--ink);
             margin-bottom: 8px;
+            letter-spacing: 0.01em;
         }}
 
         .data-quality-message {{
-            color: #4a5568;
+            color: #334155;
             margin-bottom: 6px;
-            line-height: 1.5;
+            line-height: 1.45;
+            font-size: 0.9rem;
         }}
 
         .data-quality-meta {{
-            color: #718096;
-            font-size: 0.85rem;
-            margin-bottom: 14px;
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-bottom: 12px;
         }}
 
         .data-quality-table {{
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.9rem;
+            font-size: 0.86rem;
         }}
 
         .data-quality-table th,
         .data-quality-table td {{
             text-align: left;
-            padding: 10px 12px;
-            border-bottom: 1px solid #edf2f7;
+            padding: 8px 10px;
+            border-bottom: 1px solid #f1f5f9;
             vertical-align: top;
         }}
 
         .data-quality-table th {{
-            color: #718096;
-            font-size: 0.75rem;
+            color: var(--muted);
+            font-size: 0.72rem;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.07em;
         }}
 
         .status-pill {{
             display: inline-block;
             border-radius: 999px;
             padding: 4px 10px;
-            font-size: 0.75rem;
+            font-size: 0.68rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.05em;
         }}
 
         .status-pill.status-ok {{
-            background: rgba(72, 187, 120, 0.12);
-            color: #2f855a;
+            background: rgba(16, 185, 129, 0.14);
+            color: #047857;
         }}
 
         .status-pill.status-disabled {{
-            background: rgba(113, 128, 150, 0.12);
-            color: #4a5568;
+            background: rgba(100, 116, 139, 0.14);
+            color: #475569;
         }}
 
         .status-pill.status-error {{
-            background: rgba(245, 101, 101, 0.12);
-            color: #c53030;
+            background: rgba(239, 68, 68, 0.14);
+            color: #b91c1c;
         }}
-        
+
         .summary-cards {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
         }}
-        
+
         .card {{
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
+            background: var(--card);
+            border-radius: 14px;
+            padding: 18px 18px 16px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
         }}
-        
+
         .card:hover {{
-            transform: translateY(-5px);
+            border-color: #cbd5e1;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
         }}
-        
+
         .card-title {{
-            color: #718096;
-            font-size: 0.9rem;
+            color: var(--muted);
+            font-size: 0.76rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
+            letter-spacing: 0.085em;
+            margin-bottom: 9px;
+            font-weight: 700;
         }}
-        
+
         .card-value {{
-            font-size: 2rem;
-            font-weight: bold;
-            color: #2d3748;
+            font-size: clamp(1.6rem, 2.35vw, 2.3rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+            line-height: 1.08;
         }}
-        
+
         .card-value.profit {{
-            color: #48bb78;
+            color: var(--profit);
         }}
-        
+
         .card-value.cost {{
-            color: #f56565;
+            color: var(--cost);
         }}
-        
+
         .card-value.roi {{
-            color: #667eea;
+            color: #6366f1;
         }}
-        
+
         .chart-container {{
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            background: var(--card);
+            border-radius: 16px;
+            padding: 20px 22px 18px;
+            margin-bottom: 18px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 3px 14px rgba(15, 23, 42, 0.05);
             position: relative;
         }}
-        
+
         .chart-container canvas {{
-            max-height: 300px !important;
+            width: 100% !important;
+            max-height: 420px !important;
+            height: min(52vh, 420px) !important;
         }}
-        
+
         .chart-title {{
-            font-size: 1.5rem;
-            color: #2d3748;
-            margin-bottom: 10px;
-            text-align: center;
+            font-size: clamp(1.45rem, 2.5vw, 2rem);
+            color: var(--ink);
+            margin-bottom: 8px;
+            text-align: left;
+            letter-spacing: -0.015em;
+            line-height: 1.15;
         }}
 
         .chart-explanation {{
-            font-size: 0.85rem;
-            color: #718096;
-            margin-bottom: 20px;
-            text-align: center;
-            padding: 0 20px;
-            line-height: 1.5;
+            font-size: 0.86rem;
+            color: var(--muted);
+            margin-bottom: 14px;
+            text-align: left;
+            line-height: 1.45;
+            max-width: 1200px;
         }}
 
         .chart-grid {{
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-bottom: 18px;
         }}
-        
-        @media (max-width: 768px) {{
+
+        @media (min-width: 1360px) {{
             .chart-grid {{
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }}
         }}
-        
+
         .table-container {{
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            background: var(--card);
+            border-radius: 16px;
+            padding: 20px 22px;
+            margin-bottom: 18px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
             overflow-x: auto;
         }}
-        
+
         .table-title {{
-            font-size: 1.5rem;
-            color: #2d3748;
-            margin-bottom: 20px;
+            font-size: 1.35rem;
+            color: var(--ink);
+            margin-bottom: 14px;
+            letter-spacing: -0.01em;
         }}
-        
+
         table {{
             width: 100%;
             border-collapse: collapse;
         }}
-        
+
         th {{
-            background: #f7fafc;
-            color: #4a5568;
-            font-weight: 600;
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 700;
             text-align: left;
-            padding: 15px;
-            border-bottom: 2px solid #e2e8f0;
-        }}
-        
-        td {{
-            padding: 15px;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 11px 10px;
             border-bottom: 1px solid #e2e8f0;
-            color: #2d3748;
+            position: sticky;
+            top: 0;
+            z-index: 1;
         }}
-        
+
+        td {{
+            padding: 10px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #1e293b;
+            font-size: 0.9rem;
+        }}
+
         tr:hover {{
-            background: #f7fafc;
+            background: #f8fafc;
         }}
-        
+
         .number {{
             text-align: right;
             font-variant-numeric: tabular-nums;
         }}
-        
+
         .footer {{
             text-align: center;
-            color: white;
-            padding: 20px;
-            font-size: 0.9rem;
-        }}
-        
-        .profit-positive {{
-            color: #48bb78;
-            font-weight: 600;
-        }}
-        
-        .profit-negative {{
-            color: #f56565;
-            font-weight: 600;
-        }}
-        
-        .total-row {{
-            background: #f7fafc;
-            font-weight: bold;
-        }}
-        
-        .total-row td {{
-            border-top: 2px solid #4a5568;
-            border-bottom: 2px solid #4a5568;
+            color: #475569;
+            padding: 16px 10px 8px;
+            font-size: 0.82rem;
         }}
 
-        /* Collapsible table styles */
+        .profit-positive {{
+            color: var(--profit);
+            font-weight: 700;
+        }}
+
+        .profit-negative {{
+            color: var(--cost);
+            font-weight: 700;
+        }}
+
+        .total-row {{
+            background: #f8fafc;
+            font-weight: 700;
+        }}
+
+        .total-row td {{
+            border-top: 1px solid #cbd5e1;
+            border-bottom: 1px solid #cbd5e1;
+        }}
+
         .collapsible-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             cursor: pointer;
-            padding: 15px 0;
+            padding: 10px 0;
             user-select: none;
         }}
 
         .collapsible-header:hover {{
-            opacity: 0.8;
+            opacity: 0.92;
         }}
 
         .collapsible-header .toggle-icon {{
-            font-size: 1.5rem;
-            color: #667eea;
-            transition: transform 0.3s ease;
-            margin-left: 15px;
+            font-size: 1.2rem;
+            color: var(--accent);
+            transition: transform 0.25s ease;
+            margin-left: 12px;
+            line-height: 1;
         }}
 
         .collapsible-header.expanded .toggle-icon {{
@@ -569,7 +612,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         .collapsible-content {{
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.3s ease-out;
+            transition: max-height 0.25s ease-out;
         }}
 
         .collapsible-content.expanded {{
@@ -581,19 +624,41 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         }}
 
         .expand-all-btn {{
-            background: #667eea;
+            background: #2563eb;
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
+            padding: 9px 16px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 0.9rem;
-            margin-bottom: 20px;
-            transition: background 0.3s ease;
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            transition: background 0.2s ease, transform 0.2s ease;
+            letter-spacing: 0.02em;
         }}
 
         .expand-all-btn:hover {{
-            background: #5a67d8;
+            background: #1d4ed8;
+            transform: translateY(-1px);
+        }}
+
+        @media (max-width: 900px) {{
+            body {{
+                padding: 14px;
+            }}
+
+            .header {{
+                padding: 24px 20px 18px;
+            }}
+
+            .chart-container,
+            .table-container {{
+                padding: 16px 14px;
+            }}
+
+            .chart-container canvas {{
+                height: min(45vh, 360px) !important;
+            }}
         }}
     </style>
 </head>
@@ -609,11 +674,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="summary-cards">
             <div class="card">
                 <div class="card-title">Total Revenue (Net)</div>
-                <div class="card-value">€{total_revenue:,.2f}</div>
+                <div class="card-value">&#8364;{total_revenue:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Product Costs</div>
-                <div class="card-value cost">€{total_product_expense:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_product_expense:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Packaging Costs</div>
@@ -629,27 +694,27 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Facebook Ads</div>
-                <div class="card-value cost">€{total_fb_ads:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_fb_ads:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Google Ads</div>
-                <div class="card-value cost">€{total_google_ads:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_google_ads:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Total Costs</div>
-                <div class="card-value cost">€{total_cost:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_cost:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Net Profit</div>
-                <div class="card-value {'profit' if total_profit >= 0 else 'cost'}">€{total_profit:,.2f}</div>
+                <div class="card-value {'profit' if total_profit >= 0 else 'cost'}">&#8364;{total_profit:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg Daily Revenue</div>
-                <div class="card-value">€{avg_daily_revenue:,.2f}</div>
+                <div class="card-value">&#8364;{avg_daily_revenue:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg Daily Profit/Loss</div>
-                <div class="card-value {'profit' if avg_daily_profit >= 0 else 'cost'}">€{avg_daily_profit:,.2f}</div>
+                <div class="card-value {'profit' if avg_daily_profit >= 0 else 'cost'}">&#8364;{avg_daily_profit:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">ROI</div>
@@ -665,11 +730,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Avg Order Value</div>
-                <div class="card-value">€{total_aov:.2f}</div>
+                <div class="card-value">&#8364;{total_aov:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg FB Cost/Order</div>
-                <div class="card-value cost">€{total_fb_per_order:.2f}</div>
+                <div class="card-value cost">&#8364;{total_fb_per_order:.2f}</div>
             </div>"""
     
     # Add returning customers card if data is available
@@ -693,12 +758,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
             <div class="card">
                 <div class="card-title">Avg Customer LTV (Revenue)</div>
-                <div class="card-value">€{overall_clv:.2f}</div>
+                <div class="card-value">&#8364;{overall_clv:.2f}</div>
                 <div style="color: #718096; font-size: 0.8rem;">Realized revenue/customer in selected interval</div>
             </div>
             <div class="card">
                 <div class="card-title">Customer Acq. Cost (FB)</div>
-                <div class="card-value cost">€{overall_cac:.2f}</div>
+                <div class="card-value cost">&#8364;{overall_cac:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Revenue LTV/CAC</div>
@@ -830,7 +895,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Contribution LTV/CAC</div>
                 <div class="card-value {'profit' if contribution_ltv_cac > 1 else 'cost'}">{contribution_ltv_cac:.2f}x</div>
-                <div style="color: #718096; font-size: 0.8rem;">Pre-ad contribution/customer ÷ FB CAC</div>
+                <div style="color: #718096; font-size: 0.8rem;">Pre-ad contribution/customer / FB CAC</div>
             </div>
             <div class="card">
                 <div class="card-title">New Cust. Revenue</div>
@@ -879,7 +944,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">CAC (FB/New Cust.)</div>
-                <div class="card-value">€{cac_expected:.2f}</div>
+                <div class="card-value">&#8364;{cac_expected:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">CAC Check &#916;</div>
@@ -887,7 +952,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">FB Spend / Orders</div>
-                <div class="card-value cost">€{cac_if_orders:.2f}</div>
+                <div class="card-value cost">&#8364;{cac_if_orders:.2f}</div>
             </div>"""
 
     if refunds_analysis and refunds_analysis.get('summary'):
@@ -903,7 +968,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Refund Amount</div>
-                <div class="card-value cost">€{refund_summary.get('refund_amount', 0):,.2f}</div>
+                <div class="card-value cost">&#8364;{refund_summary.get('refund_amount', 0):,.2f}</div>
             </div>"""
 
     # Add customer concentration if available
@@ -968,7 +1033,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily ROI %</h2>
-                <p class="chart-explanation">ROI (Return on Investment) = (Net Profit / Total Costs) × 100. Measures profitability as percentage of total investment</p>
+                <p class="chart-explanation">ROI (Return on Investment) = (Net Profit / Total Costs) &times; 100. Measures profitability as percentage of total investment</p>
                 <canvas id="roiChart"></canvas>
             </div>
         </div>
@@ -1171,11 +1236,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Avg CPC</div>
-                <div class="card-value cost">€{avg_cpc:.2f}</div>
+                <div class="card-value cost">&#8364;{avg_cpc:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg CPM</div>
-                <div class="card-value cost">€{avg_cpm:.2f}</div>
+                <div class="card-value cost">&#8364;{avg_cpm:.2f}</div>
             </div>
         </div>
 
@@ -1195,7 +1260,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily CTR (Click-Through Rate)</h2>
-                <p class="chart-explanation">CTR = Clicks / Impressions × 100. Measures how compelling your ads are. Higher CTR = better ad creative/targeting</p>
+                <p class="chart-explanation">CTR = Clicks / Impressions &times; 100. Measures how compelling your ads are. Higher CTR = better ad creative/targeting</p>
                 <canvas id="fbCtrChart"></canvas>
             </div>
             <div class="chart-container">
@@ -1208,7 +1273,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily CPM (Cost Per 1000 Impressions)</h2>
-                <p class="chart-explanation">CPM = Spend / Impressions × 1000. Measures cost efficiency of reaching your audience</p>
+                <p class="chart-explanation">CPM = Spend / Impressions &times; 1000. Measures cost efficiency of reaching your audience</p>
                 <canvas id="fbCpmChart"></canvas>
             </div>
             <div class="chart-container">
@@ -1239,7 +1304,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Campaign Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
                 <p style="color: #718096; margin-bottom: 15px;">Performance breakdown by campaign. Click headers to sort. Focus on campaigns with best conversion rates and lowest cost per conversion.</p>
@@ -1292,15 +1357,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <td>{campaign.get('campaign_name', 'Unknown')}</td>
                             <td style="color: {status_color};">{status}</td>
                             <td>{objective}</td>
-                            <td class="number">€{spend:.2f}</td>
+                            <td class="number">&#8364;{spend:.2f}</td>
                             <td class="number">{impressions:,}</td>
                             <td class="number">{clicks:,}</td>
                             <td class="number">{ctr:.2f}%</td>
-                            <td class="number">€{cpc:.2f}</td>
-                            <td class="number">€{cpm:.2f}</td>
+                            <td class="number">&#8364;{cpc:.2f}</td>
+                            <td class="number">&#8364;{cpm:.2f}</td>
                             <td class="number">{conversions}</td>
                             <td class="number" style="color: {conv_rate_color}; font-weight: bold;">{conversion_rate:.2f}%</td>
-                            <td class="number">{'€' + f'{cost_per_conversion:.2f}' if cost_per_conversion > 0 else '-'}</td>
+                            <td class="number">{'&#8364;' + f'{cost_per_conversion:.2f}' if cost_per_conversion > 0 else '-'}</td>
                             <td class="number">{spend_pct:.1f}%</td>
                         </tr>"""
 
@@ -1312,15 +1377,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <td><strong>TOTAL / AVG</strong></td>
                             <td></td>
                             <td></td>
-                            <td class="number"><strong>€{total_campaign_spend:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{total_campaign_spend:.2f}</strong></td>
                             <td class="number"><strong>{total_campaign_impressions:,}</strong></td>
                             <td class="number"><strong>{total_campaign_clicks:,}</strong></td>
                             <td class="number"><strong>{(total_campaign_clicks / total_campaign_impressions * 100) if total_campaign_impressions > 0 else 0:.2f}%</strong></td>
-                            <td class="number"><strong>€{(total_campaign_spend / total_campaign_clicks) if total_campaign_clicks > 0 else 0:.2f}</strong></td>
-                            <td class="number"><strong>€{(total_campaign_spend / total_campaign_impressions * 1000) if total_campaign_impressions > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_campaign_spend / total_campaign_clicks) if total_campaign_clicks > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_campaign_spend / total_campaign_impressions * 1000) if total_campaign_impressions > 0 else 0:.2f}</strong></td>
                             <td class="number"><strong>{total_conversions}</strong></td>
                             <td class="number"><strong>{avg_conversion_rate:.2f}%</strong></td>
-                            <td class="number"><strong>{'€' + f'{avg_cost_per_conversion:.2f}' if avg_cost_per_conversion > 0 else '-'}</strong></td>
+                            <td class="number"><strong>{'&#8364;' + f'{avg_cost_per_conversion:.2f}' if avg_cost_per_conversion > 0 else '-'}</strong></td>
                             <td class="number"><strong>100%</strong></td>
                         </tr>
                     </tbody>
@@ -1384,17 +1449,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">💰 Cost Per Order Analysis</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">đź’° Cost Per Order Analysis</h2>
         <p style="text-align: center; color: rgba(255,255,255,0.8); margin-bottom: 20px;">Estimated order attribution based on click and spend distribution. Note: This is correlation-based estimation, not direct tracking.</p>
 
         <div class="summary-cards">
             <div class="card">
                 <div class="card-title">FB Cost Per Order</div>
-                <div class="card-value cost">€{fb_cpo:.2f}</div>
+                <div class="card-value cost">&#8364;{fb_cpo:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Total FB Spend</div>
-                <div class="card-value cost">€{total_fb_spend_cpo:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_fb_spend_cpo:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Total Orders</div>
@@ -1402,7 +1467,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Total Revenue (Net)</div>
-                <div class="card-value profit">€{total_revenue_cpo:,.2f}</div>
+                <div class="card-value profit">&#8364;{total_revenue_cpo:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Overall ROAS (FB)</div>
@@ -1417,15 +1482,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         # FB spend and revenue reconciliation (daily source vs campaign source)
         if fb_spend_daily_source is not None:
             diff_class = 'profit-positive' if (fb_spend_diff is not None and abs(fb_spend_diff) <= 0.01) else 'profit-negative'
-            campaign_spend_display = f"€{fb_spend_campaign_source:,.2f}" if fb_spend_campaign_source is not None else "N/A"
-            diff_display = f"€{fb_spend_diff:+,.2f}" if fb_spend_diff is not None else "N/A"
+            campaign_spend_display = f"&#8364;{fb_spend_campaign_source:,.2f}" if fb_spend_campaign_source is not None else "N/A"
+            diff_display = f"&#8364;{fb_spend_diff:+,.2f}" if fb_spend_diff is not None else "N/A"
             diff_pct_display = f"{fb_spend_diff_pct:+.2f}%" if fb_spend_diff_pct is not None else "N/A"
             html_content += f"""
 
         <div class="table-container">
             <div class="collapsible-header expanded" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Spend/Revenue Reconciliation</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content expanded">
                 <table>
@@ -1439,7 +1504,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tbody>
                         <tr>
                             <td>FB Spend (Daily Source)</td>
-                            <td class="number">€{fb_spend_daily_source:,.2f}</td>
+                            <td class="number">&#8364;{fb_spend_daily_source:,.2f}</td>
                             <td>Sum of daily FB spend mapped to report days</td>
                         </tr>
                         <tr>
@@ -1454,12 +1519,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         </tr>
                         <tr>
                             <td>Revenue Used in CPO Section</td>
-                            <td class="number">€{total_revenue_cpo:,.2f}</td>
+                            <td class="number">&#8364;{total_revenue_cpo:,.2f}</td>
                             <td>Source: {total_revenue_source_cpo}</td>
                         </tr>
                         <tr>
                             <td>Raw Revenue from Daily CPO Aggregation</td>
-                            <td class="number">€{total_revenue_raw_cpo:,.2f}</td>
+                            <td class="number">&#8364;{total_revenue_raw_cpo:,.2f}</td>
                             <td>For comparison only</td>
                         </tr>
                     </tbody>
@@ -1499,7 +1564,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header expanded" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Estimated Campaign Attribution</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content expanded">
                 <p style="color: #718096; margin-bottom: 15px;">Estimated orders attributed to each campaign based on click and spend distribution (60% click-weighted, 40% spend-weighted). Best performers are listed first.</p>
@@ -1527,13 +1592,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                         <tr>
                             <td>{camp['campaign_name'][:40]}</td>
-                            <td class="number">€{camp['spend']:.2f}</td>
+                            <td class="number">&#8364;{camp['spend']:.2f}</td>
                             <td class="number">{camp['clicks']:,}</td>
                             <td class="number">{camp['ctr']:.2f}%</td>
-                            <td class="number">€{camp['cpc']:.2f}</td>
+                            <td class="number">&#8364;{camp['cpc']:.2f}</td>
                             <td class="number">{camp['estimated_orders']:.1f}</td>
-                            <td class="number" style="color: {cpo_color}; font-weight: bold;">€{camp['estimated_cpo']:.2f}</td>
-                            <td class="number">€{camp['estimated_revenue']:,.2f}</td>
+                            <td class="number" style="color: {cpo_color}; font-weight: bold;">&#8364;{camp['estimated_cpo']:.2f}</td>
+                            <td class="number">&#8364;{camp['estimated_revenue']:,.2f}</td>
                             <td class="number" style="color: {roas_color}; font-weight: bold;">{camp['estimated_roas']:.2f}x</td>
                             <td class="number">{camp['click_share_pct']:.1f}%</td>
                         </tr>"""
@@ -1575,8 +1640,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <tr>
                             <td>{day['date']}</td>
                             <td class="number">{day['orders']}</td>
-                            <td class="number">€{day['fb_spend']:.2f}</td>
-                            <td class="number profit-positive">€{day['cpo']:.2f}</td>
+                            <td class="number">&#8364;{day['fb_spend']:.2f}</td>
+                            <td class="number profit-positive">&#8364;{day['cpo']:.2f}</td>
                             <td class="number">{day['roas']:.2f}x</td>
                         </tr>"""
                 html_content += """
@@ -1599,8 +1664,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <tr>
                             <td>{day['date']}</td>
                             <td class="number">{day['orders']}</td>
-                            <td class="number">€{day['fb_spend']:.2f}</td>
-                            <td class="number profit-negative">€{day['cpo']:.2f}</td>
+                            <td class="number">&#8364;{day['fb_spend']:.2f}</td>
+                            <td class="number profit-negative">&#8364;{day['cpo']:.2f}</td>
                             <td class="number">{day['roas']:.2f}x</td>
                         </tr>"""
                 html_content += """
@@ -1631,7 +1696,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     if fb_hourly_stats or fb_dow_stats:
         html_content += """
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">⏰ FB Ads Time-Based Analysis</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">âŹ° FB Ads Time-Based Analysis</h2>
         <p style="text-align: center; color: rgba(255,255,255,0.8); margin-bottom: 20px;">Analyze when your Facebook ads perform best - by hour of day and day of week</p>"""
 
         # Hourly Stats Section
@@ -1660,7 +1725,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Best CPC Hour</div>
                 <div class="card-value profit">{best_cpc_hour['hour']:02d}:00</div>
-                <div style="color: #718096; font-size: 0.8rem;">CPC: €{best_cpc_hour.get('cpc', 0):.2f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">CPC: &#8364;{best_cpc_hour.get('cpc', 0):.2f}</div>
             </div>"""
 
                 html_content += f"""
@@ -1671,7 +1736,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Total Hourly Spend</div>
-                <div class="card-value cost">€{total_hourly_spend:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_hourly_spend:,.2f}</div>
             </div>
         </div>
 
@@ -1753,12 +1818,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Best CPO Hour</div>
                 <div class="card-value profit">{best_cpo_hour['hour']:02d}:00</div>
-                <div style="color: #718096; font-size: 0.8rem;">CPO: €{best_cpo_hour['cpo']:.2f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">CPO: &#8364;{best_cpo_hour['cpo']:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Worst CPO Hour</div>
                 <div class="card-value cost">{worst_cpo_hour['hour']:02d}:00</div>
-                <div style="color: #718096; font-size: 0.8rem;">CPO: €{worst_cpo_hour['cpo']:.2f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">CPO: &#8364;{worst_cpo_hour['cpo']:.2f}</div>
             </div>"""
 
                 if best_roas_hour:
@@ -1772,7 +1837,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
             <div class="card">
                 <div class="card-title">Avg Hourly CPO</div>
-                <div class="card-value">€{avg_hourly_cpo:.2f}</div>
+                <div class="card-value">&#8364;{avg_hourly_cpo:.2f}</div>
             </div>
         </div>
 
@@ -1807,7 +1872,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Hourly Performance Details</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
                 <table>
@@ -1829,24 +1894,24 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     html_content += f"""
                         <tr>
                             <td>{hour['hour']:02d}:00 - {hour['hour']:02d}:59</td>
-                            <td class="number">€{hour.get('spend', 0):.2f}</td>
+                            <td class="number">&#8364;{hour.get('spend', 0):.2f}</td>
                             <td class="number">{hour.get('impressions', 0):,}</td>
                             <td class="number">{hour.get('clicks', 0):,}</td>
                             <td class="number">{hour.get('ctr', 0):.2f}%</td>
-                            <td class="number">€{hour.get('cpc', 0):.2f}</td>
-                            <td class="number">€{hour.get('cpm', 0):.2f}</td>
+                            <td class="number">&#8364;{hour.get('cpc', 0):.2f}</td>
+                            <td class="number">&#8364;{hour.get('cpm', 0):.2f}</td>
                             <td class="number">{hour.get('reach', 0):,}</td>
                         </tr>"""
 
                 html_content += f"""
                         <tr class="total-row">
                             <td><strong>TOTAL</strong></td>
-                            <td class="number"><strong>€{total_hourly_spend:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{total_hourly_spend:.2f}</strong></td>
                             <td class="number"><strong>{total_hourly_impressions:,}</strong></td>
                             <td class="number"><strong>{total_hourly_clicks:,}</strong></td>
                             <td class="number"><strong>{(total_hourly_clicks/total_hourly_impressions*100) if total_hourly_impressions > 0 else 0:.2f}%</strong></td>
-                            <td class="number"><strong>€{(total_hourly_spend/total_hourly_clicks) if total_hourly_clicks > 0 else 0:.2f}</strong></td>
-                            <td class="number"><strong>€{(total_hourly_spend/total_hourly_impressions*1000) if total_hourly_impressions > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_hourly_spend/total_hourly_clicks) if total_hourly_clicks > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_hourly_spend/total_hourly_impressions*1000) if total_hourly_impressions > 0 else 0:.2f}</strong></td>
                             <td class="number"></td>
                         </tr>
                     </tbody>
@@ -1886,7 +1951,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Day of Week Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
                 <table>
@@ -1912,13 +1977,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                         <tr>
                             <td><strong>{day.get('day_of_week', '')}</strong></td>
-                            <td class="number">€{day.get('total_spend', 0):,.2f}</td>
-                            <td class="number">€{day.get('avg_spend', 0):.2f}</td>
+                            <td class="number">&#8364;{day.get('total_spend', 0):,.2f}</td>
+                            <td class="number">&#8364;{day.get('avg_spend', 0):.2f}</td>
                             <td class="number">{day.get('total_clicks', 0):,}</td>
                             <td class="number">{day.get('avg_clicks', 0):.1f}</td>
                             <td class="number" style="color: {ctr_color};">{day.get('ctr', 0):.2f}%</td>
-                            <td class="number" style="color: {cpc_color};">€{day.get('cpc', 0):.2f}</td>
-                            <td class="number">€{day.get('cpm', 0):.2f}</td>
+                            <td class="number" style="color: {cpc_color};">&#8364;{day.get('cpc', 0):.2f}</td>
+                            <td class="number">&#8364;{day.get('cpm', 0):.2f}</td>
                             <td class="number">{day.get('days_count', 0)}</td>
                         </tr>"""
 
@@ -1956,7 +2021,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Weekly Customer Retention Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2061,7 +2126,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Revenue LTV/CAC Ratio Trend</h2>
-                <p class="chart-explanation">Revenue LTV/CAC = realized CLV ÷ CAC. Healthy ratio is typically 3:1 or higher. Break-even is 1:1.</p>
+                <p class="chart-explanation">Revenue LTV/CAC = realized CLV / CAC. Healthy ratio is typically 3:1 or higher. Break-even is 1:1.</p>
                 <canvas id="ltvCacRatioChart"></canvas>
             </div>
         </div>
@@ -2081,7 +2146,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Weekly CLV, CAC & Return Time Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2092,11 +2157,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Customers</th>
                         <th class="number">New</th>
                         <th class="number">Returning</th>
-                        <th class="number">Avg CLV (€)</th>
-                        <th class="number">Cumulative CLV (€)</th>
-                        <th class="number">CAC (€)</th>
+                        <th class="number">Avg CLV (&#8364;)</th>
+                        <th class="number">Cumulative CLV (&#8364;)</th>
+                        <th class="number">CAC (&#8364;)</th>
                         <th class="number">Avg Return Days</th>
-                        <th class="number">Revenue Net (€)</th>
+                        <th class="number">Revenue Net (&#8364;)</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -2112,11 +2177,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{row['unique_customers']}</td>
                         <td class="number">{row['new_customers']}</td>
                         <td class="number">{row['returning_customers']}</td>
-                        <td class="number">€{row['avg_clv']:.2f}</td>
-                        <td class="number">€{row['cumulative_avg_clv']:.2f}</td>
-                        <td class="number">€{cac:.2f}</td>
+                        <td class="number">&#8364;{row['avg_clv']:.2f}</td>
+                        <td class="number">&#8364;{row['cumulative_avg_clv']:.2f}</td>
+                        <td class="number">&#8364;{cac:.2f}</td>
                         <td class="number">{return_time_str}</td>
-                        <td class="number">€{row['total_revenue']:.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:.2f}</td>
                     </tr>"""
         
         # Add total row
@@ -2136,11 +2201,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{total_customers}</td>
                         <td class="number">{total_new}</td>
                         <td class="number">{total_returning}</td>
-                        <td class="number">€{overall_avg_clv:.2f}</td>
-                        <td class="number">€{final_cumulative_clv:.2f}</td>
-                        <td class="number">€{overall_cac_table:.2f}</td>
+                        <td class="number">&#8364;{overall_avg_clv:.2f}</td>
+                        <td class="number">&#8364;{final_cumulative_clv:.2f}</td>
+                        <td class="number">&#8364;{overall_cac_table:.2f}</td>
                         <td class="number">{return_time_total}</td>
-                        <td class="number">€{total_revenue:.2f}</td>
+                        <td class="number">&#8364;{total_revenue:.2f}</td>
                     </tr>
                 </tbody>
             </table>
@@ -2198,7 +2263,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-container">
             <h2 class="chart-title">Time Between Orders by Order Transition</h2>
-            <p class="chart-explanation">Average days between consecutive orders (1st→2nd, 2nd→3rd, etc.). Shows if repeat customers order faster over time</p>
+            <p class="chart-explanation">Average days between consecutive orders (1stâ†’2nd, 2ndâ†’3rd, etc.). Shows if repeat customers order faster over time</p>
             <canvas id="timeBetweenByOrderChart"></canvas>
         </div>
 
@@ -2222,7 +2287,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Time to Nth Order Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2248,7 +2313,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{row['median_days_from_first']}</td>
                         <td class="number">{row['avg_days_from_prev']}</td>
                         <td class="number">{row['median_days_from_prev']}</td>
-                        <td class="number">€{row['avg_order_value']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_order_value']:.2f}</td>
                     </tr>"""
 
             html_content += """
@@ -2264,7 +2329,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Order Frequency Distribution</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2318,7 +2383,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Monthly Cohort Retention</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2386,49 +2451,49 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             html_content += f"""
 
         <div class="table-container" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); margin-top: 30px;">
-            <h2 class="table-title" style="color: white;">✅ Skutočná retencia (bez časového skreslenia) - Len kohorty 90+ dní</h2>
+            <h2 class="table-title" style="color: white;">âś… SkutoÄŤnĂˇ retencia (bez ÄŤasovĂ©ho skreslenia) - Len kohorty 90+ dnĂ­</h2>
             <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr); background: rgba(255,255,255,0.95); padding: 20px; border-radius: 8px; margin: 15px;">
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Skutočná 2nd Order Retencia</div>
+                    <div class="card-title">SkutoÄŤnĂˇ 2nd Order Retencia</div>
                     <div class="card-value" style="color: #059669;">{true_retention_2nd}%</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Skutočná 3rd Order Retencia</div>
+                    <div class="card-title">SkutoÄŤnĂˇ 3rd Order Retencia</div>
                     <div class="card-value" style="color: #059669;">{true_retention_3rd}%</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Počet zrelých kohort</div>
+                    <div class="card-title">PoÄŤet zrelĂ˝ch kohort</div>
                     <div class="card-value" style="color: #059669;">{len(mature_cohorts)}</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Celkom zákazníkov</div>
+                    <div class="card-title">Celkom zĂˇkaznĂ­kov</div>
                     <div class="card-value" style="color: #059669;">{mature_cohorts['total_customers'].sum()}</div>
                 </div>
             </div>
             <p style="color: white; padding: 0 15px 15px; font-size: 0.9rem;">
                 <strong>Note:</strong> These values are more accurate because they include only cohorts that had enough time (90+ days) for a repeat purchase.
-                Nové kohorty (menej ako 90 dní) nie sú zahrnuté, aby nedochádzalo k skresleniu výsledkov.
+                NovĂ© kohorty (menej ako 90 dnĂ­) nie sĂş zahrnutĂ©, aby nedochĂˇdzalo k skresleniu vĂ˝sledkov.
             </p>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Skutočná retencia podľa zrelých kohort (90+ dní)</h2>
-            <p class="chart-explanation">Retencia len pre kohorty, ktoré mali dostatok času na opätovný nákup. Tieto čísla sú presnejšie ako celkové štatistiky.</p>
+            <h2 class="chart-title">SkutoÄŤnĂˇ retencia podÄľa zrelĂ˝ch kohort (90+ dnĂ­)</h2>
+            <p class="chart-explanation">Retencia len pre kohorty, ktorĂ© mali dostatok ÄŤasu na opĂ¤tovnĂ˝ nĂˇkup. Tieto ÄŤĂ­sla sĂş presnejĹˇie ako celkovĂ© Ĺˇtatistiky.</p>
             <canvas id="matureCohortRetentionChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Zrelé kohorty - Podrobná retencia (90+ dní staré)</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">ZrelĂ© kohorty - PodrobnĂˇ retencia (90+ dnĂ­ starĂ©)</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
                         <th>Kohorta</th>
-                        <th class="number">Vek (dní)</th>
-                        <th class="number">Zákazníci</th>
+                        <th class="number">Vek (dnĂ­)</th>
+                        <th class="number">ZĂˇkaznĂ­ci</th>
                         <th class="number">2nd Order %</th>
                         <th class="number">3rd Order %</th>
                         <th class="number">4th Order %</th>
@@ -2478,20 +2543,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not item_retention_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Retencia podľa prvého zakúpeného produktu</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Porovnanie retencie zákazníkov podľa toho, aký produkt mali v prvej objednávke (top {len(item_retention_df)} produktov s min. 50 prvými objednávkami)</p>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Retencia podÄľa prvĂ©ho zakĂşpenĂ©ho produktu</h2>
+        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Porovnanie retencie zĂˇkaznĂ­kov podÄľa toho, akĂ˝ produkt mali v prvej objednĂˇvke (top {len(item_retention_df)} produktov s min. 50 prvĂ˝mi objednĂˇvkami)</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">Analyzovaných produktov</div>
+                <div class="card-title">AnalyzovanĂ˝ch produktov</div>
                 <div class="card-value">{first_item_summary.get('total_items_analyzed', 0)}</div>
             </div>
             <div class="card">
-                <div class="card-title">Priemerná 2nd retencia</div>
+                <div class="card-title">PriemernĂˇ 2nd retencia</div>
                 <div class="card-value roi">{first_item_summary.get('avg_retention_2nd_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Najlepšia 2nd retencia</div>
+                <div class="card-title">NajlepĹˇia 2nd retencia</div>
                 <div class="card-value profit">{first_item_summary.get('best_retention_2nd_pct', 0):.1f}%</div>
             </div>
             <div class="card">
@@ -2501,22 +2566,22 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Retencia podľa prvého produktu (2nd Order %)</h2>
-            <p class="chart-explanation">Percentuálna pravdepodobnosť opätovného nákupu zákazníkov podľa toho, aký produkt si kúpili v prvej objednávke</p>
+            <h2 class="chart-title">Retencia podÄľa prvĂ©ho produktu (2nd Order %)</h2>
+            <p class="chart-explanation">PercentuĂˇlna pravdepodobnosĹĄ opĂ¤tovnĂ©ho nĂˇkupu zĂˇkaznĂ­kov podÄľa toho, akĂ˝ produkt si kĂşpili v prvej objednĂˇvke</p>
             <canvas id="firstItemRetentionChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Detailná retencia podľa prvého produktu</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">DetailnĂˇ retencia podÄľa prvĂ©ho produktu</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt v prvej objednávke</th>
-                        <th class="number">Zákazníci</th>
+                        <th>Produkt v prvej objednĂˇvke</th>
+                        <th class="number">ZĂˇkaznĂ­ci</th>
                         <th class="number">2nd Order %</th>
                         <th class="number">3rd Order %</th>
                         <th class="number">4th Order %</th>
@@ -2570,49 +2635,49 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not time_to_nth_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Čas do ďalšej objednávky podľa prvého produktu</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">ÄŚas do ÄŹalĹˇej objednĂˇvky podÄľa prvĂ©ho produktu</h2>
         <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Comparison of average time (in days) to 2nd, 3rd, and 4th order by first-order product.</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">Priemerný čas do 2. obj.</div>
-                <div class="card-value">{time_nth_summary.get('avg_days_to_2nd_overall', 'N/A')} dní</div>
+                <div class="card-title">PriemernĂ˝ ÄŤas do 2. obj.</div>
+                <div class="card-value">{time_nth_summary.get('avg_days_to_2nd_overall', 'N/A')} dnĂ­</div>
             </div>
             <div class="card">
-                <div class="card-title">Najrýchlejší návrat</div>
-                <div class="card-value profit">{time_nth_summary.get('fastest_return_days', 'N/A')} dní</div>
+                <div class="card-title">NajrĂ˝chlejĹˇĂ­ nĂˇvrat</div>
+                <div class="card-value profit">{time_nth_summary.get('fastest_return_days', 'N/A')} dnĂ­</div>
             </div>
             <div class="card">
-                <div class="card-title">Najpomalší návrat</div>
-                <div class="card-value cost">{time_nth_summary.get('slowest_return_days', 'N/A')} dní</div>
+                <div class="card-title">NajpomalĹˇĂ­ nĂˇvrat</div>
+                <div class="card-value cost">{time_nth_summary.get('slowest_return_days', 'N/A')} dnĂ­</div>
             </div>
             <div class="card">
-                <div class="card-title">Rozptyl (dní)</div>
+                <div class="card-title">Rozptyl (dnĂ­)</div>
                 <div class="card-value">{time_nth_summary.get('days_spread', 0):.1f}</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Priemerný čas do 2. objednávky podľa prvého produktu</h2>
-            <p class="chart-explanation">Zákazníci, ktorí si kúpili tento produkt v prvej objednávke, sa vrátili v priemere za uvedený počet dní</p>
+            <h2 class="chart-title">PriemernĂ˝ ÄŤas do 2. objednĂˇvky podÄľa prvĂ©ho produktu</h2>
+            <p class="chart-explanation">ZĂˇkaznĂ­ci, ktorĂ­ si kĂşpili tento produkt v prvej objednĂˇvke, sa vrĂˇtili v priemere za uvedenĂ˝ poÄŤet dnĂ­</p>
             <canvas id="timeToNthByFirstItemChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Čas do N-tej objednávky podľa prvého produktu</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">ÄŚas do N-tej objednĂˇvky podÄľa prvĂ©ho produktu</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt v prvej objednávke</th>
-                        <th class="number">Zákazníci</th>
-                        <th class="number">Čas do 2. obj. (dní)</th>
-                        <th class="number">Čas do 3. obj. (dní)</th>
-                        <th class="number">Čas do 4. obj. (dní)</th>
-                        <th class="number">Čas do 5. obj. (dní)</th>
+                        <th>Produkt v prvej objednĂˇvke</th>
+                        <th class="number">ZĂˇkaznĂ­ci</th>
+                        <th class="number">ÄŚas do 2. obj. (dnĂ­)</th>
+                        <th class="number">ÄŚas do 3. obj. (dnĂ­)</th>
+                        <th class="number">ÄŚas do 4. obj. (dnĂ­)</th>
+                        <th class="number">ÄŚas do 5. obj. (dnĂ­)</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -2647,21 +2712,21 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not item_repurchase_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Opakovaný nákup rovnakého produktu</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Analýza toho, ako často zákazníci kupujú ten istý produkt opakovane v ďalších objednávkach (top {len(item_repurchase_df)} produktov)</p>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">OpakovanĂ˝ nĂˇkup rovnakĂ©ho produktu</h2>
+        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">AnalĂ˝za toho, ako ÄŤasto zĂˇkaznĂ­ci kupujĂş ten istĂ˝ produkt opakovane v ÄŹalĹˇĂ­ch objednĂˇvkach (top {len(item_repurchase_df)} produktov)</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">Priemerná 2x repurchase</div>
+                <div class="card-title">PriemernĂˇ 2x repurchase</div>
                 <div class="card-value roi">{repurchase_summary.get('avg_repurchase_2x_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Najlepšia repurchase</div>
+                <div class="card-title">NajlepĹˇia repurchase</div>
                 <div class="card-value profit">{repurchase_summary.get('best_repurchase_2x_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Priem. dni medzi nákupmi</div>
-                <div class="card-value">{repurchase_summary.get('avg_days_between_repurchase', 'N/A')} dní</div>
+                <div class="card-title">Priem. dni medzi nĂˇkupmi</div>
+                <div class="card-value">{repurchase_summary.get('avg_days_between_repurchase', 'N/A')} dnĂ­</div>
             </div>
             <div class="card">
                 <div class="card-title">Rozptyl repurchase</div>
@@ -2670,15 +2735,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Opakovaný nákup rovnakého produktu (2x+)</h2>
-            <p class="chart-explanation">Percento zákazníkov, ktorí si kúpili tento produkt minimálne dvakrát v rôznych objednávkach</p>
+            <h2 class="chart-title">OpakovanĂ˝ nĂˇkup rovnakĂ©ho produktu (2x+)</h2>
+            <p class="chart-explanation">Percento zĂˇkaznĂ­kov, ktorĂ­ si kĂşpili tento produkt minimĂˇlne dvakrĂˇt v rĂ´znych objednĂˇvkach</p>
             <canvas id="sameItemRepurchaseChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Detailná analýza opakovaných nákupov produktov</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">DetailnĂˇ analĂ˝za opakovanĂ˝ch nĂˇkupov produktov</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2686,11 +2751,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <th>Produkt</th>
                         <th class="number">Celkom obj.</th>
-                        <th class="number">Zákazníci</th>
+                        <th class="number">ZĂˇkaznĂ­ci</th>
                         <th class="number">2x+ %</th>
                         <th class="number">3x+ %</th>
                         <th class="number">4x+ %</th>
-                        <th class="number">Priemer nák.</th>
+                        <th class="number">Priemer nĂˇk.</th>
                         <th class="number">Dni medzi</th>
                     </tr>
                 </thead>
@@ -2742,7 +2807,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Daily Performance Summary</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2777,15 +2842,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{row['date']}</td>
                         <td class="number">{row['unique_orders']}</td>
-                        <td class="number">€{row['total_revenue']:,.2f}</td>
-                        <td class="number">€{aov:.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{aov:.2f}</td>
                         <td class="number">{avg_items_per_order:.2f}</td>
-                        <td class="number">€{row['product_expense']:,.2f}</td>
-                        <td class="number">€{fixed_costs:,.2f}</td>
-                        <td class="number">€{row['fb_ads_spend']:,.2f}</td>
-                        <td class="number">€{google_ads:,.2f}</td>
-                        <td class="number">€{row['total_cost']:,.2f}</td>
-                        <td class="number {profit_class}">€{row['net_profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['product_expense']:,.2f}</td>
+                        <td class="number">&#8364;{fixed_costs:,.2f}</td>
+                        <td class="number">&#8364;{row['fb_ads_spend']:,.2f}</td>
+                        <td class="number">&#8364;{google_ads:,.2f}</td>
+                        <td class="number">&#8364;{row['total_cost']:,.2f}</td>
+                        <td class="number {profit_class}">&#8364;{row['net_profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
                     </tr>
 """
@@ -2795,15 +2860,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr class="total-row">
                         <td>TOTAL</td>
                         <td class="number">{total_orders}</td>
-                        <td class="number">€{total_revenue:,.2f}</td>
-                        <td class="number">€{total_aov:.2f}</td>
+                        <td class="number">&#8364;{total_revenue:,.2f}</td>
+                        <td class="number">&#8364;{total_aov:.2f}</td>
                         <td class="number">{total_avg_items_per_order:.2f}</td>
-                        <td class="number">€{total_product_expense:,.2f}</td>
-                        <td class="number">€{total_fixed_costs:,.2f}</td>
-                        <td class="number">€{total_fb_ads:,.2f}</td>
-                        <td class="number">€{total_google_ads:,.2f}</td>
-                        <td class="number">€{total_cost:,.2f}</td>
-                        <td class="number profit-positive">€{total_profit:,.2f}</td>
+                        <td class="number">&#8364;{total_product_expense:,.2f}</td>
+                        <td class="number">&#8364;{total_fixed_costs:,.2f}</td>
+                        <td class="number">&#8364;{total_fb_ads:,.2f}</td>
+                        <td class="number">&#8364;{total_google_ads:,.2f}</td>
+                        <td class="number">&#8364;{total_cost:,.2f}</td>
+                        <td class="number profit-positive">&#8364;{total_profit:,.2f}</td>
                         <td class="number">{total_roi:.1f}%</td>
                     </tr>
                 </tbody>
@@ -2814,7 +2879,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">All Products by Revenue (Product Costs Only)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2849,9 +2914,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{product_name}</td>
                         <td>{product_sku}</td>
                         <td class="number">{row['total_quantity']}</td>
-                        <td class="number">€{row['total_revenue']:,.2f}</td>
-                        <td class="number">€{row['product_expense']:,.2f}</td>
-                        <td class="number {profit_class}">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['product_expense']:,.2f}</td>
+                        <td class="number {profit_class}">&#8364;{row['profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
                         <td class="number">{quantity_share:.1f}% / {revenue_share:.1f}% / {profit_share:.1f}%</td>
                     </tr>
@@ -2880,7 +2945,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Item Combinations Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2904,7 +2969,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['combination_size']} items</td>
                         <td>{combo_display}</td>
                         <td class="number">{row['count']}</td>
-                        <td class="number">€{combo_price:.2f}</td>
+                        <td class="number">&#8364;{combo_price:.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -2942,7 +3007,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Day of Week Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2964,9 +3029,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['day_name']}</td>
                         <td class="number">{row['orders']}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['aov']:.2f}</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -3000,7 +3065,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Week of Month Performance (Equalized)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3030,13 +3095,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['week_label']}</td>
                         <td class="number">{int(row['orders'])}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                         <td class="number">{row['profit_margin_pct']:.1f}%</td>
-                        <td class="number">€{row['aov']:.2f}</td>
-                        <td class="number">€{row['avg_daily_revenue']:,.2f}</td>
-                        <td class="number">€{row['avg_daily_profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_daily_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_daily_profit']:,.2f}</td>
                         <td class="number">{int(row['calendar_days'])}</td>
                         <td class="number">{int(row['active_days'])}</td>
                         <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
@@ -3071,7 +3136,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Day of Month Performance (Normalized)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3101,14 +3166,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['day_label']}</td>
                         <td class="number">{int(row['orders'])}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                         <td class="number">{row['profit_margin_pct']:.1f}%</td>
-                        <td class="number">€{row['aov']:.2f}</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
                         <td class="number">{row['avg_orders_per_occurrence']:.2f}</td>
-                        <td class="number">€{row['avg_revenue_per_occurrence']:,.2f}</td>
-                        <td class="number">€{row['avg_profit_per_occurrence']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_revenue_per_occurrence']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_profit_per_occurrence']:,.2f}</td>
                         <td class="number">{int(row['calendar_days'])}</td>
                         <td class="number">{int(row['active_days'])}</td>
                         <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
@@ -3249,11 +3314,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">First-Order Contribution / Order</div>
-                <div class="card-value {'profit' if adv_summary.get('first_order_contribution_per_order', 0) >= 0 else 'cost'}">€{adv_summary.get('first_order_contribution_per_order', 0):,.2f}</div>
+                <div class="card-value {'profit' if adv_summary.get('first_order_contribution_per_order', 0) >= 0 else 'cost'}">&#8364;{adv_summary.get('first_order_contribution_per_order', 0):,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Repeat Contribution / Order</div>
-                <div class="card-value {'profit' if adv_summary.get('repeat_order_contribution_per_order', 0) >= 0 else 'cost'}">€{adv_summary.get('repeat_order_contribution_per_order', 0):,.2f}</div>
+                <div class="card-value {'profit' if adv_summary.get('repeat_order_contribution_per_order', 0) >= 0 else 'cost'}">&#8364;{adv_summary.get('repeat_order_contribution_per_order', 0):,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Contribution LTV/CAC</div>
@@ -3325,7 +3390,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Contribution by Basket Size</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3345,9 +3410,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{row['basket_size']}</td>
                         <td class="number">{int(row['orders'])}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
-                        <td class="number">€{row['pre_ad_contribution']:,.2f}</td>
-                        <td class="number">€{row['contribution_per_order']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['pre_ad_contribution']:,.2f}</td>
+                        <td class="number">&#8364;{row['contribution_per_order']:,.2f}</td>
                         <td class="number">{row['contribution_margin_pct']:.1f}%</td>
                     </tr>"""
             html_content += """
@@ -3361,7 +3426,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Payday Window Index (Phase of Month)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3385,8 +3450,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{int(row['orders'])}</td>
                         <td class="number">{int(row['calendar_days'])}</td>
                         <td class="number">{row['avg_orders_per_day']:.2f}</td>
-                        <td class="number">€{row['avg_revenue_per_day']:,.2f}</td>
-                        <td class="number">€{row['avg_profit_per_day']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_revenue_per_day']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_profit_per_day']:,.2f}</td>
                         <td class="number">{row['revenue_index']:.1f}</td>
                         <td class="number">{row['profit_index']:.1f}</td>
                     </tr>"""
@@ -3401,7 +3466,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Cohort Payback (Days)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3425,8 +3490,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{row['cohort_month']}</td>
                         <td class="number">{int(row['new_customers'])}</td>
-                        <td class="number">€{row['cohort_fb_spend']:,.2f}</td>
-                        <td class="number">€{row['cohort_cac']:,.2f}</td>
+                        <td class="number">&#8364;{row['cohort_fb_spend']:,.2f}</td>
+                        <td class="number">&#8364;{row['cohort_cac']:,.2f}</td>
                         <td class="number">{int(row['recovered_customers'])}</td>
                         <td class="number">{row['recovery_rate_pct']:.1f}%</td>
                         <td class="number">{avg_days}</td>
@@ -3443,7 +3508,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Attach Rate (Top Key Products)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3481,7 +3546,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">SKU Contribution Pareto (Top 40)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3505,9 +3570,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{product_name}</td>
                         <td>{row['sku']}</td>
                         <td class="number">{int(row['orders'])}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
-                        <td class="number">€{row['cost']:,.2f}</td>
-                        <td class="number">€{row['pre_ad_contribution']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['cost']:,.2f}</td>
+                        <td class="number">&#8364;{row['pre_ad_contribution']:,.2f}</td>
                         <td class="number">{row['contribution_share_pct']:.2f}%</td>
                         <td class="number">{row['cum_contribution_share_pct']:.2f}%</td>
                     </tr>"""
@@ -3525,7 +3590,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
 
         <div class="chart-container">
-            <h2 class="chart-title">Orders Heatmap: Day of Week × Hour of Day</h2>
+            <h2 class="chart-title">Orders Heatmap: Day of Week &times; Hour of Day</h2>
             <p class="chart-explanation">Shows when customers place orders. Darker colors = more orders. Helps identify peak shopping times for ad scheduling and staffing.</p>
             <div id="heatmapContainer" style="overflow-x: auto;">
                 <table class="heatmap-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
@@ -3610,7 +3675,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Revenue by Country</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3630,9 +3695,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{row['country']}</td>
                         <td class="number">{row['orders']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -3649,14 +3714,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-container">
             <h2 class="chart-title">SK/CZ/HU Profitability (Post-Ad Contribution + FB CPO)</h2>
-            <p class="chart-explanation">Country-level post-ad contribution view using net revenue, product costs, packaging, shipping subsidy, and estimated FB spend by campaign naming (fixed overhead excluded). Unattributed FB spend (not mapped to SK/CZ/HU): €{unattributed_fb:,.2f}.</p>
+            <p class="chart-explanation">Country-level post-ad contribution view using net revenue, product costs, packaging, shipping subsidy, and estimated FB spend by campaign naming (fixed overhead excluded). Unattributed FB spend (not mapped to SK/CZ/HU): &#8364;{unattributed_fb:,.2f}.</p>
             <canvas id="geoProfitabilityChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Geo Profitability (SK/CZ/HU)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3681,14 +3746,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{str(row.get('country', '')).upper()}</td>
                         <td class="number">{int(row.get('orders', 0))}</td>
-                        <td class="number">€{row.get('revenue', 0):,.2f}</td>
-                        <td class="number">€{row.get('product_cost', 0):,.2f}</td>
-                        <td class="number">€{row.get('packaging_cost', 0):,.2f}</td>
-                        <td class="number">€{row.get('shipping_subsidy_cost', 0):,.2f}</td>
-                        <td class="number">€{row.get('fb_ads_spend', 0):,.2f}</td>
-                        <td class="number {'profit-positive' if row.get('contribution_profit', 0) >= 0 else 'profit-negative'}">€{row.get('contribution_profit', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('revenue', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('product_cost', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('packaging_cost', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('shipping_subsidy_cost', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('fb_ads_spend', 0):,.2f}</td>
+                        <td class="number {'profit-positive' if row.get('contribution_profit', 0) >= 0 else 'profit-negative'}">&#8364;{row.get('contribution_profit', 0):,.2f}</td>
                         <td class="number {'profit-positive' if row.get('contribution_margin_pct', 0) >= 0 else 'profit-negative'}">{row.get('contribution_margin_pct', 0):.2f}%</td>
-                        <td class="number">€{row.get('fb_cpo', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('fb_cpo', 0):,.2f}</td>
                     </tr>"""
 
             html_content += """
@@ -3704,7 +3769,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Top 20 Cities by Revenue</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3725,7 +3790,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['city']}</td>
                         <td>{row['country']}</td>
                         <td class="number">{row['orders']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
                     </tr>"""
 
@@ -3750,7 +3815,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">B2B vs B2C Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3773,9 +3838,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['customer_type']}</td>
                         <td class="number">{row['orders']}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['aov']:.2f}</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
                         <td class="number">{row['unique_customers']}</td>
                     </tr>"""
 
@@ -3822,11 +3887,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Avg Revenue/Customer</div>
-                <div class="card-value">€{avg_rev:.2f}</div>
+                <div class="card-value">&#8364;{avg_rev:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Median Revenue/Customer</div>
-                <div class="card-value">€{median_rev:.2f}</div>
+                <div class="card-value">&#8364;{median_rev:.2f}</div>
             </div>
         </div>
 
@@ -3844,7 +3909,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Top 10 Customers by Revenue</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3865,9 +3930,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{customer_display}</td>
                         <td class="number">{row['orders']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                     </tr>"""
 
             html_content += """
@@ -3891,7 +3956,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Product Margins (Sorted by Margin %)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3914,9 +3979,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{product_display}</td>
                         <td class="number">{row['quantity']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
-                        <td class="number">€{row['cost']:,.2f}</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['cost']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                         <td class="number {margin_class}">{row['margin_pct']:.1f}%</td>
                     </tr>"""
 
@@ -3936,7 +4001,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Product Trends (by Total Revenue)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3971,7 +4036,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{int(row['qty_second'])}</td>
                         <td class="number {growth_class}">{row['qty_growth_pct']:.1f}%</td>
                         <td class="{trend_class}">{trend}</td>
-                        <td class="number">€{row['total_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:,.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -3995,11 +4060,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="summary-cards">
             <div class="card">
-                <div class="card-title">FB Spend ↔ Orders</div>
+                <div class="card-title">FB Spend â†” Orders</div>
                 <div class="card-value">{correlations.get('fb_orders', 0):.3f}</div>
             </div>
             <div class="card">
-                <div class="card-title">FB Spend ↔ Revenue</div>
+                <div class="card-title">FB Spend â†” Revenue</div>
                 <div class="card-value">{correlations.get('fb_revenue', 0):.3f}</div>
             </div>
             <div class="card">
@@ -4066,7 +4131,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">FB Spend Effectiveness by Range</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -4086,10 +4151,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                     <tr>
                         <td>{row['spend_range']}</td>
-                        <td class="number">€{row['avg_spend']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_spend']:.2f}</td>
                         <td class="number">{row['avg_orders']:.1f}</td>
-                        <td class="number">€{row['avg_revenue']:.2f}</td>
-                        <td class="number">€{row['avg_profit']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_revenue']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_profit']:.2f}</td>
                         <td class="number">{row['roas']:.2f}x</td>
                     </tr>"""
 
@@ -4106,7 +4171,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Ad Effectiveness by Day of Week</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -4125,9 +4190,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                     <tr>
                         <td>{row['day_of_week']}</td>
-                        <td class="number">€{row['fb_spend']:.2f}</td>
+                        <td class="number">&#8364;{row['fb_spend']:.2f}</td>
                         <td class="number">{row['orders']:.1f}</td>
-                        <td class="number">€{row['revenue']:.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:.2f}</td>
                         <td class="number">{row['roas']:.2f}x</td>
                     </tr>"""
 
@@ -4152,7 +4217,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Order Status Breakdown</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -4172,7 +4237,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['status']}</td>
                         <td class="number">{row['orders']}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -4185,39 +4250,39 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     if customer_email_segments:
         html_content += """
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">📧 Segmentácia zákazníkov pre email marketing</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.9;">Tabuľky zákazníkov rozdelených podľa nákupného správania. Každý segment je vhodný na iný typ emailovej kampane.</p>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">đź“§ SegmentĂˇcia zĂˇkaznĂ­kov pre email marketing</h2>
+        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.9;">TabuÄľky zĂˇkaznĂ­kov rozdelenĂ˝ch podÄľa nĂˇkupnĂ©ho sprĂˇvania. KaĹľdĂ˝ segment je vhodnĂ˝ na inĂ˝ typ emailovej kampane.</p>
 """
 
         # Define segment display order and styling
         segment_configs = {
-            'sample_not_converted': {'color': '#EC4899', 'icon': '🧪', 'priority': 1},
-            'second_order_encouragement': {'color': '#8B5CF6', 'icon': '2ď¸ŹâŁ', 'priority': 2},
-            'optimal_reorder_timing': {'color': '#10B981', 'icon': '🎯', 'priority': 3},
-            'churning_customers': {'color': '#F97316', 'icon': '⚠️', 'priority': 4},
-            'repeat_buyers_90_days': {'color': '#EF4444', 'icon': '🔄', 'priority': 5},
-            'one_time_buyers_30_days': {'color': '#F59E0B', 'icon': '🛒', 'priority': 6},
-            'high_value_one_time': {'color': '#06B6D4', 'icon': '💎', 'priority': 7},
-            'new_customers_welcome': {'color': '#22C55E', 'icon': '👋', 'priority': 8},
-            'vip_customers': {'color': '#A855F7', 'icon': '👑', 'priority': 9},
-            'failed_payment_only': {'color': '#DC2626', 'icon': '❌', 'priority': 10},
-            'recent_buyers_14_60_days': {'color': '#3B82F6', 'icon': '⏰', 'priority': 11},
-            'long_dormant': {'color': '#6B7280', 'icon': '💤', 'priority': 12}
+            'sample_not_converted': {'color': '#EC4899', 'icon': 'đź§Ş', 'priority': 1},
+            'second_order_encouragement': {'color': '#8B5CF6', 'icon': '2ÄŹÂ¸ĹąĂ˘ÂĹ', 'priority': 2},
+            'optimal_reorder_timing': {'color': '#10B981', 'icon': 'đźŽŻ', 'priority': 3},
+            'churning_customers': {'color': '#F97316', 'icon': 'âš ď¸Ź', 'priority': 4},
+            'repeat_buyers_90_days': {'color': '#EF4444', 'icon': 'đź”„', 'priority': 5},
+            'one_time_buyers_30_days': {'color': '#F59E0B', 'icon': 'đź›’', 'priority': 6},
+            'high_value_one_time': {'color': '#06B6D4', 'icon': 'đź’Ž', 'priority': 7},
+            'new_customers_welcome': {'color': '#22C55E', 'icon': 'đź‘‹', 'priority': 8},
+            'vip_customers': {'color': '#A855F7', 'icon': 'đź‘‘', 'priority': 9},
+            'failed_payment_only': {'color': '#DC2626', 'icon': 'âťŚ', 'priority': 10},
+            'recent_buyers_14_60_days': {'color': '#3B82F6', 'icon': 'âŹ°', 'priority': 11},
+            'long_dormant': {'color': '#6B7280', 'icon': 'đź’¤', 'priority': 12}
         }
 
         # First, show Email Campaign Calendar
         html_content += """
         <div class="table-container" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-bottom: 30px;">
-            <h2 class="table-title" style="color: white;">📅 Plán emailových kampaní - Kedy komu poslať</h2>
+            <h2 class="table-title" style="color: white;">đź“… PlĂˇn emailovĂ˝ch kampanĂ­ - Kedy komu poslaĹĄ</h2>
             <table style="background: rgba(255,255,255,0.95);">
                 <thead>
                     <tr>
                         <th>Priorita</th>
                         <th>Segment</th>
-                        <th class="number">Počet</th>
-                        <th>Kedy poslať</th>
-                        <th>Odporúčaná zľava</th>
-                        <th>Šablóna emailu</th>
+                        <th class="number">PoÄŤet</th>
+                        <th>Kedy poslaĹĄ</th>
+                        <th>OdporĂşÄŤanĂˇ zÄľava</th>
+                        <th>Ĺ ablĂłna emailu</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -4229,13 +4294,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         for segment_name, segment_info in priority_sorted:
             if segment_info['count'] == 0:
                 continue
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '📋'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': 'đź“‹'})
             priority = segment_info.get('priority', 99)
-            timing = segment_info.get('send_timing', 'Nie je definované')
+            timing = segment_info.get('send_timing', 'Nie je definovanĂ©')
             discount = segment_info.get('discount_suggestion', '-')
             template = segment_info.get('email_template', '-')
 
-            priority_badge = '🔴' if priority <= 2 else ('🟡' if priority <= 4 else '🟢')
+            priority_badge = 'đź”´' if priority <= 2 else ('đźźˇ' if priority <= 4 else 'đźź˘')
 
             html_content += f"""
                     <tr>
@@ -4251,9 +4316,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 </tbody>
             </table>
             <p style="color: white; padding: 15px; font-size: 0.9rem;">
-                <strong>🔴 Vysoká priorita</strong> = Poslať ihneď |
-                <strong>🟡 Stredná priorita</strong> = Naplánované kampane |
-                <strong>🟢 Nízka priorita</strong> = Pravidelné kampane
+                <strong>đź”´ VysokĂˇ priorita</strong> = PoslaĹĄ ihneÄŹ |
+                <strong>đźźˇ StrednĂˇ priorita</strong> = NaplĂˇnovanĂ© kampane |
+                <strong>đźź˘ NĂ­zka priorita</strong> = PravidelnĂ© kampane
             </p>
         </div>
 """
@@ -4264,36 +4329,36 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         for segment_name, segment_info in sorted_segments:
             segment_data = segment_info['data']
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '📋'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': 'đź“‹'})
 
             if segment_data is not None and not segment_data.empty:
                 # Determine columns based on segment type
                 if segment_name == 'failed_payment_only':
                     columns = ['email', 'name', 'failed_order_count', 'last_attempt_date', 'city', 'country']
-                    headers = ['Email', 'Meno', 'Počet pokusov', 'Posledný pokus', 'Mesto', 'Krajina']
+                    headers = ['Email', 'Meno', 'PoÄŤet pokusov', 'PoslednĂ˝ pokus', 'Mesto', 'Krajina']
                 else:
                     columns = ['email', 'name', 'order_count', 'total_revenue', 'days_since_last_order', 'city', 'country']
-                    headers = ['Email', 'Meno', 'Počet obj.', 'Celková tržba', 'Dní od posl. obj.', 'Mesto', 'Krajina']
+                    headers = ['Email', 'Meno', 'PoÄŤet obj.', 'CelkovĂˇ trĹľba', 'DnĂ­ od posl. obj.', 'Mesto', 'Krajina']
 
                 html_content += f"""
         <div class="table-container" style="border-left: 4px solid {config['color']};">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">{config['icon']} {segment_info['description']} ({segment_info['count']} zákazníkov)</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">{config['icon']} {segment_info['description']} ({segment_info['count']} zĂˇkaznĂ­kov)</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <div style="background: #f8fafc; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>🎯 Účel:</strong> {segment_info['email_purpose']}
+                    <strong>đźŽŻ ĂšÄŤel:</strong> {segment_info['email_purpose']}
                 </p>
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>⏰ Kedy poslať:</strong> {segment_info.get('send_timing', 'Nie je definované')}
+                    <strong>âŹ° Kedy poslaĹĄ:</strong> {segment_info.get('send_timing', 'Nie je definovanĂ©')}
                 </p>
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>🏷️ Zľava:</strong> {segment_info.get('discount_suggestion', '-')}
+                    <strong>đźŹ·ď¸Ź ZÄľava:</strong> {segment_info.get('discount_suggestion', '-')}
                 </p>
                 <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-style: italic;">
-                    💬 "{segment_info.get('email_template', 'Šablóna nie je definovaná')}"
+                    đź’¬ "{segment_info.get('email_template', 'Ĺ ablĂłna nie je definovanĂˇ')}"
                 </p>
             </div>
             <table>
@@ -4301,7 +4366,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>"""
 
                 for header in headers:
-                    align_class = 'number' if header in ['Počet obj.', 'Celková tržba', 'Dní od posl. obj.', 'Počet pokusov'] else ''
+                    align_class = 'number' if header in ['PoÄŤet obj.', 'CelkovĂˇ trĹľba', 'DnĂ­ od posl. obj.', 'PoÄŤet pokusov'] else ''
                     html_content += f"""
                         <th class="{align_class}">{header}</th>"""
 
@@ -4319,7 +4384,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             value = row[col]
                             if col == 'total_revenue':
                                 html_content += f"""
-                        <td class="number">€{value:,.2f}</td>"""
+                        <td class="number">&#8364;{value:,.2f}</td>"""
                             elif col in ['days_since_last_order', 'days_since_first_order', 'order_count', 'failed_order_count']:
                                 html_content += f"""
                         <td class="number">{int(value) if pd.notna(value) else 'N/A'}</td>"""
@@ -4342,7 +4407,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 if len(segment_data) > 100:
                     html_content += f"""
                     <tr class="total-row">
-                        <td colspan="{len(columns)}">... a ďalších {len(segment_data) - 100} zákazníkov (celkový export v CSV súbore)</td>
+                        <td colspan="{len(columns)}">... a ÄŹalĹˇĂ­ch {len(segment_data) - 100} zĂˇkaznĂ­kov (celkovĂ˝ export v CSV sĂşbore)</td>
                     </tr>"""
 
                 html_content += """
@@ -4354,8 +4419,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 # Empty segment - show placeholder
                 html_content += f"""
         <div class="table-container" style="border-left: 4px solid {config['color']}; opacity: 0.7;">
-            <h2 class="table-title">{config['icon']} {segment_info['description']} (0 zákazníkov)</h2>
-            <p style="color: #718096; padding: 15px;">Žiadni zákazníci v tomto segmente.</p>
+            <h2 class="table-title">{config['icon']} {segment_info['description']} (0 zĂˇkaznĂ­kov)</h2>
+            <p style="color: #718096; padding: 15px;">Ĺ˝iadni zĂˇkaznĂ­ci v tomto segmente.</p>
         </div>"""
 
         # Summary card for all segments
@@ -4367,7 +4432,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="summary-cards" style="margin-top: 15px;">"""
 
         for segment_name, segment_info in sorted_segments:
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '📋'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': 'đź“‹'})
             html_content += f"""
                 <div class="card" style="border-left: 3px solid {config['color']};">
                     <div class="card-title">{config['icon']} {segment_name.replace('_', ' ').title()}</div>
@@ -4377,7 +4442,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
             </div>
             <p style="color: #065f46; margin-top: 15px; padding: 0 15px;">
-                <strong>Poznámka:</strong> Kompletné zoznamy emailov pre každý segment sú uložené v CSV súboroch v priečinku <code>data/</code> s názvom <code>email_segment_[názov].csv</code>
+                <strong>PoznĂˇmka:</strong> KompletnĂ© zoznamy emailov pre kaĹľdĂ˝ segment sĂş uloĹľenĂ© v CSV sĂşboroch v prieÄŤinku <code>data/</code> s nĂˇzvom <code>email_segment_[nĂˇzov].csv</code>
             </p>
         </div>"""
 
@@ -4511,7 +4576,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4524,7 +4589,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }},
@@ -4538,7 +4603,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4586,7 +4651,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4596,7 +4661,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4653,7 +4718,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }},
                             afterBody: function(context) {{
                                 if (context[0].datasetIndex === 1) {{
@@ -4675,7 +4740,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4711,16 +4776,16 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         callbacks: {{
                             label: function(context) {{
                                 const profit = context.parsed.y;
-                                return 'LTV-Based Profit: €' + profit.toFixed(2);
+                                return 'LTV-Based Profit: &#8364;' + profit.toFixed(2);
                             }},
                             afterBody: function(context) {{
                                 const idx = context[0].dataIndex;
                                 const ltvRev = {json.dumps(ltv_revenue_data)}[idx];
                                 const cost = {json.dumps(total_costs_data)}[idx];
                                 const actualRev = {json.dumps(revenue_data)}[idx];
-                                let info = '\\nLTV Revenue: €' + ltvRev.toFixed(2);
-                                info += '\\nTotal Costs: €' + cost.toFixed(2);
-                                info += '\\nActual Revenue: €' + actualRev.toFixed(2);
+                                let info = '\\nLTV Revenue: &#8364;' + ltvRev.toFixed(2);
+                                info += '\\nTotal Costs: &#8364;' + cost.toFixed(2);
+                                info += '\\nActual Revenue: &#8364;' + actualRev.toFixed(2);
                                 if (cost > 0) {{
                                     const roi = ((ltvRev - cost) / cost * 100).toFixed(1);
                                     info += '\\nLTV ROI: ' + roi + '%';
@@ -4735,7 +4800,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }},
                         grid: {{
@@ -4887,7 +4952,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 if (context.dataset.label === 'ROI %') {{
                                     return label + context.parsed.y.toFixed(1) + '%';
                                 }}
-                                return label + '€' + context.parsed.y.toFixed(2);
+                                return label + '&#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4900,11 +4965,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         title: {{
                             display: true,
-                            text: 'Amount (€)'
+                            text: 'Amount (&#8364;)'
                         }},
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }},
@@ -4915,14 +4980,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         title: {{
                             display: true,
-                            text: 'AOV (€)'
+                            text: 'AOV (&#8364;)'
                         }},
                         grid: {{
                             drawOnChartArea: false,
                         }},
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }},
@@ -4972,7 +5037,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Profit: €' + context.parsed.y.toFixed(2);
+                                return 'Profit: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4982,7 +5047,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5060,7 +5125,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         callbacks: {{
                             label: function(context) {{
                                 const percentage = (context.parsed / {total_cost:.2f} * 100).toFixed(1);
-                                return context.label + ': €' + context.parsed.toFixed(2) + ' (' + percentage + '%)';
+                                return context.label + ': &#8364;' + context.parsed.toFixed(2) + ' (' + percentage + '%)';
                             }}
                         }}
                     }}
@@ -5157,7 +5222,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Revenue: €' + context.parsed.y.toFixed(2);
+                                return 'Revenue: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5167,7 +5232,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5200,7 +5265,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Total Costs: €' + context.parsed.y.toFixed(2);
+                                return 'Total Costs: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5210,7 +5275,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5240,7 +5305,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Product Costs: €' + context.parsed.y.toFixed(2);
+                                return 'Product Costs: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5250,7 +5315,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5323,7 +5388,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'FB Ads: €' + context.parsed.y.toFixed(2);
+                                return 'FB Ads: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5333,7 +5398,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5363,7 +5428,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Google Ads: €' + context.parsed.y.toFixed(2);
+                                return 'Google Ads: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5373,7 +5438,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5415,7 +5480,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5425,7 +5490,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5455,7 +5520,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Packaging: €' + context.parsed.y.toFixed(2);
+                                return 'Packaging: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5465,7 +5530,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5495,7 +5560,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Shipping Subsidy: €' + context.parsed.y.toFixed(2);
+                                return 'Shipping Subsidy: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5505,7 +5570,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5535,7 +5600,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Fixed Costs: €' + context.parsed.y.toFixed(2);
+                                return 'Fixed Costs: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5545,7 +5610,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5578,7 +5643,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'AOV: €' + context.parsed.y.toFixed(2);
+                                return 'AOV: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5588,7 +5653,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5713,7 +5778,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5722,7 +5787,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     y: {{
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5766,7 +5831,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5775,7 +5840,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     y: {{
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5812,7 +5877,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5822,7 +5887,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5855,7 +5920,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.label + ': €' + context.parsed.toFixed(2);
+                                    return context.label + ': &#8364;' + context.parsed.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5899,7 +5964,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5909,7 +5974,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -5985,7 +6050,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Refund Amount: €' + context.parsed.y.toFixed(2);
+                                    return 'Refund Amount: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5995,7 +6060,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -6277,7 +6342,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.y.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6287,7 +6352,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6322,7 +6387,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPM: €' + context.parsed.y.toFixed(2);
+                                    return 'CPM: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6332,7 +6397,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6350,7 +6415,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(fb_dates_js)},
                     datasets: [
                         {{
-                            label: 'Spend (€)',
+                            label: 'Spend (&#8364;)',
                             data: {json.dumps(fb_spend_js)},
                             backgroundColor: 'rgba(245, 101, 101, 0.7)',
                             borderColor: '#f56565',
@@ -6388,11 +6453,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'Spend (€)'
+                                text: 'Spend (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value;
+                                    return '&#8364;' + value;
                                 }}
                             }}
                         }},
@@ -6423,7 +6488,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(fb_dates_js)},
                     datasets: [
                         {{
-                            label: 'CPC (€)',
+                            label: 'CPC (&#8364;)',
                             data: {json.dumps(fb_cpc_js)},
                             borderColor: '#f56565',
                             backgroundColor: 'transparent',
@@ -6432,7 +6497,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             yAxisID: 'y'
                         }},
                         {{
-                            label: 'CPM (€)',
+                            label: 'CPM (&#8364;)',
                             data: {json.dumps(fb_cpm_js)},
                             borderColor: '#ed8936',
                             backgroundColor: 'transparent',
@@ -6465,7 +6530,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     if (context.dataset.label.includes('CTR')) {{
                                         return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
                                     }}
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6478,11 +6543,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'Cost (€)'
+                                text: 'Cost (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }},
@@ -6554,7 +6619,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 label: function(context) {{
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                     const pct = (context.raw / total * 100).toFixed(1);
-                                    return context.label + ': €' + context.raw.toFixed(2) + ' (' + pct + '%)';
+                                    return context.label + ': &#8364;' + context.raw.toFixed(2) + ' (' + pct + '%)';
                                 }}
                             }}
                         }}
@@ -6571,7 +6636,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(campaign_names)},
                     datasets: [{{
-                        label: 'CPC (€)',
+                        label: 'CPC (&#8364;)',
                         data: {json.dumps(campaign_cpcs)},
                         backgroundColor: {json.dumps(campaign_cpcs)}.map(v => v < {sum(campaign_cpcs)/len(campaign_cpcs) if campaign_cpcs else 0} ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(campaign_cpcs)}.map(v => v < {sum(campaign_cpcs)/len(campaign_cpcs) if campaign_cpcs else 0} ? '#48bb78' : '#f56565'),
@@ -6589,7 +6654,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.x.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.x.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6599,12 +6664,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }},
                             title: {{
                                 display: true,
-                                text: 'Cost Per Click (€) - Green = below average, Red = above average'
+                                text: 'Cost Per Click (&#8364;) - Green = below average, Red = above average'
                             }}
                         }}
                     }}
@@ -6724,7 +6789,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(campaign_names)},
                     datasets: [{{
-                        label: 'Cost per Conversion (€)',
+                        label: 'Cost per Conversion (&#8364;)',
                         data: campaignCostPerConversions,
                         backgroundColor: campaignCostPerConversions.map(v => v === 0 ? 'rgba(160, 174, 192, 0.7)' : (v < avgCostPerConversion ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)')),
                         borderColor: campaignCostPerConversions.map(v => v === 0 ? '#a0aec0' : (v < avgCostPerConversion ? '#48bb78' : '#f56565')),
@@ -6745,7 +6810,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     if (context.parsed.x === 0) {{
                                         return 'No conversions tracked';
                                     }}
-                                    return 'Cost per Conversion: €' + context.parsed.x.toFixed(2);
+                                    return 'Cost per Conversion: &#8364;' + context.parsed.x.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6755,12 +6820,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }},
                             title: {{
                                 display: true,
-                                text: 'Cost per Conversion (€) - Green = below average, Red = above average, Gray = no data'
+                                text: 'Cost per Conversion (&#8364;) - Green = below average, Red = above average, Gray = no data'
                             }}
                         }}
                     }}
@@ -6791,7 +6856,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(weekly_dates)},
                     datasets: [
                         {{
-                            label: 'CPO (€)',
+                            label: 'CPO (&#8364;)',
                             data: {json.dumps(weekly_cpos)},
                             borderColor: '#f56565',
                             backgroundColor: 'rgba(245, 101, 101, 0.1)',
@@ -6822,8 +6887,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    if (context.dataset.label === 'CPO (€)') {{
-                                        return 'CPO: €' + context.parsed.y.toFixed(2);
+                                    if (context.dataset.label === 'CPO (&#8364;)') {{
+                                        return 'CPO: &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     return context.dataset.label + ': ' + context.parsed.y;
                                 }}
@@ -6840,7 +6905,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     borderDash: [5, 5],
                                     label: {{
                                         display: true,
-                                        content: 'Avg CPO: €{fb_cpo_avg:.2f}'
+                                        content: 'Avg CPO: &#8364;{fb_cpo_avg:.2f}'
                                     }}
                                 }}
                             }}
@@ -6852,9 +6917,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'CPO (€)' }},
+                            title: {{ display: true, text: 'CPO (&#8364;)' }},
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
                             }}
                         }},
                         y1: {{
@@ -6886,7 +6951,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(camp_names_cpo)},
                     datasets: [{{
-                        label: 'Est. CPO (€)',
+                        label: 'Est. CPO (&#8364;)',
                         data: {json.dumps(camp_cpos)},
                         backgroundColor: {json.dumps(camp_cpos)}.map(v => v < avgCpo ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(camp_cpos)}.map(v => v < avgCpo ? '#48bb78' : '#f56565'),
@@ -6904,7 +6969,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Est. CPO: €' + context.parsed.x.toFixed(2);
+                                    return 'Est. CPO: &#8364;' + context.parsed.x.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6913,11 +6978,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         x: {{
                             beginAtZero: true,
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
                             }},
                             title: {{
                                 display: true,
-                                text: 'Estimated Cost Per Order (€) - Green = below avg (€{fb_cpo_avg:.2f}), Red = above avg'
+                                text: 'Estimated Cost Per Order (&#8364;) - Green = below avg (&#8364;{fb_cpo_avg:.2f}), Red = above avg'
                             }}
                         }}
                     }}
@@ -6964,7 +7029,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             }},
                             title: {{
                                 display: true,
-                                text: 'Estimated ROAS - Green = profitable (≥1x), Red = unprofitable (<1x)'
+                                text: 'Estimated ROAS - Green = profitable (â‰Ą1x), Red = unprofitable (<1x)'
                             }}
                         }}
                     }}
@@ -7036,7 +7101,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(hourly_labels)},
                     datasets: [{{
-                        label: 'CPC €',
+                        label: 'CPC &#8364;',
                         data: {json.dumps(hourly_cpcs)},
                         backgroundColor: {json.dumps(hourly_cpcs)}.map(v => v > 0 && v <= avgCpc ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(hourly_cpcs)}.map(v => v > 0 && v <= avgCpc ? '#48bb78' : '#f56565'),
@@ -7053,7 +7118,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.y.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7062,7 +7127,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(2); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(2); }}
                             }}
                         }}
                     }}
@@ -7106,7 +7171,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(hourly_labels)},
                     datasets: [{{
-                        label: 'Spend €',
+                        label: 'Spend &#8364;',
                         data: {json.dumps(hourly_spends)},
                         backgroundColor: '#4299e1',
                         borderRadius: 5
@@ -7121,7 +7186,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Spend: €' + context.parsed.y.toFixed(2);
+                                    return 'Spend: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7130,7 +7195,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             ticks: {{
-                                callback: function(value) {{ return '€' + value; }}
+                                callback: function(value) {{ return '&#8364;' + value; }}
                             }}
                         }}
                     }}
@@ -7147,7 +7212,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(hourly_labels)},
                     datasets: [
                         {{
-                            label: 'Spend €',
+                            label: 'Spend &#8364;',
                             data: {json.dumps(hourly_spends)},
                             backgroundColor: 'rgba(66, 153, 225, 0.7)',
                             borderColor: '#4299e1',
@@ -7180,8 +7245,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Spend (€)' }},
-                            ticks: {{ callback: function(value) {{ return '€' + value; }} }}
+                            title: {{ display: true, text: 'Spend (&#8364;)' }},
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value; }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -7236,7 +7301,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(hourly_labels)},
                     datasets: [{{
-                        label: 'CPO €',
+                        label: 'CPO &#8364;',
                         data: {json.dumps(hourly_cpo_js)},
                         backgroundColor: {json.dumps(hourly_cpo_js)}.map(v => v > 0 && v <= avgCpo ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(hourly_cpo_js)}.map(v => v > 0 && v <= avgCpo ? '#48bb78' : '#f56565'),
@@ -7253,7 +7318,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPO: €' + context.parsed.y.toFixed(2);
+                                    return 'CPO: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7261,7 +7326,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     scales: {{
                         y: {{
                             beginAtZero: true,
-                            ticks: {{ callback: function(value) {{ return '€' + value.toFixed(0); }} }}
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value.toFixed(0); }} }}
                         }}
                     }}
                 }}
@@ -7345,7 +7410,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(hourly_labels)},
                     datasets: [
                         {{
-                            label: 'Spend €',
+                            label: 'Spend &#8364;',
                             data: {json.dumps(hourly_spends)},
                             backgroundColor: 'rgba(237, 137, 54, 0.7)',
                             borderColor: '#ed8936',
@@ -7364,7 +7429,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'CPO €',
+                            label: 'CPO &#8364;',
                             data: {json.dumps(hourly_cpo_js)},
                             borderColor: '#f56565',
                             backgroundColor: 'transparent',
@@ -7386,8 +7451,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    if (context.dataset.label === 'Spend €' || context.dataset.label === 'CPO €') {{
-                                        return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    if (context.dataset.label === 'Spend &#8364;' || context.dataset.label === 'CPO &#8364;') {{
+                                        return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     return context.dataset.label + ': ' + context.parsed.y;
                                 }}
@@ -7400,8 +7465,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Spend (€)' }},
-                            ticks: {{ callback: function(value) {{ return '€' + value; }} }}
+                            title: {{ display: true, text: 'Spend (&#8364;)' }},
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value; }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -7484,7 +7549,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(dow_labels)},
                     datasets: [{{
-                        label: 'CPC €',
+                        label: 'CPC &#8364;',
                         data: {json.dumps(dow_cpcs)},
                         backgroundColor: {json.dumps(dow_cpcs)}.map(v => v > 0 && v <= avgCpc ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(dow_cpcs)}.map(v => v > 0 && v <= avgCpc ? '#48bb78' : '#f56565'),
@@ -7501,7 +7566,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.y.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7509,7 +7574,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     scales: {{
                         y: {{
                             beginAtZero: true,
-                            ticks: {{ callback: function(value) {{ return '€' + value.toFixed(2); }} }}
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value.toFixed(2); }} }}
                         }}
                     }}
                 }}
@@ -7525,7 +7590,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(dow_labels)},
                     datasets: [
                         {{
-                            label: 'Total Spend €',
+                            label: 'Total Spend &#8364;',
                             data: {json.dumps(dow_spends)},
                             backgroundColor: 'rgba(245, 101, 101, 0.7)',
                             borderColor: '#f56565',
@@ -7558,8 +7623,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Spend (€)' }},
-                            ticks: {{ callback: function(value) {{ return '€' + value; }} }}
+                            title: {{ display: true, text: 'Spend (&#8364;)' }},
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value; }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -7755,7 +7820,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(clv_week_starts)},
                     datasets: [
                         {{
-                            label: 'Average CLV (€)',
+                            label: 'Average CLV (&#8364;)',
                             data: {json.dumps(avg_clv)},
                             borderColor: '#48bb78',
                             backgroundColor: 'rgba(72, 187, 120, 0.1)',
@@ -7764,7 +7829,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             yAxisID: 'y'
                         }},
                         {{
-                            label: 'Cumulative Avg CLV (€)',
+                            label: 'Cumulative Avg CLV (&#8364;)',
                             data: {json.dumps(cumulative_clv)},
                             borderColor: '#667eea',
                             backgroundColor: 'rgba(102, 126, 234, 0.1)',
@@ -7792,7 +7857,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7805,11 +7870,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'CLV (€)'
+                                text: 'CLV (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -7827,7 +7892,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(clv_week_starts)},
                     datasets: [
                         {{
-                            label: 'CAC (€)',
+                            label: 'CAC (&#8364;)',
                             data: {json.dumps(cac_data)},
                             borderColor: '#f56565',
                             backgroundColor: 'rgba(245, 101, 101, 0.1)',
@@ -7835,7 +7900,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             tension: 0.4
                         }},
                         {{
-                            label: 'Cumulative Avg CAC (€)',
+                            label: 'Cumulative Avg CAC (&#8364;)',
                             data: {json.dumps(cumulative_cac)},
                             borderColor: '#667eea',
                             backgroundColor: 'rgba(102, 126, 234, 0.1)',
@@ -7858,7 +7923,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7868,11 +7933,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'CAC (€)'
+                                text: 'CAC (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -7890,13 +7955,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(clv_week_starts)},
                     datasets: [
                         {{
-                            label: 'CLV (€)',
+                            label: 'CLV (&#8364;)',
                             data: {json.dumps(avg_clv)},
                             backgroundColor: '#48bb78',
                             borderRadius: 5
                         }},
                         {{
-                            label: 'CAC (€)',
+                            label: 'CAC (&#8364;)',
                             data: {json.dumps(cac_data)},
                             backgroundColor: '#f56565',
                             borderRadius: 5
@@ -7914,7 +7979,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7924,11 +7989,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'Amount (€)'
+                                text: 'Amount (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -8056,7 +8121,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + ' orders';
                                 }},
                                 afterBody: function() {{
-                                    return 'Pre-ad contribution/order: €{pre_ad_contribution_per_order:.2f}';
+                                    return 'Pre-ad contribution/order: &#8364;{pre_ad_contribution_per_order:.2f}';
                                 }}
                             }}
                         }}
@@ -8273,8 +8338,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'right',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'FB Spend (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }},
+                            title: {{ display: true, text: 'FB Spend (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }},
                             grid: {{ drawOnChartArea: false }}
                         }}
                     }}
@@ -8316,15 +8381,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Revenue (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                            title: {{ display: true, text: 'Revenue (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
                         }},
                         y1: {{
                             type: 'linear',
                             position: 'right',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'FB Spend (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }},
+                            title: {{ display: true, text: 'FB Spend (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }},
                             grid: {{ drawOnChartArea: false }}
                         }}
                     }}
@@ -8376,7 +8441,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             title: {{ display: true, text: 'EUR' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
                         }}
                     }}
                 }}
@@ -8411,7 +8476,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             title: {{ display: true, text: 'EUR / day' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
                         }}
                     }}
                 }}
@@ -8468,8 +8533,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'right',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Revenue (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }},
+                            title: {{ display: true, text: 'Revenue (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }},
                             grid: {{ drawOnChartArea: false }}
                         }}
                     }}
@@ -8505,7 +8570,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             title: {{ display: true, text: 'EUR / occurrence' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
                         }}
                     }}
                 }}
@@ -8639,7 +8704,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     responsive: true,
                     plugins: {{
                         legend: {{ position: 'right' }},
-                        tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.label + ': €' + ctx.raw.toLocaleString(); }} }} }}
+                        tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.label + ': &#8364;' + ctx.raw.toLocaleString(); }} }} }}
                     }}
                 }}
             }});
@@ -8671,7 +8736,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'FB CPO (€)',
+                            label: 'FB CPO (&#8364;)',
                             data: {json.dumps(geo_cpo)},
                             borderColor: '#EF4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -8691,7 +8756,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     if (context.dataset.label.includes('Margin')) {{
                                         return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
                                     }}
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -8706,9 +8771,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y1: {{
                             type: 'linear',
                             position: 'right',
-                            title: {{ display: true, text: 'FB CPO (€)' }},
+                            title: {{ display: true, text: 'FB CPO (&#8364;)' }},
                             grid: {{ drawOnChartArea: false }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toFixed(2); }} }}
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toFixed(2); }} }}
                         }}
                     }}
                 }}
@@ -8731,7 +8796,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(b2b_labels)},
                     datasets: [
-                        {{ label: 'Revenue (€)', data: {json.dumps(b2b_revenue)}, backgroundColor: '#3B82F6', yAxisID: 'y' }},
+                        {{ label: 'Revenue (&#8364;)', data: {json.dumps(b2b_revenue)}, backgroundColor: '#3B82F6', yAxisID: 'y' }},
                         {{ label: 'Orders', data: {json.dumps(b2b_orders)}, backgroundColor: '#10B981', yAxisID: 'y1' }}
                     ]
                 }},
@@ -8956,13 +9021,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                         return 'Predicted: ' + context.parsed.y.toFixed(1) + ' orders';
                                     }}
                                     var profit = adsProfitValues[context.dataIndex];
-                                    return ['Spend: €' + context.parsed.x.toFixed(2), 'Orders: ' + context.parsed.y, 'Profit: €' + profit.toFixed(2)];
+                                    return ['Spend: &#8364;' + context.parsed.x.toFixed(2), 'Orders: ' + context.parsed.y, 'Profit: &#8364;' + profit.toFixed(2)];
                                 }}
                             }}
                         }}
                     }},
                     scales: {{
-                        x: {{ title: {{ display: true, text: 'FB Spend (€)' }} }},
+                        x: {{ title: {{ display: true, text: 'FB Spend (&#8364;)' }} }},
                         y: {{ title: {{ display: true, text: 'Orders' }}, beginAtZero: true }}
                     }}
                 }}
@@ -9012,17 +9077,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             callbacks: {{
                                 label: function(context) {{
                                     if (context.dataset.label === 'Trend Line') {{
-                                        return 'Predicted: €' + context.parsed.y.toFixed(2);
+                                        return 'Predicted: &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     var profit = adsProfitValues[context.dataIndex];
-                                    return ['Spend: €' + context.parsed.x.toFixed(2), 'Revenue: €' + context.parsed.y.toFixed(2), 'Profit: €' + profit.toFixed(2)];
+                                    return ['Spend: &#8364;' + context.parsed.x.toFixed(2), 'Revenue: &#8364;' + context.parsed.y.toFixed(2), 'Profit: &#8364;' + profit.toFixed(2)];
                                 }}
                             }}
                         }}
                     }},
                     scales: {{
-                        x: {{ title: {{ display: true, text: 'FB Spend (€)' }} }},
-                        y: {{ title: {{ display: true, text: 'Revenue (€)' }}, beginAtZero: true }}
+                        x: {{ title: {{ display: true, text: 'FB Spend (&#8364;)' }} }},
+                        y: {{ title: {{ display: true, text: 'Revenue (&#8364;)' }}, beginAtZero: true }}
                     }}
                 }}
             }});
@@ -9119,17 +9184,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             callbacks: {{
                                 label: function(context) {{
                                     if (context.dataset.label === 'Trend Line') {{
-                                        return 'Predicted Revenue: €' + context.parsed.y.toFixed(2);
+                                        return 'Predicted Revenue: &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     var roi = roiValues[context.dataIndex];
-                                    return ['Cost: €' + context.parsed.x.toFixed(2), 'Revenue: €' + context.parsed.y.toFixed(2), 'ROI: ' + roi.toFixed(1) + '%'];
+                                    return ['Cost: &#8364;' + context.parsed.x.toFixed(2), 'Revenue: &#8364;' + context.parsed.y.toFixed(2), 'ROI: ' + roi.toFixed(1) + '%'];
                                 }}
                             }}
                         }}
                     }},
                     scales: {{
-                        x: {{ title: {{ display: true, text: 'Total Cost (€)' }} }},
-                        y: {{ title: {{ display: true, text: 'Revenue (€)' }}, beginAtZero: true }}
+                        x: {{ title: {{ display: true, text: 'Total Cost (&#8364;)' }} }},
+                        y: {{ title: {{ display: true, text: 'Revenue (&#8364;)' }}, beginAtZero: true }}
                     }}
                 }}
             }});
@@ -9170,7 +9235,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 afterLabel: function(context) {{
                                     var idx = context.dataIndex;
                                     var spendValues = {json.dumps(range_spend)};
-                                    return 'Avg Spend: €' + spendValues[idx].toFixed(2);
+                                    return 'Avg Spend: &#8364;' + spendValues[idx].toFixed(2);
                                 }}
                             }}
                         }}
@@ -9220,7 +9285,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 afterLabel: function(context) {{
                                     var idx = context.dataIndex;
                                     var spendValues = {json.dumps(range_spend)};
-                                    return 'Avg Spend: €' + spendValues[idx].toFixed(2);
+                                    return 'Avg Spend: &#8364;' + spendValues[idx].toFixed(2);
                                 }}
                             }}
                         }}
@@ -9230,8 +9295,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Avg Revenue (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                            title: {{ display: true, text: 'Avg Revenue (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -9558,7 +9623,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'Avg Order Value (€)',
+                            label: 'Avg Order Value (&#8364;)',
                             data: {json.dumps(aov_values)},
                             borderColor: '#F59E0B',
                             backgroundColor: 'rgba(245, 158, 11, 0.1)',
@@ -9571,7 +9636,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'Avg Price per Item (€)',
+                            label: 'Avg Price per Item (&#8364;)',
                             data: {json.dumps(avg_price_per_item)},
                             borderColor: '#8B5CF6',
                             backgroundColor: 'rgba(139, 92, 246, 0.1)',
@@ -9596,8 +9661,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    if (context.dataset.label.includes('€')) {{
-                                        return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    if (context.dataset.label.includes('&#8364;')) {{
+                                        return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
                                 }}
@@ -9609,10 +9674,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Value (€)' }},
+                            title: {{ display: true, text: 'Value (&#8364;)' }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }},
@@ -10052,7 +10117,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 label: function(context) {{
                                     if (context.dataset.label.includes('(%)')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
                                     if (context.dataset.label.includes('Orders')) return context.dataset.label + ': ' + context.parsed.y.toFixed(0);
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -10062,7 +10127,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             position: 'left',
                             beginAtZero: true,
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
                             }}
                         }},
                         y1: {{
@@ -10363,7 +10428,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             callbacks: {{
                                 label: function(context) {{
                                     if (context.dataset.label.includes('Share')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -10373,7 +10438,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             position: 'left',
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
                             }}
                         }},
                         y1: {{
@@ -10414,7 +10479,7 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Marketing Stratégia - {report_title} | {date_from.strftime('%Y-%m-%d')} až {date_to.strftime('%Y-%m-%d')}</title>
+    <title>Email Marketing StratĂ©gia - {report_title} | {date_from.strftime('%Y-%m-%d')} aĹľ {date_to.strftime('%Y-%m-%d')}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
@@ -10466,65 +10531,65 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
 <body>
     <div class="container">
         <div class="header">
-            <h1>📧 Email Marketing Stratégia - {report_title}</h1>
+            <h1>đź“§ Email Marketing StratĂ©gia - {report_title}</h1>
             <p>Obdobie: {date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%Y.%m.%d')}</p>
 
             <div class="summary-grid">
                 <div class="summary-card">
                     <div class="number">{summary.get('total_customers', 0)}</div>
-                    <div class="label">Celkom zákazníkov</div>
+                    <div class="label">Celkom zĂˇkaznĂ­kov</div>
                 </div>
                 <div class="summary-card">
                     <div class="number">{summary.get('repeat_rate_pct', 0)}%</div>
-                    <div class="label">Miera návratu</div>
+                    <div class="label">Miera nĂˇvratu</div>
                 </div>
                 <div class="summary-card">
                     <div class="number">{summary.get('true_retention_2nd_pct', summary.get('repeat_rate_pct', 0))}%</div>
-                    <div class="label">Skutočná 2. obj. retencia</div>
+                    <div class="label">SkutoÄŤnĂˇ 2. obj. retencia</div>
                 </div>
                 <div class="summary-card">
                     <div class="number">{summary.get('avg_days_to_2nd_order', 'N/A')}</div>
-                    <div class="label">Priem. dní do 2. obj.</div>
+                    <div class="label">Priem. dnĂ­ do 2. obj.</div>
                 </div>
             </div>
         </div>
 
         <div class="strategy-section">
-            <h2>🎯 Odporúčaná email stratégia</h2>
+            <h2>đźŽŻ OdporĂşÄŤanĂˇ email stratĂ©gia</h2>
             <ul class="strategy-list">
                 <li>
-                    <span class="icon">🧪</span>
+                    <span class="icon">đź§Ş</span>
                     <div class="content">
-                        <h4>1. Konverzia vzoriek (Najvyššia priorita)</h4>
-                        <p>Zákazníci, ktorí si kúpili vzorky, by mali dostať email 7-14 dní po nákupe s ponukou na plnú veľkosť. Toto je najdôležitejší segment pre rast tržieb.</p>
+                        <h4>1. Konverzia vzoriek (NajvyĹˇĹˇia priorita)</h4>
+                        <p>ZĂˇkaznĂ­ci, ktorĂ­ si kĂşpili vzorky, by mali dostaĹĄ email 7-14 dnĂ­ po nĂˇkupe s ponukou na plnĂş veÄľkosĹĄ. Toto je najdĂ´leĹľitejĹˇĂ­ segment pre rast trĹľieb.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">2ď¸ŹâŁ</span>
+                    <span class="icon">2ÄŹÂ¸ĹąĂ˘ÂĹ</span>
                     <div class="content">
-                        <h4>2. Druhá objednávka (8-14 dní)</h4>
-                        <p>Nový zákazníci by mali dostať email s motiváciou k druhej objednávke. Priemerný čas návratu je {summary.get('avg_days_to_2nd_order', 20)} dní.</p>
+                        <h4>2. DruhĂˇ objednĂˇvka (8-14 dnĂ­)</h4>
+                        <p>NovĂ˝ zĂˇkaznĂ­ci by mali dostaĹĄ email s motivĂˇciou k druhej objednĂˇvke. PriemernĂ˝ ÄŤas nĂˇvratu je {summary.get('avg_days_to_2nd_order', 20)} dnĂ­.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">🎯</span>
+                    <span class="icon">đźŽŻ</span>
                     <div class="content">
-                        <h4>3. Optimálny čas na doplnenie (15-25 dní)</h4>
-                        <p>Zákazníci v tomto okne sú ideálni kandidáti na pripomenutie. Sú v "sladkom bode" - parfum pravdepodobne dochádza.</p>
+                        <h4>3. OptimĂˇlny ÄŤas na doplnenie (15-25 dnĂ­)</h4>
+                        <p>ZĂˇkaznĂ­ci v tomto okne sĂş ideĂˇlni kandidĂˇti na pripomenutie. SĂş v "sladkom bode" - parfum pravdepodobne dochĂˇdza.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">⚠️</span>
+                    <span class="icon">âš ď¸Ź</span>
                     <div class="content">
-                        <h4>4. Záchrana odchádzajúcich (60-90 dní)</h4>
-                        <p>Verní zákazníci, ktorí dlhšie nenakúpili, potrebujú silnejšiu ponuku - 20% zľavu alebo špeciálny darček.</p>
+                        <h4>4. ZĂˇchrana odchĂˇdzajĂşcich (60-90 dnĂ­)</h4>
+                        <p>VernĂ­ zĂˇkaznĂ­ci, ktorĂ­ dlhĹˇie nenakĂşpili, potrebujĂş silnejĹˇiu ponuku - 20% zÄľavu alebo ĹˇpeciĂˇlny darÄŤek.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">👑</span>
+                    <span class="icon">đź‘‘</span>
                     <div class="content">
-                        <h4>5. VIP program (3+ objednávky)</h4>
-                        <p>Najvernejší zákazníci by mali mať špeciálne výhody - prednostný prístup k novinkám, exkluzívne zľavy, darčeky k objednávkam.</p>
+                        <h4>5. VIP program (3+ objednĂˇvky)</h4>
+                        <p>NajvernejĹˇĂ­ zĂˇkaznĂ­ci by mali maĹĄ ĹˇpeciĂˇlne vĂ˝hody - prednostnĂ˝ prĂ­stup k novinkĂˇm, exkluzĂ­vne zÄľavy, darÄŤeky k objednĂˇvkam.</p>
                     </div>
                 </li>
             </ul>
@@ -10534,356 +10599,356 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
     # Email templates for each segment
     email_templates = {
         'sample_not_converted': {
-            'icon': '🧪',
-            'title': 'Konverzia vzoriek na plnú veľkosť',
+            'icon': 'đź§Ş',
+            'title': 'Konverzia vzoriek na plnĂş veÄľkosĹĄ',
             'priority': 1,
-            'subject': 'KtorĂˇ vĂ´Ĺa VĂˇs najviac oslovila? đźŚ¸ Ĺ peciĂˇlna ponuka pre VĂˇs',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'KtorÄ‚Ë‡ vÄ‚Â´ÄąÂa VÄ‚Ë‡s najviac oslovila? Ä‘ĹşĹšÂ¸ ÄąÂ peciÄ‚Ë‡lna ponuka pre VÄ‚Ë‡s',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ďakujeme, že ste si vyskúšali naše vzorky parfumov do prania Vevo!
+ÄŹakujeme, Ĺľe ste si vyskĂşĹˇali naĹˇe vzorky parfumov do prania Vevo!
 
-Radi by sme vedeli, ktorĂˇ vĂ´Ĺa sa VĂˇm najviac pĂˇÄŤila? đź’•
+Radi by sme vedeli, ktorÄ‚Ë‡ vÄ‚Â´ÄąÂa sa VÄ‚Ë‡m najviac pÄ‚Ë‡Ă„Ĺ¤ila? Ä‘Ĺşâ€™â€˘
 
-Ako poďakovanie za vyskúšanie našich produktov sme pre Vás pripravili špeciálnu ponuku:
+Ako poÄŹakovanie za vyskĂşĹˇanie naĹˇich produktov sme pre VĂˇs pripravili ĹˇpeciĂˇlnu ponuku:
 
-đźŽ ZÄ˝AVA 15% na VaĹˇu prvĂş plnĂş veÄľkosĹĄ
-Použite kód: MOJAVONA
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 15% na VaÄąË‡u prvÄ‚Ĺź plnÄ‚Ĺź veĂ„ÄľkosÄąÄ„
+PouĹľite kĂłd: MOJAVONA
 
-Najobľúbenejšie vône našich zákazníkov:
-â€˘ No.07 Ylang Absolute - luxusnĂˇ kvetinovĂˇ vĂ´Ĺa
-• No.09 Pure Garden - sviežosť záhrady
-â€˘ No.08 Cotton Dream - jemnĂˇ bavlnenĂˇ vĂ´Ĺa
+NajobÄľĂşbenejĹˇie vĂ´ne naĹˇich zĂˇkaznĂ­kov:
+Ă˘&#8364;Ë No.07 Ylang Absolute - luxusnÄ‚Ë‡ kvetinovÄ‚Ë‡ vÄ‚Â´ÄąÂa
+â€˘ No.09 Pure Garden - svieĹľosĹĄ zĂˇhrady
+Ă˘&#8364;Ë No.08 Cotton Dream - jemnÄ‚Ë‡ bavlnenÄ‚Ë‡ vÄ‚Â´ÄąÂa
 
-Platnosť ponuky: 7 dní
+PlatnosĹĄ ponuky: 7 dnĂ­
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Máte otázky ohľadom výberu vône? Napíšte nám, radi poradíme! 💬''',
-            'timing': '7-14 dní po nákupe vzoriek',
-            'discount': '15% na prvú plnú veľkosť'
+P.S. MĂˇte otĂˇzky ohÄľadom vĂ˝beru vĂ´ne? NapĂ­Ĺˇte nĂˇm, radi poradĂ­me! đź’¬''',
+            'timing': '7-14 dnĂ­ po nĂˇkupe vzoriek',
+            'discount': '15% na prvĂş plnĂş veÄľkosĹĄ'
         },
         'second_order_encouragement': {
-            'icon': '2ď¸ŹâŁ',
-            'title': 'Motivácia k druhej objednávke',
+            'icon': '2ÄŹÂ¸ĹąĂ˘ÂĹ',
+            'title': 'MotivĂˇcia k druhej objednĂˇvke',
             'priority': 2,
-            'subject': 'Páčil sa Vám náš parfum? 🌟 Máme pre Vás darček',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'PĂˇÄŤil sa VĂˇm nĂˇĹˇ parfum? đźŚź MĂˇme pre VĂˇs darÄŤek',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ďakujeme za Vašu prvú objednávku u nás! Dúfame, že ste spokojní s kvalitou našich produktov.
+ÄŹakujeme za VaĹˇu prvĂş objednĂˇvku u nĂˇs! DĂşfame, Ĺľe ste spokojnĂ­ s kvalitou naĹˇich produktov.
 
-Keďže ste náš nový zákazník, pripravili sme pre Vás exkluzívnu ponuku:
+KeÄŹĹľe ste nĂˇĹˇ novĂ˝ zĂˇkaznĂ­k, pripravili sme pre VĂˇs exkluzĂ­vnu ponuku:
 
-đźŽ ZÄ˝AVA 10% na VaĹˇu druhĂş objednĂˇvku
-Kód: DRUHAOBJ
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 10% na VaÄąË‡u druhÄ‚Ĺź objednÄ‚Ë‡vku
+KĂłd: DRUHAOBJ
 
-Čo si obľúbili naši zákazníci:
-âś“ IntenzĂ­vna a dlhotrvajĂşca vĂ´Ĺa
-✓ Šetrné k bielizni a pokožke
-✓ Vydržia až 100+ praní
+ÄŚo si obÄľĂşbili naĹˇi zĂˇkaznĂ­ci:
+Ă˘Ĺ›â€ś IntenzÄ‚Â­vna a dlhotrvajÄ‚Ĺźca vÄ‚Â´ÄąÂa
+âś“ Ĺ etrnĂ© k bielizni a pokoĹľke
+âś“ VydrĹľia aĹľ 100+ pranĂ­
 
-💡 TIP: Vyskúšajte aj iné vône z našej kolekcie!
+đź’ˇ TIP: VyskĂşĹˇajte aj inĂ© vĂ´ne z naĹˇej kolekcie!
 
-Platnosť: 14 dní
+PlatnosĹĄ: 14 dnĂ­
 
-S láskou,
-Tím Vevo''',
-            'timing': '10-12 dní po prvej objednávke',
-            'discount': '10% na druhú objednávku'
+S lĂˇskou,
+TĂ­m Vevo''',
+            'timing': '10-12 dnĂ­ po prvej objednĂˇvke',
+            'discount': '10% na druhĂş objednĂˇvku'
         },
         'optimal_reorder_timing': {
-            'icon': '🎯',
-            'title': 'Čas na doplnenie zásob',
+            'icon': 'đźŽŻ',
+            'title': 'ÄŚas na doplnenie zĂˇsob',
             'priority': 2,
-            'subject': 'Dochádza Vám parfum do prania? 🧺 Nezabudnite na zásoby',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'DochĂˇdza VĂˇm parfum do prania? đź§ş Nezabudnite na zĂˇsoby',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-už je to chvíľa od Vašej poslednej objednávky a možno Vám pomaly dochádza parfum do prania.
+uĹľ je to chvĂ­Äľa od VaĹˇej poslednej objednĂˇvky a moĹľno VĂˇm pomaly dochĂˇdza parfum do prania.
 
-Nechceme, aby VaĹˇa bielizeĹ stratila svoju obÄľĂşbenĂş vĂ´Ĺu! đźŚ¸
+Nechceme, aby VaÄąË‡a bielizeÄąÂ stratila svoju obĂ„ÄľÄ‚ĹźbenÄ‚Ĺź vÄ‚Â´ÄąÂu! Ä‘ĹşĹšÂ¸
 
-đźšš DOPRAVA ZADARMO pri objednĂˇvke nad 25€
-(PlatĂ­ len tento tĂ˝ĹľdeĹ)
+Ä‘ĹşĹˇĹˇ DOPRAVA ZADARMO pri objednÄ‚Ë‡vke nad 25&#8364;
+(PlatÄ‚Â­ len tento tÄ‚ËťÄąÄľdeÄąÂ)
 
-Vaše obľúbené produkty sú pripravené a čakajú na Vás.
+VaĹˇe obÄľĂşbenĂ© produkty sĂş pripravenĂ© a ÄŤakajĂş na VĂˇs.
 
-Objednajte teraz a ušetrite na doprave!
+Objednajte teraz a uĹˇetrite na doprave!
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Potrebujete poradiť s výberom? Sme tu pre Vás! 💬''',
-            'timing': 'Ihneď - sú v optimálnom okne (15-25 dní)',
-            'discount': 'Doprava zadarmo nad 25€'
+P.S. Potrebujete poradiĹĄ s vĂ˝berom? Sme tu pre VĂˇs! đź’¬''',
+            'timing': 'IhneÄŹ - sĂş v optimĂˇlnom okne (15-25 dnĂ­)',
+            'discount': 'Doprava zadarmo nad 25&#8364;'
         },
         'churning_customers': {
-            'icon': '⚠️',
-            'title': 'Záchrana odchádzajúcich zákazníkov',
+            'icon': 'âš ď¸Ź',
+            'title': 'ZĂˇchrana odchĂˇdzajĂşcich zĂˇkaznĂ­kov',
             'priority': 1,
-            'subject': 'Chýbate nám! 💔 Špeciálna ponuka len pre Vás',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'ChĂ˝bate nĂˇm! đź’” Ĺ peciĂˇlna ponuka len pre VĂˇs',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-všimli sme si, že ste u nás už dlhšie nenakúpili a úprimne - chýbate nám! 💕
+vĹˇimli sme si, Ĺľe ste u nĂˇs uĹľ dlhĹˇie nenakĂşpili a Ăşprimne - chĂ˝bate nĂˇm! đź’•
 
-Možno ste našli inú značku, alebo ste len zabudli... Nech je dôvod akýkoľvek, chceme Vás späť!
+MoĹľno ste naĹˇli inĂş znaÄŤku, alebo ste len zabudli... Nech je dĂ´vod akĂ˝koÄľvek, chceme VĂˇs spĂ¤ĹĄ!
 
-Preto sme pre Vás pripravili EXKLUZÍVNU ponuku:
+Preto sme pre VĂˇs pripravili EXKLUZĂŤVNU ponuku:
 
-đźŽ ZÄ˝AVA 20% na celĂş objednĂˇvku
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 20% na celÄ‚Ĺź objednÄ‚Ë‡vku
 + DOPRAVA ZADARMO
-Kód: CHYBATEMI
+KĂłd: CHYBATEMI
 
-Táto ponuka je len pre Vás a platí iba 7 dní.
+TĂˇto ponuka je len pre VĂˇs a platĂ­ iba 7 dnĂ­.
 
-Tešíme sa na Vás!
+TeĹˇĂ­me sa na VĂˇs!
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Ak ste neboli spokojní s niečím v minulosti, dajte nám vedieť. Radi to napravíme! 🙏''',
-            'timing': 'Ihneď - posledná šanca pred stratou',
+P.S. Ak ste neboli spokojnĂ­ s nieÄŤĂ­m v minulosti, dajte nĂˇm vedieĹĄ. Radi to napravĂ­me! đź™Ź''',
+            'timing': 'IhneÄŹ - poslednĂˇ Ĺˇanca pred stratou',
             'discount': '20% + doprava zadarmo'
         },
         'repeat_buyers_90_days': {
-            'icon': '🔄',
-            'title': 'Návrat verných zákazníkov',
+            'icon': 'đź”„',
+            'title': 'NĂˇvrat vernĂ˝ch zĂˇkaznĂ­kov',
             'priority': 2,
-            'subject': 'Váš obľúbený parfum čaká! 🌸 Špeciálna VIP ponuka',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'VĂˇĹˇ obÄľĂşbenĂ˝ parfum ÄŤakĂˇ! đźŚ¸ Ĺ peciĂˇlna VIP ponuka',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ďakujeme, že ste naším verným zákazníkom! Vaša podpora pre nás veľa znamená. 💖
+ÄŹakujeme, Ĺľe ste naĹˇĂ­m vernĂ˝m zĂˇkaznĂ­kom! VaĹˇa podpora pre nĂˇs veÄľa znamenĂˇ. đź’–
 
-Už je to ale dlhšie, čo ste u nás nakúpili, a preto sme pre Vás pripravili špeciálnu VIP ponuku:
+UĹľ je to ale dlhĹˇie, ÄŤo ste u nĂˇs nakĂşpili, a preto sme pre VĂˇs pripravili ĹˇpeciĂˇlnu VIP ponuku:
 
-👑 VIP ZĽAVA 20%
+đź‘‘ VIP ZÄ˝AVA 20%
 + DOPRAVA ZADARMO
-+ DARÄŚEK K OBJEDNĂVKE
-Kód: VIPZAKAZNIK
++ DARĂ„ĹšEK K OBJEDNÄ‚ÂVKE
+KĂłd: VIPZAKAZNIK
 
-Vaše obľúbené vône stále máme skladom a čakajú na Vás!
+VaĹˇe obÄľĂşbenĂ© vĂ´ne stĂˇle mĂˇme skladom a ÄŤakajĂş na VĂˇs!
 
-Platnosť ponuky: 10 dní
+PlatnosĹĄ ponuky: 10 dnĂ­
 
-S vďakou,
-Tím Vevo
+S vÄŹakou,
+TĂ­m Vevo
 
-P.S. Máte nejaké otázky alebo spätnú väzbu? Budeme radi, ak sa ozvete! 💬''',
-            'timing': 'Ihneď - riziko straty zákazníka',
-            'discount': '20% + doprava zadarmo + darček'
+P.S. MĂˇte nejakĂ© otĂˇzky alebo spĂ¤tnĂş vĂ¤zbu? Budeme radi, ak sa ozvete! đź’¬''',
+            'timing': 'IhneÄŹ - riziko straty zĂˇkaznĂ­ka',
+            'discount': '20% + doprava zadarmo + darÄŤek'
         },
         'one_time_buyers_30_days': {
-            'icon': '🛒',
-            'title': 'Re-engagement jednorázových zákazníkov',
+            'icon': 'đź›’',
+            'title': 'Re-engagement jednorĂˇzovĂ˝ch zĂˇkaznĂ­kov',
             'priority': 3,
-            'subject': 'Ako sa Vám páči Vevo parfum? 💕 Máme pre Vás prekvapenie',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Ako sa VĂˇm pĂˇÄŤi Vevo parfum? đź’• MĂˇme pre VĂˇs prekvapenie',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-dúfame, že ste spokojní s naším parfumom do prania!
+dĂşfame, Ĺľe ste spokojnĂ­ s naĹˇĂ­m parfumom do prania!
 
-Ak ste ho ešte nevyskúšali, je najvyšší čas! A ak áno, určite viete, prečo ho naši zákazníci milujú:
+Ak ste ho eĹˇte nevyskĂşĹˇali, je najvyĹˇĹˇĂ­ ÄŤas! A ak Ăˇno, urÄŤite viete, preÄŤo ho naĹˇi zĂˇkaznĂ­ci milujĂş:
 
-âś“ DlhotrvajĂşca vĂ´Ĺa (aĹľ 100+ pranĂ­)
-✓ Šetrné k bielizni aj pokožke
-✓ Luxusné vône za dostupnú cenu
+Ă˘Ĺ›â€ś DlhotrvajÄ‚Ĺźca vÄ‚Â´ÄąÂa (aÄąÄľ 100+ pranÄ‚Â­)
+âś“ Ĺ etrnĂ© k bielizni aj pokoĹľke
+âś“ LuxusnĂ© vĂ´ne za dostupnĂş cenu
 
-Ako poďakovanie za Vašu prvú objednávku máme pre Vás:
+Ako poÄŹakovanie za VaĹˇu prvĂş objednĂˇvku mĂˇme pre VĂˇs:
 
-đźŽ ZÄ˝AVA 15% na ÄŹalĹˇiu objednĂˇvku
-Kód: VERNYSPAT
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 15% na Ă„ĹąalÄąË‡iu objednÄ‚Ë‡vku
+KĂłd: VERNYSPAT
 
-Platnosť: 14 dní
+PlatnosĹĄ: 14 dnĂ­
 
-Tešíme sa na Vás!
+TeĹˇĂ­me sa na VĂˇs!
 
 S pozdravom,
-Tím Vevo''',
-            'timing': '30-45 dní po prvej objednávke',
-            'discount': '15% na druhú objednávku'
+TĂ­m Vevo''',
+            'timing': '30-45 dnĂ­ po prvej objednĂˇvke',
+            'discount': '15% na druhĂş objednĂˇvku'
         },
         'high_value_one_time': {
-            'icon': '💎',
-            'title': 'VIP re-engagement vysokohodnotných zákazníkov',
+            'icon': 'đź’Ž',
+            'title': 'VIP re-engagement vysokohodnotnĂ˝ch zĂˇkaznĂ­kov',
             'priority': 2,
-            'subject': 'Ďakujeme za Vašu veľkú objednávku! 💎 Exkluzívna ponuka',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'ÄŽakujeme za VaĹˇu veÄľkĂş objednĂˇvku! đź’Ž ExkluzĂ­vna ponuka',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ešte raz ďakujeme za Vašu nedávnu objednávku! Veľmi si vážime Vašu dôveru v naše produkty.
+eĹˇte raz ÄŹakujeme za VaĹˇu nedĂˇvnu objednĂˇvku! VeÄľmi si vĂˇĹľime VaĹˇu dĂ´veru v naĹˇe produkty.
 
-Keďže ste náš VIP zákazník, pripravili sme pre Vás EXKLUZÍVNU ponuku:
+KeÄŹĹľe ste nĂˇĹˇ VIP zĂˇkaznĂ­k, pripravili sme pre VĂˇs EXKLUZĂŤVNU ponuku:
 
-💎 VIP ZĽAVA 15%
+đź’Ž VIP ZÄ˝AVA 15%
 + DOPRAVA ZADARMO
-+ PRÉMIOVÉ BALENIE
-Kód: VIPKLIENT
++ PRĂ‰MIOVĂ‰ BALENIE
+KĂłd: VIPKLIENT
 
-Táto ponuka je určená len pre vybraných zákazníkov ako ste Vy.
+TĂˇto ponuka je urÄŤenĂˇ len pre vybranĂ˝ch zĂˇkaznĂ­kov ako ste Vy.
 
-Čo môžete očakávať:
-✓ Rovnaká kvalita, ktorú poznáte
-✓ Nové vône v našej kolekcii
-✓ Prémiové balenie ako darček
+ÄŚo mĂ´Ĺľete oÄŤakĂˇvaĹĄ:
+âś“ RovnakĂˇ kvalita, ktorĂş poznĂˇte
+âś“ NovĂ© vĂ´ne v naĹˇej kolekcii
+âś“ PrĂ©miovĂ© balenie ako darÄŤek
 
-Platnosť: 21 dní
+PlatnosĹĄ: 21 dnĂ­
 
-S úctou,
-Tím Vevo''',
-            'timing': '14-21 dní po prvej objednávke',
-            'discount': '15% + doprava zadarmo + prémiové balenie'
+S Ăşctou,
+TĂ­m Vevo''',
+            'timing': '14-21 dnĂ­ po prvej objednĂˇvke',
+            'discount': '15% + doprava zadarmo + prĂ©miovĂ© balenie'
         },
         'new_customers_welcome': {
-            'icon': '👋',
-            'title': 'Privítanie nových zákazníkov',
+            'icon': 'đź‘‹',
+            'title': 'PrivĂ­tanie novĂ˝ch zĂˇkaznĂ­kov',
             'priority': 3,
-            'subject': 'Vitajte v rodine Vevo! 🎉 Tipy na používanie parfumu',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Vitajte v rodine Vevo! đźŽ‰ Tipy na pouĹľĂ­vanie parfumu',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-vitajte v rodine Vevo! 🎉 Sme veľmi radi, že ste sa rozhodli vyskúšať naše parfumy do prania.
+vitajte v rodine Vevo! đźŽ‰ Sme veÄľmi radi, Ĺľe ste sa rozhodli vyskĂşĹˇaĹĄ naĹˇe parfumy do prania.
 
-Tu je niekoľko tipov, ako získať z parfumu maximum:
+Tu je niekoÄľko tipov, ako zĂ­skaĹĄ z parfumu maximum:
 
-💡 TIPY NA POUŽÍVANIE:
-1. Pridajte 1-2 uzávery do bubna práčky
-2. Pre intenzĂ­vnejĹˇiu vĂ´Ĺu pridajte aj do avivĂˇĹľe
+đź’ˇ TIPY NA POUĹ˝ĂŤVANIE:
+1. Pridajte 1-2 uzĂˇvery do bubna prĂˇÄŤky
+2. Pre intenzÄ‚Â­vnejÄąË‡iu vÄ‚Â´ÄąÂu pridajte aj do avivÄ‚Ë‡ÄąÄľe
 3. Skladujte na suchom a chladnom mieste
 
-âť“ ÄŚASTO KLADENĂ‰ OTĂZKY:
-• Koľko praní vydrží? Až 100+ praní z 200ml fľašky
-â€˘ Je vhodnĂ˝ pre citlivĂş pokoĹľku? Ăno, je hypoalergĂ©nny
-â€˘ MĂ´Ĺľem kombinovaĹĄ vĂ´ne? Ăno, skĂşĹˇajte!
+Ă˘ĹĄâ€ś Ă„ĹšASTO KLADENÄ‚â€° OTÄ‚ÂZKY:
+â€˘ KoÄľko pranĂ­ vydrĹľĂ­? AĹľ 100+ pranĂ­ z 200ml fÄľaĹˇky
+Ă˘&#8364;Ë Je vhodnÄ‚Ëť pre citlivÄ‚Ĺź pokoÄąÄľku? Ä‚Âno, je hypoalergÄ‚Â©nny
+Ă˘&#8364;Ë MÄ‚Â´ÄąÄľem kombinovaÄąÄ„ vÄ‚Â´ne? Ä‚Âno, skÄ‚ĹźÄąË‡ajte!
 
-Ak máte akékoľvek otázky, sme tu pre Vás! Stačí odpovedať na tento email.
+Ak mĂˇte akĂ©koÄľvek otĂˇzky, sme tu pre VĂˇs! StaÄŤĂ­ odpovedaĹĄ na tento email.
 
-Prajeme VĂˇm voĹavĂ© pranie! đźŚ¸
+Prajeme VÄ‚Ë‡m voÄąÂavÄ‚Â© pranie! Ä‘ĹşĹšÂ¸
 
 S pozdravom,
-Tím Vevo''',
-            'timing': '3 dni po doručení objednávky',
-            'discount': 'Žiadna zľava - budovanie vzťahu'
+TĂ­m Vevo''',
+            'timing': '3 dni po doruÄŤenĂ­ objednĂˇvky',
+            'discount': 'Ĺ˝iadna zÄľava - budovanie vzĹĄahu'
         },
         'vip_customers': {
-            'icon': '👑',
-            'title': 'VIP program pre verných zákazníkov',
+            'icon': 'đź‘‘',
+            'title': 'VIP program pre vernĂ˝ch zĂˇkaznĂ­kov',
             'priority': 4,
-            'subject': 'đź‘‘ ExkluzĂ­vne pre VIP: NovĂˇ vĂ´Ĺa eĹˇte pred ostatnĂ˝mi!',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Ä‘Ĺşâ€â€ ExkluzÄ‚Â­vne pre VIP: NovÄ‚Ë‡ vÄ‚Â´ÄąÂa eÄąË‡te pred ostatnÄ‚Ëťmi!',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ako náš VIP zákazník s {pocet_objednavok}+ objednávkami ste pre nás veľmi dôležití!
+ako nĂˇĹˇ VIP zĂˇkaznĂ­k s {pocet_objednavok}+ objednĂˇvkami ste pre nĂˇs veÄľmi dĂ´leĹľitĂ­!
 
-Preto Vám ako prvým predstavujeme NOVINKU v našej kolekcii:
+Preto VĂˇm ako prvĂ˝m predstavujeme NOVINKU v naĹˇej kolekcii:
 
-đźŚź [NOVĂ VĂ”Ĺ‡A] - uĹľ ÄŤoskoro!
+Ä‘ĹşĹšĹş [NOVÄ‚Â VÄ‚â€ťÄąâ€ˇA] - uÄąÄľ Ă„Ĺ¤oskoro!
 
-Ako VIP zákazník máte:
-👑 Prednostný prístup k novinkám
-👑 Trvalú zľavu 10% na všetky produkty
-👑 Doprava zadarmo pri každej objednávke
-👑 Darček k každej objednávke
+Ako VIP zĂˇkaznĂ­k mĂˇte:
+đź‘‘ PrednostnĂ˝ prĂ­stup k novinkĂˇm
+đź‘‘ TrvalĂş zÄľavu 10% na vĹˇetky produkty
+đź‘‘ Doprava zadarmo pri kaĹľdej objednĂˇvke
+đź‘‘ DarÄŤek k kaĹľdej objednĂˇvke
 
-Váš VIP kód: VIPCLUB
+VĂˇĹˇ VIP kĂłd: VIPCLUB
 
-Ďakujeme za Vašu vernosť! 💖
+ÄŽakujeme za VaĹˇu vernosĹĄ! đź’–
 
-S úctou,
-Tím Vevo
+S Ăşctou,
+TĂ­m Vevo
 
-P.S. MĂˇte nĂˇpad na novĂş vĂ´Ĺu? NapĂ­Ĺˇte nĂˇm, radi vypoÄŤujeme! đź’¬''',
-            'timing': 'Pravidelne 1x mesačne',
-            'discount': 'Trvalá 10% zľava + doprava zadarmo'
+P.S. MÄ‚Ë‡te nÄ‚Ë‡pad na novÄ‚Ĺź vÄ‚Â´ÄąÂu? NapÄ‚Â­ÄąË‡te nÄ‚Ë‡m, radi vypoĂ„Ĺ¤ujeme! Ä‘Ĺşâ€™Â¬''',
+            'timing': 'Pravidelne 1x mesaÄŤne',
+            'discount': 'TrvalĂˇ 10% zÄľava + doprava zadarmo'
         },
         'failed_payment_only': {
-            'icon': '❌',
-            'title': 'Záchrana neúspešných platieb',
+            'icon': 'âťŚ',
+            'title': 'ZĂˇchrana neĂşspeĹˇnĂ˝ch platieb',
             'priority': 1,
-            'subject': 'Vaša objednávka čaká! 🛒 Pomôžeme Vám dokončiť nákup',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'VaĹˇa objednĂˇvka ÄŤakĂˇ! đź›’ PomĂ´Ĺľeme VĂˇm dokonÄŤiĹĄ nĂˇkup',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-všimli sme si, že sa Vám nepodarilo dokončiť objednávku.
+vĹˇimli sme si, Ĺľe sa VĂˇm nepodarilo dokonÄŤiĹĄ objednĂˇvku.
 
-Nechceme, aby VĂˇm uĹˇla prĂ­leĹľitosĹĄ maĹĄ voĹavĂş bielizeĹ! đźŚ¸
+Nechceme, aby VÄ‚Ë‡m uÄąË‡la prÄ‚Â­leÄąÄľitosÄąÄ„ maÄąÄ„ voÄąÂavÄ‚Ĺź bielizeÄąÂ! Ä‘ĹşĹšÂ¸
 
-Ak ste mali problém s platbou, môžete:
-1. Skúsiť inú platobnú kartu
-2. Zvoliť platbu na dobierku
-3. Kontaktovať nás pre pomoc
+Ak ste mali problĂ©m s platbou, mĂ´Ĺľete:
+1. SkĂşsiĹĄ inĂş platobnĂş kartu
+2. ZvoliĹĄ platbu na dobierku
+3. KontaktovaĹĄ nĂˇs pre pomoc
 
-đźŽ Ako ospravedlnenie za neprĂ­jemnosti mĂˇme pre VĂˇs:
-ZĽAVA 10% na Vašu objednávku
-Kód: DOKONCIM
+Ä‘ĹşĹ˝Â Ako ospravedlnenie za neprÄ‚Â­jemnosti mÄ‚Ë‡me pre VÄ‚Ë‡s:
+ZÄ˝AVA 10% na VaĹˇu objednĂˇvku
+KĂłd: DOKONCIM
 
-Potrebujete pomoc? Stačí odpovedať na tento email alebo zavolať na [telefón].
+Potrebujete pomoc? StaÄŤĂ­ odpovedaĹĄ na tento email alebo zavolaĹĄ na [telefĂłn].
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Vaše produkty sú stále v košíku a čakajú na Vás! 🛒''',
-            'timing': '24-48 hodín po neúspešnej platbe',
+P.S. VaĹˇe produkty sĂş stĂˇle v koĹˇĂ­ku a ÄŤakajĂş na VĂˇs! đź›’''',
+            'timing': '24-48 hodĂ­n po neĂşspeĹˇnej platbe',
             'discount': '10% + pomoc s platbou'
         },
         'long_dormant': {
-            'icon': '💤',
-            'title': 'Reaktivácia dlhodobo neaktívnych',
+            'icon': 'đź’¤',
+            'title': 'ReaktivĂˇcia dlhodobo neaktĂ­vnych',
             'priority': 5,
-            'subject': 'UĹľ ste zabudli na voĹavĂş bielizeĹ? đź˘ MĂˇme pre VĂˇs prekvapenie',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'UÄąÄľ ste zabudli na voÄąÂavÄ‚Ĺź bielizeÄąÂ? Ä‘ĹşÂË MÄ‚Ë‡me pre VÄ‚Ë‡s prekvapenie',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-je to už dlhšie, čo ste u nás nakúpili. Chýbate nám! 💕
+je to uĹľ dlhĹˇie, ÄŤo ste u nĂˇs nakĂşpili. ChĂ˝bate nĂˇm! đź’•
 
-Možno ste našli inú značku, alebo ste jednoducho zabudli... Nech je dôvod akýkoľvek, chceli by sme Vás späť!
+MoĹľno ste naĹˇli inĂş znaÄŤku, alebo ste jednoducho zabudli... Nech je dĂ´vod akĂ˝koÄľvek, chceli by sme VĂˇs spĂ¤ĹĄ!
 
-Preto sme pre Vás pripravili NAJLEPŠIU ponuku:
+Preto sme pre VĂˇs pripravili NAJLEPĹ IU ponuku:
 
-đźŽ MEGA ZÄ˝AVA 30%
+Ä‘ĹşĹ˝Â MEGA ZĂ„ËťAVA 30%
 + DOPRAVA ZADARMO
-+ DARÄŚEK K OBJEDNĂVKE
-Kód: CHCEMSPAT
++ DARĂ„ĹšEK K OBJEDNÄ‚ÂVKE
+KĂłd: CHCEMSPAT
 
-Čo sa za ten čas zmenilo:
-✓ Nové vône v kolekcii
-✓ Vylepšená receptúra
-âś“ EĹˇte dlhĹˇie trvajĂşca vĂ´Ĺa
+ÄŚo sa za ten ÄŤas zmenilo:
+âś“ NovĂ© vĂ´ne v kolekcii
+âś“ VylepĹˇenĂˇ receptĂşra
+Ă˘Ĺ›â€ś EÄąË‡te dlhÄąË‡ie trvajÄ‚Ĺźca vÄ‚Â´ÄąÂa
 
-Táto ponuka platí len 7 dní a je určená špeciálne pre Vás!
+TĂˇto ponuka platĂ­ len 7 dnĂ­ a je urÄŤenĂˇ ĹˇpeciĂˇlne pre VĂˇs!
 
-Tešíme sa na Váš návrat!
+TeĹˇĂ­me sa na VĂˇĹˇ nĂˇvrat!
 
 S pozdravom,
-Tím Vevo''',
-            'timing': 'Ihneď - posledný pokus',
-            'discount': '30% + doprava zadarmo + darček'
+TĂ­m Vevo''',
+            'timing': 'IhneÄŹ - poslednĂ˝ pokus',
+            'discount': '30% + doprava zadarmo + darÄŤek'
         },
         'recent_buyers_14_60_days': {
-            'icon': '⏰',
-            'title': 'Pripomenutie nedávnym zákazníkom',
+            'icon': 'âŹ°',
+            'title': 'Pripomenutie nedĂˇvnym zĂˇkaznĂ­kom',
             'priority': 3,
-            'subject': 'Nezabudnite na doplnenie zásob! 🧺 Novinky zo sveta Vevo',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Nezabudnite na doplnenie zĂˇsob! đź§ş Novinky zo sveta Vevo',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-dĂşfame, Ĺľe si uĹľĂ­vate voĹavĂş bielizeĹ s naĹˇimi parfumami! đźŚ¸
+dÄ‚Ĺźfame, ÄąÄľe si uÄąÄľÄ‚Â­vate voÄąÂavÄ‚Ĺź bielizeÄąÂ s naÄąË‡imi parfumami! Ä‘ĹşĹšÂ¸
 
-Chceli sme Vás informovať o novinkách:
+Chceli sme VĂˇs informovaĹĄ o novinkĂˇch:
 
-📰 ČO JE NOVÉ:
-• Nové vône v kolekcii
-• Výhodné balíčky pre rodiny
-â€˘ Tipy na starostlivosĹĄ o bielizeĹ
+đź“° ÄŚO JE NOVĂ‰:
+â€˘ NovĂ© vĂ´ne v kolekcii
+â€˘ VĂ˝hodnĂ© balĂ­ÄŤky pre rodiny
+Ă˘&#8364;Ë Tipy na starostlivosÄąÄ„ o bielizeÄąÂ
 
-💡 VEDELI STE?
-Naše parfumy sú:
-✓ Hypoalergénne
-✓ Ekologické
-✓ Vyrobené na Slovensku
+đź’ˇ VEDELI STE?
+NaĹˇe parfumy sĂş:
+âś“ HypoalergĂ©nne
+âś“ EkologickĂ©
+âś“ VyrobenĂ© na Slovensku
 
-Ak by ste chceli doplniť zásoby, máme pre Vás:
+Ak by ste chceli doplniĹĄ zĂˇsoby, mĂˇme pre VĂˇs:
 
-đźšš DOPRAVA ZADARMO nad 30€
-(Tento tĂ˝ĹľdeĹ)
+Ä‘ĹşĹˇĹˇ DOPRAVA ZADARMO nad 30&#8364;
+(Tento tÄ‚ËťÄąÄľdeÄąÂ)
 
-Prajeme voĹavĂ˝ deĹ!
+Prajeme voÄąÂavÄ‚Ëť deÄąÂ!
 
 S pozdravom,
-Tím Vevo''',
-            'timing': 'Priebežne podľa dátumu poslednej objednávky',
-            'discount': 'Doprava zadarmo nad 30€'
+TĂ­m Vevo''',
+            'timing': 'PriebeĹľne podÄľa dĂˇtumu poslednej objednĂˇvky',
+            'discount': 'Doprava zadarmo nad 30&#8364;'
         }
     }
 
@@ -10903,7 +10968,7 @@ Tím Vevo''',
 
             priority = segment_info.get('priority', 99)
             priority_class = 'priority-1' if priority <= 2 else ('priority-2' if priority <= 4 else 'priority-3')
-            priority_text = 'Vysoká' if priority <= 2 else ('Stredná' if priority <= 4 else 'Nízka')
+            priority_text = 'VysokĂˇ' if priority <= 2 else ('StrednĂˇ' if priority <= 4 else 'NĂ­zka')
 
             segment_data = segment_info['data']
 
@@ -10911,7 +10976,7 @@ Tím Vevo''',
         <div class="email-section">
             <div class="email-header">
                 <h2>
-                    <span>{template.get('icon', '📧')}</span>
+                    <span>{template.get('icon', 'đź“§')}</span>
                     {template.get('title', segment_name)}
                     <span class="priority-badge {priority_class}">Priorita: {priority_text}</span>
                 </h2>
@@ -10919,37 +10984,37 @@ Tím Vevo''',
 
             <div class="email-meta">
                 <div class="meta-item">
-                    <div class="label">Počet zákazníkov</div>
+                    <div class="label">PoÄŤet zĂˇkaznĂ­kov</div>
                     <div class="value" style="font-size: 1.5rem; color: #667eea;">{segment_info['count']}</div>
                 </div>
                 <div class="meta-item">
-                    <div class="label">Kedy poslať</div>
+                    <div class="label">Kedy poslaĹĄ</div>
                     <div class="value">{template.get('timing', segment_info.get('send_timing', 'N/A'))}</div>
                 </div>
                 <div class="meta-item">
-                    <div class="label">Odporúčaná zľava</div>
+                    <div class="label">OdporĂşÄŤanĂˇ zÄľava</div>
                     <div class="value">{template.get('discount', segment_info.get('discount_suggestion', 'N/A'))}</div>
                 </div>
                 <div class="meta-item">
-                    <div class="label">Účel emailu</div>
+                    <div class="label">ĂšÄŤel emailu</div>
                     <div class="value">{segment_info.get('email_purpose', 'N/A')}</div>
                 </div>
             </div>
 
             <div class="email-template">
-                <h3>📝 Šablóna emailu</h3>
+                <h3>đź“ť Ĺ ablĂłna emailu</h3>
                 <div class="subject">
                     <strong>Predmet:</strong> {template.get('subject', 'N/A')}
                 </div>
-                <div class="body">{template.get('body', 'Šablóna nie je k dispozícii')}</div>
+                <div class="body">{template.get('body', 'Ĺ ablĂłna nie je k dispozĂ­cii')}</div>
             </div>
 
             <div class="note">
-                💡 <strong>Tip:</strong> Personalizujte email menom zákazníka. Nahraďte {{meno}} skutočným menom. Testujte rôzne predmety pre vyšší open rate.
+                đź’ˇ <strong>Tip:</strong> Personalizujte email menom zĂˇkaznĂ­ka. NahraÄŹte {{meno}} skutoÄŤnĂ˝m menom. Testujte rĂ´zne predmety pre vyĹˇĹˇĂ­ open rate.
             </div>
 
             <button class="toggle-btn" onclick="toggleCustomerList('{segment_name}')">
-                📋 Zobraziť/Skryť zoznam zákazníkov ({segment_info['count']})
+                đź“‹ ZobraziĹĄ/SkryĹĄ zoznam zĂˇkaznĂ­kov ({segment_info['count']})
             </button>
 
             <div class="customer-list" id="list-{segment_name}">"""
@@ -10962,9 +11027,9 @@ Tím Vevo''',
                         <tr>
                             <th>Email</th>
                             <th>Meno</th>
-                            <th class="number">Počet obj.</th>
-                            <th class="number">Celková tržba</th>
-                            <th class="number">Dní od posl.</th>
+                            <th class="number">PoÄŤet obj.</th>
+                            <th class="number">CelkovĂˇ trĹľba</th>
+                            <th class="number">DnĂ­ od posl.</th>
                             <th>Mesto</th>
                         </tr>
                     </thead>
@@ -11005,7 +11070,7 @@ Tím Vevo''',
                             <td>{email}</td>
                             <td>{name}</td>
                             <td class="number">{int(order_count)}</td>
-                            <td class="number">€{float(revenue):.2f}</td>
+                            <td class="number">&#8364;{float(revenue):.2f}</td>
                             <td class="number">{int(days)}</td>
                             <td>{city}</td>
                         </tr>"""
@@ -11014,7 +11079,7 @@ Tím Vevo''',
                     html_content += f"""
                         <tr style="background: #fef3c7;">
                             <td colspan="6" style="text-align: center; font-style: italic;">
-                                ... a ďalších {len(segment_data) - 200} zákazníkov. Kompletný zoznam v CSV súbore.
+                                ... a ÄŹalĹˇĂ­ch {len(segment_data) - 200} zĂˇkaznĂ­kov. KompletnĂ˝ zoznam v CSV sĂşbore.
                             </td>
                         </tr>"""
 
@@ -11029,8 +11094,8 @@ Tím Vevo''',
 
     html_content += f"""
         <div class="footer">
-            <p>Vygenerované: {datetime.now().strftime('%d.%m.%Y %H:%M')} | Vevo Email Marketing Stratégia</p>
-            <p>📧 Pre export emailov použite CSV súbory v priečinku data/</p>
+            <p>VygenerovanĂ©: {datetime.now().strftime('%d.%m.%Y %H:%M')} | Vevo Email Marketing StratĂ©gia</p>
+            <p>đź“§ Pre export emailov pouĹľite CSV sĂşbory v prieÄŤinku data/</p>
         </div>
     </div>
 
@@ -11045,3 +11110,7 @@ Tím Vevo''',
 """
 
     return html_content
+
+
+
+
