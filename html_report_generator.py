@@ -5069,15 +5069,32 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         // Orders Chart
         const ordersCtx = document.getElementById('ordersChart').getContext('2d');
         new Chart(ordersCtx, {{
-            type: 'bar',
             data: {{
                 labels: {json.dumps(dates)},
-                datasets: [{{
-                    label: 'Orders',
-                    data: {json.dumps(orders_data)},
-                    backgroundColor: '#9f7aea',
-                    borderRadius: 5
-                }}]
+                datasets: [
+                    {{
+                        type: 'bar',
+                        label: 'Orders',
+                        data: {json.dumps(orders_data)},
+                        backgroundColor: '#9f7aea',
+                        borderRadius: 5,
+                        order: 2
+                    }},
+                    {{
+                        type: 'line',
+                        label: 'Orders Trend',
+                        data: {json.dumps(orders_data)},
+                        borderColor: '#6b46c1',
+                        backgroundColor: 'rgba(107, 70, 193, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        fill: false,
+                        pointRadius: 0,
+                        pointHoverRadius: 3,
+                        spanGaps: false,
+                        order: 1
+                    }}
+                ]
             }},
             options: {{
                 responsive: true,
@@ -5086,6 +5103,18 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 plugins: {{
                     legend: {{
                         display: false
+                    }},
+                    tooltip: {{
+                        callbacks: {{
+                            afterBody: function(items) {{
+                                if (!items.length) return '';
+                                const value = Number(items[0].raw || 0);
+                                if (value === 0) {{
+                                    return 'This date is included in the report with 0 orders.';
+                                }}
+                                return '';
+                            }}
+                        }}
                     }}
                 }},
                 scales: {{

@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-03-31
+Last updated: 2026-04-01
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -118,6 +118,13 @@ Bootstrap entrypoints:
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
+
+### 2026-04-01
+- Fixed Daily Orders chart visibility issue in shared HTML generator:
+  - date coverage in `aggregate_by_date_*` was already complete, including zero-order days,
+  - pure bar rendering made zero-order days look like "missing days" at the start of sparse client timelines,
+  - `Daily Orders` now overlays a thin line series on top of bars so zero-order periods remain visually continuous instead of appearing absent.
+- Re-generated ROY report for `2025-08-06..2026-03-31` after the chart fix.
 
 ### 2026-04-01
 - Completed `P4.2` observability baseline for reporting:
