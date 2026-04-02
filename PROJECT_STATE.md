@@ -316,7 +316,7 @@ Bootstrap entrypoints:
     - one current VEVO test HTML remains for UI review.
 
 Next exact step:
-- Review `data/vevo/report_20260301-20260331__test.html` visually and decide whether the new top CFO KPI band should fully replace the old summary-card-first entry flow or remain as a separate executive layer above it.
+- Review `data/vevo/report_20260301-20260331__test.html` visually and decide whether the new global date-range control should stay as a top-level report filter or move into the sidebar/dashboard navigation.
 
 ### 2026-04-02
 - Added reusable CFO KPI payload builder in `reporting_core/cfo_kpis.py` so the main report can reuse the same executive KPI logic as the standalone CFO dashboard.
@@ -341,3 +341,11 @@ Next exact step:
   - Pre-Ad Contribution Margin
   - Post-Ad Margin
   - Company Margin (incl. fixed)
+- Added global client-side date-range controls to the test report shell:
+  - `From` / `To` native date inputs,
+  - quick presets `7D / 30D / 90D / YTD / All`,
+  - filters only charts whose x-axis labels are daily ISO dates (`YYYY-MM-DD`),
+  - leaves summary cards and non-time-series charts unchanged,
+  - persists the selected range in `localStorage`.
+- Regenerated VEVO March test artifact again after the range-filter change:
+  - `data/vevo/report_20260301-20260331__test.html`

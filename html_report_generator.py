@@ -408,6 +408,35 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
         """
 
+    chart_range_controls_html = ""
+    if dates:
+        chart_range_controls_html = f"""
+        <div class="chart-range-panel">
+            <div class="chart-range-copy">
+                <div class="section-kicker" data-en="Chart Range" data-sk="Rozsah grafov">Chart Range</div>
+                <h3 class="chart-range-heading" data-en="Filter daily charts by date" data-sk="Filtruj denne grafy podla datumu">Filter daily charts by date</h3>
+                <p class="chart-range-desc" data-en="Use this only for date-based charts. Summary cards and categorical charts stay on the full report period." data-sk="Pouzi toto len pre grafy s datumami. Suhrnne karty a kategoricke grafy zostavaju za cele obdobie reportu.">Use this only for date-based charts. Summary cards and categorical charts stay on the full report period.</p>
+            </div>
+            <div class="chart-range-controls" id="chartRangeControls">
+                <label class="chart-range-input">
+                    <span data-en="From" data-sk="Od">From</span>
+                    <input type="date" id="chartRangeStart" min="{dates[0]}" max="{dates[-1]}" value="{dates[0]}">
+                </label>
+                <label class="chart-range-input">
+                    <span data-en="To" data-sk="Do">To</span>
+                    <input type="date" id="chartRangeEnd" min="{dates[0]}" max="{dates[-1]}" value="{dates[-1]}">
+                </label>
+                <div class="chart-range-presets">
+                    <button type="button" class="chart-range-btn" data-range="7d">7D</button>
+                    <button type="button" class="chart-range-btn" data-range="30d">30D</button>
+                    <button type="button" class="chart-range-btn" data-range="90d">90D</button>
+                    <button type="button" class="chart-range-btn" data-range="ytd">YTD</button>
+                    <button type="button" class="chart-range-btn" data-range="all" data-en="All" data-sk="Vsetko">All</button>
+                </div>
+            </div>
+        </div>
+        """
+
     new_ret_dates = []
     new_ret_new_revenue = []
     new_ret_returning_revenue = []
@@ -967,6 +996,86 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             color: #64748b;
         }}
 
+        .chart-range-panel {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 18px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        }}
+
+        .chart-range-heading {{
+            margin: 0 0 6px 0;
+            color: var(--ink);
+            font-size: 1.08rem;
+            letter-spacing: -0.02em;
+        }}
+
+        .chart-range-desc {{
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.5;
+            max-width: 760px;
+        }}
+
+        .chart-range-controls {{
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 320px;
+        }}
+
+        .chart-range-input {{
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            color: #64748b;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }}
+
+        .chart-range-input input {{
+            border: 1px solid rgba(203, 213, 225, 0.9);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.92rem;
+            color: var(--ink);
+            background: #fff;
+        }}
+
+        .chart-range-presets {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }}
+
+        .chart-range-btn {{
+            border: 1px solid rgba(251, 146, 60, 0.24);
+            background: #fff7ed;
+            color: #9a3412;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }}
+
+        .chart-range-btn.active {{
+            background: #fb923c;
+            color: white;
+            border-color: #fb923c;
+            box-shadow: 0 6px 16px rgba(251, 146, 60, 0.25);
+        }}
+
         .summary-cards {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -1379,6 +1488,16 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 align-items: stretch;
             }}
 
+            .chart-range-panel {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+
+            .chart-range-controls {{
+                min-width: 0;
+                width: 100%;
+            }}
+
             .cfo-top-window-switch {{
                 width: 100%;
             }}
@@ -1443,6 +1562,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>
         {cfo_top_block_html}
+        {chart_range_controls_html}
         {data_quality_section}
         {quick_insights_html}
         {report_guide_html}
@@ -5339,6 +5459,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         let toggleAllStateExpanded = false;
         let cfoTopActiveWindow = (JSON.parse(localStorage.getItem('reportCfoTopWindow') || 'null')) || (({json.dumps(cfo_kpi_payload.get('default_window') if cfo_kpi_payload else 'monthly')}) || 'monthly');
         const CFO_TOP_KPI = {json.dumps(cfo_kpi_payload or {}, ensure_ascii=False)};
+        const REPORT_DATE_DOMAIN = {json.dumps({"min": dates[0] if dates else None, "max": dates[-1] if dates else None}, ensure_ascii=False)};
+        let chartRangeState = JSON.parse(localStorage.getItem('reportChartRange') || 'null') || {{
+            start: REPORT_DATE_DOMAIN.min,
+            end: REPORT_DATE_DOMAIN.max
+        }};
+        const RANGE_MANAGED_CHARTS = [];
 
         const I18N_SK = {{
             "Expand All Tables": "Rozbalit vsetky tabulky",
@@ -5728,6 +5854,136 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             monthly: ['vs_prev_30d', 'vs_year']
         }};
 
+        function deepCloneChartValue(value) {{
+            return value === undefined ? value : JSON.parse(JSON.stringify(value));
+        }}
+
+        function isIsoDateLabel(value) {{
+            return typeof value === 'string' && /^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(value);
+        }}
+
+        function sliceDatasetArrays(dataset, labelsLen, indexes) {{
+            const clone = deepCloneChartValue(dataset);
+            Object.keys(clone || {{}}).forEach((key) => {{
+                const value = clone[key];
+                if (Array.isArray(value) && value.length === labelsLen) {{
+                    clone[key] = indexes.map((idx) => value[idx]);
+                }}
+            }});
+            return clone;
+        }}
+
+        function normalizeChartRange(start, end) {{
+            if (!REPORT_DATE_DOMAIN.min || !REPORT_DATE_DOMAIN.max) {{
+                return {{ start: start || null, end: end || null }};
+            }}
+
+            let normalizedStart = start || REPORT_DATE_DOMAIN.min;
+            let normalizedEnd = end || REPORT_DATE_DOMAIN.max;
+
+            if (normalizedStart < REPORT_DATE_DOMAIN.min) normalizedStart = REPORT_DATE_DOMAIN.min;
+            if (normalizedEnd > REPORT_DATE_DOMAIN.max) normalizedEnd = REPORT_DATE_DOMAIN.max;
+            if (normalizedStart > normalizedEnd) {{
+                const swap = normalizedStart;
+                normalizedStart = normalizedEnd;
+                normalizedEnd = swap;
+            }}
+
+            return {{ start: normalizedStart, end: normalizedEnd }};
+        }}
+
+        function applyRangeToManagedCharts() {{
+            const normalized = normalizeChartRange(chartRangeState.start, chartRangeState.end);
+            chartRangeState = normalized;
+            localStorage.setItem('reportChartRange', JSON.stringify(chartRangeState));
+
+            const startInput = document.getElementById('chartRangeStart');
+            const endInput = document.getElementById('chartRangeEnd');
+            if (startInput) startInput.value = normalized.start || '';
+            if (endInput) endInput.value = normalized.end || '';
+
+            RANGE_MANAGED_CHARTS.forEach((entry) => {{
+                const labels = entry.originalLabels || [];
+                if (!labels.length) return;
+
+                const indexes = [];
+                labels.forEach((label, idx) => {{
+                    if ((!normalized.start || label >= normalized.start) && (!normalized.end || label <= normalized.end)) {{
+                        indexes.push(idx);
+                    }}
+                }});
+
+                const effectiveIndexes = indexes.length ? indexes : labels.map((_, idx) => idx);
+                entry.chart.data.labels = effectiveIndexes.map((idx) => labels[idx]);
+                entry.chart.data.datasets = (entry.originalDatasets || []).map((dataset) =>
+                    sliceDatasetArrays(dataset, labels.length, effectiveIndexes)
+                );
+                entry.chart.update('none');
+            }});
+
+            const presets = document.querySelectorAll('.chart-range-btn');
+            presets.forEach((btn) => btn.classList.remove('active'));
+            if (normalized.start === REPORT_DATE_DOMAIN.min && normalized.end === REPORT_DATE_DOMAIN.max) {{
+                const allBtn = document.querySelector('.chart-range-btn[data-range="all"]');
+                if (allBtn) allBtn.classList.add('active');
+            }}
+        }}
+
+        function setChartRangeFromPreset(preset) {{
+            if (!REPORT_DATE_DOMAIN.min || !REPORT_DATE_DOMAIN.max) return;
+
+            const maxDate = new Date(`${{REPORT_DATE_DOMAIN.max}}T00:00:00`);
+            const startDate = new Date(maxDate);
+
+            if (preset === 'all') {{
+                chartRangeState = {{ start: REPORT_DATE_DOMAIN.min, end: REPORT_DATE_DOMAIN.max }};
+                applyRangeToManagedCharts();
+                return;
+            }}
+
+            if (preset === 'ytd') {{
+                chartRangeState = {{
+                    start: `${{maxDate.getFullYear()}}-01-01`,
+                    end: REPORT_DATE_DOMAIN.max
+                }};
+                applyRangeToManagedCharts();
+                const ytdBtn = document.querySelector('.chart-range-btn[data-range="ytd"]');
+                if (ytdBtn) ytdBtn.classList.add('active');
+                return;
+            }}
+
+            const days = Number(String(preset).replace('d', ''));
+            if (Number.isFinite(days) && days > 0) {{
+                startDate.setDate(startDate.getDate() - (days - 1));
+                const startIso = startDate.toISOString().slice(0, 10);
+                chartRangeState = {{
+                    start: startIso < REPORT_DATE_DOMAIN.min ? REPORT_DATE_DOMAIN.min : startIso,
+                    end: REPORT_DATE_DOMAIN.max
+                }};
+                applyRangeToManagedCharts();
+                const activeBtn = document.querySelector(`.chart-range-btn[data-range="${{preset}}"]`);
+                if (activeBtn) activeBtn.classList.add('active');
+            }}
+        }}
+
+        const NativeChart = Chart;
+        function ManagedChart(ctx, config) {{
+            const chart = new NativeChart(ctx, config);
+            const labels = (config && config.data && Array.isArray(config.data.labels)) ? config.data.labels : [];
+            if (labels.length && labels.every(isIsoDateLabel)) {{
+                RANGE_MANAGED_CHARTS.push({{
+                    chart,
+                    originalLabels: deepCloneChartValue(labels),
+                    originalDatasets: deepCloneChartValue(config.data.datasets || [])
+                }});
+            }}
+            return chart;
+        }}
+        Object.assign(ManagedChart, NativeChart);
+        ManagedChart.prototype = NativeChart.prototype;
+        Chart = ManagedChart;
+        window.Chart = ManagedChart;
+
         function cfoTopLocale() {{
             return currentLang === 'sk' ? 'sk-SK' : 'en-US';
         }}
@@ -5874,6 +6130,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 '.cfo-top-heading',
                 '.cfo-top-desc',
                 '.cfo-top-card-title',
+                '.chart-range-heading',
+                '.chart-range-desc',
+                '.chart-range-input span',
+                '.chart-range-btn',
                 '.report-guide h3',
                 '.report-guide li',
                 '.metric-cheatsheet h3',
@@ -5916,9 +6176,21 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             document.querySelectorAll('.cfo-top-window-btn').forEach((btn) => {{
                 btn.addEventListener('click', () => renderCfoTopKpis(btn.dataset.window || 'monthly'));
             }});
+            document.getElementById('chartRangeStart')?.addEventListener('change', (event) => {{
+                chartRangeState.start = event.target.value || REPORT_DATE_DOMAIN.min;
+                applyRangeToManagedCharts();
+            }});
+            document.getElementById('chartRangeEnd')?.addEventListener('change', (event) => {{
+                chartRangeState.end = event.target.value || REPORT_DATE_DOMAIN.max;
+                applyRangeToManagedCharts();
+            }});
+            document.querySelectorAll('.chart-range-btn').forEach((btn) => {{
+                btn.addEventListener('click', () => setChartRangeFromPreset(btn.dataset.range || 'all'));
+            }});
             applyLanguage(currentLang);
             applyMetricGroup(localStorage.getItem('reportMetricGroup') || 'all');
             renderCfoTopKpis(cfoTopActiveWindow);
+            applyRangeToManagedCharts();
         }});
 
         // Collapsible table functionality
