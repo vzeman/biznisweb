@@ -429,3 +429,24 @@ Next exact step:
   - successful VEVO March test regenerate with variant bundle creation,
   - zero leftover literal `{render_period_switcher(...)}`
   - working period-switcher links for all major sections in both the main report and child period variants.
+
+### 2026-04-02
+- Merged the richer analytics payload from the fuller reporting build into the isolated `test2` dashboard track while keeping the `test2` intro/hero shell unchanged.
+- `dashboard_test2.py` now renders additional sections from the richer reporting data:
+  - customer quality and retention,
+  - calendar patterns and weather,
+  - geo profitability,
+  - product trend breakout/table.
+- `html_report_generator.py` passes the richer analytics payload through to `generate_test2_dashboard(...)`.
+- Fixed a `test2` serialization bug by replacing the raw `customer_concentration` DataFrame payload with a JSON-safe summary object in the dashboard bootstrap payload.
+- Cleaned the visible Slovak labels in `test2` that were previously mojibake/broken:
+  - `Kvalita zákazníkov a retencia`
+  - `Toto rozširuje pekný ...`
+  - `Denná miera refundov odhaľuje operačné problémy, nie len súčet.`
+- Regenerated and verified the VEVO March `test2` artifact:
+  - `data/vevo/report_20260301-20260331__test2.html`
+- Verified:
+  - syntax with `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`
+  - successful VEVO March `test2` regenerate
+  - expected sections present in HTML
+  - cleaned Slovak strings present in final HTML output

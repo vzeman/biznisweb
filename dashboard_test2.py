@@ -618,8 +618,8 @@ def generate_test2_dashboard(
                 </section>
                 <section class="section" id="customers">
                     <div class="section-head">
-                        <h2><span class="lang-en">Customer quality and retention</span><span class="lang-sk hidden">Kvalita z??kazn??kov a retencia</span></h2>
-                        <p><span class="lang-en">This extends the nice `test2` shell with retention, refunds and concentration data from the richer reporting build.</span><span class="lang-sk hidden">Toto roz??iruje pekn?? `test2` shell o retenciu, refundy a koncentr??ciu z bohat??ieho reportingu.</span></p>
+                        <h2><span class="lang-en">Customer quality and retention</span><span class="lang-sk hidden">Kvalita zákazníkov a retencia</span></h2>
+                        <p><span class="lang-en">This extends the nice `test2` shell with retention, refunds and concentration data from the richer reporting build.</span><span class="lang-sk hidden">Toto rozširuje pekný `test2` shell o retenciu, refundy a koncentráciu z bohatšieho reportingu.</span></p>
                     </div>
                     <div class="panel chart-card" style="margin-bottom:18px;">
                         <div class="mini-grid">
@@ -654,7 +654,7 @@ def generate_test2_dashboard(
                             <div class="card-head">
                                 <div>
                                     <h3><span class="lang-en">Refund trend</span><span class="lang-sk hidden">Trend refundov</span></h3>
-                                    <p><span class="lang-en">Daily refund rate makes operational friction visible instead of hiding it in totals.</span><span class="lang-sk hidden">Denn?? miera refundov odha??uje operacne problemy, nie len sucet.</span></p>
+                                    <p><span class="lang-en">Daily refund rate makes operational friction visible instead of hiding it in totals.</span><span class="lang-sk hidden">Denná miera refundov odhaľuje operačné problémy, nie len súčet.</span></p>
                                 </div>
                             </div>
                             <div class="chart-shell"><canvas id="refundRateChart"></canvas></div>
