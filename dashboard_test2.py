@@ -6,7 +6,7 @@ Isolated test2 dashboard renderer.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from html import escape
 from typing import Any, Dict, List, Optional
 
@@ -94,23 +94,66 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     aov = [round((rev / ords) if ords > 0 else 0.0, 4) for rev, ords in zip(revenue, orders)]
     fb_ads = [_num(v) for v in date_agg.get("fb_ads_spend", pd.Series([0] * len(date_agg))).tolist()]
     google_ads = [_num(v) for v in date_agg.get("google_ads_spend", pd.Series([0] * len(date_agg))).tolist()]
+    total_cost = [_num(v) for v in date_agg.get("total_cost", pd.Series([0] * len(date_agg))).tolist()]
+    product_cost = [_num(v) for v in date_agg.get("product_expense", pd.Series([0] * len(date_agg))).tolist()]
+    packaging = [_num(v) for v in date_agg.get("packaging_cost", pd.Series([0] * len(date_agg))).tolist()]
+    shipping = [_num(v) for v in date_agg.get("shipping_subsidy_cost", pd.Series([0] * len(date_agg))).tolist()]
+    fixed = [_num(v) for v in date_agg.get("fixed_daily_cost", pd.Series([0] * len(date_agg))).tolist()]
+    items = [int(round(_num(v))) for v in date_agg.get("total_items", pd.Series([0] * len(date_agg))).tolist()]
+    avg_items = [round((itm / ords) if ords > 0 else 0.0, 4) for itm, ords in zip(items, orders)]
     total_ads = [round(f + g, 4) for f, g in zip(fb_ads, google_ads)]
     roas = [round((rev / ads) if ads > 0 else 0.0, 4) for rev, ads in zip(revenue, total_ads)]
     pre_margin = [_num(v) for v in date_agg.get("pre_ad_contribution_margin_pct", pd.Series([0] * len(date_agg))).tolist()]
     post_margin = [_num(v) for v in date_agg.get("post_ad_contribution_margin_pct", pd.Series([0] * len(date_agg))).tolist()]
+    pre_contribution_per_order = [_num(v) for v in date_agg.get("pre_ad_contribution_profit_per_order", pd.Series([0] * len(date_agg))).tolist()]
+    post_contribution_per_order = [_num(v) for v in date_agg.get("contribution_profit_per_order", pd.Series([0] * len(date_agg))).tolist()]
+    roi = [_num(v) for v in date_agg.get("roi_percent", pd.Series([0] * len(date_agg))).tolist()]
+    gross_margin = [
+        round(((rev - cost) / rev * 100) if rev > 0 else 0.0, 4)
+        for rev, cost in zip(revenue, product_cost)
+    ]
+    cumulative_avg_revenue = []
+    cumulative_avg_profit = []
+    running_revenue = 0.0
+    running_profit = 0.0
+    for idx, (rev, prof) in enumerate(zip(revenue, profit), 1):
+        running_revenue += rev
+        running_profit += prof
+        cumulative_avg_revenue.append(round(running_revenue / idx, 4))
+        cumulative_avg_profit.append(round(running_profit / idx, 4))
     return {
         "dates": dates,
         "revenue": revenue,
         "profit": profit,
         "orders": orders,
         "aov": aov,
+        "items": items,
+        "avg_items": avg_items,
+        "total_cost": total_cost,
+        "product_cost": product_cost,
+        "packaging": packaging,
+        "shipping": shipping,
+        "fixed": fixed,
+        "fb_ads": fb_ads,
+        "google_ads": google_ads,
+        "total_ads": total_ads,
         "roas": roas,
         "pre_margin": pre_margin,
         "post_margin": post_margin,
+        "pre_contribution_per_order": pre_contribution_per_order,
+        "post_contribution_per_order": post_contribution_per_order,
+        "roi": roi,
+        "gross_margin": gross_margin,
         "revenue_ma7": _ma(revenue, 7),
         "profit_ma7": _ma(profit, 7),
         "orders_ma7": _ma([float(v) for v in orders], 7),
         "aov_ma7": _ma(aov, 7),
+        "items_ma7": _ma([float(v) for v in items], 7),
+        "avg_items_ma7": _ma(avg_items, 7),
+        "gross_margin_ma7": _ma(gross_margin, 7),
+        "roi_ma7": _ma(roi, 7),
+        "cumulative_avg_revenue": cumulative_avg_revenue,
+        "cumulative_avg_profit": cumulative_avg_profit,
     }
 
 
@@ -183,8 +226,70 @@ def _top_rows(frame: Optional[pd.DataFrame], columns: List[str], limit: int = 8)
         return []
     rows = []
     for _, row in frame.head(limit).iterrows():
-        rows.append({key: row.get(key) for key in columns})
+        rows.append({key: _json_safe(row.get(key)) for key in columns})
     return rows
+
+
+def _frame_rows(frame: Optional[pd.DataFrame], columns: List[str], limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    if frame is None or frame.empty:
+        return []
+    rows: List[Dict[str, Any]] = []
+    source = frame if limit is None else frame.head(limit)
+    for _, row in source.iterrows():
+        rows.append({key: _json_safe(row.get(key)) for key in columns})
+    return rows
+
+
+def _to_frame(value: Any) -> pd.DataFrame:
+    if isinstance(value, pd.DataFrame):
+        return value.copy()
+    if value is None:
+        return pd.DataFrame()
+    return pd.DataFrame(value)
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, (datetime, date, pd.Timestamp)):
+        return value.isoformat()
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    return value
+
+
+def _sanitize_dashboard_html(text: str) -> str:
+    if not text:
+        return text
+    replacements = {
+        "â‚¬": "&euro;",
+        "Ă˘â€šÂ¬": "&euro;",
+        "???": "&euro;",
+        "Kalendarn?": "Kalendarne",
+        "DennĂ˝": "Denny",
+        "DennĂˇ": "Denna",
+        "Kvalita zĂˇkaznĂ­kov": "Kvalita zakaznikov",
+        "rozĹˇiruje": "rozsiruje",
+        "koncentrĂˇciu": "koncentraciu",
+        "Hlbsi": "Hlbsi",
+        "DennĂ˝ source spend": "Denny source spend",
+        "kvalita dĂˇt": "kvalita dat",
+        "dĂ´vera": "dovera",
+        "ProblĂ©my": "Problemy",
+        "byĹĄ": "byt",
+        "neĂşplnĂ©": "neuplne",
+        "signĂˇlom": "signalom",
+    }
+    fixed = text
+    for bad, good in replacements.items():
+        fixed = fixed.replace(bad, good)
+    return fixed
 
 
 def generate_test2_dashboard(
@@ -206,6 +311,26 @@ def generate_test2_dashboard(
     refunds_analysis: Optional[dict] = None,
     customer_concentration: Optional[dict] = None,
     cohort_analysis: Optional[dict] = None,
+    returning_customers_analysis: Optional[pd.DataFrame] = None,
+    clv_return_time_analysis: Optional[pd.DataFrame] = None,
+    order_size_distribution: Optional[pd.DataFrame] = None,
+    item_combinations: Optional[pd.DataFrame] = None,
+    advanced_dtc_metrics: Optional[dict] = None,
+    day_hour_heatmap: Optional[pd.DataFrame] = None,
+    b2b_analysis: Optional[pd.DataFrame] = None,
+    order_status: Optional[pd.DataFrame] = None,
+    ads_effectiveness: Optional[dict] = None,
+    customer_email_segments: Optional[dict] = None,
+    first_item_retention: Optional[dict] = None,
+    same_item_repurchase: Optional[dict] = None,
+    time_to_nth_by_first_item: Optional[dict] = None,
+    fb_detailed_metrics: Optional[dict] = None,
+    fb_campaigns: Optional[list] = None,
+    cost_per_order: Optional[dict] = None,
+    fb_hourly_stats: Optional[list] = None,
+    fb_dow_stats: Optional[list] = None,
+    ltv_by_date: Optional[pd.DataFrame] = None,
+    consistency_checks: Optional[dict] = None,
     cfo_kpi_payload: Optional[dict] = None,
     source_health: Optional[dict] = None,
     period_switcher: Optional[dict] = None,
@@ -249,6 +374,36 @@ def generate_test2_dashboard(
         (cohort_analysis or {}).get("cohort_retention"),
         ["cohort", "retention_2nd_pct", "retention_3rd_pct", "retention_4th_pct", "retention_5th_pct"],
         limit=8,
+    )
+    cohort_order_frequency_rows = _frame_rows(
+        (cohort_analysis or {}).get("order_frequency"),
+        ["frequency", "customer_count", "total_orders", "customer_pct", "orders_pct"],
+        limit=10,
+    )
+    cohort_time_between_rows = _frame_rows(
+        (cohort_analysis or {}).get("time_between_orders"),
+        ["time_bucket", "count", "percentage"],
+        limit=10,
+    )
+    cohort_time_by_order_rows = _frame_rows(
+        (cohort_analysis or {}).get("time_between_by_order_num"),
+        ["transition", "count", "avg_days", "median_days", "min_days", "max_days"],
+        limit=10,
+    )
+    cohort_time_to_nth_rows = _frame_rows(
+        (cohort_analysis or {}).get("time_to_nth_order"),
+        ["order_number", "customer_count", "avg_days_from_first", "median_days_from_first", "avg_days_from_prev", "avg_order_value"],
+        limit=10,
+    )
+    cohort_revenue_by_order_rows = _frame_rows(
+        (cohort_analysis or {}).get("revenue_by_order_num"),
+        ["order_number", "avg_order_value", "total_revenue", "order_count", "avg_items_per_order", "avg_price_per_item"],
+        limit=10,
+    )
+    mature_cohort_rows = _frame_rows(
+        (cohort_analysis or {}).get("mature_cohort_retention"),
+        ["cohort", "cohort_age_days", "retention_2nd_pct", "retention_3rd_pct", "retention_4th_pct", "retention_5th_pct"],
+        limit=12,
     )
 
     customer_daily = (new_vs_returning_revenue or {}).get("daily")
@@ -327,6 +482,141 @@ def generate_test2_dashboard(
     else:
         refunds_payload = {"dates": [], "rate": [], "amount": []}
 
+    if returning_customers_analysis is not None and not getattr(returning_customers_analysis, "empty", True):
+        returning_payload = {
+            "labels": returning_customers_analysis["week_start"].astype(str).tolist(),
+            "returning_pct": [round(_num(v), 2) for v in returning_customers_analysis["returning_percentage"].tolist()],
+            "new_pct": [round(_num(v), 2) for v in returning_customers_analysis["new_percentage"].tolist()],
+            "returning_orders": [round(_num(v), 2) for v in returning_customers_analysis["returning_orders"].tolist()],
+            "new_orders": [round(_num(v), 2) for v in returning_customers_analysis["new_orders"].tolist()],
+            "unique_customers": [round(_num(v), 2) for v in returning_customers_analysis["unique_customers"].tolist()],
+        }
+    else:
+        returning_payload = {"labels": [], "returning_pct": [], "new_pct": [], "returning_orders": [], "new_orders": [], "unique_customers": []}
+
+    if clv_return_time_analysis is not None and not getattr(clv_return_time_analysis, "empty", True):
+        clv_payload = {
+            "labels": clv_return_time_analysis["week_start"].astype(str).tolist(),
+            "avg_clv": [round(_num(v), 2) for v in clv_return_time_analysis["avg_clv"].tolist()],
+            "cac": [round(_num(v), 2) for v in clv_return_time_analysis["cac"].tolist()],
+            "ltv_cac_ratio": [round(_num(v), 2) for v in clv_return_time_analysis["ltv_cac_ratio"].tolist()],
+            "avg_return_time_days": [round(_num(v), 2) for v in clv_return_time_analysis["avg_return_time_days"].fillna(0).tolist()],
+            "cumulative_avg_clv": [round(_num(v), 2) for v in clv_return_time_analysis["cumulative_avg_clv"].tolist()],
+            "cumulative_avg_cac": [round(_num(v), 2) for v in clv_return_time_analysis["cumulative_avg_cac"].tolist()],
+        }
+    else:
+        clv_payload = {"labels": [], "avg_clv": [], "cac": [], "ltv_cac_ratio": [], "avg_return_time_days": [], "cumulative_avg_clv": [], "cumulative_avg_cac": []}
+
+    if order_size_distribution is not None and not getattr(order_size_distribution, "empty", True):
+        order_size_payload = {
+            "labels": pd.to_datetime(order_size_distribution["purchase_date_only"]).dt.strftime("%Y-%m-%d").tolist(),
+            "one": [round(_num(v), 2) for v in order_size_distribution.get("1 item", pd.Series([0] * len(order_size_distribution))).tolist()],
+            "two": [round(_num(v), 2) for v in order_size_distribution.get("2 items", pd.Series([0] * len(order_size_distribution))).tolist()],
+            "three": [round(_num(v), 2) for v in order_size_distribution.get("3 items", pd.Series([0] * len(order_size_distribution))).tolist()],
+            "four": [round(_num(v), 2) for v in order_size_distribution.get("4 items", pd.Series([0] * len(order_size_distribution))).tolist()],
+            "five_plus": [round(_num(v), 2) for v in order_size_distribution.get("5+ items", pd.Series([0] * len(order_size_distribution))).tolist()],
+        }
+    else:
+        order_size_payload = {"labels": [], "one": [], "two": [], "three": [], "four": [], "five_plus": []}
+
+    ltv_payload = {"labels": [], "ltv_revenue": []}
+    if ltv_by_date is not None and not getattr(ltv_by_date, "empty", True):
+        ltv_payload = {
+            "labels": ltv_by_date["date"].astype(str).tolist(),
+            "ltv_revenue": [round(_num(v), 2) for v in ltv_by_date["ltv_revenue"].tolist()],
+            "customers_acquired": [round(_num(v), 2) for v in ltv_by_date.get("customers_acquired", pd.Series([0] * len(ltv_by_date))).tolist()],
+            "lifetime_orders": [round(_num(v), 2) for v in ltv_by_date.get("total_lifetime_orders", pd.Series([0] * len(ltv_by_date))).tolist()],
+        }
+
+    fb_daily_payload = {"dates": [], "spend": [], "impressions": [], "clicks": [], "ctr": [], "cpc": [], "cpm": [], "reach": []}
+    if fb_detailed_metrics:
+        sorted_rows = sorted(fb_detailed_metrics.items(), key=lambda item: item[0])
+        fb_daily_payload = {
+            "dates": [str(k) for k, _ in sorted_rows],
+            "spend": [round(_num(v.get("spend")), 2) for _, v in sorted_rows],
+            "impressions": [round(_num(v.get("impressions")), 2) for _, v in sorted_rows],
+            "clicks": [round(_num(v.get("clicks")), 2) for _, v in sorted_rows],
+            "ctr": [round(_num(v.get("ctr")), 2) for _, v in sorted_rows],
+            "cpc": [round(_num(v.get("cpc")), 2) for _, v in sorted_rows],
+            "cpm": [round(_num(v.get("cpm")), 2) for _, v in sorted_rows],
+            "reach": [round(_num(v.get("reach")), 2) for _, v in sorted_rows],
+        }
+
+    fb_campaign_rows = []
+    if fb_campaigns:
+        campaign_frame = pd.DataFrame(fb_campaigns)
+        if not campaign_frame.empty:
+            campaign_frame = campaign_frame.sort_values("spend", ascending=False)
+            fb_campaign_rows = _frame_rows(
+                campaign_frame,
+                ["campaign_name", "spend", "clicks", "impressions", "ctr", "cpc", "cpm", "reach", "conversions", "cost_per_conversion"],
+                limit=12,
+            )
+
+    cpo_daily = _frame_rows(_to_frame((cost_per_order or {}).get("daily_cpo")), ["date", "orders", "fb_spend", "revenue", "cpo", "roas"], limit=120)
+    weekly_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("weekly_cpo")), ["week_start", "orders", "fb_spend", "cpo"], limit=60)
+    campaign_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("campaign_attribution")), ["campaign_name", "spend", "estimated_orders", "estimated_cpo", "estimated_revenue", "estimated_roas"], limit=12)
+    hourly_orders = _frame_rows(_to_frame((cost_per_order or {}).get("hourly_orders")), ["hour", "orders", "revenue"], limit=24)
+    fb_hourly_payload = _frame_rows(_to_frame(fb_hourly_stats), ["hour", "spend", "clicks", "impressions", "ctr", "cpc"], limit=24)
+    fb_dow_payload = _frame_rows(_to_frame(fb_dow_stats), ["day_of_week", "total_spend", "total_clicks", "ctr", "cpc", "cpm"], limit=7)
+
+    ads_daily = _to_frame((ads_effectiveness or {}).get("daily_data"))
+    if not ads_daily.empty:
+        ads_effectiveness_payload = {
+            "labels": ads_daily["date"].astype(str).tolist(),
+            "orders": [round(_num(v), 2) for v in ads_daily["orders"].tolist()],
+            "revenue": [round(_num(v), 2) for v in ads_daily["revenue"].tolist()],
+            "fb_spend": [round(_num(v), 2) for v in ads_daily["fb_spend"].tolist()],
+            "google_spend": [round(_num(v), 2) for v in ads_daily["google_spend"].tolist()],
+            "profit": [round(_num(v), 2) for v in ads_daily["profit"].tolist()],
+        }
+    else:
+        ads_effectiveness_payload = {"labels": [], "orders": [], "revenue": [], "fb_spend": [], "google_spend": [], "profit": []}
+    spend_effectiveness_rows = _frame_rows(_to_frame((ads_effectiveness or {}).get("spend_effectiveness")), ["spend_range", "avg_orders", "avg_revenue", "avg_spend", "avg_profit", "roas"], limit=20)
+    dow_effectiveness_rows = _frame_rows(_to_frame((ads_effectiveness or {}).get("dow_effectiveness")), ["day_name", "avg_orders", "avg_revenue", "avg_profit", "avg_fb_spend"], limit=7)
+
+    advanced_summary = (advanced_dtc_metrics or {}).get("summary", {}) if advanced_dtc_metrics else {}
+    basket_contribution_rows = _frame_rows((advanced_dtc_metrics or {}).get("basket_contribution"), ["basket_size", "orders", "revenue", "pre_ad_contribution", "contribution_per_order", "contribution_margin_pct"], limit=10)
+    sku_pareto_rows = _frame_rows((advanced_dtc_metrics or {}).get("sku_pareto"), ["sku", "product", "orders", "revenue", "pre_ad_contribution", "cum_contribution_pct"], limit=12)
+    attach_rate_rows = _frame_rows((advanced_dtc_metrics or {}).get("attach_rate"), ["anchor_item", "attached_item", "anchor_orders", "attached_orders", "attach_rate_pct"], limit=12)
+    daily_margin_rows = _frame_rows((advanced_dtc_metrics or {}).get("daily_margin"), ["date", "pre_ad_contribution_margin_pct"], limit=120)
+    payday_window_rows = _frame_rows((advanced_dtc_metrics or {}).get("payday_window"), ["window", "orders", "revenue", "profit", "avg_daily_revenue", "avg_daily_profit"], limit=20)
+    cohort_payback_rows = _frame_rows((advanced_dtc_metrics or {}).get("cohort_payback"), ["cohort_month", "new_customers", "cohort_cac", "recovery_rate_pct", "avg_payback_days", "median_payback_days"], limit=24)
+
+    heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
+    b2b_rows = _frame_rows(b2b_analysis, ["customer_type", "orders", "revenue", "profit", "unique_customers", "aov", "orders_pct", "revenue_pct"], limit=10)
+    order_status_rows = _frame_rows(order_status, ["status", "orders", "revenue", "orders_pct"], limit=20)
+
+    item_retention_rows = _frame_rows((first_item_retention or {}).get("item_retention"), ["item_name", "first_order_customers", "retention_2nd_pct", "retention_3rd_pct", "avg_orders_per_customer"], limit=12)
+    same_item_rows = _frame_rows((same_item_repurchase or {}).get("item_repurchase"), ["item_name", "unique_customers", "repurchase_2x_pct", "repurchase_3x_pct", "avg_days_between_repurchase"], limit=12)
+    same_item_frequency_rows = _frame_rows((same_item_repurchase or {}).get("customer_item_frequency"), ["purchase_frequency", "customer_count", "percentage"], limit=12)
+    time_to_nth_rows = _frame_rows((time_to_nth_by_first_item or {}).get("time_to_nth_by_item"), ["item_name", "first_order_customers", "avg_days_to_2nd", "median_days_to_2nd", "avg_days_to_3nd", "avg_days_to_4nd", "avg_days_to_5nd"], limit=12)
+    combinations_rows = _frame_rows(item_combinations, ["combination_size", "combination", "count", "price"], limit=12)
+
+    segment_rows = []
+    for key, value in (customer_email_segments or {}).items():
+        if not isinstance(value, dict):
+            continue
+        segment_rows.append({
+            "segment": key,
+            "count": int(_num(value.get("count"))),
+            "priority": int(_num(value.get("priority"))),
+            "description_en": value.get("description_en") or value.get("description") or key,
+            "description_sk": value.get("description") or value.get("description_en") or key,
+            "timing_en": value.get("send_timing_en") or value.get("send_timing") or "-",
+            "timing_sk": value.get("send_timing") or value.get("send_timing_en") or "-",
+        })
+    segment_rows = sorted(segment_rows, key=lambda row: (row["priority"], -row["count"]))
+
+    consistency_payload = {
+        "roas_delta": _maybe_num((consistency_checks or {}).get("roas_check_delta")),
+        "margin_delta": _maybe_num((consistency_checks or {}).get("margin_check_delta")),
+        "cac_delta": _maybe_num((consistency_checks or {}).get("cac_check_delta")),
+        "roas_ok": bool((consistency_checks or {}).get("roas_ok")),
+        "margin_ok": bool((consistency_checks or {}).get("margin_ok")),
+        "cac_ok": bool((consistency_checks or {}).get("cac_ok")),
+    }
+
     total_revenue = round(_num(date_agg["total_revenue"].sum()), 2)
     total_profit = round(_num(date_agg["net_profit"].sum()), 2)
     total_orders = int(round(_num(date_agg["unique_orders"].sum())))
@@ -362,7 +652,54 @@ def generate_test2_dashboard(
         },
         "cohort_summary": cohort_summary,
         "cohort_retention_rows": cohort_retention_rows,
+        "cohort_order_frequency_rows": cohort_order_frequency_rows,
+        "cohort_time_between_rows": cohort_time_between_rows,
+        "cohort_time_by_order_rows": cohort_time_by_order_rows,
+        "cohort_time_to_nth_rows": cohort_time_to_nth_rows,
+        "cohort_revenue_by_order_rows": cohort_revenue_by_order_rows,
+        "mature_cohort_rows": mature_cohort_rows,
         "refund_rate": round(_num((refunds_analysis or {}).get("refund_rate_pct")), 2),
+        "returning_customers": returning_payload,
+        "clv": clv_payload,
+        "order_size": order_size_payload,
+        "ltv": ltv_payload,
+        "fb_daily": fb_daily_payload,
+        "fb_campaign_rows": fb_campaign_rows,
+        "cpo_daily": cpo_daily,
+        "weekly_cpo": weekly_cpo,
+        "campaign_cpo": campaign_cpo,
+        "hourly_orders": hourly_orders,
+        "fb_hourly": fb_hourly_payload,
+        "fb_dow": fb_dow_payload,
+        "ads_effectiveness": ads_effectiveness_payload,
+        "ads_correlations": (ads_effectiveness or {}).get("correlations") or {},
+        "spend_effectiveness_rows": spend_effectiveness_rows,
+        "dow_effectiveness_rows": dow_effectiveness_rows,
+        "basket_contribution_rows": basket_contribution_rows,
+        "sku_pareto_rows": sku_pareto_rows,
+        "attach_rate_rows": attach_rate_rows,
+        "daily_margin_rows": daily_margin_rows,
+        "payday_window_rows": payday_window_rows,
+        "cohort_payback_rows": cohort_payback_rows,
+        "advanced_summary": {k: _maybe_num(v) for k, v in advanced_summary.items()},
+        "heatmap_rows": heatmap_rows,
+        "b2b_rows": b2b_rows,
+        "order_status_rows": order_status_rows,
+        "item_retention_rows": item_retention_rows,
+        "same_item_rows": same_item_rows,
+        "same_item_frequency_rows": same_item_frequency_rows,
+        "time_to_nth_rows": time_to_nth_rows,
+        "combinations_rows": combinations_rows,
+        "segment_rows": segment_rows,
+        "consistency": consistency_payload,
+        "cpo_summary": {
+            "overall_cpo": _maybe_num((cost_per_order or {}).get("overall_cpo")),
+            "fb_cpo": _maybe_num((cost_per_order or {}).get("fb_cpo")),
+            "google_cpo": _maybe_num((cost_per_order or {}).get("google_cpo")),
+            "best_lag_correlation": _maybe_num((cost_per_order or {}).get("best_lag_correlation")),
+            "best_attribution_lag": (cost_per_order or {}).get("best_attribution_lag"),
+            "reconciliation": (cost_per_order or {}).get("fb_spend_reconciliation") or {},
+        },
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
 
@@ -391,6 +728,102 @@ def generate_test2_dashboard(
         for row in cohort_retention_rows
     ) or '<tr><td colspan="5"><span class="lang-en">No cohort retention data available.</span><span class="lang-sk hidden">Kohortná retencia nie je dostupná.</span></td></tr>'
 
+
+    order_frequency_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('frequency') or '-'))}</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{int(round(_num(row.get('total_orders'))))}</td><td>{_num(row.get('customer_pct')):.1f}%</td><td>{_num(row.get('orders_pct')):.1f}%</td></tr>"
+        for row in cohort_order_frequency_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No order frequency data available.</span><span class="lang-sk hidden">Data frekvencie objednavok nie su dostupne.</span></td></tr>'
+
+    time_between_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('time_bucket') or '-'))}</td><td>{int(round(_num(row.get('count'))))}</td><td>{_num(row.get('percentage')):.1f}%</td></tr>"
+        for row in cohort_time_between_rows
+    ) or '<tr><td colspan="3"><span class="lang-en">No time-between-orders data available.</span><span class="lang-sk hidden">Data o case medzi objednavkami nie su dostupne.</span></td></tr>'
+
+    time_between_by_order_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('transition') or '-'))}</td><td>{int(round(_num(row.get('count'))))}</td><td>{_num(row.get('avg_days')):.1f}</td><td>{_num(row.get('median_days')):.1f}</td><td>{int(round(_num(row.get('min_days'))))}</td><td>{int(round(_num(row.get('max_days'))))}</td></tr>"
+        for row in cohort_time_by_order_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No order-transition timing data available.</span><span class="lang-sk hidden">Data o case medzi prechodmi objednavok nie su dostupne.</span></td></tr>'
+
+    time_to_nth_order_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('order_number') or '-'))}</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{_num(row.get('avg_days_from_first')):.1f}</td><td>{_num(row.get('median_days_from_first')):.1f}</td><td>{_num(row.get('avg_days_from_prev')):.1f}</td><td>&euro;{_num(row.get('avg_order_value')):,.2f}</td></tr>"
+        for row in cohort_time_to_nth_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No time-to-nth-order data available.</span><span class="lang-sk hidden">Data o case do n-tej objednavky nie su dostupne.</span></td></tr>'
+
+    revenue_by_order_rows_html = "".join(
+        f"<tr><td>{int(round(_num(row.get('order_number'))))}</td><td>&euro;{_num(row.get('avg_order_value')):,.2f}</td><td>&euro;{_num(row.get('total_revenue')):,.2f}</td><td>{int(round(_num(row.get('order_count'))))}</td><td>{_num(row.get('avg_items_per_order')):.2f}</td><td>&euro;{_num(row.get('avg_price_per_item')):,.2f}</td></tr>"
+        for row in cohort_revenue_by_order_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No order-sequence value data available.</span><span class="lang-sk hidden">Data hodnoty podla poradia objednavky nie su dostupne.</span></td></tr>'
+
+    mature_cohort_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('cohort') or '-'))}</td><td>{int(round(_num(row.get('cohort_age_days'))))}</td><td>{_num(row.get('retention_2nd_pct')):.1f}%</td><td>{_num(row.get('retention_3rd_pct')):.1f}%</td><td>{_num(row.get('retention_4th_pct')):.1f}%</td><td>{_num(row.get('retention_5th_pct')):.1f}%</td></tr>"
+        for row in mature_cohort_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No mature-cohort retention data available.</span><span class="lang-sk hidden">Data zrelych kohort nie su dostupne.</span></td></tr>'
+
+    fb_campaign_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('campaign_name') or 'Unknown'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{int(round(_num(row.get('clicks'))))}</td><td>{_num(row.get('ctr')):.2f}%</td><td>€{_num(row.get('cpc')):,.2f}</td><td>{int(round(_num(row.get('conversions'))))}</td></tr>"
+        for row in fb_campaign_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No campaign data available.</span><span class="lang-sk hidden">Kampaňové dáta nie sú dostupné.</span></td></tr>'
+
+    spend_effectiveness_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('spend_range') or '-'))}</td><td>€{_num(row.get('avg_spend')):,.2f}</td><td>{_num(row.get('avg_orders')):.1f}</td><td>€{_num(row.get('avg_revenue')):,.2f}</td><td>€{_num(row.get('avg_profit')):,.2f}</td><td>{_num(row.get('roas')):.2f}x</td></tr>"
+        for row in spend_effectiveness_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No spend effectiveness data available.</span><span class="lang-sk hidden">Dáta spend efektivity nie sú dostupné.</span></td></tr>'
+    dow_effectiveness_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('day_name') or '-'))}</td><td>&euro;{_num(row.get('avg_fb_spend')):,.2f}</td><td>{_num(row.get('avg_orders')):.1f}</td><td>&euro;{_num(row.get('avg_revenue')):,.2f}</td><td>&euro;{_num(row.get('avg_profit')):,.2f}</td></tr>"
+        for row in dow_effectiveness_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No day-of-week effectiveness data available.</span><span class="lang-sk hidden">Day-of-week efektivita nie je dostupna.</span></td></tr>'
+
+
+    basket_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('basket_size') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('pre_ad_contribution')):,.2f}</td><td>€{_num(row.get('contribution_per_order')):,.2f}</td><td>{_num(row.get('contribution_margin_pct')):.1f}%</td></tr>"
+        for row in basket_contribution_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No basket contribution data available.</span><span class="lang-sk hidden">Dáta kontribúcie košíka nie sú dostupné.</span></td></tr>'
+
+    sku_pareto_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('sku') or ''))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('pre_ad_contribution')):,.2f}</td><td>{_num(row.get('cum_contribution_pct')):.1f}%</td></tr>"
+        for row in sku_pareto_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No SKU Pareto data available.</span><span class="lang-sk hidden">SKU Pareto dáta nie sú dostupné.</span></td></tr>'
+
+    attach_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('anchor_item') or '-'))}</td><td>{escape(str(row.get('attached_item') or '-'))}</td><td>{int(round(_num(row.get('anchor_orders'))))}</td><td>{int(round(_num(row.get('attached_orders'))))}</td><td>{_num(row.get('attach_rate_pct')):.1f}%</td></tr>"
+        for row in attach_rate_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No attach-rate data available.</span><span class="lang-sk hidden">Attach-rate dáta nie sú dostupné.</span></td></tr>'
+
+    b2b_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('customer_type') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{int(round(_num(row.get('unique_customers'))))}</td><td>€{_num(row.get('aov')):,.2f}</td></tr>"
+        for row in b2b_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No B2B/B2C split available.</span><span class="lang-sk hidden">B2B/B2C split nie je dostupný.</span></td></tr>'
+
+    order_status_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('status') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>{_num(row.get('orders_pct')):.1f}%</td></tr>"
+        for row in order_status_rows
+    ) or '<tr><td colspan="4"><span class="lang-en">No order status data available.</span><span class="lang-sk hidden">Dáta stavov objednávok nie sú dostupné.</span></td></tr>'
+
+    item_retention_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('first_order_customers'))))}</td><td>{_num(row.get('retention_2nd_pct')):.1f}%</td><td>{_num(row.get('retention_3rd_pct')):.1f}%</td><td>{_num(row.get('avg_orders_per_customer')):.2f}</td></tr>"
+        for row in item_retention_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No first-item retention data available.</span><span class="lang-sk hidden">Retencia podľa prvého produktu nie je dostupná.</span></td></tr>'
+
+    same_item_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('unique_customers'))))}</td><td>{_num(row.get('repurchase_2x_pct')):.1f}%</td><td>{_num(row.get('repurchase_3x_pct')):.1f}%</td><td>{('%.1f' % _num(row.get('avg_days_between_repurchase'))) if row.get('avg_days_between_repurchase') not in (None, '') else 'N/A'}</td></tr>"
+        for row in same_item_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No same-item repurchase data available.</span><span class="lang-sk hidden">Repurchase rovnakého produktu nie je dostupný.</span></td></tr>'
+
+    time_to_nth_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('first_order_customers'))))}</td><td>{('%.1f' % _num(row.get('avg_days_to_2nd'))) if row.get('avg_days_to_2nd') not in (None, '') else 'N/A'}</td><td>{('%.1f' % _num(row.get('median_days_to_2nd'))) if row.get('median_days_to_2nd') not in (None, '') else 'N/A'}</td><td>{('%.1f' % _num(row.get('avg_days_to_3nd'))) if row.get('avg_days_to_3nd') not in (None, '') else 'N/A'}</td></tr>"
+        for row in time_to_nth_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No time-to-next-order data available.</span><span class="lang-sk hidden">Dáta času do ďalšej objednávky nie sú dostupné.</span></td></tr>'
+
+    combinations_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('combination_size') or '-'))}</td><td>{escape(str(row.get('combination') or '-'))}</td><td>{int(round(_num(row.get('count'))))}</td><td>€{_num(row.get('price')):,.2f}</td></tr>"
+        for row in combinations_rows
+    ) or '<tr><td colspan="4"><span class="lang-en">No item combination data available.</span><span class="lang-sk hidden">Dáta kombinácií produktov nie sú dostupné.</span></td></tr>'
+
+    segment_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('segment') or '-'))}</td><td>{int(round(_num(row.get('count'))))}</td><td>{int(round(_num(row.get('priority'))))}</td><td><span class='lang-en'>{escape(str(row.get('description_en') or '-'))}</span><span class='lang-sk hidden'>{escape(str(row.get('description_sk') or '-'))}</span></td><td><span class='lang-en'>{escape(str(row.get('timing_en') or '-'))}</span><span class='lang-sk hidden'>{escape(str(row.get('timing_sk') or '-'))}</span></td></tr>"
+        for row in segment_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No email segmentation data available.</span><span class="lang-sk hidden">Email segmentácia nie je dostupná.</span></td></tr>'
+
     health_html = "".join(
         f'<div class="health-item"><div class="health-title">{escape(str(row.get("label") or row.get("key") or "Source"))}</div><div class="health-status {("good" if row.get("healthy") else ("warn" if row.get("status") == "degraded" else "bad"))}">{escape(str(row.get("status") or "unknown"))}</div><p>{escape(str(row.get("message") or row.get("mode") or "-"))}</p></div>'
         for row in source_rows
@@ -405,7 +838,7 @@ def generate_test2_dashboard(
     top_10_share = _num((customer_concentration or {}).get("top_10_pct_revenue_share"))
     top_20_share = _num((customer_concentration or {}).get("top_20_pct_revenue_share"))
 
-    return f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -522,11 +955,14 @@ def generate_test2_dashboard(
             <a class="nav-link active" href="#overview"><span class="nav-dot">01</span><span class="lang-en">Overview</span><span class="lang-sk hidden">Prehľad</span></a>
             <a class="nav-link" href="#sales"><span class="nav-dot">02</span><span class="lang-en">Sales</span><span class="lang-sk hidden">Predaj</span></a>
             <a class="nav-link" href="#economics"><span class="nav-dot">03</span><span class="lang-en">Economics</span><span class="lang-sk hidden">Ekonomika</span></a>
-            <a class="nav-link" href="#customers"><span class="nav-dot">04</span><span class="lang-en">Customers</span><span class="lang-sk hidden">Zákazníci</span></a>
-            <a class="nav-link" href="#patterns"><span class="nav-dot">05</span><span class="lang-en">Patterns</span><span class="lang-sk hidden">Patterny</span></a>
-            <a class="nav-link" href="#geography"><span class="nav-dot">06</span><span class="lang-en">Geography</span><span class="lang-sk hidden">Geografia</span></a>
-            <a class="nav-link" href="#products"><span class="nav-dot">07</span><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></a>
-            <a class="nav-link" href="#health"><span class="nav-dot">08</span><span class="lang-en">Data health</span><span class="lang-sk hidden">Kvalita dát</span></a>
+            <a class="nav-link" href="#marketing"><span class="nav-dot">04</span><span class="lang-en">Marketing</span><span class="lang-sk hidden">Marketing</span></a>
+            <a class="nav-link" href="#customers"><span class="nav-dot">05</span><span class="lang-en">Customers</span><span class="lang-sk hidden">Zákazníci</span></a>
+            <a class="nav-link" href="#patterns"><span class="nav-dot">06</span><span class="lang-en">Patterns</span><span class="lang-sk hidden">Patterny</span></a>
+            <a class="nav-link" href="#geography"><span class="nav-dot">07</span><span class="lang-en">Geography</span><span class="lang-sk hidden">Geografia</span></a>
+            <a class="nav-link" href="#products"><span class="nav-dot">08</span><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></a>
+            <a class="nav-link" href="#operations"><span class="nav-dot">09</span><span class="lang-en">Operations</span><span class="lang-sk hidden">Operativa</span></a>
+            <a class="nav-link" href="#library"><span class="nav-dot">10</span><span class="lang-en">Full library</span><span class="lang-sk hidden">Plna kniznica</span></a>
+            <a class="nav-link" href="#health"><span class="nav-dot">11</span><span class="lang-en">Data health</span><span class="lang-sk hidden">Kvalita dát</span></a>
         </aside>
         <main class="content">
             <div class="shell">
@@ -599,7 +1035,7 @@ def generate_test2_dashboard(
                             </div>
                             <div class="chart-shell"><canvas id="ordersAovChart"></canvas></div>
                         </div>
-                        <div class="panel chart-card" id="economics">
+                        <div class="panel chart-card" id="economics-overview">
                             <div class="card-head">
                                 <div>
                                     <h3><span class="lang-en">Cost structure</span><span class="lang-sk hidden">Štruktúra nákladov</span></h3>
@@ -616,6 +1052,180 @@ def generate_test2_dashboard(
                         </div>
                     </div>
                 </section>
+
+                <section class="section" id="economics">
+                    <div class="section-head">
+                        <h2><span class="lang-en">Economics deep dive</span><span class="lang-sk hidden">Hlbsia ekonomika</span></h2>
+                        <p><span class="lang-en">Full daily economics from the original report: revenue, costs, gross margin, contribution and LTV overlays.</span><span class="lang-sk hidden">Plna denna ekonomika z povodneho reportu: trzby, naklady, hruba marza, kontribucia a LTV overlay.</span></p>
+                    </div>
+                    <div class="panel chart-card" style="margin-bottom:18px;">
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Pre-ad / order</span><span class="lang-sk hidden">Pre-ad / objednavka</span></small><strong>â‚¬{_num(advanced_summary.get('pre_ad_contribution_per_order')):,.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Break-even CAC</span><span class="lang-sk hidden">Break-even CAC</span></small><strong>â‚¬{_num(advanced_summary.get('break_even_cac')):,.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Payback orders</span><span class="lang-sk hidden">Payback objednavky</span></small><strong>{_num(advanced_summary.get('payback_orders')):.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Contribution LTV/CAC</span><span class="lang-sk hidden">Contribution LTV/CAC</span></small><strong>{_num(advanced_summary.get('contribution_ltv_cac')):.2f}x</strong></div>
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Revenue vs total costs</span><span class="lang-sk hidden">Trzby vs celkove naklady</span></h3><p><span class="lang-en">Daily revenue compared with full cost base.</span><span class="lang-sk hidden">Denne trzby oproti plnej nakladovej baze.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="dailyEconomicsChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Cost component trend</span><span class="lang-sk hidden">Trend zloziek nakladov</span></h3><p><span class="lang-en">Product, packaging, shipping, fixed and ads in one view.</span><span class="lang-sk hidden">Produkt, balenie, doprava, fix a reklama v jednom pohlade.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="costBreakoutChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Gross margin and ROI</span><span class="lang-sk hidden">Hruba marza a ROI</span></h3><p><span class="lang-en">Tracks product gross margin next to after-cost ROI.</span><span class="lang-sk hidden">Sleduje produktovu hrubu marzu vedla ROI po nakladoch.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="grossMarginRoiChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Contribution per order</span><span class="lang-sk hidden">Kontribucia na objednavku</span></h3><p><span class="lang-en">Pre-ad and post-ad order economics side by side.</span><span class="lang-sk hidden">Pre-ad a post-ad ekonomika objednavky vedla seba.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="contributionPerOrderChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Items and basket depth</span><span class="lang-sk hidden">Polozky a hlbka kosika</span></h3><p><span class="lang-en">Items sold and average items per order.</span><span class="lang-sk hidden">Predane polozky a priemer poloziek na objednavku.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="itemsBasketChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">LTV revenue and running averages</span><span class="lang-sk hidden">LTV trzby a bezne priemery</span></h3><p><span class="lang-en">Blends acquisition LTV with cumulative revenue/profit trend.</span><span class="lang-sk hidden">Spaja akvizicne LTV s kumulativnym trendom trzby a zisku.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="ltvRevenueTrendChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Basket contribution table</span><span class="lang-sk hidden">Tabulka kontribucie kosika</span></h3><p><span class="lang-en">All basket-size economics in one table.</span><span class="lang-sk hidden">Cely pohlad na ekonomiku podla velkosti kosika.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Basket</span><span class="lang-sk hidden">Kosik</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution</span><span class="lang-sk hidden">Kontribucia</span></th><th><span class="lang-en">Per order</span><span class="lang-sk hidden">Na obj.</span></th><th><span class="lang-en">Margin</span><span class="lang-sk hidden">Marza</span></th></tr></thead>
+                            <tbody>{basket_rows_html}</tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section" id="marketing">
+                    <div class="section-head">
+                        <h2><span class="lang-en">Marketing and ads deep dive</span><span class="lang-sk hidden">Hlbsi marketing a reklama</span></h2>
+                        <p><span class="lang-en">Full Facebook/CPO/attribution family brought over from the original richer report.</span><span class="lang-sk hidden">Kompletna Facebook/CPO/atribucna rodina z povodneho bohatsieho reportu.</span></p>
+                    </div>
+                    <div class="panel chart-card" style="margin-bottom:18px;">
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Overall CPO</span><span class="lang-sk hidden">Celkove CPO</span></small><strong>€{_num((cost_per_order or {}).get("overall_cpo")):,.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">FB CPO</span><span class="lang-sk hidden">FB CPO</span></small><strong>€{_num((cost_per_order or {}).get("fb_cpo")):,.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Google CPO</span><span class="lang-sk hidden">Google CPO</span></small><strong>€{_num((cost_per_order or {}).get("google_cpo")):,.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Best lag</span><span class="lang-sk hidden">Najlepsi lag</span></small><strong>{escape(str((cost_per_order or {}).get("best_attribution_lag") or "N/A"))}</strong></div>
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Daily spend, clicks and impressions</span><span class="lang-sk hidden">Denný spend, kliky a impresie</span></h3><p><span class="lang-en">Core Facebook delivery metrics in time.</span><span class="lang-sk hidden">Hlavne Facebook delivery metriky v case.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="fbDailyPerformanceChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">CTR, CPC and CPM</span><span class="lang-sk hidden">CTR, CPC a CPM</span></h3><p><span class="lang-en">Traffic quality and pricing layer.</span><span class="lang-sk hidden">Vrstva kvality trafficu a ceny.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="fbEfficiencyChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Weekly CPO and ROAS</span><span class="lang-sk hidden">Tyzdenne CPO a ROAS</span></h3><p><span class="lang-en">Weekly smoothing of cost per order and ROAS.</span><span class="lang-sk hidden">Tyzdenne vyhladenie ceny objednavky a ROAS.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="weeklyCpoChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Hourly ads vs orders</span><span class="lang-sk hidden">Hodiny: reklama vs objednavky</span></h3><p><span class="lang-en">Hourly ad spend, clicks and order demand together.</span><span class="lang-sk hidden">Hodinovy spend, kliky a dopyt objednavok spolu.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="hourlyAdsOrdersChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Ads effectiveness overlay</span><span class="lang-sk hidden">Overlay efektivity reklam</span></h3><p><span class="lang-en">Spend, orders, revenue and profit in one overlay.</span><span class="lang-sk hidden">Spend, objednavky, trzby a zisk v jednom overlay.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="adsEffectivenessChart"></canvas></div>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Spend bucket effectiveness</span><span class="lang-sk hidden">Efektivita spend bucketov</span></h3><p><span class="lang-en">Average output by spend range.</span><span class="lang-sk hidden">Priemerny vystup podla spend rozsahu.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th><th>ROAS</th></tr></thead>
+                                <tbody>{spend_effectiveness_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign performance</span><span class="lang-sk hidden">Vykon kampani</span></h3><p><span class="lang-en">Campaign level Facebook delivery and conversions.</span><span class="lang-sk hidden">Facebook delivery a konverzie na urovni kampani.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Clicks</span><span class="lang-sk hidden">Kliky</span></th><th>CTR</th><th>CPC</th><th><span class="lang-en">Conv.</span><span class="lang-sk hidden">Konv.</span></th></tr></thead>
+                                <tbody>{fb_campaign_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign attribution estimate</span><span class="lang-sk hidden">Odhad atribucie kampani</span></h3><p><span class="lang-en">Estimated orders, CPO and ROAS by campaign.</span><span class="lang-sk hidden">Odhad obj., CPO a ROAS podla kampane.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th>CPO</th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>ROAS</th></tr></thead>
+                                <tbody>{"".join(f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_num(row.get('estimated_orders')):.1f}</td><td>€{_num(row.get('estimated_cpo')):,.2f}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>" for row in campaign_cpo) or '<tr><td colspan=\"6\"><span class=\"lang-en\">No campaign attribution data available.</span><span class=\"lang-sk hidden\">Atribucne data kampani nie su dostupne.</span></td></tr>'}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Day-of-week effectiveness</span><span class="lang-sk hidden">Day-of-week efektivita</span></h3><p><span class="lang-en">Average spend, orders, revenue and profit by weekday.</span><span class="lang-sk hidden">Priemerny spend, objednavky, trzby a zisk podla dna v tyzdni.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Day</span><span class="lang-sk hidden">Den</span></th><th><span class="lang-en">FB spend</span><span class="lang-sk hidden">FB spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th></tr></thead>
+                                <tbody>{dow_effectiveness_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">FB spend reconciliation</span><span class="lang-sk hidden">FB spend reconciliation</span></h3><p><span class="lang-en">Daily-source spend versus campaign-source spend from the original reconciliation check.</span><span class="lang-sk hidden">Denný source spend oproti campaign source spendu z povodnej reconciliation kontroly.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Metric</span><span class="lang-sk hidden">Metrika</span></th><th><span class="lang-en">Value</span><span class="lang-sk hidden">Hodnota</span></th></tr></thead>
+                                <tbody>
+                                    <tr><td><span class="lang-en">Daily source spend</span><span class="lang-sk hidden">Daily source spend</span></td><td>â‚¬{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('daily_source_spend')):,.2f}</td></tr>
+                                    <tr><td><span class="lang-en">Campaign source spend</span><span class="lang-sk hidden">Campaign source spend</span></td><td>â‚¬{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('campaign_source_spend')):,.2f}</td></tr>
+                                    <tr><td><span class="lang-en">Difference</span><span class="lang-sk hidden">Rozdiel</span></td><td>â‚¬{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('difference')):,.2f}</td></tr>
+                                    <tr><td><span class="lang-en">Difference %</span><span class="lang-sk hidden">Rozdiel %</span></td><td>{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('difference_pct')):.2f}%</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Reach, clicks and CTR</span><span class="lang-sk hidden">Reach, kliky a CTR</span></h3><p><span class="lang-en">Extra Facebook delivery view from the detailed ad metrics.</span><span class="lang-sk hidden">Dalsi Facebook delivery pohlad z detailnych reklamnych metrik.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="fbReachClicksChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign spend mix</span><span class="lang-sk hidden">Mix spendu kampani</span></h3><p><span class="lang-en">How total Facebook spend is concentrated across campaigns.</span><span class="lang-sk hidden">Ako sa cely Facebook spend koncentruje medzi kampanami.</span></p></div></div>
+                            <div class="chart-shell compact"><canvas id="campaignSpendMixChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign efficiency comparison</span><span class="lang-sk hidden">Porovnanie efektivity kampani</span></h3><p><span class="lang-en">CTR, CPC and cost per conversion on one campaign view.</span><span class="lang-sk hidden">CTR, CPC a cost per conversion v jednom kampanovom pohlade.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="campaignEfficiencyChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Hourly CPO and ROAS</span><span class="lang-sk hidden">Hodinove CPO a ROAS</span></h3><p><span class="lang-en">Estimated hourly order economics from spend and hourly order demand.</span><span class="lang-sk hidden">Odhad hodinovej ekonomiky objednavok zo spendu a hodinoveho dopytu.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="hourlyEfficiencyChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Facebook day-of-week efficiency</span><span class="lang-sk hidden">Facebook efektivita podla dna v tyzdni</span></h3><p><span class="lang-en">Spend, CTR and CPC across weekdays.</span><span class="lang-sk hidden">Spend, CTR a CPC napriec dnami v tyzdni.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="fbDowEfficiencyChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Ads correlation diagnostics</span><span class="lang-sk hidden">Korelacie reklamnych vydavkov</span></h3><p><span class="lang-en">Correlation layer from the full ads effectiveness analysis.</span><span class="lang-sk hidden">Korelacna vrstva z plnej analyzy efektivity reklam.</span></p></div></div>
+                            <div class="mini-grid">
+                                <div class="mini-card"><small><span class="lang-en">Spend vs orders</span><span class="lang-sk hidden">Spend vs objednavky</span></small><strong>{_num(((ads_effectiveness or {}).get('correlations') or {}).get('spend_orders_correlation')):.2f}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Spend vs revenue</span><span class="lang-sk hidden">Spend vs trzby</span></small><strong>{_num(((ads_effectiveness or {}).get('correlations') or {}).get('spend_revenue_correlation')):.2f}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Spend vs profit</span><span class="lang-sk hidden">Spend vs zisk</span></small><strong>{_num(((ads_effectiveness or {}).get('correlations') or {}).get('spend_profit_correlation')):.2f}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Best lag corr.</span><span class="lang-sk hidden">Best lag corr.</span></small><strong>{_num((cost_per_order or {}).get('best_lag_correlation')):.2f}</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section class="section" id="customers">
                     <div class="section-head">
                         <h2><span class="lang-en">Customer quality and retention</span><span class="lang-sk hidden">Kvalita zákazníkov a retencia</span></h2>
@@ -685,6 +1295,132 @@ def generate_test2_dashboard(
                             </table>
                         </div>
                     </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Returning share by week</span><span class="lang-sk hidden">Podiel vracajucich sa podla tyzdna</span></h3><p><span class="lang-en">Weekly new vs returning split from the richer analysis.</span><span class="lang-sk hidden">Tyzdenny split novych a vracajucich sa z bohatsiej analyzy.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="returningShareChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">CLV, CAC and return time</span><span class="lang-sk hidden">CLV, CAC a cas navratu</span></h3><p><span class="lang-en">Weekly customer value and acquisition economics.</span><span class="lang-sk hidden">Tyzdenna hodnota zakaznika a ekonomika akvizicie.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="clvCacTrendChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Order size distribution</span><span class="lang-sk hidden">Rozdelenie velkosti objednavok</span></h3><p><span class="lang-en">Daily order mix by number of items.</span><span class="lang-sk hidden">Denný mix objednavok podla poctu poloziek.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="orderSizeChart"></canvas></div>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Product combinations</span><span class="lang-sk hidden">Kombinacie produktov</span></h3><p><span class="lang-en">Most frequent multi-item combinations.</span><span class="lang-sk hidden">Najcastejsie viacpolozkove kombinacie.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Size</span><span class="lang-sk hidden">Velkost</span></th><th><span class="lang-en">Combination</span><span class="lang-sk hidden">Kombinacia</span></th><th><span class="lang-en">Count</span><span class="lang-sk hidden">Pocet</span></th><th><span class="lang-en">Price</span><span class="lang-sk hidden">Cena</span></th></tr></thead>
+                                <tbody>{combinations_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Retention by first item</span><span class="lang-sk hidden">Retencia podla prveho produktu</span></h3><p><span class="lang-en">How the first purchased product influences repeat behavior.</span><span class="lang-sk hidden">Ako prvy kupeny produkt ovplyvnuje opakovane nakupy.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Item</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th>2nd</th><th>3rd</th><th><span class="lang-en">Avg orders</span><span class="lang-sk hidden">Priem. obj.</span></th></tr></thead>
+                                <tbody>{item_retention_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Same-item repurchase</span><span class="lang-sk hidden">Opakovany nakup rovnakeho produktu</span></h3><p><span class="lang-en">How often customers buy the same item again.</span><span class="lang-sk hidden">Ako casto zakaznik kupi ten isty produkt znovu.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Item</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zak.</span></th><th>2x</th><th>3x</th><th><span class="lang-en">Days between</span><span class="lang-sk hidden">Dni medzi</span></th></tr></thead>
+                                <tbody>{same_item_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Time to next order by first item</span><span class="lang-sk hidden">Cas do dalsej objednavky podla prveho produktu</span></h3><p><span class="lang-en">Average and median days to 2nd/3rd order for the first purchased item group.</span><span class="lang-sk hidden">Priemerny a medianovy cas do 2./3. objednavky podla prveho kupeneho produktu.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Item</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Avg 2nd</span><span class="lang-sk hidden">Priem. 2.</span></th><th><span class="lang-en">Median 2nd</span><span class="lang-sk hidden">Median 2.</span></th><th><span class="lang-en">Avg 3rd</span><span class="lang-sk hidden">Priem. 3.</span></th></tr></thead>
+                            <tbody>{time_to_nth_rows_html}</tbody>
+                        </table>
+                    </div>
+
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Customer concentration</span><span class="lang-sk hidden">Koncentracia zakaznikov</span></h3><p><span class="lang-en">Revenue share captured by the top customers.</span><span class="lang-sk hidden">Podiel trzby zachyteny top zakaznikmi.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="customerConcentrationChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Return time and LTV/CAC</span><span class="lang-sk hidden">Cas navratu a LTV/CAC</span></h3><p><span class="lang-en">Average days to return next to the weekly LTV/CAC ratio.</span><span class="lang-sk hidden">Priemer dni do navratu vedla tyzdenneho pomeru LTV/CAC.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="returnTimeLtvChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Order frequency distribution</span><span class="lang-sk hidden">Rozdelenie frekvencie objednavok</span></h3><p><span class="lang-en">How many customers stop at 1 order versus 2, 3 and more.</span><span class="lang-sk hidden">Kolko zakaznikov skonci pri 1 objednavke versus 2, 3 a viac.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="orderFrequencyChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Time between repeat orders</span><span class="lang-sk hidden">Cas medzi opakovanymi objednavkami</span></h3><p><span class="lang-en">Distribution of the delay between consecutive repeat orders.</span><span class="lang-sk hidden">Rozdelenie casu medzi po sebe iducimi opakovanymi objednavkami.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="timeBetweenOrdersChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Time between order transitions</span><span class="lang-sk hidden">Cas medzi prechodmi objednavok</span></h3><p><span class="lang-en">How fast customers move from 1?2, 2?3, 3?4 and beyond.</span><span class="lang-sk hidden">Ako rychlo sa zakaznici posuvaju z 1?2, 2?3, 3?4 a dalej.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="timeBetweenByOrderChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Time to nth order</span><span class="lang-sk hidden">Cas do n-tej objednavky</span></h3><p><span class="lang-en">Average days from first order to 2nd, 3rd, 4th and later orders.</span><span class="lang-sk hidden">Priemerny cas od prveho nakupu po 2., 3., 4. a dalsiu objednavku.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="timeToNthOrderChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Value by order sequence</span><span class="lang-sk hidden">Hodnota podla poradia objednavky</span></h3><p><span class="lang-en">Average order value, items per order and price per item by order number.</span><span class="lang-sk hidden">Priemerna objednavka, polozky na objednavku a cena za polozku podla poradia objednavky.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="orderSequenceValueChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Mature cohort retention</span><span class="lang-sk hidden">Retencia zrelych kohort</span></h3><p><span class="lang-en">Time-bias-free view using only cohorts old enough for repeat behavior.</span><span class="lang-sk hidden">Pohlad bez casoveho biasu len na kohorty dost stare na opakovane nakupy.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="matureCohortChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Order frequency table</span><span class="lang-sk hidden">Tabulka frekvencie objednavok</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Frequency</span><span class="lang-sk hidden">Frekvencia</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Cust. %</span><span class="lang-sk hidden">Zak. %</span></th><th><span class="lang-en">Orders %</span><span class="lang-sk hidden">Obj. %</span></th></tr></thead>
+                                <tbody>{order_frequency_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Time-between-orders table</span><span class="lang-sk hidden">Tabulka casu medzi objednavkami</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Bucket</span><span class="lang-sk hidden">Bucket</span></th><th><span class="lang-en">Count</span><span class="lang-sk hidden">Pocet</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
+                                <tbody>{time_between_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Order transition timing table</span><span class="lang-sk hidden">Tabulka casu medzi prechodmi</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Transition</span><span class="lang-sk hidden">Prechod</span></th><th><span class="lang-en">Count</span><span class="lang-sk hidden">Pocet</span></th><th><span class="lang-en">Avg days</span><span class="lang-sk hidden">Priem. dni</span></th><th><span class="lang-en">Median</span><span class="lang-sk hidden">Median</span></th><th><span class="lang-en">Min</span><span class="lang-sk hidden">Min</span></th><th><span class="lang-en">Max</span><span class="lang-sk hidden">Max</span></th></tr></thead>
+                                <tbody>{time_between_by_order_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Value by order number table</span><span class="lang-sk hidden">Tabulka hodnoty podla poradia objednavky</span></h3></div></div>
+                            <table>
+                                <thead><tr><th>#</th><th><span class="lang-en">AOV</span><span class="lang-sk hidden">AOV</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Items / order</span><span class="lang-sk hidden">Polozky / obj.</span></th><th><span class="lang-en">Price / item</span><span class="lang-sk hidden">Cena / polozku</span></th></tr></thead>
+                                <tbody>{revenue_by_order_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Mature cohort retention table</span><span class="lang-sk hidden">Tabulka retencie zrelych kohort</span></h3></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Cohort</span><span class="lang-sk hidden">Kohorta</span></th><th><span class="lang-en">Age days</span><span class="lang-sk hidden">Vek dni</span></th><th>2nd</th><th>3rd</th><th>4th</th><th>5th</th></tr></thead>
+                            <tbody>{mature_cohort_rows_html}</tbody>
+                        </table>
+                    </div>
                 </section>
 
                 <section class="section" id="patterns">
@@ -712,6 +1448,20 @@ def generate_test2_dashboard(
                             <div class="chart-shell"><canvas id="weatherImpactChart"></canvas></div>
                         </div>
                     </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Weather daily overlay</span><span class="lang-sk hidden">Denný overlay počasia</span></h3><p><span class="lang-en">Daily weather severity against revenue and profit.</span><span class="lang-sk hidden">Denná sila zleho pocasia oproti trzbe a zisku.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="weatherDailyChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Payday window</span><span class="lang-sk hidden">Vyplatne okno</span></h3><p><span class="lang-en">Average daily revenue/profit by salary window.</span><span class="lang-sk hidden">Priemerne denne trzby/zisk podla vyplatneho okna.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="paydayWindowChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="panel chart-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Day-hour heatmap</span><span class="lang-sk hidden">Heatmap dna a hodiny</span></h3><p><span class="lang-en">Order concentration by weekday and hour.</span><span class="lang-sk hidden">Koncentracia objednavok podla dna a hodiny.</span></p></div></div>
+                        <div class="chart-shell compact"><canvas id="heatmapChart"></canvas></div>
+                    </div>
                 </section>
 
                 <section class="section" id="geography">
@@ -728,6 +1478,10 @@ def generate_test2_dashboard(
                             <div class="card-head"><div><h3><span class="lang-en">Country split</span><span class="lang-sk hidden">Rozdelenie krajin</span></h3></div></div>
                             <div class="chart-shell compact"><canvas id="countryChart"></canvas></div>
                         </div>
+                    </div>
+                    <div class="panel chart-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability chart</span><span class="lang-sk hidden">Graf geo profitability</span></h3><p><span class="lang-en">Country-level revenue, contribution and CPO in one view.</span><span class="lang-sk hidden">Krajiny: trzby, contribution a CPO v jednom pohlade.</span></p></div></div>
+                        <div class="chart-shell"><canvas id="geoProfitabilityChart"></canvas></div>
                     </div>
                     <div class="panel table-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">Country-level contribution view from the richer report.</span><span class="lang-sk hidden">Country-level contribution pohlad z bohatsieho reportu.</span></p></div></div>
@@ -776,6 +1530,130 @@ def generate_test2_dashboard(
                             <tbody>{product_trend_rows_html}</tbody>
                         </table>
                     </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">SKU Pareto contribution</span><span class="lang-sk hidden">SKU Pareto contribution</span></h3><p><span class="lang-en">Cumulative contribution concentration by SKU.</span><span class="lang-sk hidden">Kumulovana koncentracia contribution podla SKU.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="skuParetoChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Attach rate pairs</span><span class="lang-sk hidden">Attach rate dvojice</span></h3><p><span class="lang-en">Products most often bought together from anchor orders.</span><span class="lang-sk hidden">Produkty najcastejsie kupovane spolu z anchor objednavok.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="attachRateChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">SKU Pareto table</span><span class="lang-sk hidden">SKU Pareto tabulka</span></h3><p><span class="lang-en">Contribution concentration by top SKUs.</span><span class="lang-sk hidden">Koncentracia contribution podla top SKU.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th>SKU</th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution</span><span class="lang-sk hidden">Contribution</span></th><th><span class="lang-en">Cum. share</span><span class="lang-sk hidden">Kumul. podiel</span></th></tr></thead>
+                                <tbody>{sku_pareto_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Attach rate table</span><span class="lang-sk hidden">Attach rate tabulka</span></h3><p><span class="lang-en">Cross-sell pair strength by anchor item.</span><span class="lang-sk hidden">Sila cross-sell dvojic podla anchor produktu.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Anchor item</span><span class="lang-sk hidden">Anchor produkt</span></th><th><span class="lang-en">Attached item</span><span class="lang-sk hidden">Pridany produkt</span></th><th><span class="lang-en">Anchor orders</span><span class="lang-sk hidden">Anchor obj.</span></th><th><span class="lang-en">Attached</span><span class="lang-sk hidden">Pridane</span></th><th><span class="lang-en">Rate</span><span class="lang-sk hidden">Miera</span></th></tr></thead>
+                                <tbody>{attach_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section" id="operations">
+                    <div class="section-head">
+                        <h2><span class="lang-en">Operations and diagnostics</span><span class="lang-sk hidden">Operativa a diagnostika</span></h2>
+                        <p><span class="lang-en">Operational mix, status structure, email segments and reconciliation markers from the full reporting logic.</span><span class="lang-sk hidden">Operativny mix, stavy objednavok, email segmenty a reconciliation markery z plnej reporting logiky.</span></p>
+                    </div>
+                    <div class="mini-grid" style="margin-bottom:18px;">
+                        <div class="mini-card"><small><span class="lang-en">ROAS check delta</span><span class="lang-sk hidden">ROAS check delta</span></small><strong>{_num(consistency_payload.get('roas_delta')):+.4f}</strong></div>
+                        <div class="mini-card"><small><span class="lang-en">Margin check delta</span><span class="lang-sk hidden">Margin check delta</span></small><strong>{_num(consistency_payload.get('margin_delta')):+.4f}</strong></div>
+                        <div class="mini-card"><small><span class="lang-en">CAC check delta</span><span class="lang-sk hidden">CAC check delta</span></small><strong>{_num(consistency_payload.get('cac_delta')):+.4f}</strong></div>
+                        <div class="mini-card"><small><span class="lang-en">Top segment</span><span class="lang-sk hidden">Top segment</span></small><strong>{escape(str(segment_rows[0].get('segment') if segment_rows else 'N/A'))}</strong></div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">B2B vs B2C mix</span><span class="lang-sk hidden">B2B vs B2C mix</span></h3><p><span class="lang-en">Revenue and profit split by customer type.</span><span class="lang-sk hidden">Rozdelenie trzby a zisku podla typu zakaznika.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="b2bMixChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Order status structure</span><span class="lang-sk hidden">Struktura stavov objednavok</span></h3><p><span class="lang-en">How order volume is distributed across statuses.</span><span class="lang-sk hidden">Ako sa objem objednavok rozdeluje medzi stavy.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="orderStatusChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">B2B/B2C table</span><span class="lang-sk hidden">B2B/B2C tabulka</span></h3><p><span class="lang-en">Revenue, profit and customer count by segment.</span><span class="lang-sk hidden">Trzby, zisk a pocet zakaznikov podla segmentu.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Type</span><span class="lang-sk hidden">Typ</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th>AOV</th></tr></thead>
+                                <tbody>{b2b_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Order status table</span><span class="lang-sk hidden">Tabulka stavov objednavok</span></h3><p><span class="lang-en">Order count and revenue by status.</span><span class="lang-sk hidden">Pocet objednavok a trzba podla stavu.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Status</span><span class="lang-sk hidden">Stav</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
+                                <tbody>{order_status_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Email segment priority</span><span class="lang-sk hidden">Priorita email segmentov</span></h3><p><span class="lang-en">CRM targeting opportunities from the full segmentation logic.</span><span class="lang-sk hidden">CRM prilezitosti z plnej segmentacnej logiky.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Segment</span><span class="lang-sk hidden">Segment</span></th><th><span class="lang-en">Count</span><span class="lang-sk hidden">Pocet</span></th><th><span class="lang-en">Priority</span><span class="lang-sk hidden">Priorita</span></th><th><span class="lang-en">Description</span><span class="lang-sk hidden">Popis</span></th><th><span class="lang-en">Timing</span><span class="lang-sk hidden">Casovanie</span></th></tr></thead>
+                                <tbody>{segment_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Same-item purchase frequency</span><span class="lang-sk hidden">Frekvencia opakovanych nakupov rovnakeho produktu</span></h3><p><span class="lang-en">How many customers buy the same item 2x, 3x and more.</span><span class="lang-sk hidden">Kolko zakaznikov kupuje ten isty produkt 2x, 3x a viac.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Frequency</span><span class="lang-sk hidden">Frekvencia</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
+                                <tbody>{"".join(f"<tr><td>{int(round(_num(row.get('purchase_frequency'))))}x</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{_num(row.get('percentage')):.1f}%</td></tr>" for row in same_item_frequency_rows) or '<tr><td colspan=\"3\"><span class=\"lang-en\">No frequency data available.</span><span class=\"lang-sk hidden\">Frekvencne data nie su dostupne.</span></td></tr>'}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Cohort payback table</span><span class="lang-sk hidden">Kohortna payback tabulka</span></h3><p><span class="lang-en">Acquisition payback by cohort from the advanced DTC block.</span><span class="lang-sk hidden">Payback akvizicie podla kohort z advanced DTC bloku.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Cohort</span><span class="lang-sk hidden">Kohorta</span></th><th><span class="lang-en">New customers</span><span class="lang-sk hidden">Novi zakaznici</span></th><th><span class="lang-en">CAC</span><span class="lang-sk hidden">CAC</span></th><th><span class="lang-en">Recovery</span><span class="lang-sk hidden">Recovery</span></th><th><span class="lang-en">Avg payback days</span><span class="lang-sk hidden">Priem. payback dni</span></th><th><span class="lang-en">Median days</span><span class="lang-sk hidden">Median dni</span></th></tr></thead>
+                            <tbody>{"".join(f"<tr><td>{escape(str(row.get('cohort_month') or '-'))}</td><td>{int(round(_num(row.get('new_customers'))))}</td><td>€{_num(row.get('cohort_cac')):,.2f}</td><td>{_num(row.get('recovery_rate_pct')):.1f}%</td><td>{_num(row.get('avg_payback_days')):.1f}</td><td>{_num(row.get('median_payback_days')):.1f}</td></tr>" for row in cohort_payback_rows) or '<tr><td colspan=\"6\"><span class=\"lang-en\">No cohort payback data available.</span><span class=\"lang-sk hidden\">Kohortne payback data nie su dostupne.</span></td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section" id="library">
+                    <div class="section-head">
+                        <h2><span class="lang-en">Full metric library</span><span class="lang-sk hidden">Plna kniznica metrik</span></h2>
+                        <p><span class="lang-en">This keeps the test2 shell but restores the wider metric surface from the original test report. Use it when you want the full analytical depth without leaving the new layout.</span><span class="lang-sk hidden">Toto zachovava shell test2, ale vracia sirsiu plochu metrik z povodneho test reportu. Pouzi to vtedy, ked chces plnu analyticku hlbku bez odchodu z noveho layoutu.</span></p>
+                    </div>
+                    <div class="section-head" style="margin-top:10px;">
+                        <h2><span class="lang-en">Daily economics library</span><span class="lang-sk hidden">Kniznica dennej ekonomiky</span></h2>
+                        <p><span class="lang-en">Single-metric economics views from the original report.</span><span class="lang-sk hidden">Jednometriove ekonomicke pohlady z povodneho reportu.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryEconomics"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Marketing drilldown library</span><span class="lang-sk hidden">Kniznica marketingoveho drilldownu</span></h2>
+                        <p><span class="lang-en">Detailed Facebook, campaign, hourly and weekday efficiency views.</span><span class="lang-sk hidden">Detailne Facebook, kampanove, hodinove a weekday pohlady na efektivitu.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryMarketing"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Customer and retention library</span><span class="lang-sk hidden">Kniznica zakaznikov a retencie</span></h2>
+                        <p><span class="lang-en">Revenue split, refund detail, CLV/CAC, retention and repeat-product behavior.</span><span class="lang-sk hidden">Revenue split, detail refundov, CLV/CAC, retencia a spravanie pri opakovanych produktoch.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryCustomers"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Calendar and weather library</span><span class="lang-sk hidden">Kniznica kalendara a pocasia</span></h2>
+                        <p><span class="lang-en">Separate weekday, week-of-month, day-of-month and weather overlays.</span><span class="lang-sk hidden">Samostatne weekday, tyzden v mesiaci, den v mesiaci a weather overlay pohlady.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryPatterns"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Products and operations library</span><span class="lang-sk hidden">Kniznica produktov a operativy</span></h2>
+                        <p><span class="lang-en">Product combinations, spend-response diagnostics and operational status drilldown.</span><span class="lang-sk hidden">Produktove kombinacie, spend-response diagnostika a operativny drilldown stavov.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryProductsOps"></div>
                 </section>
 
                 <section class="section" id="health">
@@ -882,6 +1760,68 @@ def generate_test2_dashboard(
                 }},
             }};
         }}
+        function dualAxisOptions() {{
+            const opts = baseOptions();
+            opts.scales.y1 = {{
+                position: 'right',
+                grid: {{ display: false }},
+                ticks: {{ color: '#8a8178', font: {{ size: 11 }} }},
+                border: {{ display: false }},
+            }};
+            return opts;
+        }}
+        function horizontalBarOptions() {{
+            const opts = baseOptions();
+            opts.indexAxis = 'y';
+            opts.plugins = {{ ...opts.plugins, legend: {{ display: false }} }};
+            return opts;
+        }}
+        function doughnutOptions() {{
+            return {{
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '64%',
+                plugins: {{
+                    legend: {{
+                        position: 'bottom',
+                        labels: {{ usePointStyle: true, pointStyle: 'circle', color: '#675f56', padding: 14 }},
+                    }},
+                    tooltip: {{
+                        backgroundColor: 'rgba(30,24,19,.92)',
+                        titleColor: '#fff',
+                        bodyColor: '#f8f2eb',
+                        borderColor: 'rgba(255,255,255,.08)',
+                        borderWidth: 1,
+                        padding: 12,
+                    }},
+                }},
+            }};
+        }}
+        function hasRows(rows) {{
+            return Array.isArray(rows) && rows.length > 0;
+        }}
+        function hasSeries(values) {{
+            return Array.isArray(values) && values.length > 0;
+        }}
+        function createChartCard(item) {{
+            const shellClass = item.shellClass ? `chart-shell ${{item.shellClass}}` : 'chart-shell';
+            return `
+                <div class="panel chart-card">
+                    <div class="card-head">
+                        <div>
+                            <h3><span class="lang-en">${{item.title.en}}</span><span class="lang-sk hidden">${{item.title.sk}}</span></h3>
+                            <p><span class="lang-en">${{item.desc.en}}</span><span class="lang-sk hidden">${{item.desc.sk}}</span></p>
+                        </div>
+                    </div>
+                    <div class="${{shellClass}}"><canvas id="${{item.id}}"></canvas></div>
+                </div>
+            `;
+        }}
+        function renderGalleryCards(containerId, items) {{
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = items.length ? items.map(createChartCard).join('') : '';
+        }}
         function buildCharts() {{
             const s = DATA.series;
             new Chart(document.getElementById('revenueProfitChart'), {{
@@ -957,6 +1897,21 @@ def generate_test2_dashboard(
                 }},
                 options: countryOpts,
             }});
+            if (DATA.geo_rows.length) {{
+                const geoOpts = baseOptions();
+                geoOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('geoProfitabilityChart'), {{
+                    data: {{
+                        labels: DATA.geo_rows.map(x => (x.country || 'Unknown').toUpperCase()),
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue', data: DATA.geo_rows.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Contribution', data: DATA.geo_rows.map(x => Number(x.contribution_profit || 0)), backgroundColor: 'rgba(31,157,102,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'FB CPO', data: DATA.geo_rows.map(x => Number(x.fb_cpo || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: geoOpts,
+                }});
+            }}
             if (DATA.refunds.dates.length) {{
                 new Chart(document.getElementById('refundRateChart'), {{
                     type: 'line',
@@ -1050,12 +2005,1400 @@ def generate_test2_dashboard(
                     options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
                 }});
             }}
+            const economicsOpts = baseOptions();
+            economicsOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+            new Chart(document.getElementById('dailyEconomicsChart'), {{
+                data: {{
+                    labels: s.dates,
+                    datasets: [
+                        {{ type: 'line', label: 'Revenue', data: s.revenue, borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .34, borderWidth: 2.6, pointRadius: 0, yAxisID: 'y' }},
+                        {{ type: 'line', label: 'Profit', data: s.profit, borderColor: '#1f9d66', tension: .34, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
+                        {{ type: 'line', label: 'Total cost', data: s.total_cost, borderColor: '#8a2c3d', tension: .28, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y' }},
+                        {{ type: 'line', label: 'Ads', data: s.total_ads, borderColor: '#4766ff', borderDash: [8, 6], tension: .28, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                    ],
+                }},
+                options: economicsOpts,
+            }});
+            new Chart(document.getElementById('costBreakoutChart'), {{
+                data: {{
+                    labels: s.dates,
+                    datasets: [
+                        {{ type: 'bar', label: 'Product', data: s.product_cost, backgroundColor: 'rgba(255,138,31,.72)', stack: 'costs', borderRadius: 6 }},
+                        {{ type: 'bar', label: 'Packaging', data: s.packaging, backgroundColor: 'rgba(255,177,93,.72)', stack: 'costs', borderRadius: 6 }},
+                        {{ type: 'bar', label: 'Shipping', data: s.shipping, backgroundColor: 'rgba(255,213,157,.9)', stack: 'costs', borderRadius: 6 }},
+                        {{ type: 'bar', label: 'Fixed', data: s.fixed, backgroundColor: 'rgba(64,56,47,.72)', stack: 'costs', borderRadius: 6 }},
+                        {{ type: 'line', label: 'Ads', data: s.total_ads, borderColor: '#4766ff', tension: .28, borderWidth: 2.1, pointRadius: 0, yAxisID: 'y1' }},
+                    ],
+                }},
+                options: economicsOpts,
+            }});
+            new Chart(document.getElementById('grossMarginRoiChart'), {{
+                type: 'line',
+                data: {{
+                    labels: s.dates,
+                    datasets: [
+                        {{ label: 'Gross margin %', data: s.gross_margin, borderColor: '#ff8a1f', tension: .32, borderWidth: 2.4, pointRadius: 0 }},
+                        {{ label: 'Gross margin 7d MA', data: s.gross_margin_ma7, borderColor: '#d95c00', borderDash: [8, 6], tension: .32, borderWidth: 2.0, pointRadius: 0 }},
+                        {{ label: 'ROI %', data: s.roi, borderColor: '#1f9d66', tension: .32, borderWidth: 2.4, pointRadius: 0 }},
+                        {{ label: 'ROI 7d MA', data: s.roi_ma7, borderColor: '#0f6b44', borderDash: [8, 6], tension: .32, borderWidth: 2.0, pointRadius: 0 }},
+                    ],
+                }},
+                options: baseOptions(),
+            }});
+            new Chart(document.getElementById('contributionPerOrderChart'), {{
+                type: 'line',
+                data: {{
+                    labels: s.dates,
+                    datasets: [
+                        {{ label: 'Pre-ad / order', data: s.pre_contribution_per_order, borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .32, borderWidth: 2.4, pointRadius: 0 }},
+                        {{ label: 'Post-ad / order', data: s.post_contribution_per_order, borderColor: '#1f9d66', tension: .32, borderWidth: 2.4, pointRadius: 0 }},
+                    ],
+                }},
+                options: baseOptions(),
+            }});
+            const itemsOpts = baseOptions();
+            itemsOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+            new Chart(document.getElementById('itemsBasketChart'), {{
+                data: {{
+                    labels: s.dates,
+                    datasets: [
+                        {{ type: 'bar', label: 'Items sold', data: s.items, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 6, yAxisID: 'y' }},
+                        {{ type: 'line', label: 'Avg items / order', data: s.avg_items, borderColor: '#4766ff', tension: .34, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y1' }},
+                        {{ type: 'line', label: 'Avg items 7d MA', data: s.avg_items_ma7, borderColor: '#8b5cf6', borderDash: [8, 6], tension: .34, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                    ],
+                }},
+                options: itemsOpts,
+            }});
+            if (DATA.ltv.labels.length) {{
+                const ltvOpts = baseOptions();
+                ltvOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('ltvRevenueTrendChart'), {{
+                    data: {{
+                        labels: DATA.ltv.labels,
+                        datasets: [
+                            {{ type: 'line', label: 'LTV revenue', data: DATA.ltv.ltv_revenue, borderColor: '#8b5cf6', tension: .34, borderWidth: 2.6, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Cum. avg revenue', data: s.cumulative_avg_revenue, borderColor: '#ff8a1f', borderDash: [8, 6], tension: .34, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Customers acquired', data: DATA.ltv.customers_acquired || [], backgroundColor: 'rgba(71,102,255,.38)', borderRadius: 6, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: ltvOpts,
+                }});
+            }}
+            if (DATA.fb_daily.dates.length) {{
+                const fbPerfOpts = baseOptions();
+                fbPerfOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('fbDailyPerformanceChart'), {{
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'Spend', data: DATA.fb_daily.spend, backgroundColor: 'rgba(71,102,255,.36)', borderRadius: 6, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Clicks', data: DATA.fb_daily.clicks, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Impressions', data: DATA.fb_daily.impressions, borderColor: '#8b5cf6', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: fbPerfOpts,
+                }});
+                const fbEffOpts = baseOptions();
+                fbEffOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('fbEfficiencyChart'), {{
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [
+                            {{ type: 'line', label: 'CTR %', data: DATA.fb_daily.ctr, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'CPC', data: DATA.fb_daily.cpc, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CPM', data: DATA.fb_daily.cpm, borderColor: '#8a2c3d', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: fbEffOpts,
+                }});
+            }}
+            if (DATA.weekly_cpo.length) {{
+                const weeklyLabels = DATA.weekly_cpo.map(x => x.week_start || '-');
+                const weeklyOpts = baseOptions();
+                weeklyOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('weeklyCpoChart'), {{
+                    data: {{
+                        labels: weeklyLabels,
+                        datasets: [
+                            {{ type: 'bar', label: 'CPO', data: DATA.weekly_cpo.map(x => Number(x.cpo || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 6, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Spend', data: DATA.weekly_cpo.map(x => Number(x.fb_spend || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Orders', data: DATA.weekly_cpo.map(x => Number(x.orders || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: weeklyOpts,
+                }});
+            }}
+            if (DATA.fb_hourly.length || DATA.hourly_orders.length) {{
+                const hourMap = new Map();
+                DATA.fb_hourly.forEach(row => hourMap.set(String(row.hour), {{ spend: Number(row.spend || 0), clicks: Number(row.clicks || 0) }}));
+                DATA.hourly_orders.forEach(row => {{
+                    const key = String(row.hour);
+                    const existing = hourMap.get(key) || {{ spend: 0, clicks: 0 }};
+                    existing.orders = Number(row.orders || 0);
+                    existing.revenue = Number(row.revenue || 0);
+                    hourMap.set(key, existing);
+                }});
+                const hours = Array.from({{ length: 24 }}, (_, idx) => String(idx));
+                const hourlyOpts = baseOptions();
+                hourlyOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('hourlyAdsOrdersChart'), {{
+                    data: {{
+                        labels: hours,
+                        datasets: [
+                            {{ type: 'bar', label: 'Spend', data: hours.map(h => (hourMap.get(h) || {{}}).spend || 0), backgroundColor: 'rgba(71,102,255,.38)', borderRadius: 6, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Orders', data: hours.map(h => (hourMap.get(h) || {{}}).orders || 0), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Clicks', data: hours.map(h => (hourMap.get(h) || {{}}).clicks || 0), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: hourlyOpts,
+                }});
+            }}
+            if (DATA.ads_effectiveness.labels.length) {{
+                const adsOpts = baseOptions();
+                adsOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('adsEffectivenessChart'), {{
+                    data: {{
+                        labels: DATA.ads_effectiveness.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'FB spend', data: DATA.ads_effectiveness.fb_spend, backgroundColor: 'rgba(71,102,255,.32)', borderRadius: 6, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Google spend', data: DATA.ads_effectiveness.google_spend, backgroundColor: 'rgba(151,168,255,.32)', borderRadius: 6, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Revenue', data: DATA.ads_effectiveness.revenue, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Profit', data: DATA.ads_effectiveness.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: adsOpts,
+                }});
+            }}
+            if (DATA.fb_daily.dates.length) {{
+                const reachOpts = baseOptions();
+                reachOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('fbReachClicksChart'), {{
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'Reach', data: DATA.fb_daily.reach, backgroundColor: 'rgba(71,102,255,.28)', borderRadius: 6, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Clicks', data: DATA.fb_daily.clicks, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'CTR %', data: DATA.fb_daily.ctr, borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: reachOpts,
+                }});
+            }}
+            if (DATA.fb_campaign_rows.length) {{
+                const spendMixRows = DATA.fb_campaign_rows.slice(0, 6);
+                new Chart(document.getElementById('campaignSpendMixChart'), {{
+                    type: 'doughnut',
+                    data: {{
+                        labels: spendMixRows.map(x => (x.campaign_name || 'Unknown').slice(0, 28)),
+                        datasets: [{{ data: spendMixRows.map(x => Number(x.spend || 0)), backgroundColor: ['#ff8a1f','#ffb15d','#ffd59d','#4766ff','#8b5cf6','#1f9d66'], borderColor: '#fff9f3', borderWidth: 4, hoverOffset: 8 }}],
+                    }},
+                    options: {{ responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: {{ legend: {{ position: 'bottom', labels: {{ usePointStyle: true, pointStyle: 'circle', color: '#6f665c', padding: 14 }} }} }} }},
+                }});
+                const campEffOpts = baseOptions();
+                campEffOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('campaignEfficiencyChart'), {{
+                    data: {{
+                        labels: DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Spend', data: DATA.fb_campaign_rows.map(x => Number(x.spend || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CTR %', data: DATA.fb_campaign_rows.map(x => Number(x.ctr || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'CPC', data: DATA.fb_campaign_rows.map(x => Number(x.cpc || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: campEffOpts,
+                }});
+            }}
+            if (DATA.fb_hourly.length || DATA.hourly_orders.length) {{
+                const hourlyMap = new Map();
+                DATA.fb_hourly.forEach(row => hourlyMap.set(String(row.hour), {{ spend: Number(row.spend || 0), clicks: Number(row.clicks || 0) }}));
+                DATA.hourly_orders.forEach(row => {{
+                    const key = String(row.hour);
+                    const existing = hourlyMap.get(key) || {{ spend: 0, clicks: 0 }};
+                    existing.orders = Number(row.orders || 0);
+                    existing.revenue = Number(row.revenue || 0);
+                    hourlyMap.set(key, existing);
+                }});
+                const hours = Array.from({{ length: 24 }}, (_, idx) => String(idx));
+                const hourlyEffOpts = baseOptions();
+                hourlyEffOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('hourlyEfficiencyChart'), {{
+                    data: {{
+                        labels: hours,
+                        datasets: [
+                            {{ type: 'line', label: 'Hourly CPO', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const orders = Number(row.orders || 0); const spend = Number(row.spend || 0); return orders > 0 ? spend / orders : 0; }}), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Hourly ROAS', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const spend = Number(row.spend || 0); const revenue = Number(row.revenue || 0); return spend > 0 ? revenue / spend : 0; }}), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: hourlyEffOpts,
+                }});
+            }}
+            if (DATA.fb_dow.length) {{
+                const fbDowOpts = baseOptions();
+                fbDowOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('fbDowEfficiencyChart'), {{
+                    data: {{
+                        labels: DATA.fb_dow.map(x => x.day_of_week || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Spend', data: DATA.fb_dow.map(x => Number(x.total_spend || 0)), backgroundColor: 'rgba(71,102,255,.30)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CTR %', data: DATA.fb_dow.map(x => Number(x.ctr || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'CPC', data: DATA.fb_dow.map(x => Number(x.cpc || 0)), borderColor: '#ff8a1f', tension: .28, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: fbDowOpts,
+                }});
+            }}
+            if (DATA.returning_customers.labels.length) {{
+                const retOpts = baseOptions();
+                retOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('returningShareChart'), {{
+                    data: {{
+                        labels: DATA.returning_customers.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'New %', data: DATA.returning_customers.new_pct, backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 6, stack: 'share', yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Returning %', data: DATA.returning_customers.returning_pct, backgroundColor: 'rgba(71,102,255,.62)', borderRadius: 6, stack: 'share', yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Unique customers', data: DATA.returning_customers.unique_customers, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: retOpts,
+                }});
+            }}
+            if (DATA.clv.labels.length) {{
+                const clvOpts = baseOptions();
+                clvOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('clvCacTrendChart'), {{
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [
+                            {{ type: 'line', label: 'Avg CLV', data: DATA.clv.avg_clv, borderColor: '#8b5cf6', tension: .30, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CAC', data: DATA.clv.cac, borderColor: '#cf5060', tension: .30, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'LTV/CAC', data: DATA.clv.ltv_cac_ratio, borderColor: '#ff8a1f', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: clvOpts,
+                }});
+            }}
+            if (DATA.order_size.labels.length) {{
+                new Chart(document.getElementById('orderSizeChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.order_size.labels,
+                        datasets: [
+                            {{ label: '1 item', data: DATA.order_size.one, backgroundColor: 'rgba(255,138,31,.45)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '2 items', data: DATA.order_size.two, backgroundColor: 'rgba(255,177,93,.55)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '3 items', data: DATA.order_size.three, backgroundColor: 'rgba(255,213,157,.65)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '4 items', data: DATA.order_size.four, backgroundColor: 'rgba(71,102,255,.45)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '5+ items', data: DATA.order_size.five_plus, backgroundColor: 'rgba(31,157,102,.45)', stack: 'size', borderRadius: 6 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (DATA.customer_top_rows.length) {{
+                new Chart(document.getElementById('customerConcentrationChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.customer_top_rows.map(x => (x.customer || 'Unknown').slice(0, 26)),
+                        datasets: [{{ label: 'Revenue share %', data: DATA.customer_top_rows.map(x => Number(x.revenue_pct || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }}],
+                    }},
+                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if (DATA.clv.labels.length) {{
+                const returnOpts = baseOptions();
+                returnOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('returnTimeLtvChart'), {{
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [
+                            {{ type: 'line', label: 'Avg return days', data: DATA.clv.avg_return_time_days, borderColor: '#4766ff', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'LTV/CAC', data: DATA.clv.ltv_cac_ratio, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg CLV', data: DATA.clv.avg_clv, borderColor: '#8b5cf6', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: returnOpts,
+                }});
+            }}
+            if (DATA.cohort_order_frequency_rows.length) {{
+                const freqOpts = baseOptions();
+                freqOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('orderFrequencyChart'), {{
+                    data: {{
+                        labels: DATA.cohort_order_frequency_rows.map(x => x.frequency || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Customers', data: DATA.cohort_order_frequency_rows.map(x => Number(x.customer_count || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Customer %', data: DATA.cohort_order_frequency_rows.map(x => Number(x.customer_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: freqOpts,
+                }});
+            }}
+            if (DATA.cohort_time_between_rows.length) {{
+                const betweenOpts = baseOptions();
+                betweenOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('timeBetweenOrdersChart'), {{
+                    data: {{
+                        labels: DATA.cohort_time_between_rows.map(x => x.time_bucket || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Count', data: DATA.cohort_time_between_rows.map(x => Number(x.count || 0)), backgroundColor: 'rgba(71,102,255,.55)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Share %', data: DATA.cohort_time_between_rows.map(x => Number(x.percentage || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: betweenOpts,
+                }});
+            }}
+            if (DATA.cohort_time_by_order_rows.length) {{
+                new Chart(document.getElementById('timeBetweenByOrderChart'), {{
+                    data: {{
+                        labels: DATA.cohort_time_by_order_rows.map(x => x.transition || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg days', data: DATA.cohort_time_by_order_rows.map(x => Number(x.avg_days || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
+                            {{ type: 'line', label: 'Median days', data: DATA.cohort_time_by_order_rows.map(x => Number(x.median_days || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (DATA.cohort_time_to_nth_rows.length) {{
+                const nthOpts = baseOptions();
+                nthOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('timeToNthOrderChart'), {{
+                    data: {{
+                        labels: DATA.cohort_time_to_nth_rows.map(x => String(x.order_number || '-')),
+                        datasets: [
+                            {{ type: 'line', label: 'Avg days from first', data: DATA.cohort_time_to_nth_rows.map(x => Number(x.avg_days_from_first || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg days from previous', data: DATA.cohort_time_to_nth_rows.map(x => Number(x.avg_days_from_prev || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Customers', data: DATA.cohort_time_to_nth_rows.map(x => Number(x.customer_count || 0)), borderColor: '#4766ff', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: nthOpts,
+                }});
+            }}
+            if (DATA.cohort_revenue_by_order_rows.length) {{
+                const seqOpts = baseOptions();
+                seqOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('orderSequenceValueChart'), {{
+                    data: {{
+                        labels: DATA.cohort_revenue_by_order_rows.map(x => String(x.order_number || '-')),
+                        datasets: [
+                            {{ type: 'bar', label: 'AOV', data: DATA.cohort_revenue_by_order_rows.map(x => Number(x.avg_order_value || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg items / order', data: DATA.cohort_revenue_by_order_rows.map(x => Number(x.avg_items_per_order || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Price / item', data: DATA.cohort_revenue_by_order_rows.map(x => Number(x.avg_price_per_item || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: seqOpts,
+                }});
+            }}
+            if (DATA.mature_cohort_rows.length) {{
+                new Chart(document.getElementById('matureCohortChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.mature_cohort_rows.map(x => x.cohort || '-'),
+                        datasets: [
+                            {{ label: '2nd order', data: DATA.mature_cohort_rows.map(x => Number(x.retention_2nd_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3 }},
+                            {{ label: '3rd order', data: DATA.mature_cohort_rows.map(x => Number(x.retention_3rd_pct || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3 }},
+                            {{ label: '4th order', data: DATA.mature_cohort_rows.map(x => Number(x.retention_4th_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (DATA.weather.dates.length) {{
+                const weatherDailyOpts = baseOptions();
+                weatherDailyOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('weatherDailyChart'), {{
+                    data: {{
+                        labels: DATA.weather.dates,
+                        datasets: [
+                            {{ type: 'line', label: 'Revenue', data: DATA.weather.revenue, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit', data: DATA.weather.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Bad weather score', data: DATA.weather.bad_score, backgroundColor: 'rgba(71,102,255,.30)', borderRadius: 6, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: weatherDailyOpts,
+                }});
+            }}
+            if (DATA.payday_window_rows.length) {{
+                const paydayOpts = baseOptions();
+                paydayOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('paydayWindowChart'), {{
+                    data: {{
+                        labels: DATA.payday_window_rows.map(x => x.window || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg daily revenue', data: DATA.payday_window_rows.map(x => Number(x.avg_daily_revenue || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg daily profit', data: DATA.payday_window_rows.map(x => Number(x.avg_daily_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: paydayOpts,
+                }});
+            }}
+            if (DATA.heatmap_rows.length) {{
+                const dayOrder = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+                const skOrder = ['Pondelok','Utorok','Streda','Stvrtok','Piatok','Sobota','Nedela'];
+                const labels = Array.from({{ length: 24 }}, (_, idx) => idx);
+                new Chart(document.getElementById('heatmapChart'), {{
+                    type: 'bubble',
+                    data: {{
+                        datasets: [{{
+                            label: 'Orders',
+                            data: DATA.heatmap_rows.map(row => {{
+                                const dayName = row.day_name || '';
+                                const y = Math.max(dayOrder.indexOf(dayName), skOrder.indexOf(dayName), 0);
+                                const orders = Number(row.orders || 0);
+                                return {{ x: Number(row.hour || 0), y: y, r: Math.max(4, Math.min(18, orders * 1.1)), orders: orders, day: dayName }};
+                            }}),
+                            backgroundColor: 'rgba(255,138,31,.42)',
+                            borderColor: 'rgba(255,138,31,.85)',
+                        }}],
+                    }},
+                    options: {{
+                        ...baseOptions(),
+                        plugins: {{
+                            ...baseOptions().plugins,
+                            legend: {{ display: false }},
+                            tooltip: {{
+                                ...baseOptions().plugins.tooltip,
+                                callbacks: {{
+                                    label: (ctx) => `${{ctx.raw.day}} ${{ctx.raw.x}}:00 -> ${{ctx.raw.orders}} orders`
+                                }}
+                            }}
+                        }},
+                        scales: {{
+                            x: {{ type: 'linear', min: 0, max: 23, ticks: {{ stepSize: 1, color: '#8a8178' }}, grid: {{ display: false }}, border: {{ display: false }} }},
+                            y: {{
+                                min: -0.5,
+                                max: 6.5,
+                                ticks: {{
+                                    stepSize: 1,
+                                    color: '#8a8178',
+                                    callback: (value) => dayOrder[value] || ''
+                                }},
+                                grid: {{ color: 'rgba(140,122,99,.12)' }},
+                                border: {{ display: false }}
+                            }}
+                        }}
+                    }},
+                }});
+            }}
+            if (DATA.sku_pareto_rows.length) {{
+                const paretoOpts = baseOptions();
+                paretoOpts.scales.y1 = {{ position: 'right', min: 0, max: 100, grid: {{ display: false }}, ticks: {{ color: '#8a8178', callback: (v) => `${{v}}%`, font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('skuParetoChart'), {{
+                    data: {{
+                        labels: DATA.sku_pareto_rows.map(x => (x.product || 'Unknown').slice(0, 26)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Contribution', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Cum. contribution %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_pct || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: paretoOpts,
+                }});
+            }}
+            if (DATA.attach_rate_rows.length) {{
+                new Chart(document.getElementById('attachRateChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.attach_rate_rows.map(x => `${{(x.anchor_item || '').slice(0, 14)}} -> ${{(x.attached_item || '').slice(0, 14)}}`),
+                        datasets: [{{ label: 'Attach rate %', data: DATA.attach_rate_rows.map(x => Number(x.attach_rate_pct || 0)), backgroundColor: 'rgba(71,102,255,.72)', borderRadius: 8 }}],
+                    }},
+                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if (DATA.b2b_rows.length) {{
+                const b2bOpts = baseOptions();
+                b2bOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('b2bMixChart'), {{
+                    data: {{
+                        labels: DATA.b2b_rows.map(x => x.customer_type || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue', data: DATA.b2b_rows.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit', data: DATA.b2b_rows.map(x => Number(x.profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'AOV', data: DATA.b2b_rows.map(x => Number(x.aov || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: b2bOpts,
+                }});
+            }}
+            if (DATA.order_status_rows.length) {{
+                new Chart(document.getElementById('orderStatusChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.order_status_rows.map(x => x.status || '-'),
+                        datasets: [{{ label: 'Orders', data: DATA.order_status_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }}],
+                    }},
+                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+        }}
+        function buildLibraryEconomicsMarketing() {{
+            const s = DATA.series;
+            const economicsItems = hasSeries(s.dates) ? [
+                {{ id: 'econRevenueDetailChart', title: {{ en: 'Revenue detail', sk: 'Detail trzby' }}, desc: {{ en: 'Single-metric revenue trend with smoothing.', sk: 'Samostatny trend trzby s vyhladenim.' }} }},
+                {{ id: 'econProfitDetailChart', title: {{ en: 'Profit detail', sk: 'Detail zisku' }}, desc: {{ en: 'Profit development isolated from the mixed chart.', sk: 'Vyvoj zisku oddeleny od ostatnych serii.' }} }},
+                {{ id: 'econAovDetailChart', title: {{ en: 'AOV detail', sk: 'Detail AOV' }}, desc: {{ en: 'Basket value trend and 7-day moving average.', sk: 'Trend hodnoty kosika a 7-dnovy priemer.' }} }},
+                {{ id: 'econCostStackDetailChart', title: {{ en: 'Cost stack detail', sk: 'Detail stacku nakladov' }}, desc: {{ en: 'Total cost, product cost and ad spend on one timeline.', sk: 'Total cost, produktovy cost a reklamny spend na jednej osi.' }} }},
+                {{ id: 'econLogisticsDetailChart', title: {{ en: 'Logistics and fixed costs', sk: 'Logistika a fixne naklady' }}, desc: {{ en: 'Packaging, shipping and fixed overhead in one view.', sk: 'Balenie, shipping a fixny overhead v jednom pohlade.' }} }},
+                {{ id: 'econAverageTrendDetailChart', title: {{ en: 'Running averages', sk: 'Bezace priemery' }}, desc: {{ en: 'Cumulative average revenue and profit for stability reading.', sk: 'Kumulativny priemer trzby a zisku pre citanie stability.' }} }},
+                {{ id: 'econRoiRoasDetailChart', title: {{ en: 'ROI and ROAS detail', sk: 'Detail ROI a ROAS' }}, desc: {{ en: 'Daily ROI against daily blended ROAS.', sk: 'Denne ROI oproti dennemu blended ROAS.' }} }},
+                {{ id: 'econMarginsDetailChart', title: {{ en: 'Margin stack', sk: 'Stack marzi' }}, desc: {{ en: 'Gross, pre-ad and post-ad margins in one line view.', sk: 'Hruba, pre-ad a post-ad marza v jednom pohlade.' }} }},
+            ] : [];
+            renderGalleryCards('libraryEconomics', economicsItems);
+
+            if (document.getElementById('econRevenueDetailChart')) {{
+                new Chart(document.getElementById('econRevenueDetailChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'Revenue', data: s.revenue, borderColor: '#ff8a1f', backgroundColor: (ctx) => gradient(ctx, 'rgba(255,138,31,.22)', 'rgba(255,138,31,.02)'), fill: true, tension: .36, borderWidth: 2.8, pointRadius: 0 }},
+                            {{ label: 'Revenue 7d MA', data: s.revenue_ma7, borderColor: '#d95c00', borderDash: [8, 6], tension: .34, borderWidth: 2.0, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econProfitDetailChart')) {{
+                new Chart(document.getElementById('econProfitDetailChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'Profit', data: s.profit, borderColor: '#1f9d66', backgroundColor: (ctx) => gradient(ctx, 'rgba(31,157,102,.20)', 'rgba(31,157,102,.02)'), fill: true, tension: .34, borderWidth: 2.6, pointRadius: 0 }},
+                            {{ label: 'Profit 7d MA', data: s.profit_ma7, borderColor: '#0f6b44', borderDash: [8, 6], tension: .34, borderWidth: 2.0, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econAovDetailChart')) {{
+                new Chart(document.getElementById('econAovDetailChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'AOV', data: s.aov, borderColor: '#4766ff', tension: .34, borderWidth: 2.4, pointRadius: 0 }},
+                            {{ label: 'AOV 7d MA', data: s.aov_ma7, borderColor: '#1b46e5', borderDash: [8, 6], tension: .34, borderWidth: 2.0, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econCostStackDetailChart')) {{
+                const costOpts = dualAxisOptions();
+                new Chart(document.getElementById('econCostStackDetailChart'), {{
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'Total cost', data: s.total_cost, backgroundColor: 'rgba(207,80,96,.42)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Product cost', data: s.product_cost, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Total ads', data: s.total_ads, borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: costOpts,
+                }});
+            }}
+            if (document.getElementById('econLogisticsDetailChart')) {{
+                const logisticsOpts = dualAxisOptions();
+                new Chart(document.getElementById('econLogisticsDetailChart'), {{
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'Packaging', data: s.packaging, backgroundColor: 'rgba(255,177,93,.55)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Shipping', data: s.shipping, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Fixed', data: s.fixed, borderColor: '#cf5060', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: logisticsOpts,
+                }});
+            }}
+            if (document.getElementById('econAverageTrendDetailChart')) {{
+                new Chart(document.getElementById('econAverageTrendDetailChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'Cum. avg revenue', data: s.cumulative_avg_revenue, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.4, pointRadius: 0 }},
+                            {{ label: 'Cum. avg profit', data: s.cumulative_avg_profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.4, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econRoiRoasDetailChart')) {{
+                const roiOpts = dualAxisOptions();
+                new Chart(document.getElementById('econRoiRoasDetailChart'), {{
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ type: 'line', label: 'ROI %', data: s.roi, borderColor: '#1f9d66', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'ROAS', data: s.roas, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: roiOpts,
+                }});
+            }}
+            if (document.getElementById('econMarginsDetailChart')) {{
+                new Chart(document.getElementById('econMarginsDetailChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'Gross margin %', data: s.gross_margin, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 0 }},
+                            {{ label: 'Pre-ad margin %', data: s.pre_margin, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 0 }},
+                            {{ label: 'Post-ad margin %', data: s.post_margin, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+
+            const marketingItems = [];
+            if (hasRows(DATA.cpo_daily)) marketingItems.push({{ id: 'mktDailyCpoRoasChart', title: {{ en: 'Daily CPO and ROAS', sk: 'Denne CPO a ROAS' }}, desc: {{ en: 'Daily cost per order against attributed ROAS.', sk: 'Denne CPO oproti atribucnemu ROAS.' }} }});
+            if (hasRows(DATA.weekly_cpo)) marketingItems.push({{ id: 'mktWeeklyCpoChart', title: {{ en: 'Weekly CPO', sk: 'Tyzdenne CPO' }}, desc: {{ en: 'Weekly order acquisition cost and spend.', sk: 'Tyzdenny naklad na objednavku a spend.' }} }});
+            if (hasRows(DATA.campaign_cpo)) marketingItems.push({{ id: 'mktCampaignCpoRoasChart', title: {{ en: 'Campaign attribution economics', sk: 'Ekonomika atribucie kampani' }}, desc: {{ en: 'Estimated campaign CPO and ROAS.', sk: 'Odhadovane kampanove CPO a ROAS.' }} }});
+            if (hasSeries(DATA.fb_daily.dates)) {{
+                marketingItems.push(
+                    {{ id: 'mktReachImpressionsChart', title: {{ en: 'Reach and impressions', sk: 'Reach a impresie' }}, desc: {{ en: 'Daily Meta reach compared with impressions.', sk: 'Denn y Meta reach oproti impresiam.' }} }},
+                    {{ id: 'mktClicksCtrChart', title: {{ en: 'Clicks and CTR', sk: 'Kliky a CTR' }}, desc: {{ en: 'Click volume with CTR overlay.', sk: 'Objem klikov s CTR overlayom.' }} }},
+                    {{ id: 'mktCpcCpmChart', title: {{ en: 'CPC and CPM', sk: 'CPC a CPM' }}, desc: {{ en: 'Efficiency pricing trend for Meta delivery.', sk: 'Trend ceny efektivity pre Meta delivery.' }} }},
+                );
+            }}
+            if (hasRows(DATA.hourly_orders) || hasRows(DATA.fb_hourly)) {{
+                marketingItems.push(
+                    {{ id: 'mktHourlySpendOrdersChart', title: {{ en: 'Hourly spend and orders', sk: 'Hodinovy spend a objednavky' }}, desc: {{ en: 'Hour-by-hour response between spend and orders.', sk: 'Hodinova odozva medzi spendom a objednavkami.' }} }},
+                    {{ id: 'mktHourlyRoasCpoChart', title: {{ en: 'Hourly ROAS and CPO', sk: 'Hodinove ROAS a CPO' }}, desc: {{ en: 'Hour-level efficiency by return and cost per order.', sk: 'Hodinova efektivita podla navratnosti a CPO.' }} }},
+                );
+            }}
+            if (hasRows(DATA.fb_dow)) marketingItems.push({{ id: 'mktDowCtrCpcChart', title: {{ en: 'Weekday CTR and CPC', sk: 'CTR a CPC podla dna' }}, desc: {{ en: 'Meta efficiency by day of week.', sk: 'Meta efektivita podla dna v tyzdni.' }} }});
+            if (hasRows(DATA.spend_effectiveness_rows)) {{
+                marketingItems.push(
+                    {{ id: 'mktSpendRangeRoasChart', title: {{ en: 'Spend range ROAS', sk: 'ROAS podla spend bucketu' }}, desc: {{ en: 'ROAS by daily spend bucket.', sk: 'ROAS podla bucketu denneho spendu.' }} }},
+                    {{ id: 'mktSpendRangeRevenueChart', title: {{ en: 'Spend range revenue and profit', sk: 'Trzba a zisk podla spend bucketu' }}, desc: {{ en: 'Revenue, profit and orders by spend band.', sk: 'Trzba, zisk a objednavky podla spend pasma.' }} }},
+                );
+            }}
+            if (hasRows(DATA.dow_effectiveness_rows)) marketingItems.push({{ id: 'mktDowRevenueSpendChart', title: {{ en: 'Weekday revenue and spend', sk: 'Trzba a spend podla dna' }}, desc: {{ en: 'Average weekday business output versus FB spend.', sk: 'Priemerny vykon dna oproti FB spendu.' }} }});
+            renderGalleryCards('libraryMarketing', marketingItems);
+
+            if (document.getElementById('mktDailyCpoRoasChart')) {{
+                const dailyCpoOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktDailyCpoRoasChart'), {{
+                    data: {{
+                        labels: DATA.cpo_daily.map(x => x.date || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'FB spend', data: DATA.cpo_daily.map(x => Number(x.fb_spend || 0)), backgroundColor: 'rgba(255,138,31,.42)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CPO', data: DATA.cpo_daily.map(x => Number(x.cpo || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'ROAS', data: DATA.cpo_daily.map(x => Number(x.roas || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: dailyCpoOpts,
+                }});
+            }}
+            if (document.getElementById('mktWeeklyCpoChart')) {{
+                const weeklyOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktWeeklyCpoChart'), {{
+                    data: {{
+                        labels: DATA.weekly_cpo.map(x => x.week_start || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'CPO', data: DATA.weekly_cpo.map(x => Number(x.cpo || 0)), backgroundColor: 'rgba(255,138,31,.65)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'FB spend', data: DATA.weekly_cpo.map(x => Number(x.fb_spend || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: weeklyOpts,
+                }});
+            }}
+            if (document.getElementById('mktCampaignCpoRoasChart')) {{
+                const campaignOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktCampaignCpoRoasChart'), {{
+                    data: {{
+                        labels: DATA.campaign_cpo.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Estimated CPO', data: DATA.campaign_cpo.map(x => Number(x.estimated_cpo || 0)), backgroundColor: 'rgba(255,138,31,.65)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Estimated ROAS', data: DATA.campaign_cpo.map(x => Number(x.estimated_roas || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Spend', data: DATA.campaign_cpo.map(x => Number(x.spend || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: campaignOpts,
+                }});
+            }}
+            if (document.getElementById('mktReachImpressionsChart')) {{
+                const reachOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktReachImpressionsChart'), {{
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'Impressions', data: DATA.fb_daily.impressions, backgroundColor: 'rgba(255,138,31,.36)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Reach', data: DATA.fb_daily.reach, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: reachOpts,
+                }});
+            }}
+            if (document.getElementById('mktClicksCtrChart')) {{
+                const clickOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktClicksCtrChart'), {{
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'Clicks', data: DATA.fb_daily.clicks, backgroundColor: 'rgba(71,102,255,.34)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CTR %', data: DATA.fb_daily.ctr, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: clickOpts,
+                }});
+            }}
+            if (document.getElementById('mktCpcCpmChart')) {{
+                const cpcOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktCpcCpmChart'), {{
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [
+                            {{ type: 'line', label: 'CPC', data: DATA.fb_daily.cpc, borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CPM', data: DATA.fb_daily.cpm, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: cpcOpts,
+                }});
+            }}
+            if (document.getElementById('mktHourlySpendOrdersChart') || document.getElementById('mktHourlyRoasCpoChart')) {{
+                const hourlyMap = new Map();
+                DATA.fb_hourly.forEach(row => hourlyMap.set(String(row.hour), {{ spend: Number(row.spend || 0), clicks: Number(row.clicks || 0), ctr: Number(row.ctr || 0), cpc: Number(row.cpc || 0) }}));
+                DATA.hourly_orders.forEach(row => {{
+                    const key = String(row.hour);
+                    const existing = hourlyMap.get(key) || {{ spend: 0, clicks: 0, ctr: 0, cpc: 0 }};
+                    existing.orders = Number(row.orders || 0);
+                    existing.revenue = Number(row.revenue || 0);
+                    hourlyMap.set(key, existing);
+                }});
+                const hours = Array.from({{ length: 24 }}, (_, idx) => String(idx));
+                if (document.getElementById('mktHourlySpendOrdersChart')) {{
+                    const hourlySpendOpts = dualAxisOptions();
+                    new Chart(document.getElementById('mktHourlySpendOrdersChart'), {{
+                        data: {{
+                            labels: hours,
+                            datasets: [
+                                {{ type: 'bar', label: 'Spend', data: hours.map(h => (hourlyMap.get(h) || {{}}).spend || 0), backgroundColor: 'rgba(255,138,31,.42)', borderRadius: 8, yAxisID: 'y' }},
+                                {{ type: 'line', label: 'Orders', data: hours.map(h => (hourlyMap.get(h) || {{}}).orders || 0), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                            ],
+                        }},
+                        options: hourlySpendOpts,
+                    }});
+                }}
+                if (document.getElementById('mktHourlyRoasCpoChart')) {{
+                    const hourlyEffOpts = dualAxisOptions();
+                    new Chart(document.getElementById('mktHourlyRoasCpoChart'), {{
+                        data: {{
+                            labels: hours,
+                            datasets: [
+                                {{ type: 'line', label: 'Hourly CPO', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const orders = Number(row.orders || 0); const spend = Number(row.spend || 0); return orders > 0 ? spend / orders : 0; }}), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y' }},
+                                {{ type: 'line', label: 'Hourly ROAS', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const spend = Number(row.spend || 0); const revenue = Number(row.revenue || 0); return spend > 0 ? revenue / spend : 0; }}), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                            ],
+                        }},
+                        options: hourlyEffOpts,
+                    }});
+                }}
+            }}
+            if (document.getElementById('mktDowCtrCpcChart')) {{
+                const dowOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktDowCtrCpcChart'), {{
+                    data: {{
+                        labels: DATA.fb_dow.map(x => x.day_of_week || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Spend', data: DATA.fb_dow.map(x => Number(x.total_spend || 0)), backgroundColor: 'rgba(71,102,255,.34)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CTR %', data: DATA.fb_dow.map(x => Number(x.ctr || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'CPC', data: DATA.fb_dow.map(x => Number(x.cpc || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: dowOpts,
+                }});
+            }}
+            if (document.getElementById('mktSpendRangeRoasChart')) {{
+                const spendOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktSpendRangeRoasChart'), {{
+                    data: {{
+                        labels: DATA.spend_effectiveness_rows.map(x => x.spend_range || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg spend', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_spend || 0)), backgroundColor: 'rgba(255,138,31,.52)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'ROAS', data: DATA.spend_effectiveness_rows.map(x => Number(x.roas || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: spendOpts,
+                }});
+            }}
+            if (document.getElementById('mktSpendRangeRevenueChart')) {{
+                const spendValueOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktSpendRangeRevenueChart'), {{
+                    data: {{
+                        labels: DATA.spend_effectiveness_rows.map(x => x.spend_range || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg revenue', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_revenue || 0)), backgroundColor: 'rgba(255,138,31,.52)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg orders', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_orders || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: spendValueOpts,
+                }});
+            }}
+            if (document.getElementById('mktDowRevenueSpendChart')) {{
+                const dowSpendOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktDowRevenueSpendChart'), {{
+                    data: {{
+                        labels: DATA.dow_effectiveness_rows.map(x => x.day_name || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg revenue', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_revenue || 0)), backgroundColor: 'rgba(255,138,31,.52)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg FB spend', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_fb_spend || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: dowSpendOpts,
+                }});
+            }}
+        }}
+        function buildLibraryCustomersPatternsProducts() {{
+            const customerItems = [];
+            if (hasSeries(DATA.customer_mix.dates)) {{
+                customerItems.push(
+                    {{ id: 'custNewReturningRevenueChart', title: {{ en: 'New vs returning revenue', sk: 'Nova vs vratena trzba' }}, desc: {{ en: 'Daily revenue split between new and returning customers.', sk: 'Denny split trzby medzi novymi a vracajucimi sa zakaznikmi.' }} }},
+                    {{ id: 'custNewReturningRevenuePieChart', title: {{ en: 'Revenue mix share', sk: 'Podiel revenue mixu' }}, desc: {{ en: 'Overall share of new and returning revenue.', sk: 'Celkovy podiel novej a vracajucej sa trzby.' }} }},
+                );
+            }}
+            if (hasSeries(DATA.returning_customers.labels)) {{
+                customerItems.push({{ id: 'custReturningVolumeChart', title: {{ en: 'Returning customer volume', sk: 'Objem vracajucich sa zakaznikov' }}, desc: {{ en: 'Share and order volume of returning customers.', sk: 'Podiel a objem objednavok vracajucich sa zakaznikov.' }} }});
+            }}
+            if (hasSeries(DATA.refunds.dates)) {{
+                customerItems.push({{ id: 'custRefundRateAmountChart', title: {{ en: 'Refund pressure', sk: 'Refund pressure' }}, desc: {{ en: 'Refund rate and refunded amount through time.', sk: 'Refund rate a refundovana suma v case.' }} }});
+            }}
+            if (hasSeries(DATA.clv.labels)) {{
+                customerItems.push(
+                    {{ id: 'custClvCacDetailChart', title: {{ en: 'CLV vs CAC detail', sk: 'Detail CLV vs CAC' }}, desc: {{ en: 'Weekly CLV, CAC and LTV/CAC ratio.', sk: 'Tyzdenne CLV, CAC a pomer LTV/CAC.' }} }},
+                    {{ id: 'custCumulativeClvCacChart', title: {{ en: 'Cumulative CLV vs CAC', sk: 'Kumulativne CLV vs CAC' }}, desc: {{ en: 'Cumulative average CLV compared with cumulative CAC.', sk: 'Kumulativne priemerne CLV oproti kumulativnemu CAC.' }} }},
+                );
+            }}
+            if (hasSeries(DATA.order_size.labels)) {{
+                customerItems.push({{ id: 'custOrderSizeMixDetailChart', title: {{ en: 'Order size mix', sk: 'Mix velkosti objednavok' }}, desc: {{ en: 'Daily order size distribution by basket size.', sk: 'Denny mix velkosti objednavok podla poctu poloziek.' }} }});
+            }}
+            if (Number(DATA.customer_concentration_summary.top_10_pct_revenue_share || 0) || Number(DATA.customer_concentration_summary.top_20_pct_revenue_share || 0) || Number(DATA.customer_concentration_summary.top_10_pct_profit_share || 0) || Number(DATA.customer_concentration_summary.top_20_pct_profit_share || 0)) {{
+                customerItems.push({{ id: 'custCustomerConcentrationDetailChart', title: {{ en: 'Customer concentration', sk: 'Koncentracia zakaznikov' }}, desc: {{ en: 'How much revenue and profit is concentrated in top customer cohorts.', sk: 'Ako velmi je trzba a zisk koncentrovany v top zakaznickych kohortach.' }} }});
+            }}
+            if (hasRows(DATA.cohort_order_frequency_rows)) customerItems.push({{ id: 'custOrderFrequencyDetailChart', title: {{ en: 'Order frequency', sk: 'Frekvencia objednavok' }}, desc: {{ en: 'Customer distribution by order frequency.', sk: 'Rozdelenie zakaznikov podla frekvencie objednavok.' }} }});
+            if (hasRows(DATA.cohort_time_between_rows)) customerItems.push({{ id: 'custTimeBetweenOrdersDetailChart', title: {{ en: 'Time between orders', sk: 'Cas medzi objednavkami' }}, desc: {{ en: 'Bucketed distribution of time between purchases.', sk: 'Bucketovy rozklad casu medzi nakupmi.' }} }});
+            if (hasRows(DATA.cohort_time_by_order_rows)) customerItems.push({{ id: 'custTimeBetweenByOrderDetailChart', title: {{ en: 'Time between order transitions', sk: 'Cas medzi prechodmi objednavok' }}, desc: {{ en: 'Average and median days between order transitions.', sk: 'Priemerny a medianovy cas medzi prechodmi objednavok.' }} }});
+            if (hasRows(DATA.cohort_time_to_nth_rows)) customerItems.push({{ id: 'custTimeToNthOrderDetailChart', title: {{ en: 'Time to nth order', sk: 'Cas do n-tej objednavky' }}, desc: {{ en: 'How quickly customers progress to later orders.', sk: 'Ako rychlo zakaznici postupuju k dalsim objednavkam.' }} }});
+            if (hasRows(DATA.cohort_revenue_by_order_rows)) customerItems.push({{ id: 'custOrderSequenceValueDetailChart', title: {{ en: 'Value by order sequence', sk: 'Hodnota podla poradia objednavky' }}, desc: {{ en: 'Average order value and total revenue by order number.', sk: 'Priemerna hodnota a celkova trzba podla poradia objednavky.' }} }});
+            if (hasRows(DATA.mature_cohort_rows)) customerItems.push({{ id: 'custMatureCohortDetailChart', title: {{ en: 'Mature cohort retention', sk: 'Retencia zrelych kohort' }}, desc: {{ en: 'Retention depth of older cohorts.', sk: 'Hlba retencie starsich kohort.' }} }});
+            if (hasRows(DATA.item_retention_rows)) customerItems.push({{ id: 'custFirstItemRetentionDetailChart', title: {{ en: 'First item retention', sk: 'Retencia prveho produktu' }}, desc: {{ en: 'Retention quality of first purchased items.', sk: 'Kvalita retencie podla prveho kupeneho produktu.' }} }});
+            if (hasRows(DATA.same_item_rows)) customerItems.push({{ id: 'custSameItemRepurchaseDetailChart', title: {{ en: 'Same-item repurchase', sk: 'Opakovany nakup rovnakeho produktu' }}, desc: {{ en: 'Repurchase rate of the same item among buyers.', sk: 'Miera opakovaneho nakupu rovnakeho produktu.' }} }});
+            if (hasRows(DATA.time_to_nth_rows)) customerItems.push({{ id: 'custTimeToNthByFirstItemDetailChart', title: {{ en: 'Time to nth by first item', sk: 'Cas do n-tej podla prveho produktu' }}, desc: {{ en: 'How quickly customers reorder depending on first purchased item.', sk: 'Ako rychlo sa vracaju zakaznici podla prveho produktu.' }} }});
+            renderGalleryCards('libraryCustomers', customerItems);
+
+            if (document.getElementById('custNewReturningRevenueChart')) {{
+                new Chart(document.getElementById('custNewReturningRevenueChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.customer_mix.dates,
+                        datasets: [
+                            {{ label: 'New revenue', data: DATA.customer_mix.new, backgroundColor: 'rgba(255,138,31,.75)', borderRadius: 6, stack: 'mix' }},
+                            {{ label: 'Returning revenue', data: DATA.customer_mix.returning, backgroundColor: 'rgba(71,102,255,.72)', borderRadius: 6, stack: 'mix' }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custNewReturningRevenuePieChart')) {{
+                const newTotal = DATA.customer_mix.new.reduce((sum, value) => sum + Number(value || 0), 0);
+                const returningTotal = DATA.customer_mix.returning.reduce((sum, value) => sum + Number(value || 0), 0);
+                new Chart(document.getElementById('custNewReturningRevenuePieChart'), {{
+                    type: 'doughnut',
+                    data: {{
+                        labels: ['New', 'Returning'],
+                        datasets: [{{ data: [newTotal, returningTotal], backgroundColor: ['#ff8a1f', '#4766ff'], borderColor: '#fff9f3', borderWidth: 4, hoverOffset: 8 }}],
+                    }},
+                    options: doughnutOptions(),
+                }});
+            }}
+            if (document.getElementById('custReturningVolumeChart')) {{
+                const returningOpts = dualAxisOptions();
+                new Chart(document.getElementById('custReturningVolumeChart'), {{
+                    data: {{
+                        labels: DATA.returning_customers.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Unique customers', data: DATA.returning_customers.unique_customers, backgroundColor: 'rgba(255,138,31,.52)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Returning orders', data: DATA.returning_customers.returning_orders, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Returning %', data: DATA.returning_customers.returning_pct, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: returningOpts,
+                }});
+            }}
+            if (document.getElementById('custRefundRateAmountChart')) {{
+                const refundOpts = dualAxisOptions();
+                new Chart(document.getElementById('custRefundRateAmountChart'), {{
+                    data: {{
+                        labels: DATA.refunds.dates,
+                        datasets: [
+                            {{ type: 'line', label: 'Refund rate %', data: DATA.refunds.rate, borderColor: '#cf5060', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'bar', label: 'Refund amount', data: DATA.refunds.amount, backgroundColor: 'rgba(138,44,61,.45)', borderRadius: 8, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: refundOpts,
+                }});
+            }}
+            if (document.getElementById('custClvCacDetailChart')) {{
+                const clvOpts = dualAxisOptions();
+                new Chart(document.getElementById('custClvCacDetailChart'), {{
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [
+                            {{ type: 'line', label: 'Avg CLV', data: DATA.clv.avg_clv, borderColor: '#8b5cf6', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CAC', data: DATA.clv.cac, borderColor: '#cf5060', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'LTV/CAC', data: DATA.clv.ltv_cac_ratio, borderColor: '#ff8a1f', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: clvOpts,
+                }});
+            }}
+            if (document.getElementById('custCumulativeClvCacChart')) {{
+                const cumOpts = dualAxisOptions();
+                new Chart(document.getElementById('custCumulativeClvCacChart'), {{
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [
+                            {{ type: 'line', label: 'Cum. avg CLV', data: DATA.clv.cumulative_avg_clv, borderColor: '#8b5cf6', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Cum. avg CAC', data: DATA.clv.cumulative_avg_cac, borderColor: '#cf5060', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg return days', data: DATA.clv.avg_return_time_days, borderColor: '#4766ff', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: cumOpts,
+                }});
+            }}
+            if (document.getElementById('custOrderSizeMixDetailChart')) {{
+                new Chart(document.getElementById('custOrderSizeMixDetailChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.order_size.labels,
+                        datasets: [
+                            {{ label: '1 item', data: DATA.order_size.one, backgroundColor: 'rgba(255,138,31,.45)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '2 items', data: DATA.order_size.two, backgroundColor: 'rgba(255,177,93,.55)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '3 items', data: DATA.order_size.three, backgroundColor: 'rgba(255,213,157,.65)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '4 items', data: DATA.order_size.four, backgroundColor: 'rgba(71,102,255,.45)', stack: 'size', borderRadius: 6 }},
+                            {{ label: '5+ items', data: DATA.order_size.five_plus, backgroundColor: 'rgba(31,157,102,.45)', stack: 'size', borderRadius: 6 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custCustomerConcentrationDetailChart')) {{
+                const cc = DATA.customer_concentration_summary;
+                new Chart(document.getElementById('custCustomerConcentrationDetailChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: ['Top10 Revenue', 'Top20 Revenue', 'Top10 Profit', 'Top20 Profit'],
+                        datasets: [{{ label: 'Share %', data: [Number(cc.top_10_pct_revenue_share || 0), Number(cc.top_20_pct_revenue_share || 0), Number(cc.top_10_pct_profit_share || 0), Number(cc.top_20_pct_profit_share || 0)], backgroundColor: ['rgba(255,138,31,.72)', 'rgba(255,177,93,.72)', 'rgba(71,102,255,.72)', 'rgba(31,157,102,.72)'], borderRadius: 8 }}],
+                    }},
+                    options: {{ ...baseOptions(), plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if (document.getElementById('custOrderFrequencyDetailChart')) {{
+                const freqOpts = dualAxisOptions();
+                new Chart(document.getElementById('custOrderFrequencyDetailChart'), {{
+                    data: {{
+                        labels: DATA.cohort_order_frequency_rows.map(x => `${{x.frequency || '-'}}x`),
+                        datasets: [
+                            {{ type: 'bar', label: 'Customers', data: DATA.cohort_order_frequency_rows.map(x => Number(x.customer_count || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Orders share %', data: DATA.cohort_order_frequency_rows.map(x => Number(x.orders_pct || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: freqOpts,
+                }});
+            }}
+            if (document.getElementById('custTimeBetweenOrdersDetailChart')) {{
+                new Chart(document.getElementById('custTimeBetweenOrdersDetailChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.cohort_time_between_rows.map(x => x.time_bucket || '-'),
+                        datasets: [
+                            {{ label: 'Count', data: DATA.cohort_time_between_rows.map(x => Number(x.count || 0)), backgroundColor: 'rgba(71,102,255,.64)', borderRadius: 8 }},
+                            {{ label: 'Share %', data: DATA.cohort_time_between_rows.map(x => Number(x.percentage || 0)), type: 'line', borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 2, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: dualAxisOptions(),
+                }});
+            }}
+            if (document.getElementById('custTimeBetweenByOrderDetailChart')) {{
+                const transOpts = dualAxisOptions();
+                new Chart(document.getElementById('custTimeBetweenByOrderDetailChart'), {{
+                    data: {{
+                        labels: DATA.cohort_time_by_order_rows.map(x => x.transition || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Count', data: DATA.cohort_time_by_order_rows.map(x => Number(x.count || 0)), backgroundColor: 'rgba(255,138,31,.55)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg days', data: DATA.cohort_time_by_order_rows.map(x => Number(x.avg_days || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Median days', data: DATA.cohort_time_by_order_rows.map(x => Number(x.median_days || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 2, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: transOpts,
+                }});
+            }}
+            if (document.getElementById('custTimeToNthOrderDetailChart')) {{
+                const nthOpts = dualAxisOptions();
+                new Chart(document.getElementById('custTimeToNthOrderDetailChart'), {{
+                    data: {{
+                        labels: DATA.cohort_time_to_nth_rows.map(x => String(x.order_number || '-')),
+                        datasets: [
+                            {{ type: 'line', label: 'Avg days from first', data: DATA.cohort_time_to_nth_rows.map(x => Number(x.avg_days_from_first || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg days from previous', data: DATA.cohort_time_to_nth_rows.map(x => Number(x.avg_days_from_prev || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Customers', data: DATA.cohort_time_to_nth_rows.map(x => Number(x.customer_count || 0)), borderColor: '#4766ff', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: nthOpts,
+                }});
+            }}
+            if (document.getElementById('custOrderSequenceValueDetailChart')) {{
+                const seqOpts = dualAxisOptions();
+                new Chart(document.getElementById('custOrderSequenceValueDetailChart'), {{
+                    data: {{
+                        labels: DATA.cohort_revenue_by_order_rows.map(x => `${{x.order_number || '-'}} order`),
+                        datasets: [
+                            {{ type: 'bar', label: 'Total revenue', data: DATA.cohort_revenue_by_order_rows.map(x => Number(x.total_revenue || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg order value', data: DATA.cohort_revenue_by_order_rows.map(x => Number(x.avg_order_value || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg items/order', data: DATA.cohort_revenue_by_order_rows.map(x => Number(x.avg_items_per_order || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: seqOpts,
+                }});
+            }}
+            if (document.getElementById('custMatureCohortDetailChart')) {{
+                new Chart(document.getElementById('custMatureCohortDetailChart'), {{
+                    data: {{
+                        labels: DATA.mature_cohort_rows.map(x => x.cohort || '-'),
+                        datasets: [
+                            {{ type: 'line', label: '2nd retention %', data: DATA.mature_cohort_rows.map(x => Number(x.retention_2nd_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3 }},
+                            {{ type: 'line', label: '3rd retention %', data: DATA.mature_cohort_rows.map(x => Number(x.retention_3rd_pct || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3 }},
+                            {{ type: 'line', label: '4th retention %', data: DATA.mature_cohort_rows.map(x => Number(x.retention_4th_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custFirstItemRetentionDetailChart')) {{
+                new Chart(document.getElementById('custFirstItemRetentionDetailChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.item_retention_rows.map(x => (x.item_name || '-').slice(0, 24)),
+                        datasets: [
+                            {{ label: '2nd retention %', data: DATA.item_retention_rows.map(x => Number(x.retention_2nd_pct || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
+                            {{ label: '3rd retention %', data: DATA.item_retention_rows.map(x => Number(x.retention_3rd_pct || 0)), backgroundColor: 'rgba(71,102,255,.72)', borderRadius: 8 }},
+                        ],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('custSameItemRepurchaseDetailChart')) {{
+                new Chart(document.getElementById('custSameItemRepurchaseDetailChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.same_item_rows.map(x => (x.item_name || '-').slice(0, 24)),
+                        datasets: [
+                            {{ label: '2x repurchase %', data: DATA.same_item_rows.map(x => Number(x.repurchase_2x_pct || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
+                            {{ label: '3x repurchase %', data: DATA.same_item_rows.map(x => Number(x.repurchase_3x_pct || 0)), backgroundColor: 'rgba(31,157,102,.72)', borderRadius: 8 }},
+                        ],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('custTimeToNthByFirstItemDetailChart')) {{
+                const firstItemOpts = dualAxisOptions();
+                new Chart(document.getElementById('custTimeToNthByFirstItemDetailChart'), {{
+                    data: {{
+                        labels: DATA.time_to_nth_rows.map(x => (x.item_name || '-').slice(0, 18)),
+                        datasets: [
+                            {{ type: 'bar', label: '1st order customers', data: DATA.time_to_nth_rows.map(x => Number(x.first_order_customers || 0)), backgroundColor: 'rgba(255,138,31,.55)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg days to 2nd', data: DATA.time_to_nth_rows.map(x => Number(x.avg_days_to_2nd || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg days to 3rd', data: DATA.time_to_nth_rows.map(x => Number(x.avg_days_to_3nd || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: firstItemOpts,
+                }});
+            }}
+
+            const patternItems = [];
+            if (hasSeries(DATA.day_of_week.labels)) {{
+                patternItems.push(
+                    {{ id: 'patDowOrdersRevenueChart', title: {{ en: 'Weekday orders and revenue', sk: 'Objednavky a trzba podla dna' }}, desc: {{ en: 'Average weekday order volume and revenue.', sk: 'Priemerne objednavky a trzba podla dna v tyzdni.' }} }},
+                    {{ id: 'patDowProfitSpendChart', title: {{ en: 'Weekday profit and spend', sk: 'Zisk a spend podla dna' }}, desc: {{ en: 'Average weekday profit against FB spend.', sk: 'Priemerny zisk dna oproti FB spendu.' }} }},
+                );
+            }}
+            if (hasSeries(DATA.week_of_month.labels)) {{
+                patternItems.push(
+                    {{ id: 'patWomRevenueProfitChart', title: {{ en: 'Week of month revenue and profit', sk: 'Trzba a zisk podla tyzdna v mesiaci' }}, desc: {{ en: 'Revenue and profit by balanced week-of-month bucket.', sk: 'Trzba a zisk podla vybalansovaneho tyzdna v mesiaci.' }} }},
+                    {{ id: 'patWomAvgDailyChart', title: {{ en: 'Week of month average daily output', sk: 'Priemerny denny vykon podla tyzdna v mesiaci' }}, desc: {{ en: 'Average daily revenue and profit by month phase.', sk: 'Priemerna denna trzba a zisk podla fazy mesiaca.' }} }},
+                );
+            }}
+            if (hasSeries(DATA.day_of_month.labels)) {{
+                patternItems.push(
+                    {{ id: 'patDomOrdersRevenueChart', title: {{ en: 'Day of month orders and revenue', sk: 'Objednavky a trzba podla dna v mesiaci' }}, desc: {{ en: 'Which dates in the month perform best.', sk: 'Ktore datumy v mesiaci maju najlepsi vykon.' }} }},
+                    {{ id: 'patDomAvgDailyChart', title: {{ en: 'Day of month average revenue and profit', sk: 'Priemerna trzba a zisk podla dna v mesiaci' }}, desc: {{ en: 'Average performance per calendar day-of-month.', sk: 'Priemerny vykon podla kalendarneho dna v mesiaci.' }} }},
+                );
+            }}
+            if (hasSeries(DATA.weather_bucket.labels)) patternItems.push({{ id: 'patWeatherBucketChart', title: {{ en: 'Weather bucket impact', sk: 'Dopad weather bucketov' }}, desc: {{ en: 'Revenue and profit delta versus weekday baseline by weather bucket.', sk: 'Odchylka trzby a zisku oproti weekday baseline podla weather bucketu.' }} }});
+            if (hasSeries(DATA.weather.dates)) patternItems.push({{ id: 'patWeatherPrecipChart', title: {{ en: 'Weather overlay', sk: 'Weather overlay' }}, desc: {{ en: 'Revenue and profit versus precipitation through time.', sk: 'Trzba a zisk oproti zrazkam v case.' }} }});
+            renderGalleryCards('libraryPatterns', patternItems);
+            if (document.getElementById('patDowOrdersRevenueChart')) {{
+                const dowRevOpts = dualAxisOptions();
+                new Chart(document.getElementById('patDowOrdersRevenueChart'), {{
+                    data: {{
+                        labels: DATA.day_of_week.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue', data: DATA.day_of_week.revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Orders', data: DATA.day_of_week.orders, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'AOV', data: DATA.day_of_week.aov, borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: dowRevOpts,
+                }});
+            }}
+            if (document.getElementById('patDowProfitSpendChart')) {{
+                const dowProfitOpts = dualAxisOptions();
+                new Chart(document.getElementById('patDowProfitSpendChart'), {{
+                    data: {{
+                        labels: DATA.day_of_week.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Profit', data: DATA.day_of_week.profit, backgroundColor: 'rgba(31,157,102,.64)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'FB spend', data: DATA.day_of_week.fb_spend, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: dowProfitOpts,
+                }});
+            }}
+            if (document.getElementById('patWomRevenueProfitChart')) {{
+                const womOpts = dualAxisOptions();
+                new Chart(document.getElementById('patWomRevenueProfitChart'), {{
+                    data: {{
+                        labels: DATA.week_of_month.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue', data: DATA.week_of_month.revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit', data: DATA.week_of_month.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: womOpts,
+                }});
+            }}
+            if (document.getElementById('patWomAvgDailyChart')) {{
+                const womAvgOpts = dualAxisOptions();
+                new Chart(document.getElementById('patWomAvgDailyChart'), {{
+                    data: {{
+                        labels: DATA.week_of_month.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg daily revenue', data: DATA.week_of_month.avg_daily_revenue, backgroundColor: 'rgba(255,138,31,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg daily profit', data: DATA.week_of_month.avg_daily_profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: womAvgOpts,
+                }});
+            }}
+            if (document.getElementById('patDomOrdersRevenueChart')) {{
+                const domOpts = dualAxisOptions();
+                new Chart(document.getElementById('patDomOrdersRevenueChart'), {{
+                    data: {{
+                        labels: DATA.day_of_month.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Orders', data: DATA.day_of_month.orders, backgroundColor: 'rgba(71,102,255,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Revenue', data: DATA.day_of_month.revenue, borderColor: '#ff8a1f', tension: .28, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: domOpts,
+                }});
+            }}
+            if (document.getElementById('patDomAvgDailyChart')) {{
+                const domAvgOpts = dualAxisOptions();
+                new Chart(document.getElementById('patDomAvgDailyChart'), {{
+                    data: {{
+                        labels: DATA.day_of_month.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg revenue', data: DATA.day_of_month.avg_revenue, backgroundColor: 'rgba(255,138,31,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit', data: DATA.day_of_month.avg_profit, borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: domAvgOpts,
+                }});
+            }}
+            if (document.getElementById('patWeatherBucketChart')) {{
+                new Chart(document.getElementById('patWeatherBucketChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.weather_bucket.labels,
+                        datasets: [
+                            {{ label: 'Revenue delta', data: DATA.weather_bucket.revenue_delta, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
+                            {{ label: 'Profit delta', data: DATA.weather_bucket.profit_delta, backgroundColor: 'rgba(31,157,102,.72)', borderRadius: 8 }},
+                        ],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('patWeatherPrecipChart')) {{
+                const weatherOpts = dualAxisOptions();
+                new Chart(document.getElementById('patWeatherPrecipChart'), {{
+                    data: {{
+                        labels: DATA.weather.dates,
+                        datasets: [
+                            {{ type: 'line', label: 'Revenue', data: DATA.weather.revenue, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit', data: DATA.weather.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Precipitation', data: DATA.weather.precipitation, backgroundColor: 'rgba(71,102,255,.34)', borderRadius: 6, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: weatherOpts,
+                }});
+            }}
+
+            const productItems = [];
+            if (hasRows(DATA.combinations_rows)) productItems.push({{ id: 'prodCombinationCountChart', title: {{ en: 'Top product combinations', sk: 'Top kombinacie produktov' }}, desc: {{ en: 'Most frequent product combinations by count and basket value.', sk: 'Najcastejsie kombinacie produktov podla poctu a hodnoty kosika.' }} }});
+            if (hasRows(DATA.basket_contribution_rows)) productItems.push({{ id: 'prodBasketContributionChart', title: {{ en: 'Basket contribution economics', sk: 'Kontribucia podla velkosti kosika' }}, desc: {{ en: 'Contribution per order by basket size.', sk: 'Kontribucia na objednavku podla velkosti kosika.' }} }});
+            if (hasRows(DATA.cohort_payback_rows)) productItems.push({{ id: 'prodCohortPaybackChart', title: {{ en: 'Cohort payback', sk: 'Kohortny payback' }}, desc: {{ en: 'Recovery speed and CAC quality by acquisition cohort.', sk: 'Rychlost navratnosti a kvalita CAC podla akvizicnej kohorty.' }} }});
+            if (hasRows(DATA.daily_margin_rows)) productItems.push({{ id: 'prodMarginStabilityChart', title: {{ en: 'Daily margin stability', sk: 'Stabilita denneho marginu' }}, desc: {{ en: 'Pre-ad contribution margin through time.', sk: 'Pre-ad contribution margin v case.' }} }});
+            if (hasRows(DATA.sku_pareto_rows)) productItems.push({{ id: 'prodParetoLibraryChart', title: {{ en: 'SKU Pareto', sk: 'SKU Pareto' }}, desc: {{ en: 'Contribution concentration across top SKUs.', sk: 'Koncentracia kontribucie napriec top SKU.' }} }});
+            if (hasRows(DATA.attach_rate_rows)) productItems.push({{ id: 'prodAttachRateLibraryChart', title: {{ en: 'Attach rate', sk: 'Attach rate' }}, desc: {{ en: 'Most common anchor -> attached item pairs.', sk: 'Najcastejsie dvojice anchor -> attached item.' }} }});
+            if (hasRows(DATA.b2b_rows)) productItems.push({{ id: 'opsB2bRevenueProfitChart', title: {{ en: 'B2B vs B2C economics', sk: 'Ekonomika B2B vs B2C' }}, desc: {{ en: 'Revenue, profit and AOV by customer type.', sk: 'Trzba, zisk a AOV podla typu zakaznika.' }} }});
+            if (hasRows(DATA.order_status_rows)) productItems.push({{ id: 'opsStatusRevenueChart', title: {{ en: 'Order status mix', sk: 'Mix stavov objednavok' }}, desc: {{ en: 'Orders and revenue by final order status.', sk: 'Objednavky a trzba podla finalneho statusu.' }} }});
+            if (hasRows(DATA.segment_rows)) productItems.push({{ id: 'opsSegmentPriorityChart', title: {{ en: 'Email segment volume', sk: 'Objem email segmentov' }}, desc: {{ en: 'Size and priority of lifecycle email segments.', sk: 'Velkost a priorita lifecycle email segmentov.' }} }});
+            if (DATA.consistency && (DATA.consistency.roas_delta !== null || DATA.consistency.margin_delta !== null || DATA.consistency.cac_delta !== null)) productItems.push({{ id: 'opsConsistencyChart', title: {{ en: 'Consistency checks', sk: 'Konzistencne kontroly' }}, desc: {{ en: 'Sanity check deltas across ROAS, margin and CAC.', sk: 'Sanity check odchylky pre ROAS, margin a CAC.' }} }});
+            renderGalleryCards('libraryProductsOps', productItems);
+            if (document.getElementById('prodCombinationCountChart')) {{
+                const comboOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodCombinationCountChart'), {{
+                    data: {{
+                        labels: DATA.combinations_rows.map(x => (x.combination || '-').slice(0, 28)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Count', data: DATA.combinations_rows.map(x => Number(x.count || 0)), backgroundColor: 'rgba(255,138,31,.66)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Price', data: DATA.combinations_rows.map(x => Number(x.price || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: comboOpts,
+                }});
+            }}
+            if (document.getElementById('prodBasketContributionChart')) {{
+                const basketOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodBasketContributionChart'), {{
+                    data: {{
+                        labels: DATA.basket_contribution_rows.map(x => x.basket_size || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Orders', data: DATA.basket_contribution_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Contribution/order', data: DATA.basket_contribution_rows.map(x => Number(x.contribution_per_order || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Contribution margin %', data: DATA.basket_contribution_rows.map(x => Number(x.contribution_margin_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: basketOpts,
+                }});
+            }}
+            if (document.getElementById('prodCohortPaybackChart')) {{
+                const paybackOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodCohortPaybackChart'), {{
+                    data: {{
+                        labels: DATA.cohort_payback_rows.map(x => x.cohort_month || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Recovery rate %', data: DATA.cohort_payback_rows.map(x => Number(x.recovery_rate_pct || 0)), backgroundColor: 'rgba(31,157,102,.60)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Cohort CAC', data: DATA.cohort_payback_rows.map(x => Number(x.cohort_cac || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg payback days', data: DATA.cohort_payback_rows.map(x => Number(x.avg_payback_days || 0)), borderColor: '#4766ff', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: paybackOpts,
+                }});
+            }}
+            if (document.getElementById('prodMarginStabilityChart')) {{
+                new Chart(document.getElementById('prodMarginStabilityChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.daily_margin_rows.map(x => x.date || '-'),
+                        datasets: [{{ label: 'Pre-ad margin %', data: DATA.daily_margin_rows.map(x => Number(x.pre_ad_contribution_margin_pct || 0)), borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .30, borderWidth: 2.3, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('prodParetoLibraryChart')) {{
+                const paretoOpts = dualAxisOptions();
+                paretoOpts.scales.y1.max = 100;
+                new Chart(document.getElementById('prodParetoLibraryChart'), {{
+                    data: {{
+                        labels: DATA.sku_pareto_rows.map(x => (x.product || 'Unknown').slice(0, 26)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Contribution', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Cum. contribution %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_pct || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: paretoOpts,
+                }});
+            }}
+            if (document.getElementById('prodAttachRateLibraryChart')) {{
+                new Chart(document.getElementById('prodAttachRateLibraryChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.attach_rate_rows.map(x => `${{(x.anchor_item || '').slice(0, 14)}} -> ${{(x.attached_item || '').slice(0, 14)}}`),
+                        datasets: [{{ label: 'Attach rate %', data: DATA.attach_rate_rows.map(x => Number(x.attach_rate_pct || 0)), backgroundColor: 'rgba(71,102,255,.72)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('opsB2bRevenueProfitChart')) {{
+                const b2bOpts = dualAxisOptions();
+                new Chart(document.getElementById('opsB2bRevenueProfitChart'), {{
+                    data: {{
+                        labels: DATA.b2b_rows.map(x => x.customer_type || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue', data: DATA.b2b_rows.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit', data: DATA.b2b_rows.map(x => Number(x.profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'AOV', data: DATA.b2b_rows.map(x => Number(x.aov || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: b2bOpts,
+                }});
+            }}
+            if (document.getElementById('opsStatusRevenueChart')) {{
+                const statusOpts = dualAxisOptions();
+                new Chart(document.getElementById('opsStatusRevenueChart'), {{
+                    data: {{
+                        labels: DATA.order_status_rows.map(x => x.status || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Orders', data: DATA.order_status_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Revenue', data: DATA.order_status_rows.map(x => Number(x.revenue || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: statusOpts,
+                }});
+            }}
+            if (document.getElementById('opsSegmentPriorityChart')) {{
+                new Chart(document.getElementById('opsSegmentPriorityChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.segment_rows.map(x => x.segment || '-'),
+                        datasets: [{{ label: 'Customers', data: DATA.segment_rows.map(x => Number(x.count || 0)), backgroundColor: DATA.segment_rows.map(x => Number(x.priority || 9) <= 2 ? 'rgba(207,80,96,.72)' : Number(x.priority || 9) <= 4 ? 'rgba(255,138,31,.72)' : 'rgba(71,102,255,.72)'), borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('opsConsistencyChart')) {{
+                const consistencyRows = [
+                    {{ label: 'ROAS Delta', value: Number(DATA.consistency.roas_delta || 0) }},
+                    {{ label: 'Margin Delta', value: Number(DATA.consistency.margin_delta || 0) }},
+                    {{ label: 'CAC Delta', value: Number(DATA.consistency.cac_delta || 0) }},
+                ];
+                new Chart(document.getElementById('opsConsistencyChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: consistencyRows.map(x => x.label),
+                        datasets: [{{ label: 'Delta', data: consistencyRows.map(x => x.value), backgroundColor: consistencyRows.map(x => Math.abs(x.value) <= 0.05 ? 'rgba(31,157,102,.72)' : Math.abs(x.value) <= 0.15 ? 'rgba(255,138,31,.72)' : 'rgba(207,80,96,.72)'), borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+        }}
+
+        function buildDetailGalleries() {{
+            buildLibraryEconomicsMarketing();
+            buildLibraryCustomersPatternsProducts();
         }}
         document.querySelectorAll('.lang-btn').forEach(btn => btn.addEventListener('click', () => applyLang(btn.dataset.lang)));
         document.querySelectorAll('.window-btn').forEach(btn => btn.addEventListener('click', () => renderKpis(btn.dataset.window)));
-        applyLang(lang());
-        renderKpis(currentWindow);
         buildCharts();
+        buildDetailGalleries();
+        applyLang(lang());
     </script>
 </body>
 </html>"""
+
+    return _sanitize_dashboard_html(html)

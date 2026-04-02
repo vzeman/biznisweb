@@ -450,3 +450,22 @@ Next exact step:
   - successful VEVO March `test2` regenerate
   - expected sections present in HTML
   - cleaned Slovak strings present in final HTML output
+
+### 2026-04-02
+- Expanded the VEVO March `test2` dashboard so it keeps the preferred `test2` shell/hero design but now pulls in the much richer metric surface from the fuller `test` reporting line.
+- `html_report_generator.py` now passes the full analytics payload families into `generate_test2_dashboard(...)`, including customer/retention, CLV/CAC, order-size, combinations, advanced DTC, B2B/B2C, order status, ads effectiveness, lifecycle segments, first-item retention, same-item repurchase, time-to-nth-by-first-item, detailed FB metrics, cost-per-order, hourly/day-of-week Meta stats, LTV by date, and consistency checks.
+- `dashboard_test2.py` now renders a `Full metric library` layer inside the `test2` design shell with added chart galleries for:
+  - customer quality and repeat behavior,
+  - calendar and weather patterns,
+  - product and operational drilldowns,
+  - economics and marketing drilldowns.
+- Verified syntax with:
+  - `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`
+- Regenerated only the VEVO March `test2` artifact (no email):
+  - `data/vevo/report_20260301-20260331__test2.html`
+- Verified:
+  - export completed successfully,
+  - inline dashboard script parses successfully in Node (`new Function(...)`),
+  - new gallery chart ids and render calls are present in the generated `test2` HTML.
+- Next exact step:
+  - visually review `report_20260301-20260331__test2.html` in the browser and decide which `test2` sections/cards should replace the legacy report layout next.
