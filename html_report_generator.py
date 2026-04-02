@@ -80,11 +80,32 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          consistency_checks: dict = None,
                          cfo_kpi_payload: dict = None,
                          source_health: dict = None,
-                         period_switcher: dict = None) -> str:
+                         period_switcher: dict = None,
+                         dashboard_variant: str = "default") -> str:
     """
     Generate a complete HTML report with charts and tables
     """
-    report_title = escape((report_title or "BizniWeb reporting").strip())
+    raw_report_title = (report_title or "BizniWeb reporting").strip()
+    report_title = escape(raw_report_title)
+
+    if str(dashboard_variant or "default").strip().lower() == "test2":
+        from dashboard_test2 import generate_test2_dashboard
+
+        return generate_test2_dashboard(
+            date_agg=date_agg,
+            items_agg=items_agg,
+            date_from=date_from,
+            date_to=date_to,
+            report_title=raw_report_title,
+            country_analysis=country_analysis,
+            city_analysis=city_analysis,
+            product_margins=product_margins,
+            new_vs_returning_revenue=new_vs_returning_revenue,
+            refunds_analysis=refunds_analysis,
+            cfo_kpi_payload=cfo_kpi_payload,
+            source_health=source_health,
+            period_switcher=period_switcher,
+        )
     
     # Prepare data for charts
     dates = date_agg['date'].astype(str).tolist()

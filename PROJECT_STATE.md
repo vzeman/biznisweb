@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Use the new `--output-tag ui_test` side-by-side variant flow for the upcoming CFO/main-report UI redesign so production artifacts stay untouched while layout changes are tested.
+- Review the isolated VEVO March `test2` dashboard variant and decide which visual ideas should graduate into the shared redesign path without touching the current production/test renderers.
 
 ## 9) Change Log
 
@@ -198,6 +198,20 @@ Bootstrap entrypoints:
   - historical daily weather fetch from Open-Meteo archive API,
   - monthly local cache per project/location,
   - weighted location support prepared for future multi-city rollout.
+
+### 2026-04-02
+- Completed deep research pass for professional ecommerce dashboard structure using BI/dashboard best-practice sources and ecommerce analytics guides.
+- Added fully isolated `test2` main-report renderer in `dashboard_test2.py`:
+  - separate from the current production renderer and separate from the existing `__test` shell,
+  - focused on executive KPI hierarchy, grouped business-question sections, and explicit source-health presentation,
+  - uses the same reporting data and existing CFO KPI payload instead of inventing new business logic.
+- Wired `generate_html_report(..., dashboard_variant=...)` so only `--output-tag test2` activates the new renderer.
+- Kept existing production and `__test` report outputs untouched.
+- Verified syntax with `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`.
+- Generated isolated VEVO March artifacts for review:
+  - `data\\vevo\\report_20260301-20260331__test2.html`
+  - `data\\vevo\\email_strategy_20260301-20260331__test2.html`
+  - period child reports under `data\\vevo\\_periods\\report_20260301-20260331__test2\\...`
 - Added V1 weather impact analytics into `export_orders.py`:
   - merges daily weather with `date_agg`,
   - computes weather buckets (`Good / Neutral / Bad`),
