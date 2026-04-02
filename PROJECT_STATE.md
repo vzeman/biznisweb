@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Review the isolated VEVO March `test2` dashboard variant and decide which visual ideas should graduate into the shared redesign path without touching the current production/test renderers.
+- Review the merged VEVO March `test2` dashboard variant and decide which visual/layout ideas should be promoted into the broader redesign path without touching current production outputs.
 
 ## 9) Change Log
 
@@ -331,6 +331,43 @@ Bootstrap entrypoints:
 
 Next exact step:
 - Review `data/vevo/report_20260301-20260331__test.html` visually and decide whether the new professional period switcher should stay as the baseline UX for the dashboard test track before deeper chart-visual redesign starts.
+
+### 2026-04-02
+- Extended the isolated VEVO March `test2` dashboard so it keeps the `test2` hero/intro shell while pulling in richer analytics previously available only in the fuller report/test track.
+- `dashboard_test2.py` now renders additional data groups:
+  - customer retention and concentration,
+  - refund trend,
+  - cohort retention chart + table,
+  - calendar patterns (day-of-week, week-of-month, day-of-month),
+  - weather uplift,
+  - geo profitability table,
+  - product margin breakout chart,
+  - product trend chart + table.
+- `html_report_generator.py` now passes the richer analytics payloads into the isolated `test2` renderer:
+  - `day_of_week_analysis`
+  - `week_of_month_analysis`
+  - `day_of_month_analysis`
+  - `weather_analysis`
+  - `geo_profitability`
+  - `product_trends`
+  - `customer_concentration`
+  - `cohort_analysis`
+- Kept the `test2` top section intact:
+  - hero header,
+  - side language switcher,
+  - period switcher,
+  - executive KPI deck.
+- Fixed the `test2` sidebar so the project badge uses the project initial dynamically and the navigation now includes the new `Patterns` section with correct ordering.
+- Verified with:
+  - `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`
+  - successful VEVO March regenerate:
+    - `data/vevo/report_20260301-20260331__test2.html`
+  - HTML presence checks for:
+    - `Executive KPI deck`
+    - `Customer quality and retention`
+    - `Calendar patterns and weather`
+    - `Geo profitability`
+    - `Product trend table`
 
 ### 2026-04-02
 - Added reusable CFO KPI payload builder in `reporting_core/cfo_kpis.py` so the main report can reuse the same executive KPI logic as the standalone CFO dashboard.

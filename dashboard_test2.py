@@ -193,16 +193,26 @@ def generate_test2_dashboard(
     date_from: datetime,
     date_to: datetime,
     report_title: str = "BizniWeb reporting",
+    day_of_week_analysis: Optional[pd.DataFrame] = None,
+    week_of_month_analysis: Optional[pd.DataFrame] = None,
+    day_of_month_analysis: Optional[pd.DataFrame] = None,
+    weather_analysis: Optional[dict] = None,
     country_analysis: Optional[pd.DataFrame] = None,
     city_analysis: Optional[pd.DataFrame] = None,
+    geo_profitability: Optional[dict] = None,
     product_margins: Optional[pd.DataFrame] = None,
+    product_trends: Optional[pd.DataFrame] = None,
     new_vs_returning_revenue: Optional[dict] = None,
     refunds_analysis: Optional[dict] = None,
+    customer_concentration: Optional[dict] = None,
+    cohort_analysis: Optional[dict] = None,
     cfo_kpi_payload: Optional[dict] = None,
     source_health: Optional[dict] = None,
     period_switcher: Optional[dict] = None,
 ) -> str:
-    title = escape((report_title or "BizniWeb reporting").strip())
+    raw_title = (report_title or "BizniWeb reporting").strip()
+    title = escape(raw_title)
+    brand_mark = escape((raw_title[:1] or "B").upper())
     series = _series(date_agg)
     kpi_payload = _kpis(cfo_kpi_payload)
     cost_mix = _cost_mix(date_agg)
@@ -212,8 +222,34 @@ def generate_test2_dashboard(
         ["product", "sku", "orders", "revenue", "profit", "margin_pct"],
         limit=8,
     )
+    product_margin_chart_rows = _top_rows(
+        product_margins.sort_values(["margin_pct", "profit"], ascending=[False, False]) if product_margins is not None and not product_margins.empty else product_margins,
+        ["product", "margin_pct", "profit", "revenue"],
+        limit=10,
+    )
+    trend_rows = _top_rows(
+        product_trends.sort_values(["total_revenue", "revenue_growth_pct"], ascending=[False, False]) if product_trends is not None and not product_trends.empty else product_trends,
+        ["product", "trend", "revenue_growth_pct", "qty_growth_pct", "total_revenue"],
+        limit=10,
+    )
     countries = _top_rows(country_analysis, ["country", "orders", "revenue"], limit=6)
+    geo_rows = _top_rows(
+        (geo_profitability or {}).get("table"),
+        ["country", "orders", "revenue", "contribution_profit", "contribution_margin_pct", "fb_cpo"],
+        limit=6,
+    )
     source_rows = list(((source_health or {}).get("sources") or {}).values())
+    customer_top_rows = _top_rows(
+        (customer_concentration or {}).get("top_10_customers"),
+        ["customer", "orders", "revenue", "profit", "revenue_pct"],
+        limit=8,
+    )
+    cohort_summary = (cohort_analysis or {}).get("summary", {}) if cohort_analysis else {}
+    cohort_retention_rows = _top_rows(
+        (cohort_analysis or {}).get("cohort_retention"),
+        ["cohort", "retention_2nd_pct", "retention_3rd_pct", "retention_4th_pct", "retention_5th_pct"],
+        limit=8,
+    )
 
     customer_daily = (new_vs_returning_revenue or {}).get("daily")
     if customer_daily is not None and not getattr(customer_daily, "empty", True):
@@ -224,6 +260,72 @@ def generate_test2_dashboard(
         }
     else:
         customer_mix = {"dates": [], "new": [], "returning": []}
+
+    if day_of_week_analysis is not None and not day_of_week_analysis.empty:
+        day_of_week = {
+            "labels": day_of_week_analysis["day_name"].astype(str).tolist(),
+            "orders": [round(_num(v), 2) for v in day_of_week_analysis["orders"].tolist()],
+            "revenue": [round(_num(v), 2) for v in day_of_week_analysis["revenue"].tolist()],
+            "profit": [round(_num(v), 2) for v in day_of_week_analysis.get("profit", pd.Series([0] * len(day_of_week_analysis))).tolist()],
+            "aov": [round(_num(v), 2) for v in day_of_week_analysis.get("aov", pd.Series([0] * len(day_of_week_analysis))).tolist()],
+            "fb_spend": [round(_num(v), 2) for v in day_of_week_analysis.get("fb_spend", pd.Series([0] * len(day_of_week_analysis))).tolist()],
+        }
+    else:
+        day_of_week = {"labels": [], "orders": [], "revenue": [], "profit": [], "aov": [], "fb_spend": []}
+
+    if week_of_month_analysis is not None and not week_of_month_analysis.empty:
+        week_of_month = {
+            "labels": week_of_month_analysis["week_label"].astype(str).tolist(),
+            "revenue": [round(_num(v), 2) for v in week_of_month_analysis["revenue"].tolist()],
+            "profit": [round(_num(v), 2) for v in week_of_month_analysis["profit"].tolist()],
+            "avg_daily_revenue": [round(_num(v), 2) for v in week_of_month_analysis["avg_daily_revenue"].tolist()],
+            "avg_daily_profit": [round(_num(v), 2) for v in week_of_month_analysis["avg_daily_profit"].tolist()],
+        }
+    else:
+        week_of_month = {"labels": [], "revenue": [], "profit": [], "avg_daily_revenue": [], "avg_daily_profit": []}
+
+    if day_of_month_analysis is not None and not day_of_month_analysis.empty:
+        day_of_month = {
+            "labels": day_of_month_analysis["day_label"].astype(str).tolist(),
+            "orders": [round(_num(v), 2) for v in day_of_month_analysis["orders"].tolist()],
+            "revenue": [round(_num(v), 2) for v in day_of_month_analysis["revenue"].tolist()],
+            "avg_revenue": [round(_num(v), 2) for v in day_of_month_analysis["avg_revenue_per_occurrence"].tolist()],
+            "avg_profit": [round(_num(v), 2) for v in day_of_month_analysis["avg_profit_per_occurrence"].tolist()],
+        }
+    else:
+        day_of_month = {"labels": [], "orders": [], "revenue": [], "avg_revenue": [], "avg_profit": []}
+
+    weather_daily = (weather_analysis or {}).get("daily")
+    weather_bucket = (weather_analysis or {}).get("bucket_summary")
+    if weather_daily is not None and not getattr(weather_daily, "empty", True):
+        weather_payload = {
+            "dates": pd.to_datetime(weather_daily["date"]).dt.strftime("%Y-%m-%d").tolist(),
+            "revenue": [round(_num(v), 2) for v in weather_daily["total_revenue"].tolist()],
+            "profit": [round(_num(v), 2) for v in weather_daily["net_profit"].tolist()],
+            "precipitation": [round(_num(v), 2) for v in weather_daily["precipitation_sum"].tolist()],
+            "bad_score": [round(_num(v), 2) for v in weather_daily["weather_bad_score"].tolist()],
+        }
+    else:
+        weather_payload = {"dates": [], "revenue": [], "profit": [], "precipitation": [], "bad_score": []}
+
+    if weather_bucket is not None and not getattr(weather_bucket, "empty", True):
+        weather_bucket_payload = {
+            "labels": weather_bucket["weather_bucket"].astype(str).tolist(),
+            "revenue_delta": [round(_num(v), 2) for v in weather_bucket["revenue_vs_weekday_baseline"].tolist()],
+            "profit_delta": [round(_num(v), 2) for v in weather_bucket["profit_vs_weekday_baseline"].tolist()],
+        }
+    else:
+        weather_bucket_payload = {"labels": [], "revenue_delta": [], "profit_delta": []}
+
+    refunds_daily = (refunds_analysis or {}).get("daily")
+    if refunds_daily is not None and not getattr(refunds_daily, "empty", True):
+        refunds_payload = {
+            "dates": pd.to_datetime(refunds_daily["date"]).dt.strftime("%Y-%m-%d").tolist(),
+            "rate": [round(_num(v), 2) for v in refunds_daily["refund_rate_pct"].tolist()],
+            "amount": [round(_num(v), 2) for v in refunds_daily["refund_amount"].tolist()],
+        }
+    else:
+        refunds_payload = {"dates": [], "rate": [], "amount": []}
 
     total_revenue = round(_num(date_agg["total_revenue"].sum()), 2)
     total_profit = round(_num(date_agg["net_profit"].sum()), 2)
@@ -240,8 +342,26 @@ def generate_test2_dashboard(
         "cost_mix": cost_mix,
         "cities": cities,
         "countries": countries,
+        "geo_rows": geo_rows,
         "products": products,
+        "product_margin_chart_rows": product_margin_chart_rows,
+        "trend_rows": trend_rows,
         "customer_mix": customer_mix,
+        "day_of_week": day_of_week,
+        "week_of_month": week_of_month,
+        "day_of_month": day_of_month,
+        "weather": weather_payload,
+        "weather_bucket": weather_bucket_payload,
+        "refunds": refunds_payload,
+        "customer_top_rows": customer_top_rows,
+        "customer_concentration_summary": {
+            "top_10_pct_revenue_share": _num((customer_concentration or {}).get("top_10_pct_revenue_share")),
+            "top_20_pct_revenue_share": _num((customer_concentration or {}).get("top_20_pct_revenue_share")),
+            "top_10_pct_profit_share": _num((customer_concentration or {}).get("top_10_pct_profit_share")),
+            "top_20_pct_profit_share": _num((customer_concentration or {}).get("top_20_pct_profit_share")),
+        },
+        "cohort_summary": cohort_summary,
+        "cohort_retention_rows": cohort_retention_rows,
         "refund_rate": round(_num((refunds_analysis or {}).get("refund_rate_pct")), 2),
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
@@ -251,12 +371,39 @@ def generate_test2_dashboard(
         for row in products
     ) or '<tr><td colspan="6"><span class="lang-en">No product data available.</span><span class="lang-sk hidden">Produktové dáta nie sú dostupné.</span></td></tr>'
 
+    product_trend_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('trend') or '-'))}</td><td>{_num(row.get('revenue_growth_pct')):+.1f}%</td><td>{_num(row.get('qty_growth_pct')):+.1f}%</td><td>€{_num(row.get('total_revenue')):,.2f}</td></tr>"
+        for row in trend_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No product trend data available.</span><span class="lang-sk hidden">Produktové trendy nie sú dostupné.</span></td></tr>'
+
+    geo_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('country') or 'Unknown')).upper()}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('contribution_profit')):,.2f}</td><td>{_num(row.get('contribution_margin_pct')):.1f}%</td><td>€{_num(row.get('fb_cpo')):,.2f}</td></tr>"
+        for row in geo_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupná.</span></td></tr>'
+
+    customer_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('customer') or 'Unknown'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{_num(row.get('revenue_pct')):.1f}%</td></tr>"
+        for row in customer_top_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No customer concentration data available.</span><span class="lang-sk hidden">Koncentrácia zákazníkov nie je dostupná.</span></td></tr>'
+
+    cohort_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('cohort') or '-'))}</td><td>{_num(row.get('retention_2nd_pct')):.1f}%</td><td>{_num(row.get('retention_3rd_pct')):.1f}%</td><td>{_num(row.get('retention_4th_pct')):.1f}%</td><td>{_num(row.get('retention_5th_pct')):.1f}%</td></tr>"
+        for row in cohort_retention_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No cohort retention data available.</span><span class="lang-sk hidden">Kohortná retencia nie je dostupná.</span></td></tr>'
+
     health_html = "".join(
         f'<div class="health-item"><div class="health-title">{escape(str(row.get("label") or row.get("key") or "Source"))}</div><div class="health-status {("good" if row.get("healthy") else ("warn" if row.get("status") == "degraded" else "bad"))}">{escape(str(row.get("status") or "unknown"))}</div><p>{escape(str(row.get("message") or row.get("mode") or "-"))}</p></div>'
         for row in source_rows
     ) or '<div class="health-item"><div class="health-title"><span class="lang-en">Source health</span><span class="lang-sk hidden">Stav zdrojov</span></div><div class="health-status good">ok</div><p><span class="lang-en">No source warnings attached to this run.</span><span class="lang-sk hidden">K tomuto behu nie sú pripojené žiadne varovania zdrojov.</span></p></div>'
 
     period_switcher_html = _period_switcher_html(period_switcher)
+    refund_summary = (refunds_analysis or {}).get("summary", {})
+    repeat_rate = _num(cohort_summary.get("repeat_rate_pct"))
+    repeat_customers = int(round(_num(cohort_summary.get("repeat_customers"))))
+    avg_days_to_2nd = _maybe_num(cohort_summary.get("avg_days_to_2nd_order"))
+    avg_days_between = _maybe_num(cohort_summary.get("avg_days_between_orders"))
+    top_10_share = _num((customer_concentration or {}).get("top_10_pct_revenue_share"))
+    top_20_share = _num((customer_concentration or {}).get("top_20_pct_revenue_share"))
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -365,7 +512,7 @@ def generate_test2_dashboard(
     <div class="layout">
         <aside class="sidebar">
             <div class="brand">
-                <div class="brand-mark">R</div>
+                <div class="brand-mark">{brand_mark}</div>
                 <div>
                     <strong>{title}</strong>
                     <small><span class="lang-en">test2 isolated dashboard</span><span class="lang-sk hidden">test2 izolovaný dashboard</span></small>
@@ -376,9 +523,10 @@ def generate_test2_dashboard(
             <a class="nav-link" href="#sales"><span class="nav-dot">02</span><span class="lang-en">Sales</span><span class="lang-sk hidden">Predaj</span></a>
             <a class="nav-link" href="#economics"><span class="nav-dot">03</span><span class="lang-en">Economics</span><span class="lang-sk hidden">Ekonomika</span></a>
             <a class="nav-link" href="#customers"><span class="nav-dot">04</span><span class="lang-en">Customers</span><span class="lang-sk hidden">Zákazníci</span></a>
-            <a class="nav-link" href="#geography"><span class="nav-dot">05</span><span class="lang-en">Geography</span><span class="lang-sk hidden">Geografia</span></a>
-            <a class="nav-link" href="#products"><span class="nav-dot">06</span><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></a>
-            <a class="nav-link" href="#health"><span class="nav-dot">07</span><span class="lang-en">Data health</span><span class="lang-sk hidden">Kvalita dát</span></a>
+            <a class="nav-link" href="#patterns"><span class="nav-dot">05</span><span class="lang-en">Patterns</span><span class="lang-sk hidden">Patterny</span></a>
+            <a class="nav-link" href="#geography"><span class="nav-dot">06</span><span class="lang-en">Geography</span><span class="lang-sk hidden">Geografia</span></a>
+            <a class="nav-link" href="#products"><span class="nav-dot">07</span><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></a>
+            <a class="nav-link" href="#health"><span class="nav-dot">08</span><span class="lang-en">Data health</span><span class="lang-sk hidden">Kvalita dát</span></a>
         </aside>
         <main class="content">
             <div class="shell">
@@ -468,18 +616,25 @@ def generate_test2_dashboard(
                         </div>
                     </div>
                 </section>
-
                 <section class="section" id="customers">
                     <div class="section-head">
-                        <h2><span class="lang-en">Customer quality and margin behavior</span><span class="lang-sk hidden">Kvalita zákazníkov a správanie marže</span></h2>
-                        <p><span class="lang-en">Growth quality is clearer when you separate margin behavior from new vs returning revenue.</span><span class="lang-sk hidden">Kvalita rastu je čitateľnejšia, keď oddelíš správanie marže od nových vs vracajúcich sa tržieb.</span></p>
+                        <h2><span class="lang-en">Customer quality and retention</span><span class="lang-sk hidden">Kvalita z??kazn??kov a retencia</span></h2>
+                        <p><span class="lang-en">This extends the nice `test2` shell with retention, refunds and concentration data from the richer reporting build.</span><span class="lang-sk hidden">Toto roz??iruje pekn?? `test2` shell o retenciu, refundy a koncentr??ciu z bohat??ieho reportingu.</span></p>
+                    </div>
+                    <div class="panel chart-card" style="margin-bottom:18px;">
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Repeat rate</span><span class="lang-sk hidden">Repeat rate</span></small><strong>{repeat_rate:.1f}%</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Repeat customers</span><span class="lang-sk hidden">Vracajuci sa zakaznici</span></small><strong>{repeat_customers}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Avg days to 2nd order</span><span class="lang-sk hidden">Priemer dni do 2. objednavky</span></small><strong>{(f"{avg_days_to_2nd:.0f}" if avg_days_to_2nd is not None else "N/A")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Top 10% revenue share</span><span class="lang-sk hidden">Podiel top 10% zakaznikov</span></small><strong>{top_10_share:.1f}%</strong></div>
+                        </div>
                     </div>
                     <div class="grid-2">
                         <div class="panel chart-card">
                             <div class="card-head">
                                 <div>
-                                    <h3><span class="lang-en">Margin corridor</span><span class="lang-sk hidden">Koridor marže</span></h3>
-                                    <p><span class="lang-en">Pre-ad and post-ad margins shown together.</span><span class="lang-sk hidden">Pre-ad a post-ad marža v jednom pohľade.</span></p>
+                                    <h3><span class="lang-en">Margin corridor</span><span class="lang-sk hidden">Koridor marze</span></h3>
+                                    <p><span class="lang-en">Pre-ad and post-ad margins shown together to see if growth quality is holding.</span><span class="lang-sk hidden">Pre-ad a post-ad marza spolu, aby bolo vidno kvalitu rastu.</span></p>
                                 </div>
                             </div>
                             <div class="chart-shell"><canvas id="marginChart"></canvas></div>
@@ -487,11 +642,74 @@ def generate_test2_dashboard(
                         <div class="panel chart-card">
                             <div class="card-head">
                                 <div>
-                                    <h3><span class="lang-en">New vs returning revenue</span><span class="lang-sk hidden">Nové vs vracajúce sa tržby</span></h3>
-                                    <p><span class="lang-en">Acquisition and repeat demand shown separately.</span><span class="lang-sk hidden">Akvizícia a opakovaný dopyt zobrazené oddelene.</span></p>
+                                    <h3><span class="lang-en">New vs returning revenue</span><span class="lang-sk hidden">Novi vs vracajuci sa</span></h3>
+                                    <p><span class="lang-en">Acquisition and repeat demand split out in the same timeline.</span><span class="lang-sk hidden">Akvizicia a opakovany dopyt na jednej casovej osi.</span></p>
                                 </div>
                             </div>
                             <div class="chart-shell"><canvas id="customerMixChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head">
+                                <div>
+                                    <h3><span class="lang-en">Refund trend</span><span class="lang-sk hidden">Trend refundov</span></h3>
+                                    <p><span class="lang-en">Daily refund rate makes operational friction visible instead of hiding it in totals.</span><span class="lang-sk hidden">Denn?? miera refundov odha??uje operacne problemy, nie len sucet.</span></p>
+                                </div>
+                            </div>
+                            <div class="chart-shell"><canvas id="refundRateChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head">
+                                <div>
+                                    <h3><span class="lang-en">Cohort retention</span><span class="lang-sk hidden">Kohortna retencia</span></h3>
+                                    <p><span class="lang-en">Retention by acquisition cohort to show whether repeats are stable or weakening.</span><span class="lang-sk hidden">Retencia podla kohort, aby bolo vidno ci sa opakovane nakupy drzia.</span></p>
+                                </div>
+                            </div>
+                            <div class="chart-shell"><canvas id="cohortRetentionChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Top customers by revenue</span><span class="lang-sk hidden">Top zakaznici podla trzby</span></h3><p><span class="lang-en">Customer concentration tells you how dependent revenue is on a small group.</span><span class="lang-sk hidden">Koncentracia zakaznikov ukaze zavislost trzby od malej skupiny.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Customer</span><span class="lang-sk hidden">Zakaznik</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
+                                <tbody>{customer_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Cohort retention table</span><span class="lang-sk hidden">Tabulka kohortnej retencie</span></h3><p><span class="lang-en">Detailed cohort read for 2nd to 5th order retention.</span><span class="lang-sk hidden">Detailny pohlad na retenciu od 2. po 5. objednavku.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Cohort</span><span class="lang-sk hidden">Kohorta</span></th><th>2nd</th><th>3rd</th><th>4th</th><th>5th</th></tr></thead>
+                                <tbody>{cohort_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section" id="patterns">
+                    <div class="section-head">
+                        <h2><span class="lang-en">Calendar patterns and weather</span><span class="lang-sk hidden">Kalendarn? patterny a pocasie</span></h2>
+                        <p><span class="lang-en">This brings the richer pattern analysis from the older report into the cleaner `test2` shell.</span><span class="lang-sk hidden">Sem prenasiame bohatsie patterny zo starsieho reportu do cistejsieho `test2` shellu.</span></p>
+                    </div>
+                    <div class="grid-2">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Day of week pattern</span><span class="lang-sk hidden">Pattern dna v tyzdni</span></h3><p><span class="lang-en">Revenue, orders and FB spend by weekday.</span><span class="lang-sk hidden">Trzby, objednavky a FB spend podla dna v tyzdni.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="dayOfWeekChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Week of month pattern</span><span class="lang-sk hidden">Pattern tyzdna v mesiaci</span></h3><p><span class="lang-en">Equalized week-in-month view using average daily revenue and profit.</span><span class="lang-sk hidden">Equalizovany pohlad tyzdna v mesiaci cez priemerne denne trzby a zisk.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="weekOfMonthChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Day of month pattern</span><span class="lang-sk hidden">Pattern dna v mesiaci</span></h3><p><span class="lang-en">Normalized phase-of-month signal using average revenue and profit per occurrence.</span><span class="lang-sk hidden">Normalizovany signal fazy mesiaca cez priemer na vyskyt dna.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="dayOfMonthChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Weather uplift</span><span class="lang-sk hidden">Vplyv pocasia</span></h3><p><span class="lang-en">Bucket-based revenue and profit delta versus weekday baseline.</span><span class="lang-sk hidden">Rozdiel trzby a zisku podla pocasia oproti weekday baseline.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="weatherImpactChart"></canvas></div>
                         </div>
                     </div>
                 </section>
@@ -499,38 +717,63 @@ def generate_test2_dashboard(
                 <section class="section" id="geography">
                     <div class="section-head">
                         <h2><span class="lang-en">Geography</span><span class="lang-sk hidden">Geografia</span></h2>
-                        <p><span class="lang-en">Concentration reads help explain where demand is strongest.</span><span class="lang-sk hidden">Pohľad na koncentráciu pomáha vysvetliť, kde je dopyt najsilnejší.</span></p>
+                        <p><span class="lang-en">Concentration reads help explain where demand is strongest and whether economics differ by market.</span><span class="lang-sk hidden">Geografia ukazuje kde je najsilnejsi dopyt a ako sa lisi ekonomika trhu.</span></p>
                     </div>
                     <div class="grid-2">
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Top cities by revenue</span><span class="lang-sk hidden">Top mestá podľa tržieb</span></h3></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Top cities by revenue</span><span class="lang-sk hidden">Top mesta podla trzby</span></h3></div></div>
                             <div class="chart-shell compact"><canvas id="cityChart"></canvas></div>
                         </div>
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Country split</span><span class="lang-sk hidden">Rozdelenie podľa krajín</span></h3></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Country split</span><span class="lang-sk hidden">Rozdelenie krajin</span></h3></div></div>
                             <div class="chart-shell compact"><canvas id="countryChart"></canvas></div>
                         </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">Country-level contribution view from the richer report.</span><span class="lang-sk hidden">Country-level contribution pohlad z bohatsieho reportu.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Country</span><span class="lang-sk hidden">Krajina</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution</span><span class="lang-sk hidden">Contribution</span></th><th><span class="lang-en">Margin</span><span class="lang-sk hidden">Marza</span></th><th>FB CPO</th></tr></thead>
+                            <tbody>{geo_rows_html}</tbody>
+                        </table>
                     </div>
                 </section>
 
                 <section class="section" id="products">
                     <div class="section-head">
                         <h2><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></h2>
-                        <p><span class="lang-en">Top products by profit contribution, not just by volume.</span><span class="lang-sk hidden">Top produkty podľa prínosu na zisku, nie len podľa objemu.</span></p>
+                        <p><span class="lang-en">Top products by profit contribution plus the richer margin and trend views from the earlier report.</span><span class="lang-sk hidden">Top produkty podla zisku, plus bohatsie margin a trend pohlady zo starsieho reportu.</span></p>
                     </div>
-                    <div class="panel table-card">
+                    <div class="grid-2">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Top product margins</span><span class="lang-sk hidden">Top produktove marze</span></h3><p><span class="lang-en">Highest-margin products among meaningful revenue contributors.</span><span class="lang-sk hidden">Produkty s najlepsou marzou medzi relevantnymi polozkami.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="productMarginBreakoutChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Product trend direction</span><span class="lang-sk hidden">Smer produktovych trendov</span></h3><p><span class="lang-en">Revenue growth in the second half of the period versus the first half.</span><span class="lang-sk hidden">Rast trzby v druhej polovici obdobia oproti prvej polovici.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="productTrendChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Top products by contribution</span><span class="lang-sk hidden">Top produkty podla contribution</span></h3></div></div>
                         <table>
                             <thead>
                                 <tr>
                                     <th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th>
                                     <th>SKU</th>
-                                    <th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Tržby</span></th>
+                                    <th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th>
                                     <th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th>
-                                    <th><span class="lang-en">Margin</span><span class="lang-sk hidden">Marža</span></th>
-                                    <th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednávky</span></th>
+                                    <th><span class="lang-en">Margin</span><span class="lang-sk hidden">Marza</span></th>
+                                    <th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th>
                                 </tr>
                             </thead>
                             <tbody>{product_rows_html}</tbody>
+                        </table>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Product trend table</span><span class="lang-sk hidden">Tabulka produktovych trendov</span></h3><p><span class="lang-en">Combines trend label, revenue growth and quantity growth for quick merchandising decisions.</span><span class="lang-sk hidden">Spaja trend, rast trzby a rast kusov pre rychle merchandising rozhodnutia.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Trend</span><span class="lang-sk hidden">Trend</span></th><th><span class="lang-en">Revenue growth</span><span class="lang-sk hidden">Rast trzby</span></th><th><span class="lang-en">Qty growth</span><span class="lang-sk hidden">Rast kusov</span></th><th><span class="lang-en">Total revenue</span><span class="lang-sk hidden">Spolu trzby</span></th></tr></thead>
+                            <tbody>{product_trend_rows_html}</tbody>
                         </table>
                     </div>
                 </section>
@@ -714,6 +957,99 @@ def generate_test2_dashboard(
                 }},
                 options: countryOpts,
             }});
+            if (DATA.refunds.dates.length) {{
+                new Chart(document.getElementById('refundRateChart'), {{
+                    type: 'line',
+                    data: {{ labels: DATA.refunds.dates, datasets: [
+                        {{ label: 'Refund rate %', data: DATA.refunds.rate, borderColor: '#cf5060', backgroundColor: 'rgba(207,80,96,.14)', fill: true, tension: .34, borderWidth: 2.5, pointRadius: 0 }},
+                        {{ label: 'Refund amount', data: DATA.refunds.amount, borderColor: '#8a2c3d', borderDash: [8, 6], tension: .34, borderWidth: 2, pointRadius: 0, yAxisID: 'y1' }},
+                    ] }},
+                    options: {{ ...baseOptions(), scales: {{ ...baseOptions().scales, y1: {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }} }} }},
+                }});
+            }}
+            if (DATA.cohort_retention_rows.length) {{
+                new Chart(document.getElementById('cohortRetentionChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.cohort_retention_rows.map(x => x.cohort || '-'),
+                        datasets: [
+                            {{ label: '2nd order', data: DATA.cohort_retention_rows.map(x => Number(x.retention_2nd_pct || 0)), borderColor: '#ff8a1f', tension: .34, borderWidth: 2.5, pointRadius: 0 }},
+                            {{ label: '3rd order', data: DATA.cohort_retention_rows.map(x => Number(x.retention_3rd_pct || 0)), borderColor: '#4766ff', tension: .34, borderWidth: 2.5, pointRadius: 0 }},
+                            {{ label: '4th order', data: DATA.cohort_retention_rows.map(x => Number(x.retention_4th_pct || 0)), borderColor: '#1f9d66', tension: .34, borderWidth: 2.5, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (DATA.day_of_week.labels.length) {{
+                const dowOpts = baseOptions();
+                dowOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('dayOfWeekChart'), {{
+                    data: {{
+                        labels: DATA.day_of_week.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue', data: DATA.day_of_week.revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Orders', data: DATA.day_of_week.orders, borderColor: '#4766ff', tension: .35, borderWidth: 2.4, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'FB spend', data: DATA.day_of_week.fb_spend, borderColor: '#8a2c3d', borderDash: [8, 6], tension: .35, borderWidth: 2, pointRadius: 3, yAxisID: 'y' }},
+                        ],
+                    }},
+                    options: dowOpts,
+                }});
+            }}
+            if (DATA.week_of_month.labels.length) {{
+                const womOpts = baseOptions();
+                womOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('weekOfMonthChart'), {{
+                    data: {{
+                        labels: DATA.week_of_month.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg daily revenue', data: DATA.week_of_month.avg_daily_revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg daily profit', data: DATA.week_of_month.avg_daily_profit, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: womOpts,
+                }});
+            }}
+            if (DATA.day_of_month.labels.length) {{
+                const domOpts = baseOptions();
+                domOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('dayOfMonthChart'), {{
+                    data: {{
+                        labels: DATA.day_of_month.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg revenue / occurrence', data: DATA.day_of_month.avg_revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit / occurrence', data: DATA.day_of_month.avg_profit, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: domOpts,
+                }});
+            }}
+            if (DATA.weather_bucket.labels.length) {{
+                new Chart(document.getElementById('weatherImpactChart'), {{
+                    data: {{
+                        labels: DATA.weather_bucket.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue delta', data: DATA.weather_bucket.revenue_delta, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
+                            {{ type: 'line', label: 'Profit delta', data: DATA.weather_bucket.profit_delta, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 3 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (DATA.product_margin_chart_rows.length) {{
+                new Chart(document.getElementById('productMarginBreakoutChart'), {{
+                    type: 'bar',
+                    data: {{ labels: DATA.product_margin_chart_rows.map(x => (x.product || 'Unknown').slice(0, 28)), datasets: [{{ label: 'Margin %', data: DATA.product_margin_chart_rows.map(x => Number(x.margin_pct || 0)), backgroundColor: DATA.product_margin_chart_rows.map(x => Number(x.margin_pct || 0) >= 0 ? 'rgba(31,157,102,.72)' : 'rgba(207,80,96,.72)'), borderRadius: 8 }}] }},
+                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if (DATA.trend_rows.length) {{
+                new Chart(document.getElementById('productTrendChart'), {{
+                    type: 'bar',
+                    data: {{ labels: DATA.trend_rows.map(x => (x.product || 'Unknown').slice(0, 28)), datasets: [{{ label: 'Revenue growth %', data: DATA.trend_rows.map(x => Number(x.revenue_growth_pct || 0)), backgroundColor: DATA.trend_rows.map(x => Number(x.revenue_growth_pct || 0) >= 0 ? 'rgba(31,157,102,.72)' : 'rgba(207,80,96,.72)'), borderRadius: 8 }}] }},
+                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
         }}
         document.querySelectorAll('.lang-btn').forEach(btn => btn.addEventListener('click', () => applyLang(btn.dataset.lang)));
         document.querySelectorAll('.window-btn').forEach(btn => btn.addEventListener('click', () => renderKpis(btn.dataset.window)));
