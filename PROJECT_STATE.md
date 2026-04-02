@@ -87,7 +87,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Use the new `--output-tag ui_test` side-by-side variant flow for the upcoming CFO/main-report UI redesign so production artifacts stay untouched while layout changes are tested.
+- Continue the VEVO March-only side-by-side UI redesign flow by validating the new per-section chart date filters and then deciding whether the next step is a full chart-visual redesign (dashboard skin) or a smaller KPI/section polish pass.
 
 ## 9) Change Log
 
@@ -118,6 +118,20 @@ Bootstrap entrypoints:
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
+
+### 2026-04-02
+- Added test-report-only section-level chart date filters to the main HTML report UI:
+  - each main metric group now renders its own date-range panel (`overview`, `business`, `customers`, `marketing`, `geography`, `products`, `operations`),
+  - date filters persist per metric group via browser local storage,
+  - date filters only slice ISO-date time-series charts and do not alter KPI cards or categorical charts.
+- Added a first-pass dashboard chart skin layer in `html_report_generator.py`:
+  - softer chart cards,
+  - improved chart container spacing and hierarchy,
+  - Chart.js global defaults for smoother lines, lighter gridlines, better legends, and better tooltip styling.
+- Verified syntax with `python -m py_compile html_report_generator.py export_orders.py reporting_core\\__init__.py reporting_core\\cfo_kpis.py`.
+- Regenerated VEVO March test artifact only:
+  - `data/vevo/report_20260301-20260331__test.html`
+- Verified rendered HTML contains 7 section-level chart range panels, one for each main metric group.
 
 ### 2026-04-01
 - Added side-by-side output variant support for safe UI redesign/testing without overwriting working report artifacts:

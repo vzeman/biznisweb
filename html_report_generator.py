@@ -408,30 +408,31 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
         """
 
-    chart_range_controls_html = ""
-    if dates:
-        chart_range_controls_html = f"""
-        <div class="chart-range-panel">
+    def render_chart_range_controls(group_key: str) -> str:
+        if not dates:
+            return ""
+        return f"""
+        <div class="chart-range-panel" data-chart-group="{escape(group_key)}">
             <div class="chart-range-copy">
                 <div class="section-kicker" data-en="Chart Range" data-sk="Rozsah grafov">Chart Range</div>
-                <h3 class="chart-range-heading" data-en="Filter daily charts by date" data-sk="Filtruj denne grafy podla datumu">Filter daily charts by date</h3>
-                <p class="chart-range-desc" data-en="Use this only for date-based charts. Summary cards and categorical charts stay on the full report period." data-sk="Pouzi toto len pre grafy s datumami. Suhrnne karty a kategoricke grafy zostavaju za cele obdobie reportu.">Use this only for date-based charts. Summary cards and categorical charts stay on the full report period.</p>
+                <h3 class="chart-range-heading" data-en="Filter charts in this section" data-sk="Filtruj grafy v tejto sekcii">Filter charts in this section</h3>
+                <p class="chart-range-desc" data-en="This filter affects only date-based charts inside the current metric group. KPI cards and categorical charts keep the full report period." data-sk="Tento filter ovplyvni len grafy s datumami v aktualnej skupine metrik. KPI karty a kategoricke grafy zostavaju za cele obdobie reportu.">This filter affects only date-based charts inside the current metric group. KPI cards and categorical charts keep the full report period.</p>
             </div>
-            <div class="chart-range-controls" id="chartRangeControls">
+            <div class="chart-range-controls" data-chart-group="{escape(group_key)}">
                 <label class="chart-range-input">
                     <span data-en="From" data-sk="Od">From</span>
-                    <input type="date" id="chartRangeStart" min="{dates[0]}" max="{dates[-1]}" value="{dates[0]}">
+                    <input type="date" class="chart-range-start" data-chart-group="{escape(group_key)}" min="{dates[0]}" max="{dates[-1]}" value="{dates[0]}">
                 </label>
                 <label class="chart-range-input">
                     <span data-en="To" data-sk="Do">To</span>
-                    <input type="date" id="chartRangeEnd" min="{dates[0]}" max="{dates[-1]}" value="{dates[-1]}">
+                    <input type="date" class="chart-range-end" data-chart-group="{escape(group_key)}" min="{dates[0]}" max="{dates[-1]}" value="{dates[-1]}">
                 </label>
                 <div class="chart-range-presets">
-                    <button type="button" class="chart-range-btn" data-range="7d">7D</button>
-                    <button type="button" class="chart-range-btn" data-range="30d">30D</button>
-                    <button type="button" class="chart-range-btn" data-range="90d">90D</button>
-                    <button type="button" class="chart-range-btn" data-range="ytd">YTD</button>
-                    <button type="button" class="chart-range-btn" data-range="all" data-en="All" data-sk="Vsetko">All</button>
+                    <button type="button" class="chart-range-btn" data-chart-group="{escape(group_key)}" data-range="7d">7D</button>
+                    <button type="button" class="chart-range-btn" data-chart-group="{escape(group_key)}" data-range="30d">30D</button>
+                    <button type="button" class="chart-range-btn" data-chart-group="{escape(group_key)}" data-range="90d">90D</button>
+                    <button type="button" class="chart-range-btn" data-chart-group="{escape(group_key)}" data-range="ytd">YTD</button>
+                    <button type="button" class="chart-range-btn" data-chart-group="{escape(group_key)}" data-range="all" data-en="All" data-sk="Vsetko">All</button>
                 </div>
             </div>
         </div>
@@ -1001,12 +1002,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             justify-content: space-between;
             align-items: flex-start;
             gap: 18px;
-            background: rgba(255, 255, 255, 0.94);
-            border: 1px solid rgba(226, 232, 240, 0.95);
-            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 247, 237, 0.9) 100%);
+            border: 1px solid rgba(251, 191, 36, 0.18);
+            border-radius: 20px;
             padding: 18px 20px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
         }}
 
         .chart-range-heading {{
@@ -1029,6 +1030,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             flex-direction: column;
             gap: 10px;
             min-width: 320px;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(226, 232, 240, 0.9);
         }}
 
         .chart-range-input {{
@@ -1275,36 +1280,54 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         .chart-container {{
             background: var(--card);
-            border-radius: 16px;
-            padding: 20px 22px 18px;
+            border-radius: 22px;
+            padding: 24px 26px 22px;
             margin-bottom: 18px;
-            border: 1px solid var(--card-border);
-            box-shadow: 0 3px 14px rgba(15, 23, 42, 0.05);
+            border: 1px solid rgba(226, 232, 240, 0.96);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
             position: relative;
+            overflow: hidden;
+        }}
+
+        .chart-container::before {{
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at top right, rgba(251, 146, 60, 0.08), transparent 32%),
+                linear-gradient(180deg, rgba(248, 250, 252, 0.75), rgba(255, 255, 255, 0.92));
+            pointer-events: none;
+        }}
+
+        .chart-container > * {{
+            position: relative;
+            z-index: 1;
         }}
 
         .chart-container canvas {{
             width: 100% !important;
             max-height: 420px !important;
             height: min(52vh, 420px) !important;
+            border-radius: 16px;
         }}
 
         .chart-title {{
-            font-size: clamp(1.45rem, 2.5vw, 2rem);
+            font-size: clamp(1.35rem, 2.2vw, 1.8rem);
             color: var(--ink);
             margin-bottom: 8px;
             text-align: left;
-            letter-spacing: -0.015em;
+            letter-spacing: -0.025em;
             line-height: 1.15;
+            font-weight: 800;
         }}
 
         .chart-explanation {{
-            font-size: 0.86rem;
+            font-size: 0.88rem;
             color: var(--muted);
-            margin-bottom: 14px;
+            margin-bottom: 16px;
             text-align: left;
-            line-height: 1.45;
-            max-width: 1200px;
+            line-height: 1.55;
+            max-width: 980px;
         }}
 
         .chart-grid {{
@@ -1562,7 +1585,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>
         {cfo_top_block_html}
-        {chart_range_controls_html}
+        {render_chart_range_controls("overview")}
         {data_quality_section}
         {quick_insights_html}
         {report_guide_html}
@@ -1881,7 +1904,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </section>
         """
 
-    html_content += """
+    html_content += f"""
         <section id="section-business" class="dashboard-section" data-group="business">
         <div class="section-intro">
             <div class="section-intro-copy">
@@ -1890,6 +1913,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="section-copy" data-en="These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding." data-sk="Tieto grafy odpovedaju na CFO otazky ako prve: kolko prislo, kolko odislo a ci sa drzi marza.">These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding.</p>
             </div>
         </div>
+        {render_chart_range_controls("business")}
         """
 
     if financial_metrics:
@@ -2062,7 +2086,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="Understand who buys, who returns, and who churns" data-sk="Pochop, kto nakupuje, vracia sa a odchadza">Understand who buys, who returns, and who churns</h2>
                 <p class="section-copy" data-en="Use this section when you want to explain growth quality, not just headline revenue." data-sk="Tuto sekciu pouzi, ked chces vysvetlit kvalitu rastu, nielen samotny obrat.">Use this section when you want to explain growth quality, not just headline revenue.</p>
             </div>
-        </div>"""
+        </div>
+        {render_chart_range_controls("customers")}"""
 
     if new_vs_returning_revenue and new_vs_returning_revenue.get('daily') is not None and not new_vs_returning_revenue.get('daily').empty:
         html_content += """
@@ -2106,7 +2131,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <canvas id="orderSizeDistributionChart"></canvas>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-marketing" class="dashboard-section" data-group="marketing">
@@ -2117,6 +2142,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="section-copy" data-en="This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense." data-sk="Tu overujes efektivitu spendu, kvalitu kampani a ci akvizicia stale dava ekonomicky zmysel.">This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense.</p>
             </div>
         </div>
+        {render_chart_range_controls("marketing")}
         """
 
     # Add Facebook Ads Analytics section if data is available
@@ -4591,7 +4617,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-geography" class="dashboard-section" data-group="geography">
@@ -4602,6 +4628,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="section-copy" data-en="Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming." data-sk="Rozdelenie podla krajin a miest ukaze, kde sa koncentruje obrat, kde je silna marza a kde je priestor na rast.">Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming.</p>
             </div>
         </div>
+        {render_chart_range_controls("geography")}
         """
 
     # Geographic Analysis
@@ -4744,7 +4771,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-customer-structure" class="dashboard-section" data-group="customers">
@@ -4755,6 +4782,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="section-copy" data-en="This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers." data-sk="Tato sekcia ukaze, ci rast taha B2B, B2C alebo mala skupina silnych zakaznikov.">This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers.</p>
             </div>
         </div>
+        {render_chart_range_controls("customers")}
         """
 
     # B2B vs B2C Analysis
@@ -4898,7 +4926,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-products" class="dashboard-section" data-group="products">
@@ -4909,6 +4937,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="section-copy" data-en="Use product margins and product trend tables to separate hero SKUs from low-value volume." data-sk="Pomocou produktovych marzi a trendov oddelis hero SKU od objemu s nizkou hodnotou.">Use product margins and product trend tables to separate hero SKUs from low-value volume.</p>
             </div>
         </div>
+        {render_chart_range_controls("products")}
         """
 
     # Product Margins
@@ -5015,7 +5044,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-operations" class="dashboard-section" data-group="operations">
@@ -5026,6 +5055,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="section-copy" data-en="This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath." data-sk="Tato sekcia sluzi na hlbsiu diagnostiku, ked sa pohnu hlavne KPI a potrebujes vediet, co sa pod nimi operativne zmenilo.">This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath.</p>
             </div>
         </div>
+        {render_chart_range_controls("operations")}
         """
 
     # Ads Effectiveness Analysis
@@ -5460,10 +5490,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         let cfoTopActiveWindow = (JSON.parse(localStorage.getItem('reportCfoTopWindow') || 'null')) || (({json.dumps(cfo_kpi_payload.get('default_window') if cfo_kpi_payload else 'monthly')}) || 'monthly');
         const CFO_TOP_KPI = {json.dumps(cfo_kpi_payload or {}, ensure_ascii=False)};
         const REPORT_DATE_DOMAIN = {json.dumps({"min": dates[0] if dates else None, "max": dates[-1] if dates else None}, ensure_ascii=False)};
-        let chartRangeState = JSON.parse(localStorage.getItem('reportChartRange') || 'null') || {{
-            start: REPORT_DATE_DOMAIN.min,
-            end: REPORT_DATE_DOMAIN.max
-        }};
+        let chartRangeStates = JSON.parse(localStorage.getItem('reportChartRanges') || 'null') || {{}};
         const RANGE_MANAGED_CHARTS = [];
 
         const I18N_SK = {{
@@ -5892,19 +5919,57 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             return {{ start: normalizedStart, end: normalizedEnd }};
         }}
 
-        function applyRangeToManagedCharts() {{
-            const normalized = normalizeChartRange(chartRangeState.start, chartRangeState.end);
-            chartRangeState = normalized;
-            localStorage.setItem('reportChartRange', JSON.stringify(chartRangeState));
+        function getChartRangeState(group) {{
+            const key = group || 'default';
+            const existing = chartRangeStates[key];
+            if (existing && (existing.start || existing.end)) {{
+                return normalizeChartRange(existing.start, existing.end);
+            }}
+            return normalizeChartRange(REPORT_DATE_DOMAIN.min, REPORT_DATE_DOMAIN.max);
+        }}
 
-            const startInput = document.getElementById('chartRangeStart');
-            const endInput = document.getElementById('chartRangeEnd');
-            if (startInput) startInput.value = normalized.start || '';
-            if (endInput) endInput.value = normalized.end || '';
+        function persistChartRangeStates() {{
+            localStorage.setItem('reportChartRanges', JSON.stringify(chartRangeStates));
+        }}
+
+        function syncChartRangeControls(group) {{
+            const normalized = getChartRangeState(group);
+            document.querySelectorAll(`.chart-range-panel[data-chart-group="${{group}}"]`).forEach((panel) => {{
+                const startInput = panel.querySelector('.chart-range-start');
+                const endInput = panel.querySelector('.chart-range-end');
+                if (startInput) startInput.value = normalized.start || '';
+                if (endInput) endInput.value = normalized.end || '';
+
+                panel.querySelectorAll('.chart-range-btn').forEach((btn) => {{
+                    let isActive = false;
+                    if ((btn.dataset.range || 'all') === 'all') {{
+                        isActive = normalized.start === REPORT_DATE_DOMAIN.min && normalized.end === REPORT_DATE_DOMAIN.max;
+                    }} else if ((btn.dataset.range || '') === 'ytd') {{
+                        isActive = normalized.end === REPORT_DATE_DOMAIN.max && normalized.start === `${{new Date(`${{REPORT_DATE_DOMAIN.max}}T00:00:00`).getFullYear()}}-01-01`;
+                    }} else {{
+                        const days = Number(String(btn.dataset.range || '').replace('d', ''));
+                        if (Number.isFinite(days) && days > 0) {{
+                            const maxDate = new Date(`${{REPORT_DATE_DOMAIN.max}}T00:00:00`);
+                            maxDate.setDate(maxDate.getDate() - (days - 1));
+                            const presetStart = maxDate.toISOString().slice(0, 10);
+                            isActive = normalized.end === REPORT_DATE_DOMAIN.max && normalized.start === (presetStart < REPORT_DATE_DOMAIN.min ? REPORT_DATE_DOMAIN.min : presetStart);
+                        }}
+                    }}
+                    btn.classList.toggle('active', isActive);
+                }});
+            }});
+        }}
+
+        function applyRangeToManagedCharts(targetGroup = null) {{
+            const groupsSeen = new Set();
 
             RANGE_MANAGED_CHARTS.forEach((entry) => {{
+                if (targetGroup && entry.group !== targetGroup) return;
+
+                const normalized = getChartRangeState(entry.group);
                 const labels = entry.originalLabels || [];
                 if (!labels.length) return;
+                groupsSeen.add(entry.group);
 
                 const indexes = [];
                 labels.forEach((label, idx) => {{
@@ -5921,34 +5986,41 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 entry.chart.update('none');
             }});
 
-            const presets = document.querySelectorAll('.chart-range-btn');
-            presets.forEach((btn) => btn.classList.remove('active'));
-            if (normalized.start === REPORT_DATE_DOMAIN.min && normalized.end === REPORT_DATE_DOMAIN.max) {{
-                const allBtn = document.querySelector('.chart-range-btn[data-range="all"]');
-                if (allBtn) allBtn.classList.add('active');
+            if (targetGroup) {{
+                groupsSeen.add(targetGroup);
+            }} else {{
+                document.querySelectorAll('.chart-range-panel').forEach((panel) => groupsSeen.add(panel.dataset.chartGroup || 'default'));
             }}
+
+            groupsSeen.forEach((group) => syncChartRangeControls(group));
+            persistChartRangeStates();
         }}
 
-        function setChartRangeFromPreset(preset) {{
+        function setChartRangeForGroup(group, start, end) {{
+            const key = group || 'default';
+            chartRangeStates[key] = normalizeChartRange(start, end);
+            applyRangeToManagedCharts(key);
+        }}
+
+        function setChartRangeFromPreset(group, preset) {{
             if (!REPORT_DATE_DOMAIN.min || !REPORT_DATE_DOMAIN.max) return;
 
             const maxDate = new Date(`${{REPORT_DATE_DOMAIN.max}}T00:00:00`);
             const startDate = new Date(maxDate);
+            const key = group || 'default';
 
             if (preset === 'all') {{
-                chartRangeState = {{ start: REPORT_DATE_DOMAIN.min, end: REPORT_DATE_DOMAIN.max }};
-                applyRangeToManagedCharts();
+                chartRangeStates[key] = {{ start: REPORT_DATE_DOMAIN.min, end: REPORT_DATE_DOMAIN.max }};
+                applyRangeToManagedCharts(key);
                 return;
             }}
 
             if (preset === 'ytd') {{
-                chartRangeState = {{
+                chartRangeStates[key] = {{
                     start: `${{maxDate.getFullYear()}}-01-01`,
                     end: REPORT_DATE_DOMAIN.max
                 }};
-                applyRangeToManagedCharts();
-                const ytdBtn = document.querySelector('.chart-range-btn[data-range="ytd"]');
-                if (ytdBtn) ytdBtn.classList.add('active');
+                applyRangeToManagedCharts(key);
                 return;
             }}
 
@@ -5956,13 +6028,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             if (Number.isFinite(days) && days > 0) {{
                 startDate.setDate(startDate.getDate() - (days - 1));
                 const startIso = startDate.toISOString().slice(0, 10);
-                chartRangeState = {{
+                chartRangeStates[key] = {{
                     start: startIso < REPORT_DATE_DOMAIN.min ? REPORT_DATE_DOMAIN.min : startIso,
                     end: REPORT_DATE_DOMAIN.max
                 }};
-                applyRangeToManagedCharts();
-                const activeBtn = document.querySelector(`.chart-range-btn[data-range="${{preset}}"]`);
-                if (activeBtn) activeBtn.classList.add('active');
+                applyRangeToManagedCharts(key);
             }}
         }}
 
@@ -5971,8 +6041,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             const chart = new NativeChart(ctx, config);
             const labels = (config && config.data && Array.isArray(config.data.labels)) ? config.data.labels : [];
             if (labels.length && labels.every(isIsoDateLabel)) {{
+                const canvas = chart.canvas || (chart.ctx && chart.ctx.canvas);
+                const group = (canvas && canvas.closest('.dashboard-section') && canvas.closest('.dashboard-section').dataset.group) || 'overview';
                 RANGE_MANAGED_CHARTS.push({{
                     chart,
+                    group,
                     originalLabels: deepCloneChartValue(labels),
                     originalDatasets: deepCloneChartValue(config.data.datasets || [])
                 }});
@@ -5983,6 +6056,46 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         ManagedChart.prototype = NativeChart.prototype;
         Chart = ManagedChart;
         window.Chart = ManagedChart;
+
+        if (Chart && Chart.defaults) {{
+            Chart.defaults.responsive = true;
+            Chart.defaults.maintainAspectRatio = false;
+            Chart.defaults.color = '#64748b';
+            Chart.defaults.font.family = "'Inter', 'Segoe UI', Arial, sans-serif";
+            Chart.defaults.font.size = 12;
+            Chart.defaults.elements.line.borderWidth = 2.4;
+            Chart.defaults.elements.line.tension = 0.34;
+            Chart.defaults.elements.point.radius = 0;
+            Chart.defaults.elements.point.hoverRadius = 5;
+            Chart.defaults.elements.point.hitRadius = 12;
+            Chart.defaults.elements.bar.borderRadius = 8;
+            Chart.defaults.elements.bar.borderSkipped = false;
+            Chart.defaults.plugins.legend.position = 'top';
+            Chart.defaults.plugins.legend.align = 'start';
+            Chart.defaults.plugins.legend.labels.usePointStyle = true;
+            Chart.defaults.plugins.legend.labels.boxWidth = 10;
+            Chart.defaults.plugins.legend.labels.boxHeight = 10;
+            Chart.defaults.plugins.legend.labels.padding = 16;
+            Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(15, 23, 42, 0.94)';
+            Chart.defaults.plugins.tooltip.titleColor = '#f8fafc';
+            Chart.defaults.plugins.tooltip.bodyColor = '#e2e8f0';
+            Chart.defaults.plugins.tooltip.padding = 12;
+            Chart.defaults.plugins.tooltip.cornerRadius = 12;
+            if (Chart.defaults.scale) {{
+                if (Chart.defaults.scale.grid) {{
+                    Chart.defaults.scale.grid.color = 'rgba(148, 163, 184, 0.14)';
+                    Chart.defaults.scale.grid.drawBorder = false;
+                    Chart.defaults.scale.grid.tickLength = 0;
+                }}
+                if (Chart.defaults.scale.ticks) {{
+                    Chart.defaults.scale.ticks.color = '#94a3b8';
+                    Chart.defaults.scale.ticks.padding = 8;
+                }}
+                if (Chart.defaults.scale.border) {{
+                    Chart.defaults.scale.border.display = false;
+                }}
+            }}
+        }}
 
         function cfoTopLocale() {{
             return currentLang === 'sk' ? 'sk-SK' : 'en-US';
@@ -6176,16 +6289,22 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             document.querySelectorAll('.cfo-top-window-btn').forEach((btn) => {{
                 btn.addEventListener('click', () => renderCfoTopKpis(btn.dataset.window || 'monthly'));
             }});
-            document.getElementById('chartRangeStart')?.addEventListener('change', (event) => {{
-                chartRangeState.start = event.target.value || REPORT_DATE_DOMAIN.min;
-                applyRangeToManagedCharts();
+            document.querySelectorAll('.chart-range-start').forEach((input) => {{
+                input.addEventListener('change', (event) => {{
+                    const group = event.target.dataset.chartGroup || 'default';
+                    const current = getChartRangeState(group);
+                    setChartRangeForGroup(group, event.target.value || REPORT_DATE_DOMAIN.min, current.end || REPORT_DATE_DOMAIN.max);
+                }});
             }});
-            document.getElementById('chartRangeEnd')?.addEventListener('change', (event) => {{
-                chartRangeState.end = event.target.value || REPORT_DATE_DOMAIN.max;
-                applyRangeToManagedCharts();
+            document.querySelectorAll('.chart-range-end').forEach((input) => {{
+                input.addEventListener('change', (event) => {{
+                    const group = event.target.dataset.chartGroup || 'default';
+                    const current = getChartRangeState(group);
+                    setChartRangeForGroup(group, current.start || REPORT_DATE_DOMAIN.min, event.target.value || REPORT_DATE_DOMAIN.max);
+                }});
             }});
             document.querySelectorAll('.chart-range-btn').forEach((btn) => {{
-                btn.addEventListener('click', () => setChartRangeFromPreset(btn.dataset.range || 'all'));
+                btn.addEventListener('click', () => setChartRangeFromPreset(btn.dataset.chartGroup || 'default', btn.dataset.range || 'all'));
             }});
             applyLanguage(currentLang);
             applyMetricGroup(localStorage.getItem('reportMetricGroup') || 'all');
