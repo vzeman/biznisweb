@@ -316,7 +316,7 @@ Bootstrap entrypoints:
     - one current VEVO test HTML remains for UI review.
 
 Next exact step:
-- Review `data/vevo/report_20260301-20260331__test.html` visually and decide whether the new top CFO KPI band should fully replace the old summary-card-first entry flow or remain as a separate executive layer above it.
+- Review `data/vevo/report_20260301-20260331__test.html` visually and decide whether the new professional period switcher should stay as the baseline UX for the dashboard test track before deeper chart-visual redesign starts.
 
 ### 2026-04-02
 - Added reusable CFO KPI payload builder in `reporting_core/cfo_kpis.py` so the main report can reuse the same executive KPI logic as the standalone CFO dashboard.
@@ -353,3 +353,28 @@ Next exact step:
 - Regenerated the VEVO March test artifact after the revert:
   - `data/vevo/report_20260301-20260331__test.html`
 - Verified the regenerated HTML no longer contains the removed range UI markers (`chart-range-panel`, `chart-range-start`, `chart-range-end`).
+
+### 2026-04-02
+- Implemented a server-driven professional period switcher for the VEVO March dashboard test track without touching production outputs.
+- `export_orders.py` now builds preset report variants for tagged/test exports and links them as full-report period views instead of doing client-side chart cropping:
+  - `7D`
+  - `30D`
+  - `90D` when the selected range is long enough
+  - `FULL`
+- Added reusable helpers for:
+  - period-range slicing from already fetched orders,
+  - preset period-spec generation,
+  - relative-link payload generation for parent/child report variants.
+- `html_report_generator.py` now renders the same period switcher:
+  - globally at the top,
+  - inside every major dashboard section (`Overview`, `Business`, `Customers`, `Marketing`, `Geography`, `Customer structure`, `Products`, `Operations`).
+- Section links preserve anchors (for example `#section-marketing`) and the dashboard JS reopens the correct sidebar metric group after cross-period navigation.
+- Generated only test artifacts under the hidden bundle path for tagged outputs, keeping the visible top-level test report as the main entry point:
+  - `data/vevo/report_20260301-20260331__test.html`
+  - `data/vevo/_periods/report_20260301-20260331__test/7d/...`
+  - `data/vevo/_periods/report_20260301-20260331__test/30d/...`
+- Verified:
+  - syntax with `python -m py_compile export_orders.py html_report_generator.py`,
+  - successful VEVO March test regenerate with variant bundle creation,
+  - zero leftover literal `{render_period_switcher(...)}`
+  - working period-switcher links for all major sections in both the main report and child period variants.

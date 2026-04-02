@@ -76,10 +76,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                           cost_per_order: dict = None,
                           fb_hourly_stats: list = None,
                           fb_dow_stats: list = None,
-                          ltv_by_date: pd.DataFrame = None,
-                          consistency_checks: dict = None,
-                          cfo_kpi_payload: dict = None,
-                          source_health: dict = None) -> str:
+                         ltv_by_date: pd.DataFrame = None,
+                         consistency_checks: dict = None,
+                         cfo_kpi_payload: dict = None,
+                         source_health: dict = None,
+                         period_switcher: dict = None) -> str:
     """
     Generate a complete HTML report with charts and tables
     """
@@ -228,6 +229,53 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 </tbody>
             </table>
         </div>"""
+
+    def render_period_switcher(section_id: str = "", compact: bool = False) -> str:
+        switcher = period_switcher or {}
+        options = switcher.get("options") or []
+        if not options:
+            return ""
+
+        current_key = str(switcher.get("current_key") or "")
+        label_en = escape(str(switcher.get("label_en") or "Report period"))
+        label_sk = escape(str(switcher.get("label_sk") or "Obdobie reportu"))
+        current_range_en = escape(str(switcher.get("current_range_en") or ""))
+        current_range_sk = escape(str(switcher.get("current_range_sk") or ""))
+        section_fragment = f"#{section_id}" if section_id else ""
+        mode_class = "period-switcher compact" if compact else "period-switcher"
+
+        option_html = []
+        for option in options:
+            key = escape(str(option.get("key") or ""))
+            label = escape(str(option.get("label") or key.upper()))
+            href = escape(f"{option.get('href', '#')}{section_fragment}")
+            active_class = " active" if key == current_key else ""
+            range_en = escape(str(option.get("range_en") or ""))
+            range_sk = escape(str(option.get("range_sk") or ""))
+            option_html.append(
+                f"""
+                <a href="{href}" class="period-switcher-btn{active_class}" data-period-key="{key}" data-en="{label}" data-sk="{label}">
+                    <span class="period-switcher-btn-label">{label}</span>
+                    <span class="period-switcher-btn-range" data-en="{range_en}" data-sk="{range_sk}">{range_en}</span>
+                </a>
+                """
+            )
+
+        return f"""
+        <div class="{mode_class}" data-period-current="{escape(current_key)}">
+            <div class="period-switcher-copy">
+                <div class="section-kicker" data-en="{label_en}" data-sk="{label_sk}">{label_en}</div>
+                {"<h3 class=\"period-switcher-heading\" data-en=\"Choose a complete report period\" data-sk=\"Vyber cele obdobie reportu\">Choose a complete report period</h3>" if not compact else ""}
+                {"<p class=\"period-switcher-desc\" data-en=\"This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period.\" data-sk=\"Toto prepne cely report konzistentne: KPI karty, grafy, tabulky, mesta, produkty aj diagnostika sa prepocitaju na vybrane serverovo vyratane obdobie.\">This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period.</p>" if not compact else ""}
+            </div>
+            <div class="period-switcher-controls">
+                <div class="period-switcher-options">
+                    {''.join(option_html)}
+                </div>
+                <div class="period-switcher-current" data-en="{current_range_en}" data-sk="{current_range_sk}">{current_range_en}</div>
+            </div>
+        </div>
+        """
     total_orders = date_agg['unique_orders'].sum()
     total_items = date_agg['total_items'].sum()
     total_aov = total_revenue / total_orders if total_orders > 0 else 0
@@ -665,6 +713,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             flex-wrap: wrap;
         }}
 
+        .header-toolbar-right {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }}
+
         .lang-switch {{
             display: inline-flex;
             align-items: center;
@@ -700,6 +756,109 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         .lang-switch button.active {{
             background: #f97316;
             color: #fff;
+        }}
+
+        .period-switcher {{
+            display: flex;
+            align-items: stretch;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,247,237,0.94) 100%);
+            border: 1px solid rgba(251, 146, 60, 0.16);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+            margin-top: 18px;
+        }}
+
+        .period-switcher.compact {{
+            margin-top: 0;
+            padding: 12px 14px;
+            border-radius: 16px;
+            min-width: 380px;
+            flex: 1 1 420px;
+        }}
+
+        .period-switcher-copy {{
+            min-width: 0;
+            max-width: 520px;
+        }}
+
+        .period-switcher-heading {{
+            margin: 0 0 6px 0;
+            color: var(--ink);
+            font-size: 1.06rem;
+            letter-spacing: -0.02em;
+        }}
+
+        .period-switcher-desc {{
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }}
+
+        .period-switcher-controls {{
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            min-width: 0;
+            flex: 1 1 500px;
+        }}
+
+        .period-switcher-options {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: flex-end;
+        }}
+
+        .period-switcher-btn {{
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 108px;
+            text-decoration: none;
+            padding: 10px 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(251, 146, 60, 0.18);
+            background: #fff;
+            color: #7c2d12;
+            transition: all 0.18s ease;
+        }}
+
+        .period-switcher-btn:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(249, 115, 22, 0.12);
+            border-color: rgba(249, 115, 22, 0.28);
+        }}
+
+        .period-switcher-btn.active {{
+            background: linear-gradient(180deg, #f97316 0%, #fb923c 100%);
+            color: #fff;
+            border-color: #f97316;
+            box-shadow: 0 10px 20px rgba(249, 115, 22, 0.18);
+        }}
+
+        .period-switcher-btn-label {{
+            font-size: 0.84rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }}
+
+        .period-switcher-btn-range {{
+            font-size: 0.72rem;
+            line-height: 1.35;
+            opacity: 0.78;
+        }}
+
+        .period-switcher-current {{
+            color: #64748b;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
         }}
 
         .dashboard-section {{
@@ -1369,9 +1528,29 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 padding: 24px 20px 18px;
             }}
 
+            .header-toolbar-right {{
+                width: 100%;
+                justify-content: space-between;
+            }}
+
             .section-intro {{
                 flex-direction: column;
                 align-items: flex-start;
+            }}
+
+            .period-switcher,
+            .period-switcher.compact {{
+                flex-direction: column;
+                align-items: stretch;
+                min-width: 0;
+            }}
+
+            .period-switcher-controls {{
+                align-items: stretch;
+            }}
+
+            .period-switcher-options {{
+                justify-content: flex-start;
             }}
 
             .cfo-top-head {{
@@ -1426,12 +1605,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <h1>{report_title}</h1>
             <div class="header-toolbar">
                 <div class="date-range" data-en="{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}" data-sk="{date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%d.%m.%Y')}">{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}</div>
-                <div class="lang-switch" id="langSwitch" role="group" aria-label="Language switch">
-                    <span class="lang-switch-label" data-en="Language" data-sk="Jazyk">Language</span>
-                    <button id="langEnBtn" type="button" class="active" data-lang="en">EN</button>
-                    <button id="langSkBtn" type="button" data-lang="sk">SK</button>
+                <div class="header-toolbar-right">
+                    <div class="lang-switch" id="langSwitch" role="group" aria-label="Language switch">
+                        <span class="lang-switch-label" data-en="Language" data-sk="Jazyk">Language</span>
+                        <button id="langEnBtn" type="button" class="active" data-lang="en">EN</button>
+                        <button id="langSkBtn" type="button" data-lang="sk">SK</button>
+                    </div>
                 </div>
             </div>
+            {render_period_switcher()}
             <button id="toggleAllBtn" class="expand-all-btn" onclick="toggleAllTables(true)" style="margin-top: 15px;">Expand All Tables</button>
         </div>
         <section id="section-overview" class="dashboard-section" data-group="overview">
@@ -1441,6 +1623,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="Business snapshot in one place" data-sk="Biznis snapshot na jednom mieste">Business snapshot in one place</h2>
                 <p class="section-copy" data-en="Start here if you want the fastest possible read of revenue, profit, orders and the most important risks." data-sk="Zacni tu, ak chces najrychlejsie pochopit obrat, zisk, objednavky a najdolezitejsie rizika.">Start here if you want the fastest possible read of revenue, profit, orders and the most important risks.</p>
             </div>
+            {render_period_switcher("section-overview", compact=True)}
         </div>
         {cfo_top_block_html}
         {data_quality_section}
@@ -1756,12 +1939,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value roi">{repeat_rate:.1f}%</div>
             </div>"""
 
-    html_content += """
+    html_content += f"""
         </div>
         </section>
         """
 
-    html_content += """
+    html_content += f"""
         <section id="section-business" class="dashboard-section" data-group="business">
         <div class="section-intro">
             <div class="section-intro-copy">
@@ -1769,11 +1952,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="See whether the business is actually making money" data-sk="Zisti, ci biznis realne zaraba">See whether the business is actually making money</h2>
                 <p class="section-copy" data-en="These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding." data-sk="Tieto grafy odpovedaju na CFO otazky ako prve: kolko prislo, kolko odislo a ci sa drzi marza.">These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding.</p>
             </div>
+            {render_period_switcher("section-business", compact=True)}
         </div>
         """
 
     if financial_metrics:
-        html_content += """
+        html_content += f"""
         <div class="chart-container">
             <h2 class="chart-title">CAC vs Break-even Comparison</h2>
             <p class="chart-explanation">Compares acquisition cost thresholds on customer-level units: Paid CAC (Facebook), Blended CAC (tracked ads: FB+Google), and Break-even CAC based on pre-ad contribution per customer. Values below break-even are generally healthier for scalable growth.</p>
@@ -1781,7 +1965,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
         """
 
-    html_content += """
+    html_content += f"""
         
         <div class="chart-container">
             <h2 class="chart-title">Daily Revenue vs Costs</h2>
@@ -1942,6 +2126,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="Understand who buys, who returns, and who churns" data-sk="Pochop, kto nakupuje, vracia sa a odchadza">Understand who buys, who returns, and who churns</h2>
                 <p class="section-copy" data-en="Use this section when you want to explain growth quality, not just headline revenue." data-sk="Tuto sekciu pouzi, ked chces vysvetlit kvalitu rastu, nielen samotny obrat.">Use this section when you want to explain growth quality, not just headline revenue.</p>
             </div>
+            {render_period_switcher("section-customers", compact=True)}
         </div>"""
 
     if new_vs_returning_revenue and new_vs_returning_revenue.get('daily') is not None and not new_vs_returning_revenue.get('daily').empty:
@@ -1986,7 +2171,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <canvas id="orderSizeDistributionChart"></canvas>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-marketing" class="dashboard-section" data-group="marketing">
@@ -1996,6 +2181,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="Check whether paid traffic is paying back" data-sk="Skontroluj, ci sa plateny traffic vracia">Check whether paid traffic is paying back</h2>
                 <p class="section-copy" data-en="This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense." data-sk="Tu overujes efektivitu spendu, kvalitu kampani a ci akvizicia stale dava ekonomicky zmysel.">This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense.</p>
             </div>
+            {render_period_switcher("section-marketing", compact=True)}
         </div>
         """
 
@@ -3613,7 +3799,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
@@ -4471,7 +4657,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-geography" class="dashboard-section" data-group="geography">
@@ -4481,6 +4667,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="See where your strongest markets are" data-sk="Pozri, ktore trhy tahaju vysledky">See where your strongest markets are</h2>
                 <p class="section-copy" data-en="Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming." data-sk="Rozdelenie podla krajin a miest ukaze, kde sa koncentruje obrat, kde je silna marza a kde je priestor na rast.">Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming.</p>
             </div>
+            {render_period_switcher("section-geography", compact=True)}
         </div>
         """
 
@@ -4624,7 +4811,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-customer-structure" class="dashboard-section" data-group="customers">
@@ -4634,6 +4821,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="Look at who your revenue depends on" data-sk="Pozri, od koho zavisi tvoj obrat">Look at who your revenue depends on</h2>
                 <p class="section-copy" data-en="This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers." data-sk="Tato sekcia ukaze, ci rast taha B2B, B2C alebo mala skupina silnych zakaznikov.">This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers.</p>
             </div>
+            {render_period_switcher("section-customer-structure", compact=True)}
         </div>
         """
 
@@ -4778,7 +4966,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-products" class="dashboard-section" data-group="products">
@@ -4788,6 +4976,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="Find what deserves more budget and focus" data-sk="Zisti, ktore produkty si zasluzia viac rozpoctu a pozornosti">Find what deserves more budget and focus</h2>
                 <p class="section-copy" data-en="Use product margins and product trend tables to separate hero SKUs from low-value volume." data-sk="Pomocou produktovych marzi a trendov oddelis hero SKU od objemu s nizkou hodnotou.">Use product margins and product trend tables to separate hero SKUs from low-value volume.</p>
             </div>
+            {render_period_switcher("section-products", compact=True)}
         </div>
         """
 
@@ -4895,7 +5084,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
         </section>
 
         <section id="section-operations" class="dashboard-section" data-group="operations">
@@ -4905,6 +5094,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <h2 class="section-heading" data-en="Inspect execution quality, timing, and friction points" data-sk="Skontroluj kvalitu exekucie, timing a friction pointy">Inspect execution quality, timing, and friction points</h2>
                 <p class="section-copy" data-en="This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath." data-sk="Tato sekcia sluzi na hlbsiu diagnostiku, ked sa pohnu hlavne KPI a potrebujes vediet, co sa pod nimi operativne zmenilo.">This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath.</p>
             </div>
+            {render_period_switcher("section-operations", compact=True)}
         </div>
         """
 
@@ -5906,6 +6096,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             }});
         }}
 
+        function resolveMetricGroupFromHash() {{
+            const hash = window.location.hash || '';
+            if (!hash || hash === '#') {{
+                return '';
+            }}
+
+            const target = document.querySelector(hash);
+            if (!target || !target.classList.contains('dashboard-section')) {{
+                return '';
+            }}
+
+            return target.dataset.group || 'all';
+        }}
+
         document.addEventListener('DOMContentLoaded', () => {{
             document.querySelectorAll('#langSwitch button[data-lang]').forEach((btn) => {{
                 btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
@@ -5917,8 +6121,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 btn.addEventListener('click', () => renderCfoTopKpis(btn.dataset.window || 'monthly'));
             }});
             applyLanguage(currentLang);
-            applyMetricGroup(localStorage.getItem('reportMetricGroup') || 'all');
+            applyMetricGroup(resolveMetricGroupFromHash() || localStorage.getItem('reportMetricGroup') || 'all');
             renderCfoTopKpis(cfoTopActiveWindow);
+        }});
+
+        window.addEventListener('hashchange', () => {{
+            const nextGroup = resolveMetricGroupFromHash();
+            if (nextGroup) {{
+                applyMetricGroup(nextGroup);
+            }}
         }});
 
         // Collapsible table functionality
@@ -12579,7 +12790,3 @@ TĂ­m Vevo''',
 """
 
     return _fix_common_mojibake(html_content)
-
-
-
-

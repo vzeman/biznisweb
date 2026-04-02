@@ -346,17 +346,25 @@ class BizniWebExporter:
         api_token: str,
         project_name: str = DEFAULT_PROJECT,
         output_tag: str = "",
+        artifact_subdir: str = "",
+        enable_period_bundle: bool = True,
     ):
         """Initialize the exporter with API credentials"""
+        self.api_url = api_url
+        self.api_token = api_token
         self.project_name = project_name
         self.output_tag = sanitize_output_tag(output_tag)
+        normalized_subdir = str(artifact_subdir or "").strip().strip("/\\")
+        self.artifact_subdir = normalized_subdir
+        self.enable_period_bundle = enable_period_bundle
         self.reporting_defaults = resolve_reporting_defaults(project_name, load_project_settings(project_name))
-        self.data_dir = Path("data") / project_name
+        self.project_root_dir = Path("data") / project_name
+        self.data_dir = self.project_root_dir / normalized_subdir if normalized_subdir else self.project_root_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         # Share project data directory with optional ad clients for cache isolation.
         os.environ["REPORT_PROJECT"] = project_name
-        os.environ["REPORT_DATA_DIR"] = str(self.data_dir.resolve())
+        os.environ["REPORT_DATA_DIR"] = str(self.project_root_dir.resolve())
         os.environ["REPORT_OUTPUT_TAG"] = self.output_tag
 
         transport = RequestsHTTPTransport(
@@ -369,10 +377,10 @@ class BizniWebExporter:
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
         self.fb_client = FacebookAdsClient()
         self.google_ads_client = GoogleAdsClient()
-        self.cache_dir = self.data_dir / 'cache'
+        self.cache_dir = self.project_root_dir / 'cache'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.weather_settings = copy.deepcopy(WEATHER_SETTINGS)
-        self.weather_cache_dir = self.data_dir / 'weather_cache'
+        self.weather_cache_dir = self.project_root_dir / 'weather_cache'
         self.weather_cache_dir.mkdir(parents=True, exist_ok=True)
         self.weather_client = None
         if self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
@@ -390,6 +398,166 @@ class BizniWebExporter:
         if not self.output_tag:
             return path
         return path.with_name(f"{path.stem}__{self.output_tag}{path.suffix}")
+
+    @staticmethod
+    def _order_purchase_datetime(order: Dict[str, Any]) -> Optional[datetime]:
+        raw_value = order.get('pur_date') or order.get('purchase_date') or order.get('last_change')
+        if not raw_value:
+            return None
+        parsed = pd.to_datetime(raw_value, errors='coerce')
+        if pd.isna(parsed):
+            return None
+        return parsed.to_pydatetime()
+
+    def _filter_orders_by_range(
+        self,
+        orders: List[Dict[str, Any]],
+        date_from: datetime,
+        date_to: datetime,
+    ) -> List[Dict[str, Any]]:
+        start_date = date_from.date()
+        end_date = date_to.date()
+        filtered: List[Dict[str, Any]] = []
+        for order in orders:
+            purchase_dt = self._order_purchase_datetime(order)
+            if purchase_dt is None:
+                continue
+            if start_date <= purchase_dt.date() <= end_date:
+                filtered.append(order)
+        return filtered
+
+    @staticmethod
+    def _format_period_range_en(date_from: datetime, date_to: datetime) -> str:
+        return f"{date_from.strftime('%b %d, %Y')} - {date_to.strftime('%b %d, %Y')}"
+
+    @staticmethod
+    def _format_period_range_sk(date_from: datetime, date_to: datetime) -> str:
+        return f"{date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%d.%m.%Y')}"
+
+    def _build_period_variant_specs(
+        self,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> List[Dict[str, Any]]:
+        total_days = (date_to.date() - date_from.date()).days + 1
+        candidates: List[Tuple[str, int, str]] = [
+            ('7d', 7, '7D'),
+            ('30d', 30, '30D'),
+            ('90d', 90, '90D'),
+        ]
+        specs: List[Dict[str, Any]] = []
+        seen_ranges = set()
+
+        for key, days, label in candidates:
+            if total_days <= days:
+                continue
+            variant_from = max(date_from, date_to - timedelta(days=days - 1))
+            range_key = (variant_from.date().isoformat(), date_to.date().isoformat())
+            if range_key in seen_ranges:
+                continue
+            seen_ranges.add(range_key)
+            specs.append({
+                'key': key,
+                'label': label,
+                'date_from': variant_from,
+                'date_to': date_to,
+                'range_en': self._format_period_range_en(variant_from, date_to),
+                'range_sk': self._format_period_range_sk(variant_from, date_to),
+            })
+
+        specs.append({
+            'key': 'full',
+            'label': 'FULL',
+            'date_from': date_from,
+            'date_to': date_to,
+            'range_en': self._format_period_range_en(date_from, date_to),
+            'range_sk': self._format_period_range_sk(date_from, date_to),
+        })
+        return specs
+
+    def _build_period_switcher_payload(
+        self,
+        *,
+        current_key: str,
+        current_path: Path,
+        specs: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        options = []
+        current_spec = next((spec for spec in specs if spec['key'] == current_key), specs[-1])
+        for spec in specs:
+            href = os.path.relpath(spec['report_path'], start=current_path.parent).replace("\\", "/")
+            options.append({
+                'key': spec['key'],
+                'label': spec['label'],
+                'href': href,
+                'range_en': spec['range_en'],
+                'range_sk': spec['range_sk'],
+            })
+        return {
+            'label_en': 'Report period',
+            'label_sk': 'Obdobie reportu',
+            'current_key': current_key,
+            'current_range_en': current_spec['range_en'],
+            'current_range_sk': current_spec['range_sk'],
+            'options': options,
+        }
+
+    def _build_period_switcher_bundle(
+        self,
+        orders: List[Dict[str, Any]],
+        date_from: datetime,
+        date_to: datetime,
+    ) -> Optional[Dict[str, Any]]:
+        if not self.enable_period_bundle or not self.output_tag:
+            return None
+
+        specs = self._build_period_variant_specs(date_from, date_to)
+        if len(specs) <= 1:
+            return None
+
+        main_report_path = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
+        bundle_root = Path("_periods") / main_report_path.stem
+
+        for spec in specs:
+            if spec['key'] == 'full':
+                spec['report_path'] = main_report_path
+                continue
+
+            artifact_subdir = str(bundle_root / spec['key'])
+            child_exporter = BizniWebExporter(
+                self.api_url,
+                self.api_token,
+                project_name=self.project_name,
+                output_tag=self.output_tag,
+                artifact_subdir=artifact_subdir,
+                enable_period_bundle=False,
+            )
+            spec['report_path'] = child_exporter.output_path(
+                f"report_{spec['date_from'].strftime('%Y%m%d')}-{spec['date_to'].strftime('%Y%m%d')}.html"
+            )
+            spec['exporter'] = child_exporter
+
+        for spec in specs:
+            if spec['key'] == 'full':
+                continue
+            filtered_orders = self._filter_orders_by_range(orders, spec['date_from'], spec['date_to'])
+            switcher_payload = self._build_period_switcher_payload(
+                current_key=spec['key'],
+                current_path=spec['report_path'],
+                specs=specs,
+            )
+            spec['exporter'].export_to_csv(
+                filtered_orders,
+                spec['date_from'],
+                spec['date_to'],
+                period_switcher=switcher_payload,
+            )
+
+        return self._build_period_switcher_payload(
+            current_key='full',
+            current_path=main_report_path,
+            specs=specs,
+        )
 
     def _belongs_to_active_output_variant(self, file: Path) -> bool:
         if self.output_tag:
@@ -1546,7 +1714,13 @@ class BizniWebExporter:
             # Create data directory if it doesn't exist
             data_dir.mkdir(exist_ok=True)
     
-    def export_to_csv(self, orders: List[Dict[str, Any]], date_from: datetime, date_to: datetime) -> str:
+    def export_to_csv(
+        self,
+        orders: List[Dict[str, Any]],
+        date_from: datetime,
+        date_to: datetime,
+        period_switcher: Dict[str, Any] = None,
+    ) -> str:
         """Export orders to CSV file"""
         # Clean up old data files first
         print("Cleaning up old data files...")
@@ -1554,6 +1728,8 @@ class BizniWebExporter:
 
         # Safety dedup for long historical runs / cursor overlap edge cases.
         orders = self.deduplicate_orders(orders)
+        if period_switcher is None:
+            period_switcher = self._build_period_switcher_bundle(orders, date_from, date_to)
 
         source_health: Dict[str, Any] = {
             "project": self.project_name,
@@ -1938,6 +2114,7 @@ class BizniWebExporter:
             consistency_checks=consistency_checks,
             cfo_kpi_payload=cfo_kpi_payload,
             source_health=source_health,
+            period_switcher=period_switcher,
         )
         html_filename = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
         # Write with UTF-8 BOM to avoid mojibake when a server/browser mis-detects charset
