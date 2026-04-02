@@ -24,6 +24,7 @@ from weather_client import WeatherClient
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
     apply_project_runtime,
+    build_cfo_kpi_payload,
     load_project_env,
     load_project_runtime,
     load_project_settings,
@@ -1875,6 +1876,11 @@ class BizniWebExporter:
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(df, date_agg, clv_return_time_analysis)
         consistency_checks = self.validate_metric_consistency(date_agg, financial_metrics, clv_return_time_analysis)
+        cfo_kpi_payload = build_cfo_kpi_payload(
+            date_agg=date_agg,
+            export_df=df,
+            fixed_daily_cost_eur=float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70")),
+        )
 
         # Cost Per Order analysis with campaign attribution
         # Use the same revenue source as financial summary to keep ROAS definitions aligned.
@@ -1930,6 +1936,7 @@ class BizniWebExporter:
             fb_dow_stats=fb_dow_stats,
             ltv_by_date=ltv_by_date,
             consistency_checks=consistency_checks,
+            cfo_kpi_payload=cfo_kpi_payload,
             source_health=source_health,
         )
         html_filename = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")

@@ -6,7 +6,7 @@ Generates beautiful HTML reports with charts and tables
 
 import pandas as pd
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
 from html import escape
 
@@ -78,6 +78,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                           fb_dow_stats: list = None,
                           ltv_by_date: pd.DataFrame = None,
                           consistency_checks: dict = None,
+                          cfo_kpi_payload: dict = None,
                           source_health: dict = None) -> str:
     """
     Generate a complete HTML report with charts and tables
@@ -355,6 +356,57 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>
     """
+
+    cfo_top_block_html = ""
+    if cfo_kpi_payload and cfo_kpi_payload.get('windows'):
+        company_margin_label_en = next(
+            (
+                metric.get('label', 'Company Margin (incl. fixed)')
+                for metric in cfo_kpi_payload.get('metric_defs', [])
+                if metric.get('key') == 'company_margin_with_fixed'
+            ),
+            'Company Margin (incl. fixed)',
+        )
+        cfo_top_cards = [
+            ("revenue", "Revenue", "Obrat"),
+            ("profit", "Profit", "Zisk"),
+            ("orders", "Orders", "Objednavky"),
+            ("aov", "AOV", "Priemerna hodnota objednavky"),
+            ("cac", "CAC", "CAC"),
+            ("roas", "ROAS", "ROAS"),
+            ("pre_ad_contribution_margin", "Pre-Ad Contribution Margin", "Pre-Ad kontribucna marza"),
+            ("post_ad_margin", "Post-Ad Margin", "Post-Ad marza"),
+            ("company_margin_with_fixed", company_margin_label_en, "Firemna marza (vratane fixu)"),
+        ]
+        cfo_top_cards_html = "".join(
+            f"""
+            <div class="cfo-top-card" data-metric="{metric_key}">
+                <div class="cfo-top-card-title" data-en="{escape(title_en)}" data-sk="{escape(title_sk)}">{escape(title_en)}</div>
+                <div class="cfo-top-card-value"></div>
+                <div class="cfo-top-card-period"></div>
+                <div class="cfo-top-card-comparisons"></div>
+            </div>"""
+            for metric_key, title_en, title_sk in cfo_top_cards
+        )
+        cfo_top_block_html = f"""
+        <div class="cfo-top-panel">
+            <div class="cfo-top-head">
+                <div class="cfo-top-copy">
+                    <div class="section-kicker" data-en="CFO KPIs" data-sk="CFO KPI">CFO KPIs</div>
+                    <h3 class="cfo-top-heading" data-en="Executive metrics first" data-sk="Najprv exekutivne metriky">Executive metrics first</h3>
+                    <p class="cfo-top-desc" data-en="This block uses the same core KPI logic as the CFO dashboard. Start here before you go into deeper charts and detailed tables." data-sk="Tento blok pouziva rovnaku logiku hlavnych KPI ako CFO dashboard. Zacni tu skor, nez pojdes do hlbsich grafov a detailnych tabuliek.">This block uses the same core KPI logic as the CFO dashboard. Start here before you go into deeper charts and detailed tables.</p>
+                </div>
+                <div class="cfo-top-window-switch" id="cfoTopWindowSwitch">
+                    <button type="button" class="cfo-top-window-btn" data-window="daily" data-en="Daily" data-sk="Denne">Daily</button>
+                    <button type="button" class="cfo-top-window-btn" data-window="weekly" data-en="Weekly" data-sk="Tyzdenne">Weekly</button>
+                    <button type="button" class="cfo-top-window-btn" data-window="monthly" data-en="Monthly" data-sk="Mesacne">Monthly</button>
+                </div>
+            </div>
+            <div class="cfo-top-grid" id="cfoTopGrid">
+                {cfo_top_cards_html}
+            </div>
+        </div>
+        """
 
     new_ret_dates = []
     new_ret_new_revenue = []
@@ -785,6 +837,136 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             color: #b91c1c;
         }}
 
+        .cfo-top-panel {{
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255, 251, 245, 0.98) 100%);
+            border-radius: 20px;
+            padding: 20px 20px 18px;
+            margin-bottom: 22px;
+            border: 1px solid rgba(251, 146, 60, 0.18);
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+        }}
+
+        .cfo-top-head {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 14px;
+        }}
+
+        .cfo-top-heading {{
+            margin: 0 0 6px 0;
+            color: var(--ink);
+            font-size: 1.25rem;
+            letter-spacing: -0.02em;
+        }}
+
+        .cfo-top-desc {{
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            max-width: 760px;
+        }}
+
+        .cfo-top-window-switch {{
+            display: inline-flex;
+            gap: 6px;
+            background: #fff7ed;
+            border: 1px solid rgba(251, 146, 60, 0.24);
+            border-radius: 12px;
+            padding: 4px;
+            flex-wrap: wrap;
+        }}
+
+        .cfo-top-window-btn {{
+            border: 0;
+            background: transparent;
+            color: #9a3412;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border-radius: 9px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }}
+
+        .cfo-top-window-btn.active {{
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+        }}
+
+        .cfo-top-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 12px;
+        }}
+
+        .cfo-top-card {{
+            background: rgba(255, 255, 255, 0.94);
+            border-radius: 16px;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            padding: 14px 14px 12px;
+            min-height: 142px;
+        }}
+
+        .cfo-top-card-title {{
+            color: #64748b;
+            font-size: 0.73rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }}
+
+        .cfo-top-card-value {{
+            color: #0f172a;
+            font-size: 2rem;
+            line-height: 1.04;
+            letter-spacing: -0.03em;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }}
+
+        .cfo-top-card-period {{
+            color: #94a3b8;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }}
+
+        .cfo-top-card-comparisons {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }}
+
+        .cfo-top-cmp-row {{
+            font-size: 0.8rem;
+            line-height: 1.3;
+            color: #64748b;
+        }}
+
+        .cfo-top-cmp-row .delta {{
+            font-weight: 800;
+            margin-right: 5px;
+        }}
+
+        .cfo-top-cmp-row .tone-good {{
+            color: #059669;
+        }}
+
+        .cfo-top-cmp-row .tone-bad {{
+            color: #dc2626;
+        }}
+
+        .cfo-top-cmp-row .tone-neutral {{
+            color: #64748b;
+        }}
+
         .summary-cards {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -1192,6 +1374,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 align-items: flex-start;
             }}
 
+            .cfo-top-head {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+
+            .cfo-top-window-switch {{
+                width: 100%;
+            }}
+
             .chart-container,
             .table-container {{
                 padding: 16px 14px;
@@ -1251,6 +1442,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="section-copy" data-en="Start here if you want the fastest possible read of revenue, profit, orders and the most important risks." data-sk="Zacni tu, ak chces najrychlejsie pochopit obrat, zisk, objednavky a najdolezitejsie rizika.">Start here if you want the fastest possible read of revenue, profit, orders and the most important risks.</p>
             </div>
         </div>
+        {cfo_top_block_html}
         {data_quality_section}
         {quick_insights_html}
         {report_guide_html}
@@ -5145,6 +5337,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     <script>
         let currentLang = localStorage.getItem('reportLang') || 'en';
         let toggleAllStateExpanded = false;
+        let cfoTopActiveWindow = (JSON.parse(localStorage.getItem('reportCfoTopWindow') || 'null')) || (({json.dumps(cfo_kpi_payload.get('default_window') if cfo_kpi_payload else 'monthly')}) || 'monthly');
+        const CFO_TOP_KPI = {json.dumps(cfo_kpi_payload or {}, ensure_ascii=False)};
 
         const I18N_SK = {{
             "Expand All Tables": "Rozbalit vsetky tabulky",
@@ -5505,6 +5699,147 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             }});
         }}
 
+        const CFO_TOP_WINDOW_LABELS = {{
+            daily: {{ en: 'Last day', sk: 'Posledny den' }},
+            weekly: {{ en: 'Last 7 days', sk: 'Poslednych 7 dni' }},
+            monthly: {{ en: 'Last 30 days', sk: 'Poslednych 30 dni' }}
+        }};
+
+        const CFO_TOP_COMPARISON_LABELS = {{
+            daily: {{
+                vs_prev_day: {{ en: 'vs previous day', sk: 'vs predchadzajuci den' }},
+                vs_week: {{ en: 'vs same weekday last week', sk: 'vs rovnaky den minuly tyzden' }},
+                vs_month: {{ en: 'vs same day last month', sk: 'vs rovnaky den minuly mesiac' }}
+            }},
+            weekly: {{
+                vs_prev_7d: {{ en: 'vs previous 7d', sk: 'vs predchadzajucich 7 dni' }},
+                vs_month: {{ en: 'vs same week last month', sk: 'vs rovnaky tyzden minuly mesiac' }},
+                vs_year: {{ en: 'vs same week last year', sk: 'vs rovnaky tyzden minuly rok' }}
+            }},
+            monthly: {{
+                vs_prev_30d: {{ en: 'vs previous 30d', sk: 'vs predchadzajucich 30 dni' }},
+                vs_year: {{ en: 'vs same month last year', sk: 'vs rovnaky mesiac minuly rok' }}
+            }}
+        }};
+
+        const CFO_TOP_COMPARISON_ORDER = {{
+            daily: ['vs_prev_day', 'vs_week', 'vs_month'],
+            weekly: ['vs_prev_7d', 'vs_month', 'vs_year'],
+            monthly: ['vs_prev_30d', 'vs_year']
+        }};
+
+        function cfoTopLocale() {{
+            return currentLang === 'sk' ? 'sk-SK' : 'en-US';
+        }}
+
+        function cfoTopFormatMetricValue(metricKey, rawValue) {{
+            if (rawValue === null || typeof rawValue === 'undefined' || !Number.isFinite(Number(rawValue))) {{
+                return 'N/A';
+            }}
+
+            const value = Number(rawValue);
+            if (metricKey === 'orders') {{
+                return Math.round(value).toLocaleString(cfoTopLocale());
+            }}
+            if (metricKey === 'roas') {{
+                return `${{value.toFixed(2)}}x`;
+            }}
+            if (metricKey.includes('margin')) {{
+                return `${{value.toFixed(2)}}%`;
+            }}
+
+            return new Intl.NumberFormat(cfoTopLocale(), {{
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }}).format(value);
+        }}
+
+        function cfoTopMetricDirection(metricKey) {{
+            const defs = Array.isArray(CFO_TOP_KPI.metric_defs) ? CFO_TOP_KPI.metric_defs : [];
+            const match = defs.find((item) => item && item.key === metricKey);
+            return match && match.direction ? match.direction : 'up';
+        }}
+
+        function cfoTopComparisonTone(metricKey, deltaValue) {{
+            if (deltaValue === null || typeof deltaValue === 'undefined' || !Number.isFinite(Number(deltaValue))) {{
+                return 'tone-neutral';
+            }}
+
+            const delta = Number(deltaValue);
+            if (Math.abs(delta) < 0.3) {{
+                return 'tone-neutral';
+            }}
+
+            const direction = cfoTopMetricDirection(metricKey);
+            const adjusted = direction === 'down' ? -delta : delta;
+            if (adjusted > 0) return 'tone-good';
+            if (adjusted < 0) return 'tone-bad';
+            return 'tone-neutral';
+        }}
+
+        function cfoTopDeltaPrefix(toneClass, deltaValue) {{
+            if (deltaValue === null || typeof deltaValue === 'undefined' || !Number.isFinite(Number(deltaValue))) {{
+                return 'N/A';
+            }}
+            if (toneClass === 'tone-neutral') {{
+                return currentLang === 'sk' ? 'STABLE' : 'FLAT';
+            }}
+            if (toneClass === 'tone-good') {{
+                return currentLang === 'sk' ? 'UP' : 'UP';
+            }}
+            return currentLang === 'sk' ? 'DOWN' : 'DOWN';
+        }}
+
+        function renderCfoTopKpis(windowKey) {{
+            if (!CFO_TOP_KPI || !CFO_TOP_KPI.windows) return;
+
+            cfoTopActiveWindow = windowKey || CFO_TOP_KPI.default_window || 'monthly';
+            localStorage.setItem('reportCfoTopWindow', JSON.stringify(cfoTopActiveWindow));
+
+            document.querySelectorAll('.cfo-top-window-btn').forEach((btn) => {{
+                btn.classList.toggle('active', btn.dataset.window === cfoTopActiveWindow);
+            }});
+
+            const windowData = CFO_TOP_KPI.windows[cfoTopActiveWindow] || {{}};
+            const metricValues = windowData.metrics || {{}};
+            const comparisonMap = (CFO_TOP_KPI.comparisons && CFO_TOP_KPI.comparisons[cfoTopActiveWindow]) || {{}};
+            const periodLabelDef = CFO_TOP_WINDOW_LABELS[cfoTopActiveWindow] || CFO_TOP_WINDOW_LABELS.monthly;
+            const periodLabel = currentLang === 'sk' ? periodLabelDef.sk : periodLabelDef.en;
+            const comparisonKeys = CFO_TOP_COMPARISON_ORDER[cfoTopActiveWindow] || [];
+
+            document.querySelectorAll('.cfo-top-card').forEach((card) => {{
+                const metricKey = card.dataset.metric;
+                if (!metricKey) return;
+
+                const valueEl = card.querySelector('.cfo-top-card-value');
+                const periodEl = card.querySelector('.cfo-top-card-period');
+                const comparisonsEl = card.querySelector('.cfo-top-card-comparisons');
+                if (!valueEl || !periodEl || !comparisonsEl) return;
+
+                valueEl.textContent = cfoTopFormatMetricValue(metricKey, metricValues[metricKey]);
+                periodEl.textContent = periodLabel;
+                comparisonsEl.innerHTML = '';
+
+                const metricComparisons = comparisonMap[metricKey] || {{}};
+                comparisonKeys.forEach((comparisonKey) => {{
+                    const deltaValue = metricComparisons[comparisonKey];
+                    const labelDef = (CFO_TOP_COMPARISON_LABELS[cfoTopActiveWindow] || {{}})[comparisonKey];
+                    const labelText = labelDef ? (currentLang === 'sk' ? labelDef.sk : labelDef.en) : comparisonKey;
+                    const toneClass = cfoTopComparisonTone(metricKey, deltaValue);
+                    const deltaText = (deltaValue === null || typeof deltaValue === 'undefined' || !Number.isFinite(Number(deltaValue)))
+                        ? 'N/A'
+                        : `${{cfoTopDeltaPrefix(toneClass, deltaValue)}} ${{Number(deltaValue) >= 0 ? '+' : ''}}${{Number(deltaValue).toFixed(1)}}%`;
+
+                    comparisonsEl.insertAdjacentHTML(
+                        'beforeend',
+                        `<div class="cfo-top-cmp-row"><span class="delta ${{toneClass}}">${{deltaText}}</span>${{labelText}}</div>`
+                    );
+                }});
+            }});
+        }}
+
         function applyLanguage(lang) {{
             currentLang = lang === 'sk' ? 'sk' : 'en';
             localStorage.setItem('reportLang', currentLang);
@@ -5536,6 +5871,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 '.quick-insight-title',
                 '.quick-insight-value',
                 '.quick-insight-desc',
+                '.cfo-top-heading',
+                '.cfo-top-desc',
+                '.cfo-top-card-title',
                 '.report-guide h3',
                 '.report-guide li',
                 '.metric-cheatsheet h3',
@@ -5550,6 +5888,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
             setToggleButtonLabel(toggleAllStateExpanded);
             translateChartLabels();
+            renderCfoTopKpis(cfoTopActiveWindow);
         }}
 
         function applyMetricGroup(group) {{
@@ -5574,8 +5913,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             document.querySelectorAll('.nav-group-btn').forEach((btn) => {{
                 btn.addEventListener('click', () => applyMetricGroup(btn.dataset.group));
             }});
+            document.querySelectorAll('.cfo-top-window-btn').forEach((btn) => {{
+                btn.addEventListener('click', () => renderCfoTopKpis(btn.dataset.window || 'monthly'));
+            }});
             applyLanguage(currentLang);
             applyMetricGroup(localStorage.getItem('reportMetricGroup') || 'all');
+            renderCfoTopKpis(cfoTopActiveWindow);
         }});
 
         // Collapsible table functionality

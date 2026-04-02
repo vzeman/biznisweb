@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-01
+Last updated: 2026-04-02
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -316,9 +316,28 @@ Bootstrap entrypoints:
     - one current VEVO test HTML remains for UI review.
 
 Next exact step:
-- Review `data/vevo/report_20260301-20260331__test.html` visually and decide which parts of the new dashboard shell to keep:
-  - sidebar structure,
-  - card/chart spacing,
-  - palette,
-  - section grouping,
-  - mobile behavior.
+- Review `data/vevo/report_20260301-20260331__test.html` visually and decide whether the new top CFO KPI band should fully replace the old summary-card-first entry flow or remain as a separate executive layer above it.
+
+### 2026-04-02
+- Added reusable CFO KPI payload builder in `reporting_core/cfo_kpis.py` so the main report can reuse the same executive KPI logic as the standalone CFO dashboard.
+- Wired `export_orders.py` to compute `cfo_kpi_payload` from the existing report data (`date_agg` + exported order rows) without changing the underlying financial calculations.
+- Injected a new top-of-report CFO KPI panel into `html_report_generator.py`:
+  - placed above the old summary cards,
+  - uses the same KPI set as the CFO dashboard,
+  - supports `Daily / Weekly / Monthly` switching,
+  - respects the existing SK/EN language switch,
+  - uses the new dashboard shell styling instead of the legacy card layout.
+- Verified syntax with:
+  - `python -m py_compile export_orders.py html_report_generator.py reporting_core\\__init__.py reporting_core\\cfo_kpis.py`
+- Regenerated only the VEVO March test artifact (no email):
+  - `data/vevo/report_20260301-20260331__test.html`
+- Verified the generated HTML contains the new executive block and embedded KPI payload (`CFO_TOP_KPI`) with the expected metrics:
+  - Revenue
+  - Profit
+  - Orders
+  - AOV
+  - CAC
+  - ROAS
+  - Pre-Ad Contribution Margin
+  - Post-Ad Margin
+  - Company Margin (incl. fixed)
