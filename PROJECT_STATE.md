@@ -300,3 +300,25 @@ Bootstrap entrypoints:
     - language switch texts with SK+EN variants,
     - user-friendly KPI cheat-sheet block,
     - updated Delta KPI labels.
+
+- Sidebar/menu test track for main VEVO reporting completed on 2026-04-02:
+  - redesigned the main report shell in `html_report_generator.py` to a dashboard-style layout with:
+    - sticky left sidebar,
+    - metric-group menu (`Overview`, `Revenue & profitability`, `Customers & retention`, `Marketing & ads`, `Geography`, `Products`, `Operations & diagnostics`),
+    - section-level group switching without changing any business calculations,
+    - warmer executive dashboard styling closer to modern admin dashboards.
+  - wrapped the long report into navigable dashboard sections while preserving existing charts/tables and SK/EN language switching,
+  - added client-side section filter persistence via `localStorage` (`reportMetricGroup`),
+  - generated only one stable VEVO March test artifact:
+    - `data/vevo/report_20260301-20260331__test.html`
+  - cleaned previous VEVO/ROY tagged test artifacts (`__lang_*`, `__ui_*`, `__ui_test`, etc.) so only:
+    - original untagged reports remain,
+    - one current VEVO test HTML remains for UI review.
+
+Next exact step:
+- Review `data/vevo/report_20260301-20260331__test.html` visually and decide which parts of the new dashboard shell to keep:
+  - sidebar structure,
+  - card/chart spacing,
+  - palette,
+  - section grouping,
+  - mobile behavior.

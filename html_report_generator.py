@@ -417,15 +417,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {{
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --card-border: #e2e8f0;
+            --bg: #f6efe5;
+            --card: rgba(255, 252, 247, 0.94);
+            --card-border: rgba(234, 222, 205, 0.9);
             --ink: #0f172a;
             --muted: #64748b;
             --grid: rgba(148, 163, 184, 0.22);
             --profit: #10b981;
             --cost: #ef4444;
-            --accent: #2563eb;
+            --accent: #f97316;
+            --accent-soft: rgba(249, 115, 22, 0.12);
+            --sidebar-ink: #6b3f14;
+            --sidebar-muted: #8c6d52;
+            --shadow-soft: 0 10px 30px rgba(120, 82, 38, 0.08);
         }}
 
         * {{
@@ -437,26 +441,153 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         body {{
             font-family: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background:
-                radial-gradient(circle at 15% 0%, rgba(37, 99, 235, 0.08), transparent 35%),
-                radial-gradient(circle at 90% 5%, rgba(14, 165, 233, 0.08), transparent 28%),
+                radial-gradient(circle at 10% 0%, rgba(249, 115, 22, 0.12), transparent 32%),
+                radial-gradient(circle at 90% 5%, rgba(251, 191, 36, 0.14), transparent 30%),
                 var(--bg);
             min-height: 100vh;
             padding: 22px;
             color: var(--ink);
         }}
 
-        .container {{
-            max-width: 1680px;
+        .dashboard-shell {{
+            max-width: 1820px;
             margin: 0 auto;
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+            gap: 24px;
+            align-items: start;
+        }}
+
+        .dashboard-sidebar {{
+            position: sticky;
+            top: 20px;
+            background: linear-gradient(180deg, rgba(255, 247, 237, 0.98), rgba(255, 252, 247, 0.96));
+            border: 1px solid rgba(234, 222, 205, 0.95);
+            border-radius: 24px;
+            padding: 22px 18px;
+            box-shadow: var(--shadow-soft);
+        }}
+
+        .sidebar-brand {{
+            padding-bottom: 18px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid rgba(234, 222, 205, 0.95);
+        }}
+
+        .sidebar-brand-kicker {{
+            color: var(--accent);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }}
+
+        .sidebar-brand-title {{
+            color: var(--sidebar-ink);
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }}
+
+        .sidebar-brand-subtitle {{
+            color: var(--sidebar-muted);
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }}
+
+        .sidebar-section-label {{
+            color: #9a7b5f;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 800;
+            margin: 18px 0 10px;
+        }}
+
+        .nav-group-list {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+
+        .nav-group-btn {{
+            width: 100%;
+            border: 1px solid transparent;
+            background: rgba(255, 255, 255, 0.72);
+            color: #7c5a39;
+            border-radius: 14px;
+            padding: 11px 13px;
+            text-align: left;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }}
+
+        .nav-group-btn:hover {{
+            transform: translateX(2px);
+            border-color: rgba(249, 115, 22, 0.24);
+            background: rgba(255, 255, 255, 0.92);
+        }}
+
+        .nav-group-btn.active {{
+            background: linear-gradient(135deg, #f97316, #fb923c);
+            border-color: rgba(249, 115, 22, 0.55);
+            color: #fff;
+            box-shadow: 0 8px 20px rgba(249, 115, 22, 0.24);
+        }}
+
+        .sidebar-note {{
+            margin-top: 20px;
+            padding: 14px 14px 12px;
+            border-radius: 16px;
+            background: rgba(249, 115, 22, 0.08);
+            border: 1px solid rgba(249, 115, 22, 0.18);
+        }}
+
+        .sidebar-note-title {{
+            color: #9a3412;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }}
+
+        .sidebar-note-text {{
+            color: #7c5a39;
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }}
+
+        .dashboard-main {{
+            min-width: 0;
+        }}
+
+        .container {{
+            max-width: none;
         }}
 
         .header {{
             background: var(--card);
             border: 1px solid var(--card-border);
-            border-radius: 18px;
+            border-radius: 24px;
             padding: 32px 34px 22px;
             margin-bottom: 22px;
-            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+            box-shadow: var(--shadow-soft);
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .header::before {{
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 5px;
+            background: linear-gradient(90deg, #f97316, #fb923c, #fdba74);
         }}
 
         .header h1 {{
@@ -515,8 +646,62 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         }}
 
         .lang-switch button.active {{
-            background: #2563eb;
+            background: #f97316;
             color: #fff;
+        }}
+
+        .dashboard-section {{
+            margin-bottom: 22px;
+        }}
+
+        .dashboard-section.is-hidden {{
+            display: none;
+        }}
+
+        .section-intro {{
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 0 4px;
+            margin: 4px 0 16px;
+        }}
+
+        .section-intro-copy {{
+            max-width: 980px;
+        }}
+
+        .section-kicker {{
+            color: var(--accent);
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 800;
+            margin-bottom: 7px;
+        }}
+
+        .section-heading {{
+            color: #1f2937;
+            font-size: clamp(1.55rem, 2.4vw, 2.2rem);
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }}
+
+        .section-copy {{
+            color: #6b7280;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }}
+
+        .container h2[style*="color: white"],
+        .container h3[style*="color: white"] {{
+            color: #1f2937 !important;
+        }}
+
+        .container p[style*="color: white"] {{
+            color: #6b7280 !important;
+            opacity: 1 !important;
         }}
 
         .data-quality-banner {{
@@ -964,7 +1149,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         }}
 
         .expand-all-btn {{
-            background: #2563eb;
+            background: linear-gradient(135deg, #f97316, #fb923c);
             color: white;
             border: none;
             padding: 9px 16px;
@@ -978,7 +1163,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         }}
 
         .expand-all-btn:hover {{
-            background: #1d4ed8;
+            background: linear-gradient(135deg, #ea580c, #f97316);
             transform: translateY(-1px);
         }}
 
@@ -987,8 +1172,24 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 padding: 14px;
             }}
 
+            .dashboard-shell {{
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }}
+
+            .dashboard-sidebar {{
+                position: static;
+                order: -1;
+                padding: 18px 16px;
+            }}
+
             .header {{
                 padding: 24px 20px 18px;
+            }}
+
+            .section-intro {{
+                flex-direction: column;
+                align-items: flex-start;
             }}
 
             .chart-container,
@@ -1003,6 +1204,32 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     </style>
 </head>
 <body>
+    <div class="dashboard-shell">
+        <aside class="dashboard-sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-kicker" data-en="Test dashboard" data-sk="Test dashboard">Test dashboard</div>
+                <div class="sidebar-brand-title" data-en="Navigation & metric groups" data-sk="Navigacia a skupiny metrik">Navigation & metric groups</div>
+                <div class="sidebar-brand-subtitle" data-en="Switch between business views instead of scrolling through one long wall of charts." data-sk="Prepni sa medzi business pohladmi namiesto dlheho scrollovania cez vsetky grafy.">Switch between business views instead of scrolling through one long wall of charts.</div>
+            </div>
+
+            <div class="sidebar-section-label" data-en="Metric groups" data-sk="Skupiny metrik">Metric groups</div>
+            <div class="nav-group-list" id="metricGroupNav">
+                <button type="button" class="nav-group-btn active" data-group="all" data-en="All sections" data-sk="Vsetky sekcie">All sections</button>
+                <button type="button" class="nav-group-btn" data-group="overview" data-en="Overview" data-sk="Prehlad">Overview</button>
+                <button type="button" class="nav-group-btn" data-group="business" data-en="Revenue & profitability" data-sk="Obrat a ziskovost">Revenue & profitability</button>
+                <button type="button" class="nav-group-btn" data-group="customers" data-en="Customers & retention" data-sk="Zakaznici a retencia">Customers & retention</button>
+                <button type="button" class="nav-group-btn" data-group="marketing" data-en="Marketing & ads" data-sk="Marketing a reklama">Marketing & ads</button>
+                <button type="button" class="nav-group-btn" data-group="geography" data-en="Geography" data-sk="Geografia">Geography</button>
+                <button type="button" class="nav-group-btn" data-group="products" data-en="Products" data-sk="Produkty">Products</button>
+                <button type="button" class="nav-group-btn" data-group="operations" data-en="Operations & diagnostics" data-sk="Operativa a diagnostika">Operations & diagnostics</button>
+            </div>
+
+            <div class="sidebar-note">
+                <div class="sidebar-note-title" data-en="Read this first" data-sk="Najprv si pozri toto">Read this first</div>
+                <div class="sidebar-note-text" data-en="Start with Overview, then switch to Revenue & profitability, and only then inspect Marketing or Operations if something looks off." data-sk="Zacni sekciou Prehlad, potom otvor Obrat a ziskovost, a az potom kontroluj Marketing alebo Operativu, ak nieco vyzera zle.">Start with Overview, then switch to Revenue & profitability, and only then inspect Marketing or Operations if something looks off.</div>
+            </div>
+        </aside>
+        <main class="dashboard-main">
     <div class="container">
         <div class="header">
             <h1>{report_title}</h1>
@@ -1015,6 +1242,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 </div>
             </div>
             <button id="toggleAllBtn" class="expand-all-btn" onclick="toggleAllTables(true)" style="margin-top: 15px;">Expand All Tables</button>
+        </div>
+        <section id="section-overview" class="dashboard-section" data-group="overview">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Overview" data-sk="Prehlad">Overview</div>
+                <h2 class="section-heading" data-en="Business snapshot in one place" data-sk="Biznis snapshot na jednom mieste">Business snapshot in one place</h2>
+                <p class="section-copy" data-en="Start here if you want the fastest possible read of revenue, profit, orders and the most important risks." data-sk="Zacni tu, ak chces najrychlejsie pochopit obrat, zisk, objednavky a najdolezitejsie rizika.">Start here if you want the fastest possible read of revenue, profit, orders and the most important risks.</p>
+            </div>
         </div>
         {data_quality_section}
         {quick_insights_html}
@@ -1331,6 +1566,18 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
     html_content += """
         </div>
+        </section>
+        """
+
+    html_content += """
+        <section id="section-business" class="dashboard-section" data-group="business">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Revenue & profitability" data-sk="Obrat a ziskovost">Revenue & profitability</div>
+                <h2 class="section-heading" data-en="See whether the business is actually making money" data-sk="Zisti, ci biznis realne zaraba">See whether the business is actually making money</h2>
+                <p class="section-copy" data-en="These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding." data-sk="Tieto grafy odpovedaju na CFO otazky ako prve: kolko prislo, kolko odislo a ci sa drzi marza.">These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding.</p>
+            </div>
+        </div>
         """
 
     if financial_metrics:
@@ -1493,6 +1740,16 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <h2 class="chart-title">Average Daily Revenue and Profit Trend</h2>
             <p class="chart-explanation">Cumulative daily averages in time: average revenue/day and average profit/loss per day from the start of selected period</p>
             <canvas id="avgDailyTrendChart"></canvas>
+        </div>
+        </section>
+
+        <section id="section-customers" class="dashboard-section" data-group="customers">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Customers & retention" data-sk="Zakaznici a retencia">Customers & retention</div>
+                <h2 class="section-heading" data-en="Understand who buys, who returns, and who churns" data-sk="Pochop, kto nakupuje, vracia sa a odchadza">Understand who buys, who returns, and who churns</h2>
+                <p class="section-copy" data-en="Use this section when you want to explain growth quality, not just headline revenue." data-sk="Tuto sekciu pouzi, ked chces vysvetlit kvalitu rastu, nielen samotny obrat.">Use this section when you want to explain growth quality, not just headline revenue.</p>
+            </div>
         </div>"""
 
     if new_vs_returning_revenue and new_vs_returning_revenue.get('daily') is not None and not new_vs_returning_revenue.get('daily').empty:
@@ -1536,6 +1793,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <p class="chart-explanation">Breakdown of orders by number of items purchased: shows how many orders contain 1, 2, 3, 4, or 5+ items</p>
             <canvas id="orderSizeDistributionChart"></canvas>
         </div>"""
+
+    html_content += """
+        </section>
+
+        <section id="section-marketing" class="dashboard-section" data-group="marketing">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Marketing & ads" data-sk="Marketing a reklama">Marketing & ads</div>
+                <h2 class="section-heading" data-en="Check whether paid traffic is paying back" data-sk="Skontroluj, ci sa plateny traffic vracia">Check whether paid traffic is paying back</h2>
+                <p class="section-copy" data-en="This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense." data-sk="Tu overujes efektivitu spendu, kvalitu kampani a ci akvizicia stale dava ekonomicky zmysel.">This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense.</p>
+            </div>
+        </div>
+        """
 
     # Add Facebook Ads Analytics section if data is available
     if fb_detailed_metrics or fb_campaigns:
@@ -4009,6 +4279,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
+    html_content += """
+        </section>
+
+        <section id="section-geography" class="dashboard-section" data-group="geography">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Geography" data-sk="Geografia">Geography</div>
+                <h2 class="section-heading" data-en="See where your strongest markets are" data-sk="Pozri, ktore trhy tahaju vysledky">See where your strongest markets are</h2>
+                <p class="section-copy" data-en="Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming." data-sk="Rozdelenie podla krajin a miest ukaze, kde sa koncentruje obrat, kde je silna marza a kde je priestor na rast.">Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming.</p>
+            </div>
+        </div>
+        """
+
     # Geographic Analysis
     if country_analysis is not None and not country_analysis.empty:
         html_content += """
@@ -4148,6 +4431,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </table>
             </div>
         </div>"""
+
+    html_content += """
+        </section>
+
+        <section id="section-customer-structure" class="dashboard-section" data-group="customers">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Customer structure" data-sk="Struktura zakaznikov">Customer structure</div>
+                <h2 class="section-heading" data-en="Look at who your revenue depends on" data-sk="Pozri, od koho zavisi tvoj obrat">Look at who your revenue depends on</h2>
+                <p class="section-copy" data-en="This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers." data-sk="Tato sekcia ukaze, ci rast taha B2B, B2C alebo mala skupina silnych zakaznikov.">This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers.</p>
+            </div>
+        </div>
+        """
 
     # B2B vs B2C Analysis
     if b2b_analysis is not None and not b2b_analysis.empty:
@@ -4290,6 +4586,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
+    html_content += """
+        </section>
+
+        <section id="section-products" class="dashboard-section" data-group="products">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Products" data-sk="Produkty">Products</div>
+                <h2 class="section-heading" data-en="Find what deserves more budget and focus" data-sk="Zisti, ktore produkty si zasluzia viac rozpoctu a pozornosti">Find what deserves more budget and focus</h2>
+                <p class="section-copy" data-en="Use product margins and product trend tables to separate hero SKUs from low-value volume." data-sk="Pomocou produktovych marzi a trendov oddelis hero SKU od objemu s nizkou hodnotou.">Use product margins and product trend tables to separate hero SKUs from low-value volume.</p>
+            </div>
+        </div>
+        """
+
     # Product Margins
     if product_margins is not None and not product_margins.empty:
         html_content += """
@@ -4393,6 +4702,19 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </table>
             </div>
         </div>"""
+
+    html_content += """
+        </section>
+
+        <section id="section-operations" class="dashboard-section" data-group="operations">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Operations & diagnostics" data-sk="Operativa a diagnostika">Operations & diagnostics</div>
+                <h2 class="section-heading" data-en="Inspect execution quality, timing, and friction points" data-sk="Skontroluj kvalitu exekucie, timing a friction pointy">Inspect execution quality, timing, and friction points</h2>
+                <p class="section-copy" data-en="This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath." data-sk="Tato sekcia sluzi na hlbsiu diagnostiku, ked sa pohnu hlavne KPI a potrebujes vediet, co sa pod nimi operativne zmenilo.">This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath.</p>
+            </div>
+        </div>
+        """
 
     # Ads Effectiveness Analysis
     if ads_effectiveness:
@@ -4812,9 +5134,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
     html_content += f"""
 
+        </section>
         <div class="footer">
             Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | BizniWeb Order Export System
         </div>
+    </div>
+        </main>
     </div>
 
     <script>
@@ -5227,11 +5552,30 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             translateChartLabels();
         }}
 
+        function applyMetricGroup(group) {{
+            const normalizedGroup = group || 'all';
+            localStorage.setItem('reportMetricGroup', normalizedGroup);
+
+            document.querySelectorAll('.nav-group-btn').forEach((btn) => {{
+                btn.classList.toggle('active', btn.dataset.group === normalizedGroup);
+            }});
+
+            document.querySelectorAll('.dashboard-section').forEach((section) => {{
+                const sectionGroup = section.dataset.group || '';
+                const shouldShow = normalizedGroup === 'all' || sectionGroup === normalizedGroup;
+                section.classList.toggle('is-hidden', !shouldShow);
+            }});
+        }}
+
         document.addEventListener('DOMContentLoaded', () => {{
             document.querySelectorAll('#langSwitch button[data-lang]').forEach((btn) => {{
                 btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
             }});
+            document.querySelectorAll('.nav-group-btn').forEach((btn) => {{
+                btn.addEventListener('click', () => applyMetricGroup(btn.dataset.group));
+            }});
             applyLanguage(currentLang);
+            applyMetricGroup(localStorage.getItem('reportMetricGroup') || 'all');
         }});
 
         // Collapsible table functionality
