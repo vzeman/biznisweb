@@ -213,12 +213,28 @@ def _period_switcher_html(period_switcher: Optional[dict]) -> str:
     if not options:
         return ""
     current_key = str(switcher.get("current_key") or "")
+    current_range_en = escape(str(switcher.get("current_range_en") or ""))
+    current_range_sk = escape(str(switcher.get("current_range_sk") or current_range_en))
     links = []
     for option in options:
         key = str(option.get("key") or "")
         active = "active" if key == current_key else ""
-        links.append(f'<a class="pill {active}" href="{escape(str(option.get("href") or "#"))}">{escape(str(option.get("label") or key.upper()))}</a>')
-    return '<div class="panel controls"><div class="label"><span class="lang-en">Period</span><span class="lang-sk hidden">Obdobie</span></div><div class="pill-row">' + "".join(links) + '</div></div>'
+        href = escape(str(option.get("href") or "#"))
+        label = escape(str(option.get("label") or key.upper()))
+        links.append(
+            f'<a class="pill global-period-link {active}" data-base-href="{href}" href="{href}">{label}</a>'
+        )
+    return (
+        '<div class="panel controls global-period-panel">'
+        '<div class="label"><span class="lang-en">Analytics window</span><span class="lang-sk hidden">Analyticke okno</span></div>'
+        '<div class="period-summary">'
+        f'<strong><span class="lang-en">{current_range_en}</span><span class="lang-sk hidden">{current_range_sk}</span></strong>'
+        '<small><span class="lang-en">Applies to all chart sections below. Executive KPI deck keeps its own Daily / Weekly / Monthly switch.</span>'
+        '<span class="lang-sk hidden">Plati pre vsetky sekcie s grafmi nizsie. Executive KPI deck ma vlastne prepinanie Denne / Tyzdenne / Mesacne.</span></small>'
+        '</div>'
+        '<div class="pill-row pill-row-wrap">' + "".join(links) + '</div>'
+        '</div>'
+    )
 
 
 def _top_rows(frame: Optional[pd.DataFrame], columns: List[str], limit: int = 8) -> List[Dict[str, Any]]:
@@ -890,6 +906,10 @@ def generate_test2_dashboard(
         .nav-link.active {{ color:#fff; background: linear-gradient(135deg, var(--accent), #ff9e46); }}
         .nav-dot {{ width: 26px; height: 26px; border-radius: 9px; display:grid; place-items:center; font-size: 12px; font-weight: 800; background: rgba(255,138,31,.14); color: var(--accent); }}
         .nav-link.active .nav-dot {{ color:#fff; background: rgba(255,255,255,.18); }}
+        .global-period-panel {{ margin: 18px 0 22px; }}
+        .period-summary {{ display:flex; flex-direction:column; gap: 6px; margin-bottom: 12px; }}
+        .period-summary strong {{ font-size: 15px; font-weight: 800; color: var(--text); }}
+        .period-summary small {{ color: var(--muted); font-size: 12px; line-height: 1.45; }}
         .content {{ padding: 28px 28px 72px; }}
         .shell {{ max-width: 1500px; margin: 0 auto; }}
         .hero {{ display:grid; grid-template-columns: 1.45fr .95fr; gap: 18px; }}
@@ -963,6 +983,7 @@ def generate_test2_dashboard(
                     <small><span class="lang-en">executive reporting dashboard</span><span class="lang-sk hidden">hlavny reporting dashboard</span></small>
                 </div>
             </div>
+            {period_switcher_html}
             <div class="nav-label"><span class="lang-en">Navigate</span><span class="lang-sk hidden">Navigácia</span></div>
             <a class="nav-link active" href="#overview"><span class="nav-dot">01</span><span class="lang-en">Overview</span><span class="lang-sk hidden">Prehľad</span></a>
             <a class="nav-link" href="#sales"><span class="nav-dot">02</span><span class="lang-en">Sales</span><span class="lang-sk hidden">Predaj</span></a>
@@ -998,7 +1019,6 @@ def generate_test2_dashboard(
                                 <button type="button" class="lang-btn" data-lang="sk">SK</button>
                             </div>
                         </div>
-                        {period_switcher_html}
                         <div class="panel hero-kpis">
                             <div class="hero-kpi"><small><span class="lang-en">Revenue</span><span class="lang-sk hidden">Tržby</span></small><strong>€{total_revenue:,.0f}</strong></div>
                             <div class="hero-kpi"><small><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></small><strong>€{total_profit:,.0f}</strong></div>
@@ -3428,14 +3448,26 @@ def generate_test2_dashboard(
 
         function initNavigation() {{
             const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+            const periodLinks = Array.from(document.querySelectorAll('.global-period-link'));
             const sections = Array.from(document.querySelectorAll('section[id]'));
             if (!navLinks.length || !sections.length) return;
+
+            function updatePeriodLinks(sectionId) {{
+                if (!periodLinks.length || !sectionId) return;
+                periodLinks.forEach(link => {{
+                    const baseHref = link.dataset.baseHref || (link.getAttribute('href') || '').split('#')[0];
+                    if (!baseHref) return;
+                    link.dataset.baseHref = baseHref;
+                    link.setAttribute('href', `${{baseHref}}#${{sectionId}}`);
+                }});
+            }}
 
             function setActiveNav(sectionId) {{
                 navLinks.forEach(link => {{
                     const active = (link.getAttribute('href') || '') === `#${{sectionId}}`;
                     link.classList.toggle('active', active);
                 }});
+                updatePeriodLinks(sectionId);
             }}
 
             function resolveActiveSection() {{
