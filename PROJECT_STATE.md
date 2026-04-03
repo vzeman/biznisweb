@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-03-30
+Last updated: 2026-04-03
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -83,10 +83,15 @@ Bootstrap entrypoints:
 - No formal API contract package yet for cross-project integrations
 - No container/bootstrap parity check in CI yet
 - Runtime/deploy docs for separate OpenClaw infra still belong in another repo and are not defined there yet
+- Partial upstream failures (ads/weather/etc.) now surface explicit source-health metadata in HTML/CFO outputs and JSON sidecars; downstream email/ops policy still needs alert tightening.
+- Main production HTML report now uses the modern dashboard shell that started as `test2`.
+- Standalone CFO HTML output was removed from the artifact contract and daily email flow; CFO KPI logic now lives only inside the main report.
+- Daily SES email now attaches only the main HTML report.
+- Legacy March `__test` artifacts were removed locally; `__test2` remains only as a reference snapshot.
 
 ## 8) Next Exact Step
 
-- Add repo-local operator runbook for scheduled jobs, ECR deploy, and recovery steps
+- Continue visual/UX cleanup of the new production dashboard shell now that `test2` was promoted to the default reporting output.
 
 ## 9) Change Log
 
@@ -95,3 +100,403 @@ Bootstrap entrypoints:
 - Added cross-platform bootstrap scripts for macOS/Linux and Windows PowerShell.
 - Narrowed `PROJECT_STATE.md` to this repository only.
 - Removed cross-project state ownership from this repo; left only integration notes.
+
+### 2026-03-31
+- Completed `P3.1` reusable reporting core foundation:
+  - added package `reporting_core/` as the shared source of truth for project config + runtime loading,
+  - moved project config helpers behind `reporting_core.config` and kept `project_config.py` as a backward-compatible shim,
+  - added `reporting_core.runtime` with `ProjectRuntime` and reusable runtime application/loading helpers,
+  - added `reporting_core.contracts` with `ReportingArtifactSet` + canonical output artifact builder,
+  - switched `export_orders.py`, `daily_report_runner.py`, and `generate_invoices.py` to import from `reporting_core`,
+  - updated daily runner to consume the shared artifact contract instead of rebuilding output paths ad hoc,
+  - verified syntax with `python -m py_compile export_orders.py daily_report_runner.py generate_invoices.py project_config.py reporting_core\\__init__.py reporting_core\\config.py reporting_core\\runtime.py reporting_core\\contracts.py`,
+  - verified ROY smoke export on `2026-03-01..2026-03-02`,
+  - verified project-aware daily runner on `2026-03-01..2026-03-02` with `--skip-export --skip-email`.
+- Added new Week-of-Month analytics (Week 1-4) into reporting pipeline in export_orders.py.
+- Wired Week-of-Month outputs into HTML report generation (html_report_generator.py) with 2 charts and performance table.
+- Added aggregation for week-level pattern visibility: orders, revenue, profit, margin, AOV, avg daily revenue/profit, active days/months.
+- Verified syntax via python -m py_compile export_orders.py html_report_generator.py.
+- Revised Week-of-Month methodology to remove day-count bias:
+  - uses only days 1-28 (4x7 equal windows),
+  - uses full months only (drops partial first/last month for this metric),
+  - daily normalization uses calendar_days (includes zero-order days).
+- Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
+- Added new Day-of-Month analytics (1-31) to reporting pipeline:
+
+### 2026-04-03
+- Promoted the modern dashboard shell (`test2`) to the default production HTML renderer.
+- Removed standalone CFO HTML from `reporting_core.contracts` and from `daily_report_runner.py`.
+- Changed daily SES delivery to send only the main HTML report attachment.
+- Cleaned local legacy `__test` artifacts and regenerated the plain VEVO March production report to verify the new default renderer.
+
+### 2026-04-01
+- Added side-by-side output variant support for safe UI redesign/testing without overwriting working report artifacts:
+  - new optional `output_tag` support in `reporting_core.contracts.build_artifact_set(...)`,
+  - tagged artifacts render as `__<tag>` before file extension, e.g. `report_...__ui_test.html`,
+  - `export_orders.py` now accepts `--output-tag` and isolates cleanup to the active output variant only,
+  - `daily_report_runner.py` now accepts `--output-tag` and generates tagged CFO outputs against the same tagged artifact set,
+  - verified syntax with `python -m py_compile reporting_core\\contracts.py reporting_core\\__init__.py export_orders.py daily_report_runner.py`,
+  - verified smoke exports for VEVO and ROY on `2026-03-30..2026-03-31` with `--output-tag ui_test`,
+  - verified tagged CFO generation for both projects:
+    - `data\\vevo\\cfo_graphs_20260330-20260331__ui_test.html`
+    - `data\\roy\\cfo_graphs_20260330-20260331__ui_test.html`,
+  - generated full-range side-by-side test artifacts without email sending:
+    - VEVO:
+      - `data\\vevo\\report_20250503-20260331__ui_test.html`
+      - `data\\vevo\\cfo_graphs_20250503-20260331__ui_test.html`
+      - `data\\vevo\\email_strategy_20250503-20260331__ui_test.html`
+    - ROY:
+      - `data\\roy\\report_20250924-20260331__ui_test.html`
+      - `data\\roy\\cfo_graphs_20250924-20260331__ui_test.html`.
+- Updated ROY project baseline `report_from_date` from `2025-08-06` to `2025-09-24` in `projects/roy/settings.json`.
+- Re-generated ROY reporting outputs for `2025-09-24..2026-03-31` without email delivery so current artifacts match the new start boundary.
+- Fixed report headings to use project-level `reporting_system_name` across generated HTML outputs.
+- Main HTML reports now render `Vevo reporting`, `Roy reporting`, and future client names from project config instead of a hardcoded BizniWeb title.
+- CFO dashboards now use the same project reporting title in the HTML `<title>` and visible header, with `CFO Executive Dashboard` kept as a subtitle.
+- Email strategy HTML now also uses the project reporting title in the document title and main heading.
+- Verified regeneration for VEVO (`2025-05-03..2026-03-31`) and ROY (`2025-08-06..2026-03-31`) without email delivery.
+
+- Fixed Daily Orders chart visibility issue in shared HTML generator:
+  - date coverage in `aggregate_by_date_*` was already complete, including zero-order days,
+  - pure bar rendering made zero-order days look like "missing days" at the start of sparse client timelines,
+  - `Daily Orders` now overlays a thin line series on top of bars so zero-order periods remain visually continuous instead of appearing absent.
+- Re-generated ROY report for `2025-08-06..2026-03-31` after the chart fix.
+
+### 2026-04-01
+- Completed `P4.2` observability baseline for reporting:
+  - added `scripts/observability_snapshot.py` for project-level artifact + source-health snapshots,
+  - added `.github/workflows/observability-check.yml` to generate/upload a JSON observability artifact in CI,
+  - extended `scripts/security_ci.py` to require and syntax-check the observability baseline.
+- Completed `P4.4` reporting templates baseline:
+  - added `templates/reporting-client/` with `settings.template.json`, `.env.example`, `product_expenses.json`, and onboarding README,
+  - added `scripts/scaffold_client.py` to scaffold a new client bundle under `projects/<slug>/`,
+  - updated `README_DEV.md` with observability and client-template usage.
+  - integrated in export_orders.py (`analyze_day_of_month`) and HTML generation,
+  - uses full months only for unbiased phase-of-month comparisons,
+  - normalizes by calendar occurrences for each day number (1..31),
+  - added 2 charts + normalized performance table in HTML report.
+- Hardened geographic reporting for Top Cities:
+  - country now prefers `delivery_country` and falls back to `invoice_country`,
+  - city now prefers `delivery_city` and falls back to `invoice_city`,
+  - empty cities are excluded from ranking.
+- Hardened reporting repo hygiene for multi-PC work:
+  - `.gitignore` now blocks local `.env.*` runtime files while preserving safe templates,
+  - `.gitattributes` enforces LF for Python/Markdown/template files,
+  - added safe tracked template `.env.roy.sk.template`,
+  - cleared CRLF-only working tree noise before continuing.
+- Completed `P1.4` partial-data handling for reporting outputs:
+  - added source-health contract per run (`source_health`) with per-source status/mode/detail fields,
+  - export now writes `data_quality_<range>.json` sidecar metadata next to report artifacts,
+  - main HTML report renders a visible Data Quality banner/table before KPI cards,
+  - CFO HTML runner loads the same sidecar and renders the same source-health banner,
+  - runner keeps backward compatibility by not requiring the JSON sidecar for legacy artifact existence checks,
+  - verified syntax with `python -m py_compile export_orders.py html_report_generator.py daily_report_runner.py google_ads.py weather_client.py facebook_ads.py generate_invoices.py http_client.py`,
+  - verified ROY smoke run end-to-end on `2026-03-01..2026-03-03`, including generated `data_quality_*.json`, main HTML report, and CFO HTML banner rendering.
+- Completed `P1.3` reporting integration hardening:
+  - added shared `http_client.py` with default timeout + retry policy for external integrations,
+  - moved Facebook Ads API auth to `Authorization: Bearer` header instead of query params,
+  - removed direct `requests.get` usage from Facebook Ads client in favor of shared session helper,
+  - added configurable timeouts for BizniWeb GraphQL transport in reporting and invoice flows,
+  - moved weather client to shared retry/timeout session,
+  - documented HTTP timeout/retry knobs in `.env.example`,
+  - verified syntax with `python -m py_compile http_client.py weather_client.py facebook_ads.py export_orders.py generate_invoices.py`.
+  - city now prefers `delivery_city` and falls back to `invoice_city`,
+  - blank city values are excluded from ranking,
+  - ties are sorted by revenue first and order count second.
+- Added project-scoped weather configuration for VEVO and ROY in `projects/<project>/settings.json`.
+- Added `weather_client.py`:
+  - historical daily weather fetch from Open-Meteo archive API,
+  - monthly local cache per project/location,
+  - weighted location support prepared for future multi-city rollout.
+
+### 2026-04-02
+- Completed deep research pass for professional ecommerce dashboard structure using BI/dashboard best-practice sources and ecommerce analytics guides.
+- Added fully isolated `test2` main-report renderer in `dashboard_test2.py`:
+  - separate from the current production renderer and separate from the existing `__test` shell,
+  - focused on executive KPI hierarchy, grouped business-question sections, and explicit source-health presentation,
+  - uses the same reporting data and existing CFO KPI payload instead of inventing new business logic.
+- Wired `generate_html_report(..., dashboard_variant=...)` so only `--output-tag test2` activates the new renderer.
+- Kept existing production and `__test` report outputs untouched.
+- Verified syntax with `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`.
+- Generated isolated VEVO March artifacts for review:
+  - `data\\vevo\\report_20260301-20260331__test2.html`
+  - `data\\vevo\\email_strategy_20260301-20260331__test2.html`
+  - period child reports under `data\\vevo\\_periods\\report_20260301-20260331__test2\\...`
+- Added V1 weather impact analytics into `export_orders.py`:
+  - merges daily weather with `date_agg`,
+  - computes weather buckets (`Good / Neutral / Bad`),
+  - computes weekday baseline deltas for revenue, profit, orders, AOV,
+  - computes direct and lagged weather correlations,
+  - exports project-scoped `weather_impact_<range>.csv`.
+- Added Weather Impact section into `html_report_generator.py`:
+  - correlation KPI cards,
+  - precipitation vs revenue/profit time-series chart,
+  - weather bucket uplift vs weekday baseline chart,
+  - weather bucket performance table.
+- Verified syntax with:
+  - `python -m py_compile export_orders.py html_report_generator.py weather_client.py`
+- Verified ROY runtime smoke test end-to-end on:
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-07`
+  - confirmed Weather Impact section rendered in generated HTML.
+- VEVO runtime smoke test remains blocked by expired Facebook token during ads fetch; weather implementation itself is not the blocker.
+- Regenerated full-range client outputs without email sending:
+  - ROY: `data/roy/report_20250922-20260330.html` and `data/roy/export_20250922-20260330.csv`
+  - VEVO: `data/vevo/report_20250503-20260330.html` and `data/vevo/export_20250503-20260330.csv`
+- Verified VEVO full-range regeneration again with working Facebook Ads enrichment after providing a valid runtime Meta token for the process.
+- Added Advanced DTC metrics pack (1/2/3/4/7/8/9/10/11) into reporting pipeline:
+  - new analyzer in export_orders.py: `analyze_advanced_dtc_metrics(df)`,
+  - wired to `generate_html_report(..., advanced_dtc_metrics=...)`,
+  - added summary KPI cards for first-order/repeat contribution, contribution LTV/CAC, margin stability, SKU Pareto concentration.
+- Added new Advanced DTC visual outputs in html_report_generator.py:
+  - Contribution by Basket Size chart + table,
+  - Payday Window Index chart + table,
+  - Cohort Payback Days chart + table,
+  - Margin Stability chart,
+  - SKU Contribution Pareto chart + table,
+  - Attach Rate table for key products.
+- Smoke-tested analyzer on synthetic dataset and verified syntax with:
+  - `python -m py_compile export_orders.py html_report_generator.py`
+- Hardened local repo hygiene for reporting runtime secrets:
+  - `.gitignore` now ignores arbitrary local `.env.*` runtime variants while preserving tracked safe templates
+  - `.gitattributes` now enforces LF for python/markdown/env-template files to avoid false CRLF-only diffs
+  - added safe tracked template `/.env.roy.sk.template` for roy-specific local bootstrap without committing secrets
+- Completed `P2.2` reporting client-boundary refactor:
+  - added shared `project_config.py` to centralize per-project env loading, project settings, display-name/reporting defaults, API URL resolution, and BizniWeb base URL derivation,
+  - removed remaining Vevo-specific runtime defaults from generic reporting flow in `export_orders.py`,
+  - kept Vevo legacy product-cost fallback scoped only to Vevo; non-Vevo projects no longer inherit Vevo costs implicitly,
+  - gated Vevo-only email strategy HTML behind per-project config (`enable_email_strategy_report`) so ROY and future clients do not generate Vevo-branded strategy output,
+  - made `daily_report_runner.py` project-driven for email subject/body text, SES configuration-set fallback, and CloudWatch namespace selection,
+  - removed `email_strategy_html` from required daily-runner outputs so non-Vevo projects can run cleanly without Vevo-only artifacts,
+  - made `generate_invoices.py` project-aware via `--project`, per-project env bootstrap, and BizniWeb base URL derivation from the selected project API endpoint instead of hardcoded Vevo URLs,
+  - extended project settings:
+    - `projects/vevo/settings.json` now declares display/reporting defaults and explicitly enables the Vevo email-strategy artifact,
+    - `projects/roy/settings.json` now declares project display/reporting defaults and explicitly disables the Vevo-only strategy artifact,
+  - verified syntax with `python -m py_compile project_config.py export_orders.py daily_report_runner.py generate_invoices.py`,
+  - verified ROY smoke export on `2026-03-01..2026-03-02`,
+  - verified VEVO smoke export on `2026-03-01..2026-03-02`,
+  - verified project-aware invoice bootstrap on ROY with `python generate_invoices.py --project roy --from-date 2026-03-01 --to-date 2026-03-02 --dry-run --no-web-login`.
+- Completed `P2.4` reporting security CI baseline:
+  - extended `.github/workflows/env-check.yml` to run on the active reporting branch and added `secret-scan` + `security-baseline` jobs,
+  - added `scripts/security_ci.py` with repo-local assertions for shared HTTP hardening (`Authorization` header usage, shared retry session, partial-data/source-health invariants),
+  - wired CI to fail fast if reporting core loses the partial-data markers or Meta auth hardening contract,
+  - verified the local baseline script with `python scripts/security_ci.py`.
+
+- Fixed VEVO local Meta token/bootstrap drift on 2026-04-01:
+  - confirmed AWS runtime secret `vevo/reporting/runtime-env` still contains a valid Facebook Ads token,
+  - synced local root `.env` VEVO token with the valid runtime token,
+  - rewrote `.env` without UTF-8 BOM after a local PowerShell write introduced BOM and broke the first env key (`BIZNISWEB_API_TOKEN`),
+  - hardened all reporting-side `load_dotenv(...)` calls to use `encoding="utf-8-sig"` so BOM-prefixed `.env` files no longer break the first key,
+  - verified VEVO smoke export on `2026-03-31..2026-03-31` with successful Facebook Ads enrichment (`Successfully connected to Facebook Ads account: Wachman`, spend fetched, ROAS restored).
+- Fixed VEVO Google Ads runtime hygiene on 2026-04-01:
+  - normalized AWS Secrets Manager entry `vevo/reporting/runtime-env` from malformed pseudo-JSON into valid JSON,
+  - aligned runtime `GOOGLE_ADS_LOGIN_CUSTOMER_ID` to an empty value because VEVO Google Ads API access works directly on customer `7592903323` and fails when the old MCC login header is forced,
+  - verified Google Ads API connectivity locally with `test_connection=True` against `Vevo.sk (7592903323)`,
+  - verified that March 2026 Google Ads spend is correctly `0.00` because both `Vevo.sk (7592903323)` and `Vevo.sk - old (1025163995)` return zero March campaign rows via GAQL,
+  - confirmed the zero Google Ads spend in the VEVO March report is a real account state, not an integration bug.
+
+- UI redesign baseline for main HTML reporting (test track) on 2026-04-01:
+  - replaced legacy purple-gradient dashboard skin in `html_report_generator.py` with a modern analytics layout (neutral background, stronger typography hierarchy, denser KPI cards, cleaner tables, larger chart canvases),
+  - increased chart readability (`max-height` up to 420px, improved spacing, better responsive behavior),
+  - standardized euro symbol rendering by replacing mojibake `â‚¬` occurrences with HTML entity `&#8364;` in report output templates,
+  - normalized collapsible toggle glyph to `&#9662;` to avoid encoding drift in generated HTML,
+  - validated syntax with `python -m py_compile html_report_generator.py daily_report_runner.py`,
+  - regenerated side-by-side test artifacts (no email) with `--output-tag ui_test`:
+    - VEVO: `data/vevo/report_20250503-20260331__ui_test.html`
+    - ROY: `data/roy/report_20250922-20260331__ui_test.html`.
+
+- SK/EN full-translation + user-friendly pass completed on 2026-04-01:
+  - strengthened bilingual rendering in `html_report_generator.py` with explicit `data-en`/`data-sk` coverage for guidance and quick-read sections so language switch is end-to-end usable,
+  - added plain-language onboarding block for non-finance users (`metric-cheatsheet`) explaining Revenue, Net Profit, ROAS, and CAC vs Break-even CAC in business-friendly wording,
+  - corrected Slovak readability/diacritics in key guidance text (`Ako čítať tento report (jednoducho)`),
+  - normalized confusing delta KPI labels to explicit text:
+    - `ROAS Check Delta`
+    - `Margin Check Delta (pp)`
+    - `CAC Check Delta`
+    with corresponding SK mappings (`Kontrola ... delta`),
+  - updated translation dictionaries and replacement maps to match the new labels and avoid previous symbol-encoding drift.
+- Validation executed:
+  - `python -m py_compile html_report_generator.py`,
+  - full regenerate (no email) with final outputs tag `lang_full3`:
+    - VEVO: `data/vevo/report_20250503-20260331__lang_full3.html`
+    - ROY: `data/roy/report_20250922-20260331__lang_full3.html`
+  - verified generated HTML contains:
+    - project title headers (`Vevo reporting` / `Roy reporting`),
+    - language switch texts with SK+EN variants,
+    - user-friendly KPI cheat-sheet block,
+    - updated Delta KPI labels.
+
+- Sidebar/menu test track for main VEVO reporting completed on 2026-04-02:
+  - redesigned the main report shell in `html_report_generator.py` to a dashboard-style layout with:
+    - sticky left sidebar,
+    - metric-group menu (`Overview`, `Revenue & profitability`, `Customers & retention`, `Marketing & ads`, `Geography`, `Products`, `Operations & diagnostics`),
+    - section-level group switching without changing any business calculations,
+    - warmer executive dashboard styling closer to modern admin dashboards.
+  - wrapped the long report into navigable dashboard sections while preserving existing charts/tables and SK/EN language switching,
+  - added client-side section filter persistence via `localStorage` (`reportMetricGroup`),
+  - generated only one stable VEVO March test artifact:
+    - `data/vevo/report_20260301-20260331__test.html`
+  - cleaned previous VEVO/ROY tagged test artifacts (`__lang_*`, `__ui_*`, `__ui_test`, etc.) so only:
+    - original untagged reports remain,
+    - one current VEVO test HTML remains for UI review.
+
+Next exact step:
+- Review `data/vevo/report_20260301-20260331__test.html` visually and decide whether the new professional period switcher should stay as the baseline UX for the dashboard test track before deeper chart-visual redesign starts.
+
+### 2026-04-02
+- Extended the isolated VEVO March `test2` dashboard so it keeps the `test2` hero/intro shell while pulling in richer analytics previously available only in the fuller report/test track.
+- `dashboard_test2.py` now renders additional data groups:
+  - customer retention and concentration,
+  - refund trend,
+  - cohort retention chart + table,
+  - calendar patterns (day-of-week, week-of-month, day-of-month),
+  - weather uplift,
+  - geo profitability table,
+  - product margin breakout chart,
+  - product trend chart + table.
+- `html_report_generator.py` now passes the richer analytics payloads into the isolated `test2` renderer:
+  - `day_of_week_analysis`
+  - `week_of_month_analysis`
+  - `day_of_month_analysis`
+  - `weather_analysis`
+  - `geo_profitability`
+  - `product_trends`
+  - `customer_concentration`
+  - `cohort_analysis`
+- Kept the `test2` top section intact:
+  - hero header,
+  - side language switcher,
+  - period switcher,
+  - executive KPI deck.
+- Fixed the `test2` sidebar so the project badge uses the project initial dynamically and the navigation now includes the new `Patterns` section with correct ordering.
+- Verified with:
+  - `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`
+  - successful VEVO March regenerate:
+    - `data/vevo/report_20260301-20260331__test2.html`
+  - HTML presence checks for:
+    - `Executive KPI deck`
+    - `Customer quality and retention`
+    - `Calendar patterns and weather`
+    - `Geo profitability`
+    - `Product trend table`
+
+### 2026-04-02
+- Added reusable CFO KPI payload builder in `reporting_core/cfo_kpis.py` so the main report can reuse the same executive KPI logic as the standalone CFO dashboard.
+- Wired `export_orders.py` to compute `cfo_kpi_payload` from the existing report data (`date_agg` + exported order rows) without changing the underlying financial calculations.
+- Injected a new top-of-report CFO KPI panel into `html_report_generator.py`:
+  - placed above the old summary cards,
+  - uses the same KPI set as the CFO dashboard,
+  - supports `Daily / Weekly / Monthly` switching,
+  - respects the existing SK/EN language switch,
+  - uses the new dashboard shell styling instead of the legacy card layout.
+- Verified syntax with:
+  - `python -m py_compile export_orders.py html_report_generator.py reporting_core\\__init__.py reporting_core\\cfo_kpis.py`
+- Regenerated only the VEVO March test artifact (no email):
+  - `data/vevo/report_20260301-20260331__test.html`
+- Verified the generated HTML contains the new executive block and embedded KPI payload (`CFO_TOP_KPI`) with the expected metrics:
+  - Revenue
+  - Profit
+  - Orders
+  - AOV
+  - CAC
+  - ROAS
+  - Pre-Ad Contribution Margin
+  - Post-Ad Margin
+  - Company Margin (incl. fixed)
+
+### 2026-04-02
+- Reverted the two latest test-only date-range UI experiments from the VEVO March dashboard prototype:
+  - removed the global chart date-range filter,
+  - removed the per-section chart date-range filters.
+- Restored the test UI baseline to the previous state:
+  - sidebar navigation stays,
+  - top CFO KPI band stays,
+  - no chart-range controls are rendered.
+- Regenerated the VEVO March test artifact after the revert:
+  - `data/vevo/report_20260301-20260331__test.html`
+- Verified the regenerated HTML no longer contains the removed range UI markers (`chart-range-panel`, `chart-range-start`, `chart-range-end`).
+
+### 2026-04-02
+- Implemented a server-driven professional period switcher for the VEVO March dashboard test track without touching production outputs.
+- `export_orders.py` now builds preset report variants for tagged/test exports and links them as full-report period views instead of doing client-side chart cropping:
+  - `7D`
+  - `30D`
+  - `90D` when the selected range is long enough
+  - `FULL`
+- Added reusable helpers for:
+  - period-range slicing from already fetched orders,
+  - preset period-spec generation,
+  - relative-link payload generation for parent/child report variants.
+- `html_report_generator.py` now renders the same period switcher:
+  - globally at the top,
+  - inside every major dashboard section (`Overview`, `Business`, `Customers`, `Marketing`, `Geography`, `Customer structure`, `Products`, `Operations`).
+- Section links preserve anchors (for example `#section-marketing`) and the dashboard JS reopens the correct sidebar metric group after cross-period navigation.
+- Generated only test artifacts under the hidden bundle path for tagged outputs, keeping the visible top-level test report as the main entry point:
+  - `data/vevo/report_20260301-20260331__test.html`
+  - `data/vevo/_periods/report_20260301-20260331__test/7d/...`
+  - `data/vevo/_periods/report_20260301-20260331__test/30d/...`
+- Verified:
+  - syntax with `python -m py_compile export_orders.py html_report_generator.py`,
+  - successful VEVO March test regenerate with variant bundle creation,
+  - zero leftover literal `{render_period_switcher(...)}`
+  - working period-switcher links for all major sections in both the main report and child period variants.
+
+### 2026-04-02
+- Merged the richer analytics payload from the fuller reporting build into the isolated `test2` dashboard track while keeping the `test2` intro/hero shell unchanged.
+- `dashboard_test2.py` now renders additional sections from the richer reporting data:
+  - customer quality and retention,
+  - calendar patterns and weather,
+  - geo profitability,
+  - product trend breakout/table.
+- `html_report_generator.py` passes the richer analytics payload through to `generate_test2_dashboard(...)`.
+- Fixed a `test2` serialization bug by replacing the raw `customer_concentration` DataFrame payload with a JSON-safe summary object in the dashboard bootstrap payload.
+- Cleaned the visible Slovak labels in `test2` that were previously mojibake/broken:
+  - `Kvalita zákazníkov a retencia`
+  - `Toto rozširuje pekný ...`
+  - `Denná miera refundov odhaľuje operačné problémy, nie len súčet.`
+- Regenerated and verified the VEVO March `test2` artifact:
+  - `data/vevo/report_20260301-20260331__test2.html`
+- Verified:
+  - syntax with `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`
+  - successful VEVO March `test2` regenerate
+  - expected sections present in HTML
+  - cleaned Slovak strings present in final HTML output
+
+### 2026-04-02
+- Expanded the VEVO March `test2` dashboard so it keeps the preferred `test2` shell/hero design but now pulls in the much richer metric surface from the fuller `test` reporting line.
+- `html_report_generator.py` now passes the full analytics payload families into `generate_test2_dashboard(...)`, including customer/retention, CLV/CAC, order-size, combinations, advanced DTC, B2B/B2C, order status, ads effectiveness, lifecycle segments, first-item retention, same-item repurchase, time-to-nth-by-first-item, detailed FB metrics, cost-per-order, hourly/day-of-week Meta stats, LTV by date, and consistency checks.
+- `dashboard_test2.py` now renders a `Full metric library` layer inside the `test2` design shell with added chart galleries for:
+  - customer quality and repeat behavior,
+  - calendar and weather patterns,
+  - product and operational drilldowns,
+  - economics and marketing drilldowns.
+- Verified syntax with:
+  - `python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py`
+- Regenerated only the VEVO March `test2` artifact (no email):
+  - `data/vevo/report_20260301-20260331__test2.html`
+- Verified:
+  - export completed successfully,
+  - inline dashboard script parses successfully in Node (`new Function(...)`),
+  - new gallery chart ids and render calls are present in the generated `test2` HTML.
+- Next exact step:
+  - visually review `report_20260301-20260331__test2.html` in the browser and decide which `test2` sections/cards should replace the legacy report layout next.
+
+### 2026-04-03
+- Extended VEVO March 	est2 so the design shell stays unchanged but the metric coverage moves much closer to the original 	est report.
+- dashboard_test2.py now fills the previously empty standalone library containers:
+  - libraryEconomicsStandalone
+  - libraryMarketingStandalone
+  - libraryCustomersStandalone
+- Added standalone charts for missing metric families from the legacy report, including:
+  - economics: revenue vs total cost, total costs, product costs, gross margin, packaging, shipping, fixed costs, items sold, avg items per order, scatter revenue vs cost, all-metrics overview, LTV by acquisition date, LTV-based profit
+  - marketing: FB spend, Google spend, FB vs Google spend, spend vs clicks, campaign conversion rate, cost per conversion, CTR, CPC, spend share, campaign CPO, campaign ROAS, spend bucket orders
+  - customer value: refund amount, CLV, CAC, CLV vs CAC, LTV/CAC ratio, return time, payback trend
+- Added scroll-aware sidebar navigation in 	est2:
+  - the active menu item now switches based on the visible section instead of staying hardcoded on Overview
+  - sidebar links now smooth-scroll to the relevant section and update browser hash
+- Verified:
+  - python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py
+  - VEVO March 	est2 regenerate completed successfully
+  - final inline dashboard script parses successfully in Node
+  - standalone library containers and new chart ids are present in data/vevo/report_20260301-20260331__test2.html
+- Next exact step:
+  - visually review eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.

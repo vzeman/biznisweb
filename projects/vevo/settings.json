@@ -1,9 +1,25 @@
 {
   "biznisweb_api_url": "https://vevo.flox.sk/api/graphql",
+  "project_display_name": "Vevo",
+  "reporting_system_name": "Vevo reporting",
+  "ses_configuration_set": "vevo-reporting",
+  "enable_email_strategy_report": true,
   "report_from_date": "2025-05-03",
   "packaging_cost_per_order": 0.3,
   "shipping_subsidy_per_order": 0.2,
   "fixed_monthly_cost": 0,
+  "weather": {
+    "enabled": true,
+    "timezone": "Europe/Bratislava",
+    "locations": [
+      {
+        "name": "Bratislava",
+        "latitude": 48.14816,
+        "longitude": 17.10674,
+        "weight": 1.0
+      }
+    ]
+  },
   "product_expenses_file": "product_expenses.json",
   "currency_rates_to_eur": {
     "EUR": 1.0,

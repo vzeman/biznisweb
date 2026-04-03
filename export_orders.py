@@ -8,6 +8,7 @@ import csv
 import argparse
 import time
 import json
+import copy
 import traceback
 import hashlib
 import re
@@ -19,6 +20,18 @@ from typing import Dict, List, Any, Optional, Tuple
 import calendar
 import numpy as np
 from logger_config import get_logger
+from weather_client import WeatherClient
+from reporting_core import (
+    BASE_DEFAULT_PROJECT,
+    apply_project_runtime,
+    build_cfo_kpi_payload,
+    load_project_env,
+    load_project_runtime,
+    load_project_settings,
+    resolve_biznisweb_api_url,
+    resolve_reporting_defaults,
+    sanitize_output_tag,
+)
 
 try:
     from dotenv import load_dotenv
@@ -67,7 +80,8 @@ except ImportError:
 from html_report_generator import generate_html_report, generate_email_strategy_report
 
 # Load base environment variables from repo root .env (if present).
-load_dotenv()
+# Accept UTF-8 BOM so local PowerShell rewrites do not break the first key.
+load_dotenv(encoding="utf-8-sig")
 
 # Set up logging
 logger = get_logger('export_orders')
@@ -80,10 +94,10 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-ROOT_DIR = Path(__file__).resolve().parent
-PROJECTS_DIR = ROOT_DIR / "projects"
-DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", "vevo").strip() or "vevo"
-DEFAULT_API_URL = "https://vevo.flox.sk/api/graphql"
+DEFAULT_PROJECT = BASE_DEFAULT_PROJECT
+GRAPHQL_TIMEOUT_SEC = int(
+    os.getenv("BIZNISWEB_API_TIMEOUT_SEC", os.getenv("REPORT_HTTP_READ_TIMEOUT_SEC", "30"))
+)
 
 # Fixed costs
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
@@ -97,6 +111,12 @@ MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
+WEATHER_SETTINGS: Dict[str, Any] = {
+    "enabled": False,
+    "timezone": "Europe/Bratislava",
+    "locations": []
+}
+ENABLE_EMAIL_STRATEGY_REPORT = False
 
 # Currency conversion rates to EUR
 # These should be updated regularly or fetched from an API
@@ -111,7 +131,7 @@ CURRENCY_RATES_TO_EUR = {
 # Product expense mapping (expense per item in EUR)
 # Keys are SKU/EAN codes or hash-based SKUs (H-XXXXXXXX) for products without EAN
 # Products not found in this mapping will default to 1.0 EUR expense
-PRODUCT_EXPENSES = {
+LEGACY_VEVO_PRODUCT_EXPENSES = {
     # === PARFUMY 500ml ===
     '8586024430327': 7.02,    # No.01 Cotton Paradise (500ml)
     '8586024430358': 9.38,    # No.02 Sweet Paradise (500ml)
@@ -165,110 +185,7 @@ PRODUCT_EXPENSES = {
     'H-36CA74A7': 0,          # Tringelt
     'H-A5F3BBB3': 0,          # Poistenie proti rozbitiu
 }
-
-
-def _project_dir(project_name: str) -> Path:
-    return PROJECTS_DIR / project_name
-
-
-def load_project_env(project_name: str) -> None:
-    """
-    Load per-project env file from projects/<project>/.env if it exists.
-    Values override root .env so project configs remain isolated.
-    """
-    if os.getenv("REPORT_SKIP_PROJECT_ENV", "").strip().lower() in {"1", "true", "yes", "y", "on"}:
-        logger.info("Skipping project .env load (REPORT_SKIP_PROJECT_ENV=true)")
-        return
-
-    env_path = _project_dir(project_name) / ".env"
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path, override=True)
-        logger.info(f"Loaded project env: {env_path}")
-    else:
-        if project_name != DEFAULT_PROJECT:
-            raise FileNotFoundError(
-                f"Project env file not found: {env_path}. "
-                f"Create projects/{project_name}/.env (you can start from .env.example)."
-            )
-        logger.info(f"Project env not found for default project '{project_name}' ({env_path}), using current environment")
-
-
-def load_project_runtime_settings(project_name: str) -> Dict[str, Any]:
-    """
-    Load project settings from projects/<project>/settings.json and optional
-    product_expenses.json. Falls back to legacy in-file defaults.
-    """
-    settings: Dict[str, Any] = {}
-    project_dir = _project_dir(project_name)
-    settings_path = project_dir / "settings.json"
-    if settings_path.exists():
-        with open(settings_path, "r", encoding="utf-8") as f:
-            settings = json.load(f) or {}
-
-    product_expenses = PRODUCT_EXPENSES
-    product_expenses_file = settings.get("product_expenses_file", "product_expenses.json")
-    product_expenses_path = project_dir / product_expenses_file
-    if product_expenses_path.exists():
-        with open(product_expenses_path, "r", encoding="utf-8") as f:
-            raw_map = json.load(f) or {}
-            product_expenses = {str(k): float(v) for k, v in raw_map.items()}
-    elif project_name != "vevo":
-        # Non-vevo projects should not accidentally use vevo costs.
-        product_expenses = {}
-
-    return {
-        "project_name": project_name,
-        "api_url": os.getenv("BIZNISWEB_API_URL", settings.get("biznisweb_api_url", DEFAULT_API_URL)),
-        "api_token": os.getenv("BIZNISWEB_API_TOKEN", ""),
-        "packaging_cost_per_order": float(settings.get("packaging_cost_per_order", PACKAGING_COST_PER_ORDER)),
-        "shipping_subsidy_per_order": float(settings.get("shipping_subsidy_per_order", SHIPPING_SUBSIDY_PER_ORDER)),
-        "fixed_monthly_cost": float(settings.get("fixed_monthly_cost", FIXED_MONTHLY_COST)),
-        "currency_rates_to_eur": settings.get("currency_rates_to_eur", CURRENCY_RATES_TO_EUR),
-        "product_expenses": product_expenses,
-        "zero_margin_brands": [str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
-        "zero_cost_brands": [str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
-        "zero_cost_label_patterns": [str(v).strip() for v in settings.get("zero_cost_label_patterns", []) if str(v).strip()],
-        "margin_15_brands": [str(v).strip() for v in settings.get("margin_15_brands", []) if str(v).strip()],
-        "margin_15_label_patterns": [str(v).strip() for v in settings.get("margin_15_label_patterns", []) if str(v).strip()],
-        "exclude_zero_price_label_patterns": [
-            str(v).strip() for v in settings.get("exclude_zero_price_label_patterns", []) if str(v).strip()
-        ],
-        "manual_fb_ads_total": (
-            float(settings.get("manual_fb_ads_total"))
-            if settings.get("manual_fb_ads_total") is not None
-            else None
-        ),
-        "manual_google_ads_total": (
-            float(settings.get("manual_google_ads_total"))
-            if settings.get("manual_google_ads_total") is not None
-            else None
-        ),
-    }
-
-
-def apply_runtime_settings(runtime: Dict[str, Any]) -> None:
-    """Apply project runtime settings to global constants used across calculations."""
-    global PACKAGING_COST_PER_ORDER, SHIPPING_SUBSIDY_PER_ORDER, FIXED_MONTHLY_COST
-    global CURRENCY_RATES_TO_EUR, PRODUCT_EXPENSES, ZERO_MARGIN_BRANDS, ZERO_COST_BRANDS
-    global ZERO_COST_LABEL_PATTERNS, MARGIN_15_BRANDS, MARGIN_15_LABEL_PATTERNS, EXCLUDE_ZERO_PRICE_LABEL_PATTERNS
-    global MANUAL_FB_ADS_TOTAL, MANUAL_GOOGLE_ADS_TOTAL
-
-    PACKAGING_COST_PER_ORDER = float(runtime["packaging_cost_per_order"])
-    SHIPPING_SUBSIDY_PER_ORDER = float(runtime["shipping_subsidy_per_order"])
-    FIXED_MONTHLY_COST = float(runtime["fixed_monthly_cost"])
-    CURRENCY_RATES_TO_EUR = {str(k).upper(): float(v) for k, v in dict(runtime["currency_rates_to_eur"]).items()}
-    PRODUCT_EXPENSES = {str(k): float(v) for k, v in dict(runtime["product_expenses"]).items()}
-    ZERO_MARGIN_BRANDS = [str(v).strip().lower() for v in runtime.get("zero_margin_brands", []) if str(v).strip()]
-    ZERO_COST_BRANDS = [str(v).strip().lower() for v in runtime.get("zero_cost_brands", []) if str(v).strip()]
-    ZERO_COST_LABEL_PATTERNS = [str(v).strip() for v in runtime.get("zero_cost_label_patterns", []) if str(v).strip()]
-    MARGIN_15_BRANDS = [str(v).strip().lower() for v in runtime.get("margin_15_brands", []) if str(v).strip()]
-    MARGIN_15_LABEL_PATTERNS = [str(v).strip() for v in runtime.get("margin_15_label_patterns", []) if str(v).strip()]
-    EXCLUDE_ZERO_PRICE_LABEL_PATTERNS = [
-        str(v).strip() for v in runtime.get("exclude_zero_price_label_patterns", []) if str(v).strip()
-    ]
-    MANUAL_FB_ADS_TOTAL = runtime.get("manual_fb_ads_total")
-    MANUAL_GOOGLE_ADS_TOTAL = runtime.get("manual_google_ads_total")
-
+PRODUCT_EXPENSES = dict(LEGACY_VEVO_PRODUCT_EXPENSES)
 
 def parse_input_date(value: str) -> datetime:
     """Parse common CLI/env date formats for safer project onboarding."""
@@ -423,34 +340,280 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 
 
 class BizniWebExporter:
-    def __init__(self, api_url: str, api_token: str, project_name: str = DEFAULT_PROJECT):
+    def __init__(
+        self,
+        api_url: str,
+        api_token: str,
+        project_name: str = DEFAULT_PROJECT,
+        output_tag: str = "",
+        artifact_subdir: str = "",
+        enable_period_bundle: bool = True,
+    ):
         """Initialize the exporter with API credentials"""
+        self.api_url = api_url
+        self.api_token = api_token
         self.project_name = project_name
-        self.data_dir = Path("data") / project_name
+        self.output_tag = sanitize_output_tag(output_tag)
+        normalized_subdir = str(artifact_subdir or "").strip().strip("/\\")
+        self.artifact_subdir = normalized_subdir
+        self.enable_period_bundle = enable_period_bundle
+        self.reporting_defaults = resolve_reporting_defaults(project_name, load_project_settings(project_name))
+        self.project_root_dir = Path("data") / project_name
+        self.data_dir = self.project_root_dir / normalized_subdir if normalized_subdir else self.project_root_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         # Share project data directory with optional ad clients for cache isolation.
         os.environ["REPORT_PROJECT"] = project_name
-        os.environ["REPORT_DATA_DIR"] = str(self.data_dir.resolve())
+        os.environ["REPORT_DATA_DIR"] = str(self.project_root_dir.resolve())
+        os.environ["REPORT_OUTPUT_TAG"] = self.output_tag
 
         transport = RequestsHTTPTransport(
             url=api_url,
             headers={'BW-API-Key': f'Token {api_token}'},
             verify=True,
             retries=3,
+            timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
         self.fb_client = FacebookAdsClient()
         self.google_ads_client = GoogleAdsClient()
-        self.cache_dir = self.data_dir / 'cache'
+        self.cache_dir = self.project_root_dir / 'cache'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.weather_settings = copy.deepcopy(WEATHER_SETTINGS)
+        self.weather_cache_dir = self.project_root_dir / 'weather_cache'
+        self.weather_cache_dir.mkdir(parents=True, exist_ok=True)
+        self.weather_client = None
+        if self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
+            self.weather_client = WeatherClient(
+                cache_dir=self.weather_cache_dir,
+                timezone=self.weather_settings.get("timezone", "Europe/Bratislava"),
+            )
         self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
 
     def output_path(self, filename: str) -> Path:
         """Build a path inside project-specific output directory."""
-        return self.data_dir / filename
+        path = self.data_dir / filename
+        if not self.output_tag:
+            return path
+        return path.with_name(f"{path.stem}__{self.output_tag}{path.suffix}")
+
+    @staticmethod
+    def _order_purchase_datetime(order: Dict[str, Any]) -> Optional[datetime]:
+        raw_value = order.get('pur_date') or order.get('purchase_date') or order.get('last_change')
+        if not raw_value:
+            return None
+        parsed = pd.to_datetime(raw_value, errors='coerce')
+        if pd.isna(parsed):
+            return None
+        return parsed.to_pydatetime()
+
+    def _filter_orders_by_range(
+        self,
+        orders: List[Dict[str, Any]],
+        date_from: datetime,
+        date_to: datetime,
+    ) -> List[Dict[str, Any]]:
+        start_date = date_from.date()
+        end_date = date_to.date()
+        filtered: List[Dict[str, Any]] = []
+        for order in orders:
+            purchase_dt = self._order_purchase_datetime(order)
+            if purchase_dt is None:
+                continue
+            if start_date <= purchase_dt.date() <= end_date:
+                filtered.append(order)
+        return filtered
+
+    @staticmethod
+    def _format_period_range_en(date_from: datetime, date_to: datetime) -> str:
+        return f"{date_from.strftime('%b %d, %Y')} - {date_to.strftime('%b %d, %Y')}"
+
+    @staticmethod
+    def _format_period_range_sk(date_from: datetime, date_to: datetime) -> str:
+        return f"{date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%d.%m.%Y')}"
+
+    def _build_period_variant_specs(
+        self,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> List[Dict[str, Any]]:
+        total_days = (date_to.date() - date_from.date()).days + 1
+        candidates: List[Tuple[str, int, str]] = [
+            ('7d', 7, '7D'),
+            ('30d', 30, '30D'),
+            ('90d', 90, '90D'),
+        ]
+        specs: List[Dict[str, Any]] = []
+        seen_ranges = set()
+
+        for key, days, label in candidates:
+            if total_days <= days:
+                continue
+            variant_from = max(date_from, date_to - timedelta(days=days - 1))
+            range_key = (variant_from.date().isoformat(), date_to.date().isoformat())
+            if range_key in seen_ranges:
+                continue
+            seen_ranges.add(range_key)
+            specs.append({
+                'key': key,
+                'label': label,
+                'date_from': variant_from,
+                'date_to': date_to,
+                'range_en': self._format_period_range_en(variant_from, date_to),
+                'range_sk': self._format_period_range_sk(variant_from, date_to),
+            })
+
+        specs.append({
+            'key': 'full',
+            'label': 'FULL',
+            'date_from': date_from,
+            'date_to': date_to,
+            'range_en': self._format_period_range_en(date_from, date_to),
+            'range_sk': self._format_period_range_sk(date_from, date_to),
+        })
+        return specs
+
+    def _build_period_switcher_payload(
+        self,
+        *,
+        current_key: str,
+        current_path: Path,
+        specs: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        options = []
+        current_spec = next((spec for spec in specs if spec['key'] == current_key), specs[-1])
+        for spec in specs:
+            href = os.path.relpath(spec['report_path'], start=current_path.parent).replace("\\", "/")
+            options.append({
+                'key': spec['key'],
+                'label': spec['label'],
+                'href': href,
+                'range_en': spec['range_en'],
+                'range_sk': spec['range_sk'],
+            })
+        return {
+            'label_en': 'Report period',
+            'label_sk': 'Obdobie reportu',
+            'current_key': current_key,
+            'current_range_en': current_spec['range_en'],
+            'current_range_sk': current_spec['range_sk'],
+            'options': options,
+        }
+
+    def _build_period_switcher_bundle(
+        self,
+        orders: List[Dict[str, Any]],
+        date_from: datetime,
+        date_to: datetime,
+    ) -> Optional[Dict[str, Any]]:
+        if not self.enable_period_bundle or not self.output_tag:
+            return None
+
+        specs = self._build_period_variant_specs(date_from, date_to)
+        if len(specs) <= 1:
+            return None
+
+        main_report_path = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
+        bundle_root = Path("_periods") / main_report_path.stem
+
+        for spec in specs:
+            if spec['key'] == 'full':
+                spec['report_path'] = main_report_path
+                continue
+
+            artifact_subdir = str(bundle_root / spec['key'])
+            child_exporter = BizniWebExporter(
+                self.api_url,
+                self.api_token,
+                project_name=self.project_name,
+                output_tag=self.output_tag,
+                artifact_subdir=artifact_subdir,
+                enable_period_bundle=False,
+            )
+            spec['report_path'] = child_exporter.output_path(
+                f"report_{spec['date_from'].strftime('%Y%m%d')}-{spec['date_to'].strftime('%Y%m%d')}.html"
+            )
+            spec['exporter'] = child_exporter
+
+        for spec in specs:
+            if spec['key'] == 'full':
+                continue
+            filtered_orders = self._filter_orders_by_range(orders, spec['date_from'], spec['date_to'])
+            switcher_payload = self._build_period_switcher_payload(
+                current_key=spec['key'],
+                current_path=spec['report_path'],
+                specs=specs,
+            )
+            spec['exporter'].export_to_csv(
+                filtered_orders,
+                spec['date_from'],
+                spec['date_to'],
+                period_switcher=switcher_payload,
+            )
+
+        return self._build_period_switcher_payload(
+            current_key='full',
+            current_path=main_report_path,
+            specs=specs,
+        )
+
+    def _belongs_to_active_output_variant(self, file: Path) -> bool:
+        if self.output_tag:
+            return file.stem.endswith(f"__{self.output_tag}")
+        return "__" not in file.stem
+
+    @staticmethod
+    def _build_source_entry(
+        *,
+        key: str,
+        label: str,
+        status: str,
+        mode: str,
+        message: str,
+        healthy: bool,
+        **extra: Any,
+    ) -> Dict[str, Any]:
+        entry: Dict[str, Any] = {
+            "key": key,
+            "label": label,
+            "status": status,
+            "mode": mode,
+            "message": message,
+            "healthy": healthy,
+        }
+        entry.update(extra)
+        return entry
+
+    @staticmethod
+    def _finalize_source_health(source_health: Dict[str, Any]) -> Dict[str, Any]:
+        sources = list((source_health.get("sources") or {}).values())
+        degraded = [source["label"] for source in sources if source.get("status") in {"warning", "error"}]
+        source_health["overall_status"] = "partial" if degraded else "full"
+        source_health["is_partial"] = bool(degraded)
+        source_health["partial_sources"] = degraded
+        if degraded:
+            source_health["summary"] = (
+                "Partial data: "
+                + ", ".join(degraded)
+                + " did not load cleanly in this run. Metrics depending on these sources may be incomplete or zero-filled."
+            )
+        else:
+            source_health["summary"] = "All enabled external sources loaded successfully for this run."
+        return source_health
+
+    def _write_data_quality_file(
+        self,
+        source_health: Dict[str, Any],
+        date_from: datetime,
+        date_to: datetime,
+    ) -> Path:
+        quality_path = self.output_path(f"data_quality_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.json")
+        with open(quality_path, "w", encoding="utf-8") as f:
+            json.dump(source_health, f, ensure_ascii=False, indent=2)
+        print(f"Data quality metadata saved: {quality_path}")
+        return quality_path
 
     @staticmethod
     def get_product_sku(ean: str, title: str) -> str:
@@ -1537,9 +1700,11 @@ class BizniWebExporter:
         """Clean up old data files before starting new export"""
         data_dir = self.data_dir
         if data_dir.exists():
-            # Remove all CSV and HTML files
-            for pattern in ['*.csv', '*.html']:
+            # Remove only files that belong to the active output variant.
+            for pattern in ['*.csv', '*.html', '*.json']:
                 for file in data_dir.glob(pattern):
+                    if not self._belongs_to_active_output_variant(file):
+                        continue
                     try:
                         file.unlink()
                         print(f"Removed old file: {file.name}")
@@ -1549,7 +1714,13 @@ class BizniWebExporter:
             # Create data directory if it doesn't exist
             data_dir.mkdir(exist_ok=True)
     
-    def export_to_csv(self, orders: List[Dict[str, Any]], date_from: datetime, date_to: datetime) -> str:
+    def export_to_csv(
+        self,
+        orders: List[Dict[str, Any]],
+        date_from: datetime,
+        date_to: datetime,
+        period_switcher: Dict[str, Any] = None,
+    ) -> str:
         """Export orders to CSV file"""
         # Clean up old data files first
         print("Cleaning up old data files...")
@@ -1557,6 +1728,28 @@ class BizniWebExporter:
 
         # Safety dedup for long historical runs / cursor overlap edge cases.
         orders = self.deduplicate_orders(orders)
+        if period_switcher is None:
+            period_switcher = self._build_period_switcher_bundle(orders, date_from, date_to)
+
+        source_health: Dict[str, Any] = {
+            "project": self.project_name,
+            "generated_at_utc": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            "date_range": {
+                "from": date_from.strftime("%Y-%m-%d"),
+                "to": date_to.strftime("%Y-%m-%d"),
+            },
+            "sources": {
+                "biznisweb_orders": self._build_source_entry(
+                    key="biznisweb_orders",
+                    label="BizniWeb Orders",
+                    status="ok",
+                    mode="api",
+                    message=f"Fetched and deduplicated {len(orders)} orders from BizniWeb GraphQL.",
+                    healthy=True,
+                    orders=len(orders),
+                ),
+            },
+        }
         
         # Fetch Facebook Ads spend data
         fb_daily_spend = {}
@@ -1570,35 +1763,79 @@ class BizniWebExporter:
                 f"Using manual Facebook Ads total: {MANUAL_FB_ADS_TOTAL:.2f} EUR "
                 f"distributed across {len(fb_daily_spend)} days"
             )
+            source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                key="facebook_ads",
+                label="Facebook Ads",
+                status="manual",
+                mode="manual_total_distribution",
+                message=f"Manual Facebook Ads total {MANUAL_FB_ADS_TOTAL:.2f} EUR distributed across the selected date range.",
+                healthy=True,
+                active_days=len(fb_daily_spend),
+                total_eur=round(float(MANUAL_FB_ADS_TOTAL), 2),
+            )
         elif self.fb_client.is_configured:
-            print("Fetching Facebook Ads spend data...")
-            fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
-            if fb_daily_spend:
-                print(f"Retrieved Facebook Ads data for {len(fb_daily_spend)} days")
+            print("Testing Facebook Ads connection...")
+            if not self.fb_client.test_connection():
+                logger.warning("Facebook Ads connection test failed; report will continue with zero-filled FB metrics.")
+                source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                    key="facebook_ads",
+                    label="Facebook Ads",
+                    status="error",
+                    mode="api",
+                    message="Configured, but API connection test failed. FB-based metrics in this run may be incomplete or zero-filled.",
+                    healthy=False,
+                )
+            else:
+                print("Fetching Facebook Ads spend data...")
+                fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
+                if fb_daily_spend:
+                    print(f"Retrieved Facebook Ads data for {len(fb_daily_spend)} days")
 
-            # Fetch detailed metrics for Facebook Ads report
-            print("Fetching detailed Facebook Ads metrics...")
-            fb_detailed_metrics = self.fb_client.get_daily_metrics(date_from, date_to)
-            if fb_detailed_metrics:
-                print(f"Retrieved detailed FB metrics for {len(fb_detailed_metrics)} days")
+                # Fetch detailed metrics for Facebook Ads report
+                print("Fetching detailed Facebook Ads metrics...")
+                fb_detailed_metrics = self.fb_client.get_daily_metrics(date_from, date_to)
+                if fb_detailed_metrics:
+                    print(f"Retrieved detailed FB metrics for {len(fb_detailed_metrics)} days")
 
-            # Fetch campaign-level performance
-            print("Fetching Facebook campaign performance...")
-            fb_campaigns = self.fb_client.get_campaign_spend(date_from, date_to)
-            if fb_campaigns:
-                print(f"Retrieved data for {len(fb_campaigns)} campaigns")
+                # Fetch campaign-level performance
+                print("Fetching Facebook campaign performance...")
+                fb_campaigns = self.fb_client.get_campaign_spend(date_from, date_to)
+                if fb_campaigns:
+                    print(f"Retrieved data for {len(fb_campaigns)} campaigns")
 
-            # Fetch hourly stats
-            print("Fetching Facebook hourly stats...")
-            fb_hourly_stats = self.fb_client.get_hourly_stats(date_from, date_to)
-            if fb_hourly_stats:
-                print(f"Retrieved hourly stats for {len(fb_hourly_stats)} hours")
+                # Fetch hourly stats
+                print("Fetching Facebook hourly stats...")
+                fb_hourly_stats = self.fb_client.get_hourly_stats(date_from, date_to)
+                if fb_hourly_stats:
+                    print(f"Retrieved hourly stats for {len(fb_hourly_stats)} hours")
 
-            # Fetch day of week stats
-            print("Fetching Facebook day-of-week stats...")
-            fb_dow_stats = self.fb_client.get_day_of_week_stats(date_from, date_to)
-            if fb_dow_stats:
-                print(f"Retrieved day-of-week stats for {len(fb_dow_stats)} days")
+                # Fetch day of week stats
+                print("Fetching Facebook day-of-week stats...")
+                fb_dow_stats = self.fb_client.get_day_of_week_stats(date_from, date_to)
+                if fb_dow_stats:
+                    print(f"Retrieved day-of-week stats for {len(fb_dow_stats)} days")
+
+                source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                    key="facebook_ads",
+                    label="Facebook Ads",
+                    status="ok",
+                    mode="api",
+                    message=f"Facebook Ads API connected successfully. Daily spend loaded for {len(fb_daily_spend)} active days.",
+                    healthy=True,
+                    active_days=len(fb_daily_spend),
+                    detailed_days=len(fb_detailed_metrics),
+                    campaign_count=len(fb_campaigns),
+                    hourly_rows=len(fb_hourly_stats),
+                )
+        else:
+            source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                key="facebook_ads",
+                label="Facebook Ads",
+                status="disabled",
+                mode="not_configured",
+                message="Facebook Ads integration is not configured for this project/runtime.",
+                healthy=True,
+            )
         
         # Fetch Google Ads spend data
         google_ads_daily_spend = {}
@@ -1608,11 +1845,51 @@ class BizniWebExporter:
                 f"Using manual Google Ads total: {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR "
                 f"distributed across {len(google_ads_daily_spend)} days"
             )
+            source_health["sources"]["google_ads"] = self._build_source_entry(
+                key="google_ads",
+                label="Google Ads",
+                status="manual",
+                mode="manual_total_distribution",
+                message=f"Manual Google Ads total {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR distributed across the selected date range.",
+                healthy=True,
+                active_days=len(google_ads_daily_spend),
+                total_eur=round(float(MANUAL_GOOGLE_ADS_TOTAL), 2),
+            )
         elif self.google_ads_client.is_configured:
-            print("Fetching Google Ads spend data...")
-            google_ads_daily_spend = self.google_ads_client.get_daily_spend(date_from, date_to)
-            if google_ads_daily_spend:
-                print(f"Retrieved Google Ads data for {len(google_ads_daily_spend)} days")
+            print("Testing Google Ads connection...")
+            if not self.google_ads_client.test_connection():
+                logger.warning("Google Ads connection test failed; report will continue with zero-filled Google metrics.")
+                source_health["sources"]["google_ads"] = self._build_source_entry(
+                    key="google_ads",
+                    label="Google Ads",
+                    status="error",
+                    mode="api",
+                    message="Configured, but API connection test failed. Google Ads metrics in this run may be incomplete or zero-filled.",
+                    healthy=False,
+                )
+            else:
+                print("Fetching Google Ads spend data...")
+                google_ads_daily_spend = self.google_ads_client.get_daily_spend(date_from, date_to)
+                if google_ads_daily_spend:
+                    print(f"Retrieved Google Ads data for {len(google_ads_daily_spend)} days")
+                source_health["sources"]["google_ads"] = self._build_source_entry(
+                    key="google_ads",
+                    label="Google Ads",
+                    status="ok",
+                    mode="api",
+                    message=f"Google Ads API connected successfully. Daily spend loaded for {len(google_ads_daily_spend)} active days.",
+                    healthy=True,
+                    active_days=len(google_ads_daily_spend),
+                )
+        else:
+            source_health["sources"]["google_ads"] = self._build_source_entry(
+                key="google_ads",
+                label="Google Ads",
+                status="disabled",
+                mode="not_configured",
+                message="Google Ads integration is not configured for this project/runtime.",
+                healthy=True,
+            )
         
         # Flatten all orders
         all_rows = []
@@ -1707,6 +1984,9 @@ class BizniWebExporter:
 
         # New analytics
         day_of_week_analysis = self.analyze_day_of_week(df)
+        week_of_month_analysis = self.analyze_week_of_month(df)
+        day_of_month_analysis = self.analyze_day_of_month(df)
+        advanced_dtc_metrics = self.analyze_advanced_dtc_metrics(df)
         day_hour_heatmap = self.analyze_day_hour_heatmap(df)
         country_analysis, city_analysis = self.analyze_geographic(df)
         geo_profitability = self.analyze_geo_profitability(df, fb_campaigns)
@@ -1734,10 +2014,49 @@ class BizniWebExporter:
 
         # Create aggregated reports
         date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
+        weather_analysis = self.analyze_weather_impact(date_agg, date_from, date_to)
+        if self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
+            if weather_analysis:
+                weather_days = len(weather_analysis.get("daily", [])) if weather_analysis.get("daily") is not None else 0
+                source_health["sources"]["weather"] = self._build_source_entry(
+                    key="weather",
+                    label="Weather",
+                    status="ok",
+                    mode="api",
+                    message=f"Weather enrichment loaded successfully for {weather_days} daily rows.",
+                    healthy=True,
+                    active_days=weather_days,
+                    provider=weather_analysis.get("source", "Open-Meteo Historical Weather API"),
+                    location=weather_analysis.get("location_label", ""),
+                )
+            else:
+                source_health["sources"]["weather"] = self._build_source_entry(
+                    key="weather",
+                    label="Weather",
+                    status="error",
+                    mode="api",
+                    message="Weather enrichment was enabled, but no usable weather dataset was produced for this run.",
+                    healthy=False,
+                )
+        else:
+            source_health["sources"]["weather"] = self._build_source_entry(
+                key="weather",
+                label="Weather",
+                status="disabled",
+                mode="not_configured",
+                message="Weather enrichment is not configured for this project/runtime.",
+                healthy=True,
+            )
+        source_health = self._finalize_source_health(source_health)
 
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(df, date_agg, clv_return_time_analysis)
         consistency_checks = self.validate_metric_consistency(date_agg, financial_metrics, clv_return_time_analysis)
+        cfo_kpi_payload = build_cfo_kpi_payload(
+            date_agg=date_agg,
+            export_df=df,
+            fixed_daily_cost_eur=float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70")),
+        )
 
         # Cost Per Order analysis with campaign attribution
         # Use the same revenue source as financial summary to keep ROAS definitions aligned.
@@ -1760,10 +2079,14 @@ class BizniWebExporter:
         print("Generating HTML report...")
         html_content = generate_html_report(
             date_agg, date_product_agg, items_agg,
-            date_from, date_to, fb_daily_spend, google_ads_daily_spend,
+            date_from, date_to, self.reporting_defaults["reporting_system_name"], fb_daily_spend, google_ads_daily_spend,
             returning_customers_analysis, clv_return_time_analysis,
             order_size_distribution, item_combinations,
             day_of_week_analysis=day_of_week_analysis,
+            week_of_month_analysis=week_of_month_analysis,
+            day_of_month_analysis=day_of_month_analysis,
+            weather_analysis=weather_analysis,
+            advanced_dtc_metrics=advanced_dtc_metrics,
             day_hour_heatmap=day_hour_heatmap,
             country_analysis=country_analysis,
             city_analysis=city_analysis,
@@ -1788,19 +2111,25 @@ class BizniWebExporter:
             fb_hourly_stats=fb_hourly_stats,
             fb_dow_stats=fb_dow_stats,
             ltv_by_date=ltv_by_date,
-            consistency_checks=consistency_checks
+            consistency_checks=consistency_checks,
+            cfo_kpi_payload=cfo_kpi_payload,
+            source_health=source_health,
+            period_switcher=period_switcher,
+            dashboard_variant='default',
         )
         html_filename = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
         # Write with UTF-8 BOM to avoid mojibake when a server/browser mis-detects charset
         with open(html_filename, 'w', encoding='utf-8-sig') as f:
             f.write(html_content)
         print(f"HTML report saved: {html_filename}")
+        self._write_data_quality_file(source_health, date_from, date_to)
 
         # Generate Email Strategy Report
-        if customer_email_segments and cohort_analysis:
+        if ENABLE_EMAIL_STRATEGY_REPORT and customer_email_segments and cohort_analysis:
             print("Generating Email Strategy Report...")
             email_strategy_html = generate_email_strategy_report(
-                customer_email_segments, cohort_analysis, date_from, date_to
+                customer_email_segments, cohort_analysis, date_from, date_to,
+                report_title=self.reporting_defaults["reporting_system_name"],
             )
             email_strategy_filename = self.output_path(f"email_strategy_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
             # Keep the same robust encoding strategy for secondary HTML report
@@ -3425,6 +3754,790 @@ class BizniWebExporter:
         print(f"Day of week analysis complete")
         return orders_per_day
 
+    def analyze_week_of_month(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze orders, revenue, and profitability by week-in-month using equal 4x7-day windows."""
+        print("\nAnalyzing week-of-month patterns...")
+
+        wom_df = df.copy()
+        wom_df['purchase_datetime_wom'] = pd.to_datetime(wom_df['purchase_date'])
+        wom_df['purchase_date_only'] = wom_df['purchase_datetime_wom'].dt.date
+        wom_df['year_month'] = wom_df['purchase_datetime_wom'].dt.to_period('M').astype(str)
+        wom_df['day_in_month'] = wom_df['purchase_datetime_wom'].dt.day
+        wom_df['date_only_ts'] = wom_df['purchase_datetime_wom'].dt.normalize()
+
+        # Use only days 1..28 => exact 4 equal 7-day buckets each month.
+        wom_df = wom_df[wom_df['day_in_month'] <= 28].copy()
+
+        # Use full months only (remove partial first/last month from selected range).
+        min_date = wom_df['date_only_ts'].min()
+        max_date = wom_df['date_only_ts'].max()
+        if pd.isna(min_date) or pd.isna(max_date):
+            base = pd.DataFrame({'week_of_month': [1, 2, 3, 4]})
+            base['orders'] = 0
+            base['revenue'] = 0.0
+            base['profit'] = 0.0
+            base['active_days'] = 0
+            base['active_months'] = 0
+            base['calendar_days'] = 0
+            base['week_label'] = base['week_of_month'].apply(lambda w: f'Week {int(w)}')
+            base['orders_pct'] = 0.0
+            base['revenue_pct'] = 0.0
+            base['aov'] = 0.0
+            base['profit_margin_pct'] = 0.0
+            base['avg_daily_revenue'] = 0.0
+            base['avg_daily_profit'] = 0.0
+            base['avg_orders_per_day'] = 0.0
+            base['active_day_ratio_pct'] = 0.0
+            print("Week-of-month analysis complete (empty dataset)")
+            return base
+
+        full_start = min_date if min_date.day == 1 else (min_date + pd.offsets.MonthBegin(1))
+        max_month_last_day = (max_date + pd.offsets.MonthEnd(0)).day
+        full_end = max_date if max_date.day == max_month_last_day else (max_date - pd.offsets.MonthEnd(1))
+
+        has_full_month_window = full_start <= full_end
+        if has_full_month_window:
+            wom_df = wom_df[(wom_df['date_only_ts'] >= full_start) & (wom_df['date_only_ts'] <= full_end)].copy()
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=full_start, end=full_end, freq='D')})
+        else:
+            # Fallback for short ranges that don't contain any full month.
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=min_date, end=max_date, freq='D')})
+
+        calendar_df = calendar_df[calendar_df['date'].dt.day <= 28].copy()
+
+        wom_df['week_of_month'] = ((wom_df['day_in_month'] - 1) // 7) + 1
+        calendar_df['week_of_month'] = ((calendar_df['date'].dt.day - 1) // 7) + 1
+
+        wom_orders_agg = wom_df.groupby('week_of_month').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum',
+            'purchase_date_only': 'nunique',
+            'year_month': 'nunique'
+        }).reset_index()
+
+        wom_orders_agg.columns = [
+            'week_of_month', 'orders', 'revenue', 'profit', 'active_days', 'active_months'
+        ]
+
+        calendar_days = calendar_df.groupby('week_of_month').agg({
+            'date': 'nunique'
+        }).reset_index().rename(columns={'date': 'calendar_days'})
+
+        wom_agg = pd.DataFrame({'week_of_month': [1, 2, 3, 4]})
+        wom_agg = wom_agg.merge(wom_orders_agg, on='week_of_month', how='left')
+        wom_agg = wom_agg.merge(calendar_days, on='week_of_month', how='left')
+
+        for col in ['orders', 'revenue', 'profit', 'active_days', 'active_months', 'calendar_days']:
+            wom_agg[col] = wom_agg[col].fillna(0)
+        wom_agg['orders'] = wom_agg['orders'].astype(int)
+        wom_agg['active_days'] = wom_agg['active_days'].astype(int)
+        wom_agg['active_months'] = wom_agg['active_months'].astype(int)
+        wom_agg['calendar_days'] = wom_agg['calendar_days'].astype(int)
+        wom_agg['week_label'] = wom_agg['week_of_month'].apply(lambda w: f'Week {int(w)}')
+
+        total_orders = wom_agg['orders'].sum()
+        total_revenue = wom_agg['revenue'].sum()
+
+        wom_agg['orders_pct'] = (
+            (wom_agg['orders'] / total_orders * 100).round(1) if total_orders > 0 else 0
+        )
+        wom_agg['revenue_pct'] = (
+            (wom_agg['revenue'] / total_revenue * 100).round(1) if total_revenue > 0 else 0
+        )
+        wom_agg['aov'] = (wom_agg['revenue'] / wom_agg['orders']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['profit_margin_pct'] = ((wom_agg['profit'] / wom_agg['revenue']) * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+
+        # Normalize by total calendar days in each month phase (not only active order days).
+        wom_agg['avg_daily_revenue'] = (wom_agg['revenue'] / wom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['avg_daily_profit'] = (wom_agg['profit'] / wom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['avg_orders_per_day'] = (wom_agg['orders'] / wom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['active_day_ratio_pct'] = (wom_agg['active_days'] / wom_agg['calendar_days'] * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+
+        wom_agg = wom_agg.sort_values('week_of_month').reset_index(drop=True)
+
+        if has_full_month_window:
+            print(
+                f"Week-of-month analysis complete (full months window: {full_start.strftime('%Y-%m-%d')} to {full_end.strftime('%Y-%m-%d')})"
+            )
+        else:
+            print("Week-of-month analysis complete (fallback: no full-month window in range)")
+        return wom_agg
+
+    def analyze_day_of_month(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze orders, revenue, and profitability by day number within month (1-31)."""
+        print("\nAnalyzing day-of-month patterns...")
+
+        dom_df = df.copy()
+        dom_df['purchase_datetime_dom'] = pd.to_datetime(dom_df['purchase_date'])
+        dom_df['purchase_date_only'] = dom_df['purchase_datetime_dom'].dt.date
+        dom_df['day_in_month'] = dom_df['purchase_datetime_dom'].dt.day
+        dom_df['year_month'] = dom_df['purchase_datetime_dom'].dt.to_period('M').astype(str)
+        dom_df['date_only_ts'] = dom_df['purchase_datetime_dom'].dt.normalize()
+
+        min_date = dom_df['date_only_ts'].min()
+        max_date = dom_df['date_only_ts'].max()
+        if pd.isna(min_date) or pd.isna(max_date):
+            base = pd.DataFrame({'day_in_month': list(range(1, 32))})
+            base['orders'] = 0
+            base['revenue'] = 0.0
+            base['profit'] = 0.0
+            base['active_days'] = 0
+            base['calendar_days'] = 0
+            base['day_label'] = base['day_in_month'].apply(lambda d: f"{int(d)}.")
+            base['orders_pct'] = 0.0
+            base['revenue_pct'] = 0.0
+            base['aov'] = 0.0
+            base['profit_margin_pct'] = 0.0
+            base['avg_revenue_per_occurrence'] = 0.0
+            base['avg_profit_per_occurrence'] = 0.0
+            base['avg_orders_per_occurrence'] = 0.0
+            base['active_day_ratio_pct'] = 0.0
+            print("Day-of-month analysis complete (empty dataset)")
+            return base
+
+        # Use full months only for unbiased phase-of-month comparison.
+        full_start = min_date if min_date.day == 1 else (min_date + pd.offsets.MonthBegin(1))
+        max_month_last_day = (max_date + pd.offsets.MonthEnd(0)).day
+        full_end = max_date if max_date.day == max_month_last_day else (max_date - pd.offsets.MonthEnd(1))
+
+        has_full_month_window = full_start <= full_end
+        if has_full_month_window:
+            dom_df = dom_df[(dom_df['date_only_ts'] >= full_start) & (dom_df['date_only_ts'] <= full_end)].copy()
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=full_start, end=full_end, freq='D')})
+        else:
+            # Fallback for short ranges that don't contain any full month.
+            calendar_df = pd.DataFrame({'date': pd.date_range(start=min_date, end=max_date, freq='D')})
+
+        calendar_df['day_in_month'] = calendar_df['date'].dt.day
+
+        dom_orders_agg = dom_df.groupby('day_in_month').agg({
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'profit_before_ads': 'sum',
+            'purchase_date_only': 'nunique'
+        }).reset_index()
+        dom_orders_agg.columns = ['day_in_month', 'orders', 'revenue', 'profit', 'active_days']
+
+        calendar_days = calendar_df.groupby('day_in_month').agg({
+            'date': 'nunique'
+        }).reset_index().rename(columns={'date': 'calendar_days'})
+
+        dom_agg = pd.DataFrame({'day_in_month': list(range(1, 32))})
+        dom_agg = dom_agg.merge(dom_orders_agg, on='day_in_month', how='left')
+        dom_agg = dom_agg.merge(calendar_days, on='day_in_month', how='left')
+
+        for col in ['orders', 'revenue', 'profit', 'active_days', 'calendar_days']:
+            dom_agg[col] = dom_agg[col].fillna(0)
+        dom_agg['orders'] = dom_agg['orders'].astype(int)
+        dom_agg['active_days'] = dom_agg['active_days'].astype(int)
+        dom_agg['calendar_days'] = dom_agg['calendar_days'].astype(int)
+        dom_agg['day_label'] = dom_agg['day_in_month'].apply(lambda d: f"{int(d)}.")
+
+        total_orders = dom_agg['orders'].sum()
+        total_revenue = dom_agg['revenue'].sum()
+
+        dom_agg['orders_pct'] = (
+            (dom_agg['orders'] / total_orders * 100).round(1) if total_orders > 0 else 0
+        )
+        dom_agg['revenue_pct'] = (
+            (dom_agg['revenue'] / total_revenue * 100).round(1) if total_revenue > 0 else 0
+        )
+        dom_agg['aov'] = (dom_agg['revenue'] / dom_agg['orders']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['profit_margin_pct'] = ((dom_agg['profit'] / dom_agg['revenue']) * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+
+        # Fair phase comparison: normalize by number of calendar occurrences of each day.
+        dom_agg['avg_revenue_per_occurrence'] = (dom_agg['revenue'] / dom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['avg_profit_per_occurrence'] = (dom_agg['profit'] / dom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['avg_orders_per_occurrence'] = (dom_agg['orders'] / dom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['active_day_ratio_pct'] = (dom_agg['active_days'] / dom_agg['calendar_days'] * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+
+        dom_agg = dom_agg.sort_values('day_in_month').reset_index(drop=True)
+
+        if has_full_month_window:
+            print(
+                f"Day-of-month analysis complete (full months window: {full_start.strftime('%Y-%m-%d')} to {full_end.strftime('%Y-%m-%d')})"
+            )
+        else:
+            print("Day-of-month analysis complete (fallback: no full-month window in range)")
+        return dom_agg
+
+    def analyze_weather_impact(
+        self,
+        date_agg: pd.DataFrame,
+        date_from: datetime,
+        date_to: datetime
+    ) -> Optional[dict]:
+        """Analyze whether weather conditions correlate with daily business performance."""
+        print("\nAnalyzing weather impact...")
+
+        if not self.weather_client or not self.weather_settings.get("enabled"):
+            print("Weather analysis skipped: weather integration disabled")
+            return None
+
+        try:
+            weather_df = self.weather_client.get_daily_weather(
+                date_from=date_from,
+                date_to=date_to,
+                locations=self.weather_settings.get("locations", []),
+            )
+        except Exception as exc:
+            logger.warning(f"Weather analysis skipped due to fetch error: {exc}")
+            return None
+
+        if weather_df.empty:
+            print("Weather analysis skipped: no weather data returned")
+            return None
+
+        weather_df = weather_df.copy()
+        weather_df["date"] = pd.to_datetime(weather_df["date"]).dt.date
+
+        analysis_df = date_agg.copy()
+        analysis_df["date"] = pd.to_datetime(analysis_df["date"]).dt.date
+        analysis_df["aov"] = analysis_df.apply(
+            lambda row: round((row["total_revenue"] / row["unique_orders"]) if row["unique_orders"] > 0 else 0, 2),
+            axis=1
+        )
+        analysis_df["weekday"] = pd.to_datetime(analysis_df["date"]).dt.day_name()
+
+        weekday_baseline = analysis_df.groupby("weekday").agg({
+            "total_revenue": "mean",
+            "net_profit": "mean",
+            "unique_orders": "mean",
+            "aov": "mean",
+        }).rename(columns={
+            "total_revenue": "weekday_expected_revenue",
+            "net_profit": "weekday_expected_profit",
+            "unique_orders": "weekday_expected_orders",
+            "aov": "weekday_expected_aov",
+        }).reset_index()
+
+        merged = analysis_df.merge(weather_df, on="date", how="left")
+        merged = merged.merge(weekday_baseline, on="weekday", how="left")
+
+        valid = merged[merged["temperature_2m_mean"].notna()].copy()
+        if valid.empty:
+            print("Weather analysis skipped: merged dataset has no valid weather rows")
+            return None
+
+        valid["weather_code"] = pd.to_numeric(valid["weather_code"], errors="coerce").fillna(0).astype(int)
+        valid["precipitation_sum"] = pd.to_numeric(valid["precipitation_sum"], errors="coerce").fillna(0.0)
+        valid["precipitation_hours"] = pd.to_numeric(valid["precipitation_hours"], errors="coerce").fillna(0.0)
+        valid["wind_speed_10m_max"] = pd.to_numeric(valid["wind_speed_10m_max"], errors="coerce").fillna(0.0)
+
+        valid["weather_bad_score"] = (
+            (valid["precipitation_sum"] >= 1.0).astype(int) * 2
+            + (valid["precipitation_hours"] >= 2.0).astype(int)
+            + (valid["temperature_2m_mean"] <= 5.0).astype(int)
+            + (valid["wind_speed_10m_max"] >= 25.0).astype(int)
+            + (valid["weather_code"] >= 50).astype(int)
+        )
+
+        def classify_weather_bucket(row: pd.Series) -> str:
+            if row["weather_bad_score"] >= 3:
+                return "Bad"
+            if (
+                row["precipitation_sum"] <= 0.1
+                and row["weather_code"] < 50
+                and 10.0 <= row["temperature_2m_mean"] <= 25.0
+                and row["wind_speed_10m_max"] < 20.0
+            ):
+                return "Good"
+            return "Neutral"
+
+        valid["weather_bucket"] = valid.apply(classify_weather_bucket, axis=1)
+        valid["revenue_vs_weekday_baseline"] = valid["total_revenue"] - valid["weekday_expected_revenue"]
+        valid["profit_vs_weekday_baseline"] = valid["net_profit"] - valid["weekday_expected_profit"]
+        valid["orders_vs_weekday_baseline"] = valid["unique_orders"] - valid["weekday_expected_orders"]
+        valid["aov_vs_weekday_baseline"] = valid["aov"] - valid["weekday_expected_aov"]
+
+        overall_avg_revenue = valid["total_revenue"].mean()
+        overall_avg_profit = valid["net_profit"].mean()
+        overall_avg_orders = valid["unique_orders"].mean()
+
+        bucket_summary = valid.groupby("weather_bucket").agg({
+            "date": "count",
+            "total_revenue": "mean",
+            "net_profit": "mean",
+            "unique_orders": "mean",
+            "aov": "mean",
+            "temperature_2m_mean": "mean",
+            "precipitation_sum": "mean",
+            "revenue_vs_weekday_baseline": "mean",
+            "profit_vs_weekday_baseline": "mean",
+            "orders_vs_weekday_baseline": "mean",
+            "aov_vs_weekday_baseline": "mean",
+        }).reset_index().rename(columns={
+            "date": "days",
+            "total_revenue": "avg_daily_revenue",
+            "net_profit": "avg_daily_profit",
+            "unique_orders": "avg_daily_orders",
+            "aov": "avg_aov",
+            "temperature_2m_mean": "avg_temperature",
+            "precipitation_sum": "avg_precipitation",
+        })
+
+        bucket_summary["revenue_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_revenue"] / overall_avg_revenue - 1) * 100, 2) if overall_avg_revenue else 0,
+            axis=1
+        )
+        bucket_summary["profit_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_profit"] / overall_avg_profit - 1) * 100, 2) if overall_avg_profit else 0,
+            axis=1
+        )
+        bucket_summary["orders_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_orders"] / overall_avg_orders - 1) * 100, 2) if overall_avg_orders else 0,
+            axis=1
+        )
+
+        bucket_order = ["Good", "Neutral", "Bad"]
+        bucket_summary["bucket_order"] = bucket_summary["weather_bucket"].map({label: idx for idx, label in enumerate(bucket_order)})
+        bucket_summary = bucket_summary.sort_values("bucket_order").drop(columns=["bucket_order"]).reset_index(drop=True)
+
+        def safe_corr(series_a: pd.Series, series_b: pd.Series) -> Optional[float]:
+            mask = series_a.notna() & series_b.notna()
+            if mask.sum() < 5:
+                return None
+            clean_a = series_a[mask]
+            clean_b = series_b[mask]
+            if clean_a.nunique() < 2 or clean_b.nunique() < 2:
+                return None
+            corr = clean_a.corr(clean_b)
+            if pd.isna(corr):
+                return None
+            return round(float(corr), 3)
+
+        correlations = {
+            "rain_revenue": safe_corr(valid["precipitation_sum"], valid["total_revenue"]),
+            "rain_profit": safe_corr(valid["precipitation_sum"], valid["net_profit"]),
+            "rain_orders": safe_corr(valid["precipitation_sum"], valid["unique_orders"]),
+            "temp_revenue": safe_corr(valid["temperature_2m_mean"], valid["total_revenue"]),
+            "temp_profit": safe_corr(valid["temperature_2m_mean"], valid["net_profit"]),
+            "temp_orders": safe_corr(valid["temperature_2m_mean"], valid["unique_orders"]),
+            "bad_score_revenue": safe_corr(valid["weather_bad_score"], valid["total_revenue"]),
+            "bad_score_profit": safe_corr(valid["weather_bad_score"], valid["net_profit"]),
+            "bad_score_orders": safe_corr(valid["weather_bad_score"], valid["unique_orders"]),
+        }
+
+        lag_correlations: Dict[str, Dict[str, Optional[float]]] = {}
+        valid = valid.sort_values("date").reset_index(drop=True)
+        for lag in (0, 1, 2):
+            weather_score = valid["weather_bad_score"].shift(lag) if lag > 0 else valid["weather_bad_score"]
+            lag_correlations[f"lag_{lag}_day"] = {
+                "revenue": safe_corr(weather_score, valid["total_revenue"]),
+                "profit": safe_corr(weather_score, valid["net_profit"]),
+                "orders": safe_corr(weather_score, valid["unique_orders"]),
+            }
+
+        analysis_csv = valid[[
+            "date",
+            "weekday",
+            "weather_bucket",
+            "weather_bad_score",
+            "weather_code",
+            "temperature_2m_mean",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "precipitation_sum",
+            "precipitation_hours",
+            "wind_speed_10m_max",
+            "total_revenue",
+            "net_profit",
+            "unique_orders",
+            "aov",
+            "revenue_vs_weekday_baseline",
+            "profit_vs_weekday_baseline",
+            "orders_vs_weekday_baseline",
+            "aov_vs_weekday_baseline",
+        ]].copy()
+        analysis_filename = self.output_path(
+            f"weather_impact_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+        )
+        analysis_csv.to_csv(analysis_filename, index=False, encoding="utf-8-sig")
+        print(f"Weather impact analysis saved: {analysis_filename}")
+
+        location_names = [str(location.get("name", "Location")) for location in self.weather_settings.get("locations", [])]
+        return {
+            "daily": valid,
+            "bucket_summary": bucket_summary,
+            "correlations": correlations,
+            "lag_correlations": lag_correlations,
+            "location_label": ", ".join(location_names),
+            "timezone": self.weather_settings.get("timezone", "Europe/Bratislava"),
+            "source": "Open-Meteo Historical Weather API",
+        }
+
+    def analyze_advanced_dtc_metrics(self, df: pd.DataFrame) -> dict:
+        """
+        Advanced DTC unit-economics metrics:
+        1) First-order contribution margin
+        2) First-order vs repeat contribution/order
+        3) Contribution LTV/CAC (customer-level, pre-ad contribution)
+        4) Cohort payback in days
+        7) Contribution by basket size
+        8) SKU contribution Pareto (80/20)
+        9) Attach-rate for key products
+        10) Margin stability index
+        11) Payday window index
+        """
+        print("\nAnalyzing advanced DTC metrics...")
+        revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'
+
+        # ---- Build robust order-level frame
+        orders_df = df[['order_num', 'customer_email', 'purchase_date', revenue_col, 'total_items_in_order']].drop_duplicates(subset=['order_num']).copy()
+        orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
+        orders_df['purchase_date_only'] = orders_df['purchase_datetime'].dt.date
+        orders_df['cohort_month'] = orders_df['purchase_datetime'].dt.to_period('M').astype(str)
+
+        product_cost_by_order = df.groupby('order_num')['total_expense'].sum()
+        orders_df['product_cost'] = orders_df['order_num'].map(product_cost_by_order).fillna(0)
+        orders_df['packaging_cost'] = PACKAGING_COST_PER_ORDER
+        orders_df['shipping_subsidy_cost'] = SHIPPING_SUBSIDY_PER_ORDER
+        orders_df['pre_ad_contribution'] = (
+            orders_df[revenue_col] - orders_df['product_cost'] - orders_df['packaging_cost'] - orders_df['shipping_subsidy_cost']
+        )
+
+        # Mark first vs repeat orders
+        first_order_date = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
+        orders_df['is_returning'] = orders_df.apply(
+            lambda row: row['purchase_datetime'] > first_order_date.get(row['customer_email'], row['purchase_datetime']),
+            axis=1
+        )
+        first_orders = orders_df[~orders_df['is_returning']].copy()
+        repeat_orders = orders_df[orders_df['is_returning']].copy()
+
+        # ---- 1) + 2) first-order contribution metrics
+        first_orders_revenue = float(first_orders[revenue_col].sum())
+        first_orders_contribution = float(first_orders['pre_ad_contribution'].sum())
+        first_order_contribution_margin_pct = (
+            (first_orders_contribution / first_orders_revenue * 100) if first_orders_revenue > 0 else 0.0
+        )
+        first_order_contribution_per_order = (
+            (first_orders_contribution / len(first_orders)) if len(first_orders) > 0 else 0.0
+        )
+        repeat_orders_contribution = float(repeat_orders['pre_ad_contribution'].sum())
+        repeat_order_contribution_per_order = (
+            (repeat_orders_contribution / len(repeat_orders)) if len(repeat_orders) > 0 else 0.0
+        )
+
+        # ---- 3) contribution LTV/CAC (customer-level)
+        total_pre_ad_contribution = float(orders_df['pre_ad_contribution'].sum())
+        total_customers = int(orders_df['customer_email'].nunique())
+        contribution_ltv = (total_pre_ad_contribution / total_customers) if total_customers > 0 else 0.0
+        new_customers = int(len(first_orders))
+        daily_fb_spend = (
+            df.assign(_d=pd.to_datetime(df['purchase_date']).dt.date)
+            .groupby('_d')['fb_ads_daily_spend']
+            .first()
+            .sum()
+        )
+        paid_cac_fb = (daily_fb_spend / new_customers) if new_customers > 0 else 0.0
+        contribution_ltv_cac = (contribution_ltv / paid_cac_fb) if paid_cac_fb > 0 else 0.0
+
+        # ---- 4) cohort payback in days (monthly acquisition cohorts)
+        # Cohort CAC is estimated as monthly FB spend / new customers acquired in that month.
+        daily_spend_df = (
+            df.assign(_d=pd.to_datetime(df['purchase_date']).dt.normalize())
+            .groupby('_d')[['fb_ads_daily_spend']]
+            .first()
+            .reset_index()
+        )
+        daily_spend_df['cohort_month'] = daily_spend_df['_d'].dt.to_period('M').astype(str)
+        monthly_fb_spend = daily_spend_df.groupby('cohort_month')['fb_ads_daily_spend'].sum().to_dict()
+
+        first_order_map = (
+            orders_df.sort_values(['customer_email', 'purchase_datetime'])
+            .groupby('customer_email')
+            .first()[['purchase_datetime', 'cohort_month']]
+            .rename(columns={'purchase_datetime': 'first_purchase_datetime'})
+        )
+        customer_orders = orders_df.sort_values(['customer_email', 'purchase_datetime']).copy()
+        customer_orders = customer_orders.merge(
+            first_order_map[['first_purchase_datetime', 'cohort_month']],
+            left_on='customer_email', right_index=True, how='left', suffixes=('', '_first')
+        )
+        customer_orders['days_since_first'] = (
+            customer_orders['purchase_datetime'] - customer_orders['first_purchase_datetime']
+        ).dt.days
+
+        cohort_rows = []
+        for cohort_month, group in first_order_map.groupby('cohort_month'):
+            cohort_customers = group.index.tolist()
+            cohort_new_customers = len(cohort_customers)
+            cohort_spend = float(monthly_fb_spend.get(cohort_month, 0.0))
+            cohort_cac = (cohort_spend / cohort_new_customers) if cohort_new_customers > 0 else 0.0
+
+            payback_days_list = []
+            for customer in cohort_customers:
+                c_orders = customer_orders[customer_orders['customer_email'] == customer].sort_values('purchase_datetime')
+                c_orders = c_orders[['days_since_first', 'pre_ad_contribution']].copy()
+                if c_orders.empty:
+                    continue
+                c_orders['cum_contribution'] = c_orders['pre_ad_contribution'].cumsum()
+                reached = c_orders[c_orders['cum_contribution'] >= cohort_cac]
+                if cohort_cac <= 0:
+                    payback_days_list.append(0)
+                elif not reached.empty:
+                    payback_days_list.append(int(reached.iloc[0]['days_since_first']))
+
+            recovered_customers = len(payback_days_list)
+            recovery_rate_pct = (recovered_customers / cohort_new_customers * 100) if cohort_new_customers > 0 else 0.0
+            cohort_rows.append({
+                'cohort_month': cohort_month,
+                'new_customers': cohort_new_customers,
+                'cohort_fb_spend': round(cohort_spend, 2),
+                'cohort_cac': round(cohort_cac, 2),
+                'recovered_customers': recovered_customers,
+                'recovery_rate_pct': round(recovery_rate_pct, 1),
+                'avg_payback_days': round(float(np.mean(payback_days_list)), 1) if payback_days_list else np.nan,
+                'median_payback_days': round(float(np.median(payback_days_list)), 1) if payback_days_list else np.nan,
+            })
+
+        cohort_payback = pd.DataFrame(cohort_rows).sort_values('cohort_month') if cohort_rows else pd.DataFrame()
+
+        # ---- 7) contribution by basket size
+        def basket_bucket(items_count):
+            try:
+                v = int(items_count)
+            except (TypeError, ValueError):
+                return 'unknown'
+            if v <= 1:
+                return '1 item'
+            if v == 2:
+                return '2 items'
+            if v == 3:
+                return '3 items'
+            if v == 4:
+                return '4 items'
+            return '5+ items'
+
+        orders_df['basket_size'] = orders_df['total_items_in_order'].apply(basket_bucket)
+        basket_contrib = orders_df.groupby('basket_size').agg({
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'pre_ad_contribution': 'sum'
+        }).reset_index()
+        basket_contrib.columns = ['basket_size', 'orders', 'revenue', 'pre_ad_contribution']
+        basket_contrib['contribution_per_order'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution'] / row['orders']) if row['orders'] > 0 else 0, 2), axis=1
+        )
+        basket_contrib['contribution_margin_pct'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 1), axis=1
+        )
+        basket_order = {'1 item': 1, '2 items': 2, '3 items': 3, '4 items': 4, '5+ items': 5, 'unknown': 99}
+        basket_contrib['basket_order'] = basket_contrib['basket_size'].map(basket_order).fillna(99)
+        basket_contrib = basket_contrib.sort_values('basket_order').drop(columns=['basket_order'])
+
+        # ---- 8) SKU Pareto on pre-ad contribution (with proportional order overhead allocation)
+        item_df = df[['order_num', 'product_sku', 'item_label', 'item_total_without_tax', 'total_expense']].copy()
+        order_item_revenue = item_df.groupby('order_num')['item_total_without_tax'].sum().rename('order_item_revenue')
+        item_df = item_df.merge(order_item_revenue, on='order_num', how='left')
+        item_df['item_rev_share'] = item_df.apply(
+            lambda row: (row['item_total_without_tax'] / row['order_item_revenue']) if row['order_item_revenue'] > 0 else 0,
+            axis=1
+        )
+        overhead_per_order = PACKAGING_COST_PER_ORDER + SHIPPING_SUBSIDY_PER_ORDER
+        item_df['allocated_overhead'] = item_df['item_rev_share'] * overhead_per_order
+        item_df['pre_ad_contribution'] = item_df['item_total_without_tax'] - item_df['total_expense'] - item_df['allocated_overhead']
+
+        sku_pareto = item_df.groupby('product_sku').agg({
+            'item_label': 'first',
+            'order_num': 'nunique',
+            'item_total_without_tax': 'sum',
+            'total_expense': 'sum',
+            'pre_ad_contribution': 'sum'
+        }).reset_index()
+        sku_pareto.columns = ['sku', 'product', 'orders', 'revenue', 'cost', 'pre_ad_contribution']
+        sku_pareto = sku_pareto.sort_values('pre_ad_contribution', ascending=False).reset_index(drop=True)
+        total_contrib_sku = float(sku_pareto['pre_ad_contribution'].sum())
+        if total_contrib_sku != 0:
+            sku_pareto['contribution_share_pct'] = (sku_pareto['pre_ad_contribution'] / total_contrib_sku * 100).round(2)
+            sku_pareto['cum_contribution_share_pct'] = sku_pareto['contribution_share_pct'].cumsum().round(2)
+        else:
+            sku_pareto['contribution_share_pct'] = 0.0
+            sku_pareto['cum_contribution_share_pct'] = 0.0
+        sku_pareto_80_count = int((sku_pareto['cum_contribution_share_pct'] < 80).sum() + 1) if not sku_pareto.empty else 0
+
+        # ---- 9) attach rate for key products (top 10 by order penetration)
+        order_sku = item_df.groupby('order_num')['product_sku'].apply(lambda x: set(x.dropna().astype(str))).reset_index()
+        total_orders = len(order_sku)
+        sku_order_count = {}
+        for skus in order_sku['product_sku']:
+            for sku in skus:
+                sku_order_count[sku] = sku_order_count.get(sku, 0) + 1
+
+        key_skus = sorted(sku_order_count.keys(), key=lambda s: sku_order_count[s], reverse=True)[:10]
+        sku_to_label = item_df.groupby('product_sku')['item_label'].first().to_dict()
+        attach_rows = []
+        order_sku_sets = order_sku['product_sku'].tolist()
+        for key_sku in key_skus:
+            key_orders = sku_order_count.get(key_sku, 0)
+            if key_orders == 0:
+                continue
+            co_counts = {}
+            for skus in order_sku_sets:
+                if key_sku in skus:
+                    for other in skus:
+                        if other == key_sku:
+                            continue
+                        co_counts[other] = co_counts.get(other, 0) + 1
+            top_attach = sorted(co_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+            for other_sku, co_count in top_attach:
+                attach_rows.append({
+                    'key_sku': key_sku,
+                    'key_product': sku_to_label.get(key_sku, key_sku),
+                    'key_orders': key_orders,
+                    'attached_sku': other_sku,
+                    'attached_product': sku_to_label.get(other_sku, other_sku),
+                    'attached_orders': int(co_count),
+                    'attach_rate_pct': round((co_count / key_orders * 100), 1),
+                    'key_penetration_pct': round((key_orders / total_orders * 100), 1) if total_orders > 0 else 0.0
+                })
+        attach_rate = pd.DataFrame(attach_rows).sort_values(['key_orders', 'attach_rate_pct'], ascending=[False, False]) if attach_rows else pd.DataFrame()
+
+        # ---- 10) margin stability index (daily pre-ad margin volatility)
+        daily_margin = orders_df.groupby('purchase_date_only').agg({
+            revenue_col: 'sum',
+            'pre_ad_contribution': 'sum',
+            'order_num': 'count'
+        }).reset_index()
+        daily_margin.columns = ['date', 'revenue', 'pre_ad_contribution', 'orders']
+        daily_margin['pre_ad_margin_pct'] = daily_margin.apply(
+            lambda row: (row['pre_ad_contribution'] / row['revenue'] * 100) if row['revenue'] > 0 else 0,
+            axis=1
+        )
+        daily_margin = daily_margin.sort_values('date')
+        daily_margin['pre_ad_margin_7d_ma'] = daily_margin['pre_ad_margin_pct'].rolling(window=7, min_periods=1).mean()
+
+        margin_mean = float(daily_margin['pre_ad_margin_pct'].mean()) if not daily_margin.empty else 0.0
+        margin_std = float(daily_margin['pre_ad_margin_pct'].std(ddof=0)) if len(daily_margin) > 1 else 0.0
+        margin_cv_pct = (margin_std / abs(margin_mean) * 100) if abs(margin_mean) > 1e-9 else 0.0
+        margin_stability_index = max(0.0, min(100.0, 100.0 - (margin_std * 2.0)))
+
+        # ---- 11) payday window index (phase-of-month windows)
+        window_defs = [
+            (1, 7, '1-7'),
+            (8, 14, '8-14'),
+            (15, 21, '15-21'),
+            (22, 28, '22-28'),
+            (29, 31, '29-31')
+        ]
+        orders_df['day_in_month'] = orders_df['purchase_datetime'].dt.day
+        min_dt = orders_df['purchase_datetime'].dt.normalize().min()
+        max_dt = orders_df['purchase_datetime'].dt.normalize().max()
+        full_start = min_dt if min_dt.day == 1 else (min_dt + pd.offsets.MonthBegin(1))
+        max_month_last_day = (max_dt + pd.offsets.MonthEnd(0)).day
+        full_end = max_dt if max_dt.day == max_month_last_day else (max_dt - pd.offsets.MonthEnd(1))
+        if full_start <= full_end:
+            phase_orders = orders_df[
+                (orders_df['purchase_datetime'].dt.normalize() >= full_start) &
+                (orders_df['purchase_datetime'].dt.normalize() <= full_end)
+            ].copy()
+            phase_calendar = pd.DataFrame({'date': pd.date_range(start=full_start, end=full_end, freq='D')})
+        else:
+            phase_orders = orders_df.copy()
+            phase_calendar = pd.DataFrame({'date': pd.date_range(start=min_dt, end=max_dt, freq='D')})
+        phase_orders['window'] = phase_orders['day_in_month'].apply(
+            lambda d: '1-7' if d <= 7 else ('8-14' if d <= 14 else ('15-21' if d <= 21 else ('22-28' if d <= 28 else '29-31')))
+        )
+        phase_calendar['window'] = phase_calendar['date'].dt.day.apply(
+            lambda d: '1-7' if d <= 7 else ('8-14' if d <= 14 else ('15-21' if d <= 21 else ('22-28' if d <= 28 else '29-31')))
+        )
+
+        payday_window = phase_orders.groupby('window').agg({
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'pre_ad_contribution': 'sum'
+        }).reset_index()
+        payday_window.columns = ['window', 'orders', 'revenue', 'pre_ad_contribution']
+        cal_days = phase_calendar.groupby('window')['date'].count().reset_index().rename(columns={'date': 'calendar_days'})
+        payday_window = payday_window.merge(cal_days, on='window', how='right').fillna(0)
+        payday_window['orders'] = payday_window['orders'].astype(int)
+        payday_window['calendar_days'] = payday_window['calendar_days'].astype(int)
+        payday_window['avg_orders_per_day'] = payday_window.apply(
+            lambda row: (row['orders'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
+        payday_window['avg_revenue_per_day'] = payday_window.apply(
+            lambda row: (row['revenue'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
+        payday_window['avg_profit_per_day'] = payday_window.apply(
+            lambda row: (row['pre_ad_contribution'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
+        overall_avg_revenue = (
+            (payday_window['revenue'].sum() / payday_window['calendar_days'].sum())
+            if payday_window['calendar_days'].sum() > 0 else 0
+        )
+        overall_avg_profit = (
+            (payday_window['pre_ad_contribution'].sum() / payday_window['calendar_days'].sum())
+            if payday_window['calendar_days'].sum() > 0 else 0
+        )
+        payday_window['revenue_index'] = payday_window.apply(
+            lambda row: (row['avg_revenue_per_day'] / overall_avg_revenue * 100) if overall_avg_revenue > 0 else 0,
+            axis=1
+        )
+        payday_window['profit_index'] = payday_window.apply(
+            lambda row: (row['avg_profit_per_day'] / overall_avg_profit * 100) if overall_avg_profit != 0 else 0,
+            axis=1
+        )
+        window_order = {'1-7': 1, '8-14': 2, '15-21': 3, '22-28': 4, '29-31': 5}
+        payday_window['window_order'] = payday_window['window'].map(window_order).fillna(99)
+        payday_window = payday_window.sort_values('window_order').drop(columns=['window_order'])
+
+        result = {
+            'summary': {
+                'first_order_contribution_margin_pct': round(first_order_contribution_margin_pct, 2),
+                'first_order_contribution_per_order': round(first_order_contribution_per_order, 2),
+                'repeat_order_contribution_per_order': round(repeat_order_contribution_per_order, 2),
+                'contribution_ltv': round(contribution_ltv, 2),
+                'paid_cac_fb': round(paid_cac_fb, 2),
+                'contribution_ltv_cac': round(contribution_ltv_cac, 2),
+                'margin_mean_pct': round(margin_mean, 2),
+                'margin_std_pp': round(margin_std, 2),
+                'margin_cv_pct': round(margin_cv_pct, 2),
+                'margin_stability_index': round(margin_stability_index, 1),
+                'sku_pareto_80_count': sku_pareto_80_count,
+                'sku_total_count': int(len(sku_pareto)),
+            },
+            'cohort_payback': cohort_payback,
+            'basket_contribution': basket_contrib,
+            'sku_pareto': sku_pareto,
+            'attach_rate': attach_rate,
+            'daily_margin': daily_margin,
+            'payday_window': payday_window,
+        }
+
+        print(
+            f"Advanced DTC metrics complete: first-order margin={result['summary']['first_order_contribution_margin_pct']:.2f}%, "
+            f"contribution LTV/CAC={result['summary']['contribution_ltv_cac']:.2f}x"
+        )
+        return result
     def analyze_day_hour_heatmap(self, df: pd.DataFrame) -> pd.DataFrame:
         """Analyze orders by day of week and hour of day for heatmap visualization"""
         print("\nAnalyzing day/hour heatmap patterns...")
@@ -3467,8 +4580,23 @@ class BizniWebExporter:
         """Analyze orders by geographic location"""
         print("\nAnalyzing geographic distribution...")
 
+        geo_df = df.copy()
+        geo_df['geo_country'] = geo_df.get('delivery_country')
+        geo_df['geo_country'] = geo_df['geo_country'].replace('', np.nan)
+        if 'invoice_country' in geo_df.columns:
+            geo_df['geo_country'] = geo_df['geo_country'].fillna(geo_df['invoice_country'])
+        geo_df['geo_country'] = geo_df['geo_country'].fillna('Unknown')
+
+        geo_df['geo_city'] = geo_df.get('delivery_city')
+        geo_df['geo_city'] = geo_df['geo_city'].replace('', np.nan)
+        if 'invoice_city' in geo_df.columns:
+            geo_df['geo_city'] = geo_df['geo_city'].fillna(geo_df['invoice_city'])
+        geo_df['geo_city'] = geo_df['geo_city'].apply(
+            lambda value: str(value).strip() if pd.notna(value) and str(value).strip() else np.nan
+        )
+
         # By country
-        country_agg = df.groupby('delivery_country').agg({
+        country_agg = geo_df.groupby('geo_country').agg({
             'order_num': 'nunique',
             'item_total_without_tax': 'sum',
             'profit_before_ads': 'sum'
@@ -3477,15 +4605,16 @@ class BizniWebExporter:
         country_agg = country_agg.sort_values('revenue', ascending=False)
         country_agg['revenue_pct'] = (country_agg['revenue'] / country_agg['revenue'].sum() * 100).round(1)
 
-        # By city (top 20)
-        city_agg = df.groupby(['delivery_city', 'delivery_country']).agg({
+        # By city (top 20), prefer delivery city and fallback to invoice city if delivery is missing.
+        city_source = geo_df[geo_df['geo_city'].notna()].copy()
+        city_agg = city_source.groupby(['geo_city', 'geo_country']).agg({
             'order_num': 'nunique',
             'item_total_without_tax': 'sum',
             'profit_before_ads': 'sum'
         }).reset_index()
         city_agg.columns = ['city', 'country', 'orders', 'revenue', 'profit']
-        city_agg = city_agg.sort_values('revenue', ascending=False).head(20)
-        city_agg['revenue_pct'] = (city_agg['revenue'] / df['item_total_without_tax'].sum() * 100).round(1)
+        city_agg = city_agg.sort_values(['revenue', 'orders'], ascending=[False, False]).head(20)
+        city_agg['revenue_pct'] = (city_agg['revenue'] / geo_df['item_total_without_tax'].sum() * 100).round(1)
 
         print(f"Geographic analysis complete: {len(country_agg)} countries, showing top 20 cities")
         return country_agg, city_agg
@@ -4882,17 +6011,31 @@ def main():
         action='store_true',
         help='Disable cache and fetch all data fresh from API'
     )
+    parser.add_argument(
+        '--output-tag',
+        type=str,
+        default=os.getenv('REPORT_OUTPUT_TAG', ''),
+        help='Optional output tag for parallel test artifacts (e.g. ui_test)'
+    )
 
     args = parser.parse_args()
     project_name = (args.project or DEFAULT_PROJECT).strip()
 
     # Load project-specific env first so API credentials are isolated per shop.
-    load_project_env(project_name)
-    runtime = load_project_runtime_settings(project_name)
-    apply_runtime_settings(runtime)
+    load_project_env(project_name, logger=logger)
+    runtime = load_project_runtime(
+        project_name,
+        settings=load_project_settings(project_name),
+        legacy_product_expenses=LEGACY_VEVO_PRODUCT_EXPENSES,
+        default_currency_rates=CURRENCY_RATES_TO_EUR,
+        default_packaging_cost_per_order=PACKAGING_COST_PER_ORDER,
+        default_shipping_subsidy_per_order=SHIPPING_SUBSIDY_PER_ORDER,
+        default_fixed_monthly_cost=FIXED_MONTHLY_COST,
+    )
+    apply_project_runtime(runtime, globals())
 
-    api_url = runtime['api_url']
-    api_token = runtime['api_token']
+    api_url = runtime.api_url
+    api_token = runtime.api_token
     if not api_token:
         logger.error(
             f"BIZNISWEB_API_TOKEN not found for project '{project_name}'. "
@@ -4921,7 +6064,12 @@ def main():
     )
     
     # Initialize exporter
-    exporter = BizniWebExporter(api_url, api_token, project_name=project_name)
+    exporter = BizniWebExporter(
+        api_url,
+        api_token,
+        project_name=project_name,
+        output_tag=args.output_tag,
+    )
     
     # Handle cache options
     if args.clear_cache:
@@ -4955,4 +6103,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

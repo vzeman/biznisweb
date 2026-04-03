@@ -57,6 +57,33 @@ Bootstrap does:
 Required baseline keys are listed in `.env.required`.
 Feature-specific keys stay optional until the feature is used.
 
+## Observability baseline
+
+- Local snapshot:
+
+```powershell
+python scripts/observability_snapshot.py --pretty
+```
+
+- CI snapshot:
+  - `.github/workflows/observability-check.yml`
+  - emits an artifact with the latest project/artifact/source-health view
+
+Use this before deploys when you want a fast view of:
+- latest report HTML / export / CFO artifacts per project
+- latest `data_quality_*.json`
+- whether the newest run is partial and which source degraded
+
+## Client scaffolding template
+
+To scaffold a new reporting client from the internal template:
+
+```powershell
+python scripts/scaffold_client.py my-client --display-name "My Client"
+```
+
+This creates a new `projects/<slug>/` bundle from `templates/reporting-client/`.
+
 ## Current repo scope
 
 This repo contains the reporting codebase.

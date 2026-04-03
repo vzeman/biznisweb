@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 HTML Report Generator for BizniWeb Order Export
 Generates beautiful HTML reports with charts and tables
@@ -6,12 +6,42 @@ Generates beautiful HTML reports with charts and tables
 
 import pandas as pd
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
+from html import escape
+
+
+def _fix_common_mojibake(text: str) -> str:
+    """
+    Repair common mojibake artifacts that appear when UTF-8 text was
+    accidentally interpreted with a legacy codepage.
+    """
+    if not text:
+        return text
+
+    replacements = {
+        "â°": "Time",
+        "â†’": "->",
+        "â†”": "<->",
+        "â‰Ą": ">=",
+        "ðŸ”´": "[HIGH]",
+        "ðŸŸ¡": "[MED]",
+        "ðŸŸ¢": "[LOW]",
+        "đź’¬": "",
+        "Ä‘Ĺşâ€śâ€ą": "Info",
+        "2ÄÂ¸Å¹Ã¢Â\x83Å\x81": "Second",
+        "2Ă„ĹąĂ‚Â¸ÄąÄ…Ä‚ËĂ‚ÂÄąÂ": "Second",
+    }
+
+    fixed = text
+    for bad, good in replacements.items():
+        fixed = fixed.replace(bad, good)
+    return fixed
 
 
 def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          items_agg: pd.DataFrame, date_from: datetime, date_to: datetime,
+                         report_title: str = "BizniWeb reporting",
                          fb_daily_spend: Dict[str, float] = None,
                          google_ads_daily_spend: Dict[str, float] = None,
                          returning_customers_analysis: pd.DataFrame = None,
@@ -19,6 +49,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          order_size_distribution: pd.DataFrame = None,
                          item_combinations: pd.DataFrame = None,
                          day_of_week_analysis: pd.DataFrame = None,
+                         week_of_month_analysis: pd.DataFrame = None,
+                         day_of_month_analysis: pd.DataFrame = None,
+                         weather_analysis: dict = None,
+                         advanced_dtc_metrics: dict = None,
                          day_hour_heatmap: pd.DataFrame = None,
                          country_analysis: pd.DataFrame = None,
                          city_analysis: pd.DataFrame = None,
@@ -38,15 +72,71 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          same_item_repurchase: dict = None,
                          time_to_nth_by_first_item: dict = None,
                          fb_detailed_metrics: dict = None,
-                         fb_campaigns: list = None,
-                         cost_per_order: dict = None,
-                         fb_hourly_stats: list = None,
-                         fb_dow_stats: list = None,
+                          fb_campaigns: list = None,
+                          cost_per_order: dict = None,
+                          fb_hourly_stats: list = None,
+                          fb_dow_stats: list = None,
                          ltv_by_date: pd.DataFrame = None,
-                         consistency_checks: dict = None) -> str:
+                         consistency_checks: dict = None,
+                         cfo_kpi_payload: dict = None,
+                         source_health: dict = None,
+                         period_switcher: dict = None,
+                         dashboard_variant: str = "default") -> str:
     """
     Generate a complete HTML report with charts and tables
     """
+    raw_report_title = (report_title or "BizniWeb reporting").strip()
+    report_title = escape(raw_report_title)
+
+    variant = str(dashboard_variant or "default").strip().lower()
+
+    if variant in {"default", "modern", "test2"}:
+        from dashboard_test2 import generate_test2_dashboard
+
+        return generate_test2_dashboard(
+            date_agg=date_agg,
+            items_agg=items_agg,
+            date_from=date_from,
+            date_to=date_to,
+            report_title=raw_report_title,
+            day_of_week_analysis=day_of_week_analysis,
+            week_of_month_analysis=week_of_month_analysis,
+            day_of_month_analysis=day_of_month_analysis,
+            weather_analysis=weather_analysis,
+            country_analysis=country_analysis,
+            city_analysis=city_analysis,
+            geo_profitability=geo_profitability,
+            product_margins=product_margins,
+            product_trends=product_trends,
+            new_vs_returning_revenue=new_vs_returning_revenue,
+            refunds_analysis=refunds_analysis,
+            customer_concentration=customer_concentration,
+            cohort_analysis=cohort_analysis,
+            returning_customers_analysis=returning_customers_analysis,
+            clv_return_time_analysis=clv_return_time_analysis,
+            order_size_distribution=order_size_distribution,
+            item_combinations=item_combinations,
+            advanced_dtc_metrics=advanced_dtc_metrics,
+            day_hour_heatmap=day_hour_heatmap,
+            b2b_analysis=b2b_analysis,
+            order_status=order_status,
+            ads_effectiveness=ads_effectiveness,
+            customer_email_segments=customer_email_segments,
+            first_item_retention=first_item_retention,
+            same_item_repurchase=same_item_repurchase,
+            time_to_nth_by_first_item=time_to_nth_by_first_item,
+            fb_detailed_metrics=fb_detailed_metrics,
+            fb_campaigns=fb_campaigns,
+            cost_per_order=cost_per_order,
+            fb_hourly_stats=fb_hourly_stats,
+            fb_dow_stats=fb_dow_stats,
+            ltv_by_date=ltv_by_date,
+            consistency_checks=consistency_checks,
+            financial_metrics=financial_metrics,
+            cfo_kpi_payload=cfo_kpi_payload,
+            source_health=source_health,
+            period_switcher=period_switcher,
+        )
     
     # Prepare data for charts
     dates = date_agg['date'].astype(str).tolist()
@@ -134,6 +224,110 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     total_cost = date_agg['total_cost'].sum()
     total_profit = date_agg['net_profit'].sum()
     total_roi = (total_profit / total_cost * 100) if total_cost > 0 else 0
+
+    source_health = source_health or {}
+    source_entries = list((source_health.get("sources") or {}).values())
+
+    def _source_status_label(status: str) -> str:
+        labels = {
+            "ok": "OK",
+            "manual": "Manual",
+            "disabled": "Disabled",
+            "warning": "Warning",
+            "error": "Error",
+        }
+        return labels.get(str(status or "").lower(), str(status or "Unknown").title())
+
+    def _source_status_class(status: str) -> str:
+        normalized = str(status or "").lower()
+        if normalized in {"ok", "manual"}:
+            return "status-ok"
+        if normalized == "disabled":
+            return "status-disabled"
+        return "status-error"
+
+    data_quality_section = ""
+    if source_entries:
+        overall_partial = bool(source_health.get("is_partial"))
+        overall_label = "Partial Data" if overall_partial else "Full Data"
+        overall_class = "data-quality-partial" if overall_partial else "data-quality-full"
+        source_rows = []
+        for source in source_entries:
+            source_rows.append(
+                f"""
+                    <tr>
+                        <td>{escape(str(source.get('label', 'Source')))}</td>
+                        <td><span class="status-pill {_source_status_class(source.get('status', 'unknown'))}">{escape(_source_status_label(source.get('status', 'unknown')))}</span></td>
+                        <td>{escape(str(source.get('mode', 'n/a')))}</td>
+                        <td>{escape(str(source.get('message', '')))}</td>
+                    </tr>"""
+            )
+        data_quality_section = f"""
+        <div class="data-quality-banner {overall_class}">
+            <div class="data-quality-title">Data Quality: {overall_label}</div>
+            <div class="data-quality-message">{escape(str(source_health.get('summary', '')))}</div>
+            <div class="data-quality-meta">Generated UTC: {escape(str(source_health.get('generated_at_utc', 'N/A')))}</div>
+            <table class="data-quality-table">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th>Mode</th>
+                        <th>Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(source_rows)}
+                </tbody>
+            </table>
+        </div>"""
+
+    def render_period_switcher(section_id: str = "", compact: bool = False) -> str:
+        switcher = period_switcher or {}
+        options = switcher.get("options") or []
+        if not options:
+            return ""
+
+        current_key = str(switcher.get("current_key") or "")
+        label_en = escape(str(switcher.get("label_en") or "Report period"))
+        label_sk = escape(str(switcher.get("label_sk") or "Obdobie reportu"))
+        current_range_en = escape(str(switcher.get("current_range_en") or ""))
+        current_range_sk = escape(str(switcher.get("current_range_sk") or ""))
+        section_fragment = f"#{section_id}" if section_id else ""
+        mode_class = "period-switcher compact" if compact else "period-switcher"
+
+        option_html = []
+        for option in options:
+            key = escape(str(option.get("key") or ""))
+            label = escape(str(option.get("label") or key.upper()))
+            href = escape(f"{option.get('href', '#')}{section_fragment}")
+            active_class = " active" if key == current_key else ""
+            range_en = escape(str(option.get("range_en") or ""))
+            range_sk = escape(str(option.get("range_sk") or ""))
+            option_html.append(
+                f"""
+                <a href="{href}" class="period-switcher-btn{active_class}" data-period-key="{key}" data-en="{label}" data-sk="{label}">
+                    <span class="period-switcher-btn-label">{label}</span>
+                    <span class="period-switcher-btn-range" data-en="{range_en}" data-sk="{range_sk}">{range_en}</span>
+                </a>
+                """
+            )
+
+        return f"""
+        <div class="{mode_class}" data-period-current="{escape(current_key)}">
+            <div class="period-switcher-copy">
+                <div class="section-kicker" data-en="{label_en}" data-sk="{label_sk}">{label_en}</div>
+                {"<h3 class=\"period-switcher-heading\" data-en=\"Choose a complete report period\" data-sk=\"Vyber cele obdobie reportu\">Choose a complete report period</h3>" if not compact else ""}
+                {"<p class=\"period-switcher-desc\" data-en=\"This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period.\" data-sk=\"Toto prepne cely report konzistentne: KPI karty, grafy, tabulky, mesta, produkty aj diagnostika sa prepocitaju na vybrane serverovo vyratane obdobie.\">This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period.</p>" if not compact else ""}
+            </div>
+            <div class="period-switcher-controls">
+                <div class="period-switcher-options">
+                    {''.join(option_html)}
+                </div>
+                <div class="period-switcher-current" data-en="{current_range_en}" data-sk="{current_range_sk}">{current_range_en}</div>
+            </div>
+        </div>
+        """
     total_orders = date_agg['unique_orders'].sum()
     total_items = date_agg['total_items'].sum()
     total_aov = total_revenue / total_orders if total_orders > 0 else 0
@@ -142,6 +336,177 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     total_days = len(date_agg.index)
     avg_daily_revenue = total_revenue / total_days if total_days > 0 else 0
     avg_daily_profit = total_profit / total_days if total_days > 0 else 0
+
+    def _safe_pct_change(current: float, previous: float) -> float:
+        if previous is None or abs(previous) < 1e-9:
+            return 0.0
+        return ((current - previous) / previous) * 100.0
+
+    def _sum_tail(values: list[float], tail: int, offset: int = 0) -> float:
+        if not values:
+            return 0.0
+        end = len(values) - offset
+        start = max(0, end - tail)
+        return float(sum(values[start:end]))
+
+    revenue_last_7 = _sum_tail(revenue_data, 7)
+    revenue_prev_7 = _sum_tail(revenue_data, 7, offset=7)
+    profit_last_7 = _sum_tail(profit_data, 7)
+    profit_prev_7 = _sum_tail(profit_data, 7, offset=7)
+    orders_last_7 = _sum_tail(orders_data, 7)
+    orders_prev_7 = _sum_tail(orders_data, 7, offset=7)
+
+    revenue_change_7d_pct = _safe_pct_change(revenue_last_7, revenue_prev_7)
+    profit_change_7d_pct = _safe_pct_change(profit_last_7, profit_prev_7)
+    orders_change_7d_pct = _safe_pct_change(orders_last_7, orders_prev_7)
+
+    roas_value = float(financial_metrics.get('roas', 0)) if financial_metrics else 0.0
+    company_margin_value = (
+        float(financial_metrics.get('company_profit_margin_pct', 0))
+        if financial_metrics else total_roi
+    )
+
+    def _trend_level(delta_pct: float, higher_is_better: bool = True) -> str:
+        normalized = delta_pct if higher_is_better else -delta_pct
+        if normalized >= 8:
+            return "good"
+        if normalized >= -4:
+            return "warn"
+        return "bad"
+
+    revenue_level = _trend_level(revenue_change_7d_pct, higher_is_better=True)
+    profit_level = _trend_level(profit_change_7d_pct, higher_is_better=True)
+    orders_level = _trend_level(orders_change_7d_pct, higher_is_better=True)
+    roas_level = "good" if roas_value >= 3 else ("warn" if roas_value >= 1.5 else "bad")
+    margin_level = "good" if company_margin_value >= 20 else ("warn" if company_margin_value >= 8 else "bad")
+
+    def _level_labels(level: str) -> tuple[str, str]:
+        if level == "good":
+            return "Strong", "Silné"
+        if level == "warn":
+            return "Watch", "Sledovať"
+        return "Risk", "Riziko"
+
+    rev_en, rev_sk = _level_labels(revenue_level)
+    profit_en, profit_sk = _level_labels(profit_level)
+    orders_en, orders_sk = _level_labels(orders_level)
+    roas_en, roas_sk = _level_labels(roas_level)
+    margin_en, margin_sk = _level_labels(margin_level)
+
+    quick_insights_html = f"""
+        <div class="quick-insights">
+            <div class="quick-insights-header">
+                <h3 data-en="Quick Health Check (easy summary)" data-sk="Rýchly zdravotný check (jednoduché zhrnutie)">Quick Health Check (easy summary)</h3>
+                <p data-en="Use this section first: green = good, orange = watch, red = action needed." data-sk="Začni touto sekciou: zelená = dobré, oranžová = sledovať, červená = treba riešiť.">Use this section first: green = good, orange = watch, red = action needed.</p>
+            </div>
+            <div class="quick-insights-grid">
+                <div class="quick-insight-card level-{revenue_level}">
+                    <div class="quick-insight-title" data-en="Revenue momentum (last 7 days)" data-sk="Dynamika obratu (posledných 7 dní)">Revenue momentum (last 7 days)</div>
+                    <div class="quick-insight-value" data-en="{rev_en}" data-sk="{rev_sk}">{rev_en}</div>
+                    <div class="quick-insight-desc" data-en="Revenue moved {revenue_change_7d_pct:+.1f}% vs previous 7 days." data-sk="Obrat sa zmenil o {revenue_change_7d_pct:+.1f}% oproti predchádzajúcim 7 dňom.">Revenue moved {revenue_change_7d_pct:+.1f}% vs previous 7 days.</div>
+                </div>
+                <div class="quick-insight-card level-{profit_level}">
+                    <div class="quick-insight-title" data-en="Profit momentum (last 7 days)" data-sk="Dynamika zisku (posledných 7 dní)">Profit momentum (last 7 days)</div>
+                    <div class="quick-insight-value" data-en="{profit_en}" data-sk="{profit_sk}">{profit_en}</div>
+                    <div class="quick-insight-desc" data-en="Profit moved {profit_change_7d_pct:+.1f}% vs previous 7 days." data-sk="Zisk sa zmenil o {profit_change_7d_pct:+.1f}% oproti predchádzajúcim 7 dňom.">Profit moved {profit_change_7d_pct:+.1f}% vs previous 7 days.</div>
+                </div>
+                <div class="quick-insight-card level-{roas_level}">
+                    <div class="quick-insight-title" data-en="Ad efficiency (ROAS)" data-sk="Efektivita reklamy (ROAS)">Ad efficiency (ROAS)</div>
+                    <div class="quick-insight-value" data-en="{roas_en}" data-sk="{roas_sk}">{roas_en}</div>
+                    <div class="quick-insight-desc" data-en="Current ROAS is {roas_value:.2f}x. Above 3x is usually healthy." data-sk="Aktuálny ROAS je {roas_value:.2f}x. Nad 3x je to zvyčajne zdravé.">Current ROAS is {roas_value:.2f}x. Above 3x is usually healthy.</div>
+                </div>
+                <div class="quick-insight-card level-{margin_level}">
+                    <div class="quick-insight-title" data-en="Business margin safety" data-sk="Bezpečnosť firemnej marže">Business margin safety</div>
+                    <div class="quick-insight-value" data-en="{margin_en}" data-sk="{margin_sk}">{margin_en}</div>
+                    <div class="quick-insight-desc" data-en="Company margin is {company_margin_value:.1f}% and orders moved {orders_change_7d_pct:+.1f}% in last 7 days." data-sk="Firemná marža je {company_margin_value:.1f}% a počet objednávok sa za 7 dní zmenil o {orders_change_7d_pct:+.1f}%.">Company margin is {company_margin_value:.1f}% and orders moved {orders_change_7d_pct:+.1f}% in last 7 days.</div>
+                </div>
+            </div>
+        </div>
+    """
+
+    report_guide_html = """
+        <div class="report-guide">
+            <h3 data-en="How to read this report (simple)" data-sk="Ako čítať tento report (jednoducho)">How to read this report (simple)</h3>
+            <ul>
+                <li data-en="Start with the quick health cards above. Green means healthy trend, orange means watch, red means action needed." data-sk="Začni hornými rýchlymi kartami. Zelená znamená zdravý trend, oranžová sledovať, červená treba riešiť.">Start with the quick health cards above. Green means healthy trend, orange means watch, red means action needed.</li>
+                <li data-en="Then check Revenue, Net Profit, and Total Costs cards. This gives the fastest business reality check." data-sk="Potom pozri karty Revenue, Net Profit a Total Costs. Toto je najrýchlejší reality check firmy.">Then check Revenue, Net Profit, and Total Costs cards. This gives the fastest business reality check.</li>
+                <li data-en="Use daily charts only for direction: up/down trend is more important than one-day spikes." data-sk="Denné grafy čítaj hlavne trendovo: smer hore/dole je dôležitejší ako jednodňové výkyvy.">Use daily charts only for direction: up/down trend is more important than one-day spikes.</li>
+                <li data-en="If ROAS drops under 2x or CAC rises close to Break-even CAC, marketing needs immediate review." data-sk="Ak ROAS klesne pod 2x alebo CAC rastie blízko Break-even CAC, marketing treba hneď skontrolovať.">If ROAS drops under 2x or CAC rises close to Break-even CAC, marketing needs immediate review.</li>
+            </ul>
+        </div>
+        <div class="metric-cheatsheet">
+            <h3 data-en="KPI cheat sheet for non-finance users" data-sk="KPI ťahák pre ľudí mimo financií">KPI cheat sheet for non-finance users</h3>
+            <div class="metric-cheatsheet-grid">
+                <div class="metric-tip">
+                    <h4 data-en="Revenue" data-sk="Obrat">Revenue</h4>
+                    <p data-en="How much money came in from orders. More is good if profit also stays healthy." data-sk="Koľko peňazí prišlo z objednávok. Viac je dobré, ak ostáva zdravý aj zisk.">How much money came in from orders. More is good if profit also stays healthy.</p>
+                </div>
+                <div class="metric-tip">
+                    <h4 data-en="Net Profit" data-sk="Čistý zisk">Net Profit</h4>
+                    <p data-en="What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast." data-sk="Čo ostane po všetkých sledovaných nákladoch. Ak klesá pri raste obratu, náklady rastú prirýchlo.">What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast.</p>
+                </div>
+                <div class="metric-tip">
+                    <h4 data-en="ROAS" data-sk="ROAS">ROAS</h4>
+                    <p data-en="Revenue divided by ad spend. Around 3x+ is usually healthy for scaling ads." data-sk="Obrat delený výdavkami na reklamu. Okolo 3x+ je zvyčajne zdravé pre škálovanie reklamy.">Revenue divided by ad spend. Around 3x+ is usually healthy for scaling ads.</p>
+                </div>
+                <div class="metric-tip">
+                    <h4 data-en="CAC vs Break-even CAC" data-sk="CAC vs bod zvratu CAC">CAC vs Break-even CAC</h4>
+                    <p data-en="CAC is customer acquisition cost. If CAC gets close to break-even CAC, ad efficiency risk is high." data-sk="CAC je cena za získanie zákazníka. Keď sa blíži k bodu zvratu CAC, riziko neefektívnej reklamy je vysoké.">CAC is customer acquisition cost. If CAC gets close to break-even CAC, ad efficiency risk is high.</p>
+                </div>
+            </div>
+        </div>
+    """
+
+    cfo_top_block_html = ""
+    if cfo_kpi_payload and cfo_kpi_payload.get('windows'):
+        company_margin_label_en = next(
+            (
+                metric.get('label', 'Company Margin (incl. fixed)')
+                for metric in cfo_kpi_payload.get('metric_defs', [])
+                if metric.get('key') == 'company_margin_with_fixed'
+            ),
+            'Company Margin (incl. fixed)',
+        )
+        cfo_top_cards = [
+            ("revenue", "Revenue", "Obrat"),
+            ("profit", "Profit", "Zisk"),
+            ("orders", "Orders", "Objednavky"),
+            ("aov", "AOV", "Priemerna hodnota objednavky"),
+            ("cac", "CAC", "CAC"),
+            ("roas", "ROAS", "ROAS"),
+            ("pre_ad_contribution_margin", "Pre-Ad Contribution Margin", "Pre-Ad kontribucna marza"),
+            ("post_ad_margin", "Post-Ad Margin", "Post-Ad marza"),
+            ("company_margin_with_fixed", company_margin_label_en, "Firemna marza (vratane fixu)"),
+        ]
+        cfo_top_cards_html = "".join(
+            f"""
+            <div class="cfo-top-card" data-metric="{metric_key}">
+                <div class="cfo-top-card-title" data-en="{escape(title_en)}" data-sk="{escape(title_sk)}">{escape(title_en)}</div>
+                <div class="cfo-top-card-value"></div>
+                <div class="cfo-top-card-period"></div>
+                <div class="cfo-top-card-comparisons"></div>
+            </div>"""
+            for metric_key, title_en, title_sk in cfo_top_cards
+        )
+        cfo_top_block_html = f"""
+        <div class="cfo-top-panel">
+            <div class="cfo-top-head">
+                <div class="cfo-top-copy">
+                    <div class="section-kicker" data-en="CFO KPIs" data-sk="CFO KPI">CFO KPIs</div>
+                    <h3 class="cfo-top-heading" data-en="Executive metrics first" data-sk="Najprv exekutivne metriky">Executive metrics first</h3>
+                    <p class="cfo-top-desc" data-en="This block uses the same core KPI logic as the CFO dashboard. Start here before you go into deeper charts and detailed tables." data-sk="Tento blok pouziva rovnaku logiku hlavnych KPI ako CFO dashboard. Zacni tu skor, nez pojdes do hlbsich grafov a detailnych tabuliek.">This block uses the same core KPI logic as the CFO dashboard. Start here before you go into deeper charts and detailed tables.</p>
+                </div>
+                <div class="cfo-top-window-switch" id="cfoTopWindowSwitch">
+                    <button type="button" class="cfo-top-window-btn" data-window="daily" data-en="Daily" data-sk="Denne">Daily</button>
+                    <button type="button" class="cfo-top-window-btn" data-window="weekly" data-en="Weekly" data-sk="Tyzdenne">Weekly</button>
+                    <button type="button" class="cfo-top-window-btn" data-window="monthly" data-en="Monthly" data-sk="Mesacne">Monthly</button>
+                </div>
+            </div>
+            <div class="cfo-top-grid" id="cfoTopGrid">
+                {cfo_top_cards_html}
+            </div>
+        </div>
+        """
 
     new_ret_dates = []
     new_ret_new_revenue = []
@@ -200,223 +565,962 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BizniWeb Sales Report - {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}</title>
+    <title>{report_title} - {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {{
+            --bg: #f6efe5;
+            --card: rgba(255, 252, 247, 0.94);
+            --card-border: rgba(234, 222, 205, 0.9);
+            --ink: #0f172a;
+            --muted: #64748b;
+            --grid: rgba(148, 163, 184, 0.22);
+            --profit: #10b981;
+            --cost: #ef4444;
+            --accent: #f97316;
+            --accent-soft: rgba(249, 115, 22, 0.12);
+            --sidebar-ink: #6b3f14;
+            --sidebar-muted: #8c6d52;
+            --shadow-soft: 0 10px 30px rgba(120, 82, 38, 0.08);
+        }}
+
         * {{
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }}
-        
+
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background:
+                radial-gradient(circle at 10% 0%, rgba(249, 115, 22, 0.12), transparent 32%),
+                radial-gradient(circle at 90% 5%, rgba(251, 191, 36, 0.14), transparent 30%),
+                var(--bg);
             min-height: 100vh;
-            padding: 20px;
+            padding: 22px;
+            color: var(--ink);
         }}
-        
-        .container {{
-            max-width: 1400px;
+
+        .dashboard-shell {{
+            max-width: 1820px;
             margin: 0 auto;
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+            gap: 24px;
+            align-items: start;
         }}
-        
+
+        .dashboard-sidebar {{
+            position: sticky;
+            top: 20px;
+            background: linear-gradient(180deg, rgba(255, 247, 237, 0.98), rgba(255, 252, 247, 0.96));
+            border: 1px solid rgba(234, 222, 205, 0.95);
+            border-radius: 24px;
+            padding: 22px 18px;
+            box-shadow: var(--shadow-soft);
+        }}
+
+        .sidebar-brand {{
+            padding-bottom: 18px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid rgba(234, 222, 205, 0.95);
+        }}
+
+        .sidebar-brand-kicker {{
+            color: var(--accent);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }}
+
+        .sidebar-brand-title {{
+            color: var(--sidebar-ink);
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }}
+
+        .sidebar-brand-subtitle {{
+            color: var(--sidebar-muted);
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }}
+
+        .sidebar-section-label {{
+            color: #9a7b5f;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 800;
+            margin: 18px 0 10px;
+        }}
+
+        .nav-group-list {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+
+        .nav-group-btn {{
+            width: 100%;
+            border: 1px solid transparent;
+            background: rgba(255, 255, 255, 0.72);
+            color: #7c5a39;
+            border-radius: 14px;
+            padding: 11px 13px;
+            text-align: left;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }}
+
+        .nav-group-btn:hover {{
+            transform: translateX(2px);
+            border-color: rgba(249, 115, 22, 0.24);
+            background: rgba(255, 255, 255, 0.92);
+        }}
+
+        .nav-group-btn.active {{
+            background: linear-gradient(135deg, #f97316, #fb923c);
+            border-color: rgba(249, 115, 22, 0.55);
+            color: #fff;
+            box-shadow: 0 8px 20px rgba(249, 115, 22, 0.24);
+        }}
+
+        .sidebar-note {{
+            margin-top: 20px;
+            padding: 14px 14px 12px;
+            border-radius: 16px;
+            background: rgba(249, 115, 22, 0.08);
+            border: 1px solid rgba(249, 115, 22, 0.18);
+        }}
+
+        .sidebar-note-title {{
+            color: #9a3412;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }}
+
+        .sidebar-note-text {{
+            color: #7c5a39;
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }}
+
+        .dashboard-main {{
+            min-width: 0;
+        }}
+
+        .container {{
+            max-width: none;
+        }}
+
         .header {{
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 32px 34px 22px;
+            margin-bottom: 22px;
+            box-shadow: var(--shadow-soft);
+            position: relative;
+            overflow: hidden;
         }}
-        
+
+        .header::before {{
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 5px;
+            background: linear-gradient(90deg, #f97316, #fb923c, #fdba74);
+        }}
+
         .header h1 {{
-            color: #2d3748;
-            margin-bottom: 10px;
-            font-size: 2.5rem;
+            color: var(--ink);
+            margin-bottom: 8px;
+            font-size: clamp(2.1rem, 4.2vw, 3rem);
+            line-height: 1.05;
+            letter-spacing: -0.03em;
         }}
-        
+
         .header .date-range {{
-            color: #718096;
-            font-size: 1.2rem;
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.45;
+            font-weight: 500;
         }}
-        
+
+        .header-toolbar {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }}
+
+        .header-toolbar-right {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }}
+
+        .lang-switch {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--card-border);
+            border-radius: 999px;
+            background: #f8fafc;
+            padding: 4px;
+        }}
+
+        .lang-switch-label {{
+            font-size: 0.73rem;
+            color: var(--muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-right: 4px;
+            margin-left: 8px;
+        }}
+
+        .lang-switch button {{
+            border: 0;
+            background: transparent;
+            border-radius: 999px;
+            padding: 5px 11px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            color: #475569;
+            font-weight: 700;
+            transition: background 0.15s ease, color 0.15s ease;
+        }}
+
+        .lang-switch button.active {{
+            background: #f97316;
+            color: #fff;
+        }}
+
+        .period-switcher {{
+            display: flex;
+            align-items: stretch;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,247,237,0.94) 100%);
+            border: 1px solid rgba(251, 146, 60, 0.16);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+            margin-top: 18px;
+        }}
+
+        .period-switcher.compact {{
+            margin-top: 0;
+            padding: 12px 14px;
+            border-radius: 16px;
+            min-width: 380px;
+            flex: 1 1 420px;
+        }}
+
+        .period-switcher-copy {{
+            min-width: 0;
+            max-width: 520px;
+        }}
+
+        .period-switcher-heading {{
+            margin: 0 0 6px 0;
+            color: var(--ink);
+            font-size: 1.06rem;
+            letter-spacing: -0.02em;
+        }}
+
+        .period-switcher-desc {{
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }}
+
+        .period-switcher-controls {{
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            min-width: 0;
+            flex: 1 1 500px;
+        }}
+
+        .period-switcher-options {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: flex-end;
+        }}
+
+        .period-switcher-btn {{
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 108px;
+            text-decoration: none;
+            padding: 10px 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(251, 146, 60, 0.18);
+            background: #fff;
+            color: #7c2d12;
+            transition: all 0.18s ease;
+        }}
+
+        .period-switcher-btn:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(249, 115, 22, 0.12);
+            border-color: rgba(249, 115, 22, 0.28);
+        }}
+
+        .period-switcher-btn.active {{
+            background: linear-gradient(180deg, #f97316 0%, #fb923c 100%);
+            color: #fff;
+            border-color: #f97316;
+            box-shadow: 0 10px 20px rgba(249, 115, 22, 0.18);
+        }}
+
+        .period-switcher-btn-label {{
+            font-size: 0.84rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }}
+
+        .period-switcher-btn-range {{
+            font-size: 0.72rem;
+            line-height: 1.35;
+            opacity: 0.78;
+        }}
+
+        .period-switcher-current {{
+            color: #64748b;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }}
+
+        .dashboard-section {{
+            margin-bottom: 22px;
+        }}
+
+        .dashboard-section.is-hidden {{
+            display: none;
+        }}
+
+        .section-intro {{
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 0 4px;
+            margin: 4px 0 16px;
+        }}
+
+        .section-intro-copy {{
+            max-width: 980px;
+        }}
+
+        .section-kicker {{
+            color: var(--accent);
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 800;
+            margin-bottom: 7px;
+        }}
+
+        .section-heading {{
+            color: #1f2937;
+            font-size: clamp(1.55rem, 2.4vw, 2.2rem);
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }}
+
+        .section-copy {{
+            color: #6b7280;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }}
+
+        .container h2[style*="color: white"],
+        .container h3[style*="color: white"] {{
+            color: #1f2937 !important;
+        }}
+
+        .container p[style*="color: white"] {{
+            color: #6b7280 !important;
+            opacity: 1 !important;
+        }}
+
+        .data-quality-banner {{
+            background: var(--card);
+            border-radius: 16px;
+            padding: 18px 20px;
+            margin-bottom: 22px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+            border-left: 5px solid #10b981;
+        }}
+
+        .data-quality-banner.data-quality-partial {{
+            border-left-color: #ef4444;
+        }}
+
+        .data-quality-title {{
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--ink);
+            margin-bottom: 8px;
+            letter-spacing: 0.01em;
+        }}
+
+        .data-quality-message {{
+            color: #334155;
+            margin-bottom: 6px;
+            line-height: 1.45;
+            font-size: 0.9rem;
+        }}
+
+        .data-quality-meta {{
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-bottom: 12px;
+        }}
+
+        .data-quality-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.86rem;
+        }}
+
+        .data-quality-table th,
+        .data-quality-table td {{
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: top;
+        }}
+
+        .data-quality-table th {{
+            color: var(--muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+        }}
+
+        .status-pill {{
+            display: inline-block;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+
+        .status-pill.status-ok {{
+            background: rgba(16, 185, 129, 0.14);
+            color: #047857;
+        }}
+
+        .status-pill.status-disabled {{
+            background: rgba(100, 116, 139, 0.14);
+            color: #475569;
+        }}
+
+        .status-pill.status-error {{
+            background: rgba(239, 68, 68, 0.14);
+            color: #b91c1c;
+        }}
+
+        .cfo-top-panel {{
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255, 251, 245, 0.98) 100%);
+            border-radius: 20px;
+            padding: 20px 20px 18px;
+            margin-bottom: 22px;
+            border: 1px solid rgba(251, 146, 60, 0.18);
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+        }}
+
+        .cfo-top-head {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 14px;
+        }}
+
+        .cfo-top-heading {{
+            margin: 0 0 6px 0;
+            color: var(--ink);
+            font-size: 1.25rem;
+            letter-spacing: -0.02em;
+        }}
+
+        .cfo-top-desc {{
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            max-width: 760px;
+        }}
+
+        .cfo-top-window-switch {{
+            display: inline-flex;
+            gap: 6px;
+            background: #fff7ed;
+            border: 1px solid rgba(251, 146, 60, 0.24);
+            border-radius: 12px;
+            padding: 4px;
+            flex-wrap: wrap;
+        }}
+
+        .cfo-top-window-btn {{
+            border: 0;
+            background: transparent;
+            color: #9a3412;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border-radius: 9px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }}
+
+        .cfo-top-window-btn.active {{
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+        }}
+
+        .cfo-top-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 12px;
+        }}
+
+        .cfo-top-card {{
+            background: rgba(255, 255, 255, 0.94);
+            border-radius: 16px;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            padding: 14px 14px 12px;
+            min-height: 142px;
+        }}
+
+        .cfo-top-card-title {{
+            color: #64748b;
+            font-size: 0.73rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }}
+
+        .cfo-top-card-value {{
+            color: #0f172a;
+            font-size: 2rem;
+            line-height: 1.04;
+            letter-spacing: -0.03em;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }}
+
+        .cfo-top-card-period {{
+            color: #94a3b8;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }}
+
+        .cfo-top-card-comparisons {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }}
+
+        .cfo-top-cmp-row {{
+            font-size: 0.8rem;
+            line-height: 1.3;
+            color: #64748b;
+        }}
+
+        .cfo-top-cmp-row .delta {{
+            font-weight: 800;
+            margin-right: 5px;
+        }}
+
+        .cfo-top-cmp-row .tone-good {{
+            color: #059669;
+        }}
+
+        .cfo-top-cmp-row .tone-bad {{
+            color: #dc2626;
+        }}
+
+        .cfo-top-cmp-row .tone-neutral {{
+            color: #64748b;
+        }}
+
         .summary-cards {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
         }}
-        
-        .card {{
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
+
+        .quick-insights {{
+            background: var(--card);
+            border-radius: 16px;
+            padding: 18px 18px 16px;
+            margin-bottom: 22px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
         }}
-        
-        .card:hover {{
-            transform: translateY(-5px);
+
+        .quick-insights-header h3 {{
+            font-size: 1.08rem;
+            letter-spacing: -0.01em;
+            margin-bottom: 4px;
+            color: var(--ink);
         }}
-        
-        .card-title {{
-            color: #718096;
-            font-size: 0.9rem;
+
+        .quick-insights-header p {{
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin-bottom: 12px;
+        }}
+
+        .quick-insights-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+        }}
+
+        .quick-insight-card {{
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            padding: 12px 12px 10px;
+        }}
+
+        .quick-insight-card.level-good {{
+            border-color: rgba(16, 185, 129, 0.28);
+            background: rgba(16, 185, 129, 0.08);
+        }}
+
+        .quick-insight-card.level-warn {{
+            border-color: rgba(245, 158, 11, 0.3);
+            background: rgba(245, 158, 11, 0.1);
+        }}
+
+        .quick-insight-card.level-bad {{
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.08);
+        }}
+
+        .quick-insight-title {{
+            color: #334155;
+            font-size: 0.77rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.06em;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }}
+
+        .quick-insight-value {{
+            color: #0f172a;
+            font-size: 1.05rem;
+            line-height: 1.1;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }}
+
+        .quick-insight-desc {{
+            color: #475569;
+            font-size: 0.8rem;
+            line-height: 1.38;
+        }}
+
+        .report-guide {{
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            padding: 16px 18px 14px;
+            margin-bottom: 20px;
+        }}
+
+        .report-guide h3 {{
+            font-size: 1rem;
+            margin-bottom: 8px;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+        }}
+
+        .report-guide ul {{
+            margin: 0;
+            padding-left: 18px;
+            color: #334155;
+        }}
+
+        .report-guide li {{
+            margin-bottom: 6px;
+            line-height: 1.38;
+            font-size: 0.86rem;
+        }}
+
+
+        .metric-cheatsheet {{
+            background: #f8fafc;
+            border: 1px solid #dbeafe;
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            padding: 16px 18px 14px;
+            margin-bottom: 20px;
+        }}
+
+        .metric-cheatsheet h3 {{
+            font-size: 1rem;
             margin-bottom: 10px;
+            color: var(--ink);
+            letter-spacing: -0.01em;
         }}
-        
-        .card-value {{
-            font-size: 2rem;
-            font-weight: bold;
-            color: #2d3748;
+
+        .metric-cheatsheet-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
         }}
-        
-        .card-value.profit {{
-            color: #48bb78;
-        }}
-        
-        .card-value.cost {{
-            color: #f56565;
-        }}
-        
-        .card-value.roi {{
-            color: #667eea;
-        }}
-        
-        .chart-container {{
+
+        .metric-tip {{
             background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 11px;
+        }}
+
+        .metric-tip h4 {{
+            margin: 0 0 6px;
+            font-size: 0.83rem;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+
+        .metric-tip p {{
+            margin: 0;
+            font-size: 0.81rem;
+            line-height: 1.4;
+            color: #475569;
+        }}
+
+        .card {{
+            background: var(--card);
+            border-radius: 14px;
+            padding: 18px 18px 16px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }}
+
+        .card:hover {{
+            border-color: #cbd5e1;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        }}
+
+        .card-title {{
+            color: var(--muted);
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.085em;
+            margin-bottom: 9px;
+            font-weight: 700;
+        }}
+
+        .card-value {{
+            font-size: clamp(1.6rem, 2.35vw, 2.3rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+            line-height: 1.08;
+        }}
+
+        .card-value.profit {{
+            color: var(--profit);
+        }}
+
+        .card-value.cost {{
+            color: var(--cost);
+        }}
+
+        .card-value.roi {{
+            color: #6366f1;
+        }}
+
+        .chart-container {{
+            background: var(--card);
+            border-radius: 16px;
+            padding: 20px 22px 18px;
+            margin-bottom: 18px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 3px 14px rgba(15, 23, 42, 0.05);
             position: relative;
         }}
-        
+
         .chart-container canvas {{
-            max-height: 300px !important;
+            width: 100% !important;
+            max-height: 420px !important;
+            height: min(52vh, 420px) !important;
         }}
-        
+
         .chart-title {{
-            font-size: 1.5rem;
-            color: #2d3748;
-            margin-bottom: 10px;
-            text-align: center;
+            font-size: clamp(1.45rem, 2.5vw, 2rem);
+            color: var(--ink);
+            margin-bottom: 8px;
+            text-align: left;
+            letter-spacing: -0.015em;
+            line-height: 1.15;
         }}
 
         .chart-explanation {{
-            font-size: 0.85rem;
-            color: #718096;
-            margin-bottom: 20px;
-            text-align: center;
-            padding: 0 20px;
-            line-height: 1.5;
+            font-size: 0.86rem;
+            color: var(--muted);
+            margin-bottom: 14px;
+            text-align: left;
+            line-height: 1.45;
+            max-width: 1200px;
         }}
 
         .chart-grid {{
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-bottom: 18px;
         }}
-        
-        @media (max-width: 768px) {{
+
+        @media (min-width: 1360px) {{
             .chart-grid {{
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }}
         }}
-        
+
         .table-container {{
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            background: var(--card);
+            border-radius: 16px;
+            padding: 20px 22px;
+            margin-bottom: 18px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
             overflow-x: auto;
         }}
-        
+
         .table-title {{
-            font-size: 1.5rem;
-            color: #2d3748;
-            margin-bottom: 20px;
+            font-size: 1.35rem;
+            color: var(--ink);
+            margin-bottom: 14px;
+            letter-spacing: -0.01em;
         }}
-        
+
         table {{
             width: 100%;
             border-collapse: collapse;
         }}
-        
+
         th {{
-            background: #f7fafc;
-            color: #4a5568;
-            font-weight: 600;
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 700;
             text-align: left;
-            padding: 15px;
-            border-bottom: 2px solid #e2e8f0;
-        }}
-        
-        td {{
-            padding: 15px;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 11px 10px;
             border-bottom: 1px solid #e2e8f0;
-            color: #2d3748;
+            position: sticky;
+            top: 0;
+            z-index: 1;
         }}
-        
+
+        td {{
+            padding: 10px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #1e293b;
+            font-size: 0.9rem;
+        }}
+
         tr:hover {{
-            background: #f7fafc;
+            background: #f8fafc;
         }}
-        
+
         .number {{
             text-align: right;
             font-variant-numeric: tabular-nums;
         }}
-        
+
         .footer {{
             text-align: center;
-            color: white;
-            padding: 20px;
-            font-size: 0.9rem;
-        }}
-        
-        .profit-positive {{
-            color: #48bb78;
-            font-weight: 600;
-        }}
-        
-        .profit-negative {{
-            color: #f56565;
-            font-weight: 600;
-        }}
-        
-        .total-row {{
-            background: #f7fafc;
-            font-weight: bold;
-        }}
-        
-        .total-row td {{
-            border-top: 2px solid #4a5568;
-            border-bottom: 2px solid #4a5568;
+            color: #475569;
+            padding: 16px 10px 8px;
+            font-size: 0.82rem;
         }}
 
-        /* Collapsible table styles */
+        .profit-positive {{
+            color: var(--profit);
+            font-weight: 700;
+        }}
+
+        .profit-negative {{
+            color: var(--cost);
+            font-weight: 700;
+        }}
+
+        .total-row {{
+            background: #f8fafc;
+            font-weight: 700;
+        }}
+
+        .total-row td {{
+            border-top: 1px solid #cbd5e1;
+            border-bottom: 1px solid #cbd5e1;
+        }}
+
         .collapsible-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             cursor: pointer;
-            padding: 15px 0;
+            padding: 10px 0;
             user-select: none;
         }}
 
         .collapsible-header:hover {{
-            opacity: 0.8;
+            opacity: 0.92;
         }}
 
         .collapsible-header .toggle-icon {{
-            font-size: 1.5rem;
-            color: #667eea;
-            transition: transform 0.3s ease;
-            margin-left: 15px;
+            font-size: 1.2rem;
+            color: var(--accent);
+            transition: transform 0.25s ease;
+            margin-left: 12px;
+            line-height: 1;
         }}
 
         .collapsible-header.expanded .toggle-icon {{
@@ -426,7 +1530,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         .collapsible-content {{
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.3s ease-out;
+            transition: max-height 0.25s ease-out;
         }}
 
         .collapsible-content.expanded {{
@@ -438,38 +1542,154 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         }}
 
         .expand-all-btn {{
-            background: #667eea;
+            background: linear-gradient(135deg, #f97316, #fb923c);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
+            padding: 9px 16px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 0.9rem;
-            margin-bottom: 20px;
-            transition: background 0.3s ease;
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            transition: background 0.2s ease, transform 0.2s ease;
+            letter-spacing: 0.02em;
         }}
 
         .expand-all-btn:hover {{
-            background: #5a67d8;
+            background: linear-gradient(135deg, #ea580c, #f97316);
+            transform: translateY(-1px);
+        }}
+
+        @media (max-width: 900px) {{
+            body {{
+                padding: 14px;
+            }}
+
+            .dashboard-shell {{
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }}
+
+            .dashboard-sidebar {{
+                position: static;
+                order: -1;
+                padding: 18px 16px;
+            }}
+
+            .header {{
+                padding: 24px 20px 18px;
+            }}
+
+            .header-toolbar-right {{
+                width: 100%;
+                justify-content: space-between;
+            }}
+
+            .section-intro {{
+                flex-direction: column;
+                align-items: flex-start;
+            }}
+
+            .period-switcher,
+            .period-switcher.compact {{
+                flex-direction: column;
+                align-items: stretch;
+                min-width: 0;
+            }}
+
+            .period-switcher-controls {{
+                align-items: stretch;
+            }}
+
+            .period-switcher-options {{
+                justify-content: flex-start;
+            }}
+
+            .cfo-top-head {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+
+            .cfo-top-window-switch {{
+                width: 100%;
+            }}
+
+            .chart-container,
+            .table-container {{
+                padding: 16px 14px;
+            }}
+
+            .chart-container canvas {{
+                height: min(45vh, 360px) !important;
+            }}
         }}
     </style>
 </head>
 <body>
+    <div class="dashboard-shell">
+        <aside class="dashboard-sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-kicker" data-en="Test dashboard" data-sk="Test dashboard">Test dashboard</div>
+                <div class="sidebar-brand-title" data-en="Navigation & metric groups" data-sk="Navigacia a skupiny metrik">Navigation & metric groups</div>
+                <div class="sidebar-brand-subtitle" data-en="Switch between business views instead of scrolling through one long wall of charts." data-sk="Prepni sa medzi business pohladmi namiesto dlheho scrollovania cez vsetky grafy.">Switch between business views instead of scrolling through one long wall of charts.</div>
+            </div>
+
+            <div class="sidebar-section-label" data-en="Metric groups" data-sk="Skupiny metrik">Metric groups</div>
+            <div class="nav-group-list" id="metricGroupNav">
+                <button type="button" class="nav-group-btn active" data-group="all" data-en="All sections" data-sk="Vsetky sekcie">All sections</button>
+                <button type="button" class="nav-group-btn" data-group="overview" data-en="Overview" data-sk="Prehlad">Overview</button>
+                <button type="button" class="nav-group-btn" data-group="business" data-en="Revenue & profitability" data-sk="Obrat a ziskovost">Revenue & profitability</button>
+                <button type="button" class="nav-group-btn" data-group="customers" data-en="Customers & retention" data-sk="Zakaznici a retencia">Customers & retention</button>
+                <button type="button" class="nav-group-btn" data-group="marketing" data-en="Marketing & ads" data-sk="Marketing a reklama">Marketing & ads</button>
+                <button type="button" class="nav-group-btn" data-group="geography" data-en="Geography" data-sk="Geografia">Geography</button>
+                <button type="button" class="nav-group-btn" data-group="products" data-en="Products" data-sk="Produkty">Products</button>
+                <button type="button" class="nav-group-btn" data-group="operations" data-en="Operations & diagnostics" data-sk="Operativa a diagnostika">Operations & diagnostics</button>
+            </div>
+
+            <div class="sidebar-note">
+                <div class="sidebar-note-title" data-en="Read this first" data-sk="Najprv si pozri toto">Read this first</div>
+                <div class="sidebar-note-text" data-en="Start with Overview, then switch to Revenue & profitability, and only then inspect Marketing or Operations if something looks off." data-sk="Zacni sekciou Prehlad, potom otvor Obrat a ziskovost, a az potom kontroluj Marketing alebo Operativu, ak nieco vyzera zle.">Start with Overview, then switch to Revenue & profitability, and only then inspect Marketing or Operations if something looks off.</div>
+            </div>
+        </aside>
+        <main class="dashboard-main">
     <div class="container">
         <div class="header">
-            <h1>BizniWeb Sales Report</h1>
-            <div class="date-range">{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}</div>
+            <h1>{report_title}</h1>
+            <div class="header-toolbar">
+                <div class="date-range" data-en="{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}" data-sk="{date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%d.%m.%Y')}">{date_from.strftime('%B %d, %Y')} - {date_to.strftime('%B %d, %Y')}</div>
+                <div class="header-toolbar-right">
+                    <div class="lang-switch" id="langSwitch" role="group" aria-label="Language switch">
+                        <span class="lang-switch-label" data-en="Language" data-sk="Jazyk">Language</span>
+                        <button id="langEnBtn" type="button" class="active" data-lang="en">EN</button>
+                        <button id="langSkBtn" type="button" data-lang="sk">SK</button>
+                    </div>
+                </div>
+            </div>
+            {render_period_switcher()}
             <button id="toggleAllBtn" class="expand-all-btn" onclick="toggleAllTables(true)" style="margin-top: 15px;">Expand All Tables</button>
         </div>
+        <section id="section-overview" class="dashboard-section" data-group="overview">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Overview" data-sk="Prehlad">Overview</div>
+                <h2 class="section-heading" data-en="Business snapshot in one place" data-sk="Biznis snapshot na jednom mieste">Business snapshot in one place</h2>
+                <p class="section-copy" data-en="Start here if you want the fastest possible read of revenue, profit, orders and the most important risks." data-sk="Zacni tu, ak chces najrychlejsie pochopit obrat, zisk, objednavky a najdolezitejsie rizika.">Start here if you want the fastest possible read of revenue, profit, orders and the most important risks.</p>
+            </div>
+            {render_period_switcher("section-overview", compact=True)}
+        </div>
+        {cfo_top_block_html}
+        {data_quality_section}
+        {quick_insights_html}
+        {report_guide_html}
         
         <div class="summary-cards">
             <div class="card">
                 <div class="card-title">Total Revenue (Net)</div>
-                <div class="card-value">€{total_revenue:,.2f}</div>
+                <div class="card-value">&#8364;{total_revenue:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Product Costs</div>
-                <div class="card-value cost">€{total_product_expense:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_product_expense:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Packaging Costs</div>
@@ -485,27 +1705,27 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Facebook Ads</div>
-                <div class="card-value cost">€{total_fb_ads:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_fb_ads:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Google Ads</div>
-                <div class="card-value cost">€{total_google_ads:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_google_ads:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Total Costs</div>
-                <div class="card-value cost">€{total_cost:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_cost:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Net Profit</div>
-                <div class="card-value {'profit' if total_profit >= 0 else 'cost'}">€{total_profit:,.2f}</div>
+                <div class="card-value {'profit' if total_profit >= 0 else 'cost'}">&#8364;{total_profit:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg Daily Revenue</div>
-                <div class="card-value">€{avg_daily_revenue:,.2f}</div>
+                <div class="card-value">&#8364;{avg_daily_revenue:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg Daily Profit/Loss</div>
-                <div class="card-value {'profit' if avg_daily_profit >= 0 else 'cost'}">€{avg_daily_profit:,.2f}</div>
+                <div class="card-value {'profit' if avg_daily_profit >= 0 else 'cost'}">&#8364;{avg_daily_profit:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">ROI</div>
@@ -521,11 +1741,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Avg Order Value</div>
-                <div class="card-value">€{total_aov:.2f}</div>
+                <div class="card-value">&#8364;{total_aov:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg FB Cost/Order</div>
-                <div class="card-value cost">€{total_fb_per_order:.2f}</div>
+                <div class="card-value cost">&#8364;{total_fb_per_order:.2f}</div>
             </div>"""
     
     # Add returning customers card if data is available
@@ -549,12 +1769,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
             <div class="card">
                 <div class="card-title">Avg Customer LTV (Revenue)</div>
-                <div class="card-value">€{overall_clv:.2f}</div>
+                <div class="card-value">&#8364;{overall_clv:.2f}</div>
                 <div style="color: #718096; font-size: 0.8rem;">Realized revenue/customer in selected interval</div>
             </div>
             <div class="card">
                 <div class="card-title">Customer Acq. Cost (FB)</div>
-                <div class="card-value cost">€{overall_cac:.2f}</div>
+                <div class="card-value cost">&#8364;{overall_cac:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Revenue LTV/CAC</div>
@@ -686,7 +1906,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Contribution LTV/CAC</div>
                 <div class="card-value {'profit' if contribution_ltv_cac > 1 else 'cost'}">{contribution_ltv_cac:.2f}x</div>
-                <div style="color: #718096; font-size: 0.8rem;">Pre-ad contribution/customer ÷ FB CAC</div>
+                <div style="color: #718096; font-size: 0.8rem;">Pre-ad contribution/customer / FB CAC</div>
             </div>
             <div class="card">
                 <div class="card-title">New Cust. Revenue</div>
@@ -726,24 +1946,24 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         cac_if_orders = consistency_checks.get('cac_if_orders_denominator', 0)
         html_content += f"""
             <div class="card">
-                <div class="card-title">ROAS Check &#916;</div>
+                <div class="card-title">ROAS Check Delta</div>
                 <div class="card-value {'profit' if abs(roas_delta) <= 0.01 else 'cost'}">{roas_delta:+.4f}</div>
             </div>
             <div class="card">
-                <div class="card-title">Margin Check &#916; (pp)</div>
+                <div class="card-title">Margin Check Delta (pp)</div>
                 <div class="card-value {'profit' if abs(margin_delta) <= 0.05 else 'cost'}">{margin_delta:+.4f}</div>
             </div>
             <div class="card">
                 <div class="card-title">CAC (FB/New Cust.)</div>
-                <div class="card-value">€{cac_expected:.2f}</div>
+                <div class="card-value">&#8364;{cac_expected:.2f}</div>
             </div>
             <div class="card">
-                <div class="card-title">CAC Check &#916;</div>
+                <div class="card-title">CAC Check Delta</div>
                 <div class="card-value {'profit' if abs(cac_delta) <= 0.01 else 'cost'}">{cac_delta:+.4f}</div>
             </div>
             <div class="card">
                 <div class="card-title">FB Spend / Orders</div>
-                <div class="card-value cost">€{cac_if_orders:.2f}</div>
+                <div class="card-value cost">&#8364;{cac_if_orders:.2f}</div>
             </div>"""
 
     if refunds_analysis and refunds_analysis.get('summary'):
@@ -759,7 +1979,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Refund Amount</div>
-                <div class="card-value cost">€{refund_summary.get('refund_amount', 0):,.2f}</div>
+                <div class="card-value cost">&#8364;{refund_summary.get('refund_amount', 0):,.2f}</div>
             </div>"""
 
     # Add customer concentration if available
@@ -771,12 +1991,25 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value roi">{repeat_rate:.1f}%</div>
             </div>"""
 
-    html_content += """
+    html_content += f"""
+        </div>
+        </section>
+        """
+
+    html_content += f"""
+        <section id="section-business" class="dashboard-section" data-group="business">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Revenue & profitability" data-sk="Obrat a ziskovost">Revenue & profitability</div>
+                <h2 class="section-heading" data-en="See whether the business is actually making money" data-sk="Zisti, ci biznis realne zaraba">See whether the business is actually making money</h2>
+                <p class="section-copy" data-en="These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding." data-sk="Tieto grafy odpovedaju na CFO otazky ako prve: kolko prislo, kolko odislo a ci sa drzi marza.">These charts answer the CFO questions first: what came in, what went out, and whether the margin is holding.</p>
+            </div>
+            {render_period_switcher("section-business", compact=True)}
         </div>
         """
 
     if financial_metrics:
-        html_content += """
+        html_content += f"""
         <div class="chart-container">
             <h2 class="chart-title">CAC vs Break-even Comparison</h2>
             <p class="chart-explanation">Compares acquisition cost thresholds on customer-level units: Paid CAC (Facebook), Blended CAC (tracked ads: FB+Google), and Break-even CAC based on pre-ad contribution per customer. Values below break-even are generally healthier for scalable growth.</p>
@@ -784,7 +2017,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
         """
 
-    html_content += """
+    html_content += f"""
         
         <div class="chart-container">
             <h2 class="chart-title">Daily Revenue vs Costs</h2>
@@ -824,7 +2057,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily ROI %</h2>
-                <p class="chart-explanation">ROI (Return on Investment) = (Net Profit / Total Costs) × 100. Measures profitability as percentage of total investment</p>
+                <p class="chart-explanation">ROI (Return on Investment) = (Net Profit / Total Costs) &times; 100. Measures profitability as percentage of total investment</p>
                 <canvas id="roiChart"></canvas>
             </div>
         </div>
@@ -935,6 +2168,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <h2 class="chart-title">Average Daily Revenue and Profit Trend</h2>
             <p class="chart-explanation">Cumulative daily averages in time: average revenue/day and average profit/loss per day from the start of selected period</p>
             <canvas id="avgDailyTrendChart"></canvas>
+        </div>
+        </section>
+
+        <section id="section-customers" class="dashboard-section" data-group="customers">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Customers & retention" data-sk="Zakaznici a retencia">Customers & retention</div>
+                <h2 class="section-heading" data-en="Understand who buys, who returns, and who churns" data-sk="Pochop, kto nakupuje, vracia sa a odchadza">Understand who buys, who returns, and who churns</h2>
+                <p class="section-copy" data-en="Use this section when you want to explain growth quality, not just headline revenue." data-sk="Tuto sekciu pouzi, ked chces vysvetlit kvalitu rastu, nielen samotny obrat.">Use this section when you want to explain growth quality, not just headline revenue.</p>
+            </div>
+            {render_period_switcher("section-customers", compact=True)}
         </div>"""
 
     if new_vs_returning_revenue and new_vs_returning_revenue.get('daily') is not None and not new_vs_returning_revenue.get('daily').empty:
@@ -978,6 +2222,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <p class="chart-explanation">Breakdown of orders by number of items purchased: shows how many orders contain 1, 2, 3, 4, or 5+ items</p>
             <canvas id="orderSizeDistributionChart"></canvas>
         </div>"""
+
+    html_content += f"""
+        </section>
+
+        <section id="section-marketing" class="dashboard-section" data-group="marketing">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Marketing & ads" data-sk="Marketing a reklama">Marketing & ads</div>
+                <h2 class="section-heading" data-en="Check whether paid traffic is paying back" data-sk="Skontroluj, ci sa plateny traffic vracia">Check whether paid traffic is paying back</h2>
+                <p class="section-copy" data-en="This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense." data-sk="Tu overujes efektivitu spendu, kvalitu kampani a ci akvizicia stale dava ekonomicky zmysel.">This is where you validate spend efficiency, campaign quality, and whether acquisition still makes economic sense.</p>
+            </div>
+            {render_period_switcher("section-marketing", compact=True)}
+        </div>
+        """
 
     # Add Facebook Ads Analytics section if data is available
     if fb_detailed_metrics or fb_campaigns:
@@ -1027,11 +2285,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Avg CPC</div>
-                <div class="card-value cost">€{avg_cpc:.2f}</div>
+                <div class="card-value cost">&#8364;{avg_cpc:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Avg CPM</div>
-                <div class="card-value cost">€{avg_cpm:.2f}</div>
+                <div class="card-value cost">&#8364;{avg_cpm:.2f}</div>
             </div>
         </div>
 
@@ -1051,7 +2309,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily CTR (Click-Through Rate)</h2>
-                <p class="chart-explanation">CTR = Clicks / Impressions × 100. Measures how compelling your ads are. Higher CTR = better ad creative/targeting</p>
+                <p class="chart-explanation">CTR = Clicks / Impressions &times; 100. Measures how compelling your ads are. Higher CTR = better ad creative/targeting</p>
                 <canvas id="fbCtrChart"></canvas>
             </div>
             <div class="chart-container">
@@ -1064,7 +2322,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily CPM (Cost Per 1000 Impressions)</h2>
-                <p class="chart-explanation">CPM = Spend / Impressions × 1000. Measures cost efficiency of reaching your audience</p>
+                <p class="chart-explanation">CPM = Spend / Impressions &times; 1000. Measures cost efficiency of reaching your audience</p>
                 <canvas id="fbCpmChart"></canvas>
             </div>
             <div class="chart-container">
@@ -1095,7 +2353,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Campaign Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
                 <p style="color: #718096; margin-bottom: 15px;">Performance breakdown by campaign. Click headers to sort. Focus on campaigns with best conversion rates and lowest cost per conversion.</p>
@@ -1148,15 +2406,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <td>{campaign.get('campaign_name', 'Unknown')}</td>
                             <td style="color: {status_color};">{status}</td>
                             <td>{objective}</td>
-                            <td class="number">€{spend:.2f}</td>
+                            <td class="number">&#8364;{spend:.2f}</td>
                             <td class="number">{impressions:,}</td>
                             <td class="number">{clicks:,}</td>
                             <td class="number">{ctr:.2f}%</td>
-                            <td class="number">€{cpc:.2f}</td>
-                            <td class="number">€{cpm:.2f}</td>
+                            <td class="number">&#8364;{cpc:.2f}</td>
+                            <td class="number">&#8364;{cpm:.2f}</td>
                             <td class="number">{conversions}</td>
                             <td class="number" style="color: {conv_rate_color}; font-weight: bold;">{conversion_rate:.2f}%</td>
-                            <td class="number">{'€' + f'{cost_per_conversion:.2f}' if cost_per_conversion > 0 else '-'}</td>
+                            <td class="number">{'&#8364;' + f'{cost_per_conversion:.2f}' if cost_per_conversion > 0 else '-'}</td>
                             <td class="number">{spend_pct:.1f}%</td>
                         </tr>"""
 
@@ -1168,15 +2426,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <td><strong>TOTAL / AVG</strong></td>
                             <td></td>
                             <td></td>
-                            <td class="number"><strong>€{total_campaign_spend:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{total_campaign_spend:.2f}</strong></td>
                             <td class="number"><strong>{total_campaign_impressions:,}</strong></td>
                             <td class="number"><strong>{total_campaign_clicks:,}</strong></td>
                             <td class="number"><strong>{(total_campaign_clicks / total_campaign_impressions * 100) if total_campaign_impressions > 0 else 0:.2f}%</strong></td>
-                            <td class="number"><strong>€{(total_campaign_spend / total_campaign_clicks) if total_campaign_clicks > 0 else 0:.2f}</strong></td>
-                            <td class="number"><strong>€{(total_campaign_spend / total_campaign_impressions * 1000) if total_campaign_impressions > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_campaign_spend / total_campaign_clicks) if total_campaign_clicks > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_campaign_spend / total_campaign_impressions * 1000) if total_campaign_impressions > 0 else 0:.2f}</strong></td>
                             <td class="number"><strong>{total_conversions}</strong></td>
                             <td class="number"><strong>{avg_conversion_rate:.2f}%</strong></td>
-                            <td class="number"><strong>{'€' + f'{avg_cost_per_conversion:.2f}' if avg_cost_per_conversion > 0 else '-'}</strong></td>
+                            <td class="number"><strong>{'&#8364;' + f'{avg_cost_per_conversion:.2f}' if avg_cost_per_conversion > 0 else '-'}</strong></td>
                             <td class="number"><strong>100%</strong></td>
                         </tr>
                     </tbody>
@@ -1240,17 +2498,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">💰 Cost Per Order Analysis</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">đź’° Cost Per Order Analysis</h2>
         <p style="text-align: center; color: rgba(255,255,255,0.8); margin-bottom: 20px;">Estimated order attribution based on click and spend distribution. Note: This is correlation-based estimation, not direct tracking.</p>
 
         <div class="summary-cards">
             <div class="card">
                 <div class="card-title">FB Cost Per Order</div>
-                <div class="card-value cost">€{fb_cpo:.2f}</div>
+                <div class="card-value cost">&#8364;{fb_cpo:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Total FB Spend</div>
-                <div class="card-value cost">€{total_fb_spend_cpo:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_fb_spend_cpo:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Total Orders</div>
@@ -1258,7 +2516,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Total Revenue (Net)</div>
-                <div class="card-value profit">€{total_revenue_cpo:,.2f}</div>
+                <div class="card-value profit">&#8364;{total_revenue_cpo:,.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Overall ROAS (FB)</div>
@@ -1273,15 +2531,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         # FB spend and revenue reconciliation (daily source vs campaign source)
         if fb_spend_daily_source is not None:
             diff_class = 'profit-positive' if (fb_spend_diff is not None and abs(fb_spend_diff) <= 0.01) else 'profit-negative'
-            campaign_spend_display = f"€{fb_spend_campaign_source:,.2f}" if fb_spend_campaign_source is not None else "N/A"
-            diff_display = f"€{fb_spend_diff:+,.2f}" if fb_spend_diff is not None else "N/A"
+            campaign_spend_display = f"&#8364;{fb_spend_campaign_source:,.2f}" if fb_spend_campaign_source is not None else "N/A"
+            diff_display = f"&#8364;{fb_spend_diff:+,.2f}" if fb_spend_diff is not None else "N/A"
             diff_pct_display = f"{fb_spend_diff_pct:+.2f}%" if fb_spend_diff_pct is not None else "N/A"
             html_content += f"""
 
         <div class="table-container">
             <div class="collapsible-header expanded" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Spend/Revenue Reconciliation</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content expanded">
                 <table>
@@ -1295,7 +2553,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tbody>
                         <tr>
                             <td>FB Spend (Daily Source)</td>
-                            <td class="number">€{fb_spend_daily_source:,.2f}</td>
+                            <td class="number">&#8364;{fb_spend_daily_source:,.2f}</td>
                             <td>Sum of daily FB spend mapped to report days</td>
                         </tr>
                         <tr>
@@ -1310,12 +2568,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         </tr>
                         <tr>
                             <td>Revenue Used in CPO Section</td>
-                            <td class="number">€{total_revenue_cpo:,.2f}</td>
+                            <td class="number">&#8364;{total_revenue_cpo:,.2f}</td>
                             <td>Source: {total_revenue_source_cpo}</td>
                         </tr>
                         <tr>
                             <td>Raw Revenue from Daily CPO Aggregation</td>
-                            <td class="number">€{total_revenue_raw_cpo:,.2f}</td>
+                            <td class="number">&#8364;{total_revenue_raw_cpo:,.2f}</td>
                             <td>For comparison only</td>
                         </tr>
                     </tbody>
@@ -1355,7 +2613,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header expanded" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Estimated Campaign Attribution</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content expanded">
                 <p style="color: #718096; margin-bottom: 15px;">Estimated orders attributed to each campaign based on click and spend distribution (60% click-weighted, 40% spend-weighted). Best performers are listed first.</p>
@@ -1383,13 +2641,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                         <tr>
                             <td>{camp['campaign_name'][:40]}</td>
-                            <td class="number">€{camp['spend']:.2f}</td>
+                            <td class="number">&#8364;{camp['spend']:.2f}</td>
                             <td class="number">{camp['clicks']:,}</td>
                             <td class="number">{camp['ctr']:.2f}%</td>
-                            <td class="number">€{camp['cpc']:.2f}</td>
+                            <td class="number">&#8364;{camp['cpc']:.2f}</td>
                             <td class="number">{camp['estimated_orders']:.1f}</td>
-                            <td class="number" style="color: {cpo_color}; font-weight: bold;">€{camp['estimated_cpo']:.2f}</td>
-                            <td class="number">€{camp['estimated_revenue']:,.2f}</td>
+                            <td class="number" style="color: {cpo_color}; font-weight: bold;">&#8364;{camp['estimated_cpo']:.2f}</td>
+                            <td class="number">&#8364;{camp['estimated_revenue']:,.2f}</td>
                             <td class="number" style="color: {roas_color}; font-weight: bold;">{camp['estimated_roas']:.2f}x</td>
                             <td class="number">{camp['click_share_pct']:.1f}%</td>
                         </tr>"""
@@ -1431,8 +2689,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <tr>
                             <td>{day['date']}</td>
                             <td class="number">{day['orders']}</td>
-                            <td class="number">€{day['fb_spend']:.2f}</td>
-                            <td class="number profit-positive">€{day['cpo']:.2f}</td>
+                            <td class="number">&#8364;{day['fb_spend']:.2f}</td>
+                            <td class="number profit-positive">&#8364;{day['cpo']:.2f}</td>
                             <td class="number">{day['roas']:.2f}x</td>
                         </tr>"""
                 html_content += """
@@ -1455,8 +2713,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <tr>
                             <td>{day['date']}</td>
                             <td class="number">{day['orders']}</td>
-                            <td class="number">€{day['fb_spend']:.2f}</td>
-                            <td class="number profit-negative">€{day['cpo']:.2f}</td>
+                            <td class="number">&#8364;{day['fb_spend']:.2f}</td>
+                            <td class="number profit-negative">&#8364;{day['cpo']:.2f}</td>
                             <td class="number">{day['roas']:.2f}x</td>
                         </tr>"""
                 html_content += """
@@ -1487,7 +2745,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     if fb_hourly_stats or fb_dow_stats:
         html_content += """
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">⏰ FB Ads Time-Based Analysis</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">âŹ° FB Ads Time-Based Analysis</h2>
         <p style="text-align: center; color: rgba(255,255,255,0.8); margin-bottom: 20px;">Analyze when your Facebook ads perform best - by hour of day and day of week</p>"""
 
         # Hourly Stats Section
@@ -1516,7 +2774,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Best CPC Hour</div>
                 <div class="card-value profit">{best_cpc_hour['hour']:02d}:00</div>
-                <div style="color: #718096; font-size: 0.8rem;">CPC: €{best_cpc_hour.get('cpc', 0):.2f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">CPC: &#8364;{best_cpc_hour.get('cpc', 0):.2f}</div>
             </div>"""
 
                 html_content += f"""
@@ -1527,7 +2785,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Total Hourly Spend</div>
-                <div class="card-value cost">€{total_hourly_spend:,.2f}</div>
+                <div class="card-value cost">&#8364;{total_hourly_spend:,.2f}</div>
             </div>
         </div>
 
@@ -1609,12 +2867,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="card">
                 <div class="card-title">Best CPO Hour</div>
                 <div class="card-value profit">{best_cpo_hour['hour']:02d}:00</div>
-                <div style="color: #718096; font-size: 0.8rem;">CPO: €{best_cpo_hour['cpo']:.2f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">CPO: &#8364;{best_cpo_hour['cpo']:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Worst CPO Hour</div>
                 <div class="card-value cost">{worst_cpo_hour['hour']:02d}:00</div>
-                <div style="color: #718096; font-size: 0.8rem;">CPO: €{worst_cpo_hour['cpo']:.2f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">CPO: &#8364;{worst_cpo_hour['cpo']:.2f}</div>
             </div>"""
 
                 if best_roas_hour:
@@ -1628,7 +2886,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
             <div class="card">
                 <div class="card-title">Avg Hourly CPO</div>
-                <div class="card-value">€{avg_hourly_cpo:.2f}</div>
+                <div class="card-value">&#8364;{avg_hourly_cpo:.2f}</div>
             </div>
         </div>
 
@@ -1663,7 +2921,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Hourly Performance Details</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
                 <table>
@@ -1685,24 +2943,24 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     html_content += f"""
                         <tr>
                             <td>{hour['hour']:02d}:00 - {hour['hour']:02d}:59</td>
-                            <td class="number">€{hour.get('spend', 0):.2f}</td>
+                            <td class="number">&#8364;{hour.get('spend', 0):.2f}</td>
                             <td class="number">{hour.get('impressions', 0):,}</td>
                             <td class="number">{hour.get('clicks', 0):,}</td>
                             <td class="number">{hour.get('ctr', 0):.2f}%</td>
-                            <td class="number">€{hour.get('cpc', 0):.2f}</td>
-                            <td class="number">€{hour.get('cpm', 0):.2f}</td>
+                            <td class="number">&#8364;{hour.get('cpc', 0):.2f}</td>
+                            <td class="number">&#8364;{hour.get('cpm', 0):.2f}</td>
                             <td class="number">{hour.get('reach', 0):,}</td>
                         </tr>"""
 
                 html_content += f"""
                         <tr class="total-row">
                             <td><strong>TOTAL</strong></td>
-                            <td class="number"><strong>€{total_hourly_spend:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{total_hourly_spend:.2f}</strong></td>
                             <td class="number"><strong>{total_hourly_impressions:,}</strong></td>
                             <td class="number"><strong>{total_hourly_clicks:,}</strong></td>
                             <td class="number"><strong>{(total_hourly_clicks/total_hourly_impressions*100) if total_hourly_impressions > 0 else 0:.2f}%</strong></td>
-                            <td class="number"><strong>€{(total_hourly_spend/total_hourly_clicks) if total_hourly_clicks > 0 else 0:.2f}</strong></td>
-                            <td class="number"><strong>€{(total_hourly_spend/total_hourly_impressions*1000) if total_hourly_impressions > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_hourly_spend/total_hourly_clicks) if total_hourly_clicks > 0 else 0:.2f}</strong></td>
+                            <td class="number"><strong>&#8364;{(total_hourly_spend/total_hourly_impressions*1000) if total_hourly_impressions > 0 else 0:.2f}</strong></td>
                             <td class="number"></td>
                         </tr>
                     </tbody>
@@ -1742,7 +3000,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Day of Week Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
                 <table>
@@ -1768,13 +3026,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                         <tr>
                             <td><strong>{day.get('day_of_week', '')}</strong></td>
-                            <td class="number">€{day.get('total_spend', 0):,.2f}</td>
-                            <td class="number">€{day.get('avg_spend', 0):.2f}</td>
+                            <td class="number">&#8364;{day.get('total_spend', 0):,.2f}</td>
+                            <td class="number">&#8364;{day.get('avg_spend', 0):.2f}</td>
                             <td class="number">{day.get('total_clicks', 0):,}</td>
                             <td class="number">{day.get('avg_clicks', 0):.1f}</td>
                             <td class="number" style="color: {ctr_color};">{day.get('ctr', 0):.2f}%</td>
-                            <td class="number" style="color: {cpc_color};">€{day.get('cpc', 0):.2f}</td>
-                            <td class="number">€{day.get('cpm', 0):.2f}</td>
+                            <td class="number" style="color: {cpc_color};">&#8364;{day.get('cpc', 0):.2f}</td>
+                            <td class="number">&#8364;{day.get('cpm', 0):.2f}</td>
                             <td class="number">{day.get('days_count', 0)}</td>
                         </tr>"""
 
@@ -1812,7 +3070,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Weekly Customer Retention Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -1917,7 +3175,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Revenue LTV/CAC Ratio Trend</h2>
-                <p class="chart-explanation">Revenue LTV/CAC = realized CLV ÷ CAC. Healthy ratio is typically 3:1 or higher. Break-even is 1:1.</p>
+                <p class="chart-explanation">Revenue LTV/CAC = realized CLV / CAC. Healthy ratio is typically 3:1 or higher. Break-even is 1:1.</p>
                 <canvas id="ltvCacRatioChart"></canvas>
             </div>
         </div>
@@ -1937,7 +3195,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Weekly CLV, CAC & Return Time Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -1948,11 +3206,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Customers</th>
                         <th class="number">New</th>
                         <th class="number">Returning</th>
-                        <th class="number">Avg CLV (€)</th>
-                        <th class="number">Cumulative CLV (€)</th>
-                        <th class="number">CAC (€)</th>
+                        <th class="number">Avg CLV (&#8364;)</th>
+                        <th class="number">Cumulative CLV (&#8364;)</th>
+                        <th class="number">CAC (&#8364;)</th>
                         <th class="number">Avg Return Days</th>
-                        <th class="number">Revenue Net (€)</th>
+                        <th class="number">Revenue Net (&#8364;)</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -1968,11 +3226,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{row['unique_customers']}</td>
                         <td class="number">{row['new_customers']}</td>
                         <td class="number">{row['returning_customers']}</td>
-                        <td class="number">€{row['avg_clv']:.2f}</td>
-                        <td class="number">€{row['cumulative_avg_clv']:.2f}</td>
-                        <td class="number">€{cac:.2f}</td>
+                        <td class="number">&#8364;{row['avg_clv']:.2f}</td>
+                        <td class="number">&#8364;{row['cumulative_avg_clv']:.2f}</td>
+                        <td class="number">&#8364;{cac:.2f}</td>
                         <td class="number">{return_time_str}</td>
-                        <td class="number">€{row['total_revenue']:.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:.2f}</td>
                     </tr>"""
         
         # Add total row
@@ -1992,11 +3250,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{total_customers}</td>
                         <td class="number">{total_new}</td>
                         <td class="number">{total_returning}</td>
-                        <td class="number">€{overall_avg_clv:.2f}</td>
-                        <td class="number">€{final_cumulative_clv:.2f}</td>
-                        <td class="number">€{overall_cac_table:.2f}</td>
+                        <td class="number">&#8364;{overall_avg_clv:.2f}</td>
+                        <td class="number">&#8364;{final_cumulative_clv:.2f}</td>
+                        <td class="number">&#8364;{overall_cac_table:.2f}</td>
                         <td class="number">{return_time_total}</td>
-                        <td class="number">€{total_revenue:.2f}</td>
+                        <td class="number">&#8364;{total_revenue:.2f}</td>
                     </tr>
                 </tbody>
             </table>
@@ -2054,7 +3312,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-container">
             <h2 class="chart-title">Time Between Orders by Order Transition</h2>
-            <p class="chart-explanation">Average days between consecutive orders (1st→2nd, 2nd→3rd, etc.). Shows if repeat customers order faster over time</p>
+            <p class="chart-explanation">Average days between consecutive orders (1stâ†’2nd, 2ndâ†’3rd, etc.). Shows if repeat customers order faster over time</p>
             <canvas id="timeBetweenByOrderChart"></canvas>
         </div>
 
@@ -2078,7 +3336,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Time to Nth Order Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2104,7 +3362,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{row['median_days_from_first']}</td>
                         <td class="number">{row['avg_days_from_prev']}</td>
                         <td class="number">{row['median_days_from_prev']}</td>
-                        <td class="number">€{row['avg_order_value']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_order_value']:.2f}</td>
                     </tr>"""
 
             html_content += """
@@ -2120,7 +3378,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Order Frequency Distribution</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2174,7 +3432,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Monthly Cohort Retention</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2242,54 +3500,54 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             html_content += f"""
 
         <div class="table-container" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); margin-top: 30px;">
-            <h2 class="table-title" style="color: white;">✅ Skutočná retencia (bez časového skreslenia) - Len kohorty 90+ dní</h2>
+            <h2 class="table-title" style="color: white;">True Retention (Time-Bias Free) - Mature Cohorts Only (90+ days)</h2>
             <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr); background: rgba(255,255,255,0.95); padding: 20px; border-radius: 8px; margin: 15px;">
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Skutočná 2nd Order Retencia</div>
+                    <div class="card-title">True 2nd Order Retention</div>
                     <div class="card-value" style="color: #059669;">{true_retention_2nd}%</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Skutočná 3rd Order Retencia</div>
+                    <div class="card-title">True 3rd Order Retention</div>
                     <div class="card-value" style="color: #059669;">{true_retention_3rd}%</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Počet zrelých kohort</div>
+                    <div class="card-title">Mature Cohorts Count</div>
                     <div class="card-value" style="color: #059669;">{len(mature_cohorts)}</div>
                 </div>
                 <div class="card" style="background: #ecfdf5;">
-                    <div class="card-title">Celkom zákazníkov</div>
+                    <div class="card-title">Total Customers</div>
                     <div class="card-value" style="color: #059669;">{mature_cohorts['total_customers'].sum()}</div>
                 </div>
             </div>
             <p style="color: white; padding: 0 15px 15px; font-size: 0.9rem;">
                 <strong>Note:</strong> These values are more accurate because they include only cohorts that had enough time (90+ days) for a repeat purchase.
-                Nové kohorty (menej ako 90 dní) nie sú zahrnuté, aby nedochádzalo k skresleniu výsledkov.
+                Newer cohorts (younger than 90 days) are excluded to avoid time bias.
             </p>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Skutočná retencia podľa zrelých kohort (90+ dní)</h2>
-            <p class="chart-explanation">Retencia len pre kohorty, ktoré mali dostatok času na opätovný nákup. Tieto čísla sú presnejšie ako celkové štatistiky.</p>
+            <h2 class="chart-title">True Retention by Mature Cohorts (90+ days)</h2>
+            <p class="chart-explanation">Retention measured only on cohorts that had enough time for repeat purchases. These values are less biased than all-cohort averages.</p>
             <canvas id="matureCohortRetentionChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Zrelé kohorty - Podrobná retencia (90+ dní staré)</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">Mature Cohorts - Detailed Retention (90+ days old)</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Kohorta</th>
-                        <th class="number">Vek (dní)</th>
-                        <th class="number">Zákazníci</th>
+                        <th>Cohort</th>
+                        <th class="number">Age (days)</th>
+                        <th class="number">Customers</th>
                         <th class="number">2nd Order %</th>
                         <th class="number">3rd Order %</th>
                         <th class="number">4th Order %</th>
                         <th class="number">5th Order %</th>
-                        <th class="number">Priemer obj.</th>
+                        <th class="number">Avg Orders</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -2334,50 +3592,50 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not item_retention_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Retencia podľa prvého zakúpeného produktu</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Porovnanie retencie zákazníkov podľa toho, aký produkt mali v prvej objednávke (top {len(item_retention_df)} produktov s min. 50 prvými objednávkami)</p>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Retention by First Purchased Product</h2>
+        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Customer retention comparison by first purchased product (top {len(item_retention_df)} products with at least 50 first orders).</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">Analyzovaných produktov</div>
+                <div class="card-title">Products Analyzed</div>
                 <div class="card-value">{first_item_summary.get('total_items_analyzed', 0)}</div>
             </div>
             <div class="card">
-                <div class="card-title">Priemerná 2nd retencia</div>
+                <div class="card-title">Average 2nd Order Retention</div>
                 <div class="card-value roi">{first_item_summary.get('avg_retention_2nd_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Najlepšia 2nd retencia</div>
+                <div class="card-title">Best 2nd Order Retention</div>
                 <div class="card-value profit">{first_item_summary.get('best_retention_2nd_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Rozptyl retencie</div>
+                <div class="card-title">Retention Spread</div>
                 <div class="card-value">{first_item_summary.get('retention_spread', 0):.1f}%</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Retencia podľa prvého produktu (2nd Order %)</h2>
-            <p class="chart-explanation">Percentuálna pravdepodobnosť opätovného nákupu zákazníkov podľa toho, aký produkt si kúpili v prvej objednávke</p>
+            <h2 class="chart-title">Retention by First Product (2nd Order %)</h2>
+            <p class="chart-explanation">Probability of repeat purchase based on which product the customer bought in their first order.</p>
             <canvas id="firstItemRetentionChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Detailná retencia podľa prvého produktu</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">Detailed Retention by First Product</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt v prvej objednávke</th>
-                        <th class="number">Zákazníci</th>
+                        <th>Product in First Order</th>
+                        <th class="number">Customers</th>
                         <th class="number">2nd Order %</th>
                         <th class="number">3rd Order %</th>
                         <th class="number">4th Order %</th>
                         <th class="number">5th Order %</th>
-                        <th class="number">Priemer obj.</th>
+                        <th class="number">Avg Orders</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -2426,49 +3684,49 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not time_to_nth_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Čas do ďalšej objednávky podľa prvého produktu</h2>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Time to Next Order by First Product</h2>
         <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Comparison of average time (in days) to 2nd, 3rd, and 4th order by first-order product.</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">Priemerný čas do 2. obj.</div>
-                <div class="card-value">{time_nth_summary.get('avg_days_to_2nd_overall', 'N/A')} dní</div>
+                <div class="card-title">Average Time to 2nd Order</div>
+                <div class="card-value">{time_nth_summary.get('avg_days_to_2nd_overall', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">Najrýchlejší návrat</div>
-                <div class="card-value profit">{time_nth_summary.get('fastest_return_days', 'N/A')} dní</div>
+                <div class="card-title">Fastest Return</div>
+                <div class="card-value profit">{time_nth_summary.get('fastest_return_days', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">Najpomalší návrat</div>
-                <div class="card-value cost">{time_nth_summary.get('slowest_return_days', 'N/A')} dní</div>
+                <div class="card-title">Slowest Return</div>
+                <div class="card-value cost">{time_nth_summary.get('slowest_return_days', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">Rozptyl (dní)</div>
+                <div class="card-title">Spread (days)</div>
                 <div class="card-value">{time_nth_summary.get('days_spread', 0):.1f}</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Priemerný čas do 2. objednávky podľa prvého produktu</h2>
-            <p class="chart-explanation">Zákazníci, ktorí si kúpili tento produkt v prvej objednávke, sa vrátili v priemere za uvedený počet dní</p>
+            <h2 class="chart-title">Average Time to 2nd Order by First Product</h2>
+            <p class="chart-explanation">Average time for customers to place a second order after starting with each first-order product.</p>
             <canvas id="timeToNthByFirstItemChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Čas do N-tej objednávky podľa prvého produktu</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">Time to Nth Order by First Product</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt v prvej objednávke</th>
-                        <th class="number">Zákazníci</th>
-                        <th class="number">Čas do 2. obj. (dní)</th>
-                        <th class="number">Čas do 3. obj. (dní)</th>
-                        <th class="number">Čas do 4. obj. (dní)</th>
-                        <th class="number">Čas do 5. obj. (dní)</th>
+                        <th>Product in First Order</th>
+                        <th class="number">Customers</th>
+                        <th class="number">Days to 2nd (avg)</th>
+                        <th class="number">Days to 3rd (avg)</th>
+                        <th class="number">Days to 4th (avg)</th>
+                        <th class="number">ÄŚas do 5. obj. (dnĂ­)</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -2503,50 +3761,50 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if not item_repurchase_df.empty:
             html_content += f"""
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Opakovaný nákup rovnakého produktu</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">Analýza toho, ako často zákazníci kupujú ten istý produkt opakovane v ďalších objednávkach (top {len(item_repurchase_df)} produktov)</p>
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Same Product Repurchase</h2>
+        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.8;">How often customers buy the same product repeatedly in later orders (top {len(item_repurchase_df)} products).</p>
 
         <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card">
-                <div class="card-title">Priemerná 2x repurchase</div>
+                <div class="card-title">Average 2x Repurchase</div>
                 <div class="card-value roi">{repurchase_summary.get('avg_repurchase_2x_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Najlepšia repurchase</div>
+                <div class="card-title">Best Repurchase</div>
                 <div class="card-value profit">{repurchase_summary.get('best_repurchase_2x_pct', 0):.1f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Priem. dni medzi nákupmi</div>
-                <div class="card-value">{repurchase_summary.get('avg_days_between_repurchase', 'N/A')} dní</div>
+                <div class="card-title">Avg Days Between Purchases</div>
+                <div class="card-value">{repurchase_summary.get('avg_days_between_repurchase', 'N/A')} days</div>
             </div>
             <div class="card">
-                <div class="card-title">Rozptyl repurchase</div>
+                <div class="card-title">Repurchase Spread</div>
                 <div class="card-value">{repurchase_summary.get('repurchase_spread', 0):.1f}%</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Opakovaný nákup rovnakého produktu (2x+)</h2>
-            <p class="chart-explanation">Percento zákazníkov, ktorí si kúpili tento produkt minimálne dvakrát v rôznych objednávkach</p>
+            <h2 class="chart-title">Same Product Repurchase (2x+)</h2>
+            <p class="chart-explanation">Share of customers who purchased the same product at least twice in different orders.</p>
             <canvas id="sameItemRepurchaseChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Detailná analýza opakovaných nákupov produktov</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title">Detailed Same Product Repurchase Analysis</h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
                 <thead>
                     <tr>
-                        <th>Produkt</th>
-                        <th class="number">Celkom obj.</th>
-                        <th class="number">Zákazníci</th>
+                        <th>Product</th>
+                        <th class="number">Total Orders</th>
+                        <th class="number">Customers</th>
                         <th class="number">2x+ %</th>
                         <th class="number">3x+ %</th>
                         <th class="number">4x+ %</th>
-                        <th class="number">Priemer nák.</th>
+                        <th class="number">Priemer nĂˇk.</th>
                         <th class="number">Dni medzi</th>
                     </tr>
                 </thead>
@@ -2593,12 +3851,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Daily Performance Summary</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2633,15 +3891,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{row['date']}</td>
                         <td class="number">{row['unique_orders']}</td>
-                        <td class="number">€{row['total_revenue']:,.2f}</td>
-                        <td class="number">€{aov:.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{aov:.2f}</td>
                         <td class="number">{avg_items_per_order:.2f}</td>
-                        <td class="number">€{row['product_expense']:,.2f}</td>
-                        <td class="number">€{fixed_costs:,.2f}</td>
-                        <td class="number">€{row['fb_ads_spend']:,.2f}</td>
-                        <td class="number">€{google_ads:,.2f}</td>
-                        <td class="number">€{row['total_cost']:,.2f}</td>
-                        <td class="number {profit_class}">€{row['net_profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['product_expense']:,.2f}</td>
+                        <td class="number">&#8364;{fixed_costs:,.2f}</td>
+                        <td class="number">&#8364;{row['fb_ads_spend']:,.2f}</td>
+                        <td class="number">&#8364;{google_ads:,.2f}</td>
+                        <td class="number">&#8364;{row['total_cost']:,.2f}</td>
+                        <td class="number {profit_class}">&#8364;{row['net_profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
                     </tr>
 """
@@ -2651,15 +3909,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr class="total-row">
                         <td>TOTAL</td>
                         <td class="number">{total_orders}</td>
-                        <td class="number">€{total_revenue:,.2f}</td>
-                        <td class="number">€{total_aov:.2f}</td>
+                        <td class="number">&#8364;{total_revenue:,.2f}</td>
+                        <td class="number">&#8364;{total_aov:.2f}</td>
                         <td class="number">{total_avg_items_per_order:.2f}</td>
-                        <td class="number">€{total_product_expense:,.2f}</td>
-                        <td class="number">€{total_fixed_costs:,.2f}</td>
-                        <td class="number">€{total_fb_ads:,.2f}</td>
-                        <td class="number">€{total_google_ads:,.2f}</td>
-                        <td class="number">€{total_cost:,.2f}</td>
-                        <td class="number profit-positive">€{total_profit:,.2f}</td>
+                        <td class="number">&#8364;{total_product_expense:,.2f}</td>
+                        <td class="number">&#8364;{total_fixed_costs:,.2f}</td>
+                        <td class="number">&#8364;{total_fb_ads:,.2f}</td>
+                        <td class="number">&#8364;{total_google_ads:,.2f}</td>
+                        <td class="number">&#8364;{total_cost:,.2f}</td>
+                        <td class="number profit-positive">&#8364;{total_profit:,.2f}</td>
                         <td class="number">{total_roi:.1f}%</td>
                     </tr>
                 </tbody>
@@ -2670,7 +3928,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">All Products by Revenue (Product Costs Only)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2705,9 +3963,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{product_name}</td>
                         <td>{product_sku}</td>
                         <td class="number">{row['total_quantity']}</td>
-                        <td class="number">€{row['total_revenue']:,.2f}</td>
-                        <td class="number">€{row['product_expense']:,.2f}</td>
-                        <td class="number {profit_class}">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['product_expense']:,.2f}</td>
+                        <td class="number {profit_class}">&#8364;{row['profit']:,.2f}</td>
                         <td class="number">{row['roi_percent']:.1f}%</td>
                         <td class="number">{quantity_share:.1f}% / {revenue_share:.1f}% / {profit_share:.1f}%</td>
                     </tr>
@@ -2736,7 +3994,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Item Combinations Analysis</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2760,7 +4018,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['combination_size']} items</td>
                         <td>{combo_display}</td>
                         <td class="number">{row['count']}</td>
-                        <td class="number">€{combo_price:.2f}</td>
+                        <td class="number">&#8364;{combo_price:.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -2798,7 +4056,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Day of Week Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2820,9 +4078,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['day_name']}</td>
                         <td class="number">{row['orders']}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['aov']:.2f}</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -2831,6 +4089,547 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
+
+    # Week of Month Analysis
+    if week_of_month_analysis is not None and not week_of_month_analysis.empty:
+        wom_labels = week_of_month_analysis['week_label'].tolist()
+
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Week of Month Analysis (Equalized 4x7)</h2>
+
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Revenue & Profit by Week of Month</h2>
+                <p class="chart-explanation">Uses days 1-28 only (4x7 days) and full months only, so each week bucket has the same calendar-day length.</p>
+                <canvas id="womRevenueProfitChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Average Daily Revenue & Profit by Week of Month</h2>
+                <p class="chart-explanation">Normalized by calendar days in each equalized week bucket (includes zero-order days), so phase comparison is fair.</p>
+                <canvas id="womAvgDailyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Week of Month Performance (Equalized)</h2>
+                <span class="toggle-icon">&#9662;</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Week in Month</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Orders %</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Revenue %</th>
+                        <th class="number">Profit (before ads)</th>
+                        <th class="number">Profit Margin</th>
+                        <th class="number">AOV</th>
+                        <th class="number">Avg Daily Revenue</th>
+                        <th class="number">Avg Daily Profit</th>
+                        <th class="number">Calendar Days</th>
+                        <th class="number">Active Days</th>
+                        <th class="number">Active Day Rate</th>
+                        <th class="number">Active Months</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+
+        for _, row in week_of_month_analysis.iterrows():
+            html_content += f"""
+                    <tr>
+                        <td>{row['week_label']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">{row['orders_pct']:.1f}%</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">{row['revenue_pct']:.1f}%</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
+                        <td class="number">{row['profit_margin_pct']:.1f}%</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_daily_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_daily_profit']:,.2f}</td>
+                        <td class="number">{int(row['calendar_days'])}</td>
+                        <td class="number">{int(row['active_days'])}</td>
+                        <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
+                        <td class="number">{int(row['active_months'])}</td>
+                    </tr>"""
+
+        html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+    # Day of Month Analysis
+    if day_of_month_analysis is not None and not day_of_month_analysis.empty:
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Day of Month Analysis</h2>
+
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Orders & Revenue by Day of Month</h2>
+                <p class="chart-explanation">Total performance by calendar day number (1-31) within month across selected period.</p>
+                <canvas id="domOrdersRevenueChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Average Revenue/Profit per Occurrence</h2>
+                <p class="chart-explanation">Normalized by number of calendar occurrences of each day (fair phase-of-month comparison).</p>
+                <canvas id="domAvgDailyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Day of Month Performance (Normalized)</h2>
+                <span class="toggle-icon">&#9662;</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Day in Month</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Orders %</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Revenue %</th>
+                        <th class="number">Profit (before ads)</th>
+                        <th class="number">Profit Margin</th>
+                        <th class="number">AOV</th>
+                        <th class="number">Avg Orders / Occurrence</th>
+                        <th class="number">Avg Revenue / Occurrence</th>
+                        <th class="number">Avg Profit / Occurrence</th>
+                        <th class="number">Calendar Occurrences</th>
+                        <th class="number">Active Days</th>
+                        <th class="number">Active Day Rate</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+
+        for _, row in day_of_month_analysis.iterrows():
+            html_content += f"""
+                    <tr>
+                        <td>{row['day_label']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">{row['orders_pct']:.1f}%</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">{row['revenue_pct']:.1f}%</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
+                        <td class="number">{row['profit_margin_pct']:.1f}%</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
+                        <td class="number">{row['avg_orders_per_occurrence']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_revenue_per_occurrence']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_profit_per_occurrence']:,.2f}</td>
+                        <td class="number">{int(row['calendar_days'])}</td>
+                        <td class="number">{int(row['active_days'])}</td>
+                        <td class="number">{row['active_day_ratio_pct']:.1f}%</td>
+                    </tr>"""
+
+        html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+    # Weather Impact Analysis
+    if weather_analysis and weather_analysis.get('bucket_summary') is not None and not weather_analysis.get('bucket_summary').empty:
+        weather_bucket_summary = weather_analysis.get('bucket_summary')
+        weather_correlations = weather_analysis.get('correlations', {}) or {}
+        weather_lag_correlations = weather_analysis.get('lag_correlations', {}) or {}
+
+        def _corr_text(value):
+            return "N/A" if value is None else f"{value:.3f}"
+
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Weather Impact</h2>
+
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-title">Rain vs Revenue Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('rain_revenue'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Daily precipitation vs revenue</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Rain vs Profit Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('rain_profit'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Daily precipitation vs net profit</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Temp vs Revenue Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('temp_revenue'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Mean temperature vs revenue</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Bad Score vs Profit Corr</div>
+                <div class="card-value">{_corr_text(weather_correlations.get('bad_score_profit'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Weather badness vs net profit</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Lag 1 Revenue Corr</div>
+                <div class="card-value">{_corr_text((weather_lag_correlations.get('lag_1_day') or {}).get('revenue'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Yesterday weather score vs today revenue</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Lag 1 Profit Corr</div>
+                <div class="card-value">{_corr_text((weather_lag_correlations.get('lag_1_day') or {}).get('profit'))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Yesterday weather score vs today net profit</div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h2 class="chart-title">Precipitation vs Revenue & Profit</h2>
+                <p class="chart-explanation">Daily precipitation overlaid with revenue and net profit. Weather source: {weather_analysis.get('source', 'Open-Meteo')} | Location: {weather_analysis.get('location_label', 'N/A')} | Timezone: {weather_analysis.get('timezone', 'Europe/Bratislava')}</p>
+                <canvas id="weatherRevenueChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Weather Bucket Uplift vs Weekday Baseline</h2>
+                <p class="chart-explanation">Average revenue/profit delta against expected weekday baseline, grouped into Good / Neutral / Bad weather buckets.</p>
+                <canvas id="weatherBucketChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Weather Bucket Performance</h2>
+                <span class="toggle-icon">v</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Weather Bucket</th>
+                        <th class="number">Days</th>
+                        <th class="number">Avg Daily Revenue</th>
+                        <th class="number">Revenue vs Baseline</th>
+                        <th class="number">Revenue Uplift</th>
+                        <th class="number">Avg Daily Profit</th>
+                        <th class="number">Profit vs Baseline</th>
+                        <th class="number">Profit Uplift</th>
+                        <th class="number">Avg Daily Orders</th>
+                        <th class="number">Orders vs Baseline</th>
+                        <th class="number">Avg AOV</th>
+                        <th class="number">Avg Temp</th>
+                        <th class="number">Avg Rain</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+
+        for _, row in weather_bucket_summary.iterrows():
+            html_content += f"""
+                    <tr>
+                        <td>{row['weather_bucket']}</td>
+                        <td class="number">{int(row['days'])}</td>
+                        <td class="number">EUR {row['avg_daily_revenue']:,.2f}</td>
+                        <td class="number">EUR {row['revenue_vs_weekday_baseline']:,.2f}</td>
+                        <td class="number">{row['revenue_uplift_pct']:+.2f}%</td>
+                        <td class="number">EUR {row['avg_daily_profit']:,.2f}</td>
+                        <td class="number">EUR {row['profit_vs_weekday_baseline']:,.2f}</td>
+                        <td class="number">{row['profit_uplift_pct']:+.2f}%</td>
+                        <td class="number">{row['avg_daily_orders']:.2f}</td>
+                        <td class="number">{row['orders_vs_weekday_baseline']:.2f}</td>
+                        <td class="number">EUR {row['avg_aov']:,.2f}</td>
+                        <td class="number">{row['avg_temperature']:.2f} C</td>
+                        <td class="number">{row['avg_precipitation']:.2f} mm</td>
+                    </tr>"""
+
+        html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+    # Advanced DTC Metrics
+    if advanced_dtc_metrics:
+        adv_summary = advanced_dtc_metrics.get('summary', {}) or {}
+        adv_basket = advanced_dtc_metrics.get('basket_contribution')
+        adv_payday = advanced_dtc_metrics.get('payday_window')
+        adv_payback = advanced_dtc_metrics.get('cohort_payback')
+        adv_sku_pareto = advanced_dtc_metrics.get('sku_pareto')
+        adv_attach = advanced_dtc_metrics.get('attach_rate')
+
+        html_content += f"""
+
+        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Advanced DTC Unit Economics</h2>
+
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-title">First-Order Contribution Margin</div>
+                <div class="card-value {'profit' if adv_summary.get('first_order_contribution_margin_pct', 0) >= 0 else 'cost'}">{adv_summary.get('first_order_contribution_margin_pct', 0):.2f}%</div>
+            </div>
+            <div class="card">
+                <div class="card-title">First-Order Contribution / Order</div>
+                <div class="card-value {'profit' if adv_summary.get('first_order_contribution_per_order', 0) >= 0 else 'cost'}">&#8364;{adv_summary.get('first_order_contribution_per_order', 0):,.2f}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Repeat Contribution / Order</div>
+                <div class="card-value {'profit' if adv_summary.get('repeat_order_contribution_per_order', 0) >= 0 else 'cost'}">&#8364;{adv_summary.get('repeat_order_contribution_per_order', 0):,.2f}</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Contribution LTV/CAC</div>
+                <div class="card-value {'profit' if adv_summary.get('contribution_ltv_cac', 0) > 1 else 'cost'}">{adv_summary.get('contribution_ltv_cac', 0):.2f}x</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Margin Stability Index</div>
+                <div class="card-value {'profit' if adv_summary.get('margin_stability_index', 0) >= 70 else 'cost'}">{adv_summary.get('margin_stability_index', 0):.1f}</div>
+                <div style="color: #718096; font-size: 0.8rem;">Std dev: {adv_summary.get('margin_std_pp', 0):.2f} p.b.</div>
+            </div>
+            <div class="card">
+                <div class="card-title">SKU Pareto (80%)</div>
+                <div class="card-value">{int(adv_summary.get('sku_pareto_80_count', 0))} / {int(adv_summary.get('sku_total_count', 0))}</div>
+                <div style="color: #718096; font-size: 0.8rem;">SKUs needed for 80% contribution</div>
+            </div>
+        </div>
+        """
+
+        has_adv_charts = (
+            (adv_basket is not None and not adv_basket.empty)
+            or (adv_payday is not None and not adv_payday.empty)
+            or (adv_payback is not None and not adv_payback.empty)
+            or (adv_sku_pareto is not None and not adv_sku_pareto.empty)
+            or (advanced_dtc_metrics.get('daily_margin') is not None and not advanced_dtc_metrics.get('daily_margin').empty)
+        )
+        if has_adv_charts:
+            html_content += """
+        <div class="chart-grid">"""
+            if adv_basket is not None and not adv_basket.empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Contribution by Basket Size</h2>
+                <p class="chart-explanation">Pre-ad contribution/order and margin across basket-size buckets.</p>
+                <canvas id="advBasketContributionChart"></canvas>
+            </div>"""
+            if adv_payday is not None and not adv_payday.empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Payday Window Index</h2>
+                <p class="chart-explanation">Revenue/profit index by month phase windows (1-7, 8-14, 15-21, 22-28, 29-31).</p>
+                <canvas id="advPaydayWindowChart"></canvas>
+            </div>"""
+            if adv_payback is not None and not adv_payback.empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Cohort Payback Days</h2>
+                <p class="chart-explanation">Average and median payback period by acquisition cohort month.</p>
+                <canvas id="advCohortPaybackChart"></canvas>
+            </div>"""
+            if advanced_dtc_metrics.get('daily_margin') is not None and not advanced_dtc_metrics.get('daily_margin').empty:
+                html_content += """
+            <div class="chart-container">
+                <h2 class="chart-title">Margin Stability (Daily)</h2>
+                <p class="chart-explanation">Daily pre-ad margin with 7-day moving average to monitor volatility.</p>
+                <canvas id="advMarginStabilityChart"></canvas>
+            </div>"""
+            if adv_sku_pareto is not None and not adv_sku_pareto.empty:
+                html_content += """
+            <div class="chart-container" style="grid-column: 1 / -1;">
+                <h2 class="chart-title">SKU Contribution Pareto</h2>
+                <p class="chart-explanation">Top SKU contribution bars with cumulative share line to identify 80/20 concentration.</p>
+                <canvas id="advSkuParetoChart"></canvas>
+            </div>"""
+            html_content += """
+        </div>"""
+
+        if adv_basket is not None and not adv_basket.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Contribution by Basket Size</h2>
+                <span class="toggle-icon">&#9662;</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Basket Size</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Pre-Ad Contribution</th>
+                        <th class="number">Contribution / Order</th>
+                        <th class="number">Contribution Margin</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_basket.iterrows():
+                html_content += f"""
+                    <tr>
+                        <td>{row['basket_size']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['pre_ad_contribution']:,.2f}</td>
+                        <td class="number">&#8364;{row['contribution_per_order']:,.2f}</td>
+                        <td class="number">{row['contribution_margin_pct']:.1f}%</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_payday is not None and not adv_payday.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Payday Window Index (Phase of Month)</h2>
+                <span class="toggle-icon">&#9662;</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Window</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Calendar Days</th>
+                        <th class="number">Avg Orders/Day</th>
+                        <th class="number">Avg Revenue/Day</th>
+                        <th class="number">Avg Profit/Day</th>
+                        <th class="number">Revenue Index</th>
+                        <th class="number">Profit Index</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_payday.iterrows():
+                html_content += f"""
+                    <tr>
+                        <td>{row['window']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">{int(row['calendar_days'])}</td>
+                        <td class="number">{row['avg_orders_per_day']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_revenue_per_day']:,.2f}</td>
+                        <td class="number">&#8364;{row['avg_profit_per_day']:,.2f}</td>
+                        <td class="number">{row['revenue_index']:.1f}</td>
+                        <td class="number">{row['profit_index']:.1f}</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_payback is not None and not adv_payback.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Cohort Payback (Days)</h2>
+                <span class="toggle-icon">&#9662;</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Cohort Month</th>
+                        <th class="number">New Customers</th>
+                        <th class="number">Cohort FB Spend</th>
+                        <th class="number">Cohort CAC</th>
+                        <th class="number">Recovered Customers</th>
+                        <th class="number">Recovery Rate</th>
+                        <th class="number">Avg Payback Days</th>
+                        <th class="number">Median Payback Days</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_payback.iterrows():
+                avg_days = "N/A" if pd.isna(row['avg_payback_days']) else f"{row['avg_payback_days']:.1f}"
+                med_days = "N/A" if pd.isna(row['median_payback_days']) else f"{row['median_payback_days']:.1f}"
+                html_content += f"""
+                    <tr>
+                        <td>{row['cohort_month']}</td>
+                        <td class="number">{int(row['new_customers'])}</td>
+                        <td class="number">&#8364;{row['cohort_fb_spend']:,.2f}</td>
+                        <td class="number">&#8364;{row['cohort_cac']:,.2f}</td>
+                        <td class="number">{int(row['recovered_customers'])}</td>
+                        <td class="number">{row['recovery_rate_pct']:.1f}%</td>
+                        <td class="number">{avg_days}</td>
+                        <td class="number">{med_days}</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_attach is not None and not adv_attach.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">Attach Rate (Top Key Products)</h2>
+                <span class="toggle-icon">&#9662;</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Key Product</th>
+                        <th class="number">Key Orders</th>
+                        <th class="number">Key Penetration</th>
+                        <th>Attached Product</th>
+                        <th class="number">Attached Orders</th>
+                        <th class="number">Attach Rate</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_attach.head(60).iterrows():
+                key_name = row['key_product'][:40] + '...' if len(str(row['key_product'])) > 40 else row['key_product']
+                att_name = row['attached_product'][:40] + '...' if len(str(row['attached_product'])) > 40 else row['attached_product']
+                html_content += f"""
+                    <tr>
+                        <td>{key_name}</td>
+                        <td class="number">{int(row['key_orders'])}</td>
+                        <td class="number">{row['key_penetration_pct']:.1f}%</td>
+                        <td>{att_name}</td>
+                        <td class="number">{int(row['attached_orders'])}</td>
+                        <td class="number">{row['attach_rate_pct']:.1f}%</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
+
+        if adv_sku_pareto is not None and not adv_sku_pareto.empty:
+            html_content += """
+        <div class="table-container">
+            <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <h2 class="table-title">SKU Contribution Pareto (Top 40)</h2>
+                <span class="toggle-icon">&#9662;</span>
+            </div>
+            <div class="collapsible-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>SKU</th>
+                        <th class="number">Orders</th>
+                        <th class="number">Revenue</th>
+                        <th class="number">Cost</th>
+                        <th class="number">Pre-Ad Contribution</th>
+                        <th class="number">Share</th>
+                        <th class="number">Cum Share</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            for _, row in adv_sku_pareto.head(40).iterrows():
+                product_name = row['product'][:42] + '...' if len(str(row['product'])) > 42 else row['product']
+                html_content += f"""
+                    <tr>
+                        <td>{product_name}</td>
+                        <td>{row['sku']}</td>
+                        <td class="number">{int(row['orders'])}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['cost']:,.2f}</td>
+                        <td class="number">&#8364;{row['pre_ad_contribution']:,.2f}</td>
+                        <td class="number">{row['contribution_share_pct']:.2f}%</td>
+                        <td class="number">{row['cum_contribution_share_pct']:.2f}%</td>
+                    </tr>"""
+            html_content += """
+                </tbody>
+            </table>
+            </div>
+        </div>"""
     # Day/Hour Heatmap (add after day of week analysis)
     if day_hour_heatmap is not None and not day_hour_heatmap.empty:
         # Prepare heatmap data as JSON for JavaScript
@@ -2840,7 +4639,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
 
         <div class="chart-container">
-            <h2 class="chart-title">Orders Heatmap: Day of Week × Hour of Day</h2>
+            <h2 class="chart-title">Orders Heatmap: Day of Week &times; Hour of Day</h2>
             <p class="chart-explanation">Shows when customers place orders. Darker colors = more orders. Helps identify peak shopping times for ad scheduling and staffing.</p>
             <div id="heatmapContainer" style="overflow-x: auto;">
                 <table class="heatmap-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
@@ -2910,6 +4709,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
 
+    html_content += f"""
+        </section>
+
+        <section id="section-geography" class="dashboard-section" data-group="geography">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Geography" data-sk="Geografia">Geography</div>
+                <h2 class="section-heading" data-en="See where your strongest markets are" data-sk="Pozri, ktore trhy tahaju vysledky">See where your strongest markets are</h2>
+                <p class="section-copy" data-en="Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming." data-sk="Rozdelenie podla krajin a miest ukaze, kde sa koncentruje obrat, kde je silna marza a kde je priestor na rast.">Country and city splits help you spot where revenue concentration, margin strength, or whitespace is forming.</p>
+            </div>
+            {render_period_switcher("section-geography", compact=True)}
+        </div>
+        """
+
     # Geographic Analysis
     if country_analysis is not None and not country_analysis.empty:
         html_content += """
@@ -2925,7 +4738,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Revenue by Country</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2945,9 +4758,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{row['country']}</td>
                         <td class="number">{row['orders']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -2964,14 +4777,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-container">
             <h2 class="chart-title">SK/CZ/HU Profitability (Post-Ad Contribution + FB CPO)</h2>
-            <p class="chart-explanation">Country-level post-ad contribution view using net revenue, product costs, packaging, shipping subsidy, and estimated FB spend by campaign naming (fixed overhead excluded). Unattributed FB spend (not mapped to SK/CZ/HU): €{unattributed_fb:,.2f}.</p>
+            <p class="chart-explanation">Country-level post-ad contribution view using net revenue, product costs, packaging, shipping subsidy, and estimated FB spend by campaign naming (fixed overhead excluded). Unattributed FB spend (not mapped to SK/CZ/HU): &#8364;{unattributed_fb:,.2f}.</p>
             <canvas id="geoProfitabilityChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Geo Profitability (SK/CZ/HU)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -2996,14 +4809,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{str(row.get('country', '')).upper()}</td>
                         <td class="number">{int(row.get('orders', 0))}</td>
-                        <td class="number">€{row.get('revenue', 0):,.2f}</td>
-                        <td class="number">€{row.get('product_cost', 0):,.2f}</td>
-                        <td class="number">€{row.get('packaging_cost', 0):,.2f}</td>
-                        <td class="number">€{row.get('shipping_subsidy_cost', 0):,.2f}</td>
-                        <td class="number">€{row.get('fb_ads_spend', 0):,.2f}</td>
-                        <td class="number {'profit-positive' if row.get('contribution_profit', 0) >= 0 else 'profit-negative'}">€{row.get('contribution_profit', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('revenue', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('product_cost', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('packaging_cost', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('shipping_subsidy_cost', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('fb_ads_spend', 0):,.2f}</td>
+                        <td class="number {'profit-positive' if row.get('contribution_profit', 0) >= 0 else 'profit-negative'}">&#8364;{row.get('contribution_profit', 0):,.2f}</td>
                         <td class="number {'profit-positive' if row.get('contribution_margin_pct', 0) >= 0 else 'profit-negative'}">{row.get('contribution_margin_pct', 0):.2f}%</td>
-                        <td class="number">€{row.get('fb_cpo', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('fb_cpo', 0):,.2f}</td>
                     </tr>"""
 
             html_content += """
@@ -3019,7 +4832,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Top 20 Cities by Revenue</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3040,7 +4853,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['city']}</td>
                         <td>{row['country']}</td>
                         <td class="number">{row['orders']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
                     </tr>"""
 
@@ -3049,6 +4862,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </table>
             </div>
         </div>"""
+
+    html_content += f"""
+        </section>
+
+        <section id="section-customer-structure" class="dashboard-section" data-group="customers">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Customer structure" data-sk="Struktura zakaznikov">Customer structure</div>
+                <h2 class="section-heading" data-en="Look at who your revenue depends on" data-sk="Pozri, od koho zavisi tvoj obrat">Look at who your revenue depends on</h2>
+                <p class="section-copy" data-en="This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers." data-sk="Tato sekcia ukaze, ci rast taha B2B, B2C alebo mala skupina silnych zakaznikov.">This section shows whether growth comes from companies, consumers, or a small concentration of heavy buyers.</p>
+            </div>
+            {render_period_switcher("section-customer-structure", compact=True)}
+        </div>
+        """
 
     # B2B vs B2C Analysis
     if b2b_analysis is not None and not b2b_analysis.empty:
@@ -3065,7 +4892,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">B2B vs B2C Performance</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3088,9 +4915,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['customer_type']}</td>
                         <td class="number">{row['orders']}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['aov']:.2f}</td>
+                        <td class="number">&#8364;{row['aov']:.2f}</td>
                         <td class="number">{row['unique_customers']}</td>
                     </tr>"""
 
@@ -3137,11 +4964,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Avg Revenue/Customer</div>
-                <div class="card-value">€{avg_rev:.2f}</div>
+                <div class="card-value">&#8364;{avg_rev:.2f}</div>
             </div>
             <div class="card">
                 <div class="card-title">Median Revenue/Customer</div>
-                <div class="card-value">€{median_rev:.2f}</div>
+                <div class="card-value">&#8364;{median_rev:.2f}</div>
             </div>
         </div>
 
@@ -3159,7 +4986,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Top 10 Customers by Revenue</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3180,9 +5007,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{customer_display}</td>
                         <td class="number">{row['orders']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                         <td class="number">{row['revenue_pct']:.1f}%</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                     </tr>"""
 
             html_content += """
@@ -3190,6 +5017,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </table>
             </div>
         </div>"""
+
+    html_content += f"""
+        </section>
+
+        <section id="section-products" class="dashboard-section" data-group="products">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Products" data-sk="Produkty">Products</div>
+                <h2 class="section-heading" data-en="Find what deserves more budget and focus" data-sk="Zisti, ktore produkty si zasluzia viac rozpoctu a pozornosti">Find what deserves more budget and focus</h2>
+                <p class="section-copy" data-en="Use product margins and product trend tables to separate hero SKUs from low-value volume." data-sk="Pomocou produktovych marzi a trendov oddelis hero SKU od objemu s nizkou hodnotou.">Use product margins and product trend tables to separate hero SKUs from low-value volume.</p>
+            </div>
+            {render_period_switcher("section-products", compact=True)}
+        </div>
+        """
 
     # Product Margins
     if product_margins is not None and not product_margins.empty:
@@ -3206,7 +5047,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Product Margins (Sorted by Margin %)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3229,9 +5070,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>
                         <td>{product_display}</td>
                         <td class="number">{row['quantity']}</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
-                        <td class="number">€{row['cost']:,.2f}</td>
-                        <td class="number">€{row['profit']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['cost']:,.2f}</td>
+                        <td class="number">&#8364;{row['profit']:,.2f}</td>
                         <td class="number {margin_class}">{row['margin_pct']:.1f}%</td>
                     </tr>"""
 
@@ -3251,7 +5092,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Product Trends (by Total Revenue)</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3286,7 +5127,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{int(row['qty_second'])}</td>
                         <td class="number {growth_class}">{row['qty_growth_pct']:.1f}%</td>
                         <td class="{trend_class}">{trend}</td>
-                        <td class="number">€{row['total_revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['total_revenue']:,.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -3294,6 +5135,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </table>
             </div>
         </div>"""
+
+    html_content += f"""
+        </section>
+
+        <section id="section-operations" class="dashboard-section" data-group="operations">
+        <div class="section-intro">
+            <div class="section-intro-copy">
+                <div class="section-kicker" data-en="Operations & diagnostics" data-sk="Operativa a diagnostika">Operations & diagnostics</div>
+                <h2 class="section-heading" data-en="Inspect execution quality, timing, and friction points" data-sk="Skontroluj kvalitu exekucie, timing a friction pointy">Inspect execution quality, timing, and friction points</h2>
+                <p class="section-copy" data-en="This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath." data-sk="Tato sekcia sluzi na hlbsiu diagnostiku, ked sa pohnu hlavne KPI a potrebujes vediet, co sa pod nimi operativne zmenilo.">This section is for deeper diagnosis when core KPIs move and you need to know what operationally changed underneath.</p>
+            </div>
+            {render_period_switcher("section-operations", compact=True)}
+        </div>
+        """
 
     # Ads Effectiveness Analysis
     if ads_effectiveness:
@@ -3310,11 +5165,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="summary-cards">
             <div class="card">
-                <div class="card-title">FB Spend ↔ Orders</div>
+                <div class="card-title">FB Spend â†” Orders</div>
                 <div class="card-value">{correlations.get('fb_orders', 0):.3f}</div>
             </div>
             <div class="card">
-                <div class="card-title">FB Spend ↔ Revenue</div>
+                <div class="card-title">FB Spend â†” Revenue</div>
                 <div class="card-value">{correlations.get('fb_revenue', 0):.3f}</div>
             </div>
             <div class="card">
@@ -3381,7 +5236,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">FB Spend Effectiveness by Range</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3401,10 +5256,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                     <tr>
                         <td>{row['spend_range']}</td>
-                        <td class="number">€{row['avg_spend']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_spend']:.2f}</td>
                         <td class="number">{row['avg_orders']:.1f}</td>
-                        <td class="number">€{row['avg_revenue']:.2f}</td>
-                        <td class="number">€{row['avg_profit']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_revenue']:.2f}</td>
+                        <td class="number">&#8364;{row['avg_profit']:.2f}</td>
                         <td class="number">{row['roas']:.2f}x</td>
                     </tr>"""
 
@@ -3421,7 +5276,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Ad Effectiveness by Day of Week</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3440,9 +5295,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                     <tr>
                         <td>{row['day_of_week']}</td>
-                        <td class="number">€{row['fb_spend']:.2f}</td>
+                        <td class="number">&#8364;{row['fb_spend']:.2f}</td>
                         <td class="number">{row['orders']:.1f}</td>
-                        <td class="number">€{row['revenue']:.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:.2f}</td>
                         <td class="number">{row['roas']:.2f}x</td>
                     </tr>"""
 
@@ -3467,7 +5322,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
                 <h2 class="table-title">Order Status Breakdown</h2>
-                <span class="toggle-icon">▼</span>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <table>
@@ -3487,7 +5342,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td>{row['status']}</td>
                         <td class="number">{row['orders']}</td>
                         <td class="number">{row['orders_pct']:.1f}%</td>
-                        <td class="number">€{row['revenue']:,.2f}</td>
+                        <td class="number">&#8364;{row['revenue']:,.2f}</td>
                     </tr>"""
 
         html_content += """
@@ -3500,39 +5355,39 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     if customer_email_segments:
         html_content += """
 
-        <h2 style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">📧 Segmentácia zákazníkov pre email marketing</h2>
-        <p style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.9;">Tabuľky zákazníkov rozdelených podľa nákupného správania. Každý segment je vhodný na iný typ emailovej kampane.</p>
+        <h2 class="chart-title" data-en="Customer Segmentation For Email Marketing" data-sk="Segmentacia zakaznikov pre email marketing" style="text-align: center; color: white; margin: 40px 0 20px; font-size: 2rem;">Customer Segmentation For Email Marketing</h2>
+        <p class="chart-explanation" data-en="Customers are grouped by buying behavior so each segment can get the right type of email campaign." data-sk="Zakaznici su rozdeleni podla nakupneho spravania, aby kazdy segment dostal vhodny typ emailovej kampane." style="text-align: center; color: white; margin-bottom: 20px; opacity: 0.9;">Customers are grouped by buying behavior so each segment can get the right type of email campaign.</p>
 """
 
         # Define segment display order and styling
         segment_configs = {
-            'sample_not_converted': {'color': '#EC4899', 'icon': '🧪', 'priority': 1},
-            'second_order_encouragement': {'color': '#8B5CF6', 'icon': '2ď¸ŹâŁ', 'priority': 2},
-            'optimal_reorder_timing': {'color': '#10B981', 'icon': '🎯', 'priority': 3},
-            'churning_customers': {'color': '#F97316', 'icon': '⚠️', 'priority': 4},
-            'repeat_buyers_90_days': {'color': '#EF4444', 'icon': '🔄', 'priority': 5},
-            'one_time_buyers_30_days': {'color': '#F59E0B', 'icon': '🛒', 'priority': 6},
-            'high_value_one_time': {'color': '#06B6D4', 'icon': '💎', 'priority': 7},
-            'new_customers_welcome': {'color': '#22C55E', 'icon': '👋', 'priority': 8},
-            'vip_customers': {'color': '#A855F7', 'icon': '👑', 'priority': 9},
-            'failed_payment_only': {'color': '#DC2626', 'icon': '❌', 'priority': 10},
-            'recent_buyers_14_60_days': {'color': '#3B82F6', 'icon': '⏰', 'priority': 11},
-            'long_dormant': {'color': '#6B7280', 'icon': '💤', 'priority': 12}
+            'sample_not_converted': {'color': '#EC4899', 'icon': '&#129514;', 'priority': 1},
+            'second_order_encouragement': {'color': '#8B5CF6', 'icon': '&#10145;', 'priority': 2},
+            'optimal_reorder_timing': {'color': '#10B981', 'icon': '&#9200;', 'priority': 3},
+            'churning_customers': {'color': '#F97316', 'icon': '&#9888;', 'priority': 4},
+            'repeat_buyers_90_days': {'color': '#EF4444', 'icon': '&#128257;', 'priority': 5},
+            'one_time_buyers_30_days': {'color': '#F59E0B', 'icon': '&#128337;', 'priority': 6},
+            'high_value_one_time': {'color': '#06B6D4', 'icon': '&#128176;', 'priority': 7},
+            'new_customers_welcome': {'color': '#22C55E', 'icon': '&#127881;', 'priority': 8},
+            'vip_customers': {'color': '#A855F7', 'icon': '&#11088;', 'priority': 9},
+            'failed_payment_only': {'color': '#DC2626', 'icon': '&#10060;', 'priority': 10},
+            'recent_buyers_14_60_days': {'color': '#3B82F6', 'icon': '&#128293;', 'priority': 11},
+            'long_dormant': {'color': '#6B7280', 'icon': '&#128164;', 'priority': 12}
         }
 
         # First, show Email Campaign Calendar
         html_content += """
         <div class="table-container" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-bottom: 30px;">
-            <h2 class="table-title" style="color: white;">📅 Plán emailových kampaní - Kedy komu poslať</h2>
+            <h2 class="table-title" data-en="Email Campaign Plan - Who to Send and When" data-sk="Plan email kampani - komu a kedy poslat" style="color: white;">Email Campaign Plan - Who to Send and When</h2>
             <table style="background: rgba(255,255,255,0.95);">
                 <thead>
                     <tr>
-                        <th>Priorita</th>
+                        <th>Priority</th>
                         <th>Segment</th>
-                        <th class="number">Počet</th>
-                        <th>Kedy poslať</th>
-                        <th>Odporúčaná zľava</th>
-                        <th>Šablóna emailu</th>
+                        <th class="number">Count</th>
+                        <th>Send Timing</th>
+                        <th>Suggested Discount</th>
+                        <th>Email Template</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -3544,20 +5399,25 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         for segment_name, segment_info in priority_sorted:
             if segment_info['count'] == 0:
                 continue
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '📋'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '&#128203;'})
             priority = segment_info.get('priority', 99)
-            timing = segment_info.get('send_timing', 'Nie je definované')
+            timing = segment_info.get('send_timing', 'Not defined')
+            timing_en = segment_info.get('send_timing_en', timing)
             discount = segment_info.get('discount_suggestion', '-')
             template = segment_info.get('email_template', '-')
+            desc_en = str(segment_info.get('description_en', segment_name.replace('_', ' ')))
+            desc_sk = str(segment_info.get('description', desc_en))
+            desc_en_short = (desc_en[:60] + '...') if len(desc_en) > 60 else desc_en
+            desc_sk_short = (desc_sk[:60] + '...') if len(desc_sk) > 60 else desc_sk
 
-            priority_badge = '🔴' if priority <= 2 else ('🟡' if priority <= 4 else '🟢')
+            priority_badge = 'HIGH' if priority <= 2 else ('MED' if priority <= 4 else 'LOW')
 
             html_content += f"""
                     <tr>
                         <td style="text-align: center;">{priority_badge} {priority}</td>
-                        <td><span style="color: {config['color']}; font-weight: bold;">{config['icon']} {segment_info.get('description_en', segment_name)[:60]}...</span></td>
+                        <td><span style="color: {config['color']}; font-weight: bold;" data-en="{escape(config['icon'] + ' ' + desc_en_short)}" data-sk="{escape(config['icon'] + ' ' + desc_sk_short)}">{config['icon']} {desc_en_short}</span></td>
                         <td class="number" style="font-weight: bold; color: {config['color']};">{segment_info['count']}</td>
-                        <td style="font-weight: 500;">{timing}</td>
+                        <td style="font-weight: 500;" data-en="{escape(str(timing_en))}" data-sk="{escape(str(timing))}">{escape(str(timing_en))}</td>
                         <td>{discount}</td>
                         <td style="font-size: 0.85rem; font-style: italic;">"{template[:50]}..."</td>
                     </tr>"""
@@ -3566,9 +5426,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 </tbody>
             </table>
             <p style="color: white; padding: 15px; font-size: 0.9rem;">
-                <strong>🔴 Vysoká priorita</strong> = Poslať ihneď |
-                <strong>🟡 Stredná priorita</strong> = Naplánované kampane |
-                <strong>🟢 Nízka priorita</strong> = Pravidelné kampane
+                <strong>HIGH priority</strong> = send immediately |
+                <strong>MED priority</strong> = scheduled campaigns |
+                <strong>LOW priority</strong> = regular campaigns
             </p>
         </div>
 """
@@ -3579,36 +5439,47 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         for segment_name, segment_info in sorted_segments:
             segment_data = segment_info['data']
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '📋'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '&#128203;'})
+            desc_en = str(segment_info.get('description_en', segment_name.replace('_', ' ')))
+            desc_sk = str(segment_info.get('description', desc_en))
+            title_en = f"{desc_en} ({segment_info['count']} customers)"
+            title_sk = f"{desc_sk} ({segment_info['count']} zakaznikov)"
+            purpose_en = str(segment_info.get('email_purpose_en', segment_info.get('email_purpose', '-')))
+            purpose_sk = str(segment_info.get('email_purpose', purpose_en))
+            timing_en = str(segment_info.get('send_timing_en', segment_info.get('send_timing', 'Not defined')))
+            timing_sk = str(segment_info.get('send_timing', timing_en))
+            discount_en = str(segment_info.get('discount_suggestion_en', segment_info.get('discount_suggestion', '-')))
+            discount_sk = str(segment_info.get('discount_suggestion', discount_en))
+            template_text = str(segment_info.get('email_template', 'Template not defined'))
 
             if segment_data is not None and not segment_data.empty:
                 # Determine columns based on segment type
                 if segment_name == 'failed_payment_only':
                     columns = ['email', 'name', 'failed_order_count', 'last_attempt_date', 'city', 'country']
-                    headers = ['Email', 'Meno', 'Počet pokusov', 'Posledný pokus', 'Mesto', 'Krajina']
+                    headers = ['Email', 'Name', 'Failed attempts', 'Last attempt', 'City', 'Country']
                 else:
                     columns = ['email', 'name', 'order_count', 'total_revenue', 'days_since_last_order', 'city', 'country']
-                    headers = ['Email', 'Meno', 'Počet obj.', 'Celková tržba', 'Dní od posl. obj.', 'Mesto', 'Krajina']
+                    headers = ['Email', 'Name', 'Orders', 'Total revenue', 'Days since last order', 'City', 'Country']
 
                 html_content += f"""
         <div class="table-container" style="border-left: 4px solid {config['color']};">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">{config['icon']} {segment_info['description']} ({segment_info['count']} zákazníkov)</h2>
-                <span class="toggle-icon">▼</span>
+                <h2 class="table-title"><span>{config['icon']}</span> <span data-en="{escape(title_en)}" data-sk="{escape(title_sk)}">{escape(title_en)}</span></h2>
+                <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
             <div style="background: #f8fafc; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>🎯 Účel:</strong> {segment_info['email_purpose']}
+                    <strong data-en="Purpose:" data-sk="Ucel:">Purpose:</strong> <span data-en="{escape(purpose_en)}" data-sk="{escape(purpose_sk)}">{escape(purpose_en)}</span>
                 </p>
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>⏰ Kedy poslať:</strong> {segment_info.get('send_timing', 'Nie je definované')}
+                    <strong data-en="Send timing:" data-sk="Kedy odoslat:">Send timing:</strong> <span data-en="{escape(timing_en)}" data-sk="{escape(timing_sk)}">{escape(timing_en)}</span>
                 </p>
                 <p style="color: #1e293b; font-size: 0.9rem; margin: 0 0 8px 0;">
-                    <strong>🏷️ Zľava:</strong> {segment_info.get('discount_suggestion', '-')}
+                    <strong data-en="Discount:" data-sk="Zlava:">Discount:</strong> <span data-en="{escape(discount_en)}" data-sk="{escape(discount_sk)}">{escape(discount_en)}</span>
                 </p>
                 <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-style: italic;">
-                    💬 "{segment_info.get('email_template', 'Šablóna nie je definovaná')}"
+                    "<span data-en="{escape(template_text)}" data-sk="{escape(template_text)}">{escape(template_text)}</span>"
                 </p>
             </div>
             <table>
@@ -3616,7 +5487,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tr>"""
 
                 for header in headers:
-                    align_class = 'number' if header in ['Počet obj.', 'Celková tržba', 'Dní od posl. obj.', 'Počet pokusov'] else ''
+                    align_class = 'number' if header in ['Orders', 'Total revenue', 'Days since last order', 'Failed attempts'] else ''
                     html_content += f"""
                         <th class="{align_class}">{header}</th>"""
 
@@ -3634,7 +5505,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             value = row[col]
                             if col == 'total_revenue':
                                 html_content += f"""
-                        <td class="number">€{value:,.2f}</td>"""
+                        <td class="number">&#8364;{value:,.2f}</td>"""
                             elif col in ['days_since_last_order', 'days_since_first_order', 'order_count', 'failed_order_count']:
                                 html_content += f"""
                         <td class="number">{int(value) if pd.notna(value) else 'N/A'}</td>"""
@@ -3657,7 +5528,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 if len(segment_data) > 100:
                     html_content += f"""
                     <tr class="total-row">
-                        <td colspan="{len(columns)}">... a ďalších {len(segment_data) - 100} zákazníkov (celkový export v CSV súbore)</td>
+                        <td colspan="{len(columns)}">... and {len(segment_data) - 100} more customers (full export in CSV file)</td>
                     </tr>"""
 
                 html_content += """
@@ -3666,11 +5537,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
         </div>"""
             else:
-                # Empty segment - show placeholder
                 html_content += f"""
         <div class="table-container" style="border-left: 4px solid {config['color']}; opacity: 0.7;">
-            <h2 class="table-title">{config['icon']} {segment_info['description']} (0 zákazníkov)</h2>
-            <p style="color: #718096; padding: 15px;">Žiadni zákazníci v tomto segmente.</p>
+            <h2 class="table-title"><span>{config['icon']}</span> <span data-en="{escape(desc_en + ' (0 customers)')}" data-sk="{escape(desc_sk + ' (0 zakaznikov)')}">{escape(desc_en + ' (0 customers)')}</span></h2>
+            <p style="color: #718096; padding: 15px;" data-en="No customers in this segment." data-sk="V tomto segmente nie su ziadni zakaznici.">No customers in this segment.</p>
         </div>"""
 
         # Summary card for all segments
@@ -3678,11 +5548,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
 
         <div class="table-container" style="background: #f0fdf4; border-left: 4px solid #10B981;">
-            <h2 class="table-title">Customer Segmentation Summary</h2>
+            <h2 class="table-title" data-en="Customer Segmentation Summary" data-sk="Suhrn segmentacie zakaznikov">Customer Segmentation Summary</h2>
             <div class="summary-cards" style="margin-top: 15px;">"""
 
         for segment_name, segment_info in sorted_segments:
-            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '📋'})
+            config = segment_configs.get(segment_name, {'color': '#6B7280', 'icon': '&#128196;'})
             html_content += f"""
                 <div class="card" style="border-left: 3px solid {config['color']};">
                     <div class="card-title">{config['icon']} {segment_name.replace('_', ' ').title()}</div>
@@ -3692,18 +5562,628 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         html_content += f"""
             </div>
             <p style="color: #065f46; margin-top: 15px; padding: 0 15px;">
-                <strong>Poznámka:</strong> Kompletné zoznamy emailov pre každý segment sú uložené v CSV súboroch v priečinku <code>data/</code> s názvom <code>email_segment_[názov].csv</code>
+                <strong data-en="Note:" data-sk="Poznamka:">Note:</strong> <span data-en="Full email lists for each segment are saved in CSV files in" data-sk="Kompletne email zoznamy pre kazdy segment sa ukladaju do CSV suborov v">Full email lists for each segment are saved in CSV files in</span> <code>data/</code> <span data-en="as" data-sk="ako">as</span> <code>email_segment_[name].csv</code>
             </p>
         </div>"""
 
     html_content += f"""
 
+        </section>
         <div class="footer">
             Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | BizniWeb Order Export System
         </div>
     </div>
+        </main>
+    </div>
 
     <script>
+        let currentLang = localStorage.getItem('reportLang') || 'en';
+        let toggleAllStateExpanded = false;
+        let cfoTopActiveWindow = (JSON.parse(localStorage.getItem('reportCfoTopWindow') || 'null')) || (({json.dumps(cfo_kpi_payload.get('default_window') if cfo_kpi_payload else 'monthly')}) || 'monthly');
+        const CFO_TOP_KPI = {json.dumps(cfo_kpi_payload or {}, ensure_ascii=False)};
+
+        const I18N_SK = {{
+            "Expand All Tables": "Rozbalit vsetky tabulky",
+            "Collapse All Tables": "Zbalit vsetky tabulky",
+            "Language": "Jazyk",
+            "Data Quality: Full Data": "Kvalita dat: Kompletne data",
+            "Data Quality: Partial Data": "Kvalita dat: Ciastocne data",
+            "Generated UTC:": "Generovane UTC:",
+            "Source": "Zdroj",
+            "Status": "Stav",
+            "Mode": "Rezim",
+            "Detail": "Detail",
+            "How to read this report (simple)": "Ako čítať tento report (jednoducho)",
+            "Total Revenue (Net)": "Celkovy obrat (bez DPH)",
+            "Product Costs": "Naklady na produkty",
+            "Packaging Costs": "Naklady na balenie",
+            "Shipping Subsidy": "Prispevok na dopravu",
+            "Fixed Overhead": "Fixne naklady",
+            "Facebook Ads": "Facebook reklama",
+            "Google Ads": "Google reklama",
+            "Total Costs": "Celkove naklady",
+            "Net Profit": "Cisty zisk",
+            "Avg Daily Revenue": "Priemerny denny obrat",
+            "Avg Daily Profit/Loss": "Priemerny denny zisk/strata",
+            "Total Orders": "Pocet objednavok",
+            "Total Items": "Pocet poloziek",
+            "Avg Order Value": "Priemerna hodnota objednavky",
+            "Avg FB Cost/Order": "Priemerny FB naklad/objednavka",
+            "Returning Customers": "Vracajuci sa zakaznici",
+            "Avg Customer LTV (Revenue)": "Priemerne LTV zakaznika (trzba)",
+            "Customer Acq. Cost (FB)": "Naklad na ziskanie zakaznika (FB)",
+            "Revenue LTV/CAC": "LTV/CAC podla trzby",
+            "ROAS (All Ads)": "ROAS (vsetky reklamy)",
+            "Revenue/Customer (Net)": "Trzba na zakaznika (bez DPH)",
+            "Orders / Customer": "Objednavky na zakaznika",
+            "Company Profit Margin": "Firemna marza",
+            "Product Gross Margin": "Hruba marza produktov",
+            "Pre-Ad Contribution Profit": "Pre-Ad kontribucny zisk",
+            "Pre-Ad Contribution Margin": "Pre-Ad kontribucna marza",
+            "Pre-Ad Contribution / Order": "Pre-Ad kontribucia / objednavka",
+            "Post-Ad Contribution Profit": "Post-Ad kontribucny zisk",
+            "Post-Ad Contribution Margin": "Post-Ad kontribucna marza",
+            "Post-Ad Contribution / Order": "Post-Ad kontribucia / objednavka",
+            "Break-even CAC": "Bod zvratu CAC",
+            "Pre-Ad Contribution / Customer": "Pre-Ad kontribucia / zakaznik",
+            "Current FB CAC": "Aktualny FB CAC",
+            "Paid CAC (FB)": "Plateny CAC (FB)",
+            "Blended CAC (Tracked Ads)": "Kombinovany CAC (sledovane reklamy)",
+            "CAC Headroom": "Rezerva CAC",
+            "CAC / Break-even": "CAC / bod zvratu",
+            "Contribution LTV/CAC": "Kontribucne LTV/CAC",
+            "New Cust. Revenue": "Trzba novych zakaznikov",
+            "Returning Cust. Revenue": "Trzba vracajucich sa zakaznikov",
+            "Payback Period (Orders)": "Payback obdobie (objednavky)",
+            "Payback Period (Days est.)": "Payback obdobie (odhad dni)",
+            "Post-Ad Payback (Orders est.)": "Post-Ad payback (odhad objednavok)",
+            "Post-Ad Payback (Days est.)": "Post-Ad payback (odhad dni)",
+            "ROAS Check Delta": "Kontrola ROAS delta",
+            "Margin Check Delta (pp)": "Kontrola marže delta (p. b.)",
+            "CAC (FB/New Cust.)": "CAC (FB/novi zakaznici)",
+            "CAC Check Delta": "Kontrola CAC delta",
+            "FB Spend / Orders": "FB spend / objednavky",
+            "Refund Orders": "Refundovane objednavky",
+            "Refund Rate": "Miera refundov",
+            "Refund Amount": "Suma refundov",
+            "Repeat Purchase Rate": "Miera opakovanych nakupov",
+            "Revenue": "Obrat",
+            "Daily Revenue": "Denny obrat",
+            "Daily Total Costs": "Denne celkove naklady",
+            "Daily Product Costs": "Denne naklady na produkty",
+            "Daily Product Gross Margin": "Denna hruba marza produktov",
+            "Daily Facebook Ads": "Denne Facebook Ads",
+            "Daily Google Ads": "Denne Google Ads",
+            "Daily Packaging Costs": "Denne naklady na balenie",
+            "Daily Shipping Subsidy": "Denny prispevok na dopravu",
+            "Daily Fixed Costs": "Denne fixne naklady",
+            "Daily Average Order Value": "Denna priemerna hodnota objednavky",
+            "Daily Items Sold": "Denny pocet predanych poloziek",
+            "Average Items per Order": "Priemer poloziek na objednavku",
+            "Average Daily Revenue and Profit Trend": "Trend priemerneho denneho obratu a zisku",
+            "New vs Returning Revenue Split": "Pomer obratu: novi vs vracajuci sa",
+            "New vs Returning Revenue Trend": "Trend obratu: novi vs vracajuci sa",
+            "Refund Rate Trend": "Trend refundov",
+            "Refund Amount Trend": "Trend sumy refundov",
+            "Customer Segmentation Summary": "Suhrn segmentacie zakaznikov",
+            "Email Campaign Plan - Who to Send and When": "Plan emailovych kampani - komu a kedy poslat",
+            "Customer Segmentation For Email Marketing": "Segmentacia zakaznikov pre email marketing",
+            "Priority": "Priorita",
+            "Segment": "Segment",
+            "Count": "Pocet",
+            "Send Timing": "Kedy odoslat",
+            "Suggested Discount": "Odporucana zlava",
+            "Email Template": "Email sablona",
+            "HIGH priority": "VYSOKA priorita",
+            "MED priority": "STREDNA priorita",
+            "LOW priority": "NIZKA priorita",
+            "Purpose:": "Ucel:",
+            "Send timing:": "Kedy odoslat:",
+            "Discount:": "Zlava:",
+            "Template not defined": "Sablona nie je definovana",
+            "No customers in this segment.": "V tomto segmente nie su ziadni zakaznici.",
+            "customers": "zakaznici",
+            "Customers are grouped by buying behavior so each segment can get the right type of email campaign.": "Zakaznici su rozdeleni podla nakupneho spravania, aby kazdy segment dostal vhodny typ emailovej kampane.",
+            "HIGH priority = send immediately |": "VYSOKA priorita = poslat okamzite |",
+            "MED priority = scheduled campaigns |": "STREDNA priorita = planovane kampane |",
+            "LOW priority = regular campaigns": "NIZKA priorita = pravidelne kampane",
+            "Note:": "Poznamka:",
+            "Mature Cohorts - Detailed Retention (90+ days old)": "Zrele kohorty - detailna retencia (90+ dni)",
+            "True Retention (Time-Bias Free) - Mature Cohorts Only (90+ days)": "Skutocna retencia (bez casoveho biasu) - len zrele kohorty (90+ dni)",
+            "True Retention by Mature Cohorts (90+ days)": "Skutocna retencia podla zrelych kohort (90+ dni)",
+            "Retention by First Purchased Product": "Retencia podla prveho zakupeneho produktu",
+            "Detailed Retention by First Product": "Detailna retencia podla prveho produktu",
+            "Time to Next Order by First Product": "Cas do dalsej objednavky podla prveho produktu",
+            "Time to Nth Order by First Product": "Cas do N-tej objednavky podla prveho produktu",
+            "Same Product Repurchase": "Opakovany nakup rovnakeho produktu",
+            "Detailed Same Product Repurchase Analysis": "Detailna analyza opakovanych nakupov rovnakeho produktu",
+            "Generated on": "Vygenerovane:",
+            "BizniWeb Order Export System": "BizniWeb export reportovaci system"
+        }};
+
+        const I18N_EN = {{
+            "Rozbalit vsetky tabulky": "Expand All Tables",
+            "Zbalit vsetky tabulky": "Collapse All Tables",
+            "Jazyk": "Language",
+            "Segmentacia zakaznikov pre email marketing": "Customer Segmentation For Email Marketing",
+            "Priorita": "Priority",
+            "Pocet": "Count",
+            "Kedy odoslat": "Send Timing",
+            "Odporucana zlava": "Suggested Discount",
+            "Email sablona": "Email Template",
+            "VYSOKA priorita": "HIGH priority",
+            "STREDNA priorita": "MED priority",
+            "NIZKA priorita": "LOW priority",
+            "Ucel:": "Purpose:",
+            "Kedy odoslat:": "Send timing:",
+            "Zlava:": "Discount:",
+            "Sablona nie je definovana": "Template not defined",
+            "V tomto segmente nie su ziadni zakaznici.": "No customers in this segment.",
+            "zakaznici": "customers",
+            "Zakaznici su rozdeleni podla nakupneho spravania, aby kazdy segment dostal vhodny typ emailovej kampane.": "Customers are grouped by buying behavior so each segment can get the right type of email campaign.",
+            "VYSOKA priorita = poslat okamzite |": "HIGH priority = send immediately |",
+            "STREDNA priorita = planovane kampane |": "MED priority = scheduled campaigns |",
+            "NIZKA priorita = pravidelne kampane": "LOW priority = regular campaigns",
+            "Poznamka:": "Note:",
+            "Ako čítať tento report (jednoducho)": "How to read this report (simple)",
+            "Kontrola ROAS delta": "ROAS Check Delta",
+            "Kontrola marže delta (p. b.)": "Margin Check Delta (pp)",
+            "Kontrola CAC delta": "CAC Check Delta",
+            "Skutocna retencia (bez casoveho biasu) - len zrele kohorty (90+ dni)": "True Retention (Time-Bias Free) - Mature Cohorts Only (90+ days)",
+            "Retencia podla prveho zakupeneho produktu": "Retention by First Purchased Product",
+            "Cas do dalsej objednavky podla prveho produktu": "Time to Next Order by First Product",
+            "Opakovany nakup rovnakeho produktu": "Same Product Repurchase"
+        }};
+
+        const EN_TO_SK_REPLACE = [
+            ["No customers in this segment.", "V tomto segmente nie su ziadni zakaznici."],
+            ["How to read this report", "Ako čítať tento report"],
+            ["quick health", "rychle zdravie"],
+            ["action needed", "treba riesit"],
+            ["last 7 days", "poslednych 7 dni"],
+            ["previous 7 days", "predchadzajucich 7 dni"],
+            ["Daily", "Denn"],
+            ["Total", "Celkovy"],
+            ["Revenue", "Obrat"],
+            ["Profit", "Zisk"],
+            ["Orders", "Objednavky"],
+            ["Order", "Objednavka"],
+            ["Costs", "Naklady"],
+            ["Cost", "Naklad"],
+            ["Customers", "Zakaznici"],
+            ["Customer", "Zakaznik"],
+            ["Campaign", "Kampan"],
+            ["Comparison", "Porovnanie"],
+            ["Trend", "Trend"],
+            ["Distribution", "Rozdelenie"],
+            ["Performance", "Vykonnost"],
+            ["Average", "Priemer"],
+            ["Contribution", "Kontribucia"],
+            ["Margin", "Marza"],
+            ["Retention", "Retencia"],
+            ["Source", "Zdroj"],
+            ["Status", "Stav"],
+            ["Mode", "Rezim"],
+            ["Detail", "Detail"],
+            ["Data", "Data"],
+            ["Quality", "Kvalita"],
+            ["Full", "Kompletne"],
+            ["Partial", "Ciastocne"],
+            ["Amount", "Suma"],
+            ["Rate", "Miera"],
+            ["Value", "Hodnota"],
+            ["Items", "Polozky"],
+            ["Item", "Polozka"],
+            ["Cities", "Mesta"],
+            ["City", "Mesto"],
+            ["Country", "Krajina"],
+            ["Generated", "Vygenerovane"],
+            ["Summary", "Suhrn"],
+            ["Table", "Tabulka"],
+            ["Tables", "Tabulky"],
+            ["Priority", "Priorita"],
+            ["Suggested", "Odporucana"],
+            ["Discount", "Zlava"],
+            ["Template", "Sablona"],
+            ["Timing", "Cas odoslania"],
+            ["New", "Novi"],
+            ["Returning", "Vracajuci sa"],
+            ["true", "pravda"],
+            ["false", "nepravda"],
+            [" by ", " podla "],
+            [" with ", " s "],
+            [" without ", " bez "],
+            [" per ", " na "],
+            [" and ", " a "],
+            [" of ", " "],
+            [" to ", " na "]
+        ];
+
+        const SK_TO_EN_REPLACE = [
+            ["V tomto segmente nie su ziadni zakaznici.", "No customers in this segment."],
+            ["Ako čítať tento report", "How to read this report"],
+            ["poslednych 7 dni", "last 7 days"],
+            ["predchadzajucich 7 dni", "previous 7 days"],
+            ["Celkovy", "Total"],
+            ["Obrat", "Revenue"],
+            ["Zisk", "Profit"],
+            ["Objednavky", "Orders"],
+            ["Objednavka", "Order"],
+            ["Naklady", "Costs"],
+            ["Naklad", "Cost"],
+            ["Zakaznici", "Customers"],
+            ["Zakaznik", "Customer"],
+            ["Kampan", "Campaign"],
+            ["Porovnanie", "Comparison"],
+            ["Vykonnost", "Performance"],
+            ["Priemer", "Average"],
+            ["Kontribucia", "Contribution"],
+            ["Marza", "Margin"],
+            ["Retencia", "Retention"],
+            ["Zdroj", "Source"],
+            ["Stav", "Status"],
+            ["Rezim", "Mode"],
+            ["Detail", "Detail"],
+            ["Kvalita", "Quality"],
+            ["Kompletne", "Full"],
+            ["Ciastocne", "Partial"],
+            ["Suma", "Amount"],
+            ["Miera", "Rate"],
+            ["Hodnota", "Value"],
+            ["Polozky", "Items"],
+            ["Polozka", "Item"],
+            ["Mesta", "Cities"],
+            ["Mesto", "City"],
+            ["Krajina", "Country"],
+            ["Vygenerovane", "Generated"],
+            ["Suhrn", "Summary"],
+            ["Tabulky", "Tables"],
+            ["Tabulka", "Table"],
+            ["Priorita", "Priority"],
+            ["Odporucana", "Suggested"],
+            ["Zlava", "Discount"],
+            ["Sablona", "Template"],
+            ["Novi", "New"],
+            ["Vracajuci sa", "Returning"],
+            [" podla ", " by "],
+            [" s ", " with "],
+            [" bez ", " without "],
+            [" na ", " to "],
+            [" a ", " and "]
+        ];
+
+        function escapeRegex(value) {{
+            return value.replace(/[.*+?^${{}}()|[\\\\]\\\\]/g, '\\\\$&');
+        }}
+
+        function replaceAllInsensitive(text, pairs) {{
+            let out = text || '';
+            pairs.forEach(([from, to]) => {{
+                if (!from) return;
+                const escaped = escapeRegex(from);
+                const useWordBoundary = /^[A-Za-z0-9]+$/.test(from);
+                const pattern = useWordBoundary
+                    ? new RegExp(`\\\\b${{escaped}}\\\\b`, 'gi')
+                    : new RegExp(escaped, 'gi');
+                out = out.replace(pattern, to);
+            }});
+            return out;
+        }}
+
+        function fallbackTranslateEnToSk(text) {{
+            return replaceAllInsensitive(text, EN_TO_SK_REPLACE);
+        }}
+
+        function fallbackTranslateSkToEn(text) {{
+            return replaceAllInsensitive(text, SK_TO_EN_REPLACE);
+        }}
+
+        function getSkText(enText) {{
+            if (!enText) return '';
+            return I18N_SK[enText] || fallbackTranslateEnToSk(enText);
+        }}
+
+        function getEnText(sourceText) {{
+            if (!sourceText) return '';
+            return I18N_EN[sourceText] || fallbackTranslateSkToEn(sourceText);
+        }}
+
+        function setToggleButtonLabel(expand) {{
+            const btn = document.getElementById('toggleAllBtn');
+            if (!btn) return;
+            const enLabel = expand ? 'Collapse All Tables' : 'Expand All Tables';
+            const skLabel = expand ? 'Zbalit vsetky tabulky' : 'Rozbalit vsetky tabulky';
+            btn.dataset.en = enLabel;
+            btn.dataset.sk = skLabel;
+            btn.textContent = currentLang === 'sk' ? skLabel : enLabel;
+        }}
+
+        function translateElement(el) {{
+            if (!el) return;
+            const raw = (el.textContent || '').trim();
+            if (!el.dataset.en && !el.dataset.sk) {{
+                const inferredEn = getEnText(raw);
+                el.dataset.en = inferredEn || raw;
+                el.dataset.sk = getSkText(el.dataset.en);
+            }} else if (!el.dataset.en) {{
+                el.dataset.en = getEnText(raw) || raw;
+            }} else if (!el.dataset.sk) {{
+                el.dataset.sk = getSkText(el.dataset.en);
+            }}
+
+            if (currentLang === 'sk') {{
+                el.textContent = el.dataset.sk || el.dataset.en || raw;
+            }} else {{
+                el.textContent = el.dataset.en || raw;
+            }}
+        }}
+
+        function translateChartLabels() {{
+            if (typeof Chart === 'undefined' || !Chart.instances) return;
+            const instances = Array.isArray(Chart.instances)
+                ? Chart.instances
+                : Object.values(Chart.instances);
+
+            instances.forEach((chart) => {{
+                if (!chart || !chart.data || !Array.isArray(chart.data.datasets)) return;
+                chart.data.datasets.forEach((dataset) => {{
+                    if (!dataset) return;
+                    if (typeof dataset._labelEn === 'undefined') {{
+                        const baseLabel = dataset.label || '';
+                        dataset._labelEn = getEnText(baseLabel) || baseLabel;
+                        dataset._labelSk = getSkText(dataset._labelEn) || dataset._labelEn;
+                    }}
+                    dataset.label = currentLang === 'sk' ? dataset._labelSk : dataset._labelEn;
+                }});
+                if (typeof chart.update === 'function') {{
+                    chart.update('none');
+                }}
+            }});
+        }}
+
+        const CFO_TOP_WINDOW_LABELS = {{
+            daily: {{ en: 'Last day', sk: 'Posledny den' }},
+            weekly: {{ en: 'Last 7 days', sk: 'Poslednych 7 dni' }},
+            monthly: {{ en: 'Last 30 days', sk: 'Poslednych 30 dni' }}
+        }};
+
+        const CFO_TOP_COMPARISON_LABELS = {{
+            daily: {{
+                vs_prev_day: {{ en: 'vs previous day', sk: 'vs predchadzajuci den' }},
+                vs_week: {{ en: 'vs same weekday last week', sk: 'vs rovnaky den minuly tyzden' }},
+                vs_month: {{ en: 'vs same day last month', sk: 'vs rovnaky den minuly mesiac' }}
+            }},
+            weekly: {{
+                vs_prev_7d: {{ en: 'vs previous 7d', sk: 'vs predchadzajucich 7 dni' }},
+                vs_month: {{ en: 'vs same week last month', sk: 'vs rovnaky tyzden minuly mesiac' }},
+                vs_year: {{ en: 'vs same week last year', sk: 'vs rovnaky tyzden minuly rok' }}
+            }},
+            monthly: {{
+                vs_prev_30d: {{ en: 'vs previous 30d', sk: 'vs predchadzajucich 30 dni' }},
+                vs_year: {{ en: 'vs same month last year', sk: 'vs rovnaky mesiac minuly rok' }}
+            }}
+        }};
+
+        const CFO_TOP_COMPARISON_ORDER = {{
+            daily: ['vs_prev_day', 'vs_week', 'vs_month'],
+            weekly: ['vs_prev_7d', 'vs_month', 'vs_year'],
+            monthly: ['vs_prev_30d', 'vs_year']
+        }};
+
+        function cfoTopLocale() {{
+            return currentLang === 'sk' ? 'sk-SK' : 'en-US';
+        }}
+
+        function cfoTopFormatMetricValue(metricKey, rawValue) {{
+            if (rawValue === null || typeof rawValue === 'undefined' || !Number.isFinite(Number(rawValue))) {{
+                return 'N/A';
+            }}
+
+            const value = Number(rawValue);
+            if (metricKey === 'orders') {{
+                return Math.round(value).toLocaleString(cfoTopLocale());
+            }}
+            if (metricKey === 'roas') {{
+                return `${{value.toFixed(2)}}x`;
+            }}
+            if (metricKey.includes('margin')) {{
+                return `${{value.toFixed(2)}}%`;
+            }}
+
+            return new Intl.NumberFormat(cfoTopLocale(), {{
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }}).format(value);
+        }}
+
+        function cfoTopMetricDirection(metricKey) {{
+            const defs = Array.isArray(CFO_TOP_KPI.metric_defs) ? CFO_TOP_KPI.metric_defs : [];
+            const match = defs.find((item) => item && item.key === metricKey);
+            return match && match.direction ? match.direction : 'up';
+        }}
+
+        function cfoTopComparisonTone(metricKey, deltaValue) {{
+            if (deltaValue === null || typeof deltaValue === 'undefined' || !Number.isFinite(Number(deltaValue))) {{
+                return 'tone-neutral';
+            }}
+
+            const delta = Number(deltaValue);
+            if (Math.abs(delta) < 0.3) {{
+                return 'tone-neutral';
+            }}
+
+            const direction = cfoTopMetricDirection(metricKey);
+            const adjusted = direction === 'down' ? -delta : delta;
+            if (adjusted > 0) return 'tone-good';
+            if (adjusted < 0) return 'tone-bad';
+            return 'tone-neutral';
+        }}
+
+        function cfoTopDeltaPrefix(toneClass, deltaValue) {{
+            if (deltaValue === null || typeof deltaValue === 'undefined' || !Number.isFinite(Number(deltaValue))) {{
+                return 'N/A';
+            }}
+            if (toneClass === 'tone-neutral') {{
+                return currentLang === 'sk' ? 'STABLE' : 'FLAT';
+            }}
+            if (toneClass === 'tone-good') {{
+                return currentLang === 'sk' ? 'UP' : 'UP';
+            }}
+            return currentLang === 'sk' ? 'DOWN' : 'DOWN';
+        }}
+
+        function renderCfoTopKpis(windowKey) {{
+            if (!CFO_TOP_KPI || !CFO_TOP_KPI.windows) return;
+
+            cfoTopActiveWindow = windowKey || CFO_TOP_KPI.default_window || 'monthly';
+            localStorage.setItem('reportCfoTopWindow', JSON.stringify(cfoTopActiveWindow));
+
+            document.querySelectorAll('.cfo-top-window-btn').forEach((btn) => {{
+                btn.classList.toggle('active', btn.dataset.window === cfoTopActiveWindow);
+            }});
+
+            const windowData = CFO_TOP_KPI.windows[cfoTopActiveWindow] || {{}};
+            const metricValues = windowData.metrics || {{}};
+            const comparisonMap = (CFO_TOP_KPI.comparisons && CFO_TOP_KPI.comparisons[cfoTopActiveWindow]) || {{}};
+            const periodLabelDef = CFO_TOP_WINDOW_LABELS[cfoTopActiveWindow] || CFO_TOP_WINDOW_LABELS.monthly;
+            const periodLabel = currentLang === 'sk' ? periodLabelDef.sk : periodLabelDef.en;
+            const comparisonKeys = CFO_TOP_COMPARISON_ORDER[cfoTopActiveWindow] || [];
+
+            document.querySelectorAll('.cfo-top-card').forEach((card) => {{
+                const metricKey = card.dataset.metric;
+                if (!metricKey) return;
+
+                const valueEl = card.querySelector('.cfo-top-card-value');
+                const periodEl = card.querySelector('.cfo-top-card-period');
+                const comparisonsEl = card.querySelector('.cfo-top-card-comparisons');
+                if (!valueEl || !periodEl || !comparisonsEl) return;
+
+                valueEl.textContent = cfoTopFormatMetricValue(metricKey, metricValues[metricKey]);
+                periodEl.textContent = periodLabel;
+                comparisonsEl.innerHTML = '';
+
+                const metricComparisons = comparisonMap[metricKey] || {{}};
+                comparisonKeys.forEach((comparisonKey) => {{
+                    const deltaValue = metricComparisons[comparisonKey];
+                    const labelDef = (CFO_TOP_COMPARISON_LABELS[cfoTopActiveWindow] || {{}})[comparisonKey];
+                    const labelText = labelDef ? (currentLang === 'sk' ? labelDef.sk : labelDef.en) : comparisonKey;
+                    const toneClass = cfoTopComparisonTone(metricKey, deltaValue);
+                    const deltaText = (deltaValue === null || typeof deltaValue === 'undefined' || !Number.isFinite(Number(deltaValue)))
+                        ? 'N/A'
+                        : `${{cfoTopDeltaPrefix(toneClass, deltaValue)}} ${{Number(deltaValue) >= 0 ? '+' : ''}}${{Number(deltaValue).toFixed(1)}}%`;
+
+                    comparisonsEl.insertAdjacentHTML(
+                        'beforeend',
+                        `<div class="cfo-top-cmp-row"><span class="delta ${{toneClass}}">${{deltaText}}</span>${{labelText}}</div>`
+                    );
+                }});
+            }});
+        }}
+
+        function applyLanguage(lang) {{
+            currentLang = lang === 'sk' ? 'sk' : 'en';
+            localStorage.setItem('reportLang', currentLang);
+            document.documentElement.lang = currentLang;
+
+            document.querySelectorAll('#langSwitch button[data-lang]').forEach((btn) => {{
+                btn.classList.toggle('active', btn.dataset.lang === currentLang);
+            }});
+
+            const dateRangeEl = document.querySelector('.date-range');
+            if (dateRangeEl && dateRangeEl.dataset.en && dateRangeEl.dataset.sk) {{
+                dateRangeEl.textContent = currentLang === 'sk' ? dateRangeEl.dataset.sk : dateRangeEl.dataset.en;
+            }}
+
+            const textSelectors = [
+                '.lang-switch-label',
+                '.data-quality-title',
+                '.data-quality-message',
+                '.data-quality-meta',
+                '.card-title',
+                '.chart-title',
+                '.chart-explanation',
+                '.table-title',
+                '.collapsible-header h2',
+                '.table-container p',
+                '.table-container strong',
+                '.quick-insights-header h3',
+                '.quick-insights-header p',
+                '.quick-insight-title',
+                '.quick-insight-value',
+                '.quick-insight-desc',
+                '.cfo-top-heading',
+                '.cfo-top-desc',
+                '.cfo-top-card-title',
+                '.report-guide h3',
+                '.report-guide li',
+                '.metric-cheatsheet h3',
+                '.metric-tip h4',
+                '.metric-tip p',
+                '.footer'
+            ];
+            document.querySelectorAll('[data-en], [data-sk]').forEach(translateElement);
+            document.querySelectorAll(textSelectors.join(',')).forEach(translateElement);
+            document.querySelectorAll('th').forEach(translateElement);
+            document.querySelectorAll('.status-pill').forEach(translateElement);
+
+            setToggleButtonLabel(toggleAllStateExpanded);
+            translateChartLabels();
+            renderCfoTopKpis(cfoTopActiveWindow);
+        }}
+
+        function applyMetricGroup(group) {{
+            const normalizedGroup = group || 'all';
+            localStorage.setItem('reportMetricGroup', normalizedGroup);
+
+            document.querySelectorAll('.nav-group-btn').forEach((btn) => {{
+                btn.classList.toggle('active', btn.dataset.group === normalizedGroup);
+            }});
+
+            document.querySelectorAll('.dashboard-section').forEach((section) => {{
+                const sectionGroup = section.dataset.group || '';
+                const shouldShow = normalizedGroup === 'all' || sectionGroup === normalizedGroup;
+                section.classList.toggle('is-hidden', !shouldShow);
+            }});
+        }}
+
+        function resolveMetricGroupFromHash() {{
+            const hash = window.location.hash || '';
+            if (!hash || hash === '#') {{
+                return '';
+            }}
+
+            const target = document.querySelector(hash);
+            if (!target || !target.classList.contains('dashboard-section')) {{
+                return '';
+            }}
+
+            return target.dataset.group || 'all';
+        }}
+
+        document.addEventListener('DOMContentLoaded', () => {{
+            document.querySelectorAll('#langSwitch button[data-lang]').forEach((btn) => {{
+                btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+            }});
+            document.querySelectorAll('.nav-group-btn').forEach((btn) => {{
+                btn.addEventListener('click', () => applyMetricGroup(btn.dataset.group));
+            }});
+            document.querySelectorAll('.cfo-top-window-btn').forEach((btn) => {{
+                btn.addEventListener('click', () => renderCfoTopKpis(btn.dataset.window || 'monthly'));
+            }});
+            applyLanguage(currentLang);
+            applyMetricGroup(resolveMetricGroupFromHash() || localStorage.getItem('reportMetricGroup') || 'all');
+            renderCfoTopKpis(cfoTopActiveWindow);
+        }});
+
+        window.addEventListener('hashchange', () => {{
+            const nextGroup = resolveMetricGroupFromHash();
+            if (nextGroup) {{
+                applyMetricGroup(nextGroup);
+            }}
+        }});
+
         // Collapsible table functionality
         function toggleCollapse(header) {{
             header.classList.toggle('expanded');
@@ -3712,6 +6192,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         }}
 
         function toggleAllTables(expand) {{
+            const btn = document.getElementById('toggleAllBtn');
             const headers = document.querySelectorAll('.collapsible-header');
             const contents = document.querySelectorAll('.collapsible-content');
             headers.forEach(header => {{
@@ -3728,10 +6209,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     content.classList.remove('expanded');
                 }}
             }});
-            // Update button text
-            const btn = document.getElementById('toggleAllBtn');
-            btn.textContent = expand ? 'Collapse All Tables' : 'Expand All Tables';
-            btn.onclick = () => toggleAllTables(!expand);
+            toggleAllStateExpanded = !!expand;
+            setToggleButtonLabel(toggleAllStateExpanded);
+            if (btn) {{
+                btn.onclick = () => toggleAllTables(!expand);
+            }}
         }}
 
         // Chart defaults
@@ -3826,7 +6308,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -3839,7 +6321,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }},
@@ -3853,7 +6335,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -3901,7 +6383,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -3911,7 +6393,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -3968,7 +6450,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }},
                             afterBody: function(context) {{
                                 if (context[0].datasetIndex === 1) {{
@@ -3990,7 +6472,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4026,16 +6508,16 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         callbacks: {{
                             label: function(context) {{
                                 const profit = context.parsed.y;
-                                return 'LTV-Based Profit: €' + profit.toFixed(2);
+                                return 'LTV-Based Profit: &#8364;' + profit.toFixed(2);
                             }},
                             afterBody: function(context) {{
                                 const idx = context[0].dataIndex;
                                 const ltvRev = {json.dumps(ltv_revenue_data)}[idx];
                                 const cost = {json.dumps(total_costs_data)}[idx];
                                 const actualRev = {json.dumps(revenue_data)}[idx];
-                                let info = '\\nLTV Revenue: €' + ltvRev.toFixed(2);
-                                info += '\\nTotal Costs: €' + cost.toFixed(2);
-                                info += '\\nActual Revenue: €' + actualRev.toFixed(2);
+                                let info = '\\nLTV Revenue: &#8364;' + ltvRev.toFixed(2);
+                                info += '\\nTotal Costs: &#8364;' + cost.toFixed(2);
+                                info += '\\nActual Revenue: &#8364;' + actualRev.toFixed(2);
                                 if (cost > 0) {{
                                     const roi = ((ltvRev - cost) / cost * 100).toFixed(1);
                                     info += '\\nLTV ROI: ' + roi + '%';
@@ -4050,7 +6532,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }},
                         grid: {{
@@ -4202,7 +6684,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 if (context.dataset.label === 'ROI %') {{
                                     return label + context.parsed.y.toFixed(1) + '%';
                                 }}
-                                return label + '€' + context.parsed.y.toFixed(2);
+                                return label + '&#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4215,11 +6697,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         title: {{
                             display: true,
-                            text: 'Amount (€)'
+                            text: 'Amount (&#8364;)'
                         }},
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }},
@@ -4230,14 +6712,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         title: {{
                             display: true,
-                            text: 'AOV (€)'
+                            text: 'AOV (&#8364;)'
                         }},
                         grid: {{
                             drawOnChartArea: false,
                         }},
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }},
@@ -4287,7 +6769,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Profit: €' + context.parsed.y.toFixed(2);
+                                return 'Profit: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4297,7 +6779,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4375,7 +6857,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         callbacks: {{
                             label: function(context) {{
                                 const percentage = (context.parsed / {total_cost:.2f} * 100).toFixed(1);
-                                return context.label + ': €' + context.parsed.toFixed(2) + ' (' + percentage + '%)';
+                                return context.label + ': &#8364;' + context.parsed.toFixed(2) + ' (' + percentage + '%)';
                             }}
                         }}
                     }}
@@ -4386,15 +6868,32 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         // Orders Chart
         const ordersCtx = document.getElementById('ordersChart').getContext('2d');
         new Chart(ordersCtx, {{
-            type: 'bar',
             data: {{
                 labels: {json.dumps(dates)},
-                datasets: [{{
-                    label: 'Orders',
-                    data: {json.dumps(orders_data)},
-                    backgroundColor: '#9f7aea',
-                    borderRadius: 5
-                }}]
+                datasets: [
+                    {{
+                        type: 'bar',
+                        label: 'Orders',
+                        data: {json.dumps(orders_data)},
+                        backgroundColor: '#9f7aea',
+                        borderRadius: 5,
+                        order: 2
+                    }},
+                    {{
+                        type: 'line',
+                        label: 'Orders Trend',
+                        data: {json.dumps(orders_data)},
+                        borderColor: '#6b46c1',
+                        backgroundColor: 'rgba(107, 70, 193, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        fill: false,
+                        pointRadius: 0,
+                        pointHoverRadius: 3,
+                        spanGaps: false,
+                        order: 1
+                    }}
+                ]
             }},
             options: {{
                 responsive: true,
@@ -4403,6 +6902,18 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 plugins: {{
                     legend: {{
                         display: false
+                    }},
+                    tooltip: {{
+                        callbacks: {{
+                            afterBody: function(items) {{
+                                if (!items.length) return '';
+                                const value = Number(items[0].raw || 0);
+                                if (value === 0) {{
+                                    return 'This date is included in the report with 0 orders.';
+                                }}
+                                return '';
+                            }}
+                        }}
                     }}
                 }},
                 scales: {{
@@ -4443,7 +6954,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Revenue: €' + context.parsed.y.toFixed(2);
+                                return 'Revenue: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4453,7 +6964,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4486,7 +6997,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Total Costs: €' + context.parsed.y.toFixed(2);
+                                return 'Total Costs: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4496,7 +7007,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4526,7 +7037,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Product Costs: €' + context.parsed.y.toFixed(2);
+                                return 'Product Costs: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4536,7 +7047,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4609,7 +7120,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'FB Ads: €' + context.parsed.y.toFixed(2);
+                                return 'FB Ads: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4619,7 +7130,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4649,7 +7160,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Google Ads: €' + context.parsed.y.toFixed(2);
+                                return 'Google Ads: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4659,7 +7170,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4701,7 +7212,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         intersect: false,
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4711,7 +7222,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4741,7 +7252,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Packaging: €' + context.parsed.y.toFixed(2);
+                                return 'Packaging: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4751,7 +7262,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4781,7 +7292,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Shipping Subsidy: €' + context.parsed.y.toFixed(2);
+                                return 'Shipping Subsidy: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4791,7 +7302,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4821,7 +7332,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Fixed Costs: €' + context.parsed.y.toFixed(2);
+                                return 'Fixed Costs: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4831,7 +7342,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4864,7 +7375,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'AOV: €' + context.parsed.y.toFixed(2);
+                                return 'AOV: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -4874,7 +7385,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         beginAtZero: true,
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -4999,7 +7510,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5008,7 +7519,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     y: {{
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5052,7 +7563,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}
@@ -5061,7 +7572,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     y: {{
                         ticks: {{
                             callback: function(value) {{
-                                return '€' + value.toFixed(0);
+                                return '&#8364;' + value.toFixed(0);
                             }}
                         }}
                     }}
@@ -5098,7 +7609,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5108,7 +7619,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5141,7 +7652,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.label + ': €' + context.parsed.toFixed(2);
+                                    return context.label + ': &#8364;' + context.parsed.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5185,7 +7696,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5195,7 +7706,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -5271,7 +7782,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Refund Amount: €' + context.parsed.y.toFixed(2);
+                                    return 'Refund Amount: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5281,7 +7792,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -5563,7 +8074,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.y.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5573,7 +8084,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5608,7 +8119,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPM: €' + context.parsed.y.toFixed(2);
+                                    return 'CPM: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5618,7 +8129,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5636,7 +8147,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(fb_dates_js)},
                     datasets: [
                         {{
-                            label: 'Spend (€)',
+                            label: 'Spend (&#8364;)',
                             data: {json.dumps(fb_spend_js)},
                             backgroundColor: 'rgba(245, 101, 101, 0.7)',
                             borderColor: '#f56565',
@@ -5674,11 +8185,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'Spend (€)'
+                                text: 'Spend (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value;
+                                    return '&#8364;' + value;
                                 }}
                             }}
                         }},
@@ -5709,7 +8220,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(fb_dates_js)},
                     datasets: [
                         {{
-                            label: 'CPC (€)',
+                            label: 'CPC (&#8364;)',
                             data: {json.dumps(fb_cpc_js)},
                             borderColor: '#f56565',
                             backgroundColor: 'transparent',
@@ -5718,7 +8229,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             yAxisID: 'y'
                         }},
                         {{
-                            label: 'CPM (€)',
+                            label: 'CPM (&#8364;)',
                             data: {json.dumps(fb_cpm_js)},
                             borderColor: '#ed8936',
                             backgroundColor: 'transparent',
@@ -5751,7 +8262,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     if (context.dataset.label.includes('CTR')) {{
                                         return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
                                     }}
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5764,11 +8275,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'Cost (€)'
+                                text: 'Cost (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }}
                         }},
@@ -5840,7 +8351,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 label: function(context) {{
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                     const pct = (context.raw / total * 100).toFixed(1);
-                                    return context.label + ': €' + context.raw.toFixed(2) + ' (' + pct + '%)';
+                                    return context.label + ': &#8364;' + context.raw.toFixed(2) + ' (' + pct + '%)';
                                 }}
                             }}
                         }}
@@ -5857,7 +8368,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(campaign_names)},
                     datasets: [{{
-                        label: 'CPC (€)',
+                        label: 'CPC (&#8364;)',
                         data: {json.dumps(campaign_cpcs)},
                         backgroundColor: {json.dumps(campaign_cpcs)}.map(v => v < {sum(campaign_cpcs)/len(campaign_cpcs) if campaign_cpcs else 0} ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(campaign_cpcs)}.map(v => v < {sum(campaign_cpcs)/len(campaign_cpcs) if campaign_cpcs else 0} ? '#48bb78' : '#f56565'),
@@ -5875,7 +8386,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.x.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.x.toFixed(2);
                                 }}
                             }}
                         }}
@@ -5885,12 +8396,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }},
                             title: {{
                                 display: true,
-                                text: 'Cost Per Click (€) - Green = below average, Red = above average'
+                                text: 'Cost Per Click (&#8364;) - Green = below average, Red = above average'
                             }}
                         }}
                     }}
@@ -6010,7 +8521,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(campaign_names)},
                     datasets: [{{
-                        label: 'Cost per Conversion (€)',
+                        label: 'Cost per Conversion (&#8364;)',
                         data: campaignCostPerConversions,
                         backgroundColor: campaignCostPerConversions.map(v => v === 0 ? 'rgba(160, 174, 192, 0.7)' : (v < avgCostPerConversion ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)')),
                         borderColor: campaignCostPerConversions.map(v => v === 0 ? '#a0aec0' : (v < avgCostPerConversion ? '#48bb78' : '#f56565')),
@@ -6031,7 +8542,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     if (context.parsed.x === 0) {{
                                         return 'No conversions tracked';
                                     }}
-                                    return 'Cost per Conversion: €' + context.parsed.x.toFixed(2);
+                                    return 'Cost per Conversion: &#8364;' + context.parsed.x.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6041,12 +8552,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(2);
+                                    return '&#8364;' + value.toFixed(2);
                                 }}
                             }},
                             title: {{
                                 display: true,
-                                text: 'Cost per Conversion (€) - Green = below average, Red = above average, Gray = no data'
+                                text: 'Cost per Conversion (&#8364;) - Green = below average, Red = above average, Gray = no data'
                             }}
                         }}
                     }}
@@ -6077,7 +8588,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(weekly_dates)},
                     datasets: [
                         {{
-                            label: 'CPO (€)',
+                            label: 'CPO (&#8364;)',
                             data: {json.dumps(weekly_cpos)},
                             borderColor: '#f56565',
                             backgroundColor: 'rgba(245, 101, 101, 0.1)',
@@ -6108,8 +8619,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    if (context.dataset.label === 'CPO (€)') {{
-                                        return 'CPO: €' + context.parsed.y.toFixed(2);
+                                    if (context.dataset.label === 'CPO (&#8364;)') {{
+                                        return 'CPO: &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     return context.dataset.label + ': ' + context.parsed.y;
                                 }}
@@ -6126,7 +8637,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     borderDash: [5, 5],
                                     label: {{
                                         display: true,
-                                        content: 'Avg CPO: €{fb_cpo_avg:.2f}'
+                                        content: 'Avg CPO: &#8364;{fb_cpo_avg:.2f}'
                                     }}
                                 }}
                             }}
@@ -6138,9 +8649,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'CPO (€)' }},
+                            title: {{ display: true, text: 'CPO (&#8364;)' }},
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
                             }}
                         }},
                         y1: {{
@@ -6172,7 +8683,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(camp_names_cpo)},
                     datasets: [{{
-                        label: 'Est. CPO (€)',
+                        label: 'Est. CPO (&#8364;)',
                         data: {json.dumps(camp_cpos)},
                         backgroundColor: {json.dumps(camp_cpos)}.map(v => v < avgCpo ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(camp_cpos)}.map(v => v < avgCpo ? '#48bb78' : '#f56565'),
@@ -6190,7 +8701,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Est. CPO: €' + context.parsed.x.toFixed(2);
+                                    return 'Est. CPO: &#8364;' + context.parsed.x.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6199,11 +8710,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         x: {{
                             beginAtZero: true,
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(0); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
                             }},
                             title: {{
                                 display: true,
-                                text: 'Estimated Cost Per Order (€) - Green = below avg (€{fb_cpo_avg:.2f}), Red = above avg'
+                                text: 'Estimated Cost Per Order (&#8364;) - Green = below avg (&#8364;{fb_cpo_avg:.2f}), Red = above avg'
                             }}
                         }}
                     }}
@@ -6250,7 +8761,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             }},
                             title: {{
                                 display: true,
-                                text: 'Estimated ROAS - Green = profitable (≥1x), Red = unprofitable (<1x)'
+                                text: 'Estimated ROAS - Green = profitable (â‰Ą1x), Red = unprofitable (<1x)'
                             }}
                         }}
                     }}
@@ -6322,7 +8833,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(hourly_labels)},
                     datasets: [{{
-                        label: 'CPC €',
+                        label: 'CPC &#8364;',
                         data: {json.dumps(hourly_cpcs)},
                         backgroundColor: {json.dumps(hourly_cpcs)}.map(v => v > 0 && v <= avgCpc ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(hourly_cpcs)}.map(v => v > 0 && v <= avgCpc ? '#48bb78' : '#f56565'),
@@ -6339,7 +8850,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.y.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6348,7 +8859,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             ticks: {{
-                                callback: function(value) {{ return '€' + value.toFixed(2); }}
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(2); }}
                             }}
                         }}
                     }}
@@ -6392,7 +8903,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(hourly_labels)},
                     datasets: [{{
-                        label: 'Spend €',
+                        label: 'Spend &#8364;',
                         data: {json.dumps(hourly_spends)},
                         backgroundColor: '#4299e1',
                         borderRadius: 5
@@ -6407,7 +8918,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Spend: €' + context.parsed.y.toFixed(2);
+                                    return 'Spend: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6416,7 +8927,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y: {{
                             beginAtZero: true,
                             ticks: {{
-                                callback: function(value) {{ return '€' + value; }}
+                                callback: function(value) {{ return '&#8364;' + value; }}
                             }}
                         }}
                     }}
@@ -6433,7 +8944,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(hourly_labels)},
                     datasets: [
                         {{
-                            label: 'Spend €',
+                            label: 'Spend &#8364;',
                             data: {json.dumps(hourly_spends)},
                             backgroundColor: 'rgba(66, 153, 225, 0.7)',
                             borderColor: '#4299e1',
@@ -6466,8 +8977,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Spend (€)' }},
-                            ticks: {{ callback: function(value) {{ return '€' + value; }} }}
+                            title: {{ display: true, text: 'Spend (&#8364;)' }},
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value; }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -6522,7 +9033,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(hourly_labels)},
                     datasets: [{{
-                        label: 'CPO €',
+                        label: 'CPO &#8364;',
                         data: {json.dumps(hourly_cpo_js)},
                         backgroundColor: {json.dumps(hourly_cpo_js)}.map(v => v > 0 && v <= avgCpo ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(hourly_cpo_js)}.map(v => v > 0 && v <= avgCpo ? '#48bb78' : '#f56565'),
@@ -6539,7 +9050,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPO: €' + context.parsed.y.toFixed(2);
+                                    return 'CPO: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6547,7 +9058,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     scales: {{
                         y: {{
                             beginAtZero: true,
-                            ticks: {{ callback: function(value) {{ return '€' + value.toFixed(0); }} }}
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value.toFixed(0); }} }}
                         }}
                     }}
                 }}
@@ -6631,7 +9142,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(hourly_labels)},
                     datasets: [
                         {{
-                            label: 'Spend €',
+                            label: 'Spend &#8364;',
                             data: {json.dumps(hourly_spends)},
                             backgroundColor: 'rgba(237, 137, 54, 0.7)',
                             borderColor: '#ed8936',
@@ -6650,7 +9161,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'CPO €',
+                            label: 'CPO &#8364;',
                             data: {json.dumps(hourly_cpo_js)},
                             borderColor: '#f56565',
                             backgroundColor: 'transparent',
@@ -6672,8 +9183,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    if (context.dataset.label === 'Spend €' || context.dataset.label === 'CPO €') {{
-                                        return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    if (context.dataset.label === 'Spend &#8364;' || context.dataset.label === 'CPO &#8364;') {{
+                                        return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     return context.dataset.label + ': ' + context.parsed.y;
                                 }}
@@ -6686,8 +9197,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Spend (€)' }},
-                            ticks: {{ callback: function(value) {{ return '€' + value; }} }}
+                            title: {{ display: true, text: 'Spend (&#8364;)' }},
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value; }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -6770,7 +9281,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(dow_labels)},
                     datasets: [{{
-                        label: 'CPC €',
+                        label: 'CPC &#8364;',
                         data: {json.dumps(dow_cpcs)},
                         backgroundColor: {json.dumps(dow_cpcs)}.map(v => v > 0 && v <= avgCpc ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
                         borderColor: {json.dumps(dow_cpcs)}.map(v => v > 0 && v <= avgCpc ? '#48bb78' : '#f56565'),
@@ -6787,7 +9298,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'CPC: €' + context.parsed.y.toFixed(2);
+                                    return 'CPC: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -6795,7 +9306,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     scales: {{
                         y: {{
                             beginAtZero: true,
-                            ticks: {{ callback: function(value) {{ return '€' + value.toFixed(2); }} }}
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value.toFixed(2); }} }}
                         }}
                     }}
                 }}
@@ -6811,7 +9322,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(dow_labels)},
                     datasets: [
                         {{
-                            label: 'Total Spend €',
+                            label: 'Total Spend &#8364;',
                             data: {json.dumps(dow_spends)},
                             backgroundColor: 'rgba(245, 101, 101, 0.7)',
                             borderColor: '#f56565',
@@ -6844,8 +9355,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             display: true,
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Spend (€)' }},
-                            ticks: {{ callback: function(value) {{ return '€' + value; }} }}
+                            title: {{ display: true, text: 'Spend (&#8364;)' }},
+                            ticks: {{ callback: function(value) {{ return '&#8364;' + value; }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -7041,7 +9552,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(clv_week_starts)},
                     datasets: [
                         {{
-                            label: 'Average CLV (€)',
+                            label: 'Average CLV (&#8364;)',
                             data: {json.dumps(avg_clv)},
                             borderColor: '#48bb78',
                             backgroundColor: 'rgba(72, 187, 120, 0.1)',
@@ -7050,7 +9561,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             yAxisID: 'y'
                         }},
                         {{
-                            label: 'Cumulative Avg CLV (€)',
+                            label: 'Cumulative Avg CLV (&#8364;)',
                             data: {json.dumps(cumulative_clv)},
                             borderColor: '#667eea',
                             backgroundColor: 'rgba(102, 126, 234, 0.1)',
@@ -7078,7 +9589,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7091,11 +9602,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'CLV (€)'
+                                text: 'CLV (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -7113,7 +9624,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(clv_week_starts)},
                     datasets: [
                         {{
-                            label: 'CAC (€)',
+                            label: 'CAC (&#8364;)',
                             data: {json.dumps(cac_data)},
                             borderColor: '#f56565',
                             backgroundColor: 'rgba(245, 101, 101, 0.1)',
@@ -7121,7 +9632,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             tension: 0.4
                         }},
                         {{
-                            label: 'Cumulative Avg CAC (€)',
+                            label: 'Cumulative Avg CAC (&#8364;)',
                             data: {json.dumps(cumulative_cac)},
                             borderColor: '#667eea',
                             backgroundColor: 'rgba(102, 126, 234, 0.1)',
@@ -7144,7 +9655,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7154,11 +9665,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'CAC (€)'
+                                text: 'CAC (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -7176,13 +9687,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     labels: {json.dumps(clv_week_starts)},
                     datasets: [
                         {{
-                            label: 'CLV (€)',
+                            label: 'CLV (&#8364;)',
                             data: {json.dumps(avg_clv)},
                             backgroundColor: '#48bb78',
                             borderRadius: 5
                         }},
                         {{
-                            label: 'CAC (€)',
+                            label: 'CAC (&#8364;)',
                             data: {json.dumps(cac_data)},
                             backgroundColor: '#f56565',
                             borderRadius: 5
@@ -7200,7 +9711,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7210,11 +9721,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             beginAtZero: true,
                             title: {{
                                 display: true,
-                                text: 'Amount (€)'
+                                text: 'Amount (&#8364;)'
                             }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }}
@@ -7342,7 +9853,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + ' orders';
                                 }},
                                 afterBody: function() {{
-                                    return 'Pre-ad contribution/order: €{pre_ad_contribution_per_order:.2f}';
+                                    return 'Pre-ad contribution/order: &#8364;{pre_ad_contribution_per_order:.2f}';
                                 }}
                             }}
                         }}
@@ -7559,8 +10070,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'right',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'FB Spend (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }},
+                            title: {{ display: true, text: 'FB Spend (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }},
                             grid: {{ drawOnChartArea: false }}
                         }}
                     }}
@@ -7602,15 +10113,15 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Revenue (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                            title: {{ display: true, text: 'Revenue (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
                         }},
                         y1: {{
                             type: 'linear',
                             position: 'right',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'FB Spend (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }},
+                            title: {{ display: true, text: 'FB Spend (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }},
                             grid: {{ drawOnChartArea: false }}
                         }}
                     }}
@@ -7618,6 +10129,290 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             }});
         }}"""
 
+
+    # Week of Month Charts
+    if week_of_month_analysis is not None and not week_of_month_analysis.empty:
+        wom_labels = week_of_month_analysis['week_label'].tolist()
+        wom_revenue = week_of_month_analysis['revenue'].tolist()
+        wom_profit = week_of_month_analysis['profit'].tolist()
+        wom_avg_daily_revenue = week_of_month_analysis['avg_daily_revenue'].tolist()
+        wom_avg_daily_profit = week_of_month_analysis['avg_daily_profit'].tolist()
+
+        html_content += f"""
+
+        // Week of Month Revenue & Profit Chart
+        const womRevenueProfitCtx = document.getElementById('womRevenueProfitChart');
+        if (womRevenueProfitCtx) {{
+            new Chart(womRevenueProfitCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(wom_labels)},
+                    datasets: [{{
+                        label: 'Revenue',
+                        data: {json.dumps(wom_revenue)},
+                        backgroundColor: '#10B981',
+                        borderRadius: 5,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Profit (before ads)',
+                        data: {json.dumps(wom_profit)},
+                        type: 'line',
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#3B82F6',
+                        fill: true,
+                        yAxisID: 'y'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'EUR' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        // Week of Month Average Daily Revenue & Profit Chart
+        const womAvgDailyCtx = document.getElementById('womAvgDailyChart');
+        if (womAvgDailyCtx) {{
+            new Chart(womAvgDailyCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(wom_labels)},
+                    datasets: [{{
+                        label: 'Avg Daily Revenue',
+                        data: {json.dumps(wom_avg_daily_revenue)},
+                        backgroundColor: '#8B5CF6',
+                        borderRadius: 5,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Avg Daily Profit (before ads)',
+                        data: {json.dumps(wom_avg_daily_profit)},
+                        backgroundColor: '#F59E0B',
+                        borderRadius: 5,
+                        yAxisID: 'y'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'EUR / day' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+    # Day of Month Charts
+    if day_of_month_analysis is not None and not day_of_month_analysis.empty:
+        dom_labels = day_of_month_analysis['day_label'].tolist()
+        dom_orders = day_of_month_analysis['orders'].tolist()
+        dom_revenue = day_of_month_analysis['revenue'].tolist()
+        dom_avg_revenue = day_of_month_analysis['avg_revenue_per_occurrence'].tolist()
+        dom_avg_profit = day_of_month_analysis['avg_profit_per_occurrence'].tolist()
+
+        html_content += f"""
+
+        // Day of Month Orders & Revenue Chart
+        const domOrdersRevenueCtx = document.getElementById('domOrdersRevenueChart');
+        if (domOrdersRevenueCtx) {{
+            new Chart(domOrdersRevenueCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(dom_labels)},
+                    datasets: [{{
+                        label: 'Orders',
+                        data: {json.dumps(dom_orders)},
+                        backgroundColor: '#8B5CF6',
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Revenue',
+                        data: {json.dumps(dom_revenue)},
+                        type: 'line',
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#10B981',
+                        fill: true,
+                        yAxisID: 'y1'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Orders' }}
+                        }},
+                        y1: {{
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Revenue (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }},
+                            grid: {{ drawOnChartArea: false }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        // Day of Month Normalized Revenue/Profit Chart
+        const domAvgDailyCtx = document.getElementById('domAvgDailyChart');
+        if (domAvgDailyCtx) {{
+            new Chart(domAvgDailyCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(dom_labels)},
+                    datasets: [{{
+                        label: 'Avg Revenue / Occurrence',
+                        data: {json.dumps(dom_avg_revenue)},
+                        backgroundColor: '#3B82F6',
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Avg Profit / Occurrence (before ads)',
+                        data: {json.dumps(dom_avg_profit)},
+                        backgroundColor: '#F59E0B',
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'EUR / occurrence' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+    if weather_analysis and weather_analysis.get('daily') is not None and not weather_analysis.get('daily').empty:
+        weather_daily = weather_analysis.get('daily')
+        weather_bucket_summary = weather_analysis.get('bucket_summary')
+        weather_labels = pd.to_datetime(weather_daily['date']).dt.strftime('%Y-%m-%d').tolist()
+        weather_precipitation = weather_daily['precipitation_sum'].round(2).tolist()
+        weather_revenue = weather_daily['total_revenue'].round(2).tolist()
+        weather_profit = weather_daily['net_profit'].round(2).tolist()
+        weather_bucket_labels = weather_bucket_summary['weather_bucket'].tolist()
+        weather_bucket_revenue_delta = weather_bucket_summary['revenue_vs_weekday_baseline'].round(2).tolist()
+        weather_bucket_profit_delta = weather_bucket_summary['profit_vs_weekday_baseline'].round(2).tolist()
+
+        html_content += f"""
+
+        // Weather Revenue / Profit vs Precipitation Chart
+        const weatherRevenueCtx = document.getElementById('weatherRevenueChart');
+        if (weatherRevenueCtx) {{
+            new Chart(weatherRevenueCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(weather_labels)},
+                    datasets: [{{
+                        label: 'Precipitation (mm)',
+                        data: {json.dumps(weather_precipitation)},
+                        backgroundColor: 'rgba(59, 130, 246, 0.28)',
+                        borderColor: 'rgba(59, 130, 246, 0.65)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    }}, {{
+                        label: 'Revenue',
+                        data: {json.dumps(weather_revenue)},
+                        type: 'line',
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        borderWidth: 3,
+                        pointRadius: 2,
+                        tension: 0.25,
+                        yAxisID: 'y1'
+                    }}, {{
+                        label: 'Net Profit',
+                        data: {json.dumps(weather_profit)},
+                        type: 'line',
+                        borderColor: '#EF4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                        borderWidth: 2,
+                        pointRadius: 2,
+                        tension: 0.25,
+                        yAxisID: 'y1'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    interaction: {{ mode: 'index', intersect: false }},
+                    scales: {{
+                        y: {{
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Rain (mm)' }}
+                        }},
+                        y1: {{
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Revenue / Profit (EUR)' }},
+                            ticks: {{ callback: function(v) {{ return 'EUR ' + v.toLocaleString(); }} }},
+                            grid: {{ drawOnChartArea: false }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        // Weather bucket uplift chart
+        const weatherBucketCtx = document.getElementById('weatherBucketChart');
+        if (weatherBucketCtx) {{
+            new Chart(weatherBucketCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(weather_bucket_labels)},
+                    datasets: [{{
+                        label: 'Revenue vs Weekday Baseline',
+                        data: {json.dumps(weather_bucket_revenue_delta)},
+                        backgroundColor: '#10B981',
+                        borderRadius: 5
+                    }}, {{
+                        label: 'Profit vs Weekday Baseline',
+                        data: {json.dumps(weather_bucket_profit_delta)},
+                        backgroundColor: '#EF4444',
+                        borderRadius: 5
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            title: {{ display: true, text: 'Delta vs baseline (EUR)' }},
+                            ticks: {{ callback: function(v) {{ return 'EUR ' + v.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
     # Country Chart
     if country_analysis is not None and not country_analysis.empty:
         country_labels = country_analysis['country'].tolist()[:10]
@@ -7641,7 +10436,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     responsive: true,
                     plugins: {{
                         legend: {{ position: 'right' }},
-                        tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.label + ': €' + ctx.raw.toLocaleString(); }} }} }}
+                        tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.label + ': &#8364;' + ctx.raw.toLocaleString(); }} }} }}
                     }}
                 }}
             }});
@@ -7673,7 +10468,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'FB CPO (€)',
+                            label: 'FB CPO (&#8364;)',
                             data: {json.dumps(geo_cpo)},
                             borderColor: '#EF4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -7693,7 +10488,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                     if (context.dataset.label.includes('Margin')) {{
                                         return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
                                     }}
-                                    return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -7708,9 +10503,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         y1: {{
                             type: 'linear',
                             position: 'right',
-                            title: {{ display: true, text: 'FB CPO (€)' }},
+                            title: {{ display: true, text: 'FB CPO (&#8364;)' }},
                             grid: {{ drawOnChartArea: false }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toFixed(2); }} }}
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toFixed(2); }} }}
                         }}
                     }}
                 }}
@@ -7733,7 +10528,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(b2b_labels)},
                     datasets: [
-                        {{ label: 'Revenue (€)', data: {json.dumps(b2b_revenue)}, backgroundColor: '#3B82F6', yAxisID: 'y' }},
+                        {{ label: 'Revenue (&#8364;)', data: {json.dumps(b2b_revenue)}, backgroundColor: '#3B82F6', yAxisID: 'y' }},
                         {{ label: 'Orders', data: {json.dumps(b2b_orders)}, backgroundColor: '#10B981', yAxisID: 'y1' }}
                     ]
                 }},
@@ -7958,13 +10753,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                         return 'Predicted: ' + context.parsed.y.toFixed(1) + ' orders';
                                     }}
                                     var profit = adsProfitValues[context.dataIndex];
-                                    return ['Spend: €' + context.parsed.x.toFixed(2), 'Orders: ' + context.parsed.y, 'Profit: €' + profit.toFixed(2)];
+                                    return ['Spend: &#8364;' + context.parsed.x.toFixed(2), 'Orders: ' + context.parsed.y, 'Profit: &#8364;' + profit.toFixed(2)];
                                 }}
                             }}
                         }}
                     }},
                     scales: {{
-                        x: {{ title: {{ display: true, text: 'FB Spend (€)' }} }},
+                        x: {{ title: {{ display: true, text: 'FB Spend (&#8364;)' }} }},
                         y: {{ title: {{ display: true, text: 'Orders' }}, beginAtZero: true }}
                     }}
                 }}
@@ -8014,17 +10809,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             callbacks: {{
                                 label: function(context) {{
                                     if (context.dataset.label === 'Trend Line') {{
-                                        return 'Predicted: €' + context.parsed.y.toFixed(2);
+                                        return 'Predicted: &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     var profit = adsProfitValues[context.dataIndex];
-                                    return ['Spend: €' + context.parsed.x.toFixed(2), 'Revenue: €' + context.parsed.y.toFixed(2), 'Profit: €' + profit.toFixed(2)];
+                                    return ['Spend: &#8364;' + context.parsed.x.toFixed(2), 'Revenue: &#8364;' + context.parsed.y.toFixed(2), 'Profit: &#8364;' + profit.toFixed(2)];
                                 }}
                             }}
                         }}
                     }},
                     scales: {{
-                        x: {{ title: {{ display: true, text: 'FB Spend (€)' }} }},
-                        y: {{ title: {{ display: true, text: 'Revenue (€)' }}, beginAtZero: true }}
+                        x: {{ title: {{ display: true, text: 'FB Spend (&#8364;)' }} }},
+                        y: {{ title: {{ display: true, text: 'Revenue (&#8364;)' }}, beginAtZero: true }}
                     }}
                 }}
             }});
@@ -8121,17 +10916,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             callbacks: {{
                                 label: function(context) {{
                                     if (context.dataset.label === 'Trend Line') {{
-                                        return 'Predicted Revenue: €' + context.parsed.y.toFixed(2);
+                                        return 'Predicted Revenue: &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     var roi = roiValues[context.dataIndex];
-                                    return ['Cost: €' + context.parsed.x.toFixed(2), 'Revenue: €' + context.parsed.y.toFixed(2), 'ROI: ' + roi.toFixed(1) + '%'];
+                                    return ['Cost: &#8364;' + context.parsed.x.toFixed(2), 'Revenue: &#8364;' + context.parsed.y.toFixed(2), 'ROI: ' + roi.toFixed(1) + '%'];
                                 }}
                             }}
                         }}
                     }},
                     scales: {{
-                        x: {{ title: {{ display: true, text: 'Total Cost (€)' }} }},
-                        y: {{ title: {{ display: true, text: 'Revenue (€)' }}, beginAtZero: true }}
+                        x: {{ title: {{ display: true, text: 'Total Cost (&#8364;)' }} }},
+                        y: {{ title: {{ display: true, text: 'Revenue (&#8364;)' }}, beginAtZero: true }}
                     }}
                 }}
             }});
@@ -8172,7 +10967,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 afterLabel: function(context) {{
                                     var idx = context.dataIndex;
                                     var spendValues = {json.dumps(range_spend)};
-                                    return 'Avg Spend: €' + spendValues[idx].toFixed(2);
+                                    return 'Avg Spend: &#8364;' + spendValues[idx].toFixed(2);
                                 }}
                             }}
                         }}
@@ -8222,7 +11017,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                                 afterLabel: function(context) {{
                                     var idx = context.dataIndex;
                                     var spendValues = {json.dumps(range_spend)};
-                                    return 'Avg Spend: €' + spendValues[idx].toFixed(2);
+                                    return 'Avg Spend: &#8364;' + spendValues[idx].toFixed(2);
                                 }}
                             }}
                         }}
@@ -8232,8 +11027,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Avg Revenue (€)' }},
-                            ticks: {{ callback: function(v) {{ return '€' + v.toLocaleString(); }} }}
+                            title: {{ display: true, text: 'Avg Revenue (&#8364;)' }},
+                            ticks: {{ callback: function(v) {{ return '&#8364;' + v.toLocaleString(); }} }}
                         }},
                         y1: {{
                             type: 'linear',
@@ -8560,7 +11355,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'Avg Order Value (€)',
+                            label: 'Avg Order Value (&#8364;)',
                             data: {json.dumps(aov_values)},
                             borderColor: '#F59E0B',
                             backgroundColor: 'rgba(245, 158, 11, 0.1)',
@@ -8573,7 +11368,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         }},
                         {{
                             type: 'line',
-                            label: 'Avg Price per Item (€)',
+                            label: 'Avg Price per Item (&#8364;)',
                             data: {json.dumps(avg_price_per_item)},
                             borderColor: '#8B5CF6',
                             backgroundColor: 'rgba(139, 92, 246, 0.1)',
@@ -8598,8 +11393,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             intersect: false,
                             callbacks: {{
                                 label: function(context) {{
-                                    if (context.dataset.label.includes('€')) {{
-                                        return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+                                    if (context.dataset.label.includes('&#8364;')) {{
+                                        return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
                                     }}
                                     return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
                                 }}
@@ -8611,10 +11406,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'left',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'Value (€)' }},
+                            title: {{ display: true, text: 'Value (&#8364;)' }},
                             ticks: {{
                                 callback: function(value) {{
-                                    return '€' + value.toFixed(0);
+                                    return '&#8364;' + value.toFixed(0);
                                 }}
                             }}
                         }},
@@ -8985,22 +11780,430 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             }});
         }}"""
 
+    # Advanced DTC charts (metrics 1/2/3/4/7/8/9/10/11 support)
+    if advanced_dtc_metrics:
+        adv_basket = advanced_dtc_metrics.get('basket_contribution')
+        adv_payday = advanced_dtc_metrics.get('payday_window')
+        adv_payback = advanced_dtc_metrics.get('cohort_payback')
+        adv_margin = advanced_dtc_metrics.get('daily_margin')
+        adv_sku_pareto = advanced_dtc_metrics.get('sku_pareto')
+
+        if adv_basket is not None and not adv_basket.empty:
+            basket_labels = adv_basket['basket_size'].astype(str).tolist()
+            basket_contrib_per_order = [float(v) for v in adv_basket['contribution_per_order'].tolist()]
+            basket_margin_pct = [float(v) for v in adv_basket['contribution_margin_pct'].tolist()]
+            basket_orders = [int(v) for v in adv_basket['orders'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Contribution by Basket Size
+        const advBasketContributionCtx = document.getElementById('advBasketContributionChart');
+        if (advBasketContributionCtx) {{
+            new Chart(advBasketContributionCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(basket_labels)},
+                    datasets: [
+                        {{
+                            label: 'Contribution / Order (EUR)',
+                            data: {json.dumps(basket_contrib_per_order)},
+                            backgroundColor: 'rgba(6, 182, 212, 0.65)',
+                            borderColor: '#0891b2',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Contribution Margin (%)',
+                            data: {json.dumps(basket_margin_pct)},
+                            type: 'line',
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y1'
+                        }},
+                        {{
+                            label: 'Orders',
+                            data: {json.dumps(basket_orders)},
+                            type: 'line',
+                            borderColor: '#7C3AED',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            tension: 0.35,
+                            pointRadius: 2,
+                            yAxisID: 'y2'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('(%)')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                    if (context.dataset.label.includes('Orders')) return context.dataset.label + ': ' + context.parsed.y.toFixed(0);
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            position: 'left',
+                            beginAtZero: true,
+                            ticks: {{
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
+                            }}
+                        }},
+                        y1: {{
+                            position: 'right',
+                            beginAtZero: true,
+                            grid: {{ drawOnChartArea: false }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
+                            }}
+                        }},
+                        y2: {{
+                            position: 'right',
+                            beginAtZero: true,
+                            grid: {{ drawOnChartArea: false }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0); }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_payday is not None and not adv_payday.empty:
+            payday_labels = adv_payday['window'].astype(str).tolist()
+            payday_revenue_idx = [float(v) for v in adv_payday['revenue_index'].tolist()]
+            payday_profit_idx = [float(v) for v in adv_payday['profit_index'].tolist()]
+            payday_orders_per_day = [float(v) for v in adv_payday['avg_orders_per_day'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Payday Window Index
+        const advPaydayWindowCtx = document.getElementById('advPaydayWindowChart');
+        if (advPaydayWindowCtx) {{
+            new Chart(advPaydayWindowCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(payday_labels)},
+                    datasets: [
+                        {{
+                            label: 'Revenue Index',
+                            data: {json.dumps(payday_revenue_idx)},
+                            backgroundColor: 'rgba(37, 99, 235, 0.65)',
+                            borderColor: '#2563EB',
+                            borderWidth: 1
+                        }},
+                        {{
+                            label: 'Profit Index',
+                            data: {json.dumps(payday_profit_idx)},
+                            backgroundColor: 'rgba(16, 185, 129, 0.65)',
+                            borderColor: '#10B981',
+                            borderWidth: 1
+                        }},
+                        {{
+                            label: 'Avg Orders / Day',
+                            data: {json.dumps(payday_orders_per_day)},
+                            type: 'line',
+                            borderColor: '#7C3AED',
+                            backgroundColor: 'rgba(124, 58, 237, 0.15)',
+                            borderWidth: 2,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y1'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('Orders')) return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Index (100 = baseline)' }}
+                        }},
+                        y1: {{
+                            beginAtZero: true,
+                            position: 'right',
+                            grid: {{ drawOnChartArea: false }},
+                            title: {{ display: true, text: 'Orders / Day' }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_payback is not None and not adv_payback.empty:
+            payback_months = adv_payback['cohort_month'].astype(str).tolist()
+            payback_avg = [None if pd.isna(v) else float(v) for v in adv_payback['avg_payback_days'].tolist()]
+            payback_median = [None if pd.isna(v) else float(v) for v in adv_payback['median_payback_days'].tolist()]
+            payback_recovery = [float(v) for v in adv_payback['recovery_rate_pct'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Cohort Payback Days
+        const advCohortPaybackCtx = document.getElementById('advCohortPaybackChart');
+        if (advCohortPaybackCtx) {{
+            new Chart(advCohortPaybackCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(payback_months)},
+                    datasets: [
+                        {{
+                            label: 'Avg Payback Days',
+                            data: {json.dumps(payback_avg)},
+                            borderColor: '#F59E0B',
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Median Payback Days',
+                            data: {json.dumps(payback_median)},
+                            borderColor: '#8B5CF6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                            borderWidth: 2,
+                            borderDash: [4, 4],
+                            tension: 0.35,
+                            pointRadius: 2,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Recovery Rate %',
+                            data: {json.dumps(payback_recovery)},
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            borderWidth: 2,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            yAxisID: 'y1'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('Rate')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + ' days';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            title: {{ display: true, text: 'Days' }}
+                        }},
+                        y1: {{
+                            beginAtZero: true,
+                            position: 'right',
+                            max: 100,
+                            grid: {{ drawOnChartArea: false }},
+                            title: {{ display: true, text: 'Recovery Rate (%)' }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_margin is not None and not adv_margin.empty:
+            margin_dates = pd.to_datetime(adv_margin['date']).dt.strftime('%Y-%m-%d').tolist()
+            margin_daily = [float(v) for v in adv_margin['pre_ad_margin_pct'].tolist()]
+            margin_ma7 = [float(v) for v in adv_margin['pre_ad_margin_7d_ma'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - Margin Stability
+        const advMarginStabilityCtx = document.getElementById('advMarginStabilityChart');
+        if (advMarginStabilityCtx) {{
+            new Chart(advMarginStabilityCtx.getContext('2d'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(margin_dates)},
+                    datasets: [
+                        {{
+                            label: 'Daily Pre-Ad Margin %',
+                            data: {json.dumps(margin_daily)},
+                            borderColor: '#06B6D4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.10)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 0
+                        }},
+                        {{
+                            label: 'Pre-Ad Margin 7d MA',
+                            data: {json.dumps(margin_ma7)},
+                            borderColor: '#2563EB',
+                            backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.35,
+                            pointRadius: 0
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.2,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            title: {{ display: true, text: 'Margin (%)' }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
+        if adv_sku_pareto is not None and not adv_sku_pareto.empty:
+            sku_top = adv_sku_pareto.head(20).copy()
+            sku_labels = [
+                (str(v)[:22] + '...') if len(str(v)) > 22 else str(v)
+                for v in sku_top['product'].tolist()
+            ]
+            sku_contrib = [float(v) for v in sku_top['pre_ad_contribution'].tolist()]
+            sku_cum_share = [float(v) for v in sku_top['cum_contribution_share_pct'].tolist()]
+
+            html_content += f"""
+
+        // Advanced DTC - SKU Pareto
+        const advSkuParetoCtx = document.getElementById('advSkuParetoChart');
+        if (advSkuParetoCtx) {{
+            new Chart(advSkuParetoCtx.getContext('2d'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(sku_labels)},
+                    datasets: [
+                        {{
+                            label: 'Pre-Ad Contribution (EUR)',
+                            data: {json.dumps(sku_contrib)},
+                            backgroundColor: 'rgba(37, 99, 235, 0.70)',
+                            borderColor: '#1D4ED8',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Cumulative Share %',
+                            data: {json.dumps(sku_cum_share)},
+                            type: 'line',
+                            borderColor: '#EF4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                            borderWidth: 3,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            yAxisID: 'y1'
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.8,
+                    plugins: {{
+                        legend: {{ position: 'top' }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    if (context.dataset.label.includes('Share')) return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                    return context.dataset.label + ': &#8364;' + context.parsed.y.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            position: 'left',
+                            ticks: {{
+                                callback: function(value) {{ return '&#8364;' + value.toFixed(0); }}
+                            }}
+                        }},
+                        y1: {{
+                            beginAtZero: true,
+                            position: 'right',
+                            max: 100,
+                            grid: {{ drawOnChartArea: false }},
+                            ticks: {{
+                                callback: function(value) {{ return value.toFixed(0) + '%'; }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}"""
+
     html_content += """
     </script>
 </body>
 </html>
 """
 
-    return html_content
+    return _fix_common_mojibake(html_content)
 
 
 def generate_email_strategy_report(customer_email_segments: dict, cohort_analysis: dict,
-                                    date_from: datetime, date_to: datetime) -> str:
+                                    date_from: datetime, date_to: datetime,
+                                    report_title: str = "BizniWeb reporting") -> str:
     """
     Generate a separate HTML report with complete email marketing strategy in Slovak
     including email templates and customer lists for each segment.
     """
-
+    report_title = escape((report_title or "BizniWeb reporting").strip())
     summary = cohort_analysis.get('summary', {}) if cohort_analysis else {}
 
     html_content = f"""<!DOCTYPE html>
@@ -9008,7 +12211,7 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Marketing Stratégia - Vevo | {date_from.strftime('%Y-%m-%d')} až {date_to.strftime('%Y-%m-%d')}</title>
+    <title>Email Marketing StratĂ©gia - {report_title} | {date_from.strftime('%Y-%m-%d')} aĹľ {date_to.strftime('%Y-%m-%d')}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
@@ -9060,65 +12263,65 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
 <body>
     <div class="container">
         <div class="header">
-            <h1>📧 Email Marketing Stratégia - Vevo</h1>
+            <h1>đź“§ Email Marketing StratĂ©gia - {report_title}</h1>
             <p>Obdobie: {date_from.strftime('%d.%m.%Y')} - {date_to.strftime('%Y.%m.%d')}</p>
 
             <div class="summary-grid">
                 <div class="summary-card">
                     <div class="number">{summary.get('total_customers', 0)}</div>
-                    <div class="label">Celkom zákazníkov</div>
+                    <div class="label">Celkom zĂˇkaznĂ­kov</div>
                 </div>
                 <div class="summary-card">
                     <div class="number">{summary.get('repeat_rate_pct', 0)}%</div>
-                    <div class="label">Miera návratu</div>
+                    <div class="label">Miera nĂˇvratu</div>
                 </div>
                 <div class="summary-card">
                     <div class="number">{summary.get('true_retention_2nd_pct', summary.get('repeat_rate_pct', 0))}%</div>
-                    <div class="label">Skutočná 2. obj. retencia</div>
+                    <div class="label">SkutoÄŤnĂˇ 2. obj. retencia</div>
                 </div>
                 <div class="summary-card">
                     <div class="number">{summary.get('avg_days_to_2nd_order', 'N/A')}</div>
-                    <div class="label">Priem. dní do 2. obj.</div>
+                    <div class="label">Priem. dnĂ­ do 2. obj.</div>
                 </div>
             </div>
         </div>
 
         <div class="strategy-section">
-            <h2>🎯 Odporúčaná email stratégia</h2>
+            <h2>đźŽŻ OdporĂşÄŤanĂˇ email stratĂ©gia</h2>
             <ul class="strategy-list">
                 <li>
-                    <span class="icon">🧪</span>
+                    <span class="icon">đź§Ş</span>
                     <div class="content">
-                        <h4>1. Konverzia vzoriek (Najvyššia priorita)</h4>
-                        <p>Zákazníci, ktorí si kúpili vzorky, by mali dostať email 7-14 dní po nákupe s ponukou na plnú veľkosť. Toto je najdôležitejší segment pre rast tržieb.</p>
+                        <h4>1. Konverzia vzoriek (NajvyĹˇĹˇia priorita)</h4>
+                        <p>ZĂˇkaznĂ­ci, ktorĂ­ si kĂşpili vzorky, by mali dostaĹĄ email 7-14 dnĂ­ po nĂˇkupe s ponukou na plnĂş veÄľkosĹĄ. Toto je najdĂ´leĹľitejĹˇĂ­ segment pre rast trĹľieb.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">2ď¸ŹâŁ</span>
+                    <span class="icon">2ÄŹÂ¸ĹąĂ˘ÂĹ</span>
                     <div class="content">
-                        <h4>2. Druhá objednávka (8-14 dní)</h4>
-                        <p>Nový zákazníci by mali dostať email s motiváciou k druhej objednávke. Priemerný čas návratu je {summary.get('avg_days_to_2nd_order', 20)} dní.</p>
+                        <h4>2. DruhĂˇ objednĂˇvka (8-14 dnĂ­)</h4>
+                        <p>NovĂ˝ zĂˇkaznĂ­ci by mali dostaĹĄ email s motivĂˇciou k druhej objednĂˇvke. PriemernĂ˝ ÄŤas nĂˇvratu je {summary.get('avg_days_to_2nd_order', 20)} dnĂ­.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">🎯</span>
+                    <span class="icon">đźŽŻ</span>
                     <div class="content">
-                        <h4>3. Optimálny čas na doplnenie (15-25 dní)</h4>
-                        <p>Zákazníci v tomto okne sú ideálni kandidáti na pripomenutie. Sú v "sladkom bode" - parfum pravdepodobne dochádza.</p>
+                        <h4>3. OptimĂˇlny ÄŤas na doplnenie (15-25 dnĂ­)</h4>
+                        <p>ZĂˇkaznĂ­ci v tomto okne sĂş ideĂˇlni kandidĂˇti na pripomenutie. SĂş v "sladkom bode" - parfum pravdepodobne dochĂˇdza.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">⚠️</span>
+                    <span class="icon">âš ď¸Ź</span>
                     <div class="content">
-                        <h4>4. Záchrana odchádzajúcich (60-90 dní)</h4>
-                        <p>Verní zákazníci, ktorí dlhšie nenakúpili, potrebujú silnejšiu ponuku - 20% zľavu alebo špeciálny darček.</p>
+                        <h4>4. ZĂˇchrana odchĂˇdzajĂşcich (60-90 dnĂ­)</h4>
+                        <p>VernĂ­ zĂˇkaznĂ­ci, ktorĂ­ dlhĹˇie nenakĂşpili, potrebujĂş silnejĹˇiu ponuku - 20% zÄľavu alebo ĹˇpeciĂˇlny darÄŤek.</p>
                     </div>
                 </li>
                 <li>
-                    <span class="icon">👑</span>
+                    <span class="icon">đź‘‘</span>
                     <div class="content">
-                        <h4>5. VIP program (3+ objednávky)</h4>
-                        <p>Najvernejší zákazníci by mali mať špeciálne výhody - prednostný prístup k novinkám, exkluzívne zľavy, darčeky k objednávkam.</p>
+                        <h4>5. VIP program (3+ objednĂˇvky)</h4>
+                        <p>NajvernejĹˇĂ­ zĂˇkaznĂ­ci by mali maĹĄ ĹˇpeciĂˇlne vĂ˝hody - prednostnĂ˝ prĂ­stup k novinkĂˇm, exkluzĂ­vne zÄľavy, darÄŤeky k objednĂˇvkam.</p>
                     </div>
                 </li>
             </ul>
@@ -9128,356 +12331,356 @@ def generate_email_strategy_report(customer_email_segments: dict, cohort_analysi
     # Email templates for each segment
     email_templates = {
         'sample_not_converted': {
-            'icon': '🧪',
-            'title': 'Konverzia vzoriek na plnú veľkosť',
+            'icon': 'đź§Ş',
+            'title': 'Konverzia vzoriek na plnĂş veÄľkosĹĄ',
             'priority': 1,
-            'subject': 'KtorĂˇ vĂ´Ĺa VĂˇs najviac oslovila? đźŚ¸ Ĺ peciĂˇlna ponuka pre VĂˇs',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'KtorÄ‚Ë‡ vÄ‚Â´ÄąÂa VÄ‚Ë‡s najviac oslovila? Ä‘ĹşĹšÂ¸ ÄąÂ peciÄ‚Ë‡lna ponuka pre VÄ‚Ë‡s',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ďakujeme, že ste si vyskúšali naše vzorky parfumov do prania Vevo!
+ÄŹakujeme, Ĺľe ste si vyskĂşĹˇali naĹˇe vzorky parfumov do prania Vevo!
 
-Radi by sme vedeli, ktorĂˇ vĂ´Ĺa sa VĂˇm najviac pĂˇÄŤila? đź’•
+Radi by sme vedeli, ktorÄ‚Ë‡ vÄ‚Â´ÄąÂa sa VÄ‚Ë‡m najviac pÄ‚Ë‡Ă„Ĺ¤ila? Ä‘Ĺşâ€™â€˘
 
-Ako poďakovanie za vyskúšanie našich produktov sme pre Vás pripravili špeciálnu ponuku:
+Ako poÄŹakovanie za vyskĂşĹˇanie naĹˇich produktov sme pre VĂˇs pripravili ĹˇpeciĂˇlnu ponuku:
 
-đźŽ ZÄ˝AVA 15% na VaĹˇu prvĂş plnĂş veÄľkosĹĄ
-Použite kód: MOJAVONA
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 15% na VaÄąË‡u prvÄ‚Ĺź plnÄ‚Ĺź veĂ„ÄľkosÄąÄ„
+PouĹľite kĂłd: MOJAVONA
 
-Najobľúbenejšie vône našich zákazníkov:
-â€˘ No.07 Ylang Absolute - luxusnĂˇ kvetinovĂˇ vĂ´Ĺa
-• No.09 Pure Garden - sviežosť záhrady
-â€˘ No.08 Cotton Dream - jemnĂˇ bavlnenĂˇ vĂ´Ĺa
+NajobÄľĂşbenejĹˇie vĂ´ne naĹˇich zĂˇkaznĂ­kov:
+Ă˘&#8364;Ë No.07 Ylang Absolute - luxusnÄ‚Ë‡ kvetinovÄ‚Ë‡ vÄ‚Â´ÄąÂa
+â€˘ No.09 Pure Garden - svieĹľosĹĄ zĂˇhrady
+Ă˘&#8364;Ë No.08 Cotton Dream - jemnÄ‚Ë‡ bavlnenÄ‚Ë‡ vÄ‚Â´ÄąÂa
 
-Platnosť ponuky: 7 dní
+PlatnosĹĄ ponuky: 7 dnĂ­
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Máte otázky ohľadom výberu vône? Napíšte nám, radi poradíme! 💬''',
-            'timing': '7-14 dní po nákupe vzoriek',
-            'discount': '15% na prvú plnú veľkosť'
+P.S. MĂˇte otĂˇzky ohÄľadom vĂ˝beru vĂ´ne? NapĂ­Ĺˇte nĂˇm, radi poradĂ­me! đź’¬''',
+            'timing': '7-14 dnĂ­ po nĂˇkupe vzoriek',
+            'discount': '15% na prvĂş plnĂş veÄľkosĹĄ'
         },
         'second_order_encouragement': {
-            'icon': '2ď¸ŹâŁ',
-            'title': 'Motivácia k druhej objednávke',
+            'icon': '2ÄŹÂ¸ĹąĂ˘ÂĹ',
+            'title': 'MotivĂˇcia k druhej objednĂˇvke',
             'priority': 2,
-            'subject': 'Páčil sa Vám náš parfum? 🌟 Máme pre Vás darček',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'PĂˇÄŤil sa VĂˇm nĂˇĹˇ parfum? đźŚź MĂˇme pre VĂˇs darÄŤek',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ďakujeme za Vašu prvú objednávku u nás! Dúfame, že ste spokojní s kvalitou našich produktov.
+ÄŹakujeme za VaĹˇu prvĂş objednĂˇvku u nĂˇs! DĂşfame, Ĺľe ste spokojnĂ­ s kvalitou naĹˇich produktov.
 
-Keďže ste náš nový zákazník, pripravili sme pre Vás exkluzívnu ponuku:
+KeÄŹĹľe ste nĂˇĹˇ novĂ˝ zĂˇkaznĂ­k, pripravili sme pre VĂˇs exkluzĂ­vnu ponuku:
 
-đźŽ ZÄ˝AVA 10% na VaĹˇu druhĂş objednĂˇvku
-Kód: DRUHAOBJ
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 10% na VaÄąË‡u druhÄ‚Ĺź objednÄ‚Ë‡vku
+KĂłd: DRUHAOBJ
 
-Čo si obľúbili naši zákazníci:
-âś“ IntenzĂ­vna a dlhotrvajĂşca vĂ´Ĺa
-✓ Šetrné k bielizni a pokožke
-✓ Vydržia až 100+ praní
+ÄŚo si obÄľĂşbili naĹˇi zĂˇkaznĂ­ci:
+Ă˘Ĺ›â€ś IntenzÄ‚Â­vna a dlhotrvajÄ‚Ĺźca vÄ‚Â´ÄąÂa
+âś“ Ĺ etrnĂ© k bielizni a pokoĹľke
+âś“ VydrĹľia aĹľ 100+ pranĂ­
 
-💡 TIP: Vyskúšajte aj iné vône z našej kolekcie!
+đź’ˇ TIP: VyskĂşĹˇajte aj inĂ© vĂ´ne z naĹˇej kolekcie!
 
-Platnosť: 14 dní
+PlatnosĹĄ: 14 dnĂ­
 
-S láskou,
-Tím Vevo''',
-            'timing': '10-12 dní po prvej objednávke',
-            'discount': '10% na druhú objednávku'
+S lĂˇskou,
+TĂ­m Vevo''',
+            'timing': '10-12 dnĂ­ po prvej objednĂˇvke',
+            'discount': '10% na druhĂş objednĂˇvku'
         },
         'optimal_reorder_timing': {
-            'icon': '🎯',
-            'title': 'Čas na doplnenie zásob',
+            'icon': 'đźŽŻ',
+            'title': 'ÄŚas na doplnenie zĂˇsob',
             'priority': 2,
-            'subject': 'Dochádza Vám parfum do prania? 🧺 Nezabudnite na zásoby',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'DochĂˇdza VĂˇm parfum do prania? đź§ş Nezabudnite na zĂˇsoby',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-už je to chvíľa od Vašej poslednej objednávky a možno Vám pomaly dochádza parfum do prania.
+uĹľ je to chvĂ­Äľa od VaĹˇej poslednej objednĂˇvky a moĹľno VĂˇm pomaly dochĂˇdza parfum do prania.
 
-Nechceme, aby VaĹˇa bielizeĹ stratila svoju obÄľĂşbenĂş vĂ´Ĺu! đźŚ¸
+Nechceme, aby VaÄąË‡a bielizeÄąÂ stratila svoju obĂ„ÄľÄ‚ĹźbenÄ‚Ĺź vÄ‚Â´ÄąÂu! Ä‘ĹşĹšÂ¸
 
-đźšš DOPRAVA ZADARMO pri objednĂˇvke nad 25€
-(PlatĂ­ len tento tĂ˝ĹľdeĹ)
+Ä‘ĹşĹˇĹˇ DOPRAVA ZADARMO pri objednÄ‚Ë‡vke nad 25&#8364;
+(PlatÄ‚Â­ len tento tÄ‚ËťÄąÄľdeÄąÂ)
 
-Vaše obľúbené produkty sú pripravené a čakajú na Vás.
+VaĹˇe obÄľĂşbenĂ© produkty sĂş pripravenĂ© a ÄŤakajĂş na VĂˇs.
 
-Objednajte teraz a ušetrite na doprave!
+Objednajte teraz a uĹˇetrite na doprave!
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Potrebujete poradiť s výberom? Sme tu pre Vás! 💬''',
-            'timing': 'Ihneď - sú v optimálnom okne (15-25 dní)',
-            'discount': 'Doprava zadarmo nad 25€'
+P.S. Potrebujete poradiĹĄ s vĂ˝berom? Sme tu pre VĂˇs! đź’¬''',
+            'timing': 'IhneÄŹ - sĂş v optimĂˇlnom okne (15-25 dnĂ­)',
+            'discount': 'Doprava zadarmo nad 25&#8364;'
         },
         'churning_customers': {
-            'icon': '⚠️',
-            'title': 'Záchrana odchádzajúcich zákazníkov',
+            'icon': 'âš ď¸Ź',
+            'title': 'ZĂˇchrana odchĂˇdzajĂşcich zĂˇkaznĂ­kov',
             'priority': 1,
-            'subject': 'Chýbate nám! 💔 Špeciálna ponuka len pre Vás',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'ChĂ˝bate nĂˇm! đź’” Ĺ peciĂˇlna ponuka len pre VĂˇs',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-všimli sme si, že ste u nás už dlhšie nenakúpili a úprimne - chýbate nám! 💕
+vĹˇimli sme si, Ĺľe ste u nĂˇs uĹľ dlhĹˇie nenakĂşpili a Ăşprimne - chĂ˝bate nĂˇm! đź’•
 
-Možno ste našli inú značku, alebo ste len zabudli... Nech je dôvod akýkoľvek, chceme Vás späť!
+MoĹľno ste naĹˇli inĂş znaÄŤku, alebo ste len zabudli... Nech je dĂ´vod akĂ˝koÄľvek, chceme VĂˇs spĂ¤ĹĄ!
 
-Preto sme pre Vás pripravili EXKLUZÍVNU ponuku:
+Preto sme pre VĂˇs pripravili EXKLUZĂŤVNU ponuku:
 
-đźŽ ZÄ˝AVA 20% na celĂş objednĂˇvku
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 20% na celÄ‚Ĺź objednÄ‚Ë‡vku
 + DOPRAVA ZADARMO
-Kód: CHYBATEMI
+KĂłd: CHYBATEMI
 
-Táto ponuka je len pre Vás a platí iba 7 dní.
+TĂˇto ponuka je len pre VĂˇs a platĂ­ iba 7 dnĂ­.
 
-Tešíme sa na Vás!
+TeĹˇĂ­me sa na VĂˇs!
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Ak ste neboli spokojní s niečím v minulosti, dajte nám vedieť. Radi to napravíme! 🙏''',
-            'timing': 'Ihneď - posledná šanca pred stratou',
+P.S. Ak ste neboli spokojnĂ­ s nieÄŤĂ­m v minulosti, dajte nĂˇm vedieĹĄ. Radi to napravĂ­me! đź™Ź''',
+            'timing': 'IhneÄŹ - poslednĂˇ Ĺˇanca pred stratou',
             'discount': '20% + doprava zadarmo'
         },
         'repeat_buyers_90_days': {
-            'icon': '🔄',
-            'title': 'Návrat verných zákazníkov',
+            'icon': 'đź”„',
+            'title': 'NĂˇvrat vernĂ˝ch zĂˇkaznĂ­kov',
             'priority': 2,
-            'subject': 'Váš obľúbený parfum čaká! 🌸 Špeciálna VIP ponuka',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'VĂˇĹˇ obÄľĂşbenĂ˝ parfum ÄŤakĂˇ! đźŚ¸ Ĺ peciĂˇlna VIP ponuka',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ďakujeme, že ste naším verným zákazníkom! Vaša podpora pre nás veľa znamená. 💖
+ÄŹakujeme, Ĺľe ste naĹˇĂ­m vernĂ˝m zĂˇkaznĂ­kom! VaĹˇa podpora pre nĂˇs veÄľa znamenĂˇ. đź’–
 
-Už je to ale dlhšie, čo ste u nás nakúpili, a preto sme pre Vás pripravili špeciálnu VIP ponuku:
+UĹľ je to ale dlhĹˇie, ÄŤo ste u nĂˇs nakĂşpili, a preto sme pre VĂˇs pripravili ĹˇpeciĂˇlnu VIP ponuku:
 
-👑 VIP ZĽAVA 20%
+đź‘‘ VIP ZÄ˝AVA 20%
 + DOPRAVA ZADARMO
-+ DARÄŚEK K OBJEDNĂVKE
-Kód: VIPZAKAZNIK
++ DARĂ„ĹšEK K OBJEDNÄ‚ÂVKE
+KĂłd: VIPZAKAZNIK
 
-Vaše obľúbené vône stále máme skladom a čakajú na Vás!
+VaĹˇe obÄľĂşbenĂ© vĂ´ne stĂˇle mĂˇme skladom a ÄŤakajĂş na VĂˇs!
 
-Platnosť ponuky: 10 dní
+PlatnosĹĄ ponuky: 10 dnĂ­
 
-S vďakou,
-Tím Vevo
+S vÄŹakou,
+TĂ­m Vevo
 
-P.S. Máte nejaké otázky alebo spätnú väzbu? Budeme radi, ak sa ozvete! 💬''',
-            'timing': 'Ihneď - riziko straty zákazníka',
-            'discount': '20% + doprava zadarmo + darček'
+P.S. MĂˇte nejakĂ© otĂˇzky alebo spĂ¤tnĂş vĂ¤zbu? Budeme radi, ak sa ozvete! đź’¬''',
+            'timing': 'IhneÄŹ - riziko straty zĂˇkaznĂ­ka',
+            'discount': '20% + doprava zadarmo + darÄŤek'
         },
         'one_time_buyers_30_days': {
-            'icon': '🛒',
-            'title': 'Re-engagement jednorázových zákazníkov',
+            'icon': 'đź›’',
+            'title': 'Re-engagement jednorĂˇzovĂ˝ch zĂˇkaznĂ­kov',
             'priority': 3,
-            'subject': 'Ako sa Vám páči Vevo parfum? 💕 Máme pre Vás prekvapenie',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Ako sa VĂˇm pĂˇÄŤi Vevo parfum? đź’• MĂˇme pre VĂˇs prekvapenie',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-dúfame, že ste spokojní s naším parfumom do prania!
+dĂşfame, Ĺľe ste spokojnĂ­ s naĹˇĂ­m parfumom do prania!
 
-Ak ste ho ešte nevyskúšali, je najvyšší čas! A ak áno, určite viete, prečo ho naši zákazníci milujú:
+Ak ste ho eĹˇte nevyskĂşĹˇali, je najvyĹˇĹˇĂ­ ÄŤas! A ak Ăˇno, urÄŤite viete, preÄŤo ho naĹˇi zĂˇkaznĂ­ci milujĂş:
 
-âś“ DlhotrvajĂşca vĂ´Ĺa (aĹľ 100+ pranĂ­)
-✓ Šetrné k bielizni aj pokožke
-✓ Luxusné vône za dostupnú cenu
+Ă˘Ĺ›â€ś DlhotrvajÄ‚Ĺźca vÄ‚Â´ÄąÂa (aÄąÄľ 100+ pranÄ‚Â­)
+âś“ Ĺ etrnĂ© k bielizni aj pokoĹľke
+âś“ LuxusnĂ© vĂ´ne za dostupnĂş cenu
 
-Ako poďakovanie za Vašu prvú objednávku máme pre Vás:
+Ako poÄŹakovanie za VaĹˇu prvĂş objednĂˇvku mĂˇme pre VĂˇs:
 
-đźŽ ZÄ˝AVA 15% na ÄŹalĹˇiu objednĂˇvku
-Kód: VERNYSPAT
+Ä‘ĹşĹ˝Â ZĂ„ËťAVA 15% na Ă„ĹąalÄąË‡iu objednÄ‚Ë‡vku
+KĂłd: VERNYSPAT
 
-Platnosť: 14 dní
+PlatnosĹĄ: 14 dnĂ­
 
-Tešíme sa na Vás!
+TeĹˇĂ­me sa na VĂˇs!
 
 S pozdravom,
-Tím Vevo''',
-            'timing': '30-45 dní po prvej objednávke',
-            'discount': '15% na druhú objednávku'
+TĂ­m Vevo''',
+            'timing': '30-45 dnĂ­ po prvej objednĂˇvke',
+            'discount': '15% na druhĂş objednĂˇvku'
         },
         'high_value_one_time': {
-            'icon': '💎',
-            'title': 'VIP re-engagement vysokohodnotných zákazníkov',
+            'icon': 'đź’Ž',
+            'title': 'VIP re-engagement vysokohodnotnĂ˝ch zĂˇkaznĂ­kov',
             'priority': 2,
-            'subject': 'Ďakujeme za Vašu veľkú objednávku! 💎 Exkluzívna ponuka',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'ÄŽakujeme za VaĹˇu veÄľkĂş objednĂˇvku! đź’Ž ExkluzĂ­vna ponuka',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ešte raz ďakujeme za Vašu nedávnu objednávku! Veľmi si vážime Vašu dôveru v naše produkty.
+eĹˇte raz ÄŹakujeme za VaĹˇu nedĂˇvnu objednĂˇvku! VeÄľmi si vĂˇĹľime VaĹˇu dĂ´veru v naĹˇe produkty.
 
-Keďže ste náš VIP zákazník, pripravili sme pre Vás EXKLUZÍVNU ponuku:
+KeÄŹĹľe ste nĂˇĹˇ VIP zĂˇkaznĂ­k, pripravili sme pre VĂˇs EXKLUZĂŤVNU ponuku:
 
-💎 VIP ZĽAVA 15%
+đź’Ž VIP ZÄ˝AVA 15%
 + DOPRAVA ZADARMO
-+ PRÉMIOVÉ BALENIE
-Kód: VIPKLIENT
++ PRĂ‰MIOVĂ‰ BALENIE
+KĂłd: VIPKLIENT
 
-Táto ponuka je určená len pre vybraných zákazníkov ako ste Vy.
+TĂˇto ponuka je urÄŤenĂˇ len pre vybranĂ˝ch zĂˇkaznĂ­kov ako ste Vy.
 
-Čo môžete očakávať:
-✓ Rovnaká kvalita, ktorú poznáte
-✓ Nové vône v našej kolekcii
-✓ Prémiové balenie ako darček
+ÄŚo mĂ´Ĺľete oÄŤakĂˇvaĹĄ:
+âś“ RovnakĂˇ kvalita, ktorĂş poznĂˇte
+âś“ NovĂ© vĂ´ne v naĹˇej kolekcii
+âś“ PrĂ©miovĂ© balenie ako darÄŤek
 
-Platnosť: 21 dní
+PlatnosĹĄ: 21 dnĂ­
 
-S úctou,
-Tím Vevo''',
-            'timing': '14-21 dní po prvej objednávke',
-            'discount': '15% + doprava zadarmo + prémiové balenie'
+S Ăşctou,
+TĂ­m Vevo''',
+            'timing': '14-21 dnĂ­ po prvej objednĂˇvke',
+            'discount': '15% + doprava zadarmo + prĂ©miovĂ© balenie'
         },
         'new_customers_welcome': {
-            'icon': '👋',
-            'title': 'Privítanie nových zákazníkov',
+            'icon': 'đź‘‹',
+            'title': 'PrivĂ­tanie novĂ˝ch zĂˇkaznĂ­kov',
             'priority': 3,
-            'subject': 'Vitajte v rodine Vevo! 🎉 Tipy na používanie parfumu',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Vitajte v rodine Vevo! đźŽ‰ Tipy na pouĹľĂ­vanie parfumu',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-vitajte v rodine Vevo! 🎉 Sme veľmi radi, že ste sa rozhodli vyskúšať naše parfumy do prania.
+vitajte v rodine Vevo! đźŽ‰ Sme veÄľmi radi, Ĺľe ste sa rozhodli vyskĂşĹˇaĹĄ naĹˇe parfumy do prania.
 
-Tu je niekoľko tipov, ako získať z parfumu maximum:
+Tu je niekoÄľko tipov, ako zĂ­skaĹĄ z parfumu maximum:
 
-💡 TIPY NA POUŽÍVANIE:
-1. Pridajte 1-2 uzávery do bubna práčky
-2. Pre intenzĂ­vnejĹˇiu vĂ´Ĺu pridajte aj do avivĂˇĹľe
+đź’ˇ TIPY NA POUĹ˝ĂŤVANIE:
+1. Pridajte 1-2 uzĂˇvery do bubna prĂˇÄŤky
+2. Pre intenzÄ‚Â­vnejÄąË‡iu vÄ‚Â´ÄąÂu pridajte aj do avivÄ‚Ë‡ÄąÄľe
 3. Skladujte na suchom a chladnom mieste
 
-âť“ ÄŚASTO KLADENĂ‰ OTĂZKY:
-• Koľko praní vydrží? Až 100+ praní z 200ml fľašky
-â€˘ Je vhodnĂ˝ pre citlivĂş pokoĹľku? Ăno, je hypoalergĂ©nny
-â€˘ MĂ´Ĺľem kombinovaĹĄ vĂ´ne? Ăno, skĂşĹˇajte!
+Ă˘ĹĄâ€ś Ă„ĹšASTO KLADENÄ‚â€° OTÄ‚ÂZKY:
+â€˘ KoÄľko pranĂ­ vydrĹľĂ­? AĹľ 100+ pranĂ­ z 200ml fÄľaĹˇky
+Ă˘&#8364;Ë Je vhodnÄ‚Ëť pre citlivÄ‚Ĺź pokoÄąÄľku? Ä‚Âno, je hypoalergÄ‚Â©nny
+Ă˘&#8364;Ë MÄ‚Â´ÄąÄľem kombinovaÄąÄ„ vÄ‚Â´ne? Ä‚Âno, skÄ‚ĹźÄąË‡ajte!
 
-Ak máte akékoľvek otázky, sme tu pre Vás! Stačí odpovedať na tento email.
+Ak mĂˇte akĂ©koÄľvek otĂˇzky, sme tu pre VĂˇs! StaÄŤĂ­ odpovedaĹĄ na tento email.
 
-Prajeme VĂˇm voĹavĂ© pranie! đźŚ¸
+Prajeme VÄ‚Ë‡m voÄąÂavÄ‚Â© pranie! Ä‘ĹşĹšÂ¸
 
 S pozdravom,
-Tím Vevo''',
-            'timing': '3 dni po doručení objednávky',
-            'discount': 'Žiadna zľava - budovanie vzťahu'
+TĂ­m Vevo''',
+            'timing': '3 dni po doruÄŤenĂ­ objednĂˇvky',
+            'discount': 'Ĺ˝iadna zÄľava - budovanie vzĹĄahu'
         },
         'vip_customers': {
-            'icon': '👑',
-            'title': 'VIP program pre verných zákazníkov',
+            'icon': 'đź‘‘',
+            'title': 'VIP program pre vernĂ˝ch zĂˇkaznĂ­kov',
             'priority': 4,
-            'subject': 'đź‘‘ ExkluzĂ­vne pre VIP: NovĂˇ vĂ´Ĺa eĹˇte pred ostatnĂ˝mi!',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Ä‘Ĺşâ€â€ ExkluzÄ‚Â­vne pre VIP: NovÄ‚Ë‡ vÄ‚Â´ÄąÂa eÄąË‡te pred ostatnÄ‚Ëťmi!',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-ako náš VIP zákazník s {pocet_objednavok}+ objednávkami ste pre nás veľmi dôležití!
+ako nĂˇĹˇ VIP zĂˇkaznĂ­k s {pocet_objednavok}+ objednĂˇvkami ste pre nĂˇs veÄľmi dĂ´leĹľitĂ­!
 
-Preto Vám ako prvým predstavujeme NOVINKU v našej kolekcii:
+Preto VĂˇm ako prvĂ˝m predstavujeme NOVINKU v naĹˇej kolekcii:
 
-đźŚź [NOVĂ VĂ”Ĺ‡A] - uĹľ ÄŤoskoro!
+Ä‘ĹşĹšĹş [NOVÄ‚Â VÄ‚â€ťÄąâ€ˇA] - uÄąÄľ Ă„Ĺ¤oskoro!
 
-Ako VIP zákazník máte:
-👑 Prednostný prístup k novinkám
-👑 Trvalú zľavu 10% na všetky produkty
-👑 Doprava zadarmo pri každej objednávke
-👑 Darček k každej objednávke
+Ako VIP zĂˇkaznĂ­k mĂˇte:
+đź‘‘ PrednostnĂ˝ prĂ­stup k novinkĂˇm
+đź‘‘ TrvalĂş zÄľavu 10% na vĹˇetky produkty
+đź‘‘ Doprava zadarmo pri kaĹľdej objednĂˇvke
+đź‘‘ DarÄŤek k kaĹľdej objednĂˇvke
 
-Váš VIP kód: VIPCLUB
+VĂˇĹˇ VIP kĂłd: VIPCLUB
 
-Ďakujeme za Vašu vernosť! 💖
+ÄŽakujeme za VaĹˇu vernosĹĄ! đź’–
 
-S úctou,
-Tím Vevo
+S Ăşctou,
+TĂ­m Vevo
 
-P.S. MĂˇte nĂˇpad na novĂş vĂ´Ĺu? NapĂ­Ĺˇte nĂˇm, radi vypoÄŤujeme! đź’¬''',
-            'timing': 'Pravidelne 1x mesačne',
-            'discount': 'Trvalá 10% zľava + doprava zadarmo'
+P.S. MÄ‚Ë‡te nÄ‚Ë‡pad na novÄ‚Ĺź vÄ‚Â´ÄąÂu? NapÄ‚Â­ÄąË‡te nÄ‚Ë‡m, radi vypoĂ„Ĺ¤ujeme! Ä‘Ĺşâ€™Â¬''',
+            'timing': 'Pravidelne 1x mesaÄŤne',
+            'discount': 'TrvalĂˇ 10% zÄľava + doprava zadarmo'
         },
         'failed_payment_only': {
-            'icon': '❌',
-            'title': 'Záchrana neúspešných platieb',
+            'icon': 'âťŚ',
+            'title': 'ZĂˇchrana neĂşspeĹˇnĂ˝ch platieb',
             'priority': 1,
-            'subject': 'Vaša objednávka čaká! 🛒 Pomôžeme Vám dokončiť nákup',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'VaĹˇa objednĂˇvka ÄŤakĂˇ! đź›’ PomĂ´Ĺľeme VĂˇm dokonÄŤiĹĄ nĂˇkup',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-všimli sme si, že sa Vám nepodarilo dokončiť objednávku.
+vĹˇimli sme si, Ĺľe sa VĂˇm nepodarilo dokonÄŤiĹĄ objednĂˇvku.
 
-Nechceme, aby VĂˇm uĹˇla prĂ­leĹľitosĹĄ maĹĄ voĹavĂş bielizeĹ! đźŚ¸
+Nechceme, aby VÄ‚Ë‡m uÄąË‡la prÄ‚Â­leÄąÄľitosÄąÄ„ maÄąÄ„ voÄąÂavÄ‚Ĺź bielizeÄąÂ! Ä‘ĹşĹšÂ¸
 
-Ak ste mali problém s platbou, môžete:
-1. Skúsiť inú platobnú kartu
-2. Zvoliť platbu na dobierku
-3. Kontaktovať nás pre pomoc
+Ak ste mali problĂ©m s platbou, mĂ´Ĺľete:
+1. SkĂşsiĹĄ inĂş platobnĂş kartu
+2. ZvoliĹĄ platbu na dobierku
+3. KontaktovaĹĄ nĂˇs pre pomoc
 
-đźŽ Ako ospravedlnenie za neprĂ­jemnosti mĂˇme pre VĂˇs:
-ZĽAVA 10% na Vašu objednávku
-Kód: DOKONCIM
+Ä‘ĹşĹ˝Â Ako ospravedlnenie za neprÄ‚Â­jemnosti mÄ‚Ë‡me pre VÄ‚Ë‡s:
+ZÄ˝AVA 10% na VaĹˇu objednĂˇvku
+KĂłd: DOKONCIM
 
-Potrebujete pomoc? Stačí odpovedať na tento email alebo zavolať na [telefón].
+Potrebujete pomoc? StaÄŤĂ­ odpovedaĹĄ na tento email alebo zavolaĹĄ na [telefĂłn].
 
 S pozdravom,
-Tím Vevo
+TĂ­m Vevo
 
-P.S. Vaše produkty sú stále v košíku a čakajú na Vás! 🛒''',
-            'timing': '24-48 hodín po neúspešnej platbe',
+P.S. VaĹˇe produkty sĂş stĂˇle v koĹˇĂ­ku a ÄŤakajĂş na VĂˇs! đź›’''',
+            'timing': '24-48 hodĂ­n po neĂşspeĹˇnej platbe',
             'discount': '10% + pomoc s platbou'
         },
         'long_dormant': {
-            'icon': '💤',
-            'title': 'Reaktivácia dlhodobo neaktívnych',
+            'icon': 'đź’¤',
+            'title': 'ReaktivĂˇcia dlhodobo neaktĂ­vnych',
             'priority': 5,
-            'subject': 'UĹľ ste zabudli na voĹavĂş bielizeĹ? đź˘ MĂˇme pre VĂˇs prekvapenie',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'UÄąÄľ ste zabudli na voÄąÂavÄ‚Ĺź bielizeÄąÂ? Ä‘ĹşÂË MÄ‚Ë‡me pre VÄ‚Ë‡s prekvapenie',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-je to už dlhšie, čo ste u nás nakúpili. Chýbate nám! 💕
+je to uĹľ dlhĹˇie, ÄŤo ste u nĂˇs nakĂşpili. ChĂ˝bate nĂˇm! đź’•
 
-Možno ste našli inú značku, alebo ste jednoducho zabudli... Nech je dôvod akýkoľvek, chceli by sme Vás späť!
+MoĹľno ste naĹˇli inĂş znaÄŤku, alebo ste jednoducho zabudli... Nech je dĂ´vod akĂ˝koÄľvek, chceli by sme VĂˇs spĂ¤ĹĄ!
 
-Preto sme pre Vás pripravili NAJLEPŠIU ponuku:
+Preto sme pre VĂˇs pripravili NAJLEPĹ IU ponuku:
 
-đźŽ MEGA ZÄ˝AVA 30%
+Ä‘ĹşĹ˝Â MEGA ZĂ„ËťAVA 30%
 + DOPRAVA ZADARMO
-+ DARÄŚEK K OBJEDNĂVKE
-Kód: CHCEMSPAT
++ DARĂ„ĹšEK K OBJEDNÄ‚ÂVKE
+KĂłd: CHCEMSPAT
 
-Čo sa za ten čas zmenilo:
-✓ Nové vône v kolekcii
-✓ Vylepšená receptúra
-âś“ EĹˇte dlhĹˇie trvajĂşca vĂ´Ĺa
+ÄŚo sa za ten ÄŤas zmenilo:
+âś“ NovĂ© vĂ´ne v kolekcii
+âś“ VylepĹˇenĂˇ receptĂşra
+Ă˘Ĺ›â€ś EÄąË‡te dlhÄąË‡ie trvajÄ‚Ĺźca vÄ‚Â´ÄąÂa
 
-Táto ponuka platí len 7 dní a je určená špeciálne pre Vás!
+TĂˇto ponuka platĂ­ len 7 dnĂ­ a je urÄŤenĂˇ ĹˇpeciĂˇlne pre VĂˇs!
 
-Tešíme sa na Váš návrat!
+TeĹˇĂ­me sa na VĂˇĹˇ nĂˇvrat!
 
 S pozdravom,
-Tím Vevo''',
-            'timing': 'Ihneď - posledný pokus',
-            'discount': '30% + doprava zadarmo + darček'
+TĂ­m Vevo''',
+            'timing': 'IhneÄŹ - poslednĂ˝ pokus',
+            'discount': '30% + doprava zadarmo + darÄŤek'
         },
         'recent_buyers_14_60_days': {
-            'icon': '⏰',
-            'title': 'Pripomenutie nedávnym zákazníkom',
+            'icon': 'âŹ°',
+            'title': 'Pripomenutie nedĂˇvnym zĂˇkaznĂ­kom',
             'priority': 3,
-            'subject': 'Nezabudnite na doplnenie zásob! 🧺 Novinky zo sveta Vevo',
-            'body': '''DobrĂ˝ deĹ {meno},
+            'subject': 'Nezabudnite na doplnenie zĂˇsob! đź§ş Novinky zo sveta Vevo',
+            'body': '''DobrÄ‚Ëť deÄąÂ {meno},
 
-dĂşfame, Ĺľe si uĹľĂ­vate voĹavĂş bielizeĹ s naĹˇimi parfumami! đźŚ¸
+dÄ‚Ĺźfame, ÄąÄľe si uÄąÄľÄ‚Â­vate voÄąÂavÄ‚Ĺź bielizeÄąÂ s naÄąË‡imi parfumami! Ä‘ĹşĹšÂ¸
 
-Chceli sme Vás informovať o novinkách:
+Chceli sme VĂˇs informovaĹĄ o novinkĂˇch:
 
-📰 ČO JE NOVÉ:
-• Nové vône v kolekcii
-• Výhodné balíčky pre rodiny
-â€˘ Tipy na starostlivosĹĄ o bielizeĹ
+đź“° ÄŚO JE NOVĂ‰:
+â€˘ NovĂ© vĂ´ne v kolekcii
+â€˘ VĂ˝hodnĂ© balĂ­ÄŤky pre rodiny
+Ă˘&#8364;Ë Tipy na starostlivosÄąÄ„ o bielizeÄąÂ
 
-💡 VEDELI STE?
-Naše parfumy sú:
-✓ Hypoalergénne
-✓ Ekologické
-✓ Vyrobené na Slovensku
+đź’ˇ VEDELI STE?
+NaĹˇe parfumy sĂş:
+âś“ HypoalergĂ©nne
+âś“ EkologickĂ©
+âś“ VyrobenĂ© na Slovensku
 
-Ak by ste chceli doplniť zásoby, máme pre Vás:
+Ak by ste chceli doplniĹĄ zĂˇsoby, mĂˇme pre VĂˇs:
 
-đźšš DOPRAVA ZADARMO nad 30€
-(Tento tĂ˝ĹľdeĹ)
+Ä‘ĹşĹˇĹˇ DOPRAVA ZADARMO nad 30&#8364;
+(Tento tÄ‚ËťÄąÄľdeÄąÂ)
 
-Prajeme voĹavĂ˝ deĹ!
+Prajeme voÄąÂavÄ‚Ëť deÄąÂ!
 
 S pozdravom,
-Tím Vevo''',
-            'timing': 'Priebežne podľa dátumu poslednej objednávky',
-            'discount': 'Doprava zadarmo nad 30€'
+TĂ­m Vevo''',
+            'timing': 'PriebeĹľne podÄľa dĂˇtumu poslednej objednĂˇvky',
+            'discount': 'Doprava zadarmo nad 30&#8364;'
         }
     }
 
@@ -9497,7 +12700,7 @@ Tím Vevo''',
 
             priority = segment_info.get('priority', 99)
             priority_class = 'priority-1' if priority <= 2 else ('priority-2' if priority <= 4 else 'priority-3')
-            priority_text = 'Vysoká' if priority <= 2 else ('Stredná' if priority <= 4 else 'Nízka')
+            priority_text = 'VysokĂˇ' if priority <= 2 else ('StrednĂˇ' if priority <= 4 else 'NĂ­zka')
 
             segment_data = segment_info['data']
 
@@ -9505,7 +12708,7 @@ Tím Vevo''',
         <div class="email-section">
             <div class="email-header">
                 <h2>
-                    <span>{template.get('icon', '📧')}</span>
+                    <span>{template.get('icon', 'đź“§')}</span>
                     {template.get('title', segment_name)}
                     <span class="priority-badge {priority_class}">Priorita: {priority_text}</span>
                 </h2>
@@ -9513,37 +12716,37 @@ Tím Vevo''',
 
             <div class="email-meta">
                 <div class="meta-item">
-                    <div class="label">Počet zákazníkov</div>
+                    <div class="label">PoÄŤet zĂˇkaznĂ­kov</div>
                     <div class="value" style="font-size: 1.5rem; color: #667eea;">{segment_info['count']}</div>
                 </div>
                 <div class="meta-item">
-                    <div class="label">Kedy poslať</div>
+                    <div class="label">Kedy poslaĹĄ</div>
                     <div class="value">{template.get('timing', segment_info.get('send_timing', 'N/A'))}</div>
                 </div>
                 <div class="meta-item">
-                    <div class="label">Odporúčaná zľava</div>
+                    <div class="label">OdporĂşÄŤanĂˇ zÄľava</div>
                     <div class="value">{template.get('discount', segment_info.get('discount_suggestion', 'N/A'))}</div>
                 </div>
                 <div class="meta-item">
-                    <div class="label">Účel emailu</div>
+                    <div class="label">ĂšÄŤel emailu</div>
                     <div class="value">{segment_info.get('email_purpose', 'N/A')}</div>
                 </div>
             </div>
 
             <div class="email-template">
-                <h3>📝 Šablóna emailu</h3>
+                <h3>đź“ť Ĺ ablĂłna emailu</h3>
                 <div class="subject">
                     <strong>Predmet:</strong> {template.get('subject', 'N/A')}
                 </div>
-                <div class="body">{template.get('body', 'Šablóna nie je k dispozícii')}</div>
+                <div class="body">{template.get('body', 'Ĺ ablĂłna nie je k dispozĂ­cii')}</div>
             </div>
 
             <div class="note">
-                💡 <strong>Tip:</strong> Personalizujte email menom zákazníka. Nahraďte {{meno}} skutočným menom. Testujte rôzne predmety pre vyšší open rate.
+                đź’ˇ <strong>Tip:</strong> Personalizujte email menom zĂˇkaznĂ­ka. NahraÄŹte {{meno}} skutoÄŤnĂ˝m menom. Testujte rĂ´zne predmety pre vyĹˇĹˇĂ­ open rate.
             </div>
 
             <button class="toggle-btn" onclick="toggleCustomerList('{segment_name}')">
-                📋 Zobraziť/Skryť zoznam zákazníkov ({segment_info['count']})
+                đź“‹ ZobraziĹĄ/SkryĹĄ zoznam zĂˇkaznĂ­kov ({segment_info['count']})
             </button>
 
             <div class="customer-list" id="list-{segment_name}">"""
@@ -9556,9 +12759,9 @@ Tím Vevo''',
                         <tr>
                             <th>Email</th>
                             <th>Meno</th>
-                            <th class="number">Počet obj.</th>
-                            <th class="number">Celková tržba</th>
-                            <th class="number">Dní od posl.</th>
+                            <th class="number">PoÄŤet obj.</th>
+                            <th class="number">CelkovĂˇ trĹľba</th>
+                            <th class="number">DnĂ­ od posl.</th>
                             <th>Mesto</th>
                         </tr>
                     </thead>
@@ -9599,7 +12802,7 @@ Tím Vevo''',
                             <td>{email}</td>
                             <td>{name}</td>
                             <td class="number">{int(order_count)}</td>
-                            <td class="number">€{float(revenue):.2f}</td>
+                            <td class="number">&#8364;{float(revenue):.2f}</td>
                             <td class="number">{int(days)}</td>
                             <td>{city}</td>
                         </tr>"""
@@ -9608,7 +12811,7 @@ Tím Vevo''',
                     html_content += f"""
                         <tr style="background: #fef3c7;">
                             <td colspan="6" style="text-align: center; font-style: italic;">
-                                ... a ďalších {len(segment_data) - 200} zákazníkov. Kompletný zoznam v CSV súbore.
+                                ... a ÄŹalĹˇĂ­ch {len(segment_data) - 200} zĂˇkaznĂ­kov. KompletnĂ˝ zoznam v CSV sĂşbore.
                             </td>
                         </tr>"""
 
@@ -9623,8 +12826,8 @@ Tím Vevo''',
 
     html_content += f"""
         <div class="footer">
-            <p>Vygenerované: {datetime.now().strftime('%d.%m.%Y %H:%M')} | Vevo Email Marketing Stratégia</p>
-            <p>📧 Pre export emailov použite CSV súbory v priečinku data/</p>
+            <p>VygenerovanĂ©: {datetime.now().strftime('%d.%m.%Y %H:%M')} | Vevo Email Marketing StratĂ©gia</p>
+            <p>đź“§ Pre export emailov pouĹľite CSV sĂşbory v prieÄŤinku data/</p>
         </div>
     </div>
 
@@ -9638,6 +12841,4 @@ Tím Vevo''',
 </html>
 """
 
-    return html_content
-
-
+    return _fix_common_mojibake(html_content)

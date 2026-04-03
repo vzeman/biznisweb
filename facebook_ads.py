@@ -12,10 +12,11 @@ from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse, urlunparse
 import requests
 from dotenv import load_dotenv
+from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
 
 # Load environment variables
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")
 
 # Set up logging
 logger = get_logger('facebook_ads')
@@ -30,6 +31,7 @@ class FacebookAdsClient:
         self.ad_account_id = os.getenv('FACEBOOK_AD_ACCOUNT_ID')
         self.app_id = os.getenv('FACEBOOK_APP_ID')
         self.app_secret = os.getenv('FACEBOOK_APP_SECRET')
+        self.request_timeout = resolve_timeout(os.getenv('FACEBOOK_API_TIMEOUT_SEC'))
         
         # API version - use latest stable version
         self.api_version = 'v21.0'
@@ -45,8 +47,13 @@ class FacebookAdsClient:
         if not all([self.access_token, self.ad_account_id]):
             logger.warning("Facebook Ads credentials not fully configured. Ad spend data will not be available.")
             self.is_configured = False
+            self.session = build_retry_session(timeout=self.request_timeout)
         else:
             self.is_configured = True
+            self.session = build_retry_session(
+                headers={'Authorization': f'Bearer {self.access_token}'},
+                timeout=self.request_timeout,
+            )
             # Ensure ad_account_id has correct format
             if not self.ad_account_id.startswith('act_'):
                 self.ad_account_id = f'act_{self.ad_account_id}'
@@ -117,6 +124,12 @@ class FacebookAdsClient:
             "endpoint": safe_url,
         })
         return details
+
+    def _get_json(self, url: str, params: Optional[Dict[str, Any]], context: str) -> Dict[str, Any]:
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {}
     
     def get_cache_filename(self, date_from: datetime, date_to: datetime) -> Path:
         """Generate cache filename for a date range"""
@@ -206,7 +219,6 @@ class FacebookAdsClient:
 
             # Parameters for the API request
             params = {
-                'access_token': self.access_token,
                 'fields': 'spend,impressions,clicks,cpc,cpm,ctr',
                 'time_range': f'{{"since":"{since}","until":"{until}"}}',
                 'time_increment': 1,  # Daily breakdown
@@ -215,10 +227,7 @@ class FacebookAdsClient:
             }
 
             # Make the API request
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-
-            data = response.json()
+            data = self._get_json(url, params, "Error fetching Facebook Ads data")
 
             # Process the response
             daily_spend = {}
@@ -282,7 +291,6 @@ class FacebookAdsClient:
             url = f'{self.base_url}/{self.ad_account_id}/insights'
 
             params = {
-                'access_token': self.access_token,
                 'fields': 'spend,impressions,clicks,cpc,cpm,ctr,reach,frequency,unique_clicks,cost_per_unique_click',
                 'time_range': f'{{"since":"{since}","until":"{until}"}}',
                 'time_increment': 1,
@@ -290,10 +298,7 @@ class FacebookAdsClient:
                 'limit': 500
             }
 
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-
-            data = response.json()
+            data = self._get_json(url, params, "Error fetching detailed Facebook Ads metrics")
             daily_metrics = {}
 
             if 'data' in data:
@@ -345,14 +350,11 @@ class FacebookAdsClient:
             # First get campaigns
             campaigns_url = f'{self.base_url}/{self.ad_account_id}/campaigns'
             campaigns_params = {
-                'access_token': self.access_token,
                 'fields': 'id,name,status,objective',
                 'limit': 500
             }
 
-            campaigns_response = requests.get(campaigns_url, params=campaigns_params)
-            campaigns_response.raise_for_status()
-            campaigns_data = campaigns_response.json()
+            campaigns_data = self._get_json(campaigns_url, campaigns_params, "Error fetching campaign list")
 
             campaign_spend = []
 
@@ -366,82 +368,78 @@ class FacebookAdsClient:
                     # Get insights for each campaign
                     insights_url = f'{self.base_url}/{campaign_id}/insights'
                     insights_params = {
-                        'access_token': self.access_token,
                         'fields': 'spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,unique_clicks,cost_per_unique_click,actions,conversions,cost_per_action_type,conversion_values',
                         'time_range': f'{{"since":"{since}","until":"{until}"}}',
                         'level': 'campaign'
                     }
 
-                    insights_response = requests.get(insights_url, params=insights_params)
+                    insights_data = self._get_json(insights_url, insights_params, "Error fetching campaign insights")
 
-                    if insights_response.status_code == 200:
-                        insights_data = insights_response.json()
+                    if 'data' in insights_data and insights_data['data']:
+                        data = insights_data['data'][0]
+                        spend = float(data.get('spend', 0))
+                        impressions = int(data.get('impressions', 0))
+                        clicks = int(data.get('clicks', 0))
+                        reach = int(data.get('reach', 0))
 
-                        if 'data' in insights_data and insights_data['data']:
-                            data = insights_data['data'][0]
-                            spend = float(data.get('spend', 0))
-                            impressions = int(data.get('impressions', 0))
-                            clicks = int(data.get('clicks', 0))
-                            reach = int(data.get('reach', 0))
+                        # Extract conversion data
+                        actions = data.get('actions', [])
+                        conversions_count = 0
+                        purchases_count = 0
+                        add_to_cart_count = 0
 
-                            # Extract conversion data
-                            actions = data.get('actions', [])
-                            conversions_count = 0
-                            purchases_count = 0
-                            add_to_cart_count = 0
+                        for action in actions:
+                            action_type = action.get('action_type', '')
+                            value = int(action.get('value', 0))
 
-                            for action in actions:
-                                action_type = action.get('action_type', '')
-                                value = int(action.get('value', 0))
+                            if 'purchase' in action_type or 'conversion' in action_type:
+                                conversions_count += value
+                            if action_type == 'offsite_conversion.fb_pixel_purchase':
+                                purchases_count = value
+                            if action_type == 'offsite_conversion.fb_pixel_add_to_cart':
+                                add_to_cart_count = value
 
-                                if 'purchase' in action_type or 'conversion' in action_type:
-                                    conversions_count += value
-                                if action_type == 'offsite_conversion.fb_pixel_purchase':
-                                    purchases_count = value
-                                if action_type == 'offsite_conversion.fb_pixel_add_to_cart':
-                                    add_to_cart_count = value
+                        # Extract cost per action
+                        cost_per_action_types = data.get('cost_per_action_type', [])
+                        cost_per_conversion = 0
+                        cost_per_purchase = 0
 
-                            # Extract cost per action
-                            cost_per_action_types = data.get('cost_per_action_type', [])
-                            cost_per_conversion = 0
-                            cost_per_purchase = 0
+                        for cpa in cost_per_action_types:
+                            action_type = cpa.get('action_type', '')
+                            value = float(cpa.get('value', 0))
 
-                            for cpa in cost_per_action_types:
-                                action_type = cpa.get('action_type', '')
-                                value = float(cpa.get('value', 0))
+                            if action_type == 'offsite_conversion.fb_pixel_purchase':
+                                cost_per_purchase = value
+                            elif 'purchase' in action_type or 'conversion' in action_type:
+                                cost_per_conversion = value if cost_per_conversion == 0 else cost_per_conversion
 
-                                if action_type == 'offsite_conversion.fb_pixel_purchase':
-                                    cost_per_purchase = value
-                                elif 'purchase' in action_type or 'conversion' in action_type:
-                                    cost_per_conversion = value if cost_per_conversion == 0 else cost_per_conversion
+                        # Calculate conversion rate
+                        conversion_rate = (conversions_count / clicks * 100) if clicks > 0 else 0
+                        purchase_rate = (purchases_count / clicks * 100) if clicks > 0 else 0
 
-                            # Calculate conversion rate
-                            conversion_rate = (conversions_count / clicks * 100) if clicks > 0 else 0
-                            purchase_rate = (purchases_count / clicks * 100) if clicks > 0 else 0
-
-                            campaign_spend.append({
-                                'campaign_id': campaign_id,
-                                'campaign_name': campaign_name,
-                                'status': campaign_status,
-                                'objective': campaign_objective,
-                                'spend': spend,
-                                'impressions': impressions,
-                                'clicks': clicks,
-                                'reach': reach,
-                                'cpc': float(data.get('cpc', 0)),
-                                'cpm': float(data.get('cpm', 0)),
-                                'ctr': float(data.get('ctr', 0)),
-                                'frequency': float(data.get('frequency', 0)),
-                                'unique_clicks': int(data.get('unique_clicks', 0)),
-                                'cost_per_unique_click': float(data.get('cost_per_unique_click', 0)),
-                                'conversions': conversions_count,
-                                'purchases': purchases_count,
-                                'add_to_cart': add_to_cart_count,
-                                'conversion_rate': conversion_rate,
-                                'purchase_rate': purchase_rate,
-                                'cost_per_conversion': cost_per_conversion,
-                                'cost_per_purchase': cost_per_purchase
-                            })
+                        campaign_spend.append({
+                            'campaign_id': campaign_id,
+                            'campaign_name': campaign_name,
+                            'status': campaign_status,
+                            'objective': campaign_objective,
+                            'spend': spend,
+                            'impressions': impressions,
+                            'clicks': clicks,
+                            'reach': reach,
+                            'cpc': float(data.get('cpc', 0)),
+                            'cpm': float(data.get('cpm', 0)),
+                            'ctr': float(data.get('ctr', 0)),
+                            'frequency': float(data.get('frequency', 0)),
+                            'unique_clicks': int(data.get('unique_clicks', 0)),
+                            'cost_per_unique_click': float(data.get('cost_per_unique_click', 0)),
+                            'conversions': conversions_count,
+                            'purchases': purchases_count,
+                            'add_to_cart': add_to_cart_count,
+                            'conversion_rate': conversion_rate,
+                            'purchase_rate': purchase_rate,
+                            'cost_per_conversion': cost_per_conversion,
+                            'cost_per_purchase': cost_per_purchase
+                        })
 
             # Sort by spend descending
             campaign_spend.sort(key=lambda x: x['spend'], reverse=True)
@@ -478,14 +476,11 @@ class FacebookAdsClient:
             # Get ad sets with insights
             url = f'{self.base_url}/{self.ad_account_id}/adsets'
             params = {
-                'access_token': self.access_token,
                 'fields': 'id,name,status,campaign_id,targeting',
                 'limit': 500
             }
 
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            adsets_data = response.json()
+            adsets_data = self._get_json(url, params, "Error fetching ad set list")
 
             adset_performance = []
 
@@ -496,36 +491,32 @@ class FacebookAdsClient:
                     # Get insights for each ad set
                     insights_url = f'{self.base_url}/{adset_id}/insights'
                     insights_params = {
-                        'access_token': self.access_token,
                         'fields': 'spend,impressions,clicks,reach,cpc,cpm,ctr,frequency',
                         'time_range': f'{{"since":"{since}","until":"{until}"}}',
                         'level': 'adset'
                     }
 
-                    insights_response = requests.get(insights_url, params=insights_params)
+                    insights_data = self._get_json(insights_url, insights_params, "Error fetching ad set insights")
 
-                    if insights_response.status_code == 200:
-                        insights_data = insights_response.json()
+                    if 'data' in insights_data and insights_data['data']:
+                        data = insights_data['data'][0]
+                        spend = float(data.get('spend', 0))
 
-                        if 'data' in insights_data and insights_data['data']:
-                            data = insights_data['data'][0]
-                            spend = float(data.get('spend', 0))
-
-                            if spend > 0:  # Only include ad sets with spend
-                                adset_performance.append({
-                                    'adset_id': adset_id,
-                                    'adset_name': adset['name'],
-                                    'status': adset.get('status', 'UNKNOWN'),
-                                    'campaign_id': adset.get('campaign_id', ''),
-                                    'spend': spend,
-                                    'impressions': int(data.get('impressions', 0)),
-                                    'clicks': int(data.get('clicks', 0)),
-                                    'reach': int(data.get('reach', 0)),
-                                    'cpc': float(data.get('cpc', 0)),
-                                    'cpm': float(data.get('cpm', 0)),
-                                    'ctr': float(data.get('ctr', 0)),
-                                    'frequency': float(data.get('frequency', 0))
-                                })
+                        if spend > 0:  # Only include ad sets with spend
+                            adset_performance.append({
+                                'adset_id': adset_id,
+                                'adset_name': adset['name'],
+                                'status': adset.get('status', 'UNKNOWN'),
+                                'campaign_id': adset.get('campaign_id', ''),
+                                'spend': spend,
+                                'impressions': int(data.get('impressions', 0)),
+                                'clicks': int(data.get('clicks', 0)),
+                                'reach': int(data.get('reach', 0)),
+                                'cpc': float(data.get('cpc', 0)),
+                                'cpm': float(data.get('cpm', 0)),
+                                'ctr': float(data.get('ctr', 0)),
+                                'frequency': float(data.get('frequency', 0))
+                            })
 
             # Sort by spend descending
             adset_performance.sort(key=lambda x: x['spend'], reverse=True)
@@ -563,7 +554,6 @@ class FacebookAdsClient:
             # Get ads with insights directly using the insights endpoint
             url = f'{self.base_url}/{self.ad_account_id}/insights'
             params = {
-                'access_token': self.access_token,
                 'fields': 'ad_id,ad_name,spend,impressions,clicks,reach,cpc,cpm,ctr,frequency',
                 'time_range': f'{{"since":"{since}","until":"{until}"}}',
                 'level': 'ad',
@@ -571,9 +561,7 @@ class FacebookAdsClient:
                 'sort': 'spend_descending'
             }
 
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
+            data = self._get_json(url, params, "Error fetching individual ad data")
 
             ads_performance = []
 
@@ -626,7 +614,6 @@ class FacebookAdsClient:
 
             url = f'{self.base_url}/{self.ad_account_id}/insights'
             params = {
-                'access_token': self.access_token,
                 'fields': 'spend,impressions,clicks,cpc,cpm,ctr,reach',
                 'time_range': f'{{"since":"{since}","until":"{until}"}}',
                 'breakdowns': 'hourly_stats_aggregated_by_advertiser_time_zone',
@@ -634,10 +621,7 @@ class FacebookAdsClient:
                 'limit': 500
             }
 
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-
-            data = response.json()
+            data = self._get_json(url, params, "Error fetching hourly stats")
             hourly_stats = []
 
             if 'data' in data:
@@ -750,14 +734,10 @@ class FacebookAdsClient:
             # Try to fetch account information
             url = f'{self.base_url}/{self.ad_account_id}'
             params = {
-                'access_token': self.access_token,
                 'fields': 'name,currency,account_status'
             }
             
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-
-            data = response.json()
+            data = self._get_json(url, params, "Failed to connect to Facebook Ads API")
             logger.info(f"Successfully connected to Facebook Ads account: {data.get('name', 'Unknown')}")
             logger.info(f"Account currency: {data.get('currency', 'Unknown')}")
 

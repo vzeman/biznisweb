@@ -5,33 +5,29 @@ Generate invoices for orders with specific criteria in BizniWeb
 
 import os
 import argparse
-import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 import json
 import re
-from urllib.parse import urlparse, parse_qs
 
 from dotenv import load_dotenv
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
+from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
+from reporting_core import (
+    BASE_DEFAULT_PROJECT,
+    derive_biznisweb_base_url,
+    load_project_env,
+    load_project_settings,
+    resolve_biznisweb_api_url,
+)
 
 # Load environment variables
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")
 
-# Configuration
-API_URL = os.getenv('BIZNISWEB_API_URL', 'https://vevo.flox.sk/api/graphql')
-API_TOKEN = os.getenv('BIZNISWEB_API_TOKEN')
-BASE_URL = 'https://vevo.flox.sk'
-LOGIN_URL = f'{BASE_URL}/admin/login/authenticate/'
-INVOICE_CREATE_URL = f'{BASE_URL}/erp/orders/invoices/create/{{order_num}}'
-INVOICE_FINALIZE_URL = f'{BASE_URL}/erp/orders/invoices/finalize/{{order_num}}'
-INVOICE_SEND_URL = f'{BASE_URL}/erp/orders/invoices/sendEmail/{{invoice_id}}'
-
-# Web authentication credentials
-WEB_USERNAME = os.getenv('BIZNISWEB_USERNAME')
-WEB_PASSWORD = os.getenv('BIZNISWEB_PASSWORD')
+GRAPHQL_TIMEOUT_SEC = int(os.getenv('BIZNISWEB_API_TIMEOUT_SEC', os.getenv('REPORT_HTTP_READ_TIMEOUT_SEC', '30')))
+WEB_TIMEOUT = resolve_timeout(os.getenv('BIZNISWEB_WEB_TIMEOUT_SEC'))
 
 # Set up logging
 logger = get_logger('generate_invoices')
@@ -117,22 +113,35 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 
 
 class InvoiceGenerator:
-    def __init__(self, api_url: str, api_token: str, username: Optional[str] = None, password: Optional[str] = None):
+    def __init__(
+        self,
+        api_url: str,
+        api_token: str,
+        base_url: str,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+    ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
             url=api_url,
             headers={'BW-API-Key': f'Token {api_token}'},
             verify=True,
             retries=3,
+            timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
         self.api_token = api_token
+        self.base_url = base_url.rstrip("/")
+        self.login_url = f"{self.base_url}/admin/login/authenticate/"
+        self.invoice_create_url = f"{self.base_url}/erp/orders/invoices/create/{{order_num}}"
+        self.invoice_finalize_url = f"{self.base_url}/erp/orders/invoices/finalize/{{order_num}}"
+        self.invoice_send_url = f"{self.base_url}/erp/orders/invoices/sendEmail/{{invoice_id}}"
         self.web_session = None
         self.arf_token = None
         
         # Initialize web session if credentials provided
         if username and password:
-            self.web_session = requests.Session()
+            self.web_session = build_retry_session(timeout=WEB_TIMEOUT)
             logger.info("Attempting to login to web interface...")
             if self.login_web_session(username, password):
                 logger.info("✓ Successfully logged in to web session")
@@ -149,7 +158,7 @@ class InvoiceGenerator:
         try:
             # Step 1: GET login page to obtain session cookie
             logger.info("Getting login page to establish session...")
-            login_page_url = f"{BASE_URL}/erp/main/login"
+            login_page_url = f"{self.base_url}/erp/main/login"
             login_page_response = self.web_session.get(login_page_url)
             login_page_response.raise_for_status()
             
@@ -185,7 +194,7 @@ class InvoiceGenerator:
             
             # Submit login
             login_response = self.web_session.post(
-                LOGIN_URL,
+                self.login_url,
                 data=login_data,
                 allow_redirects=True
             )
@@ -230,7 +239,7 @@ class InvoiceGenerator:
                         logger.info(f"Following redirect to: {redirect_url}")
                         
                         # Follow the redirect
-                        redirect_response = self.web_session.get(f"{BASE_URL}{redirect_url}")
+                        redirect_response = self.web_session.get(f"{self.base_url}{redirect_url}")
                         redirect_response.raise_for_status()
                         
                         # Extract arf from redirect
@@ -241,7 +250,7 @@ class InvoiceGenerator:
                     
                     # If login successful, navigate to dashboard to establish session properly
                     logger.info("Navigating to dashboard...")
-                    dashboard_url = f"{BASE_URL}/erp/"
+                    dashboard_url = f"{self.base_url}/erp/"
                     dashboard_response = self.web_session.get(dashboard_url, allow_redirects=True)
                     
                     logger.debug(f"Dashboard status: {dashboard_response.status_code}")
@@ -333,7 +342,7 @@ class InvoiceGenerator:
             
         try:
             # Try dashboard
-            dashboard_url = f"{BASE_URL}/erp/orders/orders"
+            dashboard_url = f"{self.base_url}/erp/orders/orders"
             response = self.web_session.get(dashboard_url)
             
             logger.debug(f"ARF search response status: {response.status_code}")
@@ -380,7 +389,7 @@ class InvoiceGenerator:
             
         try:
             # Try to access a protected page
-            test_url = f"{BASE_URL}/erp/orders/orders"
+            test_url = f"{self.base_url}/erp/orders/orders"
             if self.arf_token:
                 test_url += f"?arf={self.arf_token}"
             
@@ -572,10 +581,10 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                         'query': query_string,
                         'variables': variables
                     }
-                    logger.error(f"Making raw request to: {API_URL}")
+                    logger.error(f"Making raw request to: {self.client.transport.url}")
                     logger.error(f"With headers: {headers}")
                     raw_response = requests.post(
-                        API_URL,
+                        self.client.transport.url,
                         json=payload,
                         headers=headers,
                         timeout=10
@@ -677,11 +686,11 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 headers = {
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json, text/javascript, */*; q=0.01',
-                    'Referer': f'{BASE_URL}/erp/orders/orders/detail/{order_num}'
+                    'Referer': f'{self.base_url}/erp/orders/orders/detail/{order_num}'
                 }
                 
                 # First try to create the invoice (this might be required before finalization)
-                create_url = INVOICE_CREATE_URL.format(order_num=order_num)
+                create_url = self.invoice_create_url.format(order_num=order_num)
                 if self.arf_token:
                     create_url += f"?arf={self.arf_token}&_dc={timestamp}"
                 else:
@@ -710,7 +719,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 
                 for url_type, identifier in urls_to_try:
                     # Create invoice URL
-                    finalize_url = INVOICE_FINALIZE_URL.format(order_num=identifier)
+                    finalize_url = self.invoice_finalize_url.format(order_num=identifier)
                     timestamp = int(time.time() * 1000)  # New timestamp for finalize
                     if self.arf_token:
                         finalize_url += f"?arf={self.arf_token}&_dc={timestamp}"
@@ -792,7 +801,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             import time
             timestamp = int(time.time() * 1000)
             
-            send_url = INVOICE_SEND_URL.format(invoice_id=invoice_id)
+            send_url = self.invoice_send_url.format(invoice_id=invoice_id)
             if self.arf_token:
                 send_url += f"?arf={self.arf_token}&_dc={timestamp}"
             else:
@@ -929,6 +938,11 @@ def main():
     """Main function to handle command line arguments and run the invoice generator"""
     parser = argparse.ArgumentParser(description='Generate invoices for BizniWeb orders')
     parser.add_argument(
+        '--project',
+        default=os.getenv('REPORT_PROJECT', BASE_DEFAULT_PROJECT),
+        help='Project name (loads projects/<project>/.env and settings.json)'
+    )
+    parser.add_argument(
         '--from-date',
         type=str,
         help='From date in YYYY-MM-DD format (default: 7 days ago)'
@@ -948,34 +962,39 @@ def main():
         action='store_true',
         help='Skip web login (exits immediately as invoice creation requires web session)'
     )
-    
+
     args = parser.parse_args()
-    
-    # Check if API token is available
-    if not API_TOKEN:
-        logger.error("✗ BIZNISWEB_API_TOKEN not found in environment variables")
-        logger.error("Please set it in .env file:")
-        logger.error("  BIZNISWEB_API_TOKEN=your_api_token_here")
+    project_name = (args.project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    os.environ['REPORT_PROJECT'] = project_name
+    load_project_env(project_name, logger=logger)
+
+    project_settings = load_project_settings(project_name)
+    api_url = resolve_biznisweb_api_url(project_name, project_settings)
+    api_token = os.getenv('BIZNISWEB_API_TOKEN')
+    base_url = derive_biznisweb_base_url(api_url)
+    web_username = os.getenv('BIZNISWEB_USERNAME')
+    web_password = os.getenv('BIZNISWEB_PASSWORD')
+
+    if not api_token:
+        logger.error(f"? BIZNISWEB_API_TOKEN not found for project '{project_name}'")
+        logger.error('Please set it in projects/<project>/.env or environment variables')
         return
-    
-    # Parse dates
+
     if args.to_date:
         date_to = datetime.strptime(args.to_date, '%Y-%m-%d')
     else:
         date_to = datetime.now()
-    
+
     if args.from_date:
         date_from = datetime.strptime(args.from_date, '%Y-%m-%d')
     else:
         date_from = datetime(2025, 5, 11)
-    
-    # Initialize generator with web credentials if available and not disabled
+
     if args.no_web_login:
-        generator = InvoiceGenerator(API_URL, API_TOKEN)
+        generator = InvoiceGenerator(api_url, api_token, base_url)
     else:
-        generator = InvoiceGenerator(API_URL, API_TOKEN, WEB_USERNAME, WEB_PASSWORD)
-    
-    # Process orders
+        generator = InvoiceGenerator(api_url, api_token, base_url, web_username, web_password)
+
     generator.process_orders(date_from, date_to, dry_run=args.dry_run)
 
 

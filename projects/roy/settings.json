@@ -1,9 +1,24 @@
 {
   "biznisweb_api_url": "https://roy.flox.sk/api/graphql",
-  "report_from_date": "2025-08-06",
+  "project_display_name": "Roy",
+  "reporting_system_name": "Roy reporting",
+  "enable_email_strategy_report": false,
+  "report_from_date": "2025-09-24",
   "packaging_cost_per_order": 0.05,
   "shipping_subsidy_per_order": -0.2,
   "fixed_monthly_cost": 4900,
+  "weather": {
+    "enabled": true,
+    "timezone": "Europe/Bratislava",
+    "locations": [
+      {
+        "name": "Bratislava",
+        "latitude": 48.14816,
+        "longitude": 17.10674,
+        "weight": 1.0
+      }
+    ]
+  },
   "manual_fb_ads_total": 690,
   "manual_google_ads_total": 9945.95,
   "exclude_zero_price_label_patterns": [
