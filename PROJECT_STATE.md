@@ -64,6 +64,13 @@ Bootstrap entrypoints:
 - CI validates env contract and blocks tracked secret env files
 - Repo-scoped `PROJECT_STATE.md` exists
 - Bootstrap scripts now exist for macOS/Linux and Windows PowerShell
+- VEVO ECS schedule `vevo-daily-report-email` is enabled for `01:00 Europe/Bratislava`
+- VEVO production task definition `vevo-reporting-daily:3` uses full-history runtime range from `2025-05-03` to `yesterday`
+- VEVO task role CloudWatch metric policy now allows the active namespace `BizniswebReporting` (and keeps backward-compatible `VevoReporting`)
+- Manual ECS production-equivalent run succeeded on `2026-04-03` with:
+  - HTML report saved as `data/vevo/report_20250503-20260402.html`
+  - SES delivery confirmed in CloudWatch logs
+  - no remaining `PutMetricData` warning in the verified log stream
 
 ## 6) Integration Notes (External Systems)
 
@@ -118,6 +125,25 @@ Bootstrap entrypoints:
 - Added new Week-of-Month analytics (Week 1-4) into reporting pipeline in export_orders.py.
 - Wired Week-of-Month outputs into HTML report generation (html_report_generator.py) with 2 charts and performance table.
 - Added aggregation for week-level pattern visibility: orders, revenue, profit, margin, AOV, avg daily revenue/profit, active days/months.
+
+### 2026-04-03
+- Verified VEVO production scheduler and runtime wiring end-to-end on AWS:
+  - Scheduler `vevo-daily-report-email` remains enabled at `01:00 Europe/Bratislava`
+  - ECS cluster `vevo-reporting-cluster`
+  - Task definition `vevo-reporting-daily:3`
+  - Image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+- Confirmed runtime secret `vevo/reporting/runtime-env` still points to:
+  - `REPORT_FROM_DATE=2025-05-03`
+  - `REPORT_PROJECT=vevo`
+  - `REPORT_EMAIL_TO=mil.terem@gmail.com,vzeman@gmail.com,maker.martuska@gmail.com`
+- Fixed VEVO task-role CloudWatch metric permission drift:
+  - previous inline IAM policy allowed only namespace `VevoReporting`
+  - runtime writes metrics into `BizniswebReporting`
+  - updated inline policy `vevo-reporting-put-metrics` to allow both namespaces
+- Re-ran a manual ECS production-equivalent task and verified in `/ecs/vevo-reporting-daily` log stream:
+  - `HTML report saved: data/vevo/report_20250503-20260402.html`
+  - `SES message sent`
+  - no `WARN: failed to publish CloudWatch metric ... PutMetricData`
 - Verified syntax via python -m py_compile export_orders.py html_report_generator.py.
 - Revised Week-of-Month methodology to remove day-count bias:
   - uses only days 1-28 (4x7 equal windows),
