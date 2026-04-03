@@ -331,6 +331,7 @@ def generate_test2_dashboard(
     fb_dow_stats: Optional[list] = None,
     ltv_by_date: Optional[pd.DataFrame] = None,
     consistency_checks: Optional[dict] = None,
+    financial_metrics: Optional[dict] = None,
     cfo_kpi_payload: Optional[dict] = None,
     source_health: Optional[dict] = None,
     period_switcher: Optional[dict] = None,
@@ -616,6 +617,16 @@ def generate_test2_dashboard(
         "margin_ok": bool((consistency_checks or {}).get("margin_ok")),
         "cac_ok": bool((consistency_checks or {}).get("cac_ok")),
     }
+    financial_payload = {
+        "payback_weekly_labels": list((financial_metrics or {}).get("payback_weekly_labels") or []),
+        "payback_weekly_orders": [round(_num(v), 2) for v in list((financial_metrics or {}).get("payback_weekly_orders") or [])],
+        "current_fb_cac": _maybe_num((financial_metrics or {}).get("current_fb_cac")),
+        "blended_cac": _maybe_num((financial_metrics or {}).get("blended_cac")),
+        "avg_customer_ltv": _maybe_num((financial_metrics or {}).get("avg_customer_ltv")),
+        "ltv_cac_ratio": _maybe_num((financial_metrics or {}).get("ltv_cac_ratio")),
+        "payback_orders": _maybe_num((financial_metrics or {}).get("payback_orders")),
+        "avg_return_cycle_days": _maybe_num((financial_metrics or {}).get("avg_return_cycle_days")),
+    }
 
     total_revenue = round(_num(date_agg["total_revenue"].sum()), 2)
     total_profit = round(_num(date_agg["net_profit"].sum()), 2)
@@ -692,6 +703,7 @@ def generate_test2_dashboard(
         "combinations_rows": combinations_rows,
         "segment_rows": segment_rows,
         "consistency": consistency_payload,
+        "financial": financial_payload,
         "cpo_summary": {
             "overall_cpo": _maybe_num((cost_per_order or {}).get("overall_cpo")),
             "fb_cpo": _maybe_num((cost_per_order or {}).get("fb_cpo")),
@@ -1632,16 +1644,34 @@ def generate_test2_dashboard(
                     <div class="grid-2" id="libraryEconomics"></div>
 
                     <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Restored standalone economics</span><span class="lang-sk hidden">Obnovene standalone ekonomicke metriky</span></h2>
+                        <p><span class="lang-en">Explicit single-metric charts that existed in the original test report and are still useful for operator-style review.</span><span class="lang-sk hidden">Explicitne samostatne grafy z povodneho test reportu, ktore su stale uzitocne pre operatorovy review.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryEconomicsStandalone"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
                         <h2><span class="lang-en">Marketing drilldown library</span><span class="lang-sk hidden">Kniznica marketingoveho drilldownu</span></h2>
                         <p><span class="lang-en">Detailed Facebook, campaign, hourly and weekday efficiency views.</span><span class="lang-sk hidden">Detailne Facebook, kampanove, hodinove a weekday pohlady na efektivitu.</span></p>
                     </div>
                     <div class="grid-2" id="libraryMarketing"></div>
 
                     <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Restored standalone marketing</span><span class="lang-sk hidden">Obnovene standalone marketingove metriky</span></h2>
+                        <p><span class="lang-en">Legacy ad-delivery and campaign efficiency views restored without leaving the new dashboard layout.</span><span class="lang-sk hidden">Povodne delivery a kampanove pohľady obnovene bez opustenia noveho dashboard layoutu.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryMarketingStandalone"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
                         <h2><span class="lang-en">Customer and retention library</span><span class="lang-sk hidden">Kniznica zakaznikov a retencie</span></h2>
                         <p><span class="lang-en">Revenue split, refund detail, CLV/CAC, retention and repeat-product behavior.</span><span class="lang-sk hidden">Revenue split, detail refundov, CLV/CAC, retencia a spravanie pri opakovanych produktoch.</span></p>
                     </div>
                     <div class="grid-2" id="libraryCustomers"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Restored standalone customer value</span><span class="lang-sk hidden">Obnovene standalone customer value metriky</span></h2>
+                        <p><span class="lang-en">Explicit LTV, CAC, refund amount and payback trend views carried over from the original report.</span><span class="lang-sk hidden">Explicitne LTV, CAC, refund amount a payback trend pohľady prenesene z povodneho reportu.</span></p>
+                    </div>
+                    <div class="grid-2" id="libraryCustomersStandalone"></div>
 
                     <div class="section-head" style="margin-top:26px;">
                         <h2><span class="lang-en">Calendar and weather library</span><span class="lang-sk hidden">Kniznica kalendara a pocasia</span></h2>
@@ -3388,14 +3418,510 @@ def generate_test2_dashboard(
             }}
         }}
 
+        function alignSeries(sourceLabels, sourceValues, targetLabels) {{
+            const source = Array.isArray(sourceLabels) ? sourceLabels : [];
+            const values = Array.isArray(sourceValues) ? sourceValues : [];
+            const targets = Array.isArray(targetLabels) ? targetLabels : [];
+            const map = new Map(source.map((label, idx) => [String(label), Number(values[idx] || 0)]));
+            return targets.map(label => Number(map.get(String(label)) || 0));
+        }}
+
+        function initNavigation() {{
+            const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+            const sections = Array.from(document.querySelectorAll('section[id]'));
+            if (!navLinks.length || !sections.length) return;
+
+            function setActiveNav(sectionId) {{
+                navLinks.forEach(link => {{
+                    const active = (link.getAttribute('href') || '') === `#${{sectionId}}`;
+                    link.classList.toggle('active', active);
+                }});
+            }}
+
+            function resolveActiveSection() {{
+                const probe = window.scrollY + 180;
+                let current = sections[0].id;
+                sections.forEach(section => {{
+                    if (section.offsetTop <= probe) current = section.id;
+                }});
+                setActiveNav(current);
+            }}
+
+            navLinks.forEach(link => {{
+                link.addEventListener('click', (event) => {{
+                    const href = link.getAttribute('href') || '';
+                    if (!href.startsWith('#')) return;
+                    const target = document.querySelector(href);
+                    if (!target) return;
+                    event.preventDefault();
+                    const top = Math.max(target.offsetTop - 24, 0);
+                    window.scrollTo({{ top, behavior: 'smooth' }});
+                    history.replaceState(null, '', href);
+                    setActiveNav(target.id);
+                }});
+            }});
+
+            let ticking = false;
+            window.addEventListener('scroll', () => {{
+                if (ticking) return;
+                ticking = true;
+                window.requestAnimationFrame(() => {{
+                    resolveActiveSection();
+                    ticking = false;
+                }});
+            }}, {{ passive: true }});
+
+            resolveActiveSection();
+            if (window.location.hash) {{
+                const initialTarget = document.querySelector(window.location.hash);
+                if (initialTarget) setActiveNav(initialTarget.id);
+            }}
+        }}
+
+        function buildStandaloneLibraries() {{
+            const s = DATA.series;
+            const economicsStandaloneItems = [];
+            if (hasSeries(s.dates)) {{
+                economicsStandaloneItems.push(
+                    {{ id: 'econRevenueTotalCostsChart', title: {{ en: 'Revenue vs total costs', sk: 'Trzba vs celkove naklady' }}, desc: {{ en: 'Direct view of daily revenue against total daily costs.', sk: 'Priamy pohlad na dennu trzbu oproti celkovym dennym nakladom.' }} }},
+                    {{ id: 'econTotalCostsStandaloneChart', title: {{ en: 'Total costs', sk: 'Celkove naklady' }}, desc: {{ en: 'Standalone timeline of total daily costs.', sk: 'Samostatna casova os celkovych dennych nakladov.' }} }},
+                    {{ id: 'econProductCostsStandaloneChart', title: {{ en: 'Product costs', sk: 'Produktove naklady' }}, desc: {{ en: 'Cost of goods sold through time.', sk: 'Naklady na tovar v case.' }} }},
+                    {{ id: 'econGrossMarginStandaloneChart', title: {{ en: 'Gross margin', sk: 'Hruba marza' }}, desc: {{ en: 'Daily gross margin with smoothing.', sk: 'Denne hruba marza s vyhladenim.' }} }},
+                    {{ id: 'econPackagingStandaloneChart', title: {{ en: 'Packaging costs', sk: 'Naklady na balenie' }}, desc: {{ en: 'Daily packaging cost load.', sk: 'Denne naklady na balenie.' }} }},
+                    {{ id: 'econShippingStandaloneChart', title: {{ en: 'Shipping subsidy', sk: 'Shipping subsidy' }}, desc: {{ en: 'Daily shipping subsidy or shipping profit line.', sk: 'Denn a shipping subsidy resp. shipping zisk.' }} }},
+                    {{ id: 'econFixedStandaloneChart', title: {{ en: 'Fixed costs', sk: 'Fixne naklady' }}, desc: {{ en: 'Daily allocation of fixed overhead.', sk: 'Denne alokovane fixne naklady.' }} }},
+                    {{ id: 'econItemsSoldStandaloneChart', title: {{ en: 'Items sold', sk: 'Predane kusy' }}, desc: {{ en: 'Total item units sold per day.', sk: 'Celkovy pocet predanych kusov za den.' }} }},
+                    {{ id: 'econAvgItemsStandaloneChart', title: {{ en: 'Average items per order', sk: 'Priemer poloziek na objednavku' }}, desc: {{ en: 'Basket depth by number of sold items.', sk: 'Hl bka kosika podla poctu poloziek.' }} }},
+                    {{ id: 'econCostRevenueScatterChart', title: {{ en: 'Revenue vs cost scatter', sk: 'Scatter trzba vs naklady' }}, desc: {{ en: 'How daily revenue scales with daily cost base.', sk: 'Ako sa denna trzba meni oproti dennej nakladovej baze.' }} }},
+                    {{ id: 'econAllMetricsOverviewChart', title: {{ en: 'All metrics overview', sk: 'Prehlad vsetkych metrik' }}, desc: {{ en: 'Compressed multi-series operator overview of the economics stack.', sk: 'Kompresny multi-seriovy operatorovy prehlad ekonomickeho stacku.' }} }},
+                    {{ id: 'econLtvByAcquisitionStandaloneChart', title: {{ en: 'LTV by acquisition date', sk: 'LTV podla datumu akvizicie' }}, desc: {{ en: 'Daily realized LTV revenue and newly acquired customers.', sk: 'Denn a realizovana LTV trzba a novoziskani zakaznici.' }} }},
+                    {{ id: 'econLtvProfitStandaloneChart', title: {{ en: 'LTV-based profit', sk: 'LTV profit' }}, desc: {{ en: 'LTV revenue minus daily total cost.', sk: 'LTV trzba minus denne celkove naklady.' }} }},
+                );
+            }}
+            renderGalleryCards('libraryEconomicsStandalone', economicsStandaloneItems);
+
+            if (document.getElementById('econRevenueTotalCostsChart')) {{
+                const opts = dualAxisOptions();
+                new Chart(document.getElementById('econRevenueTotalCostsChart'), {{
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'Revenue', data: s.revenue, backgroundColor: 'rgba(255,138,31,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Total cost', data: s.total_cost, borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: opts,
+                }});
+            }}
+            if (document.getElementById('econTotalCostsStandaloneChart')) {{
+                new Chart(document.getElementById('econTotalCostsStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'Total cost', data: s.total_cost, borderColor: '#cf5060', backgroundColor: (ctx) => gradient(ctx, 'rgba(207,80,96,.18)', 'rgba(207,80,96,.02)'), fill: true, tension: .32, borderWidth: 2.5, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econProductCostsStandaloneChart')) {{
+                new Chart(document.getElementById('econProductCostsStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'Product cost', data: s.product_cost, backgroundColor: 'rgba(255,138,31,.66)', borderRadius: 8 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econGrossMarginStandaloneChart')) {{
+                new Chart(document.getElementById('econGrossMarginStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'Gross margin %', data: s.gross_margin, borderColor: '#ff8a1f', tension: .32, borderWidth: 2.4, pointRadius: 0 }},
+                            {{ label: 'Gross margin 7d MA', data: s.gross_margin_ma7, borderColor: '#d95c00', borderDash: [8, 6], tension: .32, borderWidth: 2.0, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econPackagingStandaloneChart')) {{
+                new Chart(document.getElementById('econPackagingStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'Packaging', data: s.packaging, backgroundColor: 'rgba(255,177,93,.72)', borderRadius: 8 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econShippingStandaloneChart')) {{
+                new Chart(document.getElementById('econShippingStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'Shipping', data: s.shipping, borderColor: '#4766ff', tension: .32, borderWidth: 2.3, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econFixedStandaloneChart')) {{
+                new Chart(document.getElementById('econFixedStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'Fixed', data: s.fixed, backgroundColor: 'rgba(207,80,96,.58)', borderRadius: 8 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econItemsSoldStandaloneChart')) {{
+                new Chart(document.getElementById('econItemsSoldStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'Items sold', data: s.items, backgroundColor: 'rgba(71,102,255,.62)', borderRadius: 8 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econAvgItemsStandaloneChart')) {{
+                new Chart(document.getElementById('econAvgItemsStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'Avg items/order', data: s.avg_items, borderColor: '#4766ff', tension: .32, borderWidth: 2.3, pointRadius: 0 }},
+                            {{ label: '7d MA', data: s.avg_items_ma7, borderColor: '#1b46e5', borderDash: [8, 6], tension: .32, borderWidth: 2.0, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econCostRevenueScatterChart')) {{
+                const scatterOpts = baseOptions();
+                scatterOpts.scales.x = {{ type: 'linear', grid: {{ color: 'rgba(138,129,120,.10)', drawBorder: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                scatterOpts.scales.y = {{ grid: {{ color: 'rgba(138,129,120,.10)', drawBorder: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
+                new Chart(document.getElementById('econCostRevenueScatterChart'), {{
+                    type: 'scatter',
+                    data: {{
+                        datasets: [{{ label: 'Daily revenue vs cost', data: s.total_cost.map((cost, idx) => ({{ x: Number(cost || 0), y: Number(s.revenue[idx] || 0) }})), backgroundColor: 'rgba(255,138,31,.58)', borderColor: '#ff8a1f', pointRadius: 4 }}],
+                    }},
+                    options: scatterOpts,
+                }});
+            }}
+            if (document.getElementById('econAllMetricsOverviewChart')) {{
+                new Chart(document.getElementById('econAllMetricsOverviewChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ label: 'Revenue', data: s.revenue, borderColor: '#ff8a1f', tension: .28, borderWidth: 2.2, pointRadius: 0 }},
+                            {{ label: 'Total cost', data: s.total_cost, borderColor: '#cf5060', tension: .28, borderWidth: 2.0, pointRadius: 0 }},
+                            {{ label: 'Product cost', data: s.product_cost, borderColor: '#b35d00', tension: .28, borderWidth: 1.8, pointRadius: 0 }},
+                            {{ label: 'FB ads', data: s.fb_ads, borderColor: '#4766ff', tension: .28, borderWidth: 1.8, pointRadius: 0 }},
+                            {{ label: 'Google ads', data: s.google_ads, borderColor: '#8b5cf6', tension: .28, borderWidth: 1.8, pointRadius: 0 }},
+                            {{ label: 'Profit', data: s.profit, borderColor: '#1f9d66', tension: .28, borderWidth: 2.0, pointRadius: 0 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('econLtvByAcquisitionStandaloneChart')) {{
+                const ltvOpts = dualAxisOptions();
+                new Chart(document.getElementById('econLtvByAcquisitionStandaloneChart'), {{
+                    data: {{
+                        labels: DATA.ltv.labels,
+                        datasets: [
+                            {{ type: 'line', label: 'LTV revenue', data: DATA.ltv.ltv_revenue, borderColor: '#8b5cf6', tension: .32, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Customers acquired', data: DATA.ltv.customers_acquired || [], backgroundColor: 'rgba(71,102,255,.36)', borderRadius: 6, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Lifetime orders', data: DATA.ltv.lifetime_orders || [], borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: ltvOpts,
+                }});
+            }}
+            if (document.getElementById('econLtvProfitStandaloneChart')) {{
+                const alignedLtvRevenue = alignSeries(DATA.ltv.labels, DATA.ltv.ltv_revenue, s.dates);
+                const ltvProfitSeries = alignedLtvRevenue.map((value, idx) => Number(value || 0) - Number(s.total_cost[idx] || 0));
+                new Chart(document.getElementById('econLtvProfitStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'LTV profit', data: ltvProfitSeries, borderColor: '#8b5cf6', backgroundColor: (ctx) => gradient(ctx, 'rgba(139,92,246,.16)', 'rgba(139,92,246,.02)'), fill: true, tension: .32, borderWidth: 2.5, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+
+            const marketingStandaloneItems = [];
+            if (hasSeries(DATA.fb_daily.dates)) {{
+                marketingStandaloneItems.push(
+                    {{ id: 'mktFbSpendStandaloneChart', title: {{ en: 'Facebook ads spend', sk: 'Facebook ads spend' }}, desc: {{ en: 'Standalone daily Meta spend.', sk: 'Samostatny denny Meta spend.' }} }},
+                    {{ id: 'mktFbSpendClicksStandaloneChart', title: {{ en: 'Spend vs clicks', sk: 'Spend vs kliky' }}, desc: {{ en: 'Meta spend against delivered clicks.', sk: 'Meta spend oproti dorucenym klikom.' }} }},
+                );
+            }}
+            if (hasSeries(s.dates)) {{
+                marketingStandaloneItems.push(
+                    {{ id: 'mktGoogleSpendStandaloneChart', title: {{ en: 'Google ads spend', sk: 'Google ads spend' }}, desc: {{ en: 'Standalone daily Google spend.', sk: 'Samostatny denny Google spend.' }} }},
+                    {{ id: 'mktAdsComparisonStandaloneChart', title: {{ en: 'FB vs Google spend', sk: 'FB vs Google spend' }}, desc: {{ en: 'Daily paid media comparison.', sk: 'Denne porovnanie platenych kanalov.' }} }},
+                );
+            }}
+            if (hasRows(DATA.fb_campaign_rows)) {{
+                marketingStandaloneItems.push(
+                    {{ id: 'mktCampaignConvRateStandaloneChart', title: {{ en: 'Campaign conversion rate', sk: 'Konverzny pomer kampani' }}, desc: {{ en: 'Conversions divided by clicks by campaign.', sk: 'Konverzie delene klikmi podla kampane.' }} }},
+                    {{ id: 'mktCampaignCostPerConvStandaloneChart', title: {{ en: 'Campaign cost per conversion', sk: 'Naklad na konverziu kampani' }}, desc: {{ en: 'Cost per conversion by campaign.', sk: 'Naklad na konverziu podla kampane.' }} }},
+                    {{ id: 'mktCampaignCtrStandaloneChart', title: {{ en: 'Campaign CTR', sk: 'CTR kampani' }}, desc: {{ en: 'CTR comparison by campaign.', sk: 'Porovnanie CTR podla kampani.' }} }},
+                    {{ id: 'mktCampaignCpcStandaloneChart', title: {{ en: 'Campaign CPC', sk: 'CPC kampani' }}, desc: {{ en: 'CPC comparison by campaign.', sk: 'Porovnanie CPC podla kampani.' }} }},
+                    {{ id: 'mktCampaignSpendPieStandaloneChart', title: {{ en: 'Campaign spend share', sk: 'Podiel spendu kampani' }}, desc: {{ en: 'Share of Meta spend by campaign.', sk: 'Podiel Meta spendu podla kampani.' }} }},
+                );
+            }}
+            if (hasRows(DATA.campaign_cpo)) {{
+                marketingStandaloneItems.push(
+                    {{ id: 'mktCampaignCpoStandaloneChart', title: {{ en: 'Campaign CPO', sk: 'CPO kampani' }}, desc: {{ en: 'Estimated CPO by campaign.', sk: 'Odhadovane CPO podla kampani.' }} }},
+                    {{ id: 'mktCampaignRoasStandaloneChart', title: {{ en: 'Campaign ROAS', sk: 'ROAS kampani' }}, desc: {{ en: 'Estimated ROAS by campaign.', sk: 'Odhadovane ROAS podla kampani.' }} }},
+                );
+            }}
+            if (hasRows(DATA.spend_effectiveness_rows)) {{
+                marketingStandaloneItems.push(
+                    {{ id: 'mktSpendRangeOrdersStandaloneChart', title: {{ en: 'Spend bucket orders', sk: 'Objednavky podla spend bucketu' }}, desc: {{ en: 'Average order count by daily spend band.', sk: 'Priemerny pocet objednavok podla denneho spend pasma.' }} }},
+                );
+            }}
+            renderGalleryCards('libraryMarketingStandalone', marketingStandaloneItems);
+
+            if (document.getElementById('mktFbSpendStandaloneChart')) {{
+                new Chart(document.getElementById('mktFbSpendStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [{{ label: 'FB spend', data: DATA.fb_daily.spend, backgroundColor: 'rgba(255,138,31,.66)', borderRadius: 8 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('mktGoogleSpendStandaloneChart')) {{
+                new Chart(document.getElementById('mktGoogleSpendStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: s.dates,
+                        datasets: [{{ label: 'Google spend', data: s.google_ads, backgroundColor: 'rgba(71,102,255,.64)', borderRadius: 8 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('mktAdsComparisonStandaloneChart')) {{
+                new Chart(document.getElementById('mktAdsComparisonStandaloneChart'), {{
+                    data: {{
+                        labels: s.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'FB ads', data: s.fb_ads, backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8 }},
+                            {{ type: 'bar', label: 'Google ads', data: s.google_ads, backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('mktFbSpendClicksStandaloneChart')) {{
+                const opts = dualAxisOptions();
+                new Chart(document.getElementById('mktFbSpendClicksStandaloneChart'), {{
+                    data: {{
+                        labels: DATA.fb_daily.dates,
+                        datasets: [
+                            {{ type: 'bar', label: 'FB spend', data: DATA.fb_daily.spend, backgroundColor: 'rgba(255,138,31,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Clicks', data: DATA.fb_daily.clicks, borderColor: '#4766ff', tension: .32, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: opts,
+                }});
+            }}
+            if (document.getElementById('mktCampaignConvRateStandaloneChart')) {{
+                const labels = DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24));
+                const convRate = DATA.fb_campaign_rows.map(x => {{
+                    const clicks = Number(x.clicks || 0);
+                    const conversions = Number(x.conversions || 0);
+                    return clicks > 0 ? (conversions / clicks) * 100 : 0;
+                }});
+                new Chart(document.getElementById('mktCampaignConvRateStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{ labels, datasets: [{{ label: 'Conversion rate %', data: convRate, backgroundColor: 'rgba(31,157,102,.68)', borderRadius: 8 }}] }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('mktCampaignCostPerConvStandaloneChart')) {{
+                new Chart(document.getElementById('mktCampaignCostPerConvStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
+                        datasets: [{{ label: 'Cost / conversion', data: DATA.fb_campaign_rows.map(x => Number(x.cost_per_conversion || 0)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('mktCampaignCtrStandaloneChart')) {{
+                new Chart(document.getElementById('mktCampaignCtrStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
+                        datasets: [{{ label: 'CTR %', data: DATA.fb_campaign_rows.map(x => Number(x.ctr || 0)), backgroundColor: 'rgba(71,102,255,.68)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('mktCampaignCpcStandaloneChart')) {{
+                new Chart(document.getElementById('mktCampaignCpcStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
+                        datasets: [{{ label: 'CPC', data: DATA.fb_campaign_rows.map(x => Number(x.cpc || 0)), backgroundColor: 'rgba(255,138,31,.68)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('mktCampaignCpoStandaloneChart')) {{
+                new Chart(document.getElementById('mktCampaignCpoStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.campaign_cpo.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
+                        datasets: [{{ label: 'Estimated CPO', data: DATA.campaign_cpo.map(x => Number(x.estimated_cpo || 0)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('mktCampaignRoasStandaloneChart')) {{
+                new Chart(document.getElementById('mktCampaignRoasStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.campaign_cpo.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
+                        datasets: [{{ label: 'Estimated ROAS', data: DATA.campaign_cpo.map(x => Number(x.estimated_roas || 0)), backgroundColor: 'rgba(31,157,102,.68)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('mktCampaignSpendPieStandaloneChart')) {{
+                new Chart(document.getElementById('mktCampaignSpendPieStandaloneChart'), {{
+                    type: 'doughnut',
+                    data: {{
+                        labels: DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 22)),
+                        datasets: [{{ data: DATA.fb_campaign_rows.map(x => Number(x.spend || 0)), backgroundColor: ['#ff8a1f', '#4766ff', '#1f9d66', '#8b5cf6', '#cf5060', '#ffb96d', '#7c8cff', '#6ac89a', '#b994ff', '#ff8fa0', '#ffc97e', '#98a6ff'], borderColor: '#fff9f3', borderWidth: 4, hoverOffset: 8 }}],
+                    }},
+                    options: doughnutOptions(),
+                }});
+            }}
+            if (document.getElementById('mktSpendRangeOrdersStandaloneChart')) {{
+                new Chart(document.getElementById('mktSpendRangeOrdersStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.spend_effectiveness_rows.map(x => x.spend_range || '-'),
+                        datasets: [{{ label: 'Avg orders', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_orders || 0)), backgroundColor: 'rgba(255,138,31,.68)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+
+            const customerStandaloneItems = [];
+            if (hasSeries(DATA.refunds.dates)) {{
+                customerStandaloneItems.push({{ id: 'custRefundAmountStandaloneChart', title: {{ en: 'Refund amount', sk: 'Refund amount' }}, desc: {{ en: 'Standalone refunded amount timeline.', sk: 'Samostatna casova os refundovanej sumy.' }} }});
+            }}
+            if (hasSeries(DATA.clv.labels)) {{
+                customerStandaloneItems.push(
+                    {{ id: 'custClvStandaloneChart', title: {{ en: 'CLV', sk: 'CLV' }}, desc: {{ en: 'Standalone weekly CLV.', sk: 'Samostatne tyzdenne CLV.' }} }},
+                    {{ id: 'custCacStandaloneChart', title: {{ en: 'CAC', sk: 'CAC' }}, desc: {{ en: 'Standalone weekly CAC.', sk: 'Samostatne tyzdenne CAC.' }} }},
+                    {{ id: 'custClvCacComparisonStandaloneChart', title: {{ en: 'CLV vs CAC comparison', sk: 'Porovnanie CLV vs CAC' }}, desc: {{ en: 'Direct value comparison between CLV and CAC.', sk: 'Priame porovnanie hodnot CLV a CAC.' }} }},
+                    {{ id: 'custLtvCacRatioStandaloneChart', title: {{ en: 'LTV/CAC ratio', sk: 'Pomer LTV/CAC' }}, desc: {{ en: 'Standalone LTV/CAC ratio view.', sk: 'Samostatny pohlad na pomer LTV/CAC.' }} }},
+                    {{ id: 'custReturnTimeStandaloneChart', title: {{ en: 'Return time', sk: 'Cas navratu' }}, desc: {{ en: 'Average return time in days.', sk: 'Priemerny cas navratu v dnoch.' }} }},
+                );
+            }}
+            if (hasSeries(DATA.financial.payback_weekly_labels)) {{
+                customerStandaloneItems.push({{ id: 'custPaybackStandaloneChart', title: {{ en: 'Payback trend', sk: 'Payback trend' }}, desc: {{ en: 'Weekly estimated payback period in orders.', sk: 'Tyzdenny odhad payback periody v objednavkach.' }} }});
+            }}
+            renderGalleryCards('libraryCustomersStandalone', customerStandaloneItems);
+
+            if (document.getElementById('custRefundAmountStandaloneChart')) {{
+                new Chart(document.getElementById('custRefundAmountStandaloneChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.refunds.dates,
+                        datasets: [{{ label: 'Refund amount', data: DATA.refunds.amount, backgroundColor: 'rgba(138,44,61,.52)', borderRadius: 8 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custClvStandaloneChart')) {{
+                new Chart(document.getElementById('custClvStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [{{ label: 'Avg CLV', data: DATA.clv.avg_clv, borderColor: '#8b5cf6', tension: .32, borderWidth: 2.4, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custCacStandaloneChart')) {{
+                new Chart(document.getElementById('custCacStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [{{ label: 'CAC', data: DATA.clv.cac, borderColor: '#cf5060', tension: .32, borderWidth: 2.4, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custClvCacComparisonStandaloneChart')) {{
+                const opts = dualAxisOptions();
+                new Chart(document.getElementById('custClvCacComparisonStandaloneChart'), {{
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Avg CLV', data: DATA.clv.avg_clv, backgroundColor: 'rgba(139,92,246,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CAC', data: DATA.clv.cac, borderColor: '#cf5060', tension: .32, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: opts,
+                }});
+            }}
+            if (document.getElementById('custLtvCacRatioStandaloneChart')) {{
+                new Chart(document.getElementById('custLtvCacRatioStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [{{ label: 'LTV/CAC', data: DATA.clv.ltv_cac_ratio, borderColor: '#ff8a1f', tension: .32, borderWidth: 2.4, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custReturnTimeStandaloneChart')) {{
+                new Chart(document.getElementById('custReturnTimeStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.clv.labels,
+                        datasets: [{{ label: 'Avg return days', data: DATA.clv.avg_return_time_days, borderColor: '#4766ff', tension: .32, borderWidth: 2.4, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custPaybackStandaloneChart')) {{
+                new Chart(document.getElementById('custPaybackStandaloneChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.financial.payback_weekly_labels,
+                        datasets: [{{ label: 'Payback orders', data: DATA.financial.payback_weekly_orders, borderColor: '#1f9d66', backgroundColor: (ctx) => gradient(ctx, 'rgba(31,157,102,.16)', 'rgba(31,157,102,.02)'), fill: true, tension: .32, borderWidth: 2.5, pointRadius: 0 }}],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+        }}
+
         function buildDetailGalleries() {{
             buildLibraryEconomicsMarketing();
             buildLibraryCustomersPatternsProducts();
+            buildStandaloneLibraries();
         }}
         document.querySelectorAll('.lang-btn').forEach(btn => btn.addEventListener('click', () => applyLang(btn.dataset.lang)));
         document.querySelectorAll('.window-btn').forEach(btn => btn.addEventListener('click', () => renderKpis(btn.dataset.window)));
         buildCharts();
         buildDetailGalleries();
+        initNavigation();
         applyLang(lang());
     </script>
 </body>

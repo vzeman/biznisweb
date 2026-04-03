@@ -469,3 +469,24 @@ Next exact step:
   - new gallery chart ids and render calls are present in the generated `test2` HTML.
 - Next exact step:
   - visually review `report_20260301-20260331__test2.html` in the browser and decide which `test2` sections/cards should replace the legacy report layout next.
+
+### 2026-04-03
+- Extended VEVO March 	est2 so the design shell stays unchanged but the metric coverage moves much closer to the original 	est report.
+- dashboard_test2.py now fills the previously empty standalone library containers:
+  - libraryEconomicsStandalone
+  - libraryMarketingStandalone
+  - libraryCustomersStandalone
+- Added standalone charts for missing metric families from the legacy report, including:
+  - economics: revenue vs total cost, total costs, product costs, gross margin, packaging, shipping, fixed costs, items sold, avg items per order, scatter revenue vs cost, all-metrics overview, LTV by acquisition date, LTV-based profit
+  - marketing: FB spend, Google spend, FB vs Google spend, spend vs clicks, campaign conversion rate, cost per conversion, CTR, CPC, spend share, campaign CPO, campaign ROAS, spend bucket orders
+  - customer value: refund amount, CLV, CAC, CLV vs CAC, LTV/CAC ratio, return time, payback trend
+- Added scroll-aware sidebar navigation in 	est2:
+  - the active menu item now switches based on the visible section instead of staying hardcoded on Overview
+  - sidebar links now smooth-scroll to the relevant section and update browser hash
+- Verified:
+  - python -m py_compile dashboard_test2.py html_report_generator.py export_orders.py
+  - VEVO March 	est2 regenerate completed successfully
+  - final inline dashboard script parses successfully in Node
+  - standalone library containers and new chart ids are present in data/vevo/report_20260301-20260331__test2.html
+- Next exact step:
+  - visually review eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.
