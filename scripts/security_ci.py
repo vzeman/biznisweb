@@ -28,6 +28,8 @@ def main() -> int:
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
         daily_runner = read("daily_report_runner.py")
+        html_report_generator = read("html_report_generator.py")
+        dashboard_test2 = read("dashboard_test2.py")
         http_client = read("http_client.py")
         weather_client = read("weather_client.py")
         read("templates/reporting-client/settings.template.json")
@@ -77,8 +79,13 @@ def main() -> int:
         )
         require(
             daily_runner,
+            "report_html",
+            "daily_report_runner.py must still attach the generated main HTML report artifact.",
+        )
+        require(
+            html_report_generator + dashboard_test2,
             "Partial Data",
-            "daily_report_runner.py must render partial-data status for generated reports.",
+            "HTML rendering layer must expose explicit partial-data status for generated reports.",
         )
         require(
             read(".github/workflows/observability-check.yml"),
