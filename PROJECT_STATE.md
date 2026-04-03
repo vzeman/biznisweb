@@ -89,6 +89,8 @@ Bootstrap entrypoints:
 - Daily SES email now attaches only the main HTML report.
 - Legacy March `__test` artifacts were removed locally; `__test2` remains only as a reference snapshot.
 - Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_test2.py`) instead of the retired daily runner rendering path.
+- Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
+- Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 
 ## 8) Next Exact Step
 
@@ -128,6 +130,14 @@ Bootstrap entrypoints:
 - Verified locally with:
   - `python scripts/security_ci.py`
   - `python -m py_compile scripts/security_ci.py`
+- Added modern timeframe UX split for the new production dashboard:
+  - `Executive KPI deck` keeps its own independent `Daily / Weekly / Monthly` toggle,
+  - all non-KPI chart sections now use a global sidebar `Analytics window` switch,
+  - global period links preserve the currently active section anchor while switching report variant,
+  - plain production reports now generate the `_periods/...` bundle needed for the sidebar switcher (previously this existed only for tagged/test outputs).
+- Verified locally with:
+  - `python -m py_compile dashboard_test2.py export_orders.py html_report_generator.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
   - uses full months only (drops partial first/last month for this metric),
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.

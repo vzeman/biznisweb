@@ -508,7 +508,7 @@ class BizniWebExporter:
         date_from: datetime,
         date_to: datetime,
     ) -> Optional[Dict[str, Any]]:
-        if not self.enable_period_bundle or not self.output_tag:
+        if not self.enable_period_bundle:
             return None
 
         specs = self._build_period_variant_specs(date_from, date_to)
