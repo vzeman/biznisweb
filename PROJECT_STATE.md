@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-02
+Last updated: 2026-04-03
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -84,10 +84,14 @@ Bootstrap entrypoints:
 - No container/bootstrap parity check in CI yet
 - Runtime/deploy docs for separate OpenClaw infra still belong in another repo and are not defined there yet
 - Partial upstream failures (ads/weather/etc.) now surface explicit source-health metadata in HTML/CFO outputs and JSON sidecars; downstream email/ops policy still needs alert tightening.
+- Main production HTML report now uses the modern dashboard shell that started as `test2`.
+- Standalone CFO HTML output was removed from the artifact contract and daily email flow; CFO KPI logic now lives only inside the main report.
+- Daily SES email now attaches only the main HTML report.
+- Legacy March `__test` artifacts were removed locally; `__test2` remains only as a reference snapshot.
 
 ## 8) Next Exact Step
 
-- Review the merged VEVO March `test2` dashboard variant and decide which visual/layout ideas should be promoted into the broader redesign path without touching current production outputs.
+- Continue visual/UX cleanup of the new production dashboard shell now that `test2` was promoted to the default reporting output.
 
 ## 9) Change Log
 
@@ -118,6 +122,12 @@ Bootstrap entrypoints:
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
+
+### 2026-04-03
+- Promoted the modern dashboard shell (`test2`) to the default production HTML renderer.
+- Removed standalone CFO HTML from `reporting_core.contracts` and from `daily_report_runner.py`.
+- Changed daily SES delivery to send only the main HTML report attachment.
+- Cleaned local legacy `__test` artifacts and regenerated the plain VEVO March production report to verify the new default renderer.
 
 ### 2026-04-01
 - Added side-by-side output variant support for safe UI redesign/testing without overwriting working report artifacts:

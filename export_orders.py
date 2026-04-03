@@ -2115,7 +2115,7 @@ class BizniWebExporter:
             cfo_kpi_payload=cfo_kpi_payload,
             source_health=source_health,
             period_switcher=period_switcher,
-            dashboard_variant='test2' if self.output_tag == 'test2' else 'default',
+            dashboard_variant='default',
         )
         html_filename = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
         # Write with UTF-8 BOM to avoid mojibake when a server/browser mis-detects charset

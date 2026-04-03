@@ -28,7 +28,6 @@ class ReportingArtifactSet:
     aggregate_by_date_product_csv: Path
     data_quality_json: Path
     weather_impact_csv: Path
-    cfo_graph_html: Path
 
     def as_dict(self) -> Dict[str, Path]:
         return {
@@ -40,7 +39,6 @@ class ReportingArtifactSet:
             "aggregate_by_date_product_csv": self.aggregate_by_date_product_csv,
             "data_quality_json": self.data_quality_json,
             "weather_impact_csv": self.weather_impact_csv,
-            "cfo_graph_html": self.cfo_graph_html,
         }
 
     def required_daily_runner_outputs(self) -> Dict[str, Path]:
@@ -83,5 +81,4 @@ def build_artifact_set(project: str, from_date: str, to_date: str, output_tag: O
         aggregate_by_date_product_csv=apply_output_tag(data_dir / f"aggregate_by_date_product_{compact_range}.csv", tag),
         data_quality_json=apply_output_tag(data_dir / f"data_quality_{compact_range}.json", tag),
         weather_impact_csv=apply_output_tag(data_dir / f"weather_impact_{compact_range}.csv", tag),
-        cfo_graph_html=apply_output_tag(data_dir / f"cfo_graphs_{compact_range}.html", tag),
     )

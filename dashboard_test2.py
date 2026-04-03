@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Isolated test2 dashboard renderer.
+Production dashboard renderer used by the main HTML reporting output.
 """
 
 from __future__ import annotations
@@ -855,7 +855,7 @@ def generate_test2_dashboard(
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{title} - test2</title>
+    <title>{title}</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         :root {{
@@ -960,7 +960,7 @@ def generate_test2_dashboard(
                 <div class="brand-mark">{brand_mark}</div>
                 <div>
                     <strong>{title}</strong>
-                    <small><span class="lang-en">test2 isolated dashboard</span><span class="lang-sk hidden">test2 izolovaný dashboard</span></small>
+                    <small><span class="lang-en">executive reporting dashboard</span><span class="lang-sk hidden">hlavny reporting dashboard</span></small>
                 </div>
             </div>
             <div class="nav-label"><span class="lang-en">Navigate</span><span class="lang-sk hidden">Navigácia</span></div>
@@ -982,7 +982,7 @@ def generate_test2_dashboard(
                     <div class="panel hero-main">
                         <div class="badge"><span class="lang-en">research-driven concept</span><span class="lang-sk hidden">research-driven koncept</span></div>
                         <h1>{title}</h1>
-                        <p class="subtitle"><span class="lang-en">A new test2 dashboard built from scratch around ecommerce dashboard best practices: executive KPIs first, grouped business questions, fewer but clearer charts, and explicit source confidence.</span><span class="lang-sk hidden">Nový test2 dashboard postavený od nuly podľa ecommerce dashboard best practices: najprv executive KPI, potom business otázky, menej ale čitateľnejších grafov a explicitný stav dátových zdrojov.</span></p>
+                        <p class="subtitle"><span class="lang-en">A modern ecommerce reporting dashboard built around executive KPIs first, grouped business questions, clearer charts, and explicit source confidence.</span><span class="lang-sk hidden">Moderny ecommerce reporting dashboard postaveny okolo executive KPI, business otazok, citatelnejsich grafov a explicitneho stavu datovych zdrojov.</span></p>
                         <div class="meta-row">
                             <div class="meta-card"><small><span class="lang-en">Range</span><span class="lang-sk hidden">Obdobie</span></small><strong>{escape(date_from.strftime("%Y-%m-%d"))} → {escape(date_to.strftime("%Y-%m-%d"))}</strong></div>
                             <div class="meta-card"><small><span class="lang-en">Generated</span><span class="lang-sk hidden">Vygenerované</span></small><strong>{escape(generated_at)}</strong></div>
@@ -1241,7 +1241,7 @@ def generate_test2_dashboard(
                 <section class="section" id="customers">
                     <div class="section-head">
                         <h2><span class="lang-en">Customer quality and retention</span><span class="lang-sk hidden">Kvalita zákazníkov a retencia</span></h2>
-                        <p><span class="lang-en">This extends the nice `test2` shell with retention, refunds and concentration data from the richer reporting build.</span><span class="lang-sk hidden">Toto rozširuje pekný `test2` shell o retenciu, refundy a koncentráciu z bohatšieho reportingu.</span></p>
+                        <p><span class="lang-en">This extends the main dashboard shell with retention, refunds and concentration data from the richer reporting build.</span><span class="lang-sk hidden">Toto rozsiruje hlavny dashboard shell o retenciu, refundy a koncentraciu z bohatsieho reportingu.</span></p>
                     </div>
                     <div class="panel chart-card" style="margin-bottom:18px;">
                         <div class="mini-grid">
@@ -1438,7 +1438,7 @@ def generate_test2_dashboard(
                 <section class="section" id="patterns">
                     <div class="section-head">
                         <h2><span class="lang-en">Calendar patterns and weather</span><span class="lang-sk hidden">Kalendarn? patterny a pocasie</span></h2>
-                        <p><span class="lang-en">This brings the richer pattern analysis from the older report into the cleaner `test2` shell.</span><span class="lang-sk hidden">Sem prenasiame bohatsie patterny zo starsieho reportu do cistejsieho `test2` shellu.</span></p>
+                        <p><span class="lang-en">This brings the richer pattern analysis from the legacy report into the cleaner main dashboard shell.</span><span class="lang-sk hidden">Sem prenasame bohatsie patterny zo starsieho reportu do cistejsieho hlavneho dashboard shellu.</span></p>
                     </div>
                     <div class="grid-2">
                         <div class="panel chart-card">
@@ -1635,7 +1635,7 @@ def generate_test2_dashboard(
                 <section class="section" id="library">
                     <div class="section-head">
                         <h2><span class="lang-en">Full metric library</span><span class="lang-sk hidden">Plna kniznica metrik</span></h2>
-                        <p><span class="lang-en">This keeps the test2 shell but restores the wider metric surface from the original test report. Use it when you want the full analytical depth without leaving the new layout.</span><span class="lang-sk hidden">Toto zachovava shell test2, ale vracia sirsiu plochu metrik z povodneho test reportu. Pouzi to vtedy, ked chces plnu analyticku hlbku bez odchodu z noveho layoutu.</span></p>
+                        <p><span class="lang-en">This keeps the new dashboard shell and restores the wider metric surface from the original reporting build. Use it when you want full analytical depth without leaving the new layout.</span><span class="lang-sk hidden">Toto zachovava novy dashboard shell, ale vracia sirsiu plochu metrik z povodneho reportingu. Pouzi to vtedy, ked chces plnu analyticku hlbku bez odchodu z noveho layoutu.</span></p>
                     </div>
                     <div class="section-head" style="margin-top:10px;">
                         <h2><span class="lang-en">Daily economics library</span><span class="lang-sk hidden">Kniznica dennej ekonomiky</span></h2>

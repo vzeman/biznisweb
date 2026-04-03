@@ -88,7 +88,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     raw_report_title = (report_title or "BizniWeb reporting").strip()
     report_title = escape(raw_report_title)
 
-    if str(dashboard_variant or "default").strip().lower() == "test2":
+    variant = str(dashboard_variant or "default").strip().lower()
+
+    if variant in {"default", "modern", "test2"}:
         from dashboard_test2 import generate_test2_dashboard
 
         return generate_test2_dashboard(
