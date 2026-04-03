@@ -88,6 +88,7 @@ Bootstrap entrypoints:
 - Standalone CFO HTML output was removed from the artifact contract and daily email flow; CFO KPI logic now lives only inside the main report.
 - Daily SES email now attaches only the main HTML report.
 - Legacy March `__test` artifacts were removed locally; `__test2` remains only as a reference snapshot.
+- Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_test2.py`) instead of the retired daily runner rendering path.
 
 ## 8) Next Exact Step
 
@@ -118,6 +119,15 @@ Bootstrap entrypoints:
 - Verified syntax via python -m py_compile export_orders.py html_report_generator.py.
 - Revised Week-of-Month methodology to remove day-count bias:
   - uses only days 1-28 (4x7 equal windows),
+
+### 2026-04-03
+- Fixed false-positive `Env Check` / `security-baseline` CI failure after promoting the modern dashboard renderer:
+  - `scripts/security_ci.py` no longer expects the `Partial Data` marker inside `daily_report_runner.py`,
+  - CI now validates partial-data rendering in the actual HTML layer (`html_report_generator.py` and `dashboard_test2.py`),
+  - retained a runner-level assertion that the main HTML report artifact is still attached by `daily_report_runner.py`.
+- Verified locally with:
+  - `python scripts/security_ci.py`
+  - `python -m py_compile scripts/security_ci.py`
   - uses full months only (drops partial first/last month for this metric),
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
