@@ -90,10 +90,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
     variant = str(dashboard_variant or "default").strip().lower()
 
-    if variant in {"default", "modern", "test2"}:
-        from dashboard_test2 import generate_test2_dashboard
+    if variant in {"default", "modern"}:
+        from dashboard_modern import generate_modern_dashboard
 
-        return generate_test2_dashboard(
+        return generate_modern_dashboard(
             date_agg=date_agg,
             items_agg=items_agg,
             date_from=date_from,

@@ -84,17 +84,17 @@ Bootstrap entrypoints:
 - No container/bootstrap parity check in CI yet
 - Runtime/deploy docs for separate OpenClaw infra still belong in another repo and are not defined there yet
 - Partial upstream failures (ads/weather/etc.) now surface explicit source-health metadata in HTML/CFO outputs and JSON sidecars; downstream email/ops policy still needs alert tightening.
-- Main production HTML report now uses the modern dashboard shell that started as `test2`.
+- Main production HTML report now uses the modern dashboard shell.
 - Standalone CFO HTML output was removed from the artifact contract and daily email flow; CFO KPI logic now lives only inside the main report.
 - Daily SES email now attaches only the main HTML report.
-- Legacy March `__test` artifacts were removed locally; `__test2` remains only as a reference snapshot.
-- Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_test2.py`) instead of the retired daily runner rendering path.
+- Legacy `__test` and `__test2` artifacts are no longer part of the active workflow.
+- Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_modern.py`) instead of the retired daily runner rendering path.
 - Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 
 ## 8) Next Exact Step
 
-- Continue visual/UX cleanup of the new production dashboard shell now that `test2` was promoted to the default reporting output.
+- Continue visual/UX cleanup of the new production dashboard shell now that the temporary `test2` output track was retired.
 
 ## 9) Change Log
 
@@ -123,9 +123,14 @@ Bootstrap entrypoints:
   - uses only days 1-28 (4x7 equal windows),
 
 ### 2026-04-03
+- Retired the standalone `test2` dashboard variant after promoting it to production:
+  - renamed `dashboard_test2.py` to `dashboard_modern.py`,
+  - removed `test2` from the HTML renderer dispatch variants,
+  - updated security CI to validate the renamed production dashboard module,
+  - cleaned local `__test2` artifacts from the active workspace.
 - Fixed false-positive `Env Check` / `security-baseline` CI failure after promoting the modern dashboard renderer:
   - `scripts/security_ci.py` no longer expects the `Partial Data` marker inside `daily_report_runner.py`,
-  - CI now validates partial-data rendering in the actual HTML layer (`html_report_generator.py` and `dashboard_test2.py`),
+  - CI now validates partial-data rendering in the actual HTML layer (`html_report_generator.py` and `dashboard_modern.py`),
   - retained a runner-level assertion that the main HTML report artifact is still attached by `daily_report_runner.py`.
 - Verified locally with:
   - `python scripts/security_ci.py`
