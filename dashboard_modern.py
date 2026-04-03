@@ -308,7 +308,7 @@ def _sanitize_dashboard_html(text: str) -> str:
     return fixed
 
 
-def generate_test2_dashboard(
+def generate_modern_dashboard(
     date_agg: pd.DataFrame,
     items_agg: pd.DataFrame,
     date_from: datetime,
