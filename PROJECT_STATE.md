@@ -551,3 +551,16 @@ Next exact step:
   - standalone library containers and new chart ids are present in data/vevo/report_20260301-20260331__test2.html
 - Next exact step:
   - visually review eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.
+### 2026-04-04
+- Added an `Executive metrics tile deck` to the end of section `10 Full library` in the modern production dashboard, keeping the current dashboard design while surfacing all major top-level KPI metrics in a compact tile grid.
+- `dashboard_modern.py` now computes and renders a large summary tile set covering revenue, cost stack, profit, daily averages, orders/items, AOV, CAC/ROAS/MER, revenue per customer, contribution layers, break-even CAC, CAC headroom, payback, refund summary, repeat purchase rate, and related executive checks.
+- Added reusable helpers for tile formatting/styling and new tile-grid CSS so the metrics render as readable dashboard cards instead of legacy summary boxes.
+- Verified with:
+  - `python -m py_compile dashboard_modern.py html_report_generator.py export_orders.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+- Verified in generated output:
+  - `data/vevo/report_20260301-20260331.html`
+  - tile deck heading is present in `Full library`
+  - tile labels such as `Total revenue (net)`, `Revenue LTV/CAC`, `ROI`, and `Repeat purchase rate` render in the final HTML.
+- Next exact step:
+  - visually review the new tile deck in the March VEVO report and decide whether any low-signal tiles should be removed or regrouped.

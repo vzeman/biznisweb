@@ -308,6 +308,53 @@ def _sanitize_dashboard_html(text: str) -> str:
     return fixed
 
 
+def _format_library_tile_value(value: Any, kind: str = "number", decimals: Optional[int] = None) -> str:
+    numeric = _maybe_num(value)
+    if numeric is None:
+        return "N/A"
+    if kind == "currency":
+        precision = 2 if decimals is None else decimals
+        return f"&euro;{numeric:,.{precision}f}"
+    if kind == "percent":
+        precision = 1 if decimals is None else decimals
+        return f"{numeric:,.{precision}f}%"
+    if kind == "multiple":
+        precision = 2 if decimals is None else decimals
+        return f"{numeric:,.{precision}f}x"
+    if kind == "integer":
+        return f"{int(round(numeric)):,}"
+    if kind == "delta":
+        precision = 4 if decimals is None else decimals
+        return f"{numeric:+.{precision}f}"
+    precision = 2 if decimals is None else decimals
+    return f"{numeric:,.{precision}f}"
+
+
+def _library_tile_html(
+    label_en: str,
+    label_sk: str,
+    value_html: str,
+    tone: str = "neutral",
+    note_en: str = "",
+    note_sk: str = "",
+) -> str:
+    note_html = ""
+    if note_en or note_sk:
+        note_html = (
+            '<div class="library-tile-note">'
+            f'<span class="lang-en">{escape(note_en)}</span>'
+            f'<span class="lang-sk hidden">{escape(note_sk or note_en)}</span>'
+            '</div>'
+        )
+    return (
+        f'<div class="library-tile tone-{escape(tone)}">'
+        f'<small><span class="lang-en">{escape(label_en)}</span><span class="lang-sk hidden">{escape(label_sk)}</span></small>'
+        f'<div class="library-tile-value">{value_html}</div>'
+        f'{note_html}'
+        '</div>'
+    )
+
+
 def generate_modern_dashboard(
     date_agg: pd.DataFrame,
     items_agg: pd.DataFrame,
@@ -647,11 +694,115 @@ def generate_modern_dashboard(
     total_revenue = round(_num(date_agg["total_revenue"].sum()), 2)
     total_profit = round(_num(date_agg["net_profit"].sum()), 2)
     total_orders = int(round(_num(date_agg["unique_orders"].sum())))
-    total_ads = round(_num(date_agg.get("fb_ads_spend", pd.Series(dtype=float)).sum()) + _num(date_agg.get("google_ads_spend", pd.Series(dtype=float)).sum()), 2)
+    total_fb_ads = round(_num(date_agg.get("fb_ads_spend", pd.Series(dtype=float)).sum()), 2)
+    total_google_ads = round(_num(date_agg.get("google_ads_spend", pd.Series(dtype=float)).sum()), 2)
+    total_ads = round(total_fb_ads + total_google_ads, 2)
+    total_product_cost = round(_num(date_agg.get("product_expense", pd.Series(dtype=float)).sum()), 2)
+    total_packaging_cost = round(_num(date_agg.get("packaging_cost", pd.Series(dtype=float)).sum()), 2)
+    total_shipping_subsidy = round(_num(date_agg.get("shipping_subsidy_cost", pd.Series(dtype=float)).sum()), 2)
+    total_fixed_overhead = round(_num(date_agg.get("fixed_daily_cost", pd.Series(dtype=float)).sum()), 2)
+    total_costs = round(_num(date_agg.get("total_cost", pd.Series(dtype=float)).sum()), 2)
+    total_items = int(round(_num(date_agg.get("total_items", pd.Series(dtype=float)).sum())))
     blended_roas = round((total_revenue / total_ads) if total_ads > 0 else 0.0, 2)
     top_city = str(cities[0].get("city") or "-") if cities else "-"
     top_product = str(products[0].get("product") or "-") if products else "-"
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    active_days = max(len(date_agg.index), 1)
+    avg_daily_revenue = round(total_revenue / active_days, 2)
+    avg_daily_profit = round(total_profit / active_days, 2)
+    avg_fb_cost_per_order = round((total_fb_ads / total_orders) if total_orders > 0 else 0.0, 2)
+    refund_summary = (refunds_analysis or {}).get("summary", {})
+
+    avg_customer_ltv = _maybe_num((financial_metrics or {}).get("avg_customer_ltv"))
+    if avg_customer_ltv is None:
+        avg_customer_ltv = _maybe_num((financial_metrics or {}).get("revenue_per_customer"))
+
+    returning_customer_rate = _maybe_num((customer_concentration or {}).get("repeat_purchase_rate"))
+    if returning_customer_rate is None:
+        returning_customer_rate = _maybe_num(cohort_summary.get("repeat_rate_pct"))
+
+    break_even_cac = _maybe_num((financial_metrics or {}).get("break_even_cac"))
+    current_fb_cac = _maybe_num((financial_metrics or {}).get("current_fb_cac"))
+    cac_break_even_ratio = None
+    if break_even_cac not in (None, 0) and current_fb_cac is not None:
+        cac_break_even_ratio = current_fb_cac / break_even_cac
+    roi_total_pct = round((total_profit / total_costs * 100), 1) if total_costs > 0 else None
+    revenue_ltv_cac = None
+    if avg_customer_ltv not in (None, 0) and current_fb_cac not in (None, 0):
+        revenue_ltv_cac = avg_customer_ltv / current_fb_cac
+
+    repeat_purchase_rate = _maybe_num((customer_concentration or {}).get("repeat_purchase_rate"))
+    if repeat_purchase_rate is None:
+        repeat_purchase_rate = _maybe_num(cohort_summary.get("repeat_rate_pct"))
+
+    library_tiles = [
+        {"en": "Total revenue (net)", "sk": "Celkove trzby (net)", "value": total_revenue, "kind": "currency", "tone": "neutral"},
+        {"en": "Product costs", "sk": "Naklady na produkty", "value": total_product_cost, "kind": "currency", "tone": "negative"},
+        {"en": "Packaging costs", "sk": "Naklady na balenie", "value": total_packaging_cost, "kind": "currency", "tone": "negative"},
+        {"en": "Shipping subsidy", "sk": "Prispevok na dopravu", "value": total_shipping_subsidy, "kind": "currency", "tone": "negative"},
+        {"en": "Fixed overhead", "sk": "Fixny overhead", "value": total_fixed_overhead, "kind": "currency", "tone": "negative"},
+        {"en": "Facebook ads", "sk": "Facebook reklama", "value": total_fb_ads, "kind": "currency", "tone": "negative"},
+        {"en": "Google ads", "sk": "Google reklama", "value": total_google_ads, "kind": "currency", "tone": "negative"},
+        {"en": "Total costs", "sk": "Celkove naklady", "value": total_costs, "kind": "currency", "tone": "negative"},
+        {"en": "Net profit", "sk": "Cisty zisk", "value": total_profit, "kind": "currency", "tone": "positive"},
+        {"en": "Avg daily revenue", "sk": "Priemerna denna trzba", "value": avg_daily_revenue, "kind": "currency", "tone": "neutral"},
+        {"en": "Avg daily profit/loss", "sk": "Priemerny denny zisk/strata", "value": avg_daily_profit, "kind": "currency", "tone": "positive"},
+        {"en": "ROI", "sk": "ROI", "value": roi_total_pct, "kind": "percent", "tone": "positive"},
+        {"en": "Total orders", "sk": "Celkove objednavky", "value": total_orders, "kind": "integer", "tone": "neutral"},
+        {"en": "Total items", "sk": "Celkove kusy", "value": total_items, "kind": "integer", "tone": "neutral"},
+        {"en": "Avg order value", "sk": "Priemerna hodnota objednavky", "value": round((total_revenue / total_orders), 2) if total_orders > 0 else 0.0, "kind": "currency", "tone": "neutral"},
+        {"en": "Avg FB cost/order", "sk": "Priemer FB naklad/objednavka", "value": avg_fb_cost_per_order, "kind": "currency", "tone": "negative"},
+        {"en": "Returning customers", "sk": "Vracajuci sa zakaznici", "value": returning_customer_rate, "kind": "percent", "tone": "positive"},
+        {"en": "Avg customer LTV (revenue)", "sk": "Priemerne customer LTV (trzby)", "value": avg_customer_ltv, "kind": "currency", "tone": "neutral"},
+        {"en": "Customer acq. cost", "sk": "Naklad na akviziciu zakaznika", "value": current_fb_cac, "kind": "currency", "tone": "negative"},
+        {"en": "Revenue LTV/CAC", "sk": "Revenue LTV/CAC", "value": revenue_ltv_cac, "kind": "multiple", "tone": "positive"},
+        {"en": "ROAS (all ads)", "sk": "ROAS (vsetky reklamy)", "value": _maybe_num((financial_metrics or {}).get("roas")) if _maybe_num((financial_metrics or {}).get("roas")) is not None else blended_roas, "kind": "multiple", "tone": "positive"},
+        {"en": "MER", "sk": "MER", "value": _maybe_num((financial_metrics or {}).get("mer")), "kind": "multiple", "tone": "positive"},
+        {"en": "Revenue/customer (net)", "sk": "Trzby/zakaznik (net)", "value": _maybe_num((financial_metrics or {}).get("revenue_per_customer")), "kind": "currency", "tone": "neutral"},
+        {"en": "Orders/customer", "sk": "Objednavky/zakaznik", "value": _maybe_num((financial_metrics or {}).get("orders_per_customer")), "kind": "number", "decimals": 2, "tone": "neutral"},
+        {"en": "Company profit margin", "sk": "Firemna ziskova marza", "value": _maybe_num((financial_metrics or {}).get("company_profit_margin_pct")), "kind": "percent", "tone": "positive", "note_en": "Includes fixed cost", "note_sk": "Vrata fixnych nakladov"},
+        {"en": "Product gross margin", "sk": "Hruba marza produktu", "value": _maybe_num((financial_metrics or {}).get("product_gross_margin_pct")), "kind": "percent", "tone": "positive"},
+        {"en": "Pre-ad contribution profit", "sk": "Pre-ad contribution profit", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_profit")), "kind": "currency", "tone": "positive"},
+        {"en": "Pre-ad contribution margin", "sk": "Pre-ad contribution marza", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_margin_pct")), "kind": "percent", "tone": "positive"},
+        {"en": "Pre-ad contribution / order", "sk": "Pre-ad contribution / objednavka", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_order")), "kind": "currency", "tone": "positive", "note_en": "Break-even order contribution", "note_sk": "Break-even contribution na objednavku"},
+        {"en": "Post-ad contribution profit", "sk": "Post-ad contribution profit", "value": _maybe_num((financial_metrics or {}).get("post_ad_contribution_profit")), "kind": "currency", "tone": "positive"},
+        {"en": "Post-ad contribution margin", "sk": "Post-ad contribution marza", "value": _maybe_num((financial_metrics or {}).get("post_ad_contribution_margin_pct")), "kind": "percent", "tone": "positive"},
+        {"en": "Post-ad contribution / order", "sk": "Post-ad contribution / objednavka", "value": _maybe_num((financial_metrics or {}).get("post_ad_contribution_profit_per_order")), "kind": "currency", "tone": "positive", "note_en": "Excludes fixed overhead", "note_sk": "Bez fixneho overheadu"},
+        {"en": "Break-even CAC", "sk": "Break-even CAC", "value": break_even_cac, "kind": "currency", "tone": "positive"},
+        {"en": "Pre-ad contribution / customer", "sk": "Pre-ad contribution / zakaznik", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_customer")), "kind": "currency", "tone": "positive"},
+        {"en": "Current FB CAC", "sk": "Aktualne FB CAC", "value": current_fb_cac, "kind": "currency", "tone": "negative"},
+        {"en": "Paid CAC (FB)", "sk": "Paid CAC (FB)", "value": _maybe_num((financial_metrics or {}).get("paid_cac")), "kind": "currency", "tone": "negative"},
+        {"en": "Blended CAC (tracked ads)", "sk": "Blended CAC (trackovane ads)", "value": _maybe_num((financial_metrics or {}).get("blended_cac")), "kind": "currency", "tone": "negative", "note_en": "FB + Google", "note_sk": "FB + Google"},
+        {"en": "CAC headroom", "sk": "CAC headroom", "value": _maybe_num((financial_metrics or {}).get("cac_headroom")), "kind": "currency", "tone": "positive"},
+        {"en": "CAC / break-even", "sk": "CAC / break-even", "value": cac_break_even_ratio, "kind": "multiple", "tone": "neutral"},
+        {"en": "Contribution LTV/CAC", "sk": "Contribution LTV/CAC", "value": _maybe_num((financial_metrics or {}).get("contribution_ltv_cac")), "kind": "multiple", "tone": "positive"},
+        {"en": "New cust. revenue", "sk": "Trzby novych zakaznikov", "value": _maybe_num((financial_metrics or {}).get("new_revenue")), "kind": "currency", "tone": "neutral"},
+        {"en": "Returning cust. revenue", "sk": "Trzby vracajucich sa zakaznikov", "value": _maybe_num((financial_metrics or {}).get("returning_revenue")), "kind": "currency", "tone": "neutral"},
+        {"en": "Payback period", "sk": "Payback period", "value": _maybe_num((financial_metrics or {}).get("payback_orders")), "kind": "number", "decimals": 2, "tone": "positive", "note_en": "orders", "note_sk": "objednavky"},
+        {"en": "Payback period (days est.)", "sk": "Payback period (odhad dni)", "value": _maybe_num((financial_metrics or {}).get("payback_days_estimated")), "kind": "number", "decimals": 0, "tone": "positive", "note_en": "days", "note_sk": "dni"},
+        {"en": "Post-ad payback orders est.", "sk": "Post-ad payback objednavky", "value": _maybe_num((financial_metrics or {}).get("post_ad_payback_orders")), "kind": "number", "decimals": 2, "tone": "positive", "note_en": "orders", "note_sk": "objednavky"},
+        {"en": "Post-ad payback (days est.)", "sk": "Post-ad payback (odhad dni)", "value": _maybe_num((financial_metrics or {}).get("post_ad_payback_days_estimated")), "kind": "number", "decimals": 0, "tone": "positive", "note_en": "days", "note_sk": "dni"},
+        {"en": "ROAS check delta", "sk": "ROAS check delta", "value": consistency_payload.get("roas_delta"), "kind": "delta", "tone": "positive"},
+        {"en": "Margin check delta", "sk": "Margin check delta", "value": consistency_payload.get("margin_delta"), "kind": "delta", "tone": "positive"},
+        {"en": "CAC check delta", "sk": "CAC check delta", "value": consistency_payload.get("cac_delta"), "kind": "delta", "tone": "negative"},
+        {"en": "CAC (FB/new cust.)", "sk": "CAC (FB/novy zakaznik)", "value": current_fb_cac, "kind": "currency", "tone": "negative"},
+        {"en": "FB spend / orders", "sk": "FB spend / objednavky", "value": avg_fb_cost_per_order, "kind": "currency", "tone": "negative"},
+        {"en": "Refund orders", "sk": "Refund objednavky", "value": _maybe_num(refund_summary.get("refund_orders")), "kind": "integer", "tone": "negative"},
+        {"en": "Refund rate", "sk": "Refund rate", "value": _maybe_num(refund_summary.get("refund_rate_pct")), "kind": "percent", "tone": "negative"},
+        {"en": "Refund amount", "sk": "Refund amount", "value": _maybe_num(refund_summary.get("refund_amount")), "kind": "currency", "tone": "negative"},
+        {"en": "Repeat purchase rate", "sk": "Repeat purchase rate", "value": repeat_purchase_rate, "kind": "percent", "tone": "positive"},
+    ]
+    full_library_tiles_html = "".join(
+        _library_tile_html(
+            tile["en"],
+            tile["sk"],
+            _format_library_tile_value(tile.get("value"), tile.get("kind", "number"), tile.get("decimals")),
+            tone=tile.get("tone", "neutral"),
+            note_en=tile.get("note_en", ""),
+            note_sk=tile.get("note_sk", ""),
+        )
+        for tile in library_tiles
+    )
 
     payload = {
         "series": series,
@@ -958,6 +1109,13 @@ def generate_modern_dashboard(
         .mini-card {{ padding: 14px 16px; border-radius: 16px; background: var(--accent-soft); border:1px solid rgba(255,138,31,.12); }}
         .mini-card small {{ display:block; color: var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }}
         .mini-card strong {{ font-size: 20px; }}
+        .library-tile-grid {{ display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 12px; }}
+        .library-tile {{ padding: 16px; border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.12); min-height: 122px; box-shadow: 0 8px 20px rgba(115, 82, 22, .05); }}
+        .library-tile small {{ display:block; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }}
+        .library-tile-value {{ font-size: 18px; font-weight: 900; line-height: 1.15; letter-spacing: -.04em; color: var(--text); word-break: break-word; }}
+        .library-tile-note {{ margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }}
+        .library-tile.tone-positive .library-tile-value {{ color: var(--green); }}
+        .library-tile.tone-negative .library-tile-value {{ color: var(--red); }}
         .health-grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }}
         .health-item {{ padding: 16px; border-radius: 18px; background: #fff; border:1px solid var(--line); }}
         .health-title {{ font-weight: 800; margin-bottom: 8px; }}
@@ -1704,6 +1862,12 @@ def generate_modern_dashboard(
                         <p><span class="lang-en">Product combinations, spend-response diagnostics and operational status drilldown.</span><span class="lang-sk hidden">Produktove kombinacie, spend-response diagnostika a operativny drilldown stavov.</span></p>
                     </div>
                     <div class="grid-2" id="libraryProductsOps"></div>
+
+                    <div class="section-head" style="margin-top:26px;">
+                        <h2><span class="lang-en">Executive metrics tile deck</span><span class="lang-sk hidden">Executive deck metrik v dlazdiciach</span></h2>
+                        <p><span class="lang-en">All core summary metrics in one compact tile view for quick scanning at the end of the full library.</span><span class="lang-sk hidden">Vsetky hlavne sumarne metriky pokope v kompaktnych dlazdiciach na rychle preletanie na konci full library.</span></p>
+                    </div>
+                    <div class="library-tile-grid">{full_library_tiles_html}</div>
                 </section>
 
                 <section class="section" id="health">
