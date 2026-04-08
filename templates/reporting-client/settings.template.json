@@ -6,6 +6,8 @@
   "report_from_date": "2026-01-01",
   "facebook_ads_currency": "EUR",
   "google_ads_currency": "EUR",
+  "item_price_values_are_net": true,
+  "exclude_zero_value_orders": false,
   "packaging_cost_per_order": 0.3,
   "shipping_subsidy_per_order": 0.0,
   "fixed_monthly_cost": 0,

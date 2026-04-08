@@ -20,6 +20,8 @@ class ProjectRuntime:
     project_name: str
     api_url: str
     api_token: str
+    item_price_values_are_net: bool
+    exclude_zero_value_orders: bool
     packaging_cost_per_order: float
     shipping_subsidy_per_order: float
     fixed_monthly_cost: float
@@ -44,6 +46,8 @@ class ProjectRuntime:
             "project_name": self.project_name,
             "api_url": self.api_url,
             "api_token": self.api_token,
+            "item_price_values_are_net": self.item_price_values_are_net,
+            "exclude_zero_value_orders": self.exclude_zero_value_orders,
             "packaging_cost_per_order": self.packaging_cost_per_order,
             "shipping_subsidy_per_order": self.shipping_subsidy_per_order,
             "fixed_monthly_cost": self.fixed_monthly_cost,
@@ -107,6 +111,8 @@ def load_project_runtime(
         project_name=project_name,
         api_url=resolve_biznisweb_api_url(project_name, settings),
         api_token=os.getenv("BIZNISWEB_API_TOKEN", ""),
+        item_price_values_are_net=bool(settings.get("item_price_values_are_net", False)),
+        exclude_zero_value_orders=bool(settings.get("exclude_zero_value_orders", False)),
         packaging_cost_per_order=float(settings.get("packaging_cost_per_order", default_packaging_cost_per_order)),
         shipping_subsidy_per_order=float(settings.get("shipping_subsidy_per_order", default_shipping_subsidy_per_order)),
         fixed_monthly_cost=float(settings.get("fixed_monthly_cost", default_fixed_monthly_cost)),
@@ -144,6 +150,8 @@ def load_project_runtime(
 
 
 def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any]) -> None:
+    target_globals["ITEM_PRICE_VALUES_ARE_NET"] = bool(runtime.item_price_values_are_net)
+    target_globals["EXCLUDE_ZERO_VALUE_ORDERS"] = bool(runtime.exclude_zero_value_orders)
     target_globals["PACKAGING_COST_PER_ORDER"] = float(runtime.packaging_cost_per_order)
     target_globals["SHIPPING_SUBSIDY_PER_ORDER"] = float(runtime.shipping_subsidy_per_order)
     target_globals["FIXED_MONTHLY_COST"] = float(runtime.fixed_monthly_cost)

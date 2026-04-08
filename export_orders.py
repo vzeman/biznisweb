@@ -104,6 +104,8 @@ GRAPHQL_TIMEOUT_SEC = int(
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
 SHIPPING_SUBSIDY_PER_ORDER = 0.2  # EUR per order (shipping subsidy)
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
+ITEM_PRICE_VALUES_ARE_NET = False  # BizniWeb item price values are treated as net when project opts in
+EXCLUDE_ZERO_VALUE_ORDERS = False  # Optional exclusion for full orders with 0 total / 0 revenue
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
 ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
@@ -1636,6 +1638,13 @@ class BizniWebExporter:
         # Convert order total to EUR
         order_total_original = order_sum.get('value', 0) or 0
         order_total_eur = self.convert_to_eur(order_total_original, order_currency)
+
+        if (
+            EXCLUDE_ZERO_VALUE_ORDERS
+            and round(float(order_total_original), 2) == 0
+            and round(float(order_total_eur), 2) == 0
+        ):
+            return flattened_rows
         
         # Customer info
         customer_name = customer.get('company_name', '')
@@ -1703,24 +1712,30 @@ class BizniWebExporter:
                 # Get item currency (use order currency if not specified)
                 item_currency = item_price.get('currency', {}).get('code') if item_price.get('currency') else order_currency
                 
-                # Calculate prices with and without tax
+                # BizniWeb order items for Roy/VEVO are emitted as net line values even when
+                # `price.is_net_price` is false. Projects opt into this explicitly.
                 item_price_value_original = item_price.get('value', 0) or 0
                 # Convert to EUR
                 item_price_value = self.convert_to_eur(item_price_value_original, item_currency)
                 item_quantity = item.get('quantity', 1) or 1
                 item_tax_rate = item.get('tax_rate', 0) or 0
-                
-                # Calculate total price for this item (price * quantity) in EUR
-                item_total_with_tax = item_price_value * item_quantity
-                
-                # Calculate price without tax
-                # Price without tax = Price with tax / (1 + tax_rate/100)
-                if item_tax_rate > 0:
-                    item_total_without_tax = item_total_with_tax / (1 + item_tax_rate / 100)
-                    item_tax_amount = item_total_with_tax - item_total_without_tax
+                item_price_is_net = bool(ITEM_PRICE_VALUES_ARE_NET or item_price.get('is_net_price'))
+
+                if item_price_is_net:
+                    item_total_without_tax = item_price_value * item_quantity
+                    item_tax_amount = (
+                        item_total_without_tax * (item_tax_rate / 100)
+                        if item_tax_rate > 0 else 0
+                    )
+                    item_total_with_tax = item_total_without_tax + item_tax_amount
                 else:
-                    item_total_without_tax = item_total_with_tax
-                    item_tax_amount = 0
+                    item_total_with_tax = item_price_value * item_quantity
+                    if item_tax_rate > 0:
+                        item_total_without_tax = item_total_with_tax / (1 + item_tax_rate / 100)
+                        item_tax_amount = item_total_with_tax - item_total_without_tax
+                    else:
+                        item_total_without_tax = item_total_with_tax
+                        item_tax_amount = 0
                 
                 # Get expense per item from mapping (using product_sku - EAN or hash)
                 item_label = item.get('item_label', '')

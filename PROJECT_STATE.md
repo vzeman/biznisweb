@@ -76,6 +76,8 @@ Bootstrap entrypoints:
 - Roy reporting now uses live Google Ads API data without `manual_google_ads_total`.
 - Standalone ads helpers support `--project <slug>` for project-scoped Roy/VEVO smoke tests.
 - Ads spend normalization now supports per-project ad-account currencies before report P&L math.
+- BizniWeb item line prices for ROY and VEVO are now treated as net values via project runtime, fixing the prior double-VAT reduction in product/order revenue math.
+- Roy reporting now excludes full zero-value orders (0 total / 0 revenue), which removes complaint/exchange/service replacement orders from financial reporting.
 
 ## 6) Integration Notes (External Systems)
 
@@ -104,10 +106,11 @@ Bootstrap entrypoints:
 - Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 - Roy Meta token expired during the 2026-04-08 export verification run; the report continued with zero-filled Facebook metrics while Google Ads stayed live.
+- Google/Meta ads and weather enrichments make full-range verification runs slow; the repo still lacks a lighter regression fixture for finance math changes.
 
 ## 8) Next Exact Step
 
-- Refresh Roy Meta access token, verify `python facebook_ads.py --project roy`, then rerun `python export_orders.py --project roy` so Roy report uses both live Meta and live Google ads data.
+- Review Roy and VEVO finance deltas after the item-price net/gross correction, then decide whether to relabel/export explicit `unit_net` / `unit_gross` CSV columns for operator clarity.
 
 ## 9) Change Log
 
@@ -116,6 +119,17 @@ Bootstrap entrypoints:
 - Added cross-platform bootstrap scripts for macOS/Linux and Windows PowerShell.
 - Narrowed `PROJECT_STATE.md` to this repository only.
 - Removed cross-project state ownership from this repo; left only integration notes.
+
+### 2026-04-08
+- Fixed BizniWeb line-price handling for ROY and VEVO:
+  - added project runtime flag `item_price_values_are_net`,
+  - updated `export_orders.py` item math to treat opted-in line prices as net and derive gross from tax rate,
+  - verified with ROY `Wachman Solar Lite` (`69.11 net -> 85.01 gross`) and VEVO `Odmerka Vevo 7ml` (`0.81 net -> 1.00 gross`).
+- Added project runtime flag `exclude_zero_value_orders` and enabled it for ROY.
+- Verified ROY zero-value order `2577000094` now produces 0 export rows and is fully excluded from reporting.
+- Regenerated full-range reports after the correction:
+  - ROY: `data/roy/report_20250924-20260407.html`, `data/roy/export_20250924-20260407.csv`
+  - VEVO: `data/vevo/report_20250503-20260407.html`, `data/vevo/export_20250503-20260407.csv`
 
 ### 2026-03-31
 - Completed `P3.1` reusable reporting core foundation:

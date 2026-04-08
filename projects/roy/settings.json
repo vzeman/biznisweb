@@ -6,6 +6,8 @@
   "report_from_date": "2025-09-24",
   "facebook_ads_currency": "EUR",
   "google_ads_currency": "EUR",
+  "item_price_values_are_net": true,
+  "exclude_zero_value_orders": true,
   "packaging_cost_per_order": 0.05,
   "shipping_subsidy_per_order": -0.2,
   "fixed_monthly_cost": 4900,
