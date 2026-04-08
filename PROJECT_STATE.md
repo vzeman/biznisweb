@@ -81,6 +81,10 @@ Bootstrap entrypoints:
 - VEVO product expense matching now supports project-scoped `expense_match_mode`, and VEVO is configured to prefer exact product titles over EAN/SKU identifiers to avoid collisions on shared product codes.
 - Product expense lookup now supports exact SKU/EAN, import code, exact product title, normalized title, and a strict fuzzy title fallback for minor diacritics/encoding drift.
 - VEVO `product_expenses.json` now uses human-readable product titles for almost all former hash-only keys; one unresolved legacy hash remains because it has no current export match.
+- VEVO modern dashboard now surfaces fixed-cost-sensitive metrics as dual values where they materially affect interpretation:
+  - profit/profitability charts and tables show both `without fixed` and `with fixed`,
+  - week/day/payday/weather/marketing/product/geo/B2B views were aligned to the same dual logic,
+  - full VEVO export/report regenerated successfully after the dashboard + DTC analytics fix.
 
 ## 6) Integration Notes (External Systems)
 
@@ -113,7 +117,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Identify the remaining unresolved VEVO legacy hash `H-C633B766` or leave it as a historical fallback if it no longer appears in live exports.
+- Do a quick visual QA pass of the regenerated VEVO HTML report and decide whether the same dual fixed-cost presentation should now be propagated to ROY dashboard surfaces too.
 
 ## 9) Change Log
 
@@ -124,6 +128,16 @@ Bootstrap entrypoints:
 - Removed cross-project state ownership from this repo; left only integration notes.
 
 ### 2026-04-08
+- Expanded VEVO fixed-cost visibility beyond the Executive KPI deck:
+  - main and library charts now show `profit without fixed` and `profit with fixed` where meaningful,
+  - weather, payday-window, spend-bucket, weekday-effectiveness, week-of-month average output, and all-metrics overview were aligned to the dual presentation,
+  - `analyze_ads_effectiveness` now exposes both profit variants for dashboard payloads,
+  - `analyze_weather_impact` now keeps both daily/bucket profit baselines and deltas,
+  - fixed a broken SKU Pareto 80% counter caused by an outdated cumulative contribution column name.
+- Rebuilt the full VEVO report successfully after the dashboard/runtime fixes:
+  - `data/vevo/report_20250503-20260407.html`
+  - `data/vevo/export_20250503-20260407.csv`
+  - `data/vevo/data_quality_20250503-20260407.json`
 - Fixed BizniWeb line-price handling for ROY and VEVO:
   - added project runtime flag `item_price_values_are_net`,
   - updated `export_orders.py` item math to treat opted-in line prices as net and derive gross from tax rate,
