@@ -11,8 +11,12 @@ on:
       - export_orders.py
       - html_report_generator.py
       - daily_report_runner.py
+      - dashboard_modern.py
+      - project_config.py
       - facebook_ads.py
       - google_ads.py
+      - reporting_core/**
+      - projects/vevo/**
       - .github/workflows/build-and-push-ecr.yml
 
 env:
