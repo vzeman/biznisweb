@@ -716,3 +716,16 @@ Next exact step:
   - VEVO reporting env/config remained untouched
 - Next exact step:
   - connect Roy Google Ads credentials into `projects/roy/.env`, remove `manual_google_ads_total` after verification, and run the same Roy-only export validation.
+### 2026-04-08 (Roy Google project-scoped setup prep)
+- Hardened standalone Google Ads testing/setup so client verification can target a specific reporting project without inheriting another shop's root `.env` credentials.
+- `google_ads.py` now accepts:
+  - `--project <slug>`
+  - `--setup`
+- The standalone helper now bootstraps `REPORT_PROJECT`, loads `projects/<project>/.env`, and then runs either connection testing or refresh-token setup against that project context.
+- Verified with:
+  - `python -m py_compile google_ads.py`
+  - `python google_ads.py --project roy`
+- Current blocker:
+  - Roy Google Ads credentials are still empty in `projects/roy/.env`, so the Roy smoke test cannot authenticate yet.
+- Next exact step:
+  - fill Roy Google Ads credentials in `projects/roy/.env` and re-run `python google_ads.py --project roy`.

@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-Google Ads API integration for fetching marketing spend data
+Google Ads API integration for fetching marketing spend data.
 """
 
+import argparse
 import os
 import json
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 from logger_config import get_logger
+from reporting_core import BASE_DEFAULT_PROJECT, load_project_env
 
 # Load environment variables
 load_dotenv(encoding="utf-8-sig")
@@ -317,7 +320,7 @@ class GoogleAdsClient:
         except Exception as e:
             logger.error(f"Failed to connect to Google Ads API: {e}")
             return False
-    
+
     def generate_refresh_token(self):
         """
         Helper method to generate a refresh token for first-time setup
@@ -377,15 +380,55 @@ class GoogleAdsClient:
             logger.error(f"Error during OAuth2 setup: {e}")
 
 
+def bootstrap_project_from_argv(argv: List[str]) -> str:
+    """Read project selection early so standalone setup/testing can load project env."""
+    project = os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    for idx, arg in enumerate(argv):
+        if arg == "--project" and idx + 1 < len(argv):
+            return argv[idx + 1].strip() or project
+        if arg.startswith("--project="):
+            return arg.split("=", 1)[1].strip() or project
+    return project
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Test Google Ads API integration")
+    parser.add_argument(
+        "--project",
+        type=str,
+        default=os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT),
+        help="Project name (loads projects/<project>/.env before setup/testing)",
+    )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run refresh-token setup helper",
+    )
+    return parser.parse_args()
+
+
 def main():
-    """Test function to verify Google Ads integration"""
+    """Test function to verify Google Ads integration."""
+    bootstrap_project = bootstrap_project_from_argv(sys.argv[1:])
+    os.environ["REPORT_PROJECT"] = bootstrap_project
+    load_project_env(bootstrap_project, logger=logger)
+
+    args = parse_args()
+    project_name = (args.project or bootstrap_project).strip() or BASE_DEFAULT_PROJECT
+    os.environ["REPORT_PROJECT"] = project_name
+
     client = GoogleAdsClient()
+    logger.info(f"Testing Google Ads integration for project '{project_name}'")
+
+    if args.setup:
+        client.generate_refresh_token()
+        return
 
     if not client.is_configured:
         logger.info("\nGoogle Ads not configured. To set up:")
         logger.info("1. Get a developer token from https://ads.google.com/aw/apicenter")
         logger.info("2. Create OAuth2 credentials in Google Cloud Console")
-        logger.info("3. Run: python google_ads.py --setup")
+        logger.info(f"3. Run: python google_ads.py --project {project_name} --setup")
         return
     
     if client.test_connection():
@@ -420,10 +463,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "--setup":
-        client = GoogleAdsClient()
-        client.generate_refresh_token()
-    else:
-        main()
+    main()
