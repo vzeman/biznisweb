@@ -312,6 +312,12 @@ def build_cfo_kpi_payload(
     ]
 
     metric_keys = [metric["key"] for metric in metric_defs]
+    sorted_dates = sorted(row_by_date.keys())
+    trend_labels = {
+        "daily": {"en": "14d trend", "sk": "Trend 14 dni"},
+        "weekly": {"en": "8x 7d trend", "sk": "Trend 8x 7 dni"},
+        "monthly": {"en": "8x 30d trend", "sk": "Trend 8x 30 dni"},
+    }
 
     def safe_kpi_value(metric_key: str, aggregate: Optional[Dict[str, Optional[float]]]) -> Optional[float]:
         if not aggregate:
@@ -336,6 +342,29 @@ def build_cfo_kpi_payload(
             return {}
         return {
             "company_margin_with_fixed": aggregate.get("company_profit_with_fixed"),
+        }
+
+    def trend_snapshot(window_days: int, points: int, window_key: str) -> Dict[str, Any]:
+        if not sorted_dates:
+            return {
+                "label_en": trend_labels[window_key]["en"],
+                "label_sk": trend_labels[window_key]["sk"],
+                "dates": [],
+                "metrics": {},
+            }
+
+        end_dates = sorted_dates[-points:]
+        metric_series: Dict[str, List[Optional[float]]] = {metric_key: [] for metric_key in metric_keys}
+        for end_date in end_dates:
+            aggregate = _window_aggregate(row_by_date, end_date, window_days, customer_by_date, order_records, fixed_daily_cost_eur)
+            for metric_key in metric_keys:
+                metric_series[metric_key].append(safe_kpi_value(metric_key, aggregate))
+
+        return {
+            "label_en": trend_labels[window_key]["en"],
+            "label_sk": trend_labels[window_key]["sk"],
+            "dates": [end_date.isoformat() for end_date in end_dates],
+            "metrics": metric_series,
         }
 
     day_vals = snapshot(day_cur)
@@ -386,9 +415,24 @@ def build_cfo_kpi_payload(
         "default_window": "monthly",
         "metric_defs": metric_defs,
         "windows": {
-            "daily": {"label": "Last day", "metrics": day_vals, "secondary_metrics": secondary_snapshot(day_cur)},
-            "weekly": {"label": "Last 7 days", "metrics": w7_vals, "secondary_metrics": secondary_snapshot(w7)},
-            "monthly": {"label": "Last 30 days", "metrics": w30_vals, "secondary_metrics": secondary_snapshot(w30)},
+            "daily": {
+                "label": "Last day",
+                "metrics": day_vals,
+                "secondary_metrics": secondary_snapshot(day_cur),
+                "trend": trend_snapshot(1, 14, "daily"),
+            },
+            "weekly": {
+                "label": "Last 7 days",
+                "metrics": w7_vals,
+                "secondary_metrics": secondary_snapshot(w7),
+                "trend": trend_snapshot(7, 8, "weekly"),
+            },
+            "monthly": {
+                "label": "Last 30 days",
+                "metrics": w30_vals,
+                "secondary_metrics": secondary_snapshot(w30),
+                "trend": trend_snapshot(30, 8, "monthly"),
+            },
         },
         "comparisons": comparisons,
     }

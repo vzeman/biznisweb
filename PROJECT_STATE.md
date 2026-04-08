@@ -594,3 +594,20 @@ Next exact step:
   - the previously incomplete verification from the earlier 2026-04-08 entry is now closed; full export/runtime generation works for the fixed implementation.
 - Next exact step:
   - visually verify from the actual emailed HTML attachment context that 7D / 30D switching behaves correctly in the browser the user uses to open the attachment.
+### 2026-04-08 (executive KPI trend strip)
+- Added recent trend visualization directly into the `Executive KPI deck` so the top CFO cards show not only current KPI values and comparison deltas, but also short operational trend context.
+- `reporting_core/cfo_kpis.py` now builds server-side trend payloads for each KPI window:
+  - daily: last 14 daily points
+  - weekly: last 8 rolling 7-day points
+  - monthly: last 8 rolling 30-day points
+- `dashboard_modern.py` now renders per-card sparkline strips with a compact trend delta label inside each Executive KPI card.
+- The existing `Company margin (incl. fixed)` secondary nominal profit stays in place and now sits alongside the new trend strip.
+- Verified with:
+  - `python -m py_compile dashboard_modern.py reporting_core/cfo_kpis.py html_report_generator.py export_orders.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+- Verified in generated output:
+  - `data/vevo/report_20260301-20260331.html`
+  - KPI trend CSS/JS markers are present (`kpi-trend`, `sparklineSvg`)
+  - report regeneration completed successfully end-to-end
+- Next exact step:
+  - visually review the Executive KPI deck in the latest VEVO report and decide whether the sparklines should be made denser/subtler or whether a separate mini trend row is needed for any specific KPI.
