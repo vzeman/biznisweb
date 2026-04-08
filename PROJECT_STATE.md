@@ -661,3 +661,6 @@ Next exact step:
   - report generated successfully: `data/vevo/report_20250503-20260407.html`.
 - Next exact step:
   - merge the weather fix branch into `main` so tomorrow's runtime image can include the corrected weather behavior on the next build/deploy cycle.
+- Follow-up deployability fix:
+  - `.github/workflows/build-and-push-ecr.yml` now also watches `weather_client.py` and `http_client.py`,
+  - so future weather/runtime HTTP changes will automatically rebuild the VEVO ECR image after merge to `main`.
