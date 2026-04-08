@@ -687,3 +687,10 @@ Next exact step:
 - This uses GitHub's documented opt-in path so JavaScript actions execute on Node 24 now, instead of waiting for the future runner default switch.
 - Next exact step:
   - push the branch, run/observe the next workflow execution, and confirm the deprecation annotation is gone.
+### 2026-04-08 (GitHub Actions v6 action pins)
+- After validating the GitHub release feeds, upgraded workflow pins further to the current major releases:
+  - `actions/checkout@v6.0.2`
+  - `aws-actions/configure-aws-credentials@v6.1.0`
+- Kept the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` workflow env override in place as an additional safety measure during the Node 24 transition window.
+- Next exact step:
+  - push the branch, merge it, and verify on the next `Build and Push ECR` run that the old Node 20 deprecation annotation no longer appears.
