@@ -79,6 +79,7 @@ Bootstrap entrypoints:
 - BizniWeb item line prices for ROY and VEVO are now treated as net values via project runtime, fixing the prior double-VAT reduction in product/order revenue math.
 - Roy reporting now excludes full zero-value orders (0 total / 0 revenue), which removes complaint/exchange/service replacement orders from financial reporting.
 - Product expense lookup now supports exact SKU/EAN, import code, exact product title, normalized title, and a strict fuzzy title fallback for minor diacritics/encoding drift.
+- VEVO `product_expenses.json` now uses human-readable product titles for almost all former hash-only keys; one unresolved legacy hash remains because it has no current export match.
 
 ## 6) Integration Notes (External Systems)
 
@@ -111,7 +112,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Decide whether to migrate selected VEVO/ROY `product_expenses.json` entries from hash keys to human-readable product titles now that title-based expense lookup is supported.
+- Identify the remaining unresolved VEVO legacy hash `H-C633B766` or leave it as a historical fallback if it no longer appears in live exports.
 
 ## 9) Change Log
 
@@ -137,6 +138,10 @@ Bootstrap entrypoints:
   - supports exact product title,
   - supports normalized/fuzzy product-title lookup for minor diacritics or encoding drift.
 - Verified title-based expense lookup with smoke checks for SKU, import code, exact title, and normalized title fallback.
+- Migrated VEVO `projects/vevo/product_expenses.json` away from opaque hash keys where the mapping was provable from live export history:
+  - converted `48/49` hash keys to human-readable product titles,
+  - intentionally kept unresolved legacy key `H-C633B766`,
+  - restored full VEVO full-range export artifacts after the verification smoke run.
 
 ### 2026-03-31
 - Completed `P3.1` reusable reporting core foundation:
