@@ -777,3 +777,32 @@ Next exact step:
   - Roy Meta token expired during the export verification run, so Facebook metrics were zero-filled while Google Ads stayed live.
 - Next exact step:
   - refresh Roy Meta access token and rerun `python export_orders.py --project roy` to restore live Facebook metrics alongside live Google Ads.
+### 2026-04-08 (Roy status exclusion hardening)
+- Added project-scoped `excluded_order_statuses` support to the shared runtime/config path.
+- Wired `export_orders.py` to use one centralized excluded-status resolver instead of repeating hard-coded lists in three places.
+- Configured Roy-specific excluded revenue statuses in `projects/roy/settings.json`:
+  - `Stripe - cancelled`
+  - `Stripe - expired`
+  - `Vrátené`
+  - `Dobropis`
+- Left VEVO behavior unchanged.
+- Updated the client settings template to include `excluded_order_statuses` for future onboarding.
+- Verified on Roy:
+  - `python export_orders.py --project roy --from-date 2026-04-07 --to-date 2026-04-07`
+  - day now exports `17` orders instead of `18`, correctly excluding `Stripe - expired`
+  - verified day summary after exclusion:
+    - revenue `€812.54`
+    - product cost `€484.84`
+    - Facebook Ads `€9.65`
+    - Google Ads `€102.94`
+    - net profit `€54.33`
+- Regenerated the full Roy report with live Meta + live Google Ads and the new status exclusions:
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-07`
+  - generated `data/roy/report_20250924-20260407.html`
+  - generated `data/roy/export_20250924-20260407.csv`
+  - generated `data/roy/data_quality_20250924-20260407.json`
+- Current state:
+  - Roy report now excludes the requested cancelled/expired/returned/credit-note statuses from revenue and margin calculations,
+  - fixed monthly costs remain manual/hard-coded per project settings.
+- Next exact step:
+  - review Roy profitability with the updated report and decide whether any additional order statuses should be excluded or split into a separate operational view.

@@ -33,6 +33,7 @@ class ProjectRuntime:
     margin_15_brands: List[str]
     margin_15_label_patterns: List[str]
     exclude_zero_price_label_patterns: List[str]
+    excluded_order_statuses: List[str]
     manual_fb_ads_total: Optional[float]
     manual_google_ads_total: Optional[float]
     weather: Dict[str, Any]
@@ -56,6 +57,7 @@ class ProjectRuntime:
             "margin_15_brands": list(self.margin_15_brands),
             "margin_15_label_patterns": list(self.margin_15_label_patterns),
             "exclude_zero_price_label_patterns": list(self.exclude_zero_price_label_patterns),
+            "excluded_order_statuses": list(self.excluded_order_statuses),
             "manual_fb_ads_total": self.manual_fb_ads_total,
             "manual_google_ads_total": self.manual_google_ads_total,
             "weather": copy.deepcopy(self.weather),
@@ -123,6 +125,9 @@ def load_project_runtime(
         exclude_zero_price_label_patterns=[
             str(v).strip() for v in settings.get("exclude_zero_price_label_patterns", []) if str(v).strip()
         ],
+        excluded_order_statuses=[
+            str(v).strip() for v in settings.get("excluded_order_statuses", []) if str(v).strip()
+        ],
         manual_fb_ads_total=(
             float(settings.get("manual_fb_ads_total"))
             if settings.get("manual_fb_ads_total") is not None
@@ -153,6 +158,9 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     target_globals["MARGIN_15_LABEL_PATTERNS"] = [str(v).strip() for v in runtime.margin_15_label_patterns if str(v).strip()]
     target_globals["EXCLUDE_ZERO_PRICE_LABEL_PATTERNS"] = [
         str(v).strip() for v in runtime.exclude_zero_price_label_patterns if str(v).strip()
+    ]
+    target_globals["EXCLUDED_ORDER_STATUSES"] = [
+        str(v).strip() for v in runtime.excluded_order_statuses if str(v).strip()
     ]
     target_globals["MANUAL_FB_ADS_TOTAL"] = runtime.manual_fb_ads_total
     target_globals["MANUAL_GOOGLE_ADS_TOTAL"] = runtime.manual_google_ads_total

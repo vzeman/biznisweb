@@ -9,6 +9,7 @@
   "packaging_cost_per_order": 0.3,
   "shipping_subsidy_per_order": 0.0,
   "fixed_monthly_cost": 0,
+  "excluded_order_statuses": [],
   "weather": {
     "enabled": false,
     "timezone": "Europe/Bratislava",
