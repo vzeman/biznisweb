@@ -664,3 +664,17 @@ Next exact step:
 - Follow-up deployability fix:
   - `.github/workflows/build-and-push-ecr.yml` now also watches `weather_client.py` and `http_client.py`,
   - so future weather/runtime HTTP changes will automatically rebuild the VEVO ECR image after merge to `main`.
+### 2026-04-08 (GitHub Actions Node 24 readiness)
+- Upgraded GitHub Actions workflow dependencies that were still running on the deprecated Node 20 action runtime.
+- Updated:
+  - `.github/workflows/build-and-push-ecr.yml`
+    - `actions/checkout@v4` -> `actions/checkout@v5`
+    - `aws-actions/configure-aws-credentials@v4` -> `aws-actions/configure-aws-credentials@v5.1.1`
+  - `.github/workflows/env-check.yml`
+    - all `actions/checkout@v4` -> `actions/checkout@v5`
+  - `.github/workflows/observability-check.yml`
+    - `actions/checkout@v4` -> `actions/checkout@v5`
+- Scope intentionally limited to the actions explicitly causing deprecation warnings in recent ECR workflow runs.
+- Verified locally by reviewing all workflow YAML references after the upgrade.
+- Next exact step:
+  - push the branch, open a PR, and verify on GitHub Actions that the deprecation warning is gone from the next workflow run.
