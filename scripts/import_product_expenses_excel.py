@@ -78,6 +78,15 @@ def build_mapping(rows: List[Dict[str, Any]]) -> Tuple[Dict[str, float], List[st
     return mapping, sorted(set(unresolved))
 
 
+def collect_managed_labels(rows: List[Dict[str, Any]]) -> List[str]:
+    labels = []
+    for row in rows:
+        label = str(row.get("item_label") or "").strip()
+        if label:
+            labels.append(label)
+    return sorted(set(labels))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Import product expenses from edited Excel workbook.")
     parser.add_argument("--xlsx", required=True, help="Path to edited workbook")
@@ -94,6 +103,7 @@ def main() -> int:
     output_path = Path(args.output)
     _, rows = load_rows(xlsx_path, args.sheet)
     mapping, unresolved = build_mapping(rows)
+    managed_labels = collect_managed_labels(rows)
 
     if args.keep_json:
         keep_path = Path(args.keep_json)
@@ -101,6 +111,12 @@ def main() -> int:
             with keep_path.open("r", encoding="utf-8") as handle:
                 existing = json.load(handle) or {}
             for key, value in existing.items():
+                key_str = str(key)
+                if any(
+                    key_str == managed_label or key_str.startswith(f"{managed_label}||")
+                    for managed_label in managed_labels
+                ):
+                    continue
                 if key not in mapping:
                     mapping[str(key)] = float(value)
 

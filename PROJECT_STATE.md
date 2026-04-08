@@ -873,3 +873,18 @@ Next exact step:
   - VEVO product aggregation no longer depends on EAN for product identity and can unify renamed products under one canonical reporting name.
 - Next exact step:
   - user review of the regenerated VEVO report and, if needed, add more aliases for any remaining product rename variants that should collapse into the same canonical product.
+### 2026-04-08 (VEVO Excel expense re-import v3)
+- Updated `scripts/import_product_expenses_excel.py` so re-imports drop stale old keys for labels managed by the current Excel input before merging preserved extras from the existing JSON.
+- Re-imported `data/vevo/product_expense_rebuild_20250503-20260407 (3).xlsx` into `projects/vevo/product_expenses.json`.
+- Verified:
+  - all 224 Excel rows resolve exactly to the imported VEVO expense mapping (`mismatches: 0`)
+  - regenerated full VEVO report again for `2025-05-03` to `2026-04-07`
+- Generated/updated:
+  - `data/vevo/report_20250503-20260407.html`
+  - `data/vevo/export_20250503-20260407.csv`
+  - `data/vevo/aggregate_by_items_20250503-20260407.csv`
+  - `data/vevo/data_quality_20250503-20260407.json`
+- Current state:
+  - VEVO reporting is now aligned to the `(3)` Excel purchase costs and no longer keeps stale compound cost keys from earlier imports.
+- Next exact step:
+  - user review of the regenerated VEVO report; if any remaining products should collapse under one canonical name, extend `projects/vevo/product_name_aliases.json`.
