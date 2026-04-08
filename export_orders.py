@@ -106,6 +106,7 @@ PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
 SHIPPING_SUBSIDY_PER_ORDER = 0.2  # EUR per order (shipping subsidy)
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
 ITEM_PRICE_VALUES_ARE_NET = False  # BizniWeb item price values are treated as net when project opts in
+EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
 EXCLUDE_ZERO_VALUE_ORDERS = False  # Optional exclusion for full orders with 0 total / 0 revenue
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
@@ -722,26 +723,37 @@ class BizniWebExporter:
         import_code: Any = None,
         warehouse_number: Any = None,
     ) -> float:
-        exact_candidates = [
+        identifier_candidates = [
             str(product_sku or "").strip(),
             str(import_code or "").strip(),
             str(warehouse_number or "").strip(),
-            str(item_label or "").strip(),
         ]
+        title_candidate = str(item_label or "").strip()
+        exact_candidates = (
+            [title_candidate, *identifier_candidates]
+            if EXPENSE_MATCH_MODE == "title_first"
+            else [*identifier_candidates, title_candidate]
+        )
         for candidate in exact_candidates:
             if candidate and candidate in self.product_expenses_exact:
                 return float(self.product_expenses_exact[candidate])
 
-        normalized_candidates = [
+        normalized_identifier_candidates = [
+            self._normalize_match_text(product_sku),
             self._normalize_match_text(import_code),
             self._normalize_match_text(warehouse_number),
-            self._normalize_match_text(item_label),
         ]
+        normalized_title_candidate = self._normalize_match_text(item_label)
+        normalized_candidates = (
+            [normalized_title_candidate, *normalized_identifier_candidates]
+            if EXPENSE_MATCH_MODE == "title_first"
+            else [*normalized_identifier_candidates, normalized_title_candidate]
+        )
         for candidate in normalized_candidates:
             if candidate and candidate in self.product_expenses_normalized:
                 return float(self.product_expenses_normalized[candidate])
 
-        label_candidate = self._normalize_match_text(item_label)
+        label_candidate = normalized_title_candidate
         if label_candidate and len(label_candidate) >= 8:
             for known_key, known_value in self.product_expenses_normalized.items():
                 if label_candidate in known_key or known_key in label_candidate:

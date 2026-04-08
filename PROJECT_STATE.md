@@ -78,6 +78,7 @@ Bootstrap entrypoints:
 - Ads spend normalization now supports per-project ad-account currencies before report P&L math.
 - BizniWeb item line prices for ROY and VEVO are now treated as net values via project runtime, fixing the prior double-VAT reduction in product/order revenue math.
 - Roy reporting now excludes full zero-value orders (0 total / 0 revenue), which removes complaint/exchange/service replacement orders from financial reporting.
+- VEVO product expense matching now supports project-scoped `expense_match_mode`, and VEVO is configured to prefer exact product titles over EAN/SKU identifiers to avoid collisions on shared product codes.
 - Product expense lookup now supports exact SKU/EAN, import code, exact product title, normalized title, and a strict fuzzy title fallback for minor diacritics/encoding drift.
 - VEVO `product_expenses.json` now uses human-readable product titles for almost all former hash-only keys; one unresolved legacy hash remains because it has no current export match.
 
@@ -832,3 +833,17 @@ Next exact step:
   - fixed monthly costs remain manual/hard-coded per project settings.
 - Next exact step:
   - review Roy profitability with the updated report and decide whether any additional order statuses should be excluded or split into a separate operational view.
+### 2026-04-08 (VEVO title-first expense matching)
+- Added project-scoped `expense_match_mode` runtime support with default `identifier_first`.
+- Updated the expense resolver in `export_orders.py` so projects can prefer exact/normalized product titles before SKU/EAN/import identifiers.
+- Configured VEVO with `"expense_match_mode": "title_first"` in `projects/vevo/settings.json`.
+- Updated `templates/reporting-client/settings.template.json` so new clients can opt into the same behavior explicitly.
+- Verified:
+  - `python -m py_compile export_orders.py reporting_core/runtime.py`
+  - VEVO runtime applies `title_first`
+  - a conflict test with the same SKU plus a distinct product title resolves to the title price (`1.06`), not the SKU fallback (`0.30`)
+- Current state:
+  - VEVO can now safely import final purchase costs from the Excel keyed by product names even when EAN/SKU identifiers collide between products.
+  - reporting still treats purchase costs as final net values without adding VAT or hidden surcharges.
+- Next exact step:
+  - wait for the user to finish the VEVO Excel corrections, then import the edited `current_expense_per_item_net` values into the VEVO expense mapping and regenerate VEVO reporting.

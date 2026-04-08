@@ -8,6 +8,7 @@
   "facebook_ads_currency": "EUR",
   "google_ads_currency": "EUR",
   "item_price_values_are_net": true,
+  "expense_match_mode": "title_first",
   "packaging_cost_per_order": 0.3,
   "shipping_subsidy_per_order": 0.2,
   "fixed_monthly_cost": 0,

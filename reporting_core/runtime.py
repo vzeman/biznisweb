@@ -21,6 +21,7 @@ class ProjectRuntime:
     api_url: str
     api_token: str
     item_price_values_are_net: bool
+    expense_match_mode: str
     exclude_zero_value_orders: bool
     packaging_cost_per_order: float
     shipping_subsidy_per_order: float
@@ -47,6 +48,7 @@ class ProjectRuntime:
             "api_url": self.api_url,
             "api_token": self.api_token,
             "item_price_values_are_net": self.item_price_values_are_net,
+            "expense_match_mode": self.expense_match_mode,
             "exclude_zero_value_orders": self.exclude_zero_value_orders,
             "packaging_cost_per_order": self.packaging_cost_per_order,
             "shipping_subsidy_per_order": self.shipping_subsidy_per_order,
@@ -112,6 +114,7 @@ def load_project_runtime(
         api_url=resolve_biznisweb_api_url(project_name, settings),
         api_token=os.getenv("BIZNISWEB_API_TOKEN", ""),
         item_price_values_are_net=bool(settings.get("item_price_values_are_net", False)),
+        expense_match_mode=str(settings.get("expense_match_mode", "identifier_first")).strip().lower() or "identifier_first",
         exclude_zero_value_orders=bool(settings.get("exclude_zero_value_orders", False)),
         packaging_cost_per_order=float(settings.get("packaging_cost_per_order", default_packaging_cost_per_order)),
         shipping_subsidy_per_order=float(settings.get("shipping_subsidy_per_order", default_shipping_subsidy_per_order)),
@@ -151,6 +154,7 @@ def load_project_runtime(
 
 def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any]) -> None:
     target_globals["ITEM_PRICE_VALUES_ARE_NET"] = bool(runtime.item_price_values_are_net)
+    target_globals["EXPENSE_MATCH_MODE"] = str(runtime.expense_match_mode).strip().lower() or "identifier_first"
     target_globals["EXCLUDE_ZERO_VALUE_ORDERS"] = bool(runtime.exclude_zero_value_orders)
     target_globals["PACKAGING_COST_PER_ORDER"] = float(runtime.packaging_cost_per_order)
     target_globals["SHIPPING_SUBSIDY_PER_ORDER"] = float(runtime.shipping_subsidy_per_order)
