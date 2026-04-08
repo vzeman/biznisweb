@@ -701,5 +701,18 @@ Next exact step:
   - `python facebook_ads.py --project roy`
 - Verified with:
   - `python -m py_compile facebook_ads.py`
+- Follow-up verification completed:
+  - filled Roy Meta credentials into `projects/roy/.env`
+  - `python facebook_ads.py --project roy` connected successfully to Meta ad account `Roy`
+  - retrieved daily Roy Meta spend for `2026-04-01..2026-04-08` (total `€98.84`)
+  - removed Roy manual Facebook fallback from `projects/roy/settings.json`
+  - verified Roy reporting export now uses live Meta API data:
+    - `python export_orders.py --project roy --from-date 2026-04-01 --to-date 2026-04-07`
+    - generated `data/roy/report_20260401-20260407.html`
+    - generated `data/roy/export_20260401-20260407.csv`
+    - Meta source connected successfully and loaded 7 active daily spend rows
+- Current state:
+  - Roy Facebook Ads integration is live in the Roy reporting flow
+  - VEVO reporting env/config remained untouched
 - Next exact step:
-  - fill Roy Meta credentials into `projects/roy/.env`, verify `python facebook_ads.py --project roy`, then remove Roy's manual Facebook fallback from project settings once API reads are confirmed.
+  - connect Roy Google Ads credentials into `projects/roy/.env`, remove `manual_google_ads_total` after verification, and run the same Roy-only export validation.
