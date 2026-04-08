@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -62,12 +62,19 @@ class WeatherClient:
         if not valid_locations:
             return pd.DataFrame()
 
+        archive_available_to = self._archive_available_to()
+        effective_date_from = date_from.date()
+        effective_date_to = min(date_to.date(), archive_available_to)
+        if effective_date_from > effective_date_to:
+            return pd.DataFrame()
+
         location_frames = []
         for location in valid_locations:
             location_df = self._load_location_weather(
-                date_from=date_from.date(),
-                date_to=date_to.date(),
+                date_from=effective_date_from,
+                date_to=effective_date_to,
                 location=location,
+                archive_available_to=archive_available_to,
             )
             if location_df.empty:
                 continue
@@ -109,10 +116,11 @@ class WeatherClient:
         date_from: date,
         date_to: date,
         location: Dict[str, Any],
+        archive_available_to: date,
     ) -> pd.DataFrame:
         monthly_rows: List[pd.DataFrame] = []
         for year, month in self._month_windows(date_from, date_to):
-            payload = self._load_cached_or_fetch(location, year, month)
+            payload = self._load_cached_or_fetch(location, year, month, archive_available_to)
             daily = (payload or {}).get("daily") or {}
             dates = daily.get("time") or []
             if not dates:
@@ -155,21 +163,40 @@ class WeatherClient:
         location_df["weather_code"] = location_df["weather_code"].fillna(0).astype(int)
         return location_df
 
-    def _load_cached_or_fetch(self, location: Dict[str, Any], year: int, month: int) -> Dict[str, Any]:
-        cache_path = self._cache_path(location, year, month)
+    def _load_cached_or_fetch(
+        self,
+        location: Dict[str, Any],
+        year: int,
+        month: int,
+        archive_available_to: date,
+    ) -> Dict[str, Any]:
+        cache_path = self._cache_path(location, year, month, archive_available_to)
         if cache_path.exists():
             with open(cache_path, "r", encoding="utf-8") as file:
                 return json.load(file)
 
-        payload = self._fetch_month(location, year, month)
+        payload = self._fetch_month(location, year, month, archive_available_to)
+        if not payload:
+            return {}
         with open(cache_path, "w", encoding="utf-8") as file:
             json.dump(payload, file, ensure_ascii=False, indent=2)
         return payload
 
-    def _fetch_month(self, location: Dict[str, Any], year: int, month: int) -> Dict[str, Any]:
-        last_day = monthrange(year, month)[1]
-        start_date = date(year, month, 1).strftime("%Y-%m-%d")
-        end_date = date(year, month, last_day).strftime("%Y-%m-%d")
+    def _fetch_month(
+        self,
+        location: Dict[str, Any],
+        year: int,
+        month: int,
+        archive_available_to: date,
+    ) -> Dict[str, Any]:
+        month_start = date(year, month, 1)
+        month_end = date(year, month, monthrange(year, month)[1])
+        effective_end = min(month_end, archive_available_to)
+        if effective_end < month_start:
+            return {}
+
+        start_date = month_start.strftime("%Y-%m-%d")
+        end_date = effective_end.strftime("%Y-%m-%d")
 
         response = self.session.get(
             self.BASE_URL,
@@ -185,11 +212,27 @@ class WeatherClient:
         response.raise_for_status()
         return response.json()
 
-    def _cache_path(self, location: Dict[str, Any], year: int, month: int) -> Path:
+    def _cache_path(
+        self,
+        location: Dict[str, Any],
+        year: int,
+        month: int,
+        archive_available_to: date,
+    ) -> Path:
         lat = f"{location['latitude']:.4f}".replace(".", "_")
         lon = f"{location['longitude']:.4f}".replace(".", "_")
         safe_name = str(location.get("name", "location")).strip().lower().replace(" ", "_")
-        return self.cache_dir / f"{safe_name}_{lat}_{lon}_{year}_{month:02d}.json"
+        month_end = date(year, month, monthrange(year, month)[1])
+        if archive_available_to >= month_end:
+            suffix = f"{year}_{month:02d}"
+        else:
+            effective_end = min(month_end, archive_available_to)
+            suffix = f"{year}_{month:02d}_through_{effective_end.strftime('%Y%m%d')}"
+        return self.cache_dir / f"{safe_name}_{lat}_{lon}_{suffix}.json"
+
+    @staticmethod
+    def _archive_available_to() -> date:
+        return (datetime.now(UTC).date() - timedelta(days=1))
 
     @staticmethod
     def _month_windows(date_from: date, date_to: date) -> Iterable[tuple[int, int]]:

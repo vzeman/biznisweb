@@ -13,6 +13,8 @@ on:
       - daily_report_runner.py
       - dashboard_modern.py
       - project_config.py
+      - weather_client.py
+      - http_client.py
       - facebook_ads.py
       - google_ads.py
       - reporting_core/**

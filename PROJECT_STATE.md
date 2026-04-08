@@ -642,3 +642,25 @@ Next exact step:
   - generated artifact: `data/vevo/report_20250503-20260408.html`
 - Next exact step:
   - merge the workflow path fix so future dashboard/runtime merges rebuild ECR automatically without requiring a manual dispatch.
+### 2026-04-08 (weather archive cutoff fix)
+- Fixed Open-Meteo archive integration in `weather_client.py`.
+- Root cause:
+  - weather cache/fetch logic requested whole calendar months,
+  - for in-progress months that meant requests like `2026-04-01 -> 2026-04-30`,
+  - Open-Meteo archive API rejects future days, so the request returned `400 Bad Request`.
+- Implemented fix:
+  - clamp weather fetches to the last historically available day (`UTC today - 1 day`),
+  - return empty weather payload if the requested month starts after the archive cutoff,
+  - use distinct cache keys for partial months (`_through_YYYYMMDD`) so incomplete current-month caches do not freeze and block later refreshes.
+- Verified with:
+  - `python -m py_compile weather_client.py`
+  - direct WeatherClient fetch for `2026-04-01 -> 2026-04-07` returned 7 rows successfully
+  - full real VEVO report run: `python daily_report_runner.py --project vevo --from-date 2025-05-03 --to-date 2026-04-07 --skip-email`
+- Verification result:
+  - weather warning `400 Client Error` is gone from the report run,
+  - report generated successfully: `data/vevo/report_20250503-20260407.html`.
+- Next exact step:
+  - merge the weather fix branch into `main` so tomorrow's runtime image can include the corrected weather behavior on the next build/deploy cycle.
+- Follow-up deployability fix:
+  - `.github/workflows/build-and-push-ecr.yml` now also watches `weather_client.py` and `http_client.py`,
+  - so future weather/runtime HTTP changes will automatically rebuild the VEVO ECR image after merge to `main`.
