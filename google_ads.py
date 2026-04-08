@@ -29,6 +29,7 @@ class GoogleAdsClient:
         self.refresh_token = os.getenv('GOOGLE_ADS_REFRESH_TOKEN')
         self.customer_id = os.getenv('GOOGLE_ADS_CUSTOMER_ID', '7592903323')
         self.login_customer_id = os.getenv('GOOGLE_ADS_LOGIN_CUSTOMER_ID')  # Optional, for MCC accounts
+        self.account_currency: Optional[str] = None
         
         # Cache configuration
         base_data_dir = Path(os.getenv('REPORT_DATA_DIR', 'data'))
@@ -310,6 +311,7 @@ class GoogleAdsClient:
             
             # Process the response
             for row in response:
+                self.account_currency = str(row.customer.currency_code or "").strip().upper() or None
                 logger.info(f"Successfully connected to Google Ads account: {row.customer.descriptive_name}")
                 logger.info(f"Customer ID: {row.customer.id}")
                 logger.info(f"Currency: {row.customer.currency_code}")

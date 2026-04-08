@@ -729,3 +729,26 @@ Next exact step:
   - Roy Google Ads credentials are still empty in `projects/roy/.env`, so the Roy smoke test cannot authenticate yet.
 - Next exact step:
   - fill Roy Google Ads credentials in `projects/roy/.env` and re-run `python google_ads.py --project roy`.
+### 2026-04-08 (Multi-country ads currency prep)
+- Hardened the reporting pipeline for future multi-country client onboarding where ad accounts may use non-EUR currencies.
+- Root issue fixed:
+  - BizniWeb order values were already normalized to EUR,
+  - but Meta / Google ad spend was previously treated as if it were always EUR.
+- Implemented:
+  - `facebook_ads.py` and `google_ads.py` now capture `account_currency` during connection tests,
+  - `reporting_core/runtime.py` now loads per-project ad-currency fallbacks:
+    - `facebook_ads_currency`
+    - `google_ads_currency`
+  - `export_orders.py` now normalizes Meta / Google spend and related Meta cost metrics to EUR before profitability calculations,
+  - project settings for `vevo`, `roy`, and the client template now explicitly declare both ad-account currencies.
+- Verified with:
+  - `python -m py_compile facebook_ads.py google_ads.py export_orders.py reporting_core/runtime.py`
+  - synthetic conversion smoke: `100 PLN -> 23.0 EUR`
+  - Roy export regression smoke:
+    - `python export_orders.py --project roy --from-date 2026-04-01 --to-date 2026-04-03`
+    - export completed successfully with live Roy Meta data and unchanged VEVO isolation.
+- Current state:
+  - the repo is now structurally ready for clients in different countries and ad-account currencies,
+  - remaining client onboarding work is mainly credential/account setup, not reporting math refactors.
+- Next exact step:
+  - fill Roy Google Ads credentials, verify `python google_ads.py --project roy`, then remove `manual_google_ads_total` after a successful Roy Google API smoke run.

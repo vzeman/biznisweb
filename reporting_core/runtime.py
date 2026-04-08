@@ -24,6 +24,8 @@ class ProjectRuntime:
     shipping_subsidy_per_order: float
     fixed_monthly_cost: float
     currency_rates_to_eur: Dict[str, float]
+    facebook_ads_currency: str
+    google_ads_currency: str
     product_expenses: Dict[str, float]
     zero_margin_brands: List[str]
     zero_cost_brands: List[str]
@@ -45,6 +47,8 @@ class ProjectRuntime:
             "shipping_subsidy_per_order": self.shipping_subsidy_per_order,
             "fixed_monthly_cost": self.fixed_monthly_cost,
             "currency_rates_to_eur": dict(self.currency_rates_to_eur),
+            "facebook_ads_currency": self.facebook_ads_currency,
+            "google_ads_currency": self.google_ads_currency,
             "product_expenses": dict(self.product_expenses),
             "zero_margin_brands": list(self.zero_margin_brands),
             "zero_cost_brands": list(self.zero_cost_brands),
@@ -108,6 +112,8 @@ def load_project_runtime(
             str(k).upper(): float(v)
             for k, v in dict(settings.get("currency_rates_to_eur", default_currency_rates or {})).items()
         },
+        facebook_ads_currency=str(settings.get("facebook_ads_currency", "EUR")).strip().upper() or "EUR",
+        google_ads_currency=str(settings.get("google_ads_currency", "EUR")).strip().upper() or "EUR",
         product_expenses={str(k): float(v) for k, v in product_expenses.items()},
         zero_margin_brands=[str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
         zero_cost_brands=[str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
@@ -137,6 +143,8 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     target_globals["SHIPPING_SUBSIDY_PER_ORDER"] = float(runtime.shipping_subsidy_per_order)
     target_globals["FIXED_MONTHLY_COST"] = float(runtime.fixed_monthly_cost)
     target_globals["CURRENCY_RATES_TO_EUR"] = dict(runtime.currency_rates_to_eur)
+    target_globals["FACEBOOK_ADS_CURRENCY"] = str(runtime.facebook_ads_currency).strip().upper() or "EUR"
+    target_globals["GOOGLE_ADS_CURRENCY"] = str(runtime.google_ads_currency).strip().upper() or "EUR"
     target_globals["PRODUCT_EXPENSES"] = dict(runtime.product_expenses)
     target_globals["ZERO_MARGIN_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_margin_brands if str(v).strip()]
     target_globals["ZERO_COST_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_cost_brands if str(v).strip()]

@@ -128,6 +128,8 @@ CURRENCY_RATES_TO_EUR = {
     'PLN': 0.23,  # 1 PLN = ~0.23 EUR (1 EUR = ~4.3 PLN)
     'USD': 0.92,  # 1 USD = ~0.92 EUR
 }
+FACEBOOK_ADS_CURRENCY = 'EUR'  # Account/reporting currency for Meta spend fallback and validation
+GOOGLE_ADS_CURRENCY = 'EUR'  # Account/reporting currency for Google spend fallback and validation
 
 # Product expense mapping (expense per item in EUR)
 # Keys are SKU/EAN codes or hash-based SKUs (H-XXXXXXXX) for products without EAN
@@ -764,6 +766,87 @@ class BizniWebExporter:
             return amount
         
         return amount * CURRENCY_RATES_TO_EUR[currency]
+
+    @staticmethod
+    def _normalize_currency_code(currency: Optional[str], fallback: str = 'EUR') -> str:
+        normalized = str(currency or '').strip().upper()
+        return normalized or fallback
+
+    def _resolve_ads_currency(
+        self,
+        source_label: str,
+        *,
+        detected_currency: Optional[str],
+        configured_currency: Optional[str],
+    ) -> str:
+        resolved_currency = self._normalize_currency_code(detected_currency or configured_currency, fallback='EUR')
+        configured_norm = self._normalize_currency_code(configured_currency, fallback='EUR')
+        detected_norm = self._normalize_currency_code(detected_currency, fallback='')
+
+        if detected_norm and configured_norm and detected_norm != configured_norm:
+            logger.warning(
+                f"{source_label} currency mismatch for project '{self.project_name}': "
+                f"account reports {detected_norm}, project fallback is {configured_norm}. Using detected account currency."
+            )
+        return resolved_currency
+
+    def _convert_ads_amount_to_eur(self, amount: float, currency: str) -> float:
+        return round(self.convert_to_eur(float(amount or 0), currency), 6)
+
+    def _convert_ads_daily_spend_to_eur(
+        self,
+        spend_by_date: Dict[str, float],
+        currency: str,
+        source_label: str,
+    ) -> Dict[str, float]:
+        if not spend_by_date:
+            return {}
+        if self._normalize_currency_code(currency) != 'EUR':
+            logger.info(f"Converting {source_label} daily spend from {currency} to EUR for project '{self.project_name}'")
+        return {
+            str(date_key): self._convert_ads_amount_to_eur(spend, currency)
+            for date_key, spend in spend_by_date.items()
+        }
+
+    def _convert_ads_metrics_dict_to_eur(
+        self,
+        metrics_by_date: Dict[str, Dict[str, Any]],
+        currency: str,
+        fields: List[str],
+        source_label: str,
+    ) -> Dict[str, Dict[str, Any]]:
+        if not metrics_by_date:
+            return {}
+        if self._normalize_currency_code(currency) != 'EUR':
+            logger.info(f"Converting {source_label} metric values from {currency} to EUR for project '{self.project_name}'")
+        converted: Dict[str, Dict[str, Any]] = {}
+        for date_key, payload in metrics_by_date.items():
+            row = dict(payload or {})
+            for field in fields:
+                if field in row:
+                    row[field] = self._convert_ads_amount_to_eur(row.get(field, 0), currency)
+            converted[str(date_key)] = row
+        return converted
+
+    def _convert_ads_rows_to_eur(
+        self,
+        rows: List[Dict[str, Any]],
+        currency: str,
+        fields: List[str],
+        source_label: str,
+    ) -> List[Dict[str, Any]]:
+        if not rows:
+            return []
+        if self._normalize_currency_code(currency) != 'EUR':
+            logger.info(f"Converting {source_label} row metrics from {currency} to EUR for project '{self.project_name}'")
+        converted_rows: List[Dict[str, Any]] = []
+        for row_payload in rows:
+            row = dict(row_payload or {})
+            for field in fields:
+                if field in row:
+                    row[field] = self._convert_ads_amount_to_eur(row.get(field, 0), currency)
+            converted_rows.append(row)
+        return converted_rows
     
     def fetch_orders_for_month(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         """
@@ -1786,9 +1869,18 @@ class BizniWebExporter:
         fb_hourly_stats = []
         fb_dow_stats = []
         if MANUAL_FB_ADS_TOTAL is not None:
-            fb_daily_spend = self._distribute_total_spend(MANUAL_FB_ADS_TOTAL, date_from, date_to)
+            fb_currency = self._resolve_ads_currency(
+                "Facebook Ads",
+                detected_currency=None,
+                configured_currency=FACEBOOK_ADS_CURRENCY,
+            )
+            fb_daily_spend = self._convert_ads_daily_spend_to_eur(
+                self._distribute_total_spend(MANUAL_FB_ADS_TOTAL, date_from, date_to),
+                fb_currency,
+                "Facebook Ads",
+            )
             print(
-                f"Using manual Facebook Ads total: {MANUAL_FB_ADS_TOTAL:.2f} EUR "
+                f"Using manual Facebook Ads total: {MANUAL_FB_ADS_TOTAL:.2f} {fb_currency} "
                 f"distributed across {len(fb_daily_spend)} days"
             )
             source_health["sources"]["facebook_ads"] = self._build_source_entry(
@@ -1796,10 +1888,14 @@ class BizniWebExporter:
                 label="Facebook Ads",
                 status="manual",
                 mode="manual_total_distribution",
-                message=f"Manual Facebook Ads total {MANUAL_FB_ADS_TOTAL:.2f} EUR distributed across the selected date range.",
+                message=(
+                    f"Manual Facebook Ads total {MANUAL_FB_ADS_TOTAL:.2f} {fb_currency} "
+                    f"distributed across the selected date range and normalized to EUR."
+                ),
                 healthy=True,
                 active_days=len(fb_daily_spend),
-                total_eur=round(float(MANUAL_FB_ADS_TOTAL), 2),
+                reported_currency=fb_currency,
+                total_eur=round(sum(fb_daily_spend.values()), 2),
             )
         elif self.fb_client.is_configured:
             print("Testing Facebook Ads connection...")
@@ -1814,32 +1910,61 @@ class BizniWebExporter:
                     healthy=False,
                 )
             else:
+                fb_currency = self._resolve_ads_currency(
+                    "Facebook Ads",
+                    detected_currency=self.fb_client.account_currency,
+                    configured_currency=FACEBOOK_ADS_CURRENCY,
+                )
                 print("Fetching Facebook Ads spend data...")
-                fb_daily_spend = self.fb_client.get_daily_spend(date_from, date_to)
+                fb_daily_spend = self._convert_ads_daily_spend_to_eur(
+                    self.fb_client.get_daily_spend(date_from, date_to),
+                    fb_currency,
+                    "Facebook Ads",
+                )
                 if fb_daily_spend:
                     print(f"Retrieved Facebook Ads data for {len(fb_daily_spend)} days")
 
                 # Fetch detailed metrics for Facebook Ads report
                 print("Fetching detailed Facebook Ads metrics...")
-                fb_detailed_metrics = self.fb_client.get_daily_metrics(date_from, date_to)
+                fb_detailed_metrics = self._convert_ads_metrics_dict_to_eur(
+                    self.fb_client.get_daily_metrics(date_from, date_to),
+                    fb_currency,
+                    ['spend', 'cpc', 'cpm', 'cost_per_unique_click'],
+                    "Facebook Ads",
+                )
                 if fb_detailed_metrics:
                     print(f"Retrieved detailed FB metrics for {len(fb_detailed_metrics)} days")
 
                 # Fetch campaign-level performance
                 print("Fetching Facebook campaign performance...")
-                fb_campaigns = self.fb_client.get_campaign_spend(date_from, date_to)
+                fb_campaigns = self._convert_ads_rows_to_eur(
+                    self.fb_client.get_campaign_spend(date_from, date_to),
+                    fb_currency,
+                    ['spend', 'cpc', 'cpm', 'cost_per_unique_click', 'cost_per_conversion', 'cost_per_purchase'],
+                    "Facebook campaign",
+                )
                 if fb_campaigns:
                     print(f"Retrieved data for {len(fb_campaigns)} campaigns")
 
                 # Fetch hourly stats
                 print("Fetching Facebook hourly stats...")
-                fb_hourly_stats = self.fb_client.get_hourly_stats(date_from, date_to)
+                fb_hourly_stats = self._convert_ads_rows_to_eur(
+                    self.fb_client.get_hourly_stats(date_from, date_to),
+                    fb_currency,
+                    ['spend', 'cpc', 'cpm'],
+                    "Facebook hourly",
+                )
                 if fb_hourly_stats:
                     print(f"Retrieved hourly stats for {len(fb_hourly_stats)} hours")
 
                 # Fetch day of week stats
                 print("Fetching Facebook day-of-week stats...")
-                fb_dow_stats = self.fb_client.get_day_of_week_stats(date_from, date_to)
+                fb_dow_stats = self._convert_ads_rows_to_eur(
+                    self.fb_client.get_day_of_week_stats(date_from, date_to),
+                    fb_currency,
+                    ['total_spend', 'avg_spend', 'cpc', 'cpm'],
+                    "Facebook day-of-week",
+                )
                 if fb_dow_stats:
                     print(f"Retrieved day-of-week stats for {len(fb_dow_stats)} days")
 
@@ -1854,6 +1979,7 @@ class BizniWebExporter:
                     detailed_days=len(fb_detailed_metrics),
                     campaign_count=len(fb_campaigns),
                     hourly_rows=len(fb_hourly_stats),
+                    reported_currency=fb_currency,
                 )
         else:
             source_health["sources"]["facebook_ads"] = self._build_source_entry(
@@ -1868,9 +1994,18 @@ class BizniWebExporter:
         # Fetch Google Ads spend data
         google_ads_daily_spend = {}
         if MANUAL_GOOGLE_ADS_TOTAL is not None:
-            google_ads_daily_spend = self._distribute_total_spend(MANUAL_GOOGLE_ADS_TOTAL, date_from, date_to)
+            google_ads_currency = self._resolve_ads_currency(
+                "Google Ads",
+                detected_currency=None,
+                configured_currency=GOOGLE_ADS_CURRENCY,
+            )
+            google_ads_daily_spend = self._convert_ads_daily_spend_to_eur(
+                self._distribute_total_spend(MANUAL_GOOGLE_ADS_TOTAL, date_from, date_to),
+                google_ads_currency,
+                "Google Ads",
+            )
             print(
-                f"Using manual Google Ads total: {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR "
+                f"Using manual Google Ads total: {MANUAL_GOOGLE_ADS_TOTAL:.2f} {google_ads_currency} "
                 f"distributed across {len(google_ads_daily_spend)} days"
             )
             source_health["sources"]["google_ads"] = self._build_source_entry(
@@ -1878,10 +2013,14 @@ class BizniWebExporter:
                 label="Google Ads",
                 status="manual",
                 mode="manual_total_distribution",
-                message=f"Manual Google Ads total {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR distributed across the selected date range.",
+                message=(
+                    f"Manual Google Ads total {MANUAL_GOOGLE_ADS_TOTAL:.2f} {google_ads_currency} "
+                    f"distributed across the selected date range and normalized to EUR."
+                ),
                 healthy=True,
                 active_days=len(google_ads_daily_spend),
-                total_eur=round(float(MANUAL_GOOGLE_ADS_TOTAL), 2),
+                reported_currency=google_ads_currency,
+                total_eur=round(sum(google_ads_daily_spend.values()), 2),
             )
         elif self.google_ads_client.is_configured:
             print("Testing Google Ads connection...")
@@ -1896,8 +2035,17 @@ class BizniWebExporter:
                     healthy=False,
                 )
             else:
+                google_ads_currency = self._resolve_ads_currency(
+                    "Google Ads",
+                    detected_currency=self.google_ads_client.account_currency,
+                    configured_currency=GOOGLE_ADS_CURRENCY,
+                )
                 print("Fetching Google Ads spend data...")
-                google_ads_daily_spend = self.google_ads_client.get_daily_spend(date_from, date_to)
+                google_ads_daily_spend = self._convert_ads_daily_spend_to_eur(
+                    self.google_ads_client.get_daily_spend(date_from, date_to),
+                    google_ads_currency,
+                    "Google Ads",
+                )
                 if google_ads_daily_spend:
                     print(f"Retrieved Google Ads data for {len(google_ads_daily_spend)} days")
                 source_health["sources"]["google_ads"] = self._build_source_entry(
@@ -1908,6 +2056,7 @@ class BizniWebExporter:
                     message=f"Google Ads API connected successfully. Daily spend loaded for {len(google_ads_daily_spend)} active days.",
                     healthy=True,
                     active_days=len(google_ads_daily_spend),
+                    reported_currency=google_ads_currency,
                 )
         else:
             source_health["sources"]["google_ads"] = self._build_source_entry(
