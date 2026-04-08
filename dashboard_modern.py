@@ -73,6 +73,25 @@ def _maybe_num(value: Any) -> Optional[float]:
         return None
 
 
+def _json_default(value: Any) -> Any:
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
+
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except (TypeError, ValueError):
+            pass
+
+    return str(value)
+
+
 def _ma(values: List[float], window: int) -> List[Optional[float]]:
     out: List[Optional[float]] = []
     bucket: List[float] = []
@@ -892,7 +911,7 @@ def generate_modern_dashboard(
             "reconciliation": (cost_per_order or {}).get("fb_spend_reconciliation") or {},
         },
     }
-    payload_json = json.dumps(payload, ensure_ascii=False)
+    payload_json = json.dumps(payload, ensure_ascii=False, default=_json_default)
 
     product_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('sku') or ''))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{_num(row.get('margin_pct')):.1f}%</td><td>{int(round(_num(row.get('orders'))))}</td></tr>"

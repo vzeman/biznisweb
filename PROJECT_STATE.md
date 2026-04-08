@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-03
+Last updated: 2026-04-08
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -71,6 +71,11 @@ Bootstrap entrypoints:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
   - SES delivery confirmed in CloudWatch logs
   - no remaining `PutMetricData` warning in the verified log stream
+- Roy Facebook Ads integration is project-scoped and isolated from VEVO config.
+- Roy Google Ads integration is project-scoped and isolated from VEVO config.
+- Roy reporting now uses live Google Ads API data without `manual_google_ads_total`.
+- Standalone ads helpers support `--project <slug>` for project-scoped Roy/VEVO smoke tests.
+- Ads spend normalization now supports per-project ad-account currencies before report P&L math.
 
 ## 6) Integration Notes (External Systems)
 
@@ -98,10 +103,11 @@ Bootstrap entrypoints:
 - Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_modern.py`) instead of the retired daily runner rendering path.
 - Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
+- Roy Meta token expired during the 2026-04-08 export verification run; the report continued with zero-filled Facebook metrics while Google Ads stayed live.
 
 ## 8) Next Exact Step
 
-- Continue visual/UX cleanup of the new production dashboard shell now that the temporary `test2` output track was retired.
+- Refresh Roy Meta access token, verify `python facebook_ads.py --project roy`, then rerun `python export_orders.py --project roy` so Roy report uses both live Meta and live Google ads data.
 
 ## 9) Change Log
 
@@ -752,3 +758,22 @@ Next exact step:
   - remaining client onboarding work is mainly credential/account setup, not reporting math refactors.
 - Next exact step:
   - fill Roy Google Ads credentials, verify `python google_ads.py --project roy`, then remove `manual_google_ads_total` after a successful Roy Google API smoke run.
+### 2026-04-08 (Roy Google integration live)
+- Verified the refreshed shared Google Ads OAuth/MCC setup against both project-scoped wrappers:
+  - `python google_ads.py --project roy`
+  - `python google_ads.py --project vevo`
+- Confirmed both projects authenticate through the same MCC login context while keeping separate child account IDs:
+  - Roy `customer_id=5313708530`
+  - Vevo `customer_id=7592903323`
+  - shared MCC `login_customer_id=6704852923`
+- Removed `manual_google_ads_total` from `projects/roy/settings.json`, so Roy reporting now uses live Google Ads API spend.
+- Fixed a dashboard serialization blocker in `dashboard_modern.py` by adding safe JSON serialization for numpy/pandas scalar values used in the embedded dashboard payload.
+- Verified Roy export end-to-end with live Google Ads data:
+  - `python export_orders.py --project roy --from-date 2026-04-01 --to-date 2026-04-03`
+  - generated `data/roy/report_20260401-20260403.html`
+  - generated `data/roy/export_20260401-20260403.csv`
+  - generated `data/roy/data_quality_20260401-20260403.json`
+- Remaining blocker outside Google integration:
+  - Roy Meta token expired during the export verification run, so Facebook metrics were zero-filled while Google Ads stayed live.
+- Next exact step:
+  - refresh Roy Meta access token and rerun `python export_orders.py --project roy` to restore live Facebook metrics alongside live Google Ads.
