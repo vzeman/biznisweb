@@ -8,6 +8,9 @@ on:
       - opan-claw
       - codex/week-of-month-pattern
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   observability-baseline:
     runs-on: ubuntu-latest

@@ -25,6 +25,7 @@ env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: vevo-reporting
   IMAGE_TAG: latest
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-and-push:
