@@ -331,6 +331,13 @@ def build_cfo_kpi_payload(
     def snapshot(aggregate: Optional[Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
         return {metric_key: safe_kpi_value(metric_key, aggregate) for metric_key in metric_keys}
 
+    def secondary_snapshot(aggregate: Optional[Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
+        if not aggregate:
+            return {}
+        return {
+            "company_margin_with_fixed": aggregate.get("company_profit_with_fixed"),
+        }
+
     day_vals = snapshot(day_cur)
     day_prev_vals = snapshot(day_prev) if day_prev else {}
     day_week_vals = snapshot(day_week) if day_week else {}
@@ -379,9 +386,9 @@ def build_cfo_kpi_payload(
         "default_window": "monthly",
         "metric_defs": metric_defs,
         "windows": {
-            "daily": {"label": "Last day", "metrics": day_vals},
-            "weekly": {"label": "Last 7 days", "metrics": w7_vals},
-            "monthly": {"label": "Last 30 days", "metrics": w30_vals},
+            "daily": {"label": "Last day", "metrics": day_vals, "secondary_metrics": secondary_snapshot(day_cur)},
+            "weekly": {"label": "Last 7 days", "metrics": w7_vals, "secondary_metrics": secondary_snapshot(w7)},
+            "monthly": {"label": "Last 30 days", "metrics": w30_vals, "secondary_metrics": secondary_snapshot(w30)},
         },
         "comparisons": comparisons,
     }

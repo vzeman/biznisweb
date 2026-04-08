@@ -178,6 +178,7 @@ def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
             "label_en": WINDOW_LABELS.get(window_key, {}).get("en", window_key.title()),
             "label_sk": WINDOW_LABELS.get(window_key, {}).get("sk", window_key.title()),
             "metrics": {k: _maybe_num(v) for k, v in (window_payload.get("metrics") or {}).items()},
+            "secondary_metrics": {k: _maybe_num(v) for k, v in (window_payload.get("secondary_metrics") or {}).items()},
         }
     comparisons = {}
     for window_key, comp_payload in (payload.get("comparisons") or {}).items():
@@ -222,7 +223,7 @@ def _period_switcher_html(period_switcher: Optional[dict]) -> str:
         href = escape(str(option.get("href") or "#"))
         label = escape(str(option.get("label") or key.upper()))
         links.append(
-            f'<a class="pill global-period-link {active}" data-base-href="{href}" href="{href}">{label}</a>'
+            f'<a class="pill global-period-link {active}" data-period-key="{escape(key)}" data-base-href="{href}" href="{href}">{label}</a>'
         )
     return (
         '<div class="panel controls global-period-panel">'
@@ -398,6 +399,7 @@ def generate_modern_dashboard(
     cfo_kpi_payload: Optional[dict] = None,
     source_health: Optional[dict] = None,
     period_switcher: Optional[dict] = None,
+    embedded_period_reports: Optional[dict] = None,
 ) -> str:
     raw_title = (report_title or "BizniWeb reporting").strip()
     title = escape(raw_title)
@@ -428,6 +430,7 @@ def generate_modern_dashboard(
         limit=6,
     )
     source_rows = list(((source_health or {}).get("sources") or {}).values())
+    embedded_period_reports = embedded_period_reports or {}
     customer_top_rows = _top_rows(
         (customer_concentration or {}).get("top_10_customers"),
         ["customer", "orders", "revenue", "profit", "revenue_pct"],
@@ -1091,6 +1094,7 @@ def generate_modern_dashboard(
         .kpi-card {{ padding: 20px; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.14); min-height: 170px; display:flex; flex-direction:column; }}
         .kpi-card small {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .kpi-value {{ font-size: 36px; font-weight: 900; line-height: 1; letter-spacing: -.05em; margin: 10px 0 6px; }}
+        .kpi-secondary {{ color: var(--text); font-size: 18px; font-weight: 800; line-height: 1.2; margin: -2px 0 8px; }}
         .kpi-period {{ color: var(--muted); font-size: 12px; font-weight: 700; }}
         .compare-list {{ margin-top: auto; display:grid; gap:4px; }}
         .compare-row {{ font-size: 13px; font-weight: 800; }}
@@ -1882,6 +1886,7 @@ def generate_modern_dashboard(
     </div>
     <script>
         const DATA = {payload_json};
+        const INLINE_EMBEDDED_PERIOD_REPORTS = window.__EMBEDDED_PERIOD_REPORTS__ || {json.dumps(embedded_period_reports)};
         const KPI_TYPES = {{
             revenue: 'currency', profit: 'currency', orders: 'integer', aov: 'currency',
             cac: 'currency', roas: 'multiple', pre_ad_contribution_margin: 'percent',
@@ -1899,6 +1904,23 @@ def generate_modern_dashboard(
             if (type === 'multiple') return fmtMultiple(value);
             return value ?? 'N/A';
         }}
+        function loadStoredJson(key) {{
+            try {{
+                const raw = sessionStorage.getItem(key);
+                if (!raw) return {{}};
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : {{}};
+            }} catch (_error) {{
+                return {{}};
+            }}
+        }}
+        const EMBEDDED_PERIOD_REPORTS = Object.keys(INLINE_EMBEDDED_PERIOD_REPORTS || {{}}).length
+            ? INLINE_EMBEDDED_PERIOD_REPORTS
+            : loadStoredJson('embeddedPeriodReports');
+        const STORED_PERIOD_BASE_HREFS = Object.keys(window.__PERIOD_HREF_BASE_MAP__ || {{}}).length
+            ? window.__PERIOD_HREF_BASE_MAP__
+            : loadStoredJson('periodHrefBaseMap');
+        const BOOTSTRAP_PENDING_SECTION_ID = window.__PENDING_SECTION_ID__ || '';
         function lang() {{ return localStorage.getItem('reportLang') || 'en'; }}
         function applyLang(next) {{
             document.querySelectorAll('.lang-en').forEach(el => el.classList.toggle('hidden', next !== 'en'));
@@ -1932,12 +1954,17 @@ def generate_modern_dashboard(
             grid.innerHTML = defs.map(def => {{
                 const label = currentLang === 'sk' ? def.label_sk : def.label_en;
                 const period = currentLang === 'sk' ? current.label_sk : current.label_en;
+                const secondaryMetrics = current.secondary_metrics || {{}};
+                const secondaryValue = secondaryMetrics[def.key];
+                const secondaryHtml = def.key === 'company_margin_with_fixed' && secondaryValue !== null && secondaryValue !== undefined
+                    ? `<div class=\"kpi-secondary\">${{fmtCurrency(secondaryValue)}}</div>`
+                    : '';
                 const metricComps = ((comps[windowKey] || {{}})[def.key]) || {{}};
                 const rows = Object.entries(metricComps).slice(0, 2).map(([compKey, compVal]) => {{
                     const names = (compLabels[windowKey] || {{}})[compKey] || {{ en: compKey, sk: compKey }};
                     return `<div class=\"compare-row ${{compClass(compVal, def.direction)}}\">${{compText(compVal)}} <span style=\"opacity:.85;\">${{currentLang === 'sk' ? names.sk : names.en}}</span></div>`;
                 }}).join('');
-                return `<article class=\"kpi-card\"><small>${{label}}</small><div class=\"kpi-value\">${{fmtMetric(def.key, (current.metrics || {{}})[def.key])}}</div><div class=\"kpi-period\">${{period}}</div><div class=\"compare-list\">${{rows}}</div></article>`;
+                return `<article class=\"kpi-card\"><small>${{label}}</small><div class=\"kpi-value\">${{fmtMetric(def.key, (current.metrics || {{}})[def.key])}}</div>${{secondaryHtml}}<div class=\"kpi-period\">${{period}}</div><div class=\"compare-list\">${{rows}}</div></article>`;
             }}).join('');
         }}
         function gradient(ctx, top, bottom) {{
@@ -3615,11 +3642,30 @@ def generate_modern_dashboard(
             const periodLinks = Array.from(document.querySelectorAll('.global-period-link'));
             const sections = Array.from(document.querySelectorAll('section[id]'));
             if (!navLinks.length || !sections.length) return;
+            let canonicalBaseHrefs = Object.assign({{}}, STORED_PERIOD_BASE_HREFS);
+            if (!Object.keys(canonicalBaseHrefs).length && periodLinks.length) {{
+                periodLinks.forEach(link => {{
+                    const periodKey = link.dataset.periodKey || '';
+                    const baseHref = link.dataset.baseHref || (link.getAttribute('href') || '').split('#')[0];
+                    if (periodKey && baseHref) canonicalBaseHrefs[periodKey] = baseHref;
+                }});
+            }}
+            try {{
+                if (Object.keys(canonicalBaseHrefs).length) {{
+                    sessionStorage.setItem('periodHrefBaseMap', JSON.stringify(canonicalBaseHrefs));
+                }}
+                if (Object.keys(EMBEDDED_PERIOD_REPORTS).length) {{
+                    sessionStorage.setItem('embeddedPeriodReports', JSON.stringify(EMBEDDED_PERIOD_REPORTS));
+                }}
+            }} catch (_error) {{
+                // best-effort only; keep file usable even when browser storage is unavailable
+            }}
 
             function updatePeriodLinks(sectionId) {{
                 if (!periodLinks.length || !sectionId) return;
                 periodLinks.forEach(link => {{
-                    const baseHref = link.dataset.baseHref || (link.getAttribute('href') || '').split('#')[0];
+                    const periodKey = link.dataset.periodKey || '';
+                    const baseHref = canonicalBaseHrefs[periodKey] || link.dataset.baseHref || (link.getAttribute('href') || '').split('#')[0];
                     if (!baseHref) return;
                     link.dataset.baseHref = baseHref;
                     link.setAttribute('href', `${{baseHref}}#${{sectionId}}`);
@@ -3657,6 +3703,50 @@ def generate_modern_dashboard(
                 }});
             }});
 
+            periodLinks.forEach(link => {{
+                link.addEventListener('click', (event) => {{
+                    const periodKey = link.dataset.periodKey || '';
+                    const sectionId = (document.querySelector('.nav-link.active')?.getAttribute('href') || '#overview').replace(/^#/, '') || 'overview';
+                    const baseHref = canonicalBaseHrefs[periodKey] || link.dataset.baseHref || (link.getAttribute('href') || '').split('#')[0];
+                    if (!periodKey) return;
+
+                    if (periodKey !== 'full' && EMBEDDED_PERIOD_REPORTS[periodKey]) {{
+                        event.preventDefault();
+                        try {{
+                            sessionStorage.setItem('periodHrefBaseMap', JSON.stringify(canonicalBaseHrefs));
+                            sessionStorage.setItem('embeddedPeriodReports', JSON.stringify(EMBEDDED_PERIOD_REPORTS));
+                            sessionStorage.setItem('pendingSectionId', sectionId);
+                        }} catch (_error) {{
+                            // continue without persistence
+                        }}
+                        const binary = atob(String(EMBEDDED_PERIOD_REPORTS[periodKey]));
+                        const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+                        const bootstrapScript = `<script>window.__EMBEDDED_PERIOD_REPORTS__ = ${{
+                            JSON.stringify(EMBEDDED_PERIOD_REPORTS).replace(/</g, '\\\\u003c')
+                        }};window.__PERIOD_HREF_BASE_MAP__ = ${{
+                            JSON.stringify(canonicalBaseHrefs).replace(/</g, '\\\\u003c')
+                        }};window.__PENDING_SECTION_ID__ = ${{
+                            JSON.stringify(sectionId).replace(/</g, '\\\\u003c')
+                        }};<\\/script>`;
+                        const html = new TextDecoder('utf-8').decode(bytes).replace('</head>', `${{bootstrapScript}}</head>`);
+                        document.open();
+                        document.write(html);
+                        document.close();
+                        return;
+                    }}
+
+                    if (periodKey === 'full' && baseHref) {{
+                        event.preventDefault();
+                        try {{
+                            sessionStorage.setItem('pendingSectionId', sectionId);
+                        }} catch (_error) {{
+                            // ignore
+                        }}
+                        window.location.href = `${{baseHref}}#${{sectionId}}`;
+                    }}
+                }});
+            }});
+
             let ticking = false;
             window.addEventListener('scroll', () => {{
                 if (ticking) return;
@@ -3668,6 +3758,16 @@ def generate_modern_dashboard(
             }}, {{ passive: true }});
 
             resolveActiveSection();
+            const pendingSectionId = BOOTSTRAP_PENDING_SECTION_ID || sessionStorage.getItem('pendingSectionId');
+            if (pendingSectionId) {{
+                if (!BOOTSTRAP_PENDING_SECTION_ID) sessionStorage.removeItem('pendingSectionId');
+                const pendingTarget = document.getElementById(pendingSectionId);
+                if (pendingTarget) {{
+                    const top = Math.max(pendingTarget.offsetTop - 24, 0);
+                    window.scrollTo({{ top, behavior: 'auto' }});
+                    setActiveNav(pendingSectionId);
+                }}
+            }}
             if (window.location.hash) {{
                 const initialTarget = document.querySelector(window.location.hash);
                 if (initialTarget) setActiveNav(initialTarget.id);
