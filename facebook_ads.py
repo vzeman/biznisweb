@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Facebook Ads API integration for fetching marketing spend data
+Facebook Ads API integration for fetching marketing spend data.
 """
 
+import argparse
 import os
 import json
 import re
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -14,6 +16,7 @@ import requests
 from dotenv import load_dotenv
 from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
+from reporting_core import BASE_DEFAULT_PROJECT, load_project_env
 
 # Load environment variables
 load_dotenv(encoding="utf-8-sig")
@@ -748,10 +751,42 @@ class FacebookAdsClient:
             return False
 
 
+def bootstrap_project_from_argv(argv: List[str]) -> str:
+    """Read project selection early so standalone testing can load project env."""
+    project = os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    for idx, arg in enumerate(argv):
+        if arg == "--project" and idx + 1 < len(argv):
+            return argv[idx + 1].strip() or project
+        if arg.startswith("--project="):
+            return arg.split("=", 1)[1].strip() or project
+    return project
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Test Facebook Ads API integration")
+    parser.add_argument(
+        "--project",
+        type=str,
+        default=os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT),
+        help="Project name (loads projects/<project>/.env before testing)",
+    )
+    return parser.parse_args()
+
+
 def main():
-    """Test function to verify Facebook Ads integration"""
+    """Test function to verify Facebook Ads integration."""
+    bootstrap_project = bootstrap_project_from_argv(sys.argv[1:])
+    os.environ["REPORT_PROJECT"] = bootstrap_project
+    load_project_env(bootstrap_project, logger=logger)
+
+    args = parse_args()
+    project_name = (args.project or bootstrap_project).strip() or BASE_DEFAULT_PROJECT
+    os.environ["REPORT_PROJECT"] = project_name
+
     client = FacebookAdsClient()
-    
+
+    logger.info(f"Testing Facebook Ads integration for project '{project_name}'")
+
     if client.test_connection():
         # Test fetching last 7 days of data
         date_to = datetime.now()

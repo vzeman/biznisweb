@@ -694,3 +694,12 @@ Next exact step:
 - Kept the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` workflow env override in place as an additional safety measure during the Node 24 transition window.
 - Next exact step:
   - push the branch, merge it, and verify on the next `Build and Push ECR` run that the old Node 20 deprecation annotation no longer appears.
+### 2026-04-08 (Roy Meta project-scoped smoke test)
+- Hardened standalone Facebook Ads testing so client verification can target a specific reporting project without inheriting another shop's root `.env` credentials.
+- `facebook_ads.py` now accepts `--project <slug>`, bootstraps `REPORT_PROJECT`, and loads `projects/<project>/.env` before initializing the Meta client.
+- This keeps Roy Meta validation isolated from VEVO when testing with:
+  - `python facebook_ads.py --project roy`
+- Verified with:
+  - `python -m py_compile facebook_ads.py`
+- Next exact step:
+  - fill Roy Meta credentials into `projects/roy/.env`, verify `python facebook_ads.py --project roy`, then remove Roy's manual Facebook fallback from project settings once API reads are confirmed.
