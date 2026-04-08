@@ -107,6 +107,7 @@ SHIPPING_SUBSIDY_PER_ORDER = 0.2  # EUR per order (shipping subsidy)
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
 ITEM_PRICE_VALUES_ARE_NET = False  # BizniWeb item price values are treated as net when project opts in
 EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
+PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for canonical reporting product names
 EXCLUDE_ZERO_VALUE_ORDERS = False  # Optional exclusion for full orders with 0 total / 0 revenue
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
@@ -427,6 +428,16 @@ class BizniWebExporter:
             normalized_key = self._normalize_match_text(key)
             if normalized_key:
                 self.product_expenses_normalized[normalized_key] = float(value)
+        self.product_name_aliases_exact = {
+            str(key).strip(): str(value).strip()
+            for key, value in PRODUCT_NAME_ALIASES.items()
+            if str(key).strip() and str(value).strip()
+        }
+        self.product_name_aliases_normalized = {}
+        for key, value in self.product_name_aliases_exact.items():
+            normalized_key = self._normalize_match_text(key)
+            if normalized_key:
+                self.product_name_aliases_normalized[normalized_key] = value
 
     def output_path(self, filename: str) -> Path:
         """Build a path inside project-specific output directory."""
@@ -697,6 +708,25 @@ class BizniWebExporter:
         )
         return df
 
+    def canonicalize_reporting_product_label(self, label: Any) -> str:
+        normalized_label = str(label or "").strip()
+        if not normalized_label:
+            return ""
+        if normalized_label in self.product_name_aliases_exact:
+            return self.product_name_aliases_exact[normalized_label]
+        normalized_match = self._normalize_match_text(normalized_label)
+        if normalized_match in self.product_name_aliases_normalized:
+            return self.product_name_aliases_normalized[normalized_match]
+        return normalized_label
+
+    def add_reporting_product_identity_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Prepare project-scoped canonical product keys for all downstream reporting analyses."""
+        df['raw_item_label'] = df.get('item_label', '')
+        df['raw_product_sku'] = df.get('product_sku', '')
+        df['item_label'] = df['item_label'].apply(self.canonicalize_reporting_product_label)
+        df['product_sku'] = df['item_label'].apply(lambda label: self.get_product_sku('', label or 'Unknown'))
+        return df
+
     @staticmethod
     def _normalize_match_text(value: Any) -> str:
         """Normalize strings for robust contains-based matching across accents/encoding/punctuation."""
@@ -716,6 +746,13 @@ class BizniWebExporter:
                 return True
         return False
 
+    @staticmethod
+    def _compose_expense_key(*parts: Any) -> str:
+        normalized_parts = [str(part or "").strip() for part in parts]
+        if not normalized_parts or any(not part for part in normalized_parts):
+            return ""
+        return "||".join(normalized_parts)
+
     def _resolve_product_expense(
         self,
         product_sku: str,
@@ -723,31 +760,44 @@ class BizniWebExporter:
         import_code: Any = None,
         warehouse_number: Any = None,
     ) -> float:
-        identifier_candidates = [
-            str(product_sku or "").strip(),
-            str(import_code or "").strip(),
-            str(warehouse_number or "").strip(),
-        ]
+        product_sku_candidate = str(product_sku or "").strip()
+        import_code_candidate = str(import_code or "").strip()
+        warehouse_number_candidate = str(warehouse_number or "").strip()
         title_candidate = str(item_label or "").strip()
+        identifier_candidates = [
+            warehouse_number_candidate,
+            import_code_candidate,
+            product_sku_candidate,
+        ]
+        exact_compound_candidates = [
+            self._compose_expense_key(title_candidate, warehouse_number_candidate),
+            self._compose_expense_key(title_candidate, import_code_candidate),
+            self._compose_expense_key(title_candidate, product_sku_candidate),
+        ]
         exact_candidates = (
-            [title_candidate, *identifier_candidates]
+            [*exact_compound_candidates, title_candidate, *identifier_candidates]
             if EXPENSE_MATCH_MODE == "title_first"
-            else [*identifier_candidates, title_candidate]
+            else [*exact_compound_candidates, *identifier_candidates, title_candidate]
         )
         for candidate in exact_candidates:
             if candidate and candidate in self.product_expenses_exact:
                 return float(self.product_expenses_exact[candidate])
 
-        normalized_identifier_candidates = [
-            self._normalize_match_text(product_sku),
-            self._normalize_match_text(import_code),
-            self._normalize_match_text(warehouse_number),
-        ]
         normalized_title_candidate = self._normalize_match_text(item_label)
+        normalized_identifier_candidates = [
+            self._normalize_match_text(warehouse_number),
+            self._normalize_match_text(import_code),
+            self._normalize_match_text(product_sku),
+        ]
+        normalized_compound_candidates = [
+            self._compose_expense_key(normalized_title_candidate, self._normalize_match_text(warehouse_number)),
+            self._compose_expense_key(normalized_title_candidate, self._normalize_match_text(import_code)),
+            self._compose_expense_key(normalized_title_candidate, self._normalize_match_text(product_sku)),
+        ]
         normalized_candidates = (
-            [normalized_title_candidate, *normalized_identifier_candidates]
+            [*normalized_compound_candidates, normalized_title_candidate, *normalized_identifier_candidates]
             if EXPENSE_MATCH_MODE == "title_first"
-            else [*normalized_identifier_candidates, normalized_title_candidate]
+            else [*normalized_compound_candidates, *normalized_identifier_candidates, normalized_title_candidate]
         )
         for candidate in normalized_candidates:
             if candidate and candidate in self.product_expenses_normalized:
@@ -2231,51 +2281,52 @@ class BizniWebExporter:
         
         # Save to CSV
         df.to_csv(filename, index=False, encoding='utf-8-sig')
-        
+        analytics_df = self.add_reporting_product_identity_columns(df.copy())
+
         # Analyze returning customers
-        returning_customers_analysis = self.analyze_returning_customers(df)
+        returning_customers_analysis = self.analyze_returning_customers(analytics_df)
         
         # Calculate CLV and return time analysis
-        clv_return_time_analysis = self.calculate_clv_and_return_time(df)
+        clv_return_time_analysis = self.calculate_clv_and_return_time(analytics_df)
 
         # Analyze order size distribution
-        order_size_distribution = self.analyze_order_size_distribution(df)
+        order_size_distribution = self.analyze_order_size_distribution(analytics_df)
 
         # Analyze item combinations
-        item_combinations = self.analyze_item_combinations(df, min_count=5)
+        item_combinations = self.analyze_item_combinations(analytics_df, min_count=5)
 
         # New analytics
-        day_of_week_analysis = self.analyze_day_of_week(df)
-        week_of_month_analysis = self.analyze_week_of_month(df)
-        day_of_month_analysis = self.analyze_day_of_month(df)
-        advanced_dtc_metrics = self.analyze_advanced_dtc_metrics(df)
-        day_hour_heatmap = self.analyze_day_hour_heatmap(df)
-        country_analysis, city_analysis = self.analyze_geographic(df)
-        geo_profitability = self.analyze_geo_profitability(df, fb_campaigns)
-        b2b_analysis = self.analyze_b2b_vs_b2c(df)
-        product_margins = self.analyze_product_margins(df)
-        product_trends = self.analyze_product_trends(df)
-        customer_concentration = self.analyze_customer_concentration(df)
-        order_status = self.analyze_order_status(df)
-        ads_effectiveness = self.analyze_ads_effectiveness(df)
-        new_vs_returning_revenue = self.analyze_new_vs_returning_revenue(df)
-        refunds_analysis = self.analyze_refunds(df)
+        day_of_week_analysis = self.analyze_day_of_week(analytics_df)
+        week_of_month_analysis = self.analyze_week_of_month(analytics_df)
+        day_of_month_analysis = self.analyze_day_of_month(analytics_df)
+        advanced_dtc_metrics = self.analyze_advanced_dtc_metrics(analytics_df)
+        day_hour_heatmap = self.analyze_day_hour_heatmap(analytics_df)
+        country_analysis, city_analysis = self.analyze_geographic(analytics_df)
+        geo_profitability = self.analyze_geo_profitability(analytics_df, fb_campaigns)
+        b2b_analysis = self.analyze_b2b_vs_b2c(analytics_df)
+        product_margins = self.analyze_product_margins(analytics_df)
+        product_trends = self.analyze_product_trends(analytics_df)
+        customer_concentration = self.analyze_customer_concentration(analytics_df)
+        order_status = self.analyze_order_status(analytics_df)
+        ads_effectiveness = self.analyze_ads_effectiveness(analytics_df)
+        new_vs_returning_revenue = self.analyze_new_vs_returning_revenue(analytics_df)
+        refunds_analysis = self.analyze_refunds(analytics_df)
 
         # Repeat purchase cohort analysis
-        cohort_analysis = self.analyze_repeat_purchase_cohorts(df)
+        cohort_analysis = self.analyze_repeat_purchase_cohorts(analytics_df)
 
         # Item-based retention analyses
-        first_item_retention = self.analyze_retention_by_first_order_item(df)
-        same_item_repurchase = self.analyze_same_item_repurchase(df)
-        time_to_nth_by_first_item = self.analyze_time_to_nth_by_first_item(df)
+        first_item_retention = self.analyze_retention_by_first_order_item(analytics_df)
+        same_item_repurchase = self.analyze_same_item_repurchase(analytics_df)
+        time_to_nth_by_first_item = self.analyze_time_to_nth_by_first_item(analytics_df)
 
         # Customer email segmentation analysis
         # Combine filtered orders with excluded (failed payment) orders for complete customer view
         all_orders_for_segmentation = orders + self.excluded_orders
-        customer_email_segments = self.analyze_customer_email_segments(df, all_orders_for_segmentation)
+        customer_email_segments = self.analyze_customer_email_segments(analytics_df, all_orders_for_segmentation)
 
         # Create aggregated reports
-        date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
+        date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(analytics_df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
         weather_analysis = self.analyze_weather_impact(date_agg, date_from, date_to)
         if self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
             if weather_analysis:
@@ -2312,18 +2363,18 @@ class BizniWebExporter:
         source_health = self._finalize_source_health(source_health)
 
         # Calculate financial metrics
-        financial_metrics = self.calculate_financial_metrics(df, date_agg, clv_return_time_analysis)
+        financial_metrics = self.calculate_financial_metrics(analytics_df, date_agg, clv_return_time_analysis)
         consistency_checks = self.validate_metric_consistency(date_agg, financial_metrics, clv_return_time_analysis)
         cfo_kpi_payload = build_cfo_kpi_payload(
             date_agg=date_agg,
-            export_df=df,
+            export_df=analytics_df,
             fixed_daily_cost_eur=float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70")),
         )
 
         # Cost Per Order analysis with campaign attribution
         # Use the same revenue source as financial summary to keep ROAS definitions aligned.
         cost_per_order = self.analyze_cost_per_order(
-            df,
+            analytics_df,
             fb_campaigns,
             reference_total_revenue=financial_metrics.get('total_revenue')
         )

@@ -846,4 +846,30 @@ Next exact step:
   - VEVO can now safely import final purchase costs from the Excel keyed by product names even when EAN/SKU identifiers collide between products.
   - reporting still treats purchase costs as final net values without adding VAT or hidden surcharges.
 - Next exact step:
-  - wait for the user to finish the VEVO Excel corrections, then import the edited `current_expense_per_item_net` values into the VEVO expense mapping and regenerate VEVO reporting.
+  - import the edited VEVO Excel prices into `projects/vevo/product_expenses.json`, add canonical product-name aliases for renamed products, and regenerate the VEVO report.
+### 2026-04-08 (VEVO Excel expense import + canonical product names)
+- Added project-scoped `product_name_aliases_file` runtime support and VEVO alias mapping in `projects/vevo/product_name_aliases.json`.
+- Added canonical reporting identity handling in `export_orders.py` so analytics/report aggregation can use canonical product names and keys while the raw export CSV remains unchanged.
+- Added `scripts/import_product_expenses_excel.py` to import edited Excel purchase costs into `product_expenses.json`.
+- Imported `data/vevo/product_expense_rebuild_20250503-20260407 (2).xlsx` into `projects/vevo/product_expenses.json`.
+- Expense import now supports:
+  - exact title keys for unambiguous product names
+  - compound `title||warehouse_number` / `title||import_code` / `title||sku` keys when the same exact title still appears with multiple costs in Excel
+- Verified:
+  - `python -m py_compile export_orders.py reporting_core/runtime.py scripts/import_product_expenses_excel.py`
+  - all 224 Excel rows resolve back to the same imported VEVO purchase costs (`mismatches: 0`)
+  - VEVO aliases collapse old/new names into one reporting product (for example `Natural` and non-`Natural` laundry perfume names, and the 6x10ml sample-set name variants)
+  - regenerated VEVO smoke report for `2026-04-01` to `2026-04-03`
+  - regenerated full VEVO report for `2025-05-03` to `2026-04-07`
+- Generated:
+  - `data/vevo/report_20250503-20260407.html`
+  - `data/vevo/export_20250503-20260407.csv`
+  - `data/vevo/aggregate_by_items_20250503-20260407.csv`
+  - `data/vevo/data_quality_20250503-20260407.json`
+- Remaining data nuance:
+  - the edited Excel still contains 8 exact-title rows with multiple purchase costs; reporting handles them via the imported compound keys, so this is not a runtime blocker.
+- Current state:
+  - VEVO reporting now uses the edited Excel purchase costs as final net costs without VAT add-ons.
+  - VEVO product aggregation no longer depends on EAN for product identity and can unify renamed products under one canonical reporting name.
+- Next exact step:
+  - user review of the regenerated VEVO report and, if needed, add more aliases for any remaining product rename variants that should collapse into the same canonical product.
