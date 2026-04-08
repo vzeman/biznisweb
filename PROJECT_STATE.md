@@ -551,3 +551,46 @@ Next exact step:
   - standalone library containers and new chart ids are present in data/vevo/report_20260301-20260331__test2.html
 - Next exact step:
   - visually review eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.
+### 2026-04-04
+- Added an `Executive metrics tile deck` to the end of section `10 Full library` in the modern production dashboard, keeping the current dashboard design while surfacing all major top-level KPI metrics in a compact tile grid.
+- `dashboard_modern.py` now computes and renders a large summary tile set covering revenue, cost stack, profit, daily averages, orders/items, AOV, CAC/ROAS/MER, revenue per customer, contribution layers, break-even CAC, CAC headroom, payback, refund summary, repeat purchase rate, and related executive checks.
+- Added reusable helpers for tile formatting/styling and new tile-grid CSS so the metrics render as readable dashboard cards instead of legacy summary boxes.
+- Verified with:
+  - `python -m py_compile dashboard_modern.py html_report_generator.py export_orders.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+- Verified in generated output:
+  - `data/vevo/report_20260301-20260331.html`
+  - tile deck heading is present in `Full library`
+  - tile labels such as `Total revenue (net)`, `Revenue LTV/CAC`, `ROI`, and `Repeat purchase rate` render in the final HTML.
+- Next exact step:
+  - visually review the new tile deck in the March VEVO report and decide whether any low-signal tiles should be removed or regrouped.
+### 2026-04-08
+- Fixed the modern dashboard global period switcher architecture so it can work from a single emailed HTML attachment instead of depending only on sibling `_periods/...` files being present on disk.
+- `dashboard_modern.py` now tags each global period link with a stable `data-period-key`, persists canonical period hrefs, and injects embedded report variants into non-full period transitions so 7D / 30D / 90D switching can work in a single-file/offline context.
+- `html_report_generator.py` now passes `embedded_period_reports` through to the modern dashboard renderer.
+- `export_orders.py` now builds a lightweight embedded period bundle (base64 child variants for non-full ranges) for the main/full report so the sidebar global time switcher has local content to swap to.
+- `reporting_core/cfo_kpis.py` now includes `secondary_metrics` in KPI windows; the modern dashboard uses that to show nominal company profit beneath `Company margin (incl. fixed)` in the Executive KPI deck.
+- Verified with:
+  - `python -m py_compile dashboard_modern.py html_report_generator.py export_orders.py reporting_core/cfo_kpis.py`
+  - a direct synthetic render smoke test through `generate_html_report(...)` confirming:
+    - `data-period-key` is present,
+    - embedded period report bootstrap is present,
+    - Company margin KPI renders a secondary nominal profit value.
+- Note:
+  - live VEVO March export fetch timed out during API work, so runtime verification for the full real report should be rechecked in the next session after a successful export run.
+- Next exact step:
+  - run a full VEVO export successfully and verify that sidebar period switching works end-to-end from the generated emailed HTML artifact, not just from local disk bundle files.
+### 2026-04-08 (runtime verification update)
+- Re-ran a full real VEVO March export after the single-file period-switch fix:
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+- Runtime verification now succeeded end-to-end; the generated report is:
+  - `data/vevo/report_20260301-20260331.html`
+- Verified on the generated HTML artifact:
+  - embedded period bundle is present (`INLINE_EMBEDDED_PERIOD_REPORTS`)
+  - period switch links render with `data-period-key`
+  - Executive KPI deck includes secondary nominal company profit rendering (`kpi-secondary`) for `Company margin (incl. fixed)`
+  - sibling period HTML variants exist under `_periods/report_20260301-20260331/...`
+- Outcome:
+  - the previously incomplete verification from the earlier 2026-04-08 entry is now closed; full export/runtime generation works for the fixed implementation.
+- Next exact step:
+  - visually verify from the actual emailed HTML attachment context that 7D / 30D switching behaves correctly in the browser the user uses to open the attachment.

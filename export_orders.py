@@ -11,6 +11,7 @@ import json
 import copy
 import traceback
 import hashlib
+import base64
 import re
 import unicodedata
 import sys
@@ -502,6 +503,26 @@ class BizniWebExporter:
             'options': options,
         }
 
+    @staticmethod
+    def _build_embedded_period_reports(period_switcher: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        switcher = period_switcher or {}
+        if str(switcher.get("current_key") or "") != "full":
+            return {}
+        embedded_specs = switcher.get("_embedded_specs") or []
+        embedded_reports: Dict[str, str] = {}
+        for spec in embedded_specs:
+            key = str(spec.get("key") or "")
+            report_path_raw = spec.get("report_path")
+            if not key or not report_path_raw:
+                continue
+            report_path = Path(report_path_raw)
+            if not report_path.exists():
+                continue
+            with open(report_path, "r", encoding="utf-8-sig") as handle:
+                report_html = handle.read()
+            embedded_reports[key] = base64.b64encode(report_html.encode("utf-8")).decode("ascii")
+        return embedded_reports
+
     def _build_period_switcher_bundle(
         self,
         orders: List[Dict[str, Any]],
@@ -553,11 +574,17 @@ class BizniWebExporter:
                 period_switcher=switcher_payload,
             )
 
-        return self._build_period_switcher_payload(
+        payload = self._build_period_switcher_payload(
             current_key='full',
             current_path=main_report_path,
             specs=specs,
         )
+        payload["_embedded_specs"] = [
+            {"key": spec["key"], "report_path": str(spec["report_path"])}
+            for spec in specs
+            if spec["key"] != "full"
+        ]
+        return payload
 
     def _belongs_to_active_output_variant(self, file: Path) -> bool:
         if self.output_tag:
@@ -1730,6 +1757,7 @@ class BizniWebExporter:
         orders = self.deduplicate_orders(orders)
         if period_switcher is None:
             period_switcher = self._build_period_switcher_bundle(orders, date_from, date_to)
+        embedded_period_reports = self._build_embedded_period_reports(period_switcher)
 
         source_health: Dict[str, Any] = {
             "project": self.project_name,
@@ -2115,6 +2143,7 @@ class BizniWebExporter:
             cfo_kpi_payload=cfo_kpi_payload,
             source_health=source_health,
             period_switcher=period_switcher,
+            embedded_period_reports=embedded_period_reports,
             dashboard_variant='default',
         )
         html_filename = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")

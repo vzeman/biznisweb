@@ -81,6 +81,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                          cfo_kpi_payload: dict = None,
                          source_health: dict = None,
                          period_switcher: dict = None,
+                         embedded_period_reports: dict = None,
                          dashboard_variant: str = "default") -> str:
     """
     Generate a complete HTML report with charts and tables
@@ -136,6 +137,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             cfo_kpi_payload=cfo_kpi_payload,
             source_health=source_health,
             period_switcher=period_switcher,
+            embedded_period_reports=embedded_period_reports,
         )
     
     # Prepare data for charts
