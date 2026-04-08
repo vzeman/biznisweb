@@ -179,6 +179,15 @@ def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
             "label_sk": WINDOW_LABELS.get(window_key, {}).get("sk", window_key.title()),
             "metrics": {k: _maybe_num(v) for k, v in (window_payload.get("metrics") or {}).items()},
             "secondary_metrics": {k: _maybe_num(v) for k, v in (window_payload.get("secondary_metrics") or {}).items()},
+            "trend": {
+                "label_en": str(((window_payload.get("trend") or {}).get("label_en")) or ""),
+                "label_sk": str(((window_payload.get("trend") or {}).get("label_sk")) or ""),
+                "dates": [str(v) for v in (((window_payload.get("trend") or {}).get("dates")) or [])],
+                "metrics": {
+                    metric_key: [_maybe_num(point) for point in (series or [])]
+                    for metric_key, series in (((window_payload.get("trend") or {}).get("metrics")) or {}).items()
+                },
+            },
         }
     comparisons = {}
     for window_key, comp_payload in (payload.get("comparisons") or {}).items():
@@ -1091,7 +1100,7 @@ def generate_modern_dashboard(
         .section-head p {{ margin: 6px 0 14px; color: var(--muted); line-height: 1.55; max-width: 760px; }}
         .kpi-band {{ padding: 22px; }}
         .kpi-grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }}
-        .kpi-card {{ padding: 20px; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.14); min-height: 170px; display:flex; flex-direction:column; }}
+        .kpi-card {{ padding: 20px; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.14); min-height: 228px; display:flex; flex-direction:column; }}
         .kpi-card small {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .kpi-value {{ font-size: 36px; font-weight: 900; line-height: 1; letter-spacing: -.05em; margin: 10px 0 6px; }}
         .kpi-secondary {{ color: var(--text); font-size: 18px; font-weight: 800; line-height: 1.2; margin: -2px 0 8px; }}
@@ -1101,6 +1110,15 @@ def generate_modern_dashboard(
         .compare-row.good {{ color: var(--green); }}
         .compare-row.bad {{ color: var(--red); }}
         .compare-row.neutral {{ color: var(--muted); }}
+        .kpi-trend {{ margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,138,31,.10); }}
+        .kpi-trend-head {{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 8px; }}
+        .kpi-trend-label {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }}
+        .kpi-trend-delta {{ font-size: 12px; font-weight: 900; }}
+        .kpi-trend-delta.good {{ color: var(--green); }}
+        .kpi-trend-delta.bad {{ color: var(--red); }}
+        .kpi-trend-delta.neutral {{ color: var(--muted); }}
+        .kpi-sparkline {{ height: 44px; }}
+        .kpi-sparkline svg {{ display:block; width: 100%; height: 44px; overflow: visible; }}
         .chart-card, .table-card, .health-card {{ padding: 20px; }}
         .card-head {{ display:flex; justify-content:space-between; gap:12px; align-items:start; margin-bottom: 16px; }}
         .card-head h3 {{ margin:0; font-size:18px; }}
@@ -1904,6 +1922,45 @@ def generate_modern_dashboard(
             if (type === 'multiple') return fmtMultiple(value);
             return value ?? 'N/A';
         }}
+        function cleanTrendValues(values) {{
+            return (values || [])
+                .map(v => (v === null || v === undefined || Number.isNaN(Number(v))) ? null : Number(v))
+                .filter(v => v !== null);
+        }}
+        function trendDelta(values) {{
+            const cleaned = cleanTrendValues(values);
+            if (cleaned.length < 2) return null;
+            const first = cleaned[0];
+            const last = cleaned[cleaned.length - 1];
+            if (first === 0) {{
+                if (last === 0) return 0;
+                return null;
+            }}
+            return ((last - first) / Math.abs(first)) * 100;
+        }}
+        function sparklineSvg(values, direction) {{
+            const cleaned = cleanTrendValues(values);
+            if (cleaned.length < 2) return '';
+            const width = 240;
+            const height = 44;
+            const pad = 3;
+            let min = Math.min(...cleaned);
+            let max = Math.max(...cleaned);
+            if (min === max) {{
+                min -= 1;
+                max += 1;
+            }}
+            const points = cleaned.map((value, idx) => {{
+                const x = (idx / Math.max(cleaned.length - 1, 1)) * width;
+                const y = height - pad - (((value - min) / (max - min)) * (height - pad * 2));
+                return [x, y];
+            }});
+            const linePath = points.map(([x, y], idx) => `${{idx === 0 ? 'M' : 'L'}}${{x.toFixed(2)}},${{y.toFixed(2)}}`).join(' ');
+            const areaPath = `${{linePath}} L${{width.toFixed(2)}},${{(height - pad).toFixed(2)}} L0,${{(height - pad).toFixed(2)}} Z`;
+            const cls = compClass(trendDelta(cleaned), direction);
+            const stroke = cls === 'good' ? '#18b07a' : (cls === 'bad' ? '#e25d4d' : '#ff8a1f');
+            return `<svg viewBox=\"0 0 ${{width}} ${{height}}\" preserveAspectRatio=\"none\" aria-hidden=\"true\"><path d=\"${{areaPath}}\" fill=\"${{stroke}}\" opacity=\"0.10\"></path><path d=\"${{linePath}}\" fill=\"none\" stroke=\"${{stroke}}\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg>`;
+        }}
         function loadStoredJson(key) {{
             try {{
                 const raw = sessionStorage.getItem(key);
@@ -1956,6 +2013,17 @@ def generate_modern_dashboard(
                 const period = currentLang === 'sk' ? current.label_sk : current.label_en;
                 const secondaryMetrics = current.secondary_metrics || {{}};
                 const secondaryValue = secondaryMetrics[def.key];
+                const trend = current.trend || {{}};
+                const trendValues = ((trend.metrics || {{}})[def.key]) || [];
+                const trendLabel = currentLang === 'sk' ? (trend.label_sk || '') : (trend.label_en || '');
+                const trendDeltaValue = trendDelta(trendValues);
+                const trendDeltaClass = compClass(trendDeltaValue, def.direction);
+                const trendDeltaText = trendDeltaValue === null || trendDeltaValue === undefined || Number.isNaN(Number(trendDeltaValue))
+                    ? 'N/A'
+                    : `${{trendDeltaValue > 0 ? '+' : ''}}${{Number(trendDeltaValue).toFixed(1)}}%`;
+                const trendHtml = trendValues.length >= 2
+                    ? `<div class=\"kpi-trend\"><div class=\"kpi-trend-head\"><span class=\"kpi-trend-label\">${{trendLabel}}</span><span class=\"kpi-trend-delta ${{trendDeltaClass}}\">${{trendDeltaText}}</span></div><div class=\"kpi-sparkline\">${{sparklineSvg(trendValues, def.direction)}}</div></div>`
+                    : '';
                 const secondaryHtml = def.key === 'company_margin_with_fixed' && secondaryValue !== null && secondaryValue !== undefined
                     ? `<div class=\"kpi-secondary\">${{fmtCurrency(secondaryValue)}}</div>`
                     : '';
@@ -1964,7 +2032,7 @@ def generate_modern_dashboard(
                     const names = (compLabels[windowKey] || {{}})[compKey] || {{ en: compKey, sk: compKey }};
                     return `<div class=\"compare-row ${{compClass(compVal, def.direction)}}\">${{compText(compVal)}} <span style=\"opacity:.85;\">${{currentLang === 'sk' ? names.sk : names.en}}</span></div>`;
                 }}).join('');
-                return `<article class=\"kpi-card\"><small>${{label}}</small><div class=\"kpi-value\">${{fmtMetric(def.key, (current.metrics || {{}})[def.key])}}</div>${{secondaryHtml}}<div class=\"kpi-period\">${{period}}</div><div class=\"compare-list\">${{rows}}</div></article>`;
+                return `<article class=\"kpi-card\"><small>${{label}}</small><div class=\"kpi-value\">${{fmtMetric(def.key, (current.metrics || {{}})[def.key])}}</div>${{secondaryHtml}}<div class=\"kpi-period\">${{period}}</div><div class=\"compare-list\">${{rows}}</div>${{trendHtml}}</article>`;
             }}).join('');
         }}
         function gradient(ctx, top, bottom) {{
