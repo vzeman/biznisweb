@@ -611,3 +611,34 @@ Next exact step:
   - report regeneration completed successfully end-to-end
 - Next exact step:
   - visually review the Executive KPI deck in the latest VEVO report and decide whether the sparklines should be made denser/subtler or whether a separate mini trend row is needed for any specific KPI.
+### 2026-04-08 (VEVO runtime build + scheduler verification)
+- Verified that merging the Executive KPI trend-strip change into `main` did not automatically rebuild the VEVO runtime image because `build-and-push-ecr.yml` was not watching `dashboard_modern.py` or `reporting_core/**`.
+- Manually dispatched the `Build and Push ECR` workflow and confirmed a fresh `latest` image in ECR:
+  - repository: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - newest pushed digest tagged `latest`: `sha256:57a95c3fa57ea5d53e081fd48f340800585a2f4901dd118d039a816719fd090b`
+- Confirmed production runtime identifiers before deploy:
+  - scheduler: `vevo-daily-report-email`
+  - cluster: `vevo-reporting-cluster`
+  - task definition before fix: `vevo-reporting-daily:3`
+  - log group: `/ecs/vevo-reporting-daily`
+  - runtime secret: `vevo/reporting/runtime-env`
+- Detected runtime drift in ECS task definition `:3`:
+  - Google Ads credentials existed in Secrets Manager,
+  - but were not mapped into the container secret env list,
+  - which caused the container to log `Google Ads credentials not fully configured`.
+- Registered new ECS task definition revision `vevo-reporting-daily:4` with all Google Ads secret mappings added:
+  - `GOOGLE_ADS_DEVELOPER_TOKEN`
+  - `GOOGLE_ADS_CLIENT_ID`
+  - `GOOGLE_ADS_CLIENT_SECRET`
+  - `GOOGLE_ADS_REFRESH_TOKEN`
+  - `GOOGLE_ADS_CUSTOMER_ID`
+  - `GOOGLE_ADS_LOGIN_CUSTOMER_ID`
+- Updated scheduler `vevo-daily-report-email` to target `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:4`.
+- Ran manual verification tasks:
+  - revision `:3` task showed the missing-Google warning,
+  - revision `:4` task started successfully from the new image digest and no longer emitted the early missing-Google-credentials warning.
+- Regenerated a fresh local full-history VEVO report without sending email:
+  - `python daily_report_runner.py --project vevo --from-date 2025-05-03 --to-date 2026-04-08 --skip-email`
+  - generated artifact: `data/vevo/report_20250503-20260408.html`
+- Next exact step:
+  - merge the workflow path fix so future dashboard/runtime merges rebuild ECR automatically without requiring a manual dispatch.
