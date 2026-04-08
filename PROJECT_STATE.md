@@ -678,3 +678,12 @@ Next exact step:
 - Verified locally by reviewing all workflow YAML references after the upgrade.
 - Next exact step:
   - push the branch, open a PR, and verify on GitHub Actions that the deprecation warning is gone from the next workflow run.
+### 2026-04-08 (force Node 24 runtime for GitHub Actions)
+- Verified that upgrading to the latest pinned workflow actions removed `actions/checkout@v4` but did not fully remove the GitHub deprecation annotation because `aws-actions/configure-aws-credentials@v5.1.1` still runs on the older JavaScript action runtime.
+- Added `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"` at workflow level in:
+  - `.github/workflows/build-and-push-ecr.yml`
+  - `.github/workflows/env-check.yml`
+  - `.github/workflows/observability-check.yml`
+- This uses GitHub's documented opt-in path so JavaScript actions execute on Node 24 now, instead of waiting for the future runner default switch.
+- Next exact step:
+  - push the branch, run/observe the next workflow execution, and confirm the deprecation annotation is gone.
