@@ -15,6 +15,7 @@ import base64
 import re
 import unicodedata
 import sys
+from difflib import get_close_matches
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
@@ -419,6 +420,12 @@ class BizniWebExporter:
         self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
+        self.product_expenses_exact = dict(PRODUCT_EXPENSES)
+        self.product_expenses_normalized = {}
+        for key, value in PRODUCT_EXPENSES.items():
+            normalized_key = self._normalize_match_text(key)
+            if normalized_key:
+                self.product_expenses_normalized[normalized_key] = float(value)
 
     def output_path(self, filename: str) -> Path:
         """Build a path inside project-specific output directory."""
@@ -707,6 +714,48 @@ class BizniWebExporter:
             if normalized_pattern and normalized_pattern in normalized_label:
                 return True
         return False
+
+    def _resolve_product_expense(
+        self,
+        product_sku: str,
+        item_label: str,
+        import_code: Any = None,
+        warehouse_number: Any = None,
+    ) -> float:
+        exact_candidates = [
+            str(product_sku or "").strip(),
+            str(import_code or "").strip(),
+            str(warehouse_number or "").strip(),
+            str(item_label or "").strip(),
+        ]
+        for candidate in exact_candidates:
+            if candidate and candidate in self.product_expenses_exact:
+                return float(self.product_expenses_exact[candidate])
+
+        normalized_candidates = [
+            self._normalize_match_text(import_code),
+            self._normalize_match_text(warehouse_number),
+            self._normalize_match_text(item_label),
+        ]
+        for candidate in normalized_candidates:
+            if candidate and candidate in self.product_expenses_normalized:
+                return float(self.product_expenses_normalized[candidate])
+
+        label_candidate = self._normalize_match_text(item_label)
+        if label_candidate and len(label_candidate) >= 8:
+            for known_key, known_value in self.product_expenses_normalized.items():
+                if label_candidate in known_key or known_key in label_candidate:
+                    return float(known_value)
+            close_matches = get_close_matches(
+                label_candidate,
+                list(self.product_expenses_normalized.keys()),
+                n=1,
+                cutoff=0.93,
+            )
+            if close_matches:
+                return float(self.product_expenses_normalized[close_matches[0]])
+
+        return 1.0
 
     @staticmethod
     def _distribute_total_spend(total: float, date_from: datetime, date_to: datetime) -> Dict[str, float]:
@@ -1740,6 +1789,8 @@ class BizniWebExporter:
                 # Get expense per item from mapping (using product_sku - EAN or hash)
                 item_label = item.get('item_label', '')
                 item_ean = item.get('ean', '')
+                item_import_code = item.get('import_code')
+                item_warehouse_number = item.get('warehouse_number')
                 product_sku = self.get_product_sku(item_ean, item_label)
 
                 # Optional exclusion for zero-priced gift lines (e.g. free promo gifts).
@@ -1771,8 +1822,13 @@ class BizniWebExporter:
                     # Keep product margin at 15%: cost = 85% of net unit selling price.
                     expense_per_item = (item_total_without_tax / item_quantity) * 0.85
                 else:
-                    # First try SKU, then title for backward compatibility, default to 1.0 for unknown products.
-                    expense_per_item = PRODUCT_EXPENSES.get(product_sku, PRODUCT_EXPENSES.get(item_label, 1.0))
+                    # Resolve by SKU/import code first, then by exact or normalized product name.
+                    expense_per_item = self._resolve_product_expense(
+                        product_sku,
+                        item_label,
+                        import_code=item_import_code,
+                        warehouse_number=item_warehouse_number,
+                    )
                 total_expense = expense_per_item * item_quantity
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
@@ -1786,8 +1842,8 @@ class BizniWebExporter:
                     'item_number': None,
                     'item_label': item.get('item_label'),
                     'item_ean': item.get('ean'),
-                    'item_import_code': item.get('import_code'),
-                    'item_warehouse_number': item.get('warehouse_number'),
+                    'item_import_code': item_import_code,
+                    'item_warehouse_number': item_warehouse_number,
                     'item_quantity': item_quantity,
                     'item_tax_rate': item_tax_rate,
                     'item_weight': weight.get('value'),

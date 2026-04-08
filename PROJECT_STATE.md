@@ -78,6 +78,7 @@ Bootstrap entrypoints:
 - Ads spend normalization now supports per-project ad-account currencies before report P&L math.
 - BizniWeb item line prices for ROY and VEVO are now treated as net values via project runtime, fixing the prior double-VAT reduction in product/order revenue math.
 - Roy reporting now excludes full zero-value orders (0 total / 0 revenue), which removes complaint/exchange/service replacement orders from financial reporting.
+- Product expense lookup now supports exact SKU/EAN, import code, exact product title, normalized title, and a strict fuzzy title fallback for minor diacritics/encoding drift.
 
 ## 6) Integration Notes (External Systems)
 
@@ -110,7 +111,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Review Roy and VEVO finance deltas after the item-price net/gross correction, then decide whether to relabel/export explicit `unit_net` / `unit_gross` CSV columns for operator clarity.
+- Decide whether to migrate selected VEVO/ROY `product_expenses.json` entries from hash keys to human-readable product titles now that title-based expense lookup is supported.
 
 ## 9) Change Log
 
@@ -130,6 +131,12 @@ Bootstrap entrypoints:
 - Regenerated full-range reports after the correction:
   - ROY: `data/roy/report_20250924-20260407.html`, `data/roy/export_20250924-20260407.csv`
   - VEVO: `data/vevo/report_20250503-20260407.html`, `data/vevo/export_20250503-20260407.csv`
+- Expanded product expense key resolution in `export_orders.py`:
+  - supports exact SKU/EAN,
+  - supports `import_code`,
+  - supports exact product title,
+  - supports normalized/fuzzy product-title lookup for minor diacritics or encoding drift.
+- Verified title-based expense lookup with smoke checks for SKU, import code, exact title, and normalized title fallback.
 
 ### 2026-03-31
 - Completed `P3.1` reusable reporting core foundation:
