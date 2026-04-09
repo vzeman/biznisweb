@@ -111,6 +111,10 @@ Bootstrap entrypoints:
 - Verified locally on the latest saved Roy + Vevo `aggregate_by_date` artifacts:
   - VEVO 30d `profit=3825.40`, `post_ad_margin=41.421099`, `company_profit_with_fixed=1725.40`, `company_margin_with_fixed=18.682481`,
   - ROY 30d `profit=8519.42`, `post_ad_margin=32.661053`, `company_profit_with_fixed=3735.46`, `company_margin_with_fixed=14.3207`.
+- Shared ECR image was rebuilt from branch commit `34db039d25239fc71a41596d87decde052f86e46` via GitHub Actions run `24174764835`:
+  - image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - pushed digest: `sha256:5eaf52e9d4700f0499d19fc3709313d9dcbc9e5e610287b1c58c0535df35ba20`
+  - local workstation currently has no AWS CLI credentials, so direct post-build ECS/log re-verification was not possible from this session.
 
 ## 6) Integration Notes (External Systems)
 
@@ -159,6 +163,13 @@ Bootstrap entrypoints:
   - `python -m py_compile reporting_core\\cfo_kpis.py dashboard_modern.py daily_report_runner.py export_orders.py html_report_generator.py`
   - smoke check on `data/vevo/aggregate_by_date_20250503-20260408.csv`
   - smoke check on `data/roy/aggregate_by_date_20250922-20260408.csv`
+  - end-to-end `--skip-email` smoke runs passed for both projects:
+    - `python daily_report_runner.py --project vevo --from-date 2026-04-07 --to-date 2026-04-08 --skip-email --output-tag semantics_smoke`
+    - `python daily_report_runner.py --project roy --from-date 2026-04-07 --to-date 2026-04-08 --skip-email --output-tag semantics_smoke`
+- Rebuilt the shared production image for tonight's scheduled runs:
+  - GitHub Actions workflow `Build and Push ECR` run `24174764835`
+  - source commit `34db039d25239fc71a41596d87decde052f86e46`
+  - pushed image digest `sha256:5eaf52e9d4700f0499d19fc3709313d9dcbc9e5e610287b1c58c0535df35ba20`
 
 ### 2026-04-09
 - Deployed the reporting logic fixes to the shared nightly runtime image:
