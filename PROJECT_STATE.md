@@ -85,6 +85,10 @@ Bootstrap entrypoints:
   - profit/profitability charts and tables show both `without fixed` and `with fixed`,
   - week/day/payday/weather/marketing/product/geo/B2B views were aligned to the same dual logic,
   - full VEVO export/report regenerated successfully after the dashboard + DTC analytics fix.
+- Daily email text summaries were rebuilt in `daily_report_runner.py`:
+  - now read directly from the current `aggregate_by_date` + export CSV of the active run,
+  - use the same net-revenue semantics as the main report,
+  - are shorter, more concrete, less technical, and include actionable recommendations instead of long comparison dumps.
 
 ## 6) Integration Notes (External Systems)
 
@@ -117,7 +121,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Do a quick visual QA pass of the regenerated VEVO HTML report and decide whether the same dual fixed-cost presentation should now be propagated to ROY dashboard surfaces too.
+- Run one VEVO daily-report/email preview with the new summary builder and decide whether the same plainer language style should be applied to ROY too.
 
 ## 9) Change Log
 
@@ -128,6 +132,14 @@ Bootstrap entrypoints:
 - Removed cross-project state ownership from this repo; left only integration notes.
 
 ### 2026-04-08
+- Reworked daily-report plain-text summary generation in `daily_report_runner.py`:
+  - fixed summary math to read current aggregate/export artifacts directly,
+  - removed the old verbose `comparison framework` / `metric trends` dump from the email summary,
+  - replaced it with compact sections: quick overview, what is good, what got worse, likely cause, recommended next steps, and data note,
+  - stopped double-subtracting fixed cost inside the summary helper by using the run's actual `net_profit` / `fixed_daily_cost` fields.
+- Verified locally against current VEVO artifacts:
+  - `python -m py_compile daily_report_runner.py`
+  - `build_report_summary(...)` now returns current VEVO totals (`93 653.81 EUR` net revenue, `39 546.84 EUR` net profit for the tested full-range export)
 - Expanded VEVO fixed-cost visibility beyond the Executive KPI deck:
   - main and library charts now show `profit without fixed` and `profit with fixed` where meaningful,
   - weather, payday-window, spend-bucket, weekday-effectiveness, week-of-month average output, and all-metrics overview were aligned to the dual presentation,
