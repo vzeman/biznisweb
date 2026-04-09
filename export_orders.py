@@ -105,6 +105,7 @@ GRAPHQL_TIMEOUT_SEC = int(
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
 SHIPPING_SUBSIDY_PER_ORDER = 0.2  # EUR per order (shipping subsidy)
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
+DEFAULT_FIXED_DAILY_COST_EUR = 70.0
 ITEM_PRICE_VALUES_ARE_NET = False  # BizniWeb item price values are treated as net when project opts in
 EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
 PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for canonical reporting product names
@@ -930,10 +931,27 @@ class BizniWebExporter:
 
         return deduped_orders
     
+    def get_default_fixed_daily_cost(self) -> float:
+        """Resolve the fixed daily fallback used when no monthly project fixed cost is configured."""
+        raw_value = str(os.getenv("CFO_FIXED_DAILY_COST_EUR", "") or "").strip()
+        if not raw_value:
+            return DEFAULT_FIXED_DAILY_COST_EUR
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid CFO_FIXED_DAILY_COST_EUR=%r, falling back to default %.2f",
+                raw_value,
+                DEFAULT_FIXED_DAILY_COST_EUR,
+            )
+            return DEFAULT_FIXED_DAILY_COST_EUR
+
     def get_daily_fixed_cost(self, date: datetime) -> float:
-        """Calculate daily fixed cost based on days in the month"""
-        days_in_month = calendar.monthrange(date.year, date.month)[1]
-        return FIXED_MONTHLY_COST / days_in_month
+        """Calculate daily fixed cost from the project monthly fixed cost or the shared daily fallback."""
+        if FIXED_MONTHLY_COST:
+            days_in_month = calendar.monthrange(date.year, date.month)[1]
+            return FIXED_MONTHLY_COST / days_in_month
+        return self.get_default_fixed_daily_cost()
     
     def convert_to_eur(self, amount: float, currency: str) -> float:
         """Convert amount from given currency to EUR"""
@@ -2412,10 +2430,14 @@ class BizniWebExporter:
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(analytics_df, date_agg, clv_return_time_analysis)
         consistency_checks = self.validate_metric_consistency(date_agg, financial_metrics, clv_return_time_analysis)
+        cfo_fixed_daily_cost = self.get_default_fixed_daily_cost()
+        if date_agg is not None and not date_agg.empty and "date" in date_agg.columns:
+            cfo_fixed_daily_cost = self.get_daily_fixed_cost(pd.Timestamp(date_agg["date"].max()))
+
         cfo_kpi_payload = build_cfo_kpi_payload(
             date_agg=date_agg,
             export_df=analytics_df,
-            fixed_daily_cost_eur=float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70")),
+            fixed_daily_cost_eur=cfo_fixed_daily_cost,
         )
 
         # Cost Per Order analysis with campaign attribution

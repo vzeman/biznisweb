@@ -137,6 +137,7 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
         product_costs = float(row.get("product_expense", 0) or 0)
         packaging_costs = float(row.get("packaging_cost", 0) or 0)
         shipping_subsidy = float(row.get("shipping_subsidy_cost", 0) or 0)
+        fixed_overhead = float(row.get("fixed_daily_cost", 0) or 0)
         facebook_ads = float(row.get("fb_ads_spend", 0) or 0)
         google_ads = float(row.get("google_ads_spend", 0) or 0)
         total_ads = facebook_ads + google_ads
@@ -159,6 +160,7 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
                 "product_costs": product_costs,
                 "packaging_costs": packaging_costs,
                 "shipping_subsidy": shipping_subsidy,
+                "fixed_overhead": fixed_overhead,
                 "facebook_ads": facebook_ads,
                 "google_ads": google_ads,
                 "total_ads": total_ads,
@@ -189,6 +191,7 @@ def _window_aggregate(
     google_ads = 0.0
     profit = 0.0
     pre_ad_contribution = 0.0
+    fixed_overhead = 0.0
     new_customers = 0
     returning_orders = 0
     returning_customers = 0
@@ -204,6 +207,7 @@ def _window_aggregate(
             google_ads += float(row["google_ads"])
             profit += float(row["profit"])
             pre_ad_contribution += float(row["pre_ad_contribution"])
+            fixed_overhead += float(row.get("fixed_overhead", fixed_daily_cost_eur) or 0)
 
         customer = customer_by_date.get(d, {})
         new_customers += int(customer.get("new_customers", 0))
@@ -221,7 +225,8 @@ def _window_aggregate(
     payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
     unique_customers = _window_unique_customers(order_records, end_date, days)
     ltv = (revenue / unique_customers) if unique_customers > 0 else None
-    company_profit_with_fixed = profit - (fixed_daily_cost_eur * days)
+    # `profit` already comes from `date_agg.net_profit`, which includes fixed overhead.
+    company_profit_with_fixed = profit
     company_margin_with_fixed = (company_profit_with_fixed / revenue * 100) if revenue > 0 else 0.0
 
     return {
@@ -232,6 +237,7 @@ def _window_aggregate(
         "google_ads": google_ads,
         "profit": profit,
         "pre_ad_contribution": pre_ad_contribution,
+        "fixed_overhead": fixed_overhead,
         "aov": aov,
         "roas": roas,
         "pre_ad_contribution_margin": contribution_margin,
@@ -413,6 +419,7 @@ def build_cfo_kpi_payload(
 
     return {
         "default_window": "monthly",
+        "fixed_daily_cost_eur": float(fixed_daily_cost_eur),
         "metric_defs": metric_defs,
         "windows": {
             "daily": {

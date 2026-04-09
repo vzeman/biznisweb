@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -89,6 +89,15 @@ Bootstrap entrypoints:
   - now read directly from the current `aggregate_by_date` + export CSV of the active run,
   - use the same net-revenue semantics as the main report,
   - are shorter, more concrete, less technical, and include actionable recommendations instead of long comparison dumps.
+- VEVO fixed-cost source is now unified across the full report:
+  - when `fixed_monthly_cost` is set, reporting uses that project monthly fixed cost,
+  - otherwise reporting falls back to the shared daily CFO fixed cost,
+  - this removed the old mismatch where the Executive KPI deck showed fixed-aware numbers but the lower executive tile deck still showed `0` fixed / stale profitability.
+- Verified locally on a fresh full-range VEVO export for `2025-05-03..2026-04-08`:
+  - `data/vevo/report_20250503-20260408.html`
+  - lower executive tile deck now shows `Fixed overhead €23,870.00`
+  - lower executive tile deck now shows live `Google ads €579.44`
+  - total costs/profit in the same deck now reflect the fixed-aware totals (`€78,207.17` cost, `€15,843.86` net profit)
 
 ## 6) Integration Notes (External Systems)
 
@@ -118,12 +127,25 @@ Bootstrap entrypoints:
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 - Roy Meta token expired during the 2026-04-08 export verification run; the report continued with zero-filled Facebook metrics while Google Ads stayed live.
 - Google/Meta ads and weather enrichments make full-range verification runs slow; the repo still lacks a lighter regression fixture for finance math changes.
+- CFO KPI payload logic still uses a constant daily fixed label for comparison metadata, even though the source-of-truth fixed values now come from `date_agg`; if we later need month-by-month label precision, that part can be refined separately.
 
 ## 8) Next Exact Step
 
-- Run one VEVO daily-report/email preview with the new summary builder and decide whether the same plainer language style should be applied to ROY too.
+- Re-run a fresh ROY full-range export and visually confirm that its Executive KPI deck and lower executive tile deck now stay aligned on the same fixed-cost source too.
 
 ## 9) Change Log
+
+### 2026-04-09
+- Unified fixed-cost sourcing between the Executive KPI deck and the lower executive tile deck.
+- `export_orders.py` now resolves daily fixed cost from:
+  - project `fixed_monthly_cost` when configured,
+  - otherwise the shared CFO daily fallback.
+- `reporting_core/cfo_kpis.py` now reads fixed-overhead context from the already-built daily aggregate rows instead of assuming a separate second fixed-cost subtraction on top of `net_profit`.
+- Regenerated the full VEVO report for `2025-05-03..2026-04-08` and verified:
+  - `Fixed overhead €23,870.00`
+  - `Google ads €579.44`
+  - `Total costs €78,207.17`
+  - `Net profit €15,843.86`
 
 ### 2026-03-30
 - Added env governance baseline: `.env.required`, pre-commit hook, CI env check.
