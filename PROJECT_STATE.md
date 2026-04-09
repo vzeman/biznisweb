@@ -131,9 +131,25 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Re-run a fresh ROY full-range export and visually confirm that its Executive KPI deck and lower executive tile deck now stay aligned on the same fixed-cost source too.
+- Build and push the current reporting image to ECR, then manually run both ECS schedulers' task definitions (`vevo-reporting-daily`, `roy-reporting-daily`) to verify tonight's email runtime uses the corrected reporting logic.
 
 ## 9) Change Log
+
+### 2026-04-09
+- Hardened reporting logic/source-of-truth alignment before the next nightly Roy + Vevo mail run:
+  - `report_from_date` now resolves from versioned `projects/<project>/settings.json` first, with env only as fallback,
+  - project `.env` loading now ignores blank values instead of overwriting already-present runtime env keys,
+  - daily email summary CAC now uses FB CAC consistently with the main dashboard metrics, with blended CAC called out separately only when Google spend exists,
+  - VEVO CLV/CAC weekly aggregation now includes FB spend from zero-order days, removing the previous CAC consistency drift,
+  - modern dashboard consistency tiles now read the correct `roas_delta` / `company_margin_delta_pct` / `cac_delta` payload keys.
+- Verified locally:
+  - `python -m py_compile reporting_core\\config.py reporting_core\\__init__.py daily_report_runner.py export_orders.py dashboard_modern.py`
+  - `resolve_report_from_date('roy') -> 2025-09-24`
+  - 7D summary CAC on Roy now separates `fb_cac=1.4294` vs `blended_cac=16.619`
+  - VEVO CLV spend reconciliation now matches `aggregate_by_date` exactly (`delta=0.0`)
+  - side-by-side smoke runs completed successfully without touching production artifacts:
+    - `python daily_report_runner.py --project vevo --from-date 2026-04-07 --to-date 2026-04-08 --skip-email --output-tag logic_smoke`
+    - `python daily_report_runner.py --project roy --from-date 2026-04-07 --to-date 2026-04-08 --skip-email --output-tag logic_smoke`
 
 ### 2026-04-09
 - Unified fixed-cost sourcing between the Executive KPI deck and the lower executive tile deck.

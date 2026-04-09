@@ -760,11 +760,11 @@ def generate_modern_dashboard(
     segment_rows = sorted(segment_rows, key=lambda row: (row["priority"], -row["count"]))
 
     consistency_payload = {
-        "roas_delta": _maybe_num((consistency_checks or {}).get("roas_check_delta")),
-        "margin_delta": _maybe_num((consistency_checks or {}).get("margin_check_delta")),
-        "cac_delta": _maybe_num((consistency_checks or {}).get("cac_check_delta")),
+        "roas_delta": _maybe_num((consistency_checks or {}).get("roas_delta")),
+        "margin_delta": _maybe_num((consistency_checks or {}).get("company_margin_delta_pct")),
+        "cac_delta": _maybe_num((consistency_checks or {}).get("cac_delta")),
         "roas_ok": bool((consistency_checks or {}).get("roas_ok")),
-        "margin_ok": bool((consistency_checks or {}).get("margin_ok")),
+        "margin_ok": bool((consistency_checks or {}).get("company_margin_ok")),
         "cac_ok": bool((consistency_checks or {}).get("cac_ok")),
     }
     financial_payload = {

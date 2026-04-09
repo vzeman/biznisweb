@@ -31,6 +31,7 @@ from reporting_core import (
     load_project_runtime,
     load_project_settings,
     resolve_biznisweb_api_url,
+    resolve_report_from_date,
     resolve_reporting_defaults,
     sanitize_output_tag,
 )
@@ -2352,7 +2353,7 @@ class BizniWebExporter:
         returning_customers_analysis = self.analyze_returning_customers(analytics_df)
         
         # Calculate CLV and return time analysis
-        clv_return_time_analysis = self.calculate_clv_and_return_time(analytics_df)
+        clv_return_time_analysis = self.calculate_clv_and_return_time(analytics_df, fb_daily_spend=fb_daily_spend)
 
         # Analyze order size distribution
         order_size_distribution = self.analyze_order_size_distribution(analytics_df)
@@ -3882,7 +3883,11 @@ class BizniWebExporter:
             'summary': summary
         }
 
-    def calculate_clv_and_return_time(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_clv_and_return_time(
+        self,
+        df: pd.DataFrame,
+        fb_daily_spend: Optional[Dict[str, float]] = None,
+    ) -> pd.DataFrame:
         """Calculate Customer Lifetime Value and average return time"""
         print("\nCalculating CLV and customer return time...")
         revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'
@@ -3893,9 +3898,24 @@ class BizniWebExporter:
         df['year_week'] = df['purchase_datetime'].dt.to_period('W')
 
         # One row per day spend table to avoid multiplying daily ad spend by order count
-        daily_spend_df = df.groupby('purchase_date_only').agg({
-            'fb_ads_daily_spend': 'first'
-        }).reset_index()
+        if fb_daily_spend:
+            spend_rows = []
+            for date_key, spend_value in fb_daily_spend.items():
+                try:
+                    spend_day = pd.to_datetime(date_key).date()
+                except Exception:
+                    continue
+                spend_rows.append({
+                    'purchase_date_only': spend_day,
+                    'fb_ads_daily_spend': float(spend_value or 0.0),
+                })
+            daily_spend_df = pd.DataFrame(spend_rows)
+        else:
+            daily_spend_df = df.groupby('purchase_date_only').agg({
+                'fb_ads_daily_spend': 'first'
+            }).reset_index()
+        if daily_spend_df.empty:
+            daily_spend_df = pd.DataFrame(columns=['purchase_date_only', 'fb_ads_daily_spend'])
         daily_spend_df['year_week'] = pd.to_datetime(daily_spend_df['purchase_date_only']).dt.to_period('W')
         weekly_fb_spend_map = daily_spend_df.groupby('year_week')['fb_ads_daily_spend'].sum().to_dict()
         
@@ -3928,7 +3948,9 @@ class BizniWebExporter:
         # Calculate weekly aggregations
         weekly_clv_stats = []
         
-        for week in orders_df['year_week'].unique():
+        all_weeks = sorted(set(orders_df['year_week'].unique()) | set(daily_spend_df['year_week'].unique()))
+
+        for week in all_weeks:
             week_orders = orders_df[orders_df['year_week'] == week]
             week_customers = week_orders['customer_email'].unique()
             
@@ -6621,7 +6643,7 @@ def main():
     parser.add_argument(
         '--from-date',
         type=str,
-        help='From date in YYYY-MM-DD format (default: 2025-05-06)'
+        help='From date in YYYY-MM-DD format (default: CLI -> REPORT_FROM_DATE -> project settings -> 2025-05-03)'
     )
     parser.add_argument(
         '--to-date',
@@ -6650,9 +6672,10 @@ def main():
 
     # Load project-specific env first so API credentials are isolated per shop.
     load_project_env(project_name, logger=logger)
+    settings = load_project_settings(project_name)
     runtime = load_project_runtime(
         project_name,
-        settings=load_project_settings(project_name),
+        settings=settings,
         legacy_product_expenses=LEGACY_VEVO_PRODUCT_EXPENSES,
         default_currency_rates=CURRENCY_RATES_TO_EUR,
         default_packaging_cost_per_order=PACKAGING_COST_PER_ORDER,
@@ -6682,7 +6705,7 @@ def main():
     if args.from_date:
         date_from = parse_input_date(args.from_date)
     else:
-        default_from_raw = os.getenv("REPORT_FROM_DATE", "2025-05-03")
+        default_from_raw = resolve_report_from_date(project_name, settings)
         date_from = parse_input_date(default_from_raw)
 
     print(

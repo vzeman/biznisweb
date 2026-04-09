@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -17,6 +17,7 @@ PROJECTS_DIR = ROOT_DIR / "projects"
 ROOT_DATA_DIR = ROOT_DIR / "data"
 BASE_DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", "vevo").strip() or "vevo"
 DEFAULT_CLOUDWATCH_NAMESPACE = "BizniswebReporting"
+DEFAULT_REPORT_FROM_DATE = "2025-05-03"
 
 
 @dataclass(frozen=True)
@@ -49,8 +50,21 @@ def load_project_env(project_name: str, logger: Optional[Any] = None) -> None:
 
     env_path = project_dir(project_name) / ".env"
     if env_path.exists():
-        load_dotenv(dotenv_path=env_path, override=True, encoding="utf-8-sig")
-        _log(logger, f"Loaded project env: {env_path}")
+        raw_values = dotenv_values(dotenv_path=env_path, encoding="utf-8-sig")
+        applied_count = 0
+        skipped_blank_keys = []
+        for key, value in raw_values.items():
+            if not key:
+                continue
+            normalized = str(value or "").strip()
+            if not normalized:
+                skipped_blank_keys.append(key)
+                continue
+            os.environ[key] = normalized
+            applied_count += 1
+        _log(logger, f"Loaded project env: {env_path} ({applied_count} non-empty keys applied)")
+        if skipped_blank_keys:
+            _log(logger, f"Ignored blank project env keys: {', '.join(sorted(skipped_blank_keys))}")
         return
 
     if project_name != BASE_DEFAULT_PROJECT:
@@ -129,7 +143,15 @@ def resolve_reporting_defaults(project_name: str, settings: Optional[Dict[str, A
             or DEFAULT_CLOUDWATCH_NAMESPACE
         ),
         "enable_email_strategy_report": bool(settings.get("enable_email_strategy_report", False)),
+        "report_from_date": resolve_report_from_date(project_name, settings),
     }
+
+
+def resolve_report_from_date(project_name: str, settings: Optional[Dict[str, Any]] = None) -> str:
+    settings = settings or {}
+    env_value = os.getenv("REPORT_FROM_DATE", "").strip()
+    settings_value = str(settings.get("report_from_date", "")).strip()
+    return settings_value or env_value or DEFAULT_REPORT_FROM_DATE
 
 
 def _load_json_file(path: Path) -> Dict[str, Any]:

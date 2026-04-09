@@ -32,6 +32,7 @@ from reporting_core import (
     load_project_env,
     load_project_settings,
     project_data_dir,
+    resolve_report_from_date,
     resolve_reporting_defaults,
     sanitize_output_tag,
 )
@@ -67,8 +68,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--from-date",
-        default=os.getenv("REPORT_FROM_DATE", "2025-05-03"),
-        help="Start date in YYYY-MM-DD format (default: REPORT_FROM_DATE or 2025-05-03)",
+        default="",
+        help="Start date in YYYY-MM-DD format (default: CLI -> REPORT_FROM_DATE -> project settings -> 2025-05-03)",
     )
     parser.add_argument(
         "--to-date",
@@ -500,9 +501,10 @@ def _window_aggregate(
     contribution_per_order = (pre_ad_contribution / orders) if orders > 0 else 0.0
     profit_per_order = (profit / orders) if orders > 0 else 0.0
     profit_per_order_without_fixed = (profit_without_fixed / orders) if orders > 0 else 0.0
-    cac = (ads / new_customers) if new_customers > 0 else None
+    fb_cac = (fb_ads / new_customers) if new_customers > 0 else None
+    blended_cac = (ads / new_customers) if new_customers > 0 else None
     returning_customer_rate = (returning_orders / orders * 100) if orders > 0 else None
-    payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
+    payback_orders = (fb_cac / contribution_per_order) if (fb_cac is not None and contribution_per_order > 0) else None
     unique_customers = _window_unique_customers(order_records, end_date, days)
     ltv = (revenue / unique_customers) if unique_customers > 0 else None
     company_profit_with_fixed = profit
@@ -532,7 +534,9 @@ def _window_aggregate(
         "returning_orders": float(returning_orders),
         "returning_customers": float(returning_customers),
         "returning_customer_rate": returning_customer_rate,
-        "cac": cac,
+        "cac": fb_cac,
+        "fb_cac": fb_cac,
+        "blended_cac": blended_cac,
         "payback_orders": payback_orders,
         "unique_customers": float(unique_customers),
         "ltv": ltv,
@@ -603,13 +607,13 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     if d_prev:
         prev_new = int(customer_by_date.get(prev_day, {}).get("new_customers", 0))
         today_new = int(customer_by_date.get(last_date, {}).get("new_customers", 0))
-        prev_cac = (float(d_prev["total_ads"]) / prev_new) if prev_new > 0 else None
-        today_cac = (float(last_row["total_ads"]) / today_new) if today_new > 0 else None
+        prev_cac = (float(d_prev["facebook_ads"]) / prev_new) if prev_new > 0 else None
+        today_cac = (float(last_row["facebook_ads"]) / today_new) if today_new > 0 else None
         if today_cac is not None and prev_cac is not None:
             cac_daily_change = _pct_change(today_cac, prev_cac)
 
-    cac_7_change = _pct_change(float(w7["cac"]), float(w7_prev["cac"])) if (w7["cac"] is not None and w7_prev["cac"] is not None) else None
-    cac_30_change = _pct_change(float(w30["cac"]), float(w30_prev["cac"])) if (w30["cac"] is not None and w30_prev["cac"] is not None) else None
+    cac_7_change = _pct_change(float(w7["fb_cac"]), float(w7_prev["fb_cac"])) if (w7["fb_cac"] is not None and w7_prev["fb_cac"] is not None) else None
+    cac_30_change = _pct_change(float(w30["fb_cac"]), float(w30_prev["fb_cac"])) if (w30["fb_cac"] is not None and w30_prev["fb_cac"] is not None) else None
 
     roas_daily_change = _pct_change(float(last_row["roas"]), float(d_prev["roas"])) if d_prev else None
     roas_7_change = _pct_change(float(w7["roas"] or 0), float(w7_prev["roas"] or 0))
@@ -641,7 +645,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         revenue_driver = "Na urcenie hlavneho dovodu zmeny obratu chyba dostatok dat."
 
     today_new = int(customer_by_date.get(last_date, {}).get("new_customers", 0))
-    daily_cac = (float(last_row["total_ads"]) / today_new) if today_new > 0 else None
+    daily_cac = (float(last_row["facebook_ads"]) / today_new) if today_new > 0 else None
     daily_payback = (daily_cac / float(last_row["contribution_per_order"])) if (daily_cac is not None and float(last_row["contribution_per_order"]) > 0) else None
     overview_lines = [
         "RYCHLY PREHLAD",
@@ -649,10 +653,14 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         f"- Poslednych 7 dni: obrat {_fmt_eur(float(w7['revenue'] or 0))}, cisty zisk {_fmt_eur(float(w7['profit'] or 0))}, spend {_fmt_eur(float(w7['ads'] or 0))}, ROAS {float(w7['roas'] or 0):.2f}x.",
         f"- Posledny den ({last_date.isoformat()}): {int(last_row['orders'] or 0)} objednavok, obrat {_fmt_eur(float(last_row['revenue'] or 0))}, zisk {_fmt_eur(float(last_row['profit'] or 0))}, AOV {_fmt_eur(float(last_row['aov'] or 0))}.",
     ]
-    if w7["cac"] is not None:
-        overview_lines.append(
-            f"- Cena za noveho zakaznika za 7 dni je {_fmt_eur(float(w7['cac']))}; na jednu objednavku pred reklamou ostava {_fmt_eur(float(w7['contribution_per_order'] or 0))}."
+    if w7["fb_cac"] is not None:
+        cac_line = (
+            f"- FB CAC za 7 dni je {_fmt_eur(float(w7['fb_cac']))}; na jednu objednavku pred reklamou ostava "
+            f"{_fmt_eur(float(w7['contribution_per_order'] or 0))}."
         )
+        if (w7["google_ads"] or 0) > 0 and w7["blended_cac"] is not None:
+            cac_line += f" Blended CAC (FB + Google) je {_fmt_eur(float(w7['blended_cac']))}."
+        overview_lines.append(cac_line)
 
     good_lines = ["CO JE DOBRE"]
     if (w7["profit"] or 0) > 0:
@@ -746,7 +754,8 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         "- Tento text sa pocita priamo z aktualneho aggregate_by_date a export CSV z danej behovej sady, nie zo starej sablony summary.",
         "- Obrat aj nakupne ceny su v tomto reportingu bez DPH.",
     ]
-    if w30["cac"] is None:
+    context_lines.append("- CAC v tomto texte znamena FB CAC; blended CAC spominame len tam, kde je aktivny aj Google Ads spend.")
+    if w30["fb_cac"] is None:
         context_lines.append("- CAC v casti porovnani moze byt miestami prazdne, ak v danom okne nebolo dost novych zakaznikov.")
 
     return "\n\n".join([
@@ -885,10 +894,11 @@ def main() -> None:
     os.environ["REPORT_PROJECT"] = project
     os.environ["REPORT_DATA_DIR"] = str(project_data_dir(project).resolve())
     os.environ["REPORT_OUTPUT_TAG"] = output_tag
-    reporting_defaults = resolve_reporting_defaults(project, load_project_settings(project))
+    project_settings = load_project_settings(project)
+    reporting_defaults = resolve_reporting_defaults(project, project_settings)
 
     to_date = normalize_date(resolve_to_date(args.to_date, args.timezone))
-    from_date = normalize_date(args.from_date)
+    from_date = normalize_date(args.from_date or resolve_report_from_date(project, project_settings))
 
     if from_date > to_date:
         raise ValueError(f"from_date ({from_date}) cannot be after to_date ({to_date})")
