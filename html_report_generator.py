@@ -444,8 +444,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <p data-en="How much money came in from orders. More is good if profit also stays healthy." data-sk="Koľko peňazí prišlo z objednávok. Viac je dobré, ak ostáva zdravý aj zisk.">How much money came in from orders. More is good if profit also stays healthy.</p>
                 </div>
                 <div class="metric-tip">
-                    <h4 data-en="Net Profit" data-sk="Čistý zisk">Net Profit</h4>
-                    <p data-en="What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast." data-sk="Čo ostane po všetkých sledovaných nákladoch. Ak klesá pri raste obratu, náklady rastú prirýchlo.">What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast.</p>
+                    <h4 data-en="Profit (post-ad, before fixed)" data-sk="Zisk po reklamách, pred fixom">Profit (post-ad, before fixed)</h4>
+                    <p data-en="What remains after product, packaging, shipping and ad costs. Fixed overhead is not deducted here." data-sk="Čo ostane po produktoch, balení, doprave a reklamách. Fixné náklady sa tu ešte neodpočítavajú.">What remains after product, packaging, shipping and ad costs. Fixed overhead is not deducted here.</p>
                 </div>
                 <div class="metric-tip">
                     <h4 data-en="ROAS" data-sk="ROAS">ROAS</h4>
@@ -471,13 +471,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         )
         cfo_top_cards = [
             ("revenue", "Revenue", "Obrat"),
-            ("profit", "Profit", "Zisk"),
+            ("profit", "Profit (pre-fixed)", "Zisk pred fixom"),
             ("orders", "Orders", "Objednavky"),
             ("aov", "AOV", "Priemerna hodnota objednavky"),
             ("cac", "CAC", "CAC"),
             ("roas", "ROAS", "ROAS"),
             ("pre_ad_contribution_margin", "Pre-Ad Contribution Margin", "Pre-Ad kontribucna marza"),
-            ("post_ad_margin", "Post-Ad Margin", "Post-Ad marza"),
+            ("post_ad_margin", "Post-Ad Margin (pre-fixed)", "Post-Ad marza pred fixom"),
             ("company_margin_with_fixed", company_margin_label_en, "Firemna marza (vratane fixu)"),
         ]
         cfo_top_cards_html = "".join(

@@ -104,6 +104,13 @@ Bootstrap entrypoints:
   - Roy task used `2025-09-24` as the start date despite the older task env fallback,
   - Roy task connected successfully to both Facebook Ads (`Roy`) and Google Ads (`Roy.sk`),
   - Vevo task completed with `Consistency checks: roas_ok=True, company_margin_ok=True, cac_ok=True`.
+- CFO KPI semantics are now aligned for future Roy + Vevo reports:
+  - `Profit` = post-ad, pre-fixed,
+  - `Post-ad margin` = post-ad, pre-fixed,
+  - `Company margin (incl. fixed)` = post-ad, post-fixed.
+- Verified locally on the latest saved Roy + Vevo `aggregate_by_date` artifacts:
+  - VEVO 30d `profit=3825.40`, `post_ad_margin=41.421099`, `company_profit_with_fixed=1725.40`, `company_margin_with_fixed=18.682481`,
+  - ROY 30d `profit=8519.42`, `post_ad_margin=32.661053`, `company_profit_with_fixed=3735.46`, `company_margin_with_fixed=14.3207`.
 
 ## 6) Integration Notes (External Systems)
 
@@ -140,6 +147,18 @@ Bootstrap entrypoints:
 - Watch tonight's scheduled Roy + Vevo emails and verify the attachments match the already-confirmed manual ECS runtime markers and corrected metric logic.
 
 ## 9) Change Log
+
+### 2026-04-09
+- Realigned profit semantics across the shared reporting surfaces for future Roy + Vevo runs:
+  - `reporting_core/cfo_kpis.py` now maps generic `Profit` to `contribution_profit` and keeps `Company margin (incl. fixed)` on `net_profit`,
+  - `dashboard_modern.py` now uses pre-fixed variants for the generic `profit`, `post_ad_margin`, and related contribution-per-order aliases,
+  - `daily_report_runner.py` plain-text email summary now explicitly distinguishes `profit po reklamach pred fixami` vs `firemny zisk po fixoch`,
+  - `export_orders.py` helper aliases were normalized so generic `profit`/`avg_profit` no longer default to the with-fixed variant where both variants already exist,
+  - `html_report_generator.py` KPI helper copy was clarified so the report itself states that `Profit` is post-ad before fixed overhead.
+- Verified locally:
+  - `python -m py_compile reporting_core\\cfo_kpis.py dashboard_modern.py daily_report_runner.py export_orders.py html_report_generator.py`
+  - smoke check on `data/vevo/aggregate_by_date_20250503-20260408.csv`
+  - smoke check on `data/roy/aggregate_by_date_20250922-20260408.csv`
 
 ### 2026-04-09
 - Deployed the reporting logic fixes to the shared nightly runtime image:

@@ -141,14 +141,17 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
         facebook_ads = float(row.get("fb_ads_spend", 0) or 0)
         google_ads = float(row.get("google_ads_spend", 0) or 0)
         total_ads = facebook_ads + google_ads
-        profit = float(row.get("net_profit", 0) or 0)
+        profit_with_fixed = float(row.get("net_profit", 0) or 0)
+        profit_without_fixed = float(
+            row.get("contribution_profit", row.get("post_ad_contribution_profit", profit_with_fixed + fixed_overhead)) or 0
+        )
         pre_ad_contribution = float(row.get("pre_ad_contribution_profit", 0) or 0)
         contribution_margin_percent = float(row.get("pre_ad_contribution_margin_pct", 0) or 0)
 
         aov = (revenue / orders) if orders > 0 else 0.0
         roas = (revenue / total_ads) if total_ads > 0 else 0.0
         contribution_per_order = (pre_ad_contribution / orders) if orders > 0 else 0.0
-        post_ad_contribution_per_order = (profit / orders) if orders > 0 else 0.0
+        post_ad_contribution_per_order = (profit_without_fixed / orders) if orders > 0 else 0.0
 
         rows.append(
             {
@@ -164,7 +167,9 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
                 "facebook_ads": facebook_ads,
                 "google_ads": google_ads,
                 "total_ads": total_ads,
-                "profit": profit,
+                "profit": profit_without_fixed,
+                "profit_without_fixed": profit_without_fixed,
+                "profit_with_fixed": profit_with_fixed,
                 "roas": roas,
                 "contribution_margin_percent": contribution_margin_percent,
                 "pre_ad_contribution": pre_ad_contribution,
@@ -189,7 +194,8 @@ def _window_aggregate(
     ads = 0.0
     fb_ads = 0.0
     google_ads = 0.0
-    profit = 0.0
+    profit_without_fixed = 0.0
+    profit_with_fixed = 0.0
     pre_ad_contribution = 0.0
     fixed_overhead = 0.0
     new_customers = 0
@@ -205,7 +211,8 @@ def _window_aggregate(
             ads += float(row["total_ads"])
             fb_ads += float(row["facebook_ads"])
             google_ads += float(row["google_ads"])
-            profit += float(row["profit"])
+            profit_without_fixed += float(row.get("profit_without_fixed", row["profit"]))
+            profit_with_fixed += float(row.get("profit_with_fixed", row["profit"]))
             pre_ad_contribution += float(row["pre_ad_contribution"])
             fixed_overhead += float(row.get("fixed_overhead", fixed_daily_cost_eur) or 0)
 
@@ -217,16 +224,15 @@ def _window_aggregate(
     aov = (revenue / orders) if orders > 0 else 0.0
     roas = (revenue / ads) if ads > 0 else 0.0
     contribution_margin = (pre_ad_contribution / revenue * 100) if revenue > 0 else 0.0
-    post_ad_margin = (profit / revenue * 100) if revenue > 0 else 0.0
+    post_ad_margin = (profit_without_fixed / revenue * 100) if revenue > 0 else 0.0
     contribution_per_order = (pre_ad_contribution / orders) if orders > 0 else 0.0
-    profit_per_order = (profit / orders) if orders > 0 else 0.0
+    profit_per_order = (profit_without_fixed / orders) if orders > 0 else 0.0
     cac = (ads / new_customers) if new_customers > 0 else None
     returning_customer_rate = (returning_orders / orders * 100) if orders > 0 else None
     payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
     unique_customers = _window_unique_customers(order_records, end_date, days)
     ltv = (revenue / unique_customers) if unique_customers > 0 else None
-    # `profit` already comes from `date_agg.net_profit`, which includes fixed overhead.
-    company_profit_with_fixed = profit
+    company_profit_with_fixed = profit_with_fixed
     company_margin_with_fixed = (company_profit_with_fixed / revenue * 100) if revenue > 0 else 0.0
 
     return {
@@ -235,7 +241,9 @@ def _window_aggregate(
         "ads": ads,
         "fb_ads": fb_ads,
         "google_ads": google_ads,
-        "profit": profit,
+        "profit": profit_without_fixed,
+        "profit_without_fixed": profit_without_fixed,
+        "profit_with_fixed": profit_with_fixed,
         "pre_ad_contribution": pre_ad_contribution,
         "fixed_overhead": fixed_overhead,
         "aov": aov,

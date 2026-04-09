@@ -4186,7 +4186,7 @@ class BizniWebExporter:
             fb_spend=('fb_ads_daily_spend', lambda x: x.drop_duplicates().sum()),
             google_spend=('google_ads_daily_spend', lambda x: x.drop_duplicates().sum()),
         ).reset_index()
-        orders_per_day['profit'] = orders_per_day['profit_with_fixed']
+        orders_per_day['profit'] = orders_per_day['profit_without_fixed']
         orders_per_day = orders_per_day.sort_values('day_of_week')
 
         # Calculate averages and percentages
@@ -4262,7 +4262,7 @@ class BizniWebExporter:
             active_days=('purchase_date_only', 'nunique'),
             active_months=('year_month', 'nunique'),
         ).reset_index()
-        wom_orders_agg['profit'] = wom_orders_agg['profit_with_fixed']
+        wom_orders_agg['profit'] = wom_orders_agg['profit_without_fixed']
 
         calendar_days = calendar_df.groupby('week_of_month').agg({
             'date': 'nunique'
@@ -4387,7 +4387,7 @@ class BizniWebExporter:
             profit_with_fixed=(profit_with_fixed_col, 'sum'),
             active_days=('purchase_date_only', 'nunique'),
         ).reset_index()
-        dom_orders_agg['profit'] = dom_orders_agg['profit_with_fixed']
+        dom_orders_agg['profit'] = dom_orders_agg['profit_without_fixed']
 
         calendar_days = calendar_df.groupby('day_in_month').agg({
             'date': 'nunique'
@@ -4499,7 +4499,7 @@ class BizniWebExporter:
         analysis_df["profit_with_fixed"] = pd.to_numeric(
             analysis_df.get("net_profit", 0), errors="coerce"
         ).fillna(0.0)
-        analysis_df["profit"] = analysis_df["profit_with_fixed"]
+        analysis_df["profit"] = analysis_df["profit_without_fixed"]
         analysis_df["aov"] = analysis_df.apply(
             lambda row: round((row["total_revenue"] / row["unique_orders"]) if row["unique_orders"] > 0 else 0, 2),
             axis=1
@@ -4561,7 +4561,7 @@ class BizniWebExporter:
         valid["profit_with_fixed_vs_weekday_baseline"] = (
             valid["profit_with_fixed"] - valid["weekday_expected_profit_with_fixed"]
         )
-        valid["profit_vs_weekday_baseline"] = valid["profit_with_fixed_vs_weekday_baseline"]
+        valid["profit_vs_weekday_baseline"] = valid["profit_without_fixed_vs_weekday_baseline"]
         valid["orders_vs_weekday_baseline"] = valid["unique_orders"] - valid["weekday_expected_orders"]
         valid["aov_vs_weekday_baseline"] = valid["aov"] - valid["weekday_expected_aov"]
 
@@ -4594,8 +4594,8 @@ class BizniWebExporter:
             "temperature_2m_mean": "avg_temperature",
             "precipitation_sum": "avg_precipitation",
         })
-        bucket_summary["avg_daily_profit"] = bucket_summary["avg_daily_profit_with_fixed"]
-        bucket_summary["profit_vs_weekday_baseline"] = bucket_summary["profit_with_fixed_vs_weekday_baseline"]
+        bucket_summary["avg_daily_profit"] = bucket_summary["avg_daily_profit_without_fixed"]
+        bucket_summary["profit_vs_weekday_baseline"] = bucket_summary["profit_without_fixed_vs_weekday_baseline"]
 
         bucket_summary["revenue_uplift_pct"] = bucket_summary.apply(
             lambda row: round((row["avg_daily_revenue"] / overall_avg_revenue - 1) * 100, 2) if overall_avg_revenue else 0,
@@ -4611,7 +4611,7 @@ class BizniWebExporter:
             if overall_avg_profit_with_fixed else 0,
             axis=1
         )
-        bucket_summary["profit_uplift_pct"] = bucket_summary["profit_with_fixed_uplift_pct"]
+        bucket_summary["profit_uplift_pct"] = bucket_summary["profit_without_fixed_uplift_pct"]
         bucket_summary["orders_uplift_pct"] = bucket_summary.apply(
             lambda row: round((row["avg_daily_orders"] / overall_avg_orders - 1) * 100, 2) if overall_avg_orders else 0,
             axis=1
@@ -4648,9 +4648,9 @@ class BizniWebExporter:
             "bad_score_profit_with_fixed": safe_corr(valid["weather_bad_score"], valid["profit_with_fixed"]),
             "bad_score_orders": safe_corr(valid["weather_bad_score"], valid["unique_orders"]),
         }
-        correlations["rain_profit"] = correlations["rain_profit_with_fixed"]
-        correlations["temp_profit"] = correlations["temp_profit_with_fixed"]
-        correlations["bad_score_profit"] = correlations["bad_score_profit_with_fixed"]
+        correlations["rain_profit"] = correlations["rain_profit_without_fixed"]
+        correlations["temp_profit"] = correlations["temp_profit_without_fixed"]
+        correlations["bad_score_profit"] = correlations["bad_score_profit_without_fixed"]
 
         lag_correlations: Dict[str, Dict[str, Optional[float]]] = {}
         valid = valid.sort_values("date").reset_index(drop=True)
@@ -4662,7 +4662,7 @@ class BizniWebExporter:
                 "profit_with_fixed": safe_corr(weather_score, valid["profit_with_fixed"]),
                 "orders": safe_corr(weather_score, valid["unique_orders"]),
             }
-            lag_correlations[f"lag_{lag}_day"]["profit"] = lag_correlations[f"lag_{lag}_day"]["profit_with_fixed"]
+            lag_correlations[f"lag_{lag}_day"]["profit"] = lag_correlations[f"lag_{lag}_day"]["profit_without_fixed"]
 
         analysis_csv = valid[[
             "date",
@@ -5202,7 +5202,7 @@ class BizniWebExporter:
             profit_without_fixed=('profit_before_ads', 'sum'),
             profit_with_fixed=(profit_with_fixed_col, 'sum'),
         ).reset_index()
-        country_agg['profit'] = country_agg['profit_with_fixed']
+        country_agg['profit'] = country_agg['profit_without_fixed']
         country_agg = country_agg.sort_values('revenue', ascending=False)
         country_agg['revenue_pct'] = (country_agg['revenue'] / country_agg['revenue'].sum() * 100).round(1)
 
@@ -5215,7 +5215,7 @@ class BizniWebExporter:
             profit_with_fixed=(profit_with_fixed_col, 'sum'),
         ).reset_index()
         city_agg.columns = ['city', 'country', 'orders', 'revenue', 'profit_without_fixed', 'profit_with_fixed']
-        city_agg['profit'] = city_agg['profit_with_fixed']
+        city_agg['profit'] = city_agg['profit_without_fixed']
         city_agg = city_agg.sort_values(['revenue', 'orders'], ascending=[False, False]).head(20)
         city_agg['revenue_pct'] = (city_agg['revenue'] / geo_df['item_total_without_tax'].sum() * 100).round(1)
 
@@ -5326,9 +5326,9 @@ class BizniWebExporter:
             lambda row: round((row['contribution_profit_with_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
             axis=1
         )
-        geo['contribution_cost'] = geo['contribution_cost_with_fixed']
-        geo['contribution_profit'] = geo['contribution_profit_with_fixed']
-        geo['contribution_margin_pct'] = geo['contribution_margin_with_fixed_pct']
+        geo['contribution_cost'] = geo['contribution_cost_without_fixed']
+        geo['contribution_profit'] = geo['contribution_profit_without_fixed']
+        geo['contribution_margin_pct'] = geo['contribution_margin_without_fixed_pct']
         geo['fb_cpo'] = geo.apply(
             lambda row: round((row['fb_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
             axis=1
@@ -5375,7 +5375,7 @@ class BizniWebExporter:
             profit_with_fixed=(profit_with_fixed_col, 'sum'),
             unique_customers=('customer_email', 'nunique'),
         ).reset_index()
-        b2b_agg['profit'] = b2b_agg['profit_with_fixed']
+        b2b_agg['profit'] = b2b_agg['profit_without_fixed']
         b2b_agg['customer_type'] = b2b_agg['is_b2b'].map({True: 'B2B (Companies)', False: 'B2C (Individuals)'})
         b2b_agg['aov'] = (b2b_agg['revenue'] / b2b_agg['orders']).round(2)
         b2b_agg['orders_pct'] = (b2b_agg['orders'] / b2b_agg['orders'].sum() * 100).round(1)
@@ -5402,7 +5402,7 @@ class BizniWebExporter:
         product_margins['margin_with_fixed_pct'] = ((product_margins['profit_with_fixed'] / product_margins['revenue']) * 100).round(1)
         product_margins['margin_without_fixed_pct'] = product_margins['margin_without_fixed_pct'].fillna(0)
         product_margins['margin_with_fixed_pct'] = product_margins['margin_with_fixed_pct'].fillna(0)
-        product_margins['profit'] = product_margins['profit_with_fixed']
+        product_margins['profit'] = product_margins['profit_without_fixed']
         product_margins['margin_pct'] = product_margins['margin_with_fixed_pct']
         product_margins = product_margins.sort_values('margin_with_fixed_pct', ascending=False)
 
@@ -5481,7 +5481,7 @@ class BizniWebExporter:
             profit_without_fixed=('profit_before_ads', 'sum'),
             profit_with_fixed=('profit_after_fixed', 'sum'),
         ).reset_index().rename(columns={'customer_email': 'customer'})
-        customer_revenue['profit'] = customer_revenue['profit_with_fixed']
+        customer_revenue['profit'] = customer_revenue['profit_without_fixed']
         customer_revenue = customer_revenue.sort_values('revenue', ascending=False)
 
         total_revenue = customer_revenue['revenue'].sum()
@@ -5862,7 +5862,7 @@ class BizniWebExporter:
             profit_without_fixed=('profit_before_ads', 'sum'),
             profit_with_fixed=('profit_after_fixed', 'sum'),
         ).reset_index().rename(columns={'purchase_date_only': 'date'})
-        daily_data['profit'] = daily_data['profit_with_fixed']
+        daily_data['profit'] = daily_data['profit_without_fixed']
         daily_data['total_ad_spend'] = daily_data['fb_spend'] + daily_data['google_spend']
 
         # Calculate correlations
@@ -5890,7 +5890,7 @@ class BizniWebExporter:
             'profit_with_fixed': 'mean'
         }).reset_index()
         spend_effectiveness.columns = ['spend_range', 'avg_orders', 'avg_revenue', 'avg_spend', 'avg_profit_without_fixed', 'avg_profit_with_fixed']
-        spend_effectiveness['avg_profit'] = spend_effectiveness['avg_profit_with_fixed']
+        spend_effectiveness['avg_profit'] = spend_effectiveness['avg_profit_without_fixed']
 
         # Calculate ROAS per spend range
         spend_effectiveness['roas'] = (spend_effectiveness['avg_revenue'] / spend_effectiveness['avg_spend']).round(2)
@@ -5914,7 +5914,7 @@ class BizniWebExporter:
         dow_effectiveness['avg_revenue'] = dow_effectiveness['revenue']
         dow_effectiveness['avg_profit_without_fixed'] = dow_effectiveness['profit_without_fixed']
         dow_effectiveness['avg_profit_with_fixed'] = dow_effectiveness['profit_with_fixed']
-        dow_effectiveness['avg_profit'] = dow_effectiveness['profit_with_fixed']
+        dow_effectiveness['avg_profit'] = dow_effectiveness['profit_without_fixed']
         dow_effectiveness['roas'] = (dow_effectiveness['revenue'] / dow_effectiveness['fb_spend']).round(2)
         dow_effectiveness['roas'] = dow_effectiveness['roas'].replace([float('inf'), float('-inf')], 0).fillna(0)
 

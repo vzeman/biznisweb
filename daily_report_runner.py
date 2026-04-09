@@ -341,17 +341,19 @@ def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
             facebook_ads = _to_float(row.get("fb_ads_spend", ""))
             google_ads = _to_float(row.get("google_ads_spend", ""))
             total_ads = facebook_ads + google_ads
-            profit = _to_float(row.get("net_profit", ""))
+            profit_with_fixed = _to_float(row.get("net_profit", ""))
             fixed_daily_cost = _to_float(row.get("fixed_daily_cost", ""))
             pre_ad_contribution = _to_float(row.get("pre_ad_contribution_profit", ""))
             contribution_margin_percent = _to_float(row.get("pre_ad_contribution_margin_pct", ""))
             company_margin_with_fixed = _to_float(row.get("company_profit_margin_pct", ""))
-            profit_without_fixed = profit + fixed_daily_cost
+            profit_without_fixed = _to_float(row.get("contribution_profit", ""))
+            if profit_without_fixed == 0.0 and str(row.get("contribution_profit", "")).strip() == "":
+                profit_without_fixed = profit_with_fixed + fixed_daily_cost
 
             aov = (revenue / orders) if orders > 0 else 0.0
             roas = (revenue / total_ads) if total_ads > 0 else 0.0
             contribution_per_order = (pre_ad_contribution / orders) if orders > 0 else 0.0
-            post_ad_contribution_per_order = (profit / orders) if orders > 0 else 0.0
+            post_ad_contribution_per_order = (profit_without_fixed / orders) if orders > 0 else 0.0
 
             rows.append(
                 {
@@ -366,8 +368,9 @@ def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
                     "facebook_ads": facebook_ads,
                     "google_ads": google_ads,
                     "total_ads": total_ads,
-                    "profit": profit,
+                    "profit": profit_without_fixed,
                     "profit_without_fixed": profit_without_fixed,
+                    "profit_with_fixed": profit_with_fixed,
                     "fixed_daily_cost": fixed_daily_cost,
                     "roas": roas,
                     "contribution_margin_percent": contribution_margin_percent,
@@ -469,6 +472,7 @@ def _window_aggregate(
     google_ads = 0.0
     profit = 0.0
     profit_without_fixed = 0.0
+    profit_with_fixed = 0.0
     fixed_cost = 0.0
     pre_ad_contribution = 0.0
     new_customers = 0
@@ -486,6 +490,7 @@ def _window_aggregate(
             google_ads += float(row["google_ads"])
             profit += float(row["profit"])
             profit_without_fixed += float(row.get("profit_without_fixed", row["profit"]))
+            profit_with_fixed += float(row.get("profit_with_fixed", row["profit"]))
             fixed_cost += float(row.get("fixed_daily_cost", 0.0))
             pre_ad_contribution += float(row["pre_ad_contribution"])
 
@@ -507,7 +512,7 @@ def _window_aggregate(
     payback_orders = (fb_cac / contribution_per_order) if (fb_cac is not None and contribution_per_order > 0) else None
     unique_customers = _window_unique_customers(order_records, end_date, days)
     ltv = (revenue / unique_customers) if unique_customers > 0 else None
-    company_profit_with_fixed = profit
+    company_profit_with_fixed = profit_with_fixed
     company_margin_with_fixed = (company_profit_with_fixed / revenue * 100) if revenue > 0 else 0.0
 
     return {
@@ -518,6 +523,7 @@ def _window_aggregate(
         "google_ads": google_ads,
         "profit": profit,
         "profit_without_fixed": profit_without_fixed,
+        "profit_with_fixed": profit_with_fixed,
         "fixed_cost": fixed_cost,
         "pre_ad_contribution": pre_ad_contribution,
         "aov": aov,
@@ -649,9 +655,20 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     daily_payback = (daily_cac / float(last_row["contribution_per_order"])) if (daily_cac is not None and float(last_row["contribution_per_order"]) > 0) else None
     overview_lines = [
         "RYCHLY PREHLAD",
-        f"- Cele obdobie: {int(total['orders'] or 0)} objednavok, obrat bez DPH {_fmt_eur(float(total['revenue'] or 0))}, cisty zisk po reklamach a fixoch {_fmt_eur(float(total['profit'] or 0))}.",
-        f"- Poslednych 7 dni: obrat {_fmt_eur(float(w7['revenue'] or 0))}, cisty zisk {_fmt_eur(float(w7['profit'] or 0))}, spend {_fmt_eur(float(w7['ads'] or 0))}, ROAS {float(w7['roas'] or 0):.2f}x.",
-        f"- Posledny den ({last_date.isoformat()}): {int(last_row['orders'] or 0)} objednavok, obrat {_fmt_eur(float(last_row['revenue'] or 0))}, zisk {_fmt_eur(float(last_row['profit'] or 0))}, AOV {_fmt_eur(float(last_row['aov'] or 0))}.",
+        (
+            f"- Cele obdobie: {int(total['orders'] or 0)} objednavok, obrat bez DPH {_fmt_eur(float(total['revenue'] or 0))}, "
+            f"profit po reklamach pred fixami {_fmt_eur(float(total['profit'] or 0))}, firemny zisk po fixoch "
+            f"{_fmt_eur(float(total['company_profit_with_fixed'] or 0))}."
+        ),
+        (
+            f"- Poslednych 7 dni: obrat {_fmt_eur(float(w7['revenue'] or 0))}, profit po reklamach pred fixami "
+            f"{_fmt_eur(float(w7['profit'] or 0))}, spend {_fmt_eur(float(w7['ads'] or 0))}, ROAS {float(w7['roas'] or 0):.2f}x."
+        ),
+        (
+            f"- Posledny den ({last_date.isoformat()}): {int(last_row['orders'] or 0)} objednavok, obrat "
+            f"{_fmt_eur(float(last_row['revenue'] or 0))}, profit pred fixami {_fmt_eur(float(last_row['profit'] or 0))}, "
+            f"AOV {_fmt_eur(float(last_row['aov'] or 0))}."
+        ),
     ]
     if w7["fb_cac"] is not None:
         cac_line = (
@@ -664,7 +681,9 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
 
     good_lines = ["CO JE DOBRE"]
     if (w7["profit"] or 0) > 0:
-        good_lines.append(f"- Poslednych 7 dni je biznis stale v pluse: {_fmt_eur(float(w7['profit'] or 0))}.")
+        good_lines.append(
+            f"- Poslednych 7 dni je biznis po reklamach stale v pluse: {_fmt_eur(float(w7['profit'] or 0))} pred fixami."
+        )
     if (w7["roas"] or 0) > 2.5:
         good_lines.append(
             f"- Reklama stale funguje: z 1 EUR do reklam sa vracia {float(w7['roas'] or 0):.2f} EUR v obrate."
@@ -687,7 +706,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         )
     if profit_7_change is not None and profit_7_change < -10:
         weaker_lines.append(
-            f"- Zisk za poslednych 7 dni klesol o {_fmt_pct(abs(profit_7_change))}, co je vyrazne rychlejsi pokles ako samotny obrat."
+            f"- Profit po reklamach za poslednych 7 dni klesol o {_fmt_pct(abs(profit_7_change))}, co je vyrazne rychlejsi pokles ako samotny obrat."
         )
     if aov_7_change is not None and aov_7_change < -8:
         weaker_lines.append(

@@ -15,13 +15,13 @@ import pandas as pd
 
 METRIC_LABELS = {
     "revenue": {"en": "Revenue", "sk": "Trzby"},
-    "profit": {"en": "Profit", "sk": "Zisk"},
+    "profit": {"en": "Profit (pre-fixed)", "sk": "Zisk pred fixom"},
     "orders": {"en": "Orders", "sk": "Objednávky"},
     "aov": {"en": "AOV", "sk": "Priemerná objednávka"},
     "cac": {"en": "CAC", "sk": "CAC"},
     "roas": {"en": "ROAS", "sk": "ROAS"},
     "pre_ad_contribution_margin": {"en": "Pre-ad contribution", "sk": "Pre-ad kontribučná marža"},
-    "post_ad_margin": {"en": "Post-ad margin", "sk": "Post-ad marža"},
+    "post_ad_margin": {"en": "Post-ad margin (pre-fixed)", "sk": "Post-ad marža pred fixom"},
     "company_margin_with_fixed": {"en": "Company margin (incl. fixed)", "sk": "Firemná marža (s fixom)"},
 }
 
@@ -110,7 +110,7 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     revenue = [_num(v) for v in date_agg["total_revenue"].tolist()]
     profit_without_fixed = [_num(v) for v in date_agg.get("contribution_profit", pd.Series([0] * len(date_agg))).tolist()]
     profit_with_fixed = [_num(v) for v in date_agg.get("net_profit", pd.Series([0] * len(date_agg))).tolist()]
-    profit = profit_with_fixed
+    profit = profit_without_fixed
     orders = [int(round(_num(v))) for v in date_agg["unique_orders"].tolist()]
     aov = [round((rev / ords) if ords > 0 else 0.0, 4) for rev, ords in zip(revenue, orders)]
     fb_ads = [_num(v) for v in date_agg.get("fb_ads_spend", pd.Series([0] * len(date_agg))).tolist()]
@@ -132,10 +132,10 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     pre_contribution_per_order_with_fixed = [_num(v) for v in date_agg.get("pre_ad_profit_after_fixed_per_order", pd.Series(pre_contribution_per_order_without_fixed)).tolist()]
     post_contribution_per_order_without_fixed = [_num(v) for v in date_agg.get("contribution_profit_per_order", pd.Series([0] * len(date_agg))).tolist()]
     post_contribution_per_order_with_fixed = [_num(v) for v in date_agg.get("company_profit_per_order", pd.Series(post_contribution_per_order_without_fixed)).tolist()]
-    pre_margin = pre_margin_with_fixed
-    post_margin = post_margin_with_fixed
-    pre_contribution_per_order = pre_contribution_per_order_with_fixed
-    post_contribution_per_order = post_contribution_per_order_with_fixed
+    pre_margin = pre_margin_without_fixed
+    post_margin = post_margin_without_fixed
+    pre_contribution_per_order = pre_contribution_per_order_without_fixed
+    post_contribution_per_order = post_contribution_per_order_without_fixed
     roi = [_num(v) for v in date_agg.get("roi_percent", pd.Series([0] * len(date_agg))).tolist()]
     gross_margin = [
         round(((rev - cost) / rev * 100) if rev > 0 else 0.0, 4)
