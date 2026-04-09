@@ -6,6 +6,7 @@ Production dashboard renderer used by the main HTML reporting output.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime
 from html import escape
 from typing import Any, Dict, List, Optional
@@ -45,6 +46,8 @@ COMPARISON_LABELS = {
         "vs_year": {"en": "vs same month last year", "sk": "vs rovnaké obdobie minulý rok"},
     },
 }
+
+DASHBOARD_PAYLOAD_SCRIPT_ID = "report-dashboard-json"
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -90,6 +93,27 @@ def _json_default(value: Any) -> Any:
             pass
 
     return str(value)
+
+
+def _json_script_content(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, default=_json_default).replace("<", "\\u003c")
+
+
+def extract_embedded_dashboard_payload(html_text: str) -> Dict[str, Any]:
+    pattern = (
+        rf'<script\s+id="{re.escape(DASHBOARD_PAYLOAD_SCRIPT_ID)}"\s+type="application/json">'
+        rf"(?P<payload>.*?)</script>"
+    )
+    match = re.search(pattern, html_text, flags=re.DOTALL | re.IGNORECASE)
+    if not match:
+        raise ValueError("Embedded dashboard payload script tag not found in report HTML.")
+    payload_raw = match.group("payload").strip()
+    if not payload_raw:
+        raise ValueError("Embedded dashboard payload is empty.")
+    payload = json.loads(payload_raw)
+    if not isinstance(payload, dict):
+        raise ValueError("Embedded dashboard payload must decode to a JSON object.")
+    return payload
 
 
 def _ma(values: List[float], window: int) -> List[Optional[float]]:
@@ -967,7 +991,7 @@ def generate_modern_dashboard(
             "reconciliation": (cost_per_order or {}).get("fb_spend_reconciliation") or {},
         },
     }
-    payload_json = json.dumps(payload, ensure_ascii=False, default=_json_default)
+    payload_json = _json_script_content(payload)
 
     product_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('sku') or ''))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{_num(row.get('margin_pct')):.1f}%</td><td>{int(round(_num(row.get('orders'))))}</td></tr>"
@@ -2019,8 +2043,9 @@ def generate_modern_dashboard(
             </div>
         </main>
     </div>
+    <script id="{DASHBOARD_PAYLOAD_SCRIPT_ID}" type="application/json">{payload_json}</script>
     <script>
-        const DATA = {payload_json};
+        const DATA = JSON.parse(document.getElementById('{DASHBOARD_PAYLOAD_SCRIPT_ID}').textContent || '{{}}');
         const INLINE_EMBEDDED_PERIOD_REPORTS = window.__EMBEDDED_PERIOD_REPORTS__ || {json.dumps(embedded_period_reports)};
         const KPI_TYPES = {{
             revenue: 'currency', profit: 'currency', orders: 'integer', aov: 'currency',

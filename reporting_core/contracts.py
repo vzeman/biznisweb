@@ -21,22 +21,28 @@ class ReportingArtifactSet:
     output_tag: str
     data_dir: Path
     report_html: Path
+    report_latest_html: Path
     email_strategy_html: Path
     export_csv: Path
     aggregate_by_date_csv: Path
     aggregate_by_month_csv: Path
     aggregate_by_date_product_csv: Path
+    dashboard_payload_json: Path
+    dashboard_payload_latest_json: Path
     data_quality_json: Path
     weather_impact_csv: Path
 
     def as_dict(self) -> Dict[str, Path]:
         return {
             "report_html": self.report_html,
+            "report_latest_html": self.report_latest_html,
             "email_strategy_html": self.email_strategy_html,
             "export_csv": self.export_csv,
             "aggregate_by_date_csv": self.aggregate_by_date_csv,
             "aggregate_by_month_csv": self.aggregate_by_month_csv,
             "aggregate_by_date_product_csv": self.aggregate_by_date_product_csv,
+            "dashboard_payload_json": self.dashboard_payload_json,
+            "dashboard_payload_latest_json": self.dashboard_payload_latest_json,
             "data_quality_json": self.data_quality_json,
             "weather_impact_csv": self.weather_impact_csv,
         }
@@ -74,11 +80,14 @@ def build_artifact_set(project: str, from_date: str, to_date: str, output_tag: O
         output_tag=tag,
         data_dir=data_dir,
         report_html=apply_output_tag(data_dir / f"report_{compact_range}.html", tag),
+        report_latest_html=apply_output_tag(data_dir / "report_latest.html", tag),
         email_strategy_html=apply_output_tag(data_dir / f"email_strategy_{compact_range}.html", tag),
         export_csv=apply_output_tag(data_dir / f"export_{compact_range}.csv", tag),
         aggregate_by_date_csv=apply_output_tag(data_dir / f"aggregate_by_date_{compact_range}.csv", tag),
         aggregate_by_month_csv=apply_output_tag(data_dir / f"aggregate_by_month_{compact_range}.csv", tag),
         aggregate_by_date_product_csv=apply_output_tag(data_dir / f"aggregate_by_date_product_{compact_range}.csv", tag),
+        dashboard_payload_json=apply_output_tag(data_dir / f"dashboard_payload_{compact_range}.json", tag),
+        dashboard_payload_latest_json=apply_output_tag(data_dir / "dashboard_payload_latest.json", tag),
         data_quality_json=apply_output_tag(data_dir / f"data_quality_{compact_range}.json", tag),
         weather_impact_csv=apply_output_tag(data_dir / f"weather_impact_{compact_range}.csv", tag),
     )

@@ -15,7 +15,7 @@ import mimetypes
 import os
 import subprocess
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -41,6 +41,10 @@ from reporting_core import (
 ROOT_DIR = Path(__file__).resolve().parent
 DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
 CFO_FIXED_DAILY_COST_EUR = float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70"))
+STABLE_LIVE_ARTIFACT_NAMES = {
+    "report_latest.html",
+    "dashboard_payload_latest.json",
+}
 
 
 def bootstrap_project_from_argv(argv: List[str]) -> str:
@@ -198,7 +202,7 @@ def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
 
     s3 = boto3.client("s3", region_name=region)
     uploaded_links: Dict[str, str] = {}
-    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     for key, path in paths.items():
         if not path.exists():
@@ -216,6 +220,16 @@ def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
             ExpiresIn=expires,
         )
         uploaded_links[key] = presigned
+
+        if path.name in STABLE_LIVE_ARTIFACT_NAMES:
+            stable_key = f"{prefix}/latest/{path.name}"
+            s3.upload_file(str(path), bucket, stable_key, ExtraArgs=extra_args)
+            stable_presigned = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": stable_key},
+                ExpiresIn=expires,
+            )
+            uploaded_links[f"{key}_latest"] = stable_presigned
 
     return uploaded_links
 

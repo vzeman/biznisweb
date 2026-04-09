@@ -115,6 +115,20 @@ Bootstrap entrypoints:
   - image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
   - pushed digest: `sha256:5eaf52e9d4700f0499d19fc3709313d9dcbc9e5e610287b1c58c0535df35ba20`
   - local workstation currently has no AWS CLI credentials, so direct post-build ECS/log re-verification was not possible from this session.
+- Live dashboard groundwork now exists without changing the existing email-report flow:
+  - reporting runs now write `report_latest.html` and `dashboard_payload_latest.json` alongside the dated artifacts,
+  - the modern HTML report now embeds its dashboard payload in a dedicated JSON script tag for reliable sidecar extraction,
+  - `daily_report_runner.py` uploads stable S3 `latest/` copies for `report_latest.html` and `dashboard_payload_latest.json` when S3 upload is enabled,
+  - `live_dashboard_server.py` can serve `/dashboard/<project>` from the latest generated HTML and `/api/<project>/latest` from the latest JSON snapshot.
+- Verified locally on `2026-04-09`:
+  - `python -m py_compile reporting_core\\contracts.py dashboard_modern.py export_orders.py daily_report_runner.py live_dashboard_server.py`
+  - `python daily_report_runner.py --project roy --from-date 2026-04-08 --to-date 2026-04-08 --skip-email --output-tag live_smoke`
+  - created tagged live artifacts:
+    - `data/roy/report_latest__live_smoke.html`
+    - `data/roy/dashboard_payload_latest__live_smoke.json`
+  - localhost smoke server check:
+    - `GET /` -> `200`
+    - `GET /dashboard/roy` -> `200`
 
 ## 6) Integration Notes (External Systems)
 
@@ -145,12 +159,26 @@ Bootstrap entrypoints:
 - Roy ads credentials were missing only in the AWS runtime secret during the first 2026-04-09 ECS verification run; that secret drift is now corrected and re-verified.
 - Google/Meta ads and weather enrichments make full-range verification runs slow; the repo still lacks a lighter regression fixture for finance math changes.
 - CFO KPI payload logic still uses a constant daily fixed label for comparison metadata, even though the source-of-truth fixed values now come from `date_agg`; if we later need month-by-month label precision, that part can be refined separately.
+- The live dashboard server is local-only for now; no always-on hosting/service has been provisioned yet.
+- Current untagged `dashboard_payload_latest.json` will start appearing automatically on the next normal nightly production run; today's verification used tagged smoke artifacts to avoid touching the main latest files.
 
 ## 8) Next Exact Step
 
-- Watch tonight's scheduled Roy + Vevo emails and verify the attachments match the already-confirmed manual ECS runtime markers and corrected metric logic.
+- Choose the first online hosting target for the live dashboard (`S3/CloudFront static latest HTML` vs `small ECS read-only dashboard service`) and wire it to the new stable latest artifacts, while keeping the nightly email schedules unchanged.
 
 ## 9) Change Log
+
+### 2026-04-09
+- Started the live-dashboard delivery path without changing the nightly SES email flow:
+  - `reporting_core/contracts.py` now defines dated + latest dashboard/report artifacts,
+  - `dashboard_modern.py` now embeds the dashboard state in a dedicated JSON script tag and exposes an extraction helper,
+  - `export_orders.py` now writes `report_latest.html`, `dashboard_payload_<range>.json`, and `dashboard_payload_latest.json`,
+  - `daily_report_runner.py` now uploads stable `latest/` S3 copies for the live artifacts when S3 upload is enabled,
+  - added `live_dashboard_server.py` as a minimal read-only server for `/dashboard/<project>` and `/api/<project>/latest`.
+- Verified locally:
+  - `python -m py_compile reporting_core\\contracts.py dashboard_modern.py export_orders.py daily_report_runner.py live_dashboard_server.py`
+  - `python daily_report_runner.py --project roy --from-date 2026-04-08 --to-date 2026-04-08 --skip-email --output-tag live_smoke`
+  - `http://127.0.0.1:8788/` and `http://127.0.0.1:8788/dashboard/roy` both returned `200` during localhost smoke test.
 
 ### 2026-04-09
 - Realigned profit semantics across the shared reporting surfaces for future Roy + Vevo runs:
