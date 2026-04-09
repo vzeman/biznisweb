@@ -98,6 +98,12 @@ Bootstrap entrypoints:
   - lower executive tile deck now shows `Fixed overhead €23,870.00`
   - lower executive tile deck now shows live `Google ads €579.44`
   - total costs/profit in the same deck now reflect the fixed-aware totals (`€78,207.17` cost, `€15,843.86` net profit)
+- Daily runtime logic/source-of-truth hardening is now live in the shared ECR image used by both nightly ECS schedules.
+- Roy ECS runtime secret now includes the live Meta + Google Ads credentials from the project-scoped Roy env, so scheduled Roy reports can load real ads data again.
+- Manual ECS runtime verification on `2026-04-09` succeeded for both schedulers without sending email:
+  - Roy task used `2025-09-24` as the start date despite the older task env fallback,
+  - Roy task connected successfully to both Facebook Ads (`Roy`) and Google Ads (`Roy.sk`),
+  - Vevo task completed with `Consistency checks: roas_ok=True, company_margin_ok=True, cac_ok=True`.
 
 ## 6) Integration Notes (External Systems)
 
@@ -125,15 +131,36 @@ Bootstrap entrypoints:
 - Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_modern.py`) instead of the retired daily runner rendering path.
 - Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
-- Roy Meta token expired during the 2026-04-08 export verification run; the report continued with zero-filled Facebook metrics while Google Ads stayed live.
+- Roy ads credentials were missing only in the AWS runtime secret during the first 2026-04-09 ECS verification run; that secret drift is now corrected and re-verified.
 - Google/Meta ads and weather enrichments make full-range verification runs slow; the repo still lacks a lighter regression fixture for finance math changes.
 - CFO KPI payload logic still uses a constant daily fixed label for comparison metadata, even though the source-of-truth fixed values now come from `date_agg`; if we later need month-by-month label precision, that part can be refined separately.
 
 ## 8) Next Exact Step
 
-- Build and push the current reporting image to ECR, then manually run both ECS schedulers' task definitions (`vevo-reporting-daily`, `roy-reporting-daily`) to verify tonight's email runtime uses the corrected reporting logic.
+- Watch tonight's scheduled Roy + Vevo emails and verify the attachments match the already-confirmed manual ECS runtime markers and corrected metric logic.
 
 ## 9) Change Log
+
+### 2026-04-09
+- Deployed the reporting logic fixes to the shared nightly runtime image:
+  - pushed new `vevo-reporting:latest` through GitHub Actions workflow run `24173571361`,
+  - current verified ECR digest: `sha256:c4744568acff333448bab23c4b6be6f47ad53c95644ccac4166a5408c379199c`.
+- Production runtime identifiers confirmed before deploy:
+  - cluster: `vevo-reporting-cluster`
+  - Vevo scheduler/task/log: `vevo-daily-report-email` -> `vevo-reporting-daily:4` -> `/ecs/vevo-reporting-daily`
+  - Roy scheduler/task/log: `roy-daily-report-email` -> `roy-reporting-daily:1` -> `/ecs/roy-reporting-daily`
+  - shared container/image: `reporting` -> `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+- Fixed Roy runtime secret drift in AWS Secrets Manager:
+  - `roy/reporting/runtime-env` had empty Meta + Google Ads keys even though the local Roy project env was complete,
+  - synced the Roy ads credentials into the secret and kept the existing mail/S3 keys untouched.
+- Verified directly on ECS/Fargate with manual `--skip-email` runs:
+  - Roy task `79ef0c54869d4952b84f5527add5912e`:
+    - log marker `Exporting project 'roy' orders from 2025-09-24`
+    - log marker `Successfully connected to Facebook Ads account: Roy`
+    - log marker `Successfully connected to Google Ads account: Roy.sk`
+  - Vevo task `cd0e76c313a94509927925ad917e0cc6`:
+    - log marker `Consistency checks: roas_ok=True, company_margin_ok=True, cac_ok=True`
+  - both verification tasks exited `0` and respected `--skip-email`.
 
 ### 2026-04-09
 - Hardened reporting logic/source-of-truth alignment before the next nightly Roy + Vevo mail run:
