@@ -866,6 +866,196 @@ class BizniWebExporter:
         }
 
     @staticmethod
+    def _count_missing_values(frame: pd.DataFrame, column: str) -> int:
+        if frame.empty or column not in frame.columns:
+            return 0
+        series = frame[column]
+        return int(series.isna().sum() + (series.astype(str).str.strip() == "").sum())
+
+    def _build_model_integrity_qa(
+        self,
+        *,
+        financial_metrics: Optional[Dict[str, Any]],
+        consistency_checks: Optional[Dict[str, Any]],
+        refunds_analysis: Optional[Dict[str, Any]],
+        day_of_week_analysis: Optional[pd.DataFrame],
+        advanced_dtc_metrics: Optional[Dict[str, Any]],
+        country_analysis: Optional[pd.DataFrame],
+        geo_profitability: Optional[Dict[str, Any]],
+        cost_per_order: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        warnings: List[str] = []
+        metrics = financial_metrics or {}
+        checks = consistency_checks or {}
+        refund_summary = (refunds_analysis or {}).get("summary") or {}
+        dow_df = day_of_week_analysis.copy() if isinstance(day_of_week_analysis, pd.DataFrame) else pd.DataFrame()
+        attach_df = (advanced_dtc_metrics or {}).get("attach_rate")
+        attach_df = attach_df.copy() if isinstance(attach_df, pd.DataFrame) else pd.DataFrame()
+        country_df = country_analysis.copy() if isinstance(country_analysis, pd.DataFrame) else pd.DataFrame()
+        geo_table = (geo_profitability or {}).get("table")
+        geo_df = geo_table.copy() if isinstance(geo_table, pd.DataFrame) else pd.DataFrame()
+        campaign_rows = list((cost_per_order or {}).get("campaign_attribution") or [])
+        attribution_summary = (cost_per_order or {}).get("campaign_attribution_summary") or {}
+
+        required_financial_keys = [
+            "pre_ad_contribution_per_order",
+            "break_even_cac",
+            "payback_orders",
+            "contribution_ltv_cac",
+        ]
+        missing_financial_keys = [key for key in required_financial_keys if metrics.get(key) is None]
+        if missing_financial_keys:
+            warnings.append(
+                "Critical economics metrics are missing from the financial registry: "
+                + ", ".join(missing_financial_keys)
+                + "."
+            )
+
+        if refund_summary and refund_summary.get("refund_orders", 0) > 0 and refund_summary.get("refund_rate_pct") in (None, 0):
+            warnings.append("Refund summary contains refund orders, but refund rate is missing or zero.")
+
+        if checks:
+            if checks.get("roas_ok") is False:
+                warnings.append(
+                    f"ROAS consistency delta is {checks.get('roas_delta')}. Summary and derived ROAS do not match."
+                )
+            if checks.get("company_margin_ok") is False:
+                warnings.append(
+                    f"Company margin consistency delta is {checks.get('company_margin_delta_pct')} percentage points."
+                )
+            if checks.get("cac_ok") is False:
+                warnings.append(
+                    f"CAC consistency delta is {checks.get('cac_delta')}. Check spend/new-customer denominator alignment."
+                )
+
+        day_name_missing = self._count_missing_values(dow_df, "day_name")
+        if day_name_missing > 0:
+            warnings.append(f"{day_name_missing} weekday effectiveness row(s) are missing day_name.")
+
+        anchor_missing = self._count_missing_values(attach_df, "anchor_item")
+        attached_missing = self._count_missing_values(attach_df, "attached_item")
+        if anchor_missing > 0:
+            warnings.append(f"{anchor_missing} attach-rate row(s) are missing anchor_item.")
+        if attached_missing > 0:
+            warnings.append(f"{attached_missing} attach-rate row(s) are missing attached_item.")
+        anchor_orders_col = "anchor_orders" if "anchor_orders" in attach_df.columns else ("key_orders" if "key_orders" in attach_df.columns else None)
+        if not attach_df.empty and anchor_orders_col:
+            anchor_orders_missing = int(attach_df[anchor_orders_col].isna().sum())
+            if anchor_orders_missing > 0:
+                warnings.append(f"{anchor_orders_missing} attach-rate row(s) are missing anchor_orders.")
+        else:
+            anchor_orders_missing = 0
+
+        country_missing = self._count_missing_values(country_df, "country")
+        geo_country_missing = self._count_missing_values(geo_df, "country")
+        if country_missing > 0:
+            warnings.append(f"{country_missing} geographic country row(s) are missing country labels.")
+        if geo_country_missing > 0:
+            warnings.append(f"{geo_country_missing} geo profitability row(s) are missing country labels.")
+
+        attributed_orders_total = self._safe_float(attribution_summary.get("estimated_orders_total"))
+        total_orders = self._safe_float(attribution_summary.get("total_orders") or metrics.get("total_orders"))
+        attributed_cpa_mismatches = 0
+        for row in campaign_rows:
+            spend = self._safe_float(row.get("spend"))
+            attributed_orders = self._safe_float(row.get("attributed_orders_est"))
+            attributed_cpa = self._safe_float(row.get("cost_per_attributed_order"))
+            if spend is None or attributed_orders is None or attributed_orders <= 0:
+                continue
+            expected = spend / attributed_orders
+            if attributed_cpa is None or abs(expected - attributed_cpa) > 0.05:
+                attributed_cpa_mismatches += 1
+        if attributed_cpa_mismatches > 0:
+            warnings.append(
+                f"{attributed_cpa_mismatches} campaign row(s) have cost_per_attributed_order that does not match spend/attributed_orders_est."
+            )
+        if attributed_orders_total is not None and total_orders and attributed_orders_total > (total_orders * 1.05):
+            warnings.append(
+                f"Attributed campaign orders sum to {attributed_orders_total:.1f}, which exceeds total orders ({total_orders:.0f}) beyond tolerance."
+            )
+
+        message = (
+            "Model integrity QA passed: dimensions, arithmetic, and summary consistency are within tolerance."
+            if not warnings
+            else warnings[0]
+        )
+        return {
+            "key": "model_integrity",
+            "label": "Model integrity",
+            "status": "warning" if warnings else "ok",
+            "healthy": not warnings,
+            "message": message,
+            "warnings": warnings,
+            "missing_financial_keys": missing_financial_keys,
+            "day_name_missing": day_name_missing,
+            "attach_anchor_missing": anchor_missing,
+            "attach_attached_missing": attached_missing,
+            "country_missing": country_missing,
+            "geo_country_missing": geo_country_missing,
+            "attributed_cpa_mismatches": attributed_cpa_mismatches,
+        }
+
+    def _build_margin_stability_qa(self, date_agg: Optional[pd.DataFrame]) -> Dict[str, Any]:
+        date_df = date_agg.copy() if isinstance(date_agg, pd.DataFrame) else pd.DataFrame()
+        if date_df.empty or "total_revenue" not in date_df.columns:
+            return {
+                "key": "margin_stability",
+                "label": "Margin stability",
+                "status": "ok",
+                "healthy": True,
+                "message": "Margin stability QA skipped because no daily revenue series was available.",
+                "warnings": [],
+            }
+
+        frame = date_df.sort_values("date").copy()
+        revenue = frame["total_revenue"].fillna(0.0)
+        frame["company_margin_with_fixed_pct"] = np.where(
+            revenue > 0,
+            (frame["net_profit"] / revenue) * 100,
+            np.nan,
+        )
+        frame["pre_ad_margin_with_fixed_pct"] = np.where(
+            revenue > 0,
+            ((frame["pre_ad_contribution_profit"] - frame["fixed_daily_cost"]) / revenue) * 100,
+            np.nan,
+        )
+        frame["company_margin_with_fixed_pct_ma7"] = frame["company_margin_with_fixed_pct"].rolling(7, min_periods=1).mean()
+        frame["pre_ad_margin_with_fixed_pct_ma7"] = frame["pre_ad_margin_with_fixed_pct"].rolling(7, min_periods=1).mean()
+
+        raw_extreme_days = int((frame["pre_ad_margin_with_fixed_pct"].abs() > 150).fillna(False).sum())
+        smoothed_extreme_days = int((frame["pre_ad_margin_with_fixed_pct_ma7"].abs() > 100).fillna(False).sum())
+        min_smoothed = self._safe_float(frame["pre_ad_margin_with_fixed_pct_ma7"].min())
+        max_smoothed = self._safe_float(frame["pre_ad_margin_with_fixed_pct_ma7"].max())
+
+        warnings: List[str] = []
+        if smoothed_extreme_days > 0:
+            warnings.append(
+                f"7-day smoothed pre-ad margin with fixed is still extreme on {smoothed_extreme_days} day(s). Review fixed-cost alerting thresholds."
+            )
+        elif raw_extreme_days > 0:
+            warnings.append(
+                f"Raw daily fixed-margin series has {raw_extreme_days} extreme day(s), but smoothing normalizes them. Use 7-day trend for alerting."
+            )
+
+        message = (
+            "Margin stability QA passed: smoothed fixed-margin series is within alert thresholds."
+            if not warnings
+            else warnings[0]
+        )
+        return {
+            "key": "margin_stability",
+            "label": "Margin stability",
+            "status": "warning" if smoothed_extreme_days > 0 else "ok",
+            "healthy": smoothed_extreme_days == 0,
+            "message": message,
+            "warnings": warnings,
+            "raw_extreme_days": raw_extreme_days,
+            "smoothed_extreme_days": smoothed_extreme_days,
+            "min_smoothed_margin_pct": round(min_smoothed, 2) if min_smoothed is not None else None,
+            "max_smoothed_margin_pct": round(max_smoothed, 2) if max_smoothed is not None else None,
+        }
+
+    @staticmethod
     def get_product_sku(ean: str, title: str) -> str:
         """
         Get a consistent product SKU/identifier.
@@ -2570,6 +2760,19 @@ class BizniWebExporter:
         source_health.setdefault("qa", {})["geo"] = self._build_geo_qa(
             country_analysis=country_analysis,
             geo_profitability=geo_profitability,
+        )
+        source_health.setdefault("qa", {})["model_integrity"] = self._build_model_integrity_qa(
+            financial_metrics=financial_metrics,
+            consistency_checks=consistency_checks,
+            refunds_analysis=refunds_analysis,
+            day_of_week_analysis=day_of_week_analysis,
+            advanced_dtc_metrics=advanced_dtc_metrics,
+            country_analysis=country_analysis,
+            geo_profitability=geo_profitability,
+            cost_per_order=cost_per_order,
+        )
+        source_health.setdefault("qa", {})["margin_stability"] = self._build_margin_stability_qa(
+            date_agg=date_agg,
         )
         source_health = self._finalize_source_health(source_health)
 

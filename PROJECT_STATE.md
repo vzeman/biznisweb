@@ -606,7 +606,8 @@ Next exact step:
   - final inline dashboard script parses successfully in Node
   - standalone library containers and new chart ids are present in data/vevo/report_20260301-20260331__test2.html
 - Next exact step:
-  - visually review eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.
+  - visually review 
+eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.
 ### 2026-04-04
 - Added an `Executive metrics tile deck` to the end of section `10 Full library` in the modern production dashboard, keeping the current dashboard design while surfacing all major top-level KPI metrics in a compact tile grid.
 - `dashboard_modern.py` now computes and renders a large summary tile set covering revenue, cost stack, profit, daily averages, orders/items, AOV, CAC/ROAS/MER, revenue per customer, contribution layers, break-even CAC, CAC headroom, payback, refund summary, repeat purchase rate, and related executive checks.
@@ -951,3 +952,36 @@ Next exact step:
   - shipping math stays stable while sign semantics are now explicit and consistent
 - Next exact step:
   - add full QA assertions in pipeline for shell/library parity, campaign arithmetic integrity and normalized-dimension completeness (`day_name`, `anchor_item`, `country`).
+
+### 2026-04-10 (Model integrity and margin stability QA)
+- Added full model-integrity QA builders in `export_orders.py` for both VEVO and ROY.
+- New QA assertions now check:
+  - shell/library critical economics registry completeness
+  - refund binding consistency
+  - arithmetic consistency flags (`roas_ok`, `company_margin_ok`, `cac_ok`)
+  - normalized dimension completeness (`day_name`, `anchor_item`, `attached_item`, `anchor_orders`, `country`)
+  - campaign arithmetic (`cost_per_attributed_order == spend / attributed_orders_est` within tolerance)
+  - attributed-orders oversubscription vs total orders
+- Added smoothed fixed-margin QA:
+  - raw extreme daily fixed-margin days are tracked
+  - 7-day smoothed pre-ad fixed-margin series is used for warning severity
+- Wired the new QA entries into the exported `data_quality_*.json` payload under top-level `qa`.
+- Strengthened `scripts/security_ci.py` so CI fails if these QA builders disappear from the export pipeline or if the dashboard stops rendering QA cards in source health.
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py scripts\security_ci.py`
+  - `python scripts\security_ci.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO March 2026 `data_quality` now reports:
+    - attribution: `ok`
+    - geo: `warning` (low sample countries)
+    - model_integrity: `ok`
+    - margin_stability: `ok`
+  - ROY March 2026 `data_quality` now reports:
+    - attribution: `warning` (campaign-level FB spend missing while daily FB spend exists)
+    - geo: `warning` (low sample countries)
+    - model_integrity: `ok`
+    - margin_stability: `ok`
+- Next exact step:
+  - formalize geo confidence scoring and small-sample guardrails in the visible dashboard layer, then continue with CM1/CM2/CM3 taxonomy.

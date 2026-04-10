@@ -89,6 +89,16 @@ def main() -> int:
         )
         require(
             export_orders,
+            "_build_model_integrity_qa",
+            "export_orders.py must build model-integrity QA assertions before report export.",
+        )
+        require(
+            export_orders,
+            "_build_margin_stability_qa",
+            "export_orders.py must build smoothed margin-stability QA before report export.",
+        )
+        require(
+            export_orders,
             "\"is_partial\"",
             "export_orders.py must persist partial-data state in source health metadata.",
         )
@@ -111,6 +121,11 @@ def main() -> int:
             dashboard_modern,
             "Geo confidence guardrails",
             "Modern dashboard must surface geo confidence guardrails explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "qa_rows.append",
+            "Modern dashboard must keep rendering QA cards alongside source-health cards.",
         )
         require(
             dashboard_modern,
