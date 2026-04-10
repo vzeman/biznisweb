@@ -358,7 +358,8 @@ class BizniWebExporter:
         normalized_subdir = str(artifact_subdir or "").strip().strip("/\\")
         self.artifact_subdir = normalized_subdir
         self.enable_period_bundle = enable_period_bundle
-        self.reporting_defaults = resolve_reporting_defaults(project_name, load_project_settings(project_name))
+        self.project_settings = load_project_settings(project_name)
+        self.reporting_defaults = resolve_reporting_defaults(project_name, self.project_settings)
         self.project_root_dir = Path("data") / project_name
         self.data_dir = self.project_root_dir / normalized_subdir if normalized_subdir else self.project_root_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -820,6 +821,229 @@ class BizniWebExporter:
             if normalized_pattern and normalized_pattern in normalized_label:
                 return True
         return False
+
+    def _bundle_accessory_config(self) -> Dict[str, Any]:
+        config = self.project_settings.get("bundle_accessory_model") or {}
+        return config if isinstance(config, dict) else {}
+
+    def _match_named_group(self, label: Any, groups: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
+        for group in groups or []:
+            if self._matches_patterns(str(label or ""), group.get("patterns") or []):
+                group_key = str(group.get("key") or "").strip()
+                group_label = str(group.get("label") or group_key).strip()
+                if group_key:
+                    return group_key, group_label
+        return None, None
+
+    def analyze_bundle_accessory_model(
+        self,
+        orders_df: pd.DataFrame,
+        item_df: pd.DataFrame,
+        revenue_col: str,
+    ) -> dict:
+        config = self._bundle_accessory_config()
+        if not config.get("enabled"):
+            return {
+                "summary": {},
+                "pair_rows": pd.DataFrame(),
+                "device_family_rows": pd.DataFrame(),
+                "accessory_group_rows": pd.DataFrame(),
+            }
+
+        anchor_groups = config.get("anchor_groups") or []
+        accessory_groups = config.get("accessory_groups") or []
+        if not anchor_groups or not accessory_groups or orders_df.empty or item_df.empty:
+            return {
+                "summary": {},
+                "pair_rows": pd.DataFrame(),
+                "device_family_rows": pd.DataFrame(),
+                "accessory_group_rows": pd.DataFrame(),
+            }
+
+        classified_rows = []
+        for row in item_df[["order_num", "item_label", "product_sku"]].itertuples(index=False):
+            anchor_key, anchor_label = self._match_named_group(row.item_label, anchor_groups)
+            accessory_key, accessory_label = self._match_named_group(row.item_label, accessory_groups)
+            if not anchor_key and not accessory_key:
+                continue
+            classified_rows.append(
+                {
+                    "order_num": row.order_num,
+                    "item_label": row.item_label,
+                    "product_sku": row.product_sku,
+                    "anchor_group_key": anchor_key,
+                    "anchor_group_label": anchor_label,
+                    "accessory_group_key": accessory_key,
+                    "accessory_group_label": accessory_label,
+                }
+            )
+
+        classified = pd.DataFrame(classified_rows)
+        if classified.empty:
+            return {
+                "summary": {},
+                "pair_rows": pd.DataFrame(),
+                "device_family_rows": pd.DataFrame(),
+                "accessory_group_rows": pd.DataFrame(),
+            }
+
+        anchor_matches = classified[classified["anchor_group_key"].notna()][
+            ["order_num", "anchor_group_key", "anchor_group_label"]
+        ].drop_duplicates()
+        accessory_matches = classified[classified["accessory_group_key"].notna()][
+            ["order_num", "accessory_group_key", "accessory_group_label"]
+        ].drop_duplicates()
+        if anchor_matches.empty or accessory_matches.empty:
+            return {
+                "summary": {
+                    "anchor_group_count": int(anchor_matches["anchor_group_key"].nunique()) if not anchor_matches.empty else 0,
+                    "accessory_group_count": int(accessory_matches["accessory_group_key"].nunique()) if not accessory_matches.empty else 0,
+                },
+                "pair_rows": pd.DataFrame(),
+                "device_family_rows": pd.DataFrame(),
+                "accessory_group_rows": pd.DataFrame(),
+            }
+
+        orders_lookup = orders_df[["order_num", revenue_col, "pre_ad_contribution"]].drop_duplicates(subset=["order_num"]).copy()
+        orders_lookup[revenue_col] = pd.to_numeric(orders_lookup[revenue_col], errors="coerce").fillna(0.0)
+        orders_lookup["pre_ad_contribution"] = pd.to_numeric(orders_lookup["pre_ad_contribution"], errors="coerce").fillna(0.0)
+
+        pair_matches = anchor_matches.merge(accessory_matches, on="order_num", how="inner")
+        pair_rows = []
+        for (anchor_key, anchor_label), anchor_group_df in anchor_matches.groupby(["anchor_group_key", "anchor_group_label"]):
+            anchor_order_nums = set(anchor_group_df["order_num"].astype(str))
+            anchor_orders_df = orders_lookup[orders_lookup["order_num"].astype(str).isin(anchor_order_nums)].copy()
+            anchor_orders = len(anchor_order_nums)
+            if anchor_orders == 0 or anchor_orders_df.empty:
+                continue
+
+            anchor_avg_aov = float(anchor_orders_df[revenue_col].mean())
+            anchor_avg_contribution = float(anchor_orders_df["pre_ad_contribution"].mean())
+            anchor_pairs = pair_matches[pair_matches["anchor_group_key"] == anchor_key]
+            if anchor_pairs.empty:
+                continue
+
+            for (accessory_key, accessory_label), pair_df in anchor_pairs.groupby(["accessory_group_key", "accessory_group_label"]):
+                attached_order_nums = set(pair_df["order_num"].astype(str))
+                attached_orders_df = anchor_orders_df[anchor_orders_df["order_num"].astype(str).isin(attached_order_nums)].copy()
+                without_orders_df = anchor_orders_df[~anchor_orders_df["order_num"].astype(str).isin(attached_order_nums)].copy()
+                attached_orders = len(attached_order_nums)
+                if attached_orders == 0 or attached_orders_df.empty:
+                    continue
+
+                avg_order_value_with = float(attached_orders_df[revenue_col].mean())
+                avg_contribution_with = float(attached_orders_df["pre_ad_contribution"].mean())
+                avg_order_value_without = float(without_orders_df[revenue_col].mean()) if not without_orders_df.empty else np.nan
+                avg_contribution_without = float(without_orders_df["pre_ad_contribution"].mean()) if not without_orders_df.empty else np.nan
+
+                pair_rows.append(
+                    {
+                        "anchor_group_key": anchor_key,
+                        "anchor_group_label": anchor_label,
+                        "accessory_group_key": accessory_key,
+                        "accessory_group_label": accessory_label,
+                        "anchor_orders": int(anchor_orders),
+                        "attached_orders": int(attached_orders),
+                        "attach_rate_pct": round((attached_orders / anchor_orders * 100), 1),
+                        "anchor_avg_order_value": round(anchor_avg_aov, 2),
+                        "anchor_avg_pre_ad_contribution": round(anchor_avg_contribution, 2),
+                        "avg_order_value_with_accessory": round(avg_order_value_with, 2),
+                        "avg_order_value_without_accessory": round(avg_order_value_without, 2) if pd.notna(avg_order_value_without) else np.nan,
+                        "avg_pre_ad_contribution_with_accessory": round(avg_contribution_with, 2),
+                        "avg_pre_ad_contribution_without_accessory": round(avg_contribution_without, 2) if pd.notna(avg_contribution_without) else np.nan,
+                        "revenue_uplift_per_order": round(avg_order_value_with - avg_order_value_without, 2) if pd.notna(avg_order_value_without) else np.nan,
+                        "contribution_uplift_per_order": round(avg_contribution_with - avg_contribution_without, 2) if pd.notna(avg_contribution_without) else np.nan,
+                    }
+                )
+
+        pair_rows_df = pd.DataFrame(pair_rows)
+        if pair_rows_df.empty:
+            return {
+                "summary": {
+                    "anchor_group_count": int(anchor_matches["anchor_group_key"].nunique()),
+                    "accessory_group_count": int(accessory_matches["accessory_group_key"].nunique()),
+                    "anchor_orders_total": int(anchor_matches["order_num"].nunique()),
+                    "device_family_count": int(anchor_matches["anchor_group_key"].nunique()),
+                },
+                "pair_rows": pd.DataFrame(),
+                "device_family_rows": pd.DataFrame(),
+                "accessory_group_rows": pd.DataFrame(),
+            }
+
+        pair_rows_df = pair_rows_df.sort_values(
+            ["anchor_orders", "attach_rate_pct", "contribution_uplift_per_order"],
+            ascending=[False, False, False],
+        ).reset_index(drop=True)
+
+        device_family_rows = []
+        for (anchor_key, anchor_label), anchor_df in pair_rows_df.groupby(["anchor_group_key", "anchor_group_label"]):
+            ranked = anchor_df.sort_values(
+                ["contribution_uplift_per_order", "attach_rate_pct", "attached_orders"],
+                ascending=[False, False, False],
+                na_position="last",
+            )
+            best_row = ranked.iloc[0]
+            device_family_rows.append(
+                {
+                    "anchor_group_key": anchor_key,
+                    "anchor_group_label": anchor_label,
+                    "anchor_orders": int(anchor_df["anchor_orders"].max()),
+                    "anchor_avg_order_value": round(float(anchor_df["anchor_avg_order_value"].max()), 2),
+                    "anchor_avg_pre_ad_contribution": round(float(anchor_df["anchor_avg_pre_ad_contribution"].max()), 2),
+                    "best_accessory_group_key": best_row["accessory_group_key"],
+                    "best_accessory_group_label": best_row["accessory_group_label"],
+                    "best_attach_rate_pct": round(float(best_row["attach_rate_pct"]), 1),
+                    "best_contribution_uplift_per_order": round(float(best_row["contribution_uplift_per_order"]), 2)
+                    if pd.notna(best_row["contribution_uplift_per_order"]) else np.nan,
+                    "best_revenue_uplift_per_order": round(float(best_row["revenue_uplift_per_order"]), 2)
+                    if pd.notna(best_row["revenue_uplift_per_order"]) else np.nan,
+                }
+            )
+        device_family_rows_df = pd.DataFrame(device_family_rows).sort_values("anchor_orders", ascending=False)
+
+        accessory_group_rows = []
+        for (accessory_key, accessory_label), accessory_df in pair_rows_df.groupby(["accessory_group_key", "accessory_group_label"]):
+            weighted_attach = np.average(
+                accessory_df["attach_rate_pct"],
+                weights=accessory_df["anchor_orders"].clip(lower=1),
+            ) if not accessory_df.empty else np.nan
+            best_anchor = accessory_df.sort_values(
+                ["contribution_uplift_per_order", "attach_rate_pct", "attached_orders"],
+                ascending=[False, False, False],
+                na_position="last",
+            ).iloc[0]
+            accessory_group_rows.append(
+                {
+                    "accessory_group_key": accessory_key,
+                    "accessory_group_label": accessory_label,
+                    "covered_anchor_groups": int(accessory_df["anchor_group_key"].nunique()),
+                    "pair_rows": int(len(accessory_df)),
+                    "attached_orders_total": int(accessory_df["attached_orders"].sum()),
+                    "weighted_attach_rate_pct": round(float(weighted_attach), 1) if pd.notna(weighted_attach) else np.nan,
+                    "avg_contribution_uplift_per_order": round(float(accessory_df["contribution_uplift_per_order"].dropna().mean()), 2)
+                    if accessory_df["contribution_uplift_per_order"].notna().any() else np.nan,
+                    "best_anchor_group_label": best_anchor["anchor_group_label"],
+                }
+            )
+        accessory_group_rows_df = pd.DataFrame(accessory_group_rows).sort_values("attached_orders_total", ascending=False)
+
+        summary = {
+            "anchor_group_count": int(anchor_matches["anchor_group_key"].nunique()),
+            "accessory_group_count": int(accessory_matches["accessory_group_key"].nunique()),
+            "anchor_orders_total": int(anchor_matches["order_num"].nunique()),
+            "device_family_count": int(device_family_rows_df["anchor_group_key"].nunique()) if not device_family_rows_df.empty else 0,
+            "pair_row_count": int(len(pair_rows_df)),
+            "best_attach_rate_pct": round(float(pair_rows_df["attach_rate_pct"].max()), 1) if not pair_rows_df.empty else np.nan,
+            "best_contribution_uplift_per_order": round(float(pair_rows_df["contribution_uplift_per_order"].max()), 2)
+            if pair_rows_df["contribution_uplift_per_order"].notna().any() else np.nan,
+        }
+
+        return {
+            "summary": summary,
+            "pair_rows": pair_rows_df,
+            "device_family_rows": device_family_rows_df,
+            "accessory_group_rows": accessory_group_rows_df,
+        }
 
     @staticmethod
     def _distribute_total_spend(total: float, date_from: datetime, date_to: datetime) -> Dict[str, float]:
@@ -4830,6 +5054,9 @@ class BizniWebExporter:
             attach_rate['anchor_orders'] = attach_rate['key_orders']
             attach_rate['attached_item'] = attach_rate['attached_product']
 
+        # ---- Roy bundle/accessory model (config-driven, optional per project)
+        bundle_accessory_model = self.analyze_bundle_accessory_model(orders_df, item_df, revenue_col)
+
         # ---- 10) margin stability index (daily pre-ad margin volatility)
         daily_margin = orders_df.groupby('purchase_date_only').agg({
             revenue_col: 'sum',
@@ -4943,6 +5170,7 @@ class BizniWebExporter:
             'basket_contribution': basket_contrib,
             'sku_pareto': sku_pareto,
             'attach_rate': attach_rate,
+            'bundle_accessory_model': bundle_accessory_model,
             'daily_margin': daily_margin,
             'payday_window': payday_window,
         }
