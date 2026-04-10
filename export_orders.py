@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Export orders from BizniWeb GraphQL API to CSV
 """
@@ -37,7 +37,7 @@ from reporting_core import (
 try:
     from dotenv import load_dotenv
 except ImportError:
-    print("❌ Missing package: python-dotenv")
+    print("âťŚ Missing package: python-dotenv")
     print("Please run: pip install python-dotenv")
     exit(1)
 
@@ -45,14 +45,14 @@ try:
     from gql import gql, Client
     from gql.transport.requests import RequestsHTTPTransport
 except ImportError:
-    print("❌ Missing package: gql")
+    print("âťŚ Missing package: gql")
     print("Please run: pip install 'gql[all]>=3.5.0'")
     exit(1)
 
 try:
     import pandas as pd
 except ImportError:
-    print("❌ Missing package: pandas")
+    print("âťŚ Missing package: pandas")
     print("Please run: pip install pandas>=2.0.0")
     exit(1)
 
@@ -60,7 +60,7 @@ except ImportError:
 try:
     from facebook_ads import FacebookAdsClient
 except ImportError:
-    print("⚠️  Facebook Ads integration not available (missing facebook-business package)")
+    print("âš ď¸Ź  Facebook Ads integration not available (missing facebook-business package)")
     class FacebookAdsClient:
         def __init__(self):
             self.is_configured = False
@@ -70,7 +70,7 @@ except ImportError:
 try:
     from google_ads import GoogleAdsClient
 except ImportError:
-    print("⚠️  Google Ads integration not available (missing google-ads package)")
+    print("âš ď¸Ź  Google Ads integration not available (missing google-ads package)")
     print("   To enable, run: pip install google-ads google-auth-oauthlib google-auth-httplib2")
     class GoogleAdsClient:
         def __init__(self):
@@ -150,10 +150,10 @@ LEGACY_VEVO_PRODUCT_EXPENSES = {
     '8586024430488': 2.86,    # No.09 Pure Garden (200ml)
 
     # === SADY VZORIEK ===
-    'H-7D043A91': 1.79,       # Sada vzoriek všetkých vôní Vevo 6 x 10ml
-    'H-E77D4634': 0.86,       # Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml
-    'H-125E3A73': 1.79,       # Sada vzoriek všetkých vôní Vevo Natural 6 x 10ml
-    'H-31566B7A': 0.85,       # Sada vzoriek najpredávanejších vôní Vevo Natural 3 x 10ml
+    'H-7D043A91': 1.79,       # Sada vzoriek vĹˇetkĂ˝ch vĂ´nĂ­ Vevo 6 x 10ml
+    'H-E77D4634': 0.86,       # Sada vzoriek najpredĂˇvanejĹˇĂ­ch vĂ´nĂ­ Vevo 3 x 10ml
+    'H-125E3A73': 1.79,       # Sada vzoriek vĹˇetkĂ˝ch vĂ´nĂ­ Vevo Natural 6 x 10ml
+    'H-31566B7A': 0.85,       # Sada vzoriek najpredĂˇvanejĹˇĂ­ch vĂ´nĂ­ Vevo Natural 3 x 10ml
 
     # === PREMIUM VZORKY ===
     'H-A2620358': 0.42,       # Premium No.07 Ylang Absolute (Vzorka 10ml)
@@ -170,19 +170,19 @@ LEGACY_VEVO_PRODUCT_EXPENSES = {
     'H-A1EA61E5': 0.28,       # Natural No.09 Pure Garden (Vzorka 10ml)
 
     # === DOPLNKY ===
-    'H-8F8BF46E': 0.31,       # Odmerka Vevo 7ml drevená
-    'H-3583EAEC': 0.65,       # Vevo Shot - koncentrát na čistenie práčky 100ml
-    'H-F03DF99A': 2.43,       # Prací gél hypoalergénny z Marseillského mydla 1L
-    '8594201618000': 2.43,    # Prací gél hypoalergénny (EAN variant)
-    'H-C633B766': 2.43,       # Prací gél Levanduľa 1L
-    'H-95B10CAD': 2.43,       # Prací gél Ruža 1L
-    'H-231AAF25': 2.83,       # Perkarbonát sodný PLUS 1kg
-    'H-A2C58C41': 2.43,       # Strong PINK čistiaca pasta 500g
-    'H-5916EC93': 4.80,       # Čistič podláh do robotického mopu
+    'H-8F8BF46E': 0.31,       # Odmerka Vevo 7ml drevenĂˇ
+    'H-3583EAEC': 0.65,       # Vevo Shot - koncentrĂˇt na ÄŤistenie prĂˇÄŤky 100ml
+    'H-F03DF99A': 2.43,       # PracĂ­ gĂ©l hypoalergĂ©nny z MarseillskĂ©ho mydla 1L
+    '8594201618000': 2.43,    # PracĂ­ gĂ©l hypoalergĂ©nny (EAN variant)
+    'H-C633B766': 2.43,       # PracĂ­ gĂ©l LevanduÄľa 1L
+    'H-95B10CAD': 2.43,       # PracĂ­ gĂ©l RuĹľa 1L
+    'H-231AAF25': 2.83,       # PerkarbonĂˇt sodnĂ˝ PLUS 1kg
+    'H-A2C58C41': 2.43,       # Strong PINK ÄŤistiaca pasta 500g
+    'H-5916EC93': 4.80,       # ÄŚistiÄŤ podlĂˇh do robotickĂ©ho mopu
     'H-65B41890': 1.00,       # Biely ocot v spreji 500 ml
-    'H-29C4BDE2': 1.00,       # Interiérový sprej Vevo Premium Škorica & Ihličie 150ml
+    'H-29C4BDE2': 1.00,       # InteriĂ©rovĂ˝ sprej Vevo Premium Ĺ korica & IhliÄŤie 150ml
 
-    # === NULOVÉ NÁKLADY ===
+    # === NULOVĂ‰ NĂKLADY ===
     'H-36CA74A7': 0,          # Tringelt
     'H-A5F3BBB3': 0,          # Poistenie proti rozbitiu
 }
@@ -199,26 +199,26 @@ def parse_input_date(value: str) -> datetime:
 
 # nove ceny nakladov
 # PRODUCT_EXPENSES = {
-#     'Sada vzoriek najpredávanejších vôní Vevo 6 x 10ml': 1.38,
-#     'Sada vzoriek všetkých vôní Vevo 6 x 10ml': 1.38,
-#     'Sada najpredávanejších vzoriek Vevo 6 x 10ml': 1.38,
-#     'Sada 6 najpredávanejších vzoriek po 1ks': 1.38,
-#     'Sada najpredávanejších vzoriek 6 x 10ml': 1.38,
-#     'Sada vzorků všech vůní Vevo (6 × 10 ml)': 1.38,
-#     'Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml': 0.69,
+#     'Sada vzoriek najpredĂˇvanejĹˇĂ­ch vĂ´nĂ­ Vevo 6 x 10ml': 1.38,
+#     'Sada vzoriek vĹˇetkĂ˝ch vĂ´nĂ­ Vevo 6 x 10ml': 1.38,
+#     'Sada najpredĂˇvanejĹˇĂ­ch vzoriek Vevo 6 x 10ml': 1.38,
+#     'Sada 6 najpredĂˇvanejĹˇĂ­ch vzoriek po 1ks': 1.38,
+#     'Sada najpredĂˇvanejĹˇĂ­ch vzoriek 6 x 10ml': 1.38,
+#     'Sada vzorkĹŻ vĹˇech vĹŻnĂ­ Vevo (6 Ă— 10 ml)': 1.38,
+#     'Sada vzoriek najpredĂˇvanejĹˇĂ­ch vĂ´nĂ­ Vevo 3 x 10ml': 0.69,
 #     'Parfum do prania Vevo No.08 Cotton Dream (500ml)': 3.13,
-#     'Vevo No.08 Cotton Dream mosóparfüm (500ml)': 3.13,
+#     'Vevo No.08 Cotton Dream mosĂłparfĂĽm (500ml)': 3.13,
 #     'Parfum do prania Vevo No.07 Ylang Absolute (200ml)': 1.79,
-#     'Vevo No.07 Ylang Absolute mosóparfüm (200ml)': 1.79,
+#     'Vevo No.07 Ylang Absolute mosĂłparfĂĽm (200ml)': 1.79,
 #     'Parfum do prania Vevo No.08 Cotton Dream (200ml)': 1.79,
 #     'Parfum do prania Vevo No.09 Pure Garden (200ml)': 1.79,
 #     'Parfum do prania Vevo No.01 Cotton Paradise (500ml)': 3.13,
 #     'Parfum do prania Vevo No.01 Cotton Paradise (200ml)': 1.79,
 #     'Parfum do prania Vevo No.09 Pure Garden (500ml)': 3.13,
-#     'Parfém na praní Vevo No.09 Pure Garden (500ml)': 1.79,
+#     'ParfĂ©m na pranĂ­ Vevo No.09 Pure Garden (500ml)': 1.79,
 #     'Parfum do prania Vevo No.06 Royal Cotton (200ml)': 1.79,
 #     'Parfum do prania Vevo No.02 Sweet Paradise (200ml)': 1.79,
-#     'Odmerka Vevo 7ml drevená na parfum do prania': 0.31,
+#     'Odmerka Vevo 7ml drevenĂˇ na parfum do prania': 0.31,
 #     'Parfum do prania Vevo No.02 Sweet Paradise (500ml)': 3.13,
 #     'Parfum do prania Vevo No.07 Ylang Absolute (Vzorka 10ml)': 0.22,
 #     'Parfum do prania Vevo No.07 Ylang Absolute (Vzorka)': 0.22,
@@ -236,8 +236,8 @@ def parse_input_date(value: str) -> datetime:
 #     'Tringelt': 0,
 #     'Parfum do prania Vevo No.01 Cotton Paradise (Vzorka 10ml)': 0.22,
 #     'Poistenie proti rozbitiu': 0,
-#     'Vevo Shot - koncentrát na čistenie práčky 100ml': 0.65,
-#     'Vevo Shot – koncentrát na čištění pračky 100 ml': 0.65
+#     'Vevo Shot - koncentrĂˇt na ÄŤistenie prĂˇÄŤky 100ml': 0.65,
+#     'Vevo Shot â€“ koncentrĂˇt na ÄŤiĹˇtÄ›nĂ­ praÄŤky 100 ml': 0.65
 # }
 
 # GraphQL query with fragments
@@ -760,6 +760,110 @@ class BizniWebExporter:
         print(f"Data quality metadata saved: {quality_path}")
         return quality_path
 
+    def _geo_confidence_settings(self, level: str) -> Dict[str, int]:
+        raw = dict((self.project_settings or {}).get("geo_confidence") or {})
+        defaults = {
+            "country": {
+                "ignore_orders_below": 5,
+                "observe_orders_below": 20,
+                "chart_min_orders": 5,
+            },
+            "city": {
+                "ignore_orders_below": 3,
+                "observe_orders_below": 10,
+                "chart_min_orders": 3,
+            },
+        }
+        scope = dict(defaults.get(level, {}))
+        scope.update(
+            {
+                str(k): int(v)
+                for k, v in dict(raw.get(level) or {}).items()
+                if str(k) in {"ignore_orders_below", "observe_orders_below", "chart_min_orders"}
+            }
+        )
+        scope["ignore_orders_below"] = max(int(scope.get("ignore_orders_below", 1)), 1)
+        scope["observe_orders_below"] = max(int(scope.get("observe_orders_below", scope["ignore_orders_below"] + 1)), scope["ignore_orders_below"] + 1)
+        scope["chart_min_orders"] = max(int(scope.get("chart_min_orders", scope["ignore_orders_below"])), 1)
+        return scope
+
+    def _geo_confidence_payload(self, orders: Any, *, level: str) -> Dict[str, Any]:
+        order_count = int(round(self._safe_float(orders) or 0))
+        settings = self._geo_confidence_settings(level)
+        ignore_below = settings["ignore_orders_below"]
+        observe_below = settings["observe_orders_below"]
+
+        if order_count < ignore_below:
+            status = "ignore"
+            label = "Ignore"
+        elif order_count < observe_below:
+            status = "observe"
+            label = "Observe"
+        else:
+            status = "ready"
+            label = "Ready"
+
+        confidence_score = 100.0 if order_count >= observe_below else round((order_count / observe_below) * 100, 1)
+        return {
+            "confidence_status": status,
+            "confidence_label": label,
+            "confidence_score": confidence_score,
+            "low_sample": status != "ready",
+            "hide_economics": order_count < settings["chart_min_orders"],
+            "ignore_orders_below": ignore_below,
+            "observe_orders_below": observe_below,
+            "chart_min_orders": settings["chart_min_orders"],
+        }
+
+    def _build_geo_qa(self, country_analysis: Optional[pd.DataFrame], geo_profitability: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        country_df = country_analysis.copy() if isinstance(country_analysis, pd.DataFrame) else pd.DataFrame()
+        geo_table = (geo_profitability or {}).get("table")
+        geo_df = geo_table.copy() if isinstance(geo_table, pd.DataFrame) else pd.DataFrame()
+
+        warnings: List[str] = []
+        ignore_count = 0
+        observe_count = 0
+        ready_count = 0
+
+        if not geo_df.empty and "confidence_status" in geo_df.columns:
+            ignore_count = int((geo_df["confidence_status"] == "ignore").sum())
+            observe_count = int((geo_df["confidence_status"] == "observe").sum())
+            ready_count = int((geo_df["confidence_status"] == "ready").sum())
+            if ignore_count > 0:
+                warnings.append(
+                    f"{ignore_count} country row(s) are below the minimum geo sample threshold and should not be treated as strategic market insight."
+                )
+            if observe_count > 0:
+                warnings.append(
+                    f"{observe_count} country row(s) are in observe mode only. Treat margin/CPO reads as directional rather than decisive."
+                )
+
+        unknown_country_rate = None
+        if not country_df.empty and "country" in country_df.columns:
+            total_orders = float(country_df["orders"].sum()) if "orders" in country_df.columns else 0.0
+            unknown_orders = float(country_df.loc[country_df["country"].astype(str).str.lower() == "unknown", "orders"].sum()) if total_orders > 0 else 0.0
+            unknown_country_rate = round((unknown_orders / total_orders) * 100, 2) if total_orders > 0 else 0.0
+            if unknown_country_rate > 0:
+                warnings.append(f"Unknown country coverage is {unknown_country_rate:.2f}% of orders.")
+
+        message = (
+            "Geo confidence guardrails passed: country sample sizes are large enough for strategic comparison."
+            if not warnings
+            else warnings[0]
+        )
+        return {
+            "key": "geo",
+            "label": "Geo confidence",
+            "status": "warning" if warnings else "ok",
+            "healthy": not warnings,
+            "message": message,
+            "warnings": warnings,
+            "ignore_count": ignore_count,
+            "observe_count": observe_count,
+            "ready_count": ready_count,
+            "unknown_country_rate": unknown_country_rate,
+        }
+
     @staticmethod
     def get_product_sku(ean: str, title: str) -> str:
         """
@@ -1233,9 +1337,9 @@ class BizniWebExporter:
         # Filter out orders with excluded statuses
         excluded_statuses = [
             'Storno',
-            'Platba online - platnosť vypršala',
-            'Platba online - platba zamietnutá',
-            'Čaká na úhradu',
+            'Platba online - platnosĹĄ vyprĹˇala',
+            'Platba online - platba zamietnutĂˇ',
+            'ÄŚakĂˇ na Ăşhradu',
             'GoPay - platebni metoda potvrzena'
         ]
 
@@ -1673,16 +1777,16 @@ class BizniWebExporter:
         """
         excluded_statuses = [
             'Storno',
-            'Platba online - platnosť vypršala',
-            'Platba online - platba zamietnutá',
-            'Čaká na úhradu',
+            'Platba online - platnosĹĄ vyprĹˇala',
+            'Platba online - platba zamietnutĂˇ',
+            'ÄŚakĂˇ na Ăşhradu',
             'GoPay - platebni metoda potvrzena'
         ]
 
         # Statuses for failed payment segmentation (subset of excluded)
         failed_payment_statuses = [
-            'Platba online - platnosť vypršala',
-            'Platba online - platba zamietnutá'
+            'Platba online - platnosĹĄ vyprĹˇala',
+            'Platba online - platba zamietnutĂˇ'
         ]
 
         filtered_orders = []
@@ -1870,9 +1974,9 @@ class BizniWebExporter:
         # Filter out orders with excluded statuses
         excluded_statuses = [
             'Storno',
-            'Platba online - platnosť vypršala',
-            'Platba online - platba zamietnutá',
-            'Čaká na úhradu',
+            'Platba online - platnosĹĄ vyprĹˇala',
+            'Platba online - platba zamietnutĂˇ',
+            'ÄŚakĂˇ na Ăşhradu',
             'GoPay - platebni metoda potvrzena'
         ]
 
@@ -2462,6 +2566,10 @@ class BizniWebExporter:
             fb_campaigns=fb_campaigns,
             total_orders=int(df["order_num"].nunique()) if "order_num" in df.columns else len(orders),
         )
+        source_health.setdefault("qa", {})["geo"] = self._build_geo_qa(
+            country_analysis=country_analysis,
+            geo_profitability=geo_profitability,
+        )
         source_health = self._finalize_source_health(source_health)
 
         # Display aggregated data
@@ -2878,7 +2986,7 @@ class BizniWebExporter:
                 print("Fixed Costs = Packaging + Shipping Subsidy + Fixed Daily Cost | AOV = Avg Order Value | FB/Order = Avg FB Cost per Order")
                 print("="*220)
                 
-                print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Revenue (€)':>12} {'AOV (€)':>8} {'Product (€)':>12} {'Fixed Costs (€)':>14} {'FB Ads (€)':>12} {'Google Ads (€)':>14} {'Total Cost (€)':>14} {'Profit (€)':>12} {'ROI %':>8}")
+                print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Revenue (â‚¬)':>12} {'AOV (â‚¬)':>8} {'Product (â‚¬)':>12} {'Fixed Costs (â‚¬)':>14} {'FB Ads (â‚¬)':>12} {'Google Ads (â‚¬)':>14} {'Total Cost (â‚¬)':>14} {'Profit (â‚¬)':>12} {'ROI %':>8}")
                 print("-"*240)
                 
                 month_orders = 0
@@ -2931,7 +3039,7 @@ class BizniWebExporter:
             print("\n" + "="*220)
             print("MONTHLY SUMMARY")
             print("="*220)
-            print(f"\n{'Month':<12} {'Orders':>8} {'Items':>8} {'Revenue (€)':>12} {'AOV (€)':>8} {'Product (€)':>12} {'Fixed Costs (€)':>14} {'FB Ads (€)':>12} {'Google Ads (€)':>14} {'Total Cost (€)':>14} {'Profit (€)':>12} {'ROI %':>8}")
+            print(f"\n{'Month':<12} {'Orders':>8} {'Items':>8} {'Revenue (â‚¬)':>12} {'AOV (â‚¬)':>8} {'Product (â‚¬)':>12} {'Fixed Costs (â‚¬)':>14} {'FB Ads (â‚¬)':>12} {'Google Ads (â‚¬)':>14} {'Total Cost (â‚¬)':>14} {'Profit (â‚¬)':>12} {'ROI %':>8}")
             print("-"*240)
             
             month_total_orders = 0
@@ -3123,8 +3231,8 @@ class BizniWebExporter:
         }
 
         print(
-            f"New vs returning revenue: new=€{result['summary']['new_revenue']:.2f}, "
-            f"returning=€{result['summary']['returning_revenue']:.2f}"
+            f"New vs returning revenue: new=â‚¬{result['summary']['new_revenue']:.2f}, "
+            f"returning=â‚¬{result['summary']['returning_revenue']:.2f}"
         )
         return result
 
@@ -3229,13 +3337,13 @@ class BizniWebExporter:
 
             result['time_between_orders'] = time_distribution
 
-            # === 2b. TIME BETWEEN ORDERS BY ORDER NUMBER (1st→2nd, 2nd→3rd, etc.) ===
+            # === 2b. TIME BETWEEN ORDERS BY ORDER NUMBER (1stâ†’2nd, 2ndâ†’3rd, etc.) ===
             print("  Analyzing time between orders by order number...")
             time_by_order_num = []
             for order_num in range(2, 7):  # 2nd through 6th order
                 order_transitions = repeat_orders[repeat_orders['customer_order_num'] == order_num]
                 if len(order_transitions) >= 3:  # Min 3 data points
-                    transition_label = f'{order_num-1}→{order_num}'
+                    transition_label = f'{order_num-1}â†’{order_num}'
                     time_by_order_num.append({
                         'transition': transition_label,
                         'order_num': order_num,
@@ -5357,6 +5465,8 @@ class BizniWebExporter:
         country_agg.columns = ['country', 'orders', 'revenue', 'profit']
         country_agg = country_agg.sort_values('revenue', ascending=False)
         country_agg['revenue_pct'] = (country_agg['revenue'] / country_agg['revenue'].sum() * 100).round(1)
+        country_meta = country_agg['orders'].apply(lambda value: self._geo_confidence_payload(value, level="country"))
+        country_agg = pd.concat([country_agg, pd.DataFrame(country_meta.tolist(), index=country_agg.index)], axis=1)
 
         # By city (top 20), prefer delivery city and fallback to invoice city if delivery is missing.
         city_source = geo_df[geo_df['geo_city'].notna()].copy()
@@ -5368,6 +5478,8 @@ class BizniWebExporter:
         city_agg.columns = ['city', 'country', 'orders', 'revenue', 'profit']
         city_agg = city_agg.sort_values(['revenue', 'orders'], ascending=[False, False]).head(20)
         city_agg['revenue_pct'] = (city_agg['revenue'] / geo_df['item_total_without_tax'].sum() * 100).round(1)
+        city_meta = city_agg['orders'].apply(lambda value: self._geo_confidence_payload(value, level="city"))
+        city_agg = pd.concat([city_agg, pd.DataFrame(city_meta.tolist(), index=city_agg.index)], axis=1)
 
         print(f"Geographic analysis complete: {len(country_agg)} countries, showing top 20 cities")
         return country_agg, city_agg
@@ -5404,10 +5516,10 @@ class BizniWebExporter:
             'slovensko': 'sk',
             'czech republic': 'cz',
             'cesko': 'cz',
-            'česko': 'cz',
+            'ÄŤesko': 'cz',
             'hungary': 'hu',
             'madarsko': 'hu',
-            'maďarsko': 'hu',
+            'maÄŹarsko': 'hu',
         }
         order_level['country'] = order_level['country'].replace(alias_map)
         order_level = order_level[order_level['country'].isin(['sk', 'cz', 'hu'])]
@@ -5465,13 +5577,27 @@ class BizniWebExporter:
             lambda row: round((row['revenue'] / row['orders']) if row['orders'] > 0 else 0, 2),
             axis=1
         )
+        geo_meta = geo['orders'].apply(lambda value: self._geo_confidence_payload(value, level="country"))
+        geo = pd.concat([geo, pd.DataFrame(geo_meta.tolist(), index=geo.index)], axis=1)
+        geo['contribution_profit_guarded'] = geo.apply(
+            lambda row: row['contribution_profit'] if not bool(row.get('hide_economics')) else np.nan,
+            axis=1,
+        )
+        geo['contribution_margin_pct_guarded'] = geo.apply(
+            lambda row: row['contribution_margin_pct'] if not bool(row.get('hide_economics')) else np.nan,
+            axis=1,
+        )
+        geo['fb_cpo_guarded'] = geo.apply(
+            lambda row: row['fb_cpo'] if not bool(row.get('hide_economics')) else np.nan,
+            axis=1,
+        )
 
         # Round financial values for display.
-        for col in ['revenue', 'product_cost', 'packaging_cost', 'shipping_subsidy_cost', 'fb_ads_spend', 'contribution_cost', 'contribution_profit']:
+        for col in ['revenue', 'product_cost', 'packaging_cost', 'shipping_subsidy_cost', 'fb_ads_spend', 'contribution_cost', 'contribution_profit', 'contribution_profit_guarded']:
             geo[col] = geo[col].round(2)
 
         geo = geo.sort_values('revenue', ascending=False).reset_index(drop=True)
-        print(f"Geo profitability complete: {len(geo)} countries, unattributed FB spend=€{fb_spend_unattributed:.2f}")
+        print(f"Geo profitability complete: {len(geo)} countries, unattributed FB spend=EUR {fb_spend_unattributed:.2f}")
 
         return {
             'table': geo,
@@ -5995,12 +6121,12 @@ class BizniWebExporter:
             correlations['spend_revenue_correlation'] = correlations['total_ads_revenue']
             correlations['spend_profit_correlation'] = correlations['total_ads_profit']
 
-        # Calculate optimal spend ranges with 10€ increments
+        # Calculate optimal spend ranges with 10â‚¬ increments
         # Group by spend ranges and calculate average orders/revenue
         max_spend = daily_data['fb_spend'].max()
-        # Create bins in 10€ increments up to the max spend
+        # Create bins in 10â‚¬ increments up to the max spend
         spend_bins = list(range(0, int(max_spend) + 20, 10))
-        spend_labels = [f'{spend_bins[i]}-{spend_bins[i+1]}€' for i in range(len(spend_bins) - 1)]
+        spend_labels = [f'{spend_bins[i]}-{spend_bins[i+1]}â‚¬' for i in range(len(spend_bins) - 1)]
         daily_data['fb_spend_range'] = pd.cut(daily_data['fb_spend'], bins=spend_bins, labels=spend_labels, include_lowest=True)
         spend_effectiveness = daily_data.groupby('fb_spend_range', observed=True).agg({
             'orders': 'mean',
@@ -6279,7 +6405,7 @@ class BizniWebExporter:
             for _, row in hourly_orders.iterrows()
         ]
 
-        print(f"Cost Per Order analysis complete. Overall FB CPO: €{result['fb_cpo']:.2f}")
+        print(f"Cost Per Order analysis complete. Overall FB CPO: â‚¬{result['fb_cpo']:.2f}")
         return result
 
     def display_returning_customers_analysis(self, analysis: pd.DataFrame):
@@ -6327,7 +6453,7 @@ class BizniWebExporter:
         print("CUSTOMER LIFETIME VALUE, CAC & RETURN TIME ANALYSIS - WEEKLY AGGREGATION")
         print("="*160)
         
-        print(f"\n{'Week':>10} {'Week Start':>12} {'Customers':>10} {'New':>8} {'Returning':>10} {'Avg CLV (€)':>12} {'Cumulative CLV (€)':>18} {'CAC (€)':>10} {'Avg Return Days':>16} {'Revenue (€)':>12}")
+        print(f"\n{'Week':>10} {'Week Start':>12} {'Customers':>10} {'New':>8} {'Returning':>10} {'Avg CLV (â‚¬)':>12} {'Cumulative CLV (â‚¬)':>18} {'CAC (â‚¬)':>10} {'Avg Return Days':>16} {'Revenue (â‚¬)':>12}")
         print("-"*160)
         
         total_customers = 0
@@ -6376,12 +6502,12 @@ class BizniWebExporter:
         Analyze customers and segment them for email marketing campaigns.
 
         Segments:
-        1. One-time buyers (inactive 30+ days): Bought once with status "Odoslaná",
+        1. One-time buyers (inactive 30+ days): Bought once with status "OdoslanĂˇ",
            order was at least 30 days ago
-        2. Repeat buyers (inactive 90+ days): Bought 2+ times with status "Odoslaná",
+        2. Repeat buyers (inactive 90+ days): Bought 2+ times with status "OdoslanĂˇ",
            last order was 90+ days ago
-        3. Failed payment customers: All orders have status "Platba online - platnosť vypršala"
-           or "Platba online - platba zamietnutá"
+        3. Failed payment customers: All orders have status "Platba online - platnosĹĄ vyprĹˇala"
+           or "Platba online - platba zamietnutĂˇ"
         4. Additional segments discovered from data patterns
 
         Returns dict with DataFrames for each segment
@@ -6398,8 +6524,8 @@ class BizniWebExporter:
         orders_df = df[['order_num', 'customer_email', 'customer_name', 'purchase_datetime',
                         'status_name', revenue_col, 'invoice_city', 'invoice_country']].drop_duplicates(subset=['order_num'])
 
-        # Filter to only "Odoslaná" (shipped) orders for segments 1 and 2
-        shipped_orders = orders_df[orders_df['status_name'] == 'Odoslaná'].copy()
+        # Filter to only "OdoslanĂˇ" (shipped) orders for segments 1 and 2
+        shipped_orders = orders_df[orders_df['status_name'] == 'OdoslanĂˇ'].copy()
 
         # Calculate per-customer stats from shipped orders
         customer_stats = shipped_orders.groupby('customer_email').agg({
@@ -6428,15 +6554,15 @@ class BizniWebExporter:
         one_time_inactive = one_time_inactive.sort_values('days_since_first_order', ascending=False)
         segments['one_time_buyers_30_days'] = {
             'data': one_time_inactive,
-            'description': 'Zákazníci, ktorí nakúpili raz (objednávka "Odoslaná") a od objednávky uplynulo viac ako 30 dní',
+            'description': 'ZĂˇkaznĂ­ci, ktorĂ­ nakĂşpili raz (objednĂˇvka "OdoslanĂˇ") a od objednĂˇvky uplynulo viac ako 30 dnĂ­',
             'description_en': 'Customers who bought once (status "Shipped") and order was 30+ days ago',
             'count': len(one_time_inactive),
-            'email_purpose': 'Re-engagement - motivácia k druhému nákupu',
-            'send_timing': '30-45 dní po prvej objednávke',
+            'email_purpose': 'Re-engagement - motivĂˇcia k druhĂ©mu nĂˇkupu',
+            'send_timing': '30-45 dnĂ­ po prvej objednĂˇvke',
             'send_timing_en': '30-45 days after first order',
             'priority': 3,
-            'discount_suggestion': '15% na druhú objednávku',
-            'email_template': 'Chýbate nám! Tu je 15% zľava na Vašu ďalšiu objednávku.'
+            'discount_suggestion': '15% na druhĂş objednĂˇvku',
+            'email_template': 'ChĂ˝bate nĂˇm! Tu je 15% zÄľava na VaĹˇu ÄŹalĹˇiu objednĂˇvku.'
         }
         print(f"  Segment 1 (One-time buyers, 30+ days inactive): {len(one_time_inactive)} customers")
 
@@ -6449,15 +6575,15 @@ class BizniWebExporter:
         repeat_inactive = repeat_inactive.sort_values('days_since_last_order', ascending=False)
         segments['repeat_buyers_90_days'] = {
             'data': repeat_inactive,
-            'description': 'Zákazníci, ktorí nakúpili 2x a viac (objednávky "Odoslaná") ale posledná objednávka bola pred 90+ dňami',
+            'description': 'ZĂˇkaznĂ­ci, ktorĂ­ nakĂşpili 2x a viac (objednĂˇvky "OdoslanĂˇ") ale poslednĂˇ objednĂˇvka bola pred 90+ dĹami',
             'description_en': 'Customers who bought 2+ times (status "Shipped") but last order was 90+ days ago',
             'count': len(repeat_inactive),
-            'email_purpose': 'Win-back - návrat verných zákazníkov',
-            'send_timing': 'Ihneď - sú v riziku odchodu',
+            'email_purpose': 'Win-back - nĂˇvrat vernĂ˝ch zĂˇkaznĂ­kov',
+            'send_timing': 'IhneÄŹ - sĂş v riziku odchodu',
             'send_timing_en': 'Immediately - at risk of churning',
             'priority': 2,
             'discount_suggestion': '20% + doprava zadarmo',
-            'email_template': 'Váš obľúbený parfum čaká! Špeciálna ponuka pre verných zákazníkov.'
+            'email_template': 'VĂˇĹˇ obÄľĂşbenĂ˝ parfum ÄŤakĂˇ! Ĺ peciĂˇlna ponuka pre vernĂ˝ch zĂˇkaznĂ­kov.'
         }
         print(f"  Segment 2 (Repeat buyers, 90+ days inactive): {len(repeat_inactive)} customers")
 
@@ -6467,7 +6593,7 @@ class BizniWebExporter:
 
         if all_orders_raw:
             # Extract customer emails from failed payment orders
-            failed_statuses = ['Platba online - platnosť vypršala', 'Platba online - platba zamietnutá']
+            failed_statuses = ['Platba online - platnosĹĄ vyprĹˇala', 'Platba online - platba zamietnutĂˇ']
 
             failed_orders = []
             all_customer_orders = {}  # Track all orders per customer email
@@ -6514,15 +6640,15 @@ class BizniWebExporter:
 
         segments['failed_payment_only'] = {
             'data': failed_payment_customers,
-            'description': 'Zákazníci, ktorí nedokončili žiadnu objednávku - všetky ich objednávky majú stav "Platba online - platnosť vypršala" alebo "Platba online - platba zamietnutá"',
+            'description': 'ZĂˇkaznĂ­ci, ktorĂ­ nedokonÄŤili Ĺľiadnu objednĂˇvku - vĹˇetky ich objednĂˇvky majĂş stav "Platba online - platnosĹĄ vyprĹˇala" alebo "Platba online - platba zamietnutĂˇ"',
             'description_en': 'Customers who never completed any order - all their orders have failed payment status',
             'count': len(failed_payment_customers),
-            'email_purpose': 'Recovery - pomoc s dokončením objednávky',
-            'send_timing': '24-48 hodín po neúspešnej platbe',
+            'email_purpose': 'Recovery - pomoc s dokonÄŤenĂ­m objednĂˇvky',
+            'send_timing': '24-48 hodĂ­n po neĂşspeĹˇnej platbe',
             'send_timing_en': '24-48 hours after failed payment',
             'priority': 1,
             'discount_suggestion': '10% + pomoc s platbou',
-            'email_template': 'Vaša objednávka čaká! Pomôžeme Vám dokončiť nákup.'
+            'email_template': 'VaĹˇa objednĂˇvka ÄŤakĂˇ! PomĂ´Ĺľeme VĂˇm dokonÄŤiĹĄ nĂˇkup.'
         }
         print(f"  Segment 3 (Failed payment only): {len(failed_payment_customers)} customers")
 
@@ -6538,15 +6664,15 @@ class BizniWebExporter:
         high_value_one_time = high_value_one_time.sort_values('total_revenue', ascending=False)
         segments['high_value_one_time'] = {
             'data': high_value_one_time,
-            'description': f'Zákazníci s jednou objednávkou nad priemernou hodnotu (€{avg_order_value:.2f}), ktorí sa nevrátili',
-            'description_en': f'One-time buyers who spent above average (€{avg_order_value:.2f}) but never returned',
+            'description': f'ZĂˇkaznĂ­ci s jednou objednĂˇvkou nad priemernou hodnotu (â‚¬{avg_order_value:.2f}), ktorĂ­ sa nevrĂˇtili',
+            'description_en': f'One-time buyers who spent above average (â‚¬{avg_order_value:.2f}) but never returned',
             'count': len(high_value_one_time),
-            'email_purpose': 'VIP re-engagement - osobnejší prístup k hodnotným zákazníkom',
-            'send_timing': '14-21 dní po prvej objednávke',
+            'email_purpose': 'VIP re-engagement - osobnejĹˇĂ­ prĂ­stup k hodnotnĂ˝m zĂˇkaznĂ­kom',
+            'send_timing': '14-21 dnĂ­ po prvej objednĂˇvke',
             'send_timing_en': '14-21 days after first order',
             'priority': 2,
-            'discount_suggestion': '15% + osobná správa',
-            'email_template': 'Ďakujeme za veľkú objednávku! Pripravili sme pre Vás exkluzívnu ponuku.'
+            'discount_suggestion': '15% + osobnĂˇ sprĂˇva',
+            'email_template': 'ÄŽakujeme za veÄľkĂş objednĂˇvku! Pripravili sme pre VĂˇs exkluzĂ­vnu ponuku.'
         }
         print(f"  Segment 4 (High-value one-time): {len(high_value_one_time)} customers")
 
@@ -6558,15 +6684,15 @@ class BizniWebExporter:
         recent_buyers = recent_buyers.sort_values('days_since_last_order', ascending=True)
         segments['recent_buyers_14_60_days'] = {
             'data': recent_buyers,
-            'description': 'Zákazníci, ktorí nakúpili pred 14-60 dňami - ideálny čas na pripomenutie',
+            'description': 'ZĂˇkaznĂ­ci, ktorĂ­ nakĂşpili pred 14-60 dĹami - ideĂˇlny ÄŤas na pripomenutie',
             'description_en': 'Customers who bought 14-60 days ago - perfect time for a reminder',
             'count': len(recent_buyers),
             'email_purpose': 'Reminder - pripomenutie produktu, cross-sell',
-            'send_timing': 'Segmentovať podľa dní a posielať priebežne',
+            'send_timing': 'SegmentovaĹĄ podÄľa dnĂ­ a posielaĹĄ priebeĹľne',
             'send_timing_en': 'Segment by days and send continuously',
             'priority': 3,
-            'discount_suggestion': 'Doprava zadarmo nad X€',
-            'email_template': 'Nezabudnite na doplnenie zásob! Máme pre Vás novinky.'
+            'discount_suggestion': 'Doprava zadarmo nad Xâ‚¬',
+            'email_template': 'Nezabudnite na doplnenie zĂˇsob! MĂˇme pre VĂˇs novinky.'
         }
         print(f"  Segment 5 (Recent 14-60 days): {len(recent_buyers)} customers")
 
@@ -6577,15 +6703,15 @@ class BizniWebExporter:
         vip_customers = vip_customers.sort_values('total_revenue', ascending=False)
         segments['vip_customers'] = {
             'data': vip_customers,
-            'description': 'VIP zákazníci - nakúpili 3x a viac, najvernejší zákazníci',
+            'description': 'VIP zĂˇkaznĂ­ci - nakĂşpili 3x a viac, najvernejĹˇĂ­ zĂˇkaznĂ­ci',
             'description_en': 'VIP customers - bought 3+ times, most loyal customers',
             'count': len(vip_customers),
-            'email_purpose': 'Loyalty - špeciálne ponuky, poďakovanie, program lojality',
-            'send_timing': 'Pravidelne 1x mesačne',
+            'email_purpose': 'Loyalty - ĹˇpeciĂˇlne ponuky, poÄŹakovanie, program lojality',
+            'send_timing': 'Pravidelne 1x mesaÄŤne',
             'send_timing_en': 'Regularly once a month',
             'priority': 4,
-            'discount_suggestion': 'VIP zľava 15-20%, prednostný prístup k novinkám',
-            'email_template': 'Exkluzívne pre VIP: Nová vôňa ešte pred ostatnými!'
+            'discount_suggestion': 'VIP zÄľava 15-20%, prednostnĂ˝ prĂ­stup k novinkĂˇm',
+            'email_template': 'ExkluzĂ­vne pre VIP: NovĂˇ vĂ´Ĺa eĹˇte pred ostatnĂ˝mi!'
         }
         print(f"  Segment 6 (VIP 3+ orders): {len(vip_customers)} customers")
 
@@ -6598,15 +6724,15 @@ class BizniWebExporter:
         churning_customers = churning_customers.sort_values('days_since_last_order', ascending=False)
         segments['churning_customers'] = {
             'data': churning_customers,
-            'description': 'Zákazníci v riziku odchodu - nakúpili 2x+, posledná objednávka pred 60-90 dňami',
+            'description': 'ZĂˇkaznĂ­ci v riziku odchodu - nakĂşpili 2x+, poslednĂˇ objednĂˇvka pred 60-90 dĹami',
             'description_en': 'At-risk customers - bought 2+ times, last order 60-90 days ago',
             'count': len(churning_customers),
-            'email_purpose': 'Prevention - zabrániť strate zákazníka',
-            'send_timing': 'Ihneď - posledná šanca pred stratou',
+            'email_purpose': 'Prevention - zabrĂˇniĹĄ strate zĂˇkaznĂ­ka',
+            'send_timing': 'IhneÄŹ - poslednĂˇ Ĺˇanca pred stratou',
             'send_timing_en': 'Immediately - last chance before losing them',
             'priority': 1,
-            'discount_suggestion': '20% + limitovaná ponuka',
-            'email_template': 'Všimli sme si, že dlhšie nenakupujete. Máme pre Vás špeciálnu ponuku!'
+            'discount_suggestion': '20% + limitovanĂˇ ponuka',
+            'email_template': 'VĹˇimli sme si, Ĺľe dlhĹˇie nenakupujete. MĂˇme pre VĂˇs ĹˇpeciĂˇlnu ponuku!'
         }
         print(f"  Segment 7 (Churning 60-90 days): {len(churning_customers)} customers")
 
@@ -6617,11 +6743,11 @@ class BizniWebExporter:
         long_dormant = long_dormant.sort_values('total_revenue', ascending=False)
         segments['long_dormant'] = {
             'data': long_dormant,
-            'description': 'Dlhodobo neaktívni zákazníci - posledná objednávka pred 180+ dňami',
+            'description': 'Dlhodobo neaktĂ­vni zĂˇkaznĂ­ci - poslednĂˇ objednĂˇvka pred 180+ dĹami',
             'description_en': 'Long-term dormant customers - last order 180+ days ago',
             'count': len(long_dormant),
-            'email_purpose': 'Re-activation - agresívna zľava alebo špeciálna ponuka',
-            'send_timing': 'Ihneď',
+            'email_purpose': 'Re-activation - agresĂ­vna zÄľava alebo ĹˇpeciĂˇlna ponuka',
+            'send_timing': 'IhneÄŹ',
             'send_timing_en': 'Immediately',
             'priority': 5,
             'discount_suggestion': '20-30%'
@@ -6672,15 +6798,15 @@ class BizniWebExporter:
 
         segments['sample_not_converted'] = {
             'data': sample_not_converted,
-            'description': 'Zákazníci, ktorí kúpili vzorky ale ešte nekúpili plnú veľkosť (7-60 dní)',
+            'description': 'ZĂˇkaznĂ­ci, ktorĂ­ kĂşpili vzorky ale eĹˇte nekĂşpili plnĂş veÄľkosĹĄ (7-60 dnĂ­)',
             'description_en': 'Customers who bought samples but never bought full-size products (7-60 days ago)',
             'count': len(sample_not_converted),
-            'email_purpose': 'Conversion - konverzia zo vzoriek na plnú veľkosť',
-            'send_timing': '7-14 dní po nákupe vzoriek',
+            'email_purpose': 'Conversion - konverzia zo vzoriek na plnĂş veÄľkosĹĄ',
+            'send_timing': '7-14 dnĂ­ po nĂˇkupe vzoriek',
             'send_timing_en': '7-14 days after sample purchase',
             'priority': 1,
-            'discount_suggestion': '10-15% na prvú plnú veľkosť',
-            'email_template': 'Ktorá vôňa sa Vám najviac páčila? Teraz so zľavou X%!'
+            'discount_suggestion': '10-15% na prvĂş plnĂş veÄľkosĹĄ',
+            'email_template': 'KtorĂˇ vĂ´Ĺa sa VĂˇm najviac pĂˇÄŤila? Teraz so zÄľavou X%!'
         }
         print(f"  Segment 9 (Sample not converted): {len(sample_not_converted)} customers")
 
@@ -6693,15 +6819,15 @@ class BizniWebExporter:
         optimal_reorder = optimal_reorder.sort_values('days_since_last_order', ascending=True)
         segments['optimal_reorder_timing'] = {
             'data': optimal_reorder,
-            'description': 'Zákazníci v optimálnom čase na opätovný nákup (15-25 dní od poslednej objednávky)',
+            'description': 'ZĂˇkaznĂ­ci v optimĂˇlnom ÄŤase na opĂ¤tovnĂ˝ nĂˇkup (15-25 dnĂ­ od poslednej objednĂˇvky)',
             'description_en': 'Customers at optimal reorder timing (15-25 days since last order)',
             'count': len(optimal_reorder),
-            'email_purpose': 'Reorder - pripomenutie na doplnenie zásob',
-            'send_timing': 'Ihneď (sú v optimálnom okne)',
+            'email_purpose': 'Reorder - pripomenutie na doplnenie zĂˇsob',
+            'send_timing': 'IhneÄŹ (sĂş v optimĂˇlnom okne)',
             'send_timing_en': 'Immediately (within optimal window)',
             'priority': 2,
             'discount_suggestion': '5-10% alebo doprava zadarmo',
-            'email_template': 'Dochádza Vám parfum do prania? Objednajte teraz!'
+            'email_template': 'DochĂˇdza VĂˇm parfum do prania? Objednajte teraz!'
         }
         print(f"  Segment 10 (Optimal reorder 15-25 days): {len(optimal_reorder)} customers")
 
@@ -6713,15 +6839,15 @@ class BizniWebExporter:
         new_customers = new_customers.sort_values('first_order_date', ascending=False)
         segments['new_customers_welcome'] = {
             'data': new_customers,
-            'description': 'Noví zákazníci - prvá objednávka v posledných 7 dňoch',
+            'description': 'NovĂ­ zĂˇkaznĂ­ci - prvĂˇ objednĂˇvka v poslednĂ˝ch 7 dĹoch',
             'description_en': 'New customers - first order within last 7 days',
             'count': len(new_customers),
-            'email_purpose': 'Welcome - privítanie, tipy na použitie produktu',
-            'send_timing': '3 dni po doručení',
+            'email_purpose': 'Welcome - privĂ­tanie, tipy na pouĹľitie produktu',
+            'send_timing': '3 dni po doruÄŤenĂ­',
             'send_timing_en': '3 days after delivery',
             'priority': 3,
-            'discount_suggestion': 'Žiadna zľava, len hodnota',
-            'email_template': 'Ako sa Vám páči váš nový parfum? Tipy na použitie...'
+            'discount_suggestion': 'Ĺ˝iadna zÄľava, len hodnota',
+            'email_template': 'Ako sa VĂˇm pĂˇÄŤi vĂˇĹˇ novĂ˝ parfum? Tipy na pouĹľitie...'
         }
         print(f"  Segment 11 (New customers 0-7 days): {len(new_customers)} customers")
 
@@ -6734,15 +6860,15 @@ class BizniWebExporter:
         second_order_timing = second_order_timing.sort_values('days_since_first_order', ascending=True)
         segments['second_order_encouragement'] = {
             'data': second_order_timing,
-            'description': 'Zákazníci pripravení na druhý nákup (8-14 dní po prvej objednávke)',
+            'description': 'ZĂˇkaznĂ­ci pripravenĂ­ na druhĂ˝ nĂˇkup (8-14 dnĂ­ po prvej objednĂˇvke)',
             'description_en': 'Customers ready for second order (8-14 days after first purchase)',
             'count': len(second_order_timing),
-            'email_purpose': 'Second order - motivácia k druhému nákupu',
-            'send_timing': '10-12 dní po prvej objednávke',
+            'email_purpose': 'Second order - motivĂˇcia k druhĂ©mu nĂˇkupu',
+            'send_timing': '10-12 dnĂ­ po prvej objednĂˇvke',
             'send_timing_en': '10-12 days after first order',
             'priority': 2,
-            'discount_suggestion': '10% na druhú objednávku',
-            'email_template': 'Páčil sa Vám náš produkt? Získajte 10% na ďalší nákup!'
+            'discount_suggestion': '10% na druhĂş objednĂˇvku',
+            'email_template': 'PĂˇÄŤil sa VĂˇm nĂˇĹˇ produkt? ZĂ­skajte 10% na ÄŹalĹˇĂ­ nĂˇkup!'
         }
         print(f"  Segment 12 (Second order timing 8-14 days): {len(second_order_timing)} customers")
 
@@ -6879,3 +7005,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

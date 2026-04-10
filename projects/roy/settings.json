@@ -19,6 +19,18 @@
       }
     ]
   },
+  "geo_confidence": {
+    "country": {
+      "ignore_orders_below": 5,
+      "observe_orders_below": 20,
+      "chart_min_orders": 5
+    },
+    "city": {
+      "ignore_orders_below": 3,
+      "observe_orders_below": 10,
+      "chart_min_orders": 3
+    }
+  },
   "manual_fb_ads_total": 690,
   "manual_google_ads_total": 9945.95,
   "exclude_zero_price_label_patterns": [

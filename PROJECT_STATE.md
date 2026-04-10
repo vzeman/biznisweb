@@ -101,7 +101,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Add geo confidence scoring and low-sample guardrails so country-level reporting does not present tiny samples as strategic market insights.
+- Normalize shipping sign convention across both projects so `shipping` / `shipping_subsidy` has one clear meaning in export, dashboard labels, and profitability math.
 
 ## 9) Change Log
 
@@ -198,6 +198,32 @@ Bootstrap entrypoints:
 - Verified with:
   - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py`
   - `python export_orders.py --project vevo --from-date 2025-05-03 --to-date 2026-04-09`
+
+### 2026-04-10 (geo confidence guardrails)
+- Added project-level `geo_confidence` settings for VEVO and ROY with separate country/city thresholds.
+- Export layer now computes confidence metadata per country/city:
+  - `confidence_status`
+  - `confidence_score`
+  - `low_sample`
+  - `hide_economics`
+- Geo profitability output now exposes guarded fields:
+  - `contribution_profit_guarded`
+  - `contribution_margin_pct_guarded`
+  - `fb_cpo_guarded`
+- Source health now includes `qa.geo` summary with:
+  - ready / observe / ignore counts
+  - unknown country rate
+  - warning list
+- Modern dashboard geography section now renders:
+  - Geo confidence guardrails panel
+  - confidence badges for country rows
+  - guarded geo profitability chart/table values (`N/A` on low-sample markets)
+- Added CI guardrails so geo QA metadata and the dashboard geo-confidence panel cannot disappear silently.
+- Verification target:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py scripts\\security_ci.py`
+  - `python scripts\\security_ci.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
   - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-09`
 - Verification outcome:
   - VEVO full-history report `data\\vevo\\report_20250503-20260409.html` contains all three cohort chart IDs

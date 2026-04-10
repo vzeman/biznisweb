@@ -20,6 +20,18 @@
       }
     ]
   },
+  "geo_confidence": {
+    "country": {
+      "ignore_orders_below": 5,
+      "observe_orders_below": 20,
+      "chart_min_orders": 5
+    },
+    "city": {
+      "ignore_orders_below": 3,
+      "observe_orders_below": 10,
+      "chart_min_orders": 3
+    }
+  },
   "product_expenses_file": "product_expenses.json",
   "currency_rates_to_eur": {
     "EUR": 1.0,

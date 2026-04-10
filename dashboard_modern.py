@@ -459,6 +459,24 @@ def _library_tile_html(
     )
 
 
+def _geo_confidence_badge_html(status: Any) -> str:
+    normalized = str(status or "observe").strip().lower()
+    if normalized not in {"ready", "observe", "ignore"}:
+        normalized = "observe"
+    labels = {
+        "ready": ("Ready", "Pripravene"),
+        "observe": ("Observe", "Sledovat"),
+        "ignore": ("Ignore", "Ignorovat"),
+    }
+    en_label, sk_label = labels[normalized]
+    return (
+        f'<span class="confidence-badge {escape(normalized)}">'
+        f'<span class="lang-en">{escape(en_label)}</span>'
+        f'<span class="lang-sk hidden">{escape(sk_label)}</span>'
+        '</span>'
+    )
+
+
 def generate_modern_dashboard(
     date_agg: pd.DataFrame,
     items_agg: pd.DataFrame,
@@ -511,7 +529,11 @@ def generate_modern_dashboard(
     series = _series(date_agg)
     kpi_payload = _kpis(cfo_kpi_payload)
     cost_mix = _cost_mix(date_agg)
-    cities = _top_rows(city_analysis, ["city", "country", "orders", "revenue", "profit"], limit=8)
+    cities = _top_rows(
+        city_analysis,
+        ["city", "country", "orders", "revenue", "profit", "confidence_status", "confidence_label", "low_sample"],
+        limit=8,
+    )
     products = _top_rows(
         product_margins.sort_values(["profit", "revenue"], ascending=[False, False]) if product_margins is not None and not product_margins.empty else product_margins,
         ["product", "sku", "orders", "revenue", "profit", "margin_pct"],
@@ -527,12 +549,32 @@ def generate_modern_dashboard(
         ["product", "trend", "revenue_growth_pct", "qty_growth_pct", "total_revenue"],
         limit=10,
     )
-    countries = _top_rows(country_analysis, ["country", "orders", "revenue"], limit=6)
-    geo_rows = _top_rows(
-        (geo_profitability or {}).get("table"),
-        ["country", "orders", "revenue", "contribution_profit", "contribution_margin_pct", "fb_cpo"],
+    countries = _top_rows(
+        country_analysis,
+        ["country", "orders", "revenue", "confidence_status", "confidence_label", "low_sample"],
         limit=6,
     )
+    geo_rows = _top_rows(
+        (geo_profitability or {}).get("table"),
+        [
+            "country",
+            "orders",
+            "revenue",
+            "contribution_profit",
+            "contribution_profit_guarded",
+            "contribution_margin_pct",
+            "contribution_margin_pct_guarded",
+            "fb_cpo",
+            "fb_cpo_guarded",
+            "confidence_status",
+            "confidence_label",
+            "confidence_score",
+            "low_sample",
+            "hide_economics",
+        ],
+        limit=6,
+    )
+    geo_qa = (((source_health or {}).get("qa") or {}).get("geo") or {})
     source_rows = list(((source_health or {}).get("sources") or {}).values())
     qa_rows = []
     for key, value in (((source_health or {}).get("qa") or {}).items()):
@@ -1159,9 +1201,28 @@ def generate_modern_dashboard(
     ) or '<tr><td colspan="5"><span class="lang-en">No product trend data available.</span><span class="lang-sk hidden">Produktové trendy nie sú dostupné.</span></td></tr>'
 
     geo_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('country') or 'Unknown')).upper()}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('contribution_profit')):,.2f}</td><td>{_num(row.get('contribution_margin_pct')):.1f}%</td><td>€{_num(row.get('fb_cpo')):,.2f}</td></tr>"
+        (
+            "<tr>"
+            f"<td><div class=\"table-label-stack\"><strong>{escape(str(row.get('country') or 'Unknown')).upper()}</strong>"
+            f"{_geo_confidence_badge_html(row.get('confidence_status'))}"
+            f"<div class=\"muted-note\"><span class=\"lang-en\">Score {int(round(_num(row.get('confidence_score'))))}%</span><span class=\"lang-sk hidden\">Skore {int(round(_num(row.get('confidence_score'))))}%</span></div>"
+            "</div></td>"
+            f"<td>{int(round(_num(row.get('orders'))))}</td>"
+            f"<td>{_format_library_tile_value(row.get('revenue'), kind='currency')}</td>"
+            f"<td>{_format_library_tile_value(row.get('contribution_profit_guarded'), kind='currency')}</td>"
+            f"<td>{_format_library_tile_value(row.get('contribution_margin_pct_guarded'), kind='percent')}</td>"
+            f"<td>{_format_library_tile_value(row.get('fb_cpo_guarded'), kind='currency')}</td>"
+            "</tr>"
+        )
         for row in geo_rows
-    ) or '<tr><td colspan="6"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupná.</span></td></tr>'
+    ) or '<tr><td colspan="6"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupna.</span></td></tr>'
+    geo_warning_items = list(geo_qa.get("warnings") or [])
+    geo_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in geo_warning_items)
+    geo_warning_block_html = (
+        f'<ul class="warning-list">{geo_warning_items_html}</ul>'
+        if geo_warning_items_html
+        else '<p class="muted-note"><span class="lang-en">No low-sample geo warnings for the current report window.</span><span class="lang-sk hidden">V aktualnom okne nie su ziadne geo warningy pre malu vzorku.</span></p>'
+    )
 
     customer_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('customer') or 'Unknown'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{_num(row.get('revenue_pct')):.1f}%</td></tr>"
@@ -1504,8 +1565,14 @@ def generate_modern_dashboard(
         .health-status.good {{ color:#11633f; background: rgba(31,157,102,.12); }}
         .health-status.warn {{ color:#a75300; background: rgba(255,138,31,.12); }}
         .health-status.bad {{ color:#a22d40; background: rgba(207,80,96,.12); }}
+        .confidence-badge {{ display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }}
+        .confidence-badge.ready {{ color:#11633f; background: rgba(31,157,102,.12); }}
+        .confidence-badge.observe {{ color:#a75300; background: rgba(255,138,31,.12); }}
+        .confidence-badge.ignore {{ color:#a22d40; background: rgba(207,80,96,.12); }}
         .warning-list {{ margin: 16px 0 0; padding-left: 18px; }}
         .warning-list li {{ margin: 8px 0; color: var(--muted); }}
+        .muted-note {{ color: var(--muted); font-size: 12px; line-height: 1.55; }}
+        .table-label-stack {{ display:flex; flex-direction:column; gap:8px; }}
         table {{ width:100%; border-collapse: collapse; }}
         th, td {{ text-align:left; padding: 11px 8px; border-bottom: 1px solid rgba(234,223,206,.85); font-size: 13px; }}
         th {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
@@ -2089,6 +2156,16 @@ def generate_modern_dashboard(
                             <div class="chart-shell compact"><canvas id="countryChart"></canvas></div>
                         </div>
                     </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Geo confidence guardrails</span><span class="lang-sk hidden">Geo confidence guardrails</span></h3><p><span class="lang-en">Small-sample countries stay visible, but low-confidence economics should not drive strategic market decisions.</span><span class="lang-sk hidden">Krajiny s malou vzorkou ostavaju viditelne, ale ich ekonomika nema sluzit ako strategicky insight.</span></p></div></div>
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Ready countries</span><span class="lang-sk hidden">Pripravene krajiny</span></small><strong>{int(round(_num(geo_qa.get("ready_count"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Observe countries</span><span class="lang-sk hidden">Sledovane krajiny</span></small><strong>{int(round(_num(geo_qa.get("observe_count"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Ignore countries</span><span class="lang-sk hidden">Ignorovane krajiny</span></small><strong>{int(round(_num(geo_qa.get("ignore_count"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Unknown country rate</span><span class="lang-sk hidden">Podiel neznamej krajiny</span></small><strong>{_format_mini_value_html(geo_qa.get("unknown_country_rate"), kind="percent")}</strong></div>
+                        </div>
+                        {geo_warning_block_html}
+                    </div>
                     <div class="panel chart-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Geo profitability chart</span><span class="lang-sk hidden">Graf geo profitability</span></h3><p><span class="lang-en">Country-level revenue, contribution and CPO in one view.</span><span class="lang-sk hidden">Krajiny: trzby, contribution a CPO v jednom pohlade.</span></p></div></div>
                         <div class="chart-shell"><canvas id="geoProfitabilityChart"></canvas></div>
@@ -2605,14 +2682,14 @@ def generate_modern_dashboard(
             }}
             new Chart(document.getElementById('cityChart'), {{
                 type: 'bar',
-                data: {{ labels: DATA.cities.map(x => x.city || 'Unknown'), datasets: [{{ label: 'Revenue', data: DATA.cities.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.78)', borderRadius: 8 }}] }},
+                data: {{ labels: DATA.cities.map(x => `${{x.city || 'Unknown'}}${{x.low_sample ? ' *' : ''}}`), datasets: [{{ label: 'Revenue', data: DATA.cities.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.78)', borderRadius: 8 }}] }},
                 options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
             }});
             const countryOpts = baseOptions();
             countryOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
             new Chart(document.getElementById('countryChart'), {{
                 data: {{
-                    labels: DATA.countries.map(x => x.country || 'Unknown'),
+                    labels: DATA.countries.map(x => `${{(x.country || 'Unknown').toUpperCase()}}${{x.low_sample ? ' *' : ''}}`),
                     datasets: [
                         {{ type: 'bar', label: 'Revenue', data: DATA.countries.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
                         {{ type: 'line', label: 'Orders', data: DATA.countries.map(x => Number(x.orders || 0)), borderColor: '#4766ff', tension: .35, borderWidth: 2.5, pointRadius: 3, yAxisID: 'y1' }},
@@ -2625,11 +2702,11 @@ def generate_modern_dashboard(
                 geoOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
                 new Chart(document.getElementById('geoProfitabilityChart'), {{
                     data: {{
-                        labels: DATA.geo_rows.map(x => (x.country || 'Unknown').toUpperCase()),
+                        labels: DATA.geo_rows.map(x => `${{(x.country || 'Unknown').toUpperCase()}}${{x.low_sample ? ' *' : ''}}`),
                         datasets: [
                             {{ type: 'bar', label: 'Revenue', data: DATA.geo_rows.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'bar', label: 'Contribution', data: DATA.geo_rows.map(x => Number(x.contribution_profit || 0)), backgroundColor: 'rgba(31,157,102,.58)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'FB CPO', data: DATA.geo_rows.map(x => Number(x.fb_cpo || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'bar', label: 'Contribution', data: DATA.geo_rows.map(x => x.contribution_profit_guarded == null ? null : Number(x.contribution_profit_guarded || 0)), backgroundColor: 'rgba(31,157,102,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'FB CPO', data: DATA.geo_rows.map(x => x.fb_cpo_guarded == null ? null : Number(x.fb_cpo_guarded || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: geoOpts,
