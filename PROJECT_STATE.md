@@ -116,32 +116,37 @@ Bootstrap entrypoints:
   - pushed digest: `sha256:5eaf52e9d4700f0499d19fc3709313d9dcbc9e5e610287b1c58c0535df35ba20`
   - local workstation currently has no AWS CLI credentials, so direct post-build ECS/log re-verification was not possible from this session.
 - Live dashboard groundwork now exists without changing the existing email-report flow:
-  - reporting runs now write `report_latest.html` and `dashboard_payload_latest.json` alongside the dated artifacts,
-  - the modern HTML report now embeds its dashboard payload in a dedicated JSON script tag for reliable sidecar extraction,
+  - reporting runs write `report_latest.html` and `dashboard_payload_latest.json` alongside the dated artifacts,
+  - the modern HTML report embeds its dashboard payload in a dedicated JSON script tag for reliable sidecar extraction,
+  - `daily_report_runner.py` uploads stable S3 `latest/` copies for `report_latest.html` and `dashboard_payload_latest.json` when S3 upload is enabled.
 - Shared ad incrementality analysis is now wired into both Roy and Vevo reports:
-  - reports now include an `Ad impact verdict` block and an `Incrementality comparison table` in the marketing section,
+  - reports include an `Ad impact verdict` block and an `Incrementality comparison table` in the marketing section,
   - the shared analytics layer first tries `ads on vs ads off` and, if no clean ad-off days exist, falls back to `higher spend vs lower spend` matched-weekday comparisons,
-  - incrementality data is also embedded in the dashboard JSON payload for future live-dashboard views.
+  - incrementality data is embedded in the dashboard JSON payload and is now also consumable by the live dashboard server.
+- `live_dashboard_server.py` is now period-aware:
+  - `/dashboard/<project>` serves a dedicated read-only online dashboard instead of raw report HTML,
+  - `/api/<project>/latest?period=7d|30d|full` resolves the correct snapshot from the latest report family,
+  - `/report/<project>?period=7d|30d|full` keeps the raw generated HTML reports available separately,
+  - latest artifact resolution now also supports tagged `report_latest__*.html` and `dashboard_payload_latest__*.json` files.
 - Verified locally on side-by-side smoke exports for `2026-02-15..2026-04-09` with `--skip-email --output-tag incrementality_smoke2`:
   - Roy generated `data/roy/report_20260215-20260409__incrementality_smoke2.html` with 2 incrementality rows and primary verdict `Scale`,
   - Vevo generated `data/vevo/report_20260215-20260409__incrementality_smoke2.html` with 2 incrementality rows and primary verdict `Cut / reduce`,
   - both runs still completed the normal HTML/payload pipeline without breaking the email-report generation path.
-- Current state:
-  - Roy and Vevo can now show a direct decision layer for ad effectiveness even when campaigns are always on,
-  - the nightly mail flow was not changed; the new logic only enriches the HTML/dashboard content for future runs.
-- Next exact step:
-  - surface the same incrementality layer inside the live online dashboard UI and add a date-range selector for explicit period-vs-period ad decision reviews.
-  - `daily_report_runner.py` uploads stable S3 `latest/` copies for `report_latest.html` and `dashboard_payload_latest.json` when S3 upload is enabled,
-  - `live_dashboard_server.py` can serve `/dashboard/<project>` from the latest generated HTML and `/api/<project>/latest` from the latest JSON snapshot.
-- Verified locally on `2026-04-09`:
-  - `python -m py_compile reporting_core\\contracts.py dashboard_modern.py export_orders.py daily_report_runner.py live_dashboard_server.py`
-  - `python daily_report_runner.py --project roy --from-date 2026-04-08 --to-date 2026-04-08 --skip-email --output-tag live_smoke`
-  - created tagged live artifacts:
-    - `data/roy/report_latest__live_smoke.html`
-    - `data/roy/dashboard_payload_latest__live_smoke.json`
-  - localhost smoke server check:
+- Verified locally on `2026-04-10`:
+  - `python -m py_compile live_dashboard_server.py`
+  - localhost smoke server check on `127.0.0.1:8787`:
     - `GET /` -> `200`
-    - `GET /dashboard/roy` -> `200`
+    - `GET /dashboard/roy?period=30d` -> `200` with `data-marker="live-dashboard-app"`
+    - `GET /api/roy/latest?period=30d` -> `200` with `current_key=30d`
+    - `GET /report/roy?period=30d` -> `200`
+    - `GET /api/roy/latest?period=7d` -> `200` with `current_key=7d`
+    - `GET /api/vevo/latest?period=30d` -> `200` with `current_key=30d`
+- Current state:
+  - Roy and Vevo now have a read-only live dashboard entry point that can switch between `7D`, `30D`, and `FULL` snapshots,
+  - the same incrementality decision layer is visible in both the generated report and the live dashboard path,
+  - the nightly mail flow remains unchanged.
+- Next exact step:
+  - extend the live dashboard beyond static latest snapshots into an explicit interactive date-range review flow for period-vs-period ad decisions and broader online dashboard sections.
 
 ## 6) Integration Notes (External Systems)
 
