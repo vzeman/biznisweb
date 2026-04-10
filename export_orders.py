@@ -4893,12 +4893,17 @@ class BizniWebExporter:
         # Cohort CAC is estimated as monthly FB spend / new customers acquired in that month.
         daily_spend_df = (
             df.assign(_d=pd.to_datetime(df['purchase_date']).dt.normalize())
-            .groupby('_d')[['fb_ads_daily_spend']]
+            .groupby('_d')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
             .first()
             .reset_index()
         )
         daily_spend_df['cohort_month'] = daily_spend_df['_d'].dt.to_period('M').astype(str)
         monthly_fb_spend = daily_spend_df.groupby('cohort_month')['fb_ads_daily_spend'].sum().to_dict()
+        monthly_google_spend = daily_spend_df.groupby('cohort_month')['google_ads_daily_spend'].sum().to_dict()
+        monthly_paid_spend = {
+            month: float(monthly_fb_spend.get(month, 0.0)) + float(monthly_google_spend.get(month, 0.0))
+            for month in set(monthly_fb_spend.keys()) | set(monthly_google_spend.keys())
+        }
 
         first_order_map = (
             orders_df.sort_values(['customer_email', 'purchase_datetime'])
@@ -4914,6 +4919,7 @@ class BizniWebExporter:
         customer_orders['days_since_first'] = (
             customer_orders['purchase_datetime'] - customer_orders['first_purchase_datetime']
         ).dt.days
+        analysis_end = customer_orders['purchase_datetime'].max().normalize()
 
         cohort_rows = []
         for cohort_month, group in first_order_map.groupby('cohort_month'):
@@ -4949,6 +4955,109 @@ class BizniWebExporter:
             })
 
         cohort_payback = pd.DataFrame(cohort_rows).sort_values('cohort_month') if cohort_rows else pd.DataFrame()
+
+        # ---- 4b) cohort-normalized CAC / LTV / payback by horizon
+        cohort_unit_rows = []
+        cohort_horizons = (30, 60, 90, 180)
+        for cohort_month, group in first_order_map.groupby('cohort_month'):
+            cohort_customers = group.index.tolist()
+            cohort_new_customers = len(cohort_customers)
+            if cohort_new_customers == 0:
+                continue
+
+            cohort_fb_spend = float(monthly_fb_spend.get(cohort_month, 0.0))
+            cohort_google_spend = float(monthly_google_spend.get(cohort_month, 0.0))
+            cohort_paid_spend = float(monthly_paid_spend.get(cohort_month, 0.0))
+            cohort_fb_cac = (cohort_fb_spend / cohort_new_customers) if cohort_new_customers > 0 else 0.0
+            cohort_blended_cac = (cohort_paid_spend / cohort_new_customers) if cohort_new_customers > 0 else 0.0
+
+            cohort_first_dates = group['first_purchase_datetime'].sort_values()
+            cohort_start_date = cohort_first_dates.min().normalize()
+            cohort_latest_first_date = cohort_first_dates.max().normalize()
+            cohort_age_days = int((analysis_end - cohort_latest_first_date).days)
+            cohort_customer_orders = customer_orders[
+                customer_orders['customer_email'].isin(cohort_customers)
+            ].copy()
+
+            row = {
+                'cohort_month': cohort_month,
+                'new_customers': cohort_new_customers,
+                'cohort_start_date': cohort_start_date.strftime('%Y-%m-%d'),
+                'cohort_latest_first_date': cohort_latest_first_date.strftime('%Y-%m-%d'),
+                'cohort_age_days': cohort_age_days,
+                'cohort_fb_spend': round(cohort_fb_spend, 2),
+                'cohort_google_spend': round(cohort_google_spend, 2),
+                'cohort_paid_spend': round(cohort_paid_spend, 2),
+                'cohort_fb_cac': round(cohort_fb_cac, 2),
+                'cohort_blended_cac': round(cohort_blended_cac, 2),
+            }
+
+            for horizon in cohort_horizons:
+                mature = cohort_age_days >= horizon
+                horizon_orders = cohort_customer_orders[cohort_customer_orders['days_since_first'] <= horizon].copy()
+                revenue_ltv = (float(horizon_orders[revenue_col].sum()) / cohort_new_customers) if mature else np.nan
+                contribution_ltv_h = (float(horizon_orders['pre_ad_contribution'].sum()) / cohort_new_customers) if mature else np.nan
+
+                revenue_ltv_cac_h = np.nan
+                contribution_ltv_cac_h = np.nan
+                if mature and cohort_blended_cac > 0:
+                    revenue_ltv_cac_h = revenue_ltv / cohort_blended_cac
+                    contribution_ltv_cac_h = contribution_ltv_h / cohort_blended_cac
+
+                payback_days_list = []
+                if mature and cohort_blended_cac > 0:
+                    for customer in cohort_customers:
+                        c_orders = horizon_orders[horizon_orders['customer_email'] == customer].sort_values('purchase_datetime')
+                        if c_orders.empty:
+                            continue
+                        c_orders = c_orders[['days_since_first', 'pre_ad_contribution']].copy()
+                        c_orders['cum_contribution'] = c_orders['pre_ad_contribution'].cumsum()
+                        reached = c_orders[c_orders['cum_contribution'] >= cohort_blended_cac]
+                        if not reached.empty:
+                            payback_days_list.append(int(reached.iloc[0]['days_since_first']))
+
+                recovered_customers_h = len(payback_days_list) if mature and cohort_blended_cac > 0 else np.nan
+                recovery_rate_h = (
+                    recovered_customers_h / cohort_new_customers * 100
+                    if mature and cohort_blended_cac > 0 else np.nan
+                )
+
+                row.update({
+                    f'revenue_ltv_{horizon}d': round(revenue_ltv, 2) if pd.notna(revenue_ltv) else np.nan,
+                    f'contribution_ltv_{horizon}d': round(contribution_ltv_h, 2) if pd.notna(contribution_ltv_h) else np.nan,
+                    f'revenue_ltv_cac_{horizon}d': round(revenue_ltv_cac_h, 2) if pd.notna(revenue_ltv_cac_h) else np.nan,
+                    f'contribution_ltv_cac_{horizon}d': round(contribution_ltv_cac_h, 2) if pd.notna(contribution_ltv_cac_h) else np.nan,
+                    f'payback_recovered_{horizon}d': int(recovered_customers_h) if pd.notna(recovered_customers_h) else np.nan,
+                    f'payback_recovery_{horizon}d_pct': round(recovery_rate_h, 1) if pd.notna(recovery_rate_h) else np.nan,
+                    f'avg_payback_{horizon}d_days': round(float(np.mean(payback_days_list)), 1) if payback_days_list else np.nan,
+                    f'median_payback_{horizon}d_days': round(float(np.median(payback_days_list)), 1) if payback_days_list else np.nan,
+                })
+
+            cohort_unit_rows.append(row)
+
+        cohort_unit_economics = (
+            pd.DataFrame(cohort_unit_rows).sort_values('cohort_month').reset_index(drop=True)
+            if cohort_unit_rows else pd.DataFrame()
+        )
+
+        mature_weighted_summary = {}
+        if not cohort_unit_economics.empty:
+            weight_col = cohort_unit_economics['new_customers'].fillna(0)
+            for horizon in cohort_horizons:
+                ratio_col = f'contribution_ltv_cac_{horizon}d'
+                recovery_col = f'payback_recovery_{horizon}d_pct'
+                valid_ratio = cohort_unit_economics[ratio_col].notna()
+                valid_recovery = cohort_unit_economics[recovery_col].notna()
+                if valid_ratio.any():
+                    mature_weighted_summary[f'mature_{horizon}d_contribution_ltv_cac'] = round(
+                        float((cohort_unit_economics.loc[valid_ratio, ratio_col] * weight_col.loc[valid_ratio]).sum() / weight_col.loc[valid_ratio].sum()),
+                        2,
+                    )
+                if valid_recovery.any():
+                    mature_weighted_summary[f'mature_{horizon}d_payback_recovery_pct'] = round(
+                        float((cohort_unit_economics.loc[valid_recovery, recovery_col] * weight_col.loc[valid_recovery]).sum() / weight_col.loc[valid_recovery].sum()),
+                        1,
+                    )
 
         # ---- 7) contribution by basket size
         def basket_bucket(items_count):
@@ -5165,8 +5274,10 @@ class BizniWebExporter:
                 'margin_stability_index': round(margin_stability_index, 1),
                 'sku_pareto_80_count': sku_pareto_80_count,
                 'sku_total_count': int(len(sku_pareto)),
+                **mature_weighted_summary,
             },
             'cohort_payback': cohort_payback,
+            'cohort_unit_economics': cohort_unit_economics,
             'basket_contribution': basket_contrib,
             'sku_pareto': sku_pareto,
             'attach_rate': attach_rate,
