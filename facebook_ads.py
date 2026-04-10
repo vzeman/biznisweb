@@ -401,17 +401,20 @@ class FacebookAdsClient:
 
                         # Extract cost per action
                         cost_per_action_types = data.get('cost_per_action_type', [])
-                        cost_per_conversion = 0
-                        cost_per_purchase = 0
+                        reported_cost_per_conversion = 0
+                        reported_cost_per_purchase = 0
 
                         for cpa in cost_per_action_types:
                             action_type = cpa.get('action_type', '')
                             value = float(cpa.get('value', 0))
 
                             if action_type == 'offsite_conversion.fb_pixel_purchase':
-                                cost_per_purchase = value
+                                reported_cost_per_purchase = value
                             elif 'purchase' in action_type or 'conversion' in action_type:
-                                cost_per_conversion = value if cost_per_conversion == 0 else cost_per_conversion
+                                reported_cost_per_conversion = value if reported_cost_per_conversion == 0 else reported_cost_per_conversion
+
+                        cost_per_conversion = (spend / conversions_count) if conversions_count > 0 else 0
+                        cost_per_purchase = (spend / purchases_count) if purchases_count > 0 else 0
 
                         # Calculate conversion rate
                         conversion_rate = (conversions_count / clicks * 100) if clicks > 0 else 0
@@ -432,13 +435,18 @@ class FacebookAdsClient:
                             'frequency': float(data.get('frequency', 0)),
                             'unique_clicks': int(data.get('unique_clicks', 0)),
                             'cost_per_unique_click': float(data.get('cost_per_unique_click', 0)),
+                            'platform_conversions': conversions_count,
+                            'platform_purchases': purchases_count,
                             'conversions': conversions_count,
                             'purchases': purchases_count,
                             'add_to_cart': add_to_cart_count,
                             'conversion_rate': conversion_rate,
                             'purchase_rate': purchase_rate,
                             'cost_per_conversion': cost_per_conversion,
-                            'cost_per_purchase': cost_per_purchase
+                            'cost_per_purchase': cost_per_purchase,
+                            'reported_cost_per_conversion': reported_cost_per_conversion,
+                            'reported_cost_per_purchase': reported_cost_per_purchase,
+                            'cost_per_platform_conversion': cost_per_conversion,
                         })
 
             # Sort by spend descending
