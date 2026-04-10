@@ -1173,6 +1173,79 @@ def generate_modern_dashboard(
         f"<li>{escape(item)}</li>"
         for item in attribution_warnings
     ) or '<li><span class="lang-en">Attribution QA passed for this period.</span><span class="lang-sk hidden">Attribution QA pre toto obdobie presla bez warningov.</span></li>'
+    attribution_coverage_ratio = _maybe_num(attribution_qa.get("coverage_ratio"))
+    attribution_oversubscription_ratio = _maybe_num(attribution_qa.get("oversubscription_ratio"))
+    attribution_campaign_rows = int(round(_num(attribution_qa.get("campaign_rows"))))
+    attribution_cpa_mismatch_count = int(round(_num(attribution_qa.get("platform_cost_mismatch_count"))))
+    attribution_banner_severity: Optional[str] = None
+    attribution_banner_title_en = ""
+    attribution_banner_title_sk = ""
+    attribution_banner_summary_en = ""
+    attribution_banner_summary_sk = ""
+    if attribution_warnings:
+        severe_coverage = (
+            attribution_coverage_ratio is None
+            or attribution_coverage_ratio < 0.75
+            or attribution_coverage_ratio > 1.25
+        )
+        severe_oversubscription = (
+            attribution_oversubscription_ratio is not None
+            and attribution_oversubscription_ratio > 1.10
+        )
+        missing_campaign_spend = any("Campaign-level Facebook spend is missing" in item for item in attribution_warnings)
+        empty_campaign_table = any("Campaign attribution table is empty" in item for item in attribution_warnings)
+        severe_cpa_mismatch = attribution_cpa_mismatch_count > 0
+        is_critical = (
+            missing_campaign_spend
+            or empty_campaign_table
+            or severe_coverage
+            or severe_oversubscription
+            or severe_cpa_mismatch
+        )
+        attribution_banner_severity = "critical" if is_critical else "warning"
+        if is_critical:
+            attribution_banner_title_en = "Attribution warning"
+            attribution_banner_title_sk = "Varovanie atribucie"
+            attribution_banner_summary_en = (
+                "Campaign attribution is not fully trustworthy for this period. Treat ROAS, campaign CPO and campaign output as directional until coverage is fixed."
+            )
+            attribution_banner_summary_sk = (
+                "Atribucia kampani nie je pre toto obdobie plne doveryhodna. ROAS, kampanove CPO a vykon kampani ber ako orientacne, kym sa coverage neopraví."
+            )
+        else:
+            attribution_banner_title_en = "Attribution needs review"
+            attribution_banner_title_sk = "Atribuciu treba preverit"
+            attribution_banner_summary_en = (
+                "Campaign attribution produced warnings. Top-level business KPIs remain usable, but campaign-level comparisons need extra caution."
+            )
+            attribution_banner_summary_sk = (
+                "Atribucia kampani ma warningy. Hlavne business KPI su pouzitelne, ale kampanove porovnania treba citat opatrnejsie."
+            )
+    attribution_banner_html = ""
+    if attribution_banner_severity:
+        attribution_banner_html = (
+            f'<section class="hero-alert {escape(attribution_banner_severity)}">'
+            '<div class="hero-alert-copy">'
+            f'<div class="hero-alert-badge {escape(attribution_banner_severity)}">'
+            f'<span class="lang-en">{escape(attribution_banner_title_en)}</span>'
+            f'<span class="lang-sk hidden">{escape(attribution_banner_title_sk)}</span>'
+            '</div>'
+            f'<h3><span class="lang-en">{escape(attribution_banner_title_en)}</span>'
+            f'<span class="lang-sk hidden">{escape(attribution_banner_title_sk)}</span></h3>'
+            f'<p><span class="lang-en">{escape(attribution_banner_summary_en)}</span>'
+            f'<span class="lang-sk hidden">{escape(attribution_banner_summary_sk)}</span></p>'
+            '</div>'
+            '<div class="hero-alert-metrics">'
+            f'<div class="hero-alert-metric"><small><span class="lang-en">Coverage ratio</span><span class="lang-sk hidden">Coverage ratio</span></small><strong>{_format_mini_value_html(attribution_coverage_ratio, kind="multiple")}</strong></div>'
+            f'<div class="hero-alert-metric"><small><span class="lang-en">Oversubscription</span><span class="lang-sk hidden">Oversubscription</span></small><strong>{_format_mini_value_html(attribution_oversubscription_ratio, kind="multiple")}</strong></div>'
+            f'<div class="hero-alert-metric"><small><span class="lang-en">CPA mismatches</span><span class="lang-sk hidden">CPA nezrovnalosti</span></small><strong>{attribution_cpa_mismatch_count}</strong></div>'
+            f'<div class="hero-alert-metric"><small><span class="lang-en">Campaign rows</span><span class="lang-sk hidden">Pocet kampani</span></small><strong>{attribution_campaign_rows}</strong></div>'
+            '</div>'
+            '<ul class="warning-list">'
+            f'{attribution_warning_items_html}'
+            '</ul>'
+            '</section>'
+        )
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1240,6 +1313,20 @@ def generate_modern_dashboard(
         .hero-kpi {{ padding: 18px; border-radius: 20px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.16); }}
         .hero-kpi small {{ display:block; color: var(--muted); margin-bottom: 8px; }}
         .hero-kpi strong {{ font-size: 28px; }}
+        .hero-alert {{ margin-top: 18px; padding: 20px 22px; border-radius: 24px; border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--panel); }}
+        .hero-alert.warning {{ background: linear-gradient(180deg, rgba(255,252,247,.98), rgba(255,243,227,.96)); border-color: rgba(255,138,31,.20); }}
+        .hero-alert.critical {{ background: linear-gradient(180deg, rgba(255,250,250,.98), rgba(255,238,241,.96)); border-color: rgba(207,80,96,.20); }}
+        .hero-alert-copy {{ display:flex; flex-direction:column; gap: 8px; margin-bottom: 16px; }}
+        .hero-alert-copy h3 {{ margin: 0; font-size: 20px; letter-spacing: -.03em; }}
+        .hero-alert-copy p {{ margin: 0; color: var(--muted); line-height: 1.6; max-width: 920px; }}
+        .hero-alert-badge {{ display:inline-flex; align-self:flex-start; padding: 8px 12px; border-radius: 999px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }}
+        .hero-alert-badge.warning {{ color:#a75300; background: rgba(255,138,31,.12); }}
+        .hero-alert-badge.critical {{ color:#a22d40; background: rgba(207,80,96,.14); }}
+        .hero-alert-metrics {{ display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }}
+        .hero-alert-metric {{ padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.72); border:1px solid rgba(255,138,31,.12); }}
+        .hero-alert.critical .hero-alert-metric {{ border-color: rgba(207,80,96,.14); }}
+        .hero-alert-metric small {{ display:block; color: var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }}
+        .hero-alert-metric strong {{ font-size: 22px; }}
         .section {{ margin-top: 24px; }}
         .section-head h2 {{ margin:0; font-size: 26px; letter-spacing: -.03em; }}
         .section-head p {{ margin: 6px 0 14px; color: var(--muted); line-height: 1.55; max-width: 760px; }}
@@ -1297,7 +1384,7 @@ def generate_modern_dashboard(
         th {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .lang-en.hidden, .lang-sk.hidden {{ display:none !important; }}
         @media (max-width: 1280px) {{ .layout {{ grid-template-columns: 1fr; }} .sidebar {{ position: static; height:auto; }} }}
-        @media (max-width: 1080px) {{ .hero, .grid-2, .kpi-grid, .health-grid, .mini-grid {{ grid-template-columns: 1fr; }} }}
+        @media (max-width: 1080px) {{ .hero, .grid-2, .kpi-grid, .health-grid, .mini-grid, .hero-alert-metrics {{ grid-template-columns: 1fr; }} }}
     </style>
 </head>
 <body>
@@ -1354,6 +1441,7 @@ def generate_modern_dashboard(
                         </div>
                     </div>
                 </section>
+                {attribution_banner_html}
 
                 <section class="section">
                     <div class="section-head">
