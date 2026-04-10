@@ -776,3 +776,42 @@ Next exact step:
   - CI passes with the new shell-level guard in place.
 - Next exact step:
   - start the Vevo sample funnel model as the next shared business-modeling expansion after the P0 reporting hardening is now visible in the shell.
+### 2026-04-10 (Vevo sample funnel model)
+- Added a Vevo sample funnel model in `export_orders.py` to track first-order sample-entry customers into repeat and full-size conversion windows.
+- Entry cohort definition is now explicit:
+  - first order contains at least one sample item
+  - first order does not contain a full-size item
+- The model computes and exports:
+  - repeat conversion by 7/14/30/60/90 day windows
+  - any full-size conversion by 7/14/30/60/90 day windows
+  - 200ml conversion by 7/14/30/60/90 day windows
+  - 500ml conversion by 7/14/30/60/90 day windows
+  - top sample entry-product quality rows ranked by downstream conversion
+- Added the sample funnel payload pass-through to:
+  - `html_report_generator.py`
+  - `dashboard_modern.py`
+- Added a dedicated sample funnel block in the main Customers section of the modern dashboard:
+  - entry customers
+  - repeat 30d
+  - full-size 30d
+  - full-size 60d
+  - median days to full-size
+  - top entry product
+  - sample funnel window chart
+  - entry-product quality table
+- Added customer-library drilldowns in the modern dashboard:
+  - `custSampleFunnelWindowChart`
+  - `custSampleEntryProductChart`
+- Hardened the sample funnel implementation so it uses robust revenue-field fallback selection instead of assuming item-level revenue columns exist in every export/sub-period bundle.
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO March 2026 export completed successfully
+  - sample funnel CSV outputs were generated for the 7d and full March bundles
+  - `data\\vevo\\report_20260301-20260331.html` contains:
+    - `sampleFunnelChart`
+    - `custSampleFunnelWindowChart`
+    - `custSampleEntryProductChart`
+- Next exact step:
+  - start the Roy bundle/accessory model as the next business-model expansion after the Vevo sample funnel model is now live in the modern dashboard.
