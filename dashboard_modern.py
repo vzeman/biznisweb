@@ -533,6 +533,19 @@ def generate_modern_dashboard(
         limit=6,
     )
     source_rows = list(((source_health or {}).get("sources") or {}).values())
+    qa_rows = []
+    for key, value in (((source_health or {}).get("qa") or {}).items()):
+        if not isinstance(value, dict):
+            continue
+        qa_rows.append(
+            {
+                "key": key,
+                "label": value.get("label") or key,
+                "status": value.get("status") or "unknown",
+                "healthy": value.get("healthy", value.get("status") == "ok"),
+                "message": value.get("message") or "-",
+            }
+        )
     embedded_period_reports = embedded_period_reports or {}
     customer_top_rows = _top_rows(
         (customer_concentration or {}).get("top_10_customers"),
@@ -1140,10 +1153,11 @@ def generate_modern_dashboard(
         for row in segment_rows
     ) or '<tr><td colspan="5"><span class="lang-en">No email segmentation data available.</span><span class="lang-sk hidden">Email segmentácia nie je dostupná.</span></td></tr>'
 
+    health_cards = source_rows + qa_rows
     health_html = "".join(
-        f'<div class="health-item"><div class="health-title">{escape(str(row.get("label") or row.get("key") or "Source"))}</div><div class="health-status {("good" if row.get("healthy") else ("warn" if row.get("status") == "degraded" else "bad"))}">{escape(str(row.get("status") or "unknown"))}</div><p>{escape(str(row.get("message") or row.get("mode") or "-"))}</p></div>'
-        for row in source_rows
-    ) or '<div class="health-item"><div class="health-title"><span class="lang-en">Source health</span><span class="lang-sk hidden">Stav zdrojov</span></div><div class="health-status good">ok</div><p><span class="lang-en">No source warnings attached to this run.</span><span class="lang-sk hidden">K tomuto behu nie sú pripojené žiadne varovania zdrojov.</span></p></div>'
+        f'<div class="health-item"><div class="health-title">{escape(str(row.get("label") or row.get("key") or "Source"))}</div><div class="health-status {("good" if row.get("healthy") else ("warn" if row.get("status") in {"warning", "degraded"} else "bad"))}">{escape(str(row.get("status") or "unknown"))}</div><p>{escape(str(row.get("message") or row.get("mode") or "-"))}</p></div>'
+        for row in health_cards
+    ) or '<div class="health-item"><div class="health-title"><span class="lang-en">Source health</span><span class="lang-sk hidden">Stav zdrojov</span></div><div class="health-status good">ok</div><p><span class="lang-en">No source warnings attached to this run.</span><span class="lang-sk hidden">K tomuto behu nie su pripojene ziadne varovania zdrojov.</span></p></div>'
 
     period_switcher_html = _period_switcher_html(period_switcher)
     refund_summary = (refunds_analysis or {}).get("summary", {})
@@ -1153,6 +1167,12 @@ def generate_modern_dashboard(
     avg_days_between = _maybe_num(cohort_summary.get("avg_days_between_orders"))
     top_10_share = _num((customer_concentration or {}).get("top_10_pct_revenue_share"))
     top_20_share = _num((customer_concentration or {}).get("top_20_pct_revenue_share"))
+    attribution_qa = (((source_health or {}).get("qa") or {}).get("attribution") or {})
+    attribution_warnings = [str(item) for item in list(attribution_qa.get("warnings") or []) if str(item).strip()]
+    attribution_warning_items_html = "".join(
+        f"<li>{escape(item)}</li>"
+        for item in attribution_warnings
+    ) or '<li><span class="lang-en">Attribution QA passed for this period.</span><span class="lang-sk hidden">Attribution QA pre toto obdobie presla bez warningov.</span></li>'
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1270,6 +1290,8 @@ def generate_modern_dashboard(
         .health-status.good {{ color:#11633f; background: rgba(31,157,102,.12); }}
         .health-status.warn {{ color:#a75300; background: rgba(255,138,31,.12); }}
         .health-status.bad {{ color:#a22d40; background: rgba(207,80,96,.12); }}
+        .warning-list {{ margin: 16px 0 0; padding-left: 18px; }}
+        .warning-list li {{ margin: 8px 0; color: var(--muted); }}
         table {{ width:100%; border-collapse: collapse; }}
         th, td {{ text-align:left; padding: 11px 8px; border-bottom: 1px solid rgba(234,223,206,.85); font-size: 13px; }}
         th {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
@@ -1513,17 +1535,28 @@ def generate_modern_dashboard(
                             </table>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">FB spend reconciliation</span><span class="lang-sk hidden">FB spend reconciliation</span></h3><p><span class="lang-en">Daily-source spend versus campaign-source spend from the original reconciliation check.</span><span class="lang-sk hidden">Denný source spend oproti campaign source spendu z povodnej reconciliation kontroly.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">FB spend reconciliation</span><span class="lang-sk hidden">FB spend reconciliation</span></h3><p><span class="lang-en">Daily-source spend versus campaign-source spend from the original reconciliation check.</span><span class="lang-sk hidden">Denny source spend oproti campaign source spendu z povodnej reconciliation kontroly.</span></p></div></div>
                             <table>
                                 <thead><tr><th><span class="lang-en">Metric</span><span class="lang-sk hidden">Metrika</span></th><th><span class="lang-en">Value</span><span class="lang-sk hidden">Hodnota</span></th></tr></thead>
                                 <tbody>
-                                    <tr><td><span class="lang-en">Daily source spend</span><span class="lang-sk hidden">Daily source spend</span></td><td>â‚¬{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('daily_source_spend')):,.2f}</td></tr>
-                                    <tr><td><span class="lang-en">Campaign source spend</span><span class="lang-sk hidden">Campaign source spend</span></td><td>â‚¬{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('campaign_source_spend')):,.2f}</td></tr>
-                                    <tr><td><span class="lang-en">Difference</span><span class="lang-sk hidden">Rozdiel</span></td><td>â‚¬{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('difference')):,.2f}</td></tr>
+                                    <tr><td><span class="lang-en">Daily source spend</span><span class="lang-sk hidden">Denny source spend</span></td><td>&euro;{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('daily_source_spend')):,.2f}</td></tr>
+                                    <tr><td><span class="lang-en">Campaign source spend</span><span class="lang-sk hidden">Campaign source spend</span></td><td>&euro;{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('campaign_source_spend')):,.2f}</td></tr>
+                                    <tr><td><span class="lang-en">Difference</span><span class="lang-sk hidden">Rozdiel</span></td><td>&euro;{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('difference')):,.2f}</td></tr>
                                     <tr><td><span class="lang-en">Difference %</span><span class="lang-sk hidden">Rozdiel %</span></td><td>{_num(((cost_per_order or {}).get('fb_spend_reconciliation') or {}).get('difference_pct')):.2f}%</td></tr>
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Attribution QA guardrails</span><span class="lang-sk hidden">Attribution QA guardrails</span></h3><p><span class="lang-en">Coverage and oversubscription checks that catch attribution fallback problems early.</span><span class="lang-sk hidden">Kontroly coverage a oversubscription, ktore skoro zachytia problemy s attribution fallbackom.</span></p></div></div>
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Coverage ratio</span><span class="lang-sk hidden">Coverage ratio</span></small><strong>{_format_mini_value_html(attribution_qa.get("coverage_ratio"), kind="multiple")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Oversubscription</span><span class="lang-sk hidden">Oversubscription</span></small><strong>{_format_mini_value_html(attribution_qa.get("oversubscription_ratio"), kind="multiple")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Campaign rows</span><span class="lang-sk hidden">Pocet kampani</span></small><strong>{int(round(_num(attribution_qa.get("campaign_rows"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">CPA mismatches</span><span class="lang-sk hidden">CPA nezrovnalosti</span></small><strong>{int(round(_num(attribution_qa.get("platform_cost_mismatch_count"))))}</strong></div>
+                        </div>
+                        <ul class="warning-list">{attribution_warning_items_html}</ul>
                     </div>
 
                     <div class="grid-2" style="margin-top:18px;">

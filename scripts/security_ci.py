@@ -74,6 +74,16 @@ def main() -> int:
         )
         require(
             export_orders,
+            "_build_attribution_qa",
+            "export_orders.py must build attribution QA guardrails before report export.",
+        )
+        require(
+            export_orders,
+            "campaign_attribution_summary",
+            "export_orders.py must keep campaign attribution summary metadata.",
+        )
+        require(
+            export_orders,
             "\"is_partial\"",
             "export_orders.py must persist partial-data state in source health metadata.",
         )
@@ -86,6 +96,11 @@ def main() -> int:
             html_report_generator + dashboard_modern,
             "Partial Data",
             "HTML rendering layer must expose explicit partial-data status for generated reports.",
+        )
+        require(
+            dashboard_modern,
+            "Attribution QA guardrails",
+            "Modern dashboard must surface attribution QA warnings explicitly.",
         )
         require(
             read(".github/workflows/observability-check.yml"),

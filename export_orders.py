@@ -614,17 +614,134 @@ class BizniWebExporter:
         return entry
 
     @staticmethod
+    def _safe_float(value: Any) -> Optional[float]:
+        try:
+            if pd.isna(value):
+                return None
+        except TypeError:
+            pass
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _build_attribution_qa(
+        cls,
+        *,
+        cost_per_order: Optional[Dict[str, Any]],
+        fb_campaigns: Optional[List[Dict[str, Any]]],
+        total_orders: int,
+    ) -> Dict[str, Any]:
+        reconciliation = ((cost_per_order or {}).get("fb_spend_reconciliation") or {})
+        summary = ((cost_per_order or {}).get("campaign_attribution_summary") or {})
+        campaign_rows = list((cost_per_order or {}).get("campaign_attribution") or [])
+        daily_source_spend = cls._safe_float(summary.get("daily_source_spend"))
+        if daily_source_spend is None:
+            daily_source_spend = cls._safe_float(reconciliation.get("daily_source_spend"))
+        campaign_source_spend = cls._safe_float(summary.get("campaign_source_spend"))
+        if campaign_source_spend is None:
+            campaign_source_spend = cls._safe_float(reconciliation.get("campaign_source_spend"))
+        coverage_ratio = cls._safe_float(summary.get("coverage_ratio"))
+        if coverage_ratio is None:
+            coverage_ratio = cls._safe_float(reconciliation.get("coverage_ratio"))
+        estimated_orders_total = cls._safe_float(summary.get("estimated_orders_total"))
+        oversubscription_ratio = cls._safe_float(summary.get("oversubscription_ratio"))
+        warnings: List[str] = []
+
+        if (daily_source_spend or 0) > 0 and (campaign_source_spend is None or campaign_source_spend <= 0):
+            warnings.append("Campaign-level Facebook spend is missing while daily Facebook spend exists.")
+        elif coverage_ratio is None and (daily_source_spend or 0) > 0:
+            warnings.append("Campaign spend coverage ratio is unavailable for a period with Facebook spend.")
+        elif coverage_ratio is not None and (coverage_ratio < 0.90 or coverage_ratio > 1.10):
+            warnings.append(
+                f"Campaign spend coverage ratio is {coverage_ratio:.2f}x. Expected range is 0.90x-1.10x."
+            )
+
+        if total_orders > 0 and not campaign_rows and (daily_source_spend or 0) > 0:
+            warnings.append("Campaign attribution table is empty although Facebook daily spend exists.")
+        if oversubscription_ratio is not None and oversubscription_ratio > 1.05:
+            warnings.append(
+                f"Attributed campaign orders sum to {oversubscription_ratio:.2f}x of total orders. Attribution fallback is likely overstating campaign output."
+            )
+
+        platform_rows_checked = 0
+        platform_cost_mismatch_count = 0
+        for row in fb_campaigns or []:
+            spend = cls._safe_float(row.get("spend"))
+            platform_conversions = cls._safe_float(row.get("platform_conversions", row.get("conversions")))
+            platform_cpa = cls._safe_float(
+                row.get("cost_per_platform_conversion", row.get("cost_per_conversion"))
+            )
+            if spend is None:
+                continue
+            if platform_conversions is None or platform_conversions <= 0:
+                continue
+            platform_rows_checked += 1
+            expected_cpa = spend / platform_conversions
+            if platform_cpa is None or abs(expected_cpa - platform_cpa) > 0.05:
+                platform_cost_mismatch_count += 1
+
+        if platform_cost_mismatch_count > 0:
+            warnings.append(
+                f"{platform_cost_mismatch_count} campaign row(s) have platform CPA that does not match spend/platform conversions."
+            )
+
+        status = "warning" if warnings else "ok"
+        message = (
+            "Campaign attribution QA passed: coverage, attribution totals, and platform CPA are within tolerance."
+            if not warnings
+            else warnings[0]
+        )
+        return {
+            "key": "attribution",
+            "label": "Campaign Attribution QA",
+            "status": status,
+            "healthy": not warnings,
+            "message": message,
+            "warnings": warnings,
+            "coverage_ratio": round(coverage_ratio, 4) if coverage_ratio is not None else None,
+            "oversubscription_ratio": round(oversubscription_ratio, 4) if oversubscription_ratio is not None else None,
+            "daily_source_spend": round(daily_source_spend, 2) if daily_source_spend is not None else None,
+            "campaign_source_spend": round(campaign_source_spend, 2) if campaign_source_spend is not None else None,
+            "estimated_orders_total": round(estimated_orders_total, 1) if estimated_orders_total is not None else None,
+            "total_orders": int(total_orders),
+            "campaign_rows": len(campaign_rows),
+            "platform_rows_checked": platform_rows_checked,
+            "platform_cost_mismatch_count": platform_cost_mismatch_count,
+            "attribution_method": summary.get("attribution_method") or "unknown",
+        }
+
+    @staticmethod
     def _finalize_source_health(source_health: Dict[str, Any]) -> Dict[str, Any]:
         sources = list((source_health.get("sources") or {}).values())
         degraded = [source["label"] for source in sources if source.get("status") in {"warning", "error"}]
-        source_health["overall_status"] = "partial" if degraded else "full"
+        qa_checks = list((source_health.get("qa") or {}).values())
+        qa_warnings = [check.get("label") or check.get("key") or "QA" for check in qa_checks if check.get("status") == "warning"]
+        if degraded:
+            overall_status = "partial"
+        elif qa_warnings:
+            overall_status = "warning"
+        else:
+            overall_status = "full"
+        source_health["overall_status"] = overall_status
         source_health["is_partial"] = bool(degraded)
         source_health["partial_sources"] = degraded
+        source_health["qa_status"] = "warning" if qa_warnings else "ok"
+        source_health["qa_warnings"] = qa_warnings
         if degraded:
             source_health["summary"] = (
                 "Partial data: "
                 + ", ".join(degraded)
                 + " did not load cleanly in this run. Metrics depending on these sources may be incomplete or zero-filled."
+            )
+        elif qa_warnings:
+            source_health["summary"] = (
+                "Data sources loaded, but QA warnings were raised for "
+                + ", ".join(qa_warnings)
+                + ". Treat attribution-style metrics with caution."
             )
         else:
             source_health["summary"] = "All enabled external sources loaded successfully for this run."
@@ -2075,7 +2192,6 @@ class BizniWebExporter:
                 message="Weather enrichment is not configured for this project/runtime.",
                 healthy=True,
             )
-        source_health = self._finalize_source_health(source_health)
 
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(df, date_agg, clv_return_time_analysis)
@@ -2093,6 +2209,12 @@ class BizniWebExporter:
             fb_campaigns,
             reference_total_revenue=financial_metrics.get('total_revenue')
         )
+        source_health.setdefault("qa", {})["attribution"] = self._build_attribution_qa(
+            cost_per_order=cost_per_order,
+            fb_campaigns=fb_campaigns,
+            total_orders=int(df["order_num"].nunique()) if "order_num" in df.columns else len(orders),
+        )
+        source_health = self._finalize_source_health(source_health)
 
         # Display aggregated data
         self.display_aggregated_data(date_product_agg, date_agg, month_agg)

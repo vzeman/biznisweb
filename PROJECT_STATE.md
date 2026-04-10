@@ -727,3 +727,27 @@ Next exact step:
   - VEVO shell `Google CPO` now shows `N/A`,
   - ROY shell economics cards show real values and keep numeric Google CPO,
   - no remaining `null` hydration symptoms were found in generated HTML for weekday / attach-rate / geo consumer labels during targeted checks.
+- Follow-up hardening completed:
+  - added explicit attribution QA metadata into `source_health.qa.attribution`,
+  - QA now evaluates campaign spend coverage, oversubscription and platform CPA arithmetic mismatches,
+  - `source_health.overall_status` now escalates to `warning` when QA warnings exist even if raw sources loaded cleanly,
+  - modern dashboard now surfaces attribution QA twice:
+    - as a health card in the source health grid,
+    - as a dedicated marketing panel (`Attribution QA guardrails`) with coverage, oversubscription, campaign-row count and CPA mismatch count,
+  - fixed mojibake / bad currency rendering inside the modern marketing section (`&euro;`, ASCII-safe SK copy for reconciliation text),
+  - added CI assertions so regressions fail if:
+    - attribution QA builder is removed from export,
+    - campaign attribution summary disappears,
+    - dashboard stops rendering the attribution QA panel.
+- Verified with:
+  - `python -m py_compile dashboard_modern.py export_orders.py facebook_ads.py scripts\\security_ci.py`
+  - `python scripts\\security_ci.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO `data_quality_20260301-20260331.json` now contains attribution QA metadata with `qa_status=ok`,
+  - ROY `data_quality_20260301-20260331.json` now contains attribution QA metadata with `qa_status=warning`,
+  - VEVO and ROY modern reports render the new QA panel and reconciliation values with proper euro symbols,
+  - ROY now explicitly warns in dashboard that campaign-level Facebook spend coverage is missing while daily spend exists.
+- Next exact step:
+  - add thresholded attribution warning banners to the hero/executive shell so severe coverage or oversubscription issues are visible before the user reaches the marketing section.
