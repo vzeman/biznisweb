@@ -606,7 +606,8 @@ Next exact step:
   - final inline dashboard script parses successfully in Node
   - standalone library containers and new chart ids are present in data/vevo/report_20260301-20260331__test2.html
 - Next exact step:
-  - visually review eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.
+  - visually review 
+eport_20260301-20260331__test2.html and decide whether the remaining legacy tables should also be redesigned into 	est2 cards/panels or left outside the dashboard shell.
 ### 2026-04-04
 - Added an `Executive metrics tile deck` to the end of section `10 Full library` in the modern production dashboard, keeping the current dashboard design while surfacing all major top-level KPI metrics in a compact tile grid.
 - `dashboard_modern.py` now computes and renders a large summary tile set covering revenue, cost stack, profit, daily averages, orders/items, AOV, CAC/ROAS/MER, revenue per customer, contribution layers, break-even CAC, CAC headroom, payback, refund summary, repeat purchase rate, and related executive checks.
@@ -951,3 +952,31 @@ Next exact step:
   - shipping math stays stable while sign semantics are now explicit and consistent
 - Next exact step:
   - add full QA assertions in pipeline for shell/library parity, campaign arithmetic integrity and normalized-dimension completeness (`day_name`, `anchor_item`, `country`).
+### 2026-04-10 (CM taxonomy surfaced + full data QA assertions)
+- Added explicit CM1 / CM2 / CM3 taxonomy aliases and dashboard cards so the economics section no longer depends only on legacy pre-ad/post-ad naming.
+- Added pipeline-level `data_assertions` QA in `export_orders.py` covering:
+  - shell vs library parity for key economics metrics
+  - campaign CPA arithmetic integrity
+  - normalized dimension completeness (`day_name`, `anchor_item`, `attached_item`, `anchor_orders`, `country`)
+  - attributed orders tolerance vs total orders
+  - refund registry presence and consistency deltas
+- Added `margin_stability` QA with 7-day smoothing for fixed-margin alerting, including raw vs smoothed extreme-day counts and min/max smoothed margin bounds.
+- Wired both QA builders into `source_health.qa` so they render in the modern dashboard and participate in warning propagation.
+- Added modern dashboard sections:
+  - `CM1 / CM2 / CM3 taxonomy`
+  - `Data assertions`
+  - `Smoothed fixed-margin alerts`
+- Extended `scripts/security_ci.py` so CI now fails if these new QA builders / dashboard sections disappear.
+- Fixed a runtime bug in monthly aggregation where `cm3_margin_pct` incorrectly referenced a non-existent `month_agg['profit_margin_pct']`; it now computes directly from `net_profit / total_revenue`.
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py scripts\security_ci.py`
+  - `python scripts\security_ci.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO and ROY March 2026 reports regenerate successfully
+  - new QA sections render without breaking period bundles
+  - consistency checks remain green after CM taxonomy exposure
+- Next exact step:
+  - add acquisition-source x product-family cube for ROY and VEVO so channel efficiency can be evaluated by product family instead of only globally.
+

@@ -575,6 +575,8 @@ def generate_modern_dashboard(
         limit=6,
     )
     geo_qa = (((source_health or {}).get("qa") or {}).get("geo") or {})
+    data_assertions_qa = (((source_health or {}).get("qa") or {}).get("data_assertions") or {})
+    margin_stability_qa = (((source_health or {}).get("qa") or {}).get("margin_stability") or {})
     source_rows = list(((source_health or {}).get("sources") or {}).values())
     qa_rows = []
     for key, value in (((source_health or {}).get("qa") or {}).items()):
@@ -1006,6 +1008,17 @@ def generate_modern_dashboard(
     shell_pre_ad_per_order = _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_order"))
     shell_payback_orders = _maybe_num((financial_metrics or {}).get("payback_orders"))
     shell_contribution_ltv_cac = _maybe_num((financial_metrics or {}).get("contribution_ltv_cac"))
+    cm1_profit = _maybe_num((financial_metrics or {}).get("cm1_profit"))
+    cm1_margin_pct = _maybe_num((financial_metrics or {}).get("cm1_margin_pct"))
+    cm1_profit_per_order = _maybe_num((financial_metrics or {}).get("cm1_profit_per_order"))
+    cm1_profit_per_customer = _maybe_num((financial_metrics or {}).get("cm1_profit_per_customer"))
+    cm2_profit = _maybe_num((financial_metrics or {}).get("cm2_profit"))
+    cm2_margin_pct = _maybe_num((financial_metrics or {}).get("cm2_margin_pct"))
+    cm2_profit_per_order = _maybe_num((financial_metrics or {}).get("cm2_profit_per_order"))
+    cm3_profit = _maybe_num((financial_metrics or {}).get("cm3_profit"))
+    cm3_margin_pct = _maybe_num((financial_metrics or {}).get("cm3_margin_pct"))
+    cm3_profit_per_order = _maybe_num((financial_metrics or {}).get("cm3_profit_per_order"))
+    cm_taxonomy_note = str((financial_metrics or {}).get("cm_taxonomy_note") or "")
     cac_break_even_ratio = None
     if break_even_cac not in (None, 0) and current_fb_cac is not None:
         cac_break_even_ratio = current_fb_cac / break_even_cac
@@ -1060,6 +1073,16 @@ def generate_modern_dashboard(
         {"en": "Orders/customer", "sk": "Objednavky/zakaznik", "value": _maybe_num((financial_metrics or {}).get("orders_per_customer")), "kind": "number", "decimals": 2, "tone": "neutral"},
         {"en": "Company profit margin", "sk": "Firemna ziskova marza", "value": _maybe_num((financial_metrics or {}).get("company_profit_margin_pct")), "kind": "percent", "tone": "positive", "note_en": "Includes fixed cost", "note_sk": "Vrata fixnych nakladov"},
         {"en": "Product gross margin", "sk": "Hruba marza produktu", "value": _maybe_num((financial_metrics or {}).get("product_gross_margin_pct")), "kind": "percent", "tone": "positive"},
+        {"en": "CM1 profit", "sk": "CM1 profit", "value": cm1_profit, "kind": "currency", "tone": "positive", "note_en": "Revenue - COGS - packaging - net shipping", "note_sk": "Trzby - COGS - balenie - ciste shipping"},
+        {"en": "CM1 margin", "sk": "CM1 marza", "value": cm1_margin_pct, "kind": "percent", "tone": "positive"},
+        {"en": "CM1 / order", "sk": "CM1 / objednavka", "value": cm1_profit_per_order, "kind": "currency", "tone": "positive"},
+        {"en": "CM1 / customer", "sk": "CM1 / zakaznik", "value": cm1_profit_per_customer, "kind": "currency", "tone": "positive"},
+        {"en": "CM2 profit", "sk": "CM2 profit", "value": cm2_profit, "kind": "currency", "tone": "positive", "note_en": "CM1 - paid ads", "note_sk": "CM1 - platene reklamy"},
+        {"en": "CM2 margin", "sk": "CM2 marza", "value": cm2_margin_pct, "kind": "percent", "tone": "positive"},
+        {"en": "CM2 / order", "sk": "CM2 / objednavka", "value": cm2_profit_per_order, "kind": "currency", "tone": "positive"},
+        {"en": "CM3 profit", "sk": "CM3 profit", "value": cm3_profit, "kind": "currency", "tone": "positive", "note_en": "CM2 - fixed overhead", "note_sk": "CM2 - fixny overhead"},
+        {"en": "CM3 margin", "sk": "CM3 marza", "value": cm3_margin_pct, "kind": "percent", "tone": "positive"},
+        {"en": "CM3 / order", "sk": "CM3 / objednavka", "value": cm3_profit_per_order, "kind": "currency", "tone": "positive"},
         {"en": "Pre-ad contribution profit", "sk": "Pre-ad contribution profit", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_profit")), "kind": "currency", "tone": "positive"},
         {"en": "Pre-ad contribution margin", "sk": "Pre-ad contribution marza", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_margin_pct")), "kind": "percent", "tone": "positive"},
         {"en": "Pre-ad contribution / order", "sk": "Pre-ad contribution / objednavka", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_order")), "kind": "currency", "tone": "positive", "note_en": "Break-even order contribution", "note_sk": "Break-even contribution na objednavku"},
@@ -1224,6 +1247,20 @@ def generate_modern_dashboard(
         f'<ul class="warning-list">{geo_warning_items_html}</ul>'
         if geo_warning_items_html
         else '<p class="muted-note"><span class="lang-en">No low-sample geo warnings for the current report window.</span><span class="lang-sk hidden">V aktualnom okne nie su ziadne geo warningy pre malu vzorku.</span></p>'
+    )
+    data_assertion_warning_items = list(data_assertions_qa.get("warnings") or [])
+    data_assertion_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in data_assertion_warning_items)
+    data_assertion_warning_block_html = (
+        f'<ul class="warning-list">{data_assertion_warning_items_html}</ul>'
+        if data_assertion_warning_items_html
+        else '<p class="muted-note"><span class="lang-en">Data assertions passed for the current report window.</span><span class="lang-sk hidden">Datove assertions pre aktualne okno presli bez warningov.</span></p>'
+    )
+    margin_stability_warning_items = list(margin_stability_qa.get("warnings") or [])
+    margin_stability_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in margin_stability_warning_items)
+    margin_stability_warning_block_html = (
+        f'<ul class="warning-list">{margin_stability_warning_items_html}</ul>'
+        if margin_stability_warning_items_html
+        else '<p class="muted-note"><span class="lang-en">Smoothed fixed-margin alerts are within tolerance for this report window.</span><span class="lang-sk hidden">Vyhladene alerty fixnej marze su v tolerancii pre toto okno.</span></p>'
     )
 
     customer_rows_html = "".join(
@@ -1709,6 +1746,18 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Contribution LTV/CAC</span><span class="lang-sk hidden">Contribution LTV/CAC</span></small><strong>{_format_mini_value_html(shell_contribution_ltv_cac, kind="multiple")}</strong></div>
                         </div>
                     </div>
+                    <div class="panel chart-card" style="margin-bottom:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">CM1 / CM2 / CM3 taxonomy</span><span class="lang-sk hidden">CM1 / CM2 / CM3 taxonomia</span></h3><p><span class="lang-en">Normalized margin waterfall: CM1 before paid ads, CM2 after paid ads, CM3 after fixed overhead.</span><span class="lang-sk hidden">Normalizovana marzova waterfall logika: CM1 pred platenou reklamou, CM2 po platenej reklame, CM3 po fixnom overheade.</span></p></div></div>
+                        <div class="mini-grid">
+                            <div class="mini-card"><small>CM1</small><strong>{_format_mini_value_html(cm1_profit, kind="currency")}</strong><span class="delta up">{_format_mini_value_html(cm1_margin_pct, kind="percent")}</span></div>
+                            <div class="mini-card"><small>CM1 / order</small><strong>{_format_mini_value_html(cm1_profit_per_order, kind="currency")}</strong><span class="delta neutral">{_format_mini_value_html(cm1_profit_per_customer, kind="currency")}</span></div>
+                            <div class="mini-card"><small>CM2</small><strong>{_format_mini_value_html(cm2_profit, kind="currency")}</strong><span class="delta up">{_format_mini_value_html(cm2_margin_pct, kind="percent")}</span></div>
+                            <div class="mini-card"><small>CM2 / order</small><strong>{_format_mini_value_html(cm2_profit_per_order, kind="currency")}</strong><span class="delta neutral"><span class="lang-en">after ads</span><span class="lang-sk hidden">po reklamach</span></span></div>
+                            <div class="mini-card"><small>CM3</small><strong>{_format_mini_value_html(cm3_profit, kind="currency")}</strong><span class="delta up">{_format_mini_value_html(cm3_margin_pct, kind="percent")}</span></div>
+                            <div class="mini-card"><small>CM3 / order</small><strong>{_format_mini_value_html(cm3_profit_per_order, kind="currency")}</strong><span class="delta neutral"><span class="lang-en">after fixed overhead</span><span class="lang-sk hidden">po fixnom overheade</span></span></div>
+                        </div>
+                        <p class="muted-note">{escape(cm_taxonomy_note) if cm_taxonomy_note else '<span class="lang-en">CM1 currently excludes payment fees because the reporting model does not ingest them separately.</span><span class="lang-sk hidden">CM1 zatial vylucuje payment fees, pretoze reporting ich zatial nenasava samostatne.</span>'}</p>
+                    </div>
                     <div class="grid-2">
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">Revenue vs total costs</span><span class="lang-sk hidden">Trzby vs celkove naklady</span></h3><p><span class="lang-en">Daily revenue compared with full cost base.</span><span class="lang-sk hidden">Denne trzby oproti plnej nakladovej baze.</span></p></div></div>
@@ -2167,6 +2216,26 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Unknown country rate</span><span class="lang-sk hidden">Podiel neznamej krajiny</span></small><strong>{_format_mini_value_html(geo_qa.get("unknown_country_rate"), kind="percent")}</strong></div>
                         </div>
                         {geo_warning_block_html}
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Data assertions</span><span class="lang-sk hidden">Datove assertions</span></h3><p><span class="lang-en">Pipeline-level parity, arithmetic and dimension completeness checks.</span><span class="lang-sk hidden">Kontroly parity, aritmetiky a uplnosti dimenzii priamo v pipeline.</span></p></div></div>
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Shell parity failures</span><span class="lang-sk hidden">Shell parity chyby</span></small><strong>{int(round(_num(data_assertions_qa.get("shell_parity_failures"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Platform CPA mismatches</span><span class="lang-sk hidden">Platform CPA nezrovnalosti</span></small><strong>{int(round(_num(data_assertions_qa.get("platform_cpa_mismatches"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Attributed CPA mismatches</span><span class="lang-sk hidden">Attributed CPA nezrovnalosti</span></small><strong>{int(round(_num(data_assertions_qa.get("attributed_cpa_mismatches"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Missing country labels</span><span class="lang-sk hidden">Chybajuce country labely</span></small><strong>{int(round(_num(data_assertions_qa.get("country_missing"))))}</strong></div>
+                        </div>
+                        {data_assertion_warning_block_html}
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Smoothed fixed-margin alerts</span><span class="lang-sk hidden">Vyhladene alerty fixnej marze</span></h3><p><span class="lang-en">Tracks whether extreme fixed-margin days remain after 7-day smoothing.</span><span class="lang-sk hidden">Sleduje, ci po 7-dnovom smoothingu stale ostavaju extremne dni s fixnou marzou.</span></p></div></div>
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Raw extreme days</span><span class="lang-sk hidden">Surove extremne dni</span></small><strong>{int(round(_num(margin_stability_qa.get("raw_extreme_days"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Smoothed extreme days</span><span class="lang-sk hidden">Vyhladene extremne dni</span></small><strong>{int(round(_num(margin_stability_qa.get("smoothed_extreme_days"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Min smoothed margin</span><span class="lang-sk hidden">Min vyhladena marza</span></small><strong>{_format_mini_value_html(margin_stability_qa.get("min_smoothed_margin_pct"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Max smoothed margin</span><span class="lang-sk hidden">Max vyhladena marza</span></small><strong>{_format_mini_value_html(margin_stability_qa.get("max_smoothed_margin_pct"), kind="percent")}</strong></div>
+                        </div>
+                        {margin_stability_warning_block_html}
                     </div>
                     <div class="panel chart-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Geo profitability chart</span><span class="lang-sk hidden">Graf geo profitability</span></h3><p><span class="lang-en">Country-level revenue, contribution and CPO in one view.</span><span class="lang-sk hidden">Krajiny: trzby, contribution a CPO v jednom pohlade.</span></p></div></div>

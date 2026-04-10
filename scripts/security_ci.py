@@ -89,6 +89,16 @@ def main() -> int:
         )
         require(
             export_orders,
+            "_build_data_assertions_qa",
+            "export_orders.py must build data assertion QA metadata before report export.",
+        )
+        require(
+            export_orders,
+            "_build_margin_stability_qa",
+            "export_orders.py must build smoothed margin stability QA before report export.",
+        )
+        require(
+            export_orders,
             "\"is_partial\"",
             "export_orders.py must persist partial-data state in source health metadata.",
         )
@@ -111,6 +121,26 @@ def main() -> int:
             dashboard_modern,
             "Geo confidence guardrails",
             "Modern dashboard must surface geo confidence guardrails explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "Data assertions",
+            "Modern dashboard must surface data assertion warnings explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "Smoothed fixed-margin alerts",
+            "Modern dashboard must surface smoothed fixed-margin alerts explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "CM1 / CM2 / CM3 taxonomy",
+            "Modern dashboard must surface normalized CM taxonomy explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "qa_rows.append",
+            "Modern dashboard must keep rendering QA cards alongside source-health cards.",
         )
         require(
             dashboard_modern,

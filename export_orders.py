@@ -629,6 +629,14 @@ class BizniWebExporter:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _count_missing_values(frame: pd.DataFrame, column: str) -> int:
+        if frame.empty or column not in frame.columns:
+            return 0
+        series = frame[column]
+        normalized = series.astype(str).str.strip().str.lower()
+        return int(series.isna().sum() + normalized.isin({"", "nan", "none", "null"}).sum())
+
     @classmethod
     def _build_attribution_qa(
         cls,
@@ -863,6 +871,234 @@ class BizniWebExporter:
             "observe_count": observe_count,
             "ready_count": ready_count,
             "unknown_country_rate": unknown_country_rate,
+        }
+
+    def _build_data_assertions_qa(
+        self,
+        *,
+        financial_metrics: Optional[Dict[str, Any]],
+        consistency_checks: Optional[Dict[str, Any]],
+        refunds_analysis: Optional[Dict[str, Any]],
+        day_of_week_analysis: Optional[pd.DataFrame],
+        advanced_dtc_metrics: Optional[Dict[str, Any]],
+        country_analysis: Optional[pd.DataFrame],
+        geo_profitability: Optional[Dict[str, Any]],
+        cost_per_order: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        warnings: List[str] = []
+        metrics = financial_metrics or {}
+        checks = consistency_checks or {}
+        refund_summary = (refunds_analysis or {}).get("summary") or {}
+        dow_df = day_of_week_analysis.copy() if isinstance(day_of_week_analysis, pd.DataFrame) else pd.DataFrame()
+        attach_df = (advanced_dtc_metrics or {}).get("attach_rate")
+        attach_df = attach_df.copy() if isinstance(attach_df, pd.DataFrame) else pd.DataFrame()
+        country_df = country_analysis.copy() if isinstance(country_analysis, pd.DataFrame) else pd.DataFrame()
+        geo_table = (geo_profitability or {}).get("table")
+        geo_df = geo_table.copy() if isinstance(geo_table, pd.DataFrame) else pd.DataFrame()
+        campaign_rows = list((cost_per_order or {}).get("campaign_attribution") or [])
+        attribution_summary = (cost_per_order or {}).get("campaign_attribution_summary") or {}
+
+        required_financial_keys = [
+            "pre_ad_contribution_per_order",
+            "break_even_cac",
+            "payback_orders",
+            "contribution_ltv_cac",
+            "cm1_profit",
+            "cm1_profit_per_order",
+            "cm1_profit_per_customer",
+            "cm2_profit",
+            "cm3_profit",
+        ]
+        missing_financial_keys = [key for key in required_financial_keys if metrics.get(key) is None]
+        if missing_financial_keys:
+            warnings.append(
+                "Critical economics registry keys are missing: " + ", ".join(missing_financial_keys[:5])
+            )
+
+        shell_parity_failures = 0
+        shell_pre_ad = self._safe_float(metrics.get("pre_ad_contribution_per_order"))
+        cm1_per_order = self._safe_float(metrics.get("cm1_profit_per_order"))
+        break_even_cac = self._safe_float(metrics.get("break_even_cac"))
+        cm1_per_customer = self._safe_float(metrics.get("cm1_profit_per_customer"))
+        payback_orders = self._safe_float(metrics.get("payback_orders"))
+        current_fb_cac = self._safe_float(metrics.get("current_fb_cac"))
+        expected_payback = None
+        if current_fb_cac is not None and cm1_per_order not in (None, 0):
+            expected_payback = current_fb_cac / cm1_per_order
+        if shell_pre_ad is not None and cm1_per_order is not None and abs(shell_pre_ad - cm1_per_order) > 0.05:
+            shell_parity_failures += 1
+        if break_even_cac is not None and cm1_per_customer is not None and abs(break_even_cac - cm1_per_customer) > 0.05:
+            shell_parity_failures += 1
+        if payback_orders is not None and expected_payback is not None and abs(payback_orders - expected_payback) > 0.05:
+            shell_parity_failures += 1
+        if shell_parity_failures > 0:
+            warnings.append(
+                f"{shell_parity_failures} shell/library economics parity check(s) failed."
+            )
+
+        if refund_summary.get("refund_orders") and metrics.get("refund_rate_pct") is None:
+            warnings.append("Refund orders exist but refund summary metrics are missing from the registry.")
+
+        if checks:
+            if checks.get("roas_ok") is False:
+                warnings.append(
+                    f"ROAS consistency delta is {checks.get('roas_delta')}. Reported and derived ROAS do not match."
+                )
+            if checks.get("company_margin_ok") is False:
+                warnings.append(
+                    f"Company margin consistency delta is {checks.get('company_margin_delta_pct')} percentage points."
+                )
+            if checks.get("cac_ok") is False:
+                warnings.append(
+                    f"CAC consistency delta is {checks.get('cac_delta')}. Check spend/new-customer denominator alignment."
+                )
+
+        day_name_missing = self._count_missing_values(dow_df, "day_name")
+        if day_name_missing > 0:
+            warnings.append(f"{day_name_missing} weekday effectiveness row(s) are missing day_name.")
+
+        anchor_missing = self._count_missing_values(attach_df, "anchor_item")
+        attached_missing = self._count_missing_values(attach_df, "attached_item")
+        if anchor_missing > 0:
+            warnings.append(f"{anchor_missing} attach-rate row(s) are missing anchor_item.")
+        if attached_missing > 0:
+            warnings.append(f"{attached_missing} attach-rate row(s) are missing attached_item.")
+        anchor_orders_col = "anchor_orders" if "anchor_orders" in attach_df.columns else ("key_orders" if "key_orders" in attach_df.columns else None)
+        if not attach_df.empty and anchor_orders_col:
+            anchor_orders_missing = int(attach_df[anchor_orders_col].isna().sum())
+            if anchor_orders_missing > 0:
+                warnings.append(f"{anchor_orders_missing} attach-rate row(s) are missing anchor_orders.")
+        else:
+            anchor_orders_missing = 0
+
+        country_missing = self._count_missing_values(country_df, "country")
+        geo_country_missing = self._count_missing_values(geo_df, "country")
+        if country_missing > 0:
+            warnings.append(f"{country_missing} geographic country row(s) are missing country labels.")
+        if geo_country_missing > 0:
+            warnings.append(f"{geo_country_missing} geo profitability row(s) are missing country labels.")
+
+        platform_cpa_mismatches = 0
+        attributed_cpa_mismatches = 0
+        for row in campaign_rows:
+            spend = self._safe_float(row.get("spend"))
+            platform_conversions = self._safe_float(row.get("platform_conversions", row.get("conversions")))
+            platform_cpa = self._safe_float(row.get("cost_per_platform_conversion", row.get("cost_per_conversion")))
+            if spend is not None and platform_conversions not in (None, 0):
+                expected = spend / platform_conversions
+                if platform_cpa is None or abs(expected - platform_cpa) > 0.05:
+                    platform_cpa_mismatches += 1
+
+            attributed_orders = self._safe_float(row.get("attributed_orders_est"))
+            attributed_cpa = self._safe_float(row.get("cost_per_attributed_order"))
+            if spend is not None and attributed_orders not in (None, 0):
+                expected = spend / attributed_orders
+                if attributed_cpa is None or abs(expected - attributed_cpa) > 0.05:
+                    attributed_cpa_mismatches += 1
+
+        if platform_cpa_mismatches > 0:
+            warnings.append(
+                f"{platform_cpa_mismatches} campaign row(s) have platform CPA that does not match spend/platform conversions."
+            )
+        if attributed_cpa_mismatches > 0:
+            warnings.append(
+                f"{attributed_cpa_mismatches} campaign row(s) have cost_per_attributed_order that does not match spend/attributed_orders_est."
+            )
+
+        attributed_orders_total = self._safe_float(attribution_summary.get("estimated_orders_total"))
+        total_orders = self._safe_float(attribution_summary.get("total_orders") or metrics.get("total_orders"))
+        attributed_orders_ratio = None
+        if attributed_orders_total is not None and total_orders and total_orders > 0:
+            attributed_orders_ratio = attributed_orders_total / total_orders
+            if attributed_orders_ratio > 1.05:
+                warnings.append(
+                    f"Attributed campaign orders sum to {attributed_orders_total:.1f}, which exceeds total orders ({total_orders:.0f}) beyond tolerance."
+                )
+
+        message = (
+            "Data assertions passed: economics registry, arithmetic and dimensions are within tolerance."
+            if not warnings
+            else warnings[0]
+        )
+        return {
+            "key": "data_assertions",
+            "label": "Data assertions",
+            "status": "warning" if warnings else "ok",
+            "healthy": not warnings,
+            "message": message,
+            "warnings": warnings,
+            "missing_financial_keys": missing_financial_keys,
+            "shell_parity_failures": shell_parity_failures,
+            "day_name_missing": day_name_missing,
+            "attach_anchor_missing": anchor_missing,
+            "attach_attached_missing": attached_missing,
+            "anchor_orders_missing": anchor_orders_missing,
+            "country_missing": country_missing,
+            "geo_country_missing": geo_country_missing,
+            "platform_cpa_mismatches": platform_cpa_mismatches,
+            "attributed_cpa_mismatches": attributed_cpa_mismatches,
+            "attributed_orders_ratio": round(attributed_orders_ratio, 4) if attributed_orders_ratio is not None else None,
+        }
+
+    def _build_margin_stability_qa(self, date_agg: Optional[pd.DataFrame]) -> Dict[str, Any]:
+        date_df = date_agg.copy() if isinstance(date_agg, pd.DataFrame) else pd.DataFrame()
+        required = {"date", "total_revenue", "pre_ad_contribution_profit", "fixed_daily_cost", "net_profit"}
+        if date_df.empty or not required.issubset(set(date_df.columns)):
+            return {
+                "key": "margin_stability",
+                "label": "Margin stability",
+                "status": "ok",
+                "healthy": True,
+                "message": "Margin stability QA skipped because the daily contribution series is unavailable.",
+                "warnings": [],
+            }
+
+        frame = date_df.sort_values("date").copy()
+        revenue = frame["total_revenue"].fillna(0.0)
+        frame["pre_ad_margin_with_fixed_pct"] = np.where(
+            revenue > 0,
+            ((frame["pre_ad_contribution_profit"] - frame["fixed_daily_cost"]) / revenue) * 100,
+            np.nan,
+        )
+        frame["company_margin_with_fixed_pct"] = np.where(
+            revenue > 0,
+            (frame["net_profit"] / revenue) * 100,
+            np.nan,
+        )
+        frame["pre_ad_margin_with_fixed_pct_ma7"] = frame["pre_ad_margin_with_fixed_pct"].rolling(7, min_periods=1).mean()
+        frame["company_margin_with_fixed_pct_ma7"] = frame["company_margin_with_fixed_pct"].rolling(7, min_periods=1).mean()
+
+        raw_extreme_days = int((frame["pre_ad_margin_with_fixed_pct"].abs() > 150).fillna(False).sum())
+        smoothed_extreme_days = int((frame["pre_ad_margin_with_fixed_pct_ma7"].abs() > 100).fillna(False).sum())
+        min_smoothed = self._safe_float(frame["pre_ad_margin_with_fixed_pct_ma7"].min())
+        max_smoothed = self._safe_float(frame["pre_ad_margin_with_fixed_pct_ma7"].max())
+
+        warnings: List[str] = []
+        if smoothed_extreme_days > 0:
+            warnings.append(
+                f"7-day smoothed fixed-margin series still shows {smoothed_extreme_days} extreme day(s) beyond +/-100%."
+            )
+        elif raw_extreme_days > 0:
+            warnings.append(
+                f"Raw fixed-margin series has {raw_extreme_days} extreme day(s), but the 7-day smoothing stays within tolerance."
+            )
+
+        message = (
+            "Smoothed fixed-margin series is within tolerance."
+            if not warnings
+            else warnings[0]
+        )
+        return {
+            "key": "margin_stability",
+            "label": "Margin stability",
+            "status": "warning" if warnings else "ok",
+            "healthy": not warnings,
+            "message": message,
+            "warnings": warnings,
+            "raw_extreme_days": raw_extreme_days,
+            "smoothed_extreme_days": smoothed_extreme_days,
+            "min_smoothed_margin_pct": round(min_smoothed, 2) if min_smoothed is not None else None,
+            "max_smoothed_margin_pct": round(max_smoothed, 2) if max_smoothed is not None else None,
         }
 
     @staticmethod
@@ -2571,6 +2807,19 @@ class BizniWebExporter:
             country_analysis=country_analysis,
             geo_profitability=geo_profitability,
         )
+        source_health.setdefault("qa", {})["data_assertions"] = self._build_data_assertions_qa(
+            financial_metrics=financial_metrics,
+            consistency_checks=consistency_checks,
+            refunds_analysis=refunds_analysis,
+            day_of_week_analysis=day_of_week_analysis,
+            advanced_dtc_metrics=advanced_dtc_metrics,
+            country_analysis=country_analysis,
+            geo_profitability=geo_profitability,
+            cost_per_order=cost_per_order,
+        )
+        source_health.setdefault("qa", {})["margin_stability"] = self._build_margin_stability_qa(
+            date_agg=date_agg,
+        )
         source_health = self._finalize_source_health(source_health)
 
         # Display aggregated data
@@ -2781,6 +3030,9 @@ class BizniWebExporter:
             lambda row: round((row['pre_ad_contribution_profit'] / row['unique_orders']) if row['unique_orders'] > 0 else 0, 2),
             axis=1
         )
+        date_agg['cm1_profit'] = date_agg['pre_ad_contribution_profit']
+        date_agg['cm1_margin_pct'] = date_agg['pre_ad_contribution_margin_pct']
+        date_agg['cm1_profit_per_order'] = date_agg['pre_ad_contribution_profit_per_order']
 
         # Post-ad contribution view (CM2): excludes fixed overhead, includes ad spend
         date_agg['contribution_cost'] = (
@@ -2804,10 +3056,22 @@ class BizniWebExporter:
         date_agg['post_ad_contribution_profit'] = date_agg['contribution_profit']
         date_agg['post_ad_contribution_margin_pct'] = date_agg['contribution_margin_pct']
         date_agg['post_ad_contribution_profit_per_order'] = date_agg['contribution_profit_per_order']
+        date_agg['cm2_profit'] = date_agg['post_ad_contribution_profit']
+        date_agg['cm2_margin_pct'] = date_agg['post_ad_contribution_margin_pct']
+        date_agg['cm2_profit_per_order'] = date_agg['post_ad_contribution_profit_per_order']
 
         # Calculate ROI: (Profit / Total Cost) * 100
         date_agg['roi_percent'] = date_agg.apply(
             lambda row: round((row['net_profit'] / row['total_cost'] * 100) if row['total_cost'] > 0 else 0, 2),
+            axis=1
+        )
+        date_agg['cm3_profit'] = date_agg['net_profit']
+        date_agg['cm3_margin_pct'] = date_agg.apply(
+            lambda row: round((row['net_profit'] / row['total_revenue'] * 100) if row['total_revenue'] > 0 else 0, 2),
+            axis=1
+        )
+        date_agg['cm3_profit_per_order'] = date_agg.apply(
+            lambda row: round((row['net_profit'] / row['unique_orders']) if row['unique_orders'] > 0 else 0, 2),
             axis=1
         )
 
@@ -2888,6 +3152,21 @@ class BizniWebExporter:
         # Explicit post-ad aliases (terminology clarity)
         month_agg['post_ad_contribution_margin_pct'] = month_agg['contribution_margin_pct']
         month_agg['post_ad_contribution_profit_per_order'] = month_agg['contribution_profit_per_order']
+        month_agg['cm1_profit'] = month_agg['pre_ad_contribution_profit']
+        month_agg['cm1_margin_pct'] = month_agg['pre_ad_contribution_margin_pct']
+        month_agg['cm1_profit_per_order'] = month_agg['pre_ad_contribution_profit_per_order']
+        month_agg['cm2_profit'] = month_agg['contribution_profit']
+        month_agg['cm2_margin_pct'] = month_agg['post_ad_contribution_margin_pct']
+        month_agg['cm2_profit_per_order'] = month_agg['post_ad_contribution_profit_per_order']
+        month_agg['cm3_profit'] = month_agg['net_profit']
+        month_agg['cm3_margin_pct'] = month_agg.apply(
+            lambda row: round((row['net_profit'] / row['total_revenue'] * 100) if row['total_revenue'] > 0 else 0, 2),
+            axis=1
+        )
+        month_agg['cm3_profit_per_order'] = month_agg.apply(
+            lambda row: round((row['net_profit'] / row['unique_orders']) if row['unique_orders'] > 0 else 0, 2),
+            axis=1
+        )
         
         # Convert month period to string for display
         month_agg['month'] = month_agg['month'].astype(str)
@@ -5893,6 +6172,18 @@ class BizniWebExporter:
             'post_ad_contribution_profit_per_order': round(total_contribution_profit / total_orders, 2) if total_orders > 0 else 0,
             'pre_ad_contribution_per_order': round(pre_ad_contribution_per_order, 2),
             'pre_ad_contribution_per_customer': round(pre_ad_contribution_per_customer, 2),
+            'cm1_profit': round(total_pre_ad_contribution, 2),
+            'cm1_margin_pct': round(total_pre_ad_contribution / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'cm1_profit_per_order': round(pre_ad_contribution_per_order, 2),
+            'cm1_profit_per_customer': round(pre_ad_contribution_per_customer, 2),
+            'cm2_profit': round(total_contribution_profit, 2),
+            'cm2_margin_pct': round(total_contribution_profit / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'cm2_profit_per_order': round(total_contribution_profit / total_orders, 2) if total_orders > 0 else 0,
+            'cm3_profit': round(total_company_profit, 2),
+            'cm3_margin_pct': round(total_company_profit / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'cm3_profit_per_order': round(total_company_profit / total_orders, 2) if total_orders > 0 else 0,
+            'cm_taxonomy_payment_fees_mode': 'excluded_not_modeled',
+            'cm_taxonomy_note': 'CM1 excludes payment fees because the current reporting model does not ingest them separately.',
             'break_even_cac': round(break_even_cac, 2),
             'break_even_cac_order_based': round(break_even_cac_order_based, 2),
             'current_fb_cac': round(current_fb_cac, 2),
