@@ -491,6 +491,7 @@ def generate_modern_dashboard(
     first_item_retention: Optional[dict] = None,
     same_item_repurchase: Optional[dict] = None,
     time_to_nth_by_first_item: Optional[dict] = None,
+    sample_funnel_analysis: Optional[dict] = None,
     fb_detailed_metrics: Optional[dict] = None,
     fb_campaigns: Optional[list] = None,
     cost_per_order: Optional[dict] = None,
@@ -786,6 +787,37 @@ def generate_modern_dashboard(
     same_item_rows = _frame_rows((same_item_repurchase or {}).get("item_repurchase"), ["item_name", "unique_customers", "repurchase_2x_pct", "repurchase_3x_pct", "avg_days_between_repurchase"], limit=12)
     same_item_frequency_rows = _frame_rows((same_item_repurchase or {}).get("customer_item_frequency"), ["purchase_frequency", "customer_count", "percentage"], limit=12)
     time_to_nth_rows = _frame_rows((time_to_nth_by_first_item or {}).get("time_to_nth_by_item"), ["item_name", "first_order_customers", "avg_days_to_2nd", "median_days_to_2nd", "avg_days_to_3nd", "avg_days_to_4nd", "avg_days_to_5nd"], limit=12)
+    sample_funnel_summary = (sample_funnel_analysis or {}).get("summary", {}) if sample_funnel_analysis else {}
+    sample_funnel_window_rows = _frame_rows(
+        (sample_funnel_analysis or {}).get("window_conversion"),
+        [
+            "window_days",
+            "cohort_customers",
+            "repeat_customers",
+            "repeat_pct",
+            "fullsize_any_customers",
+            "fullsize_any_pct",
+            "fullsize_200_customers",
+            "fullsize_200_pct",
+            "fullsize_500_customers",
+            "fullsize_500_pct",
+        ],
+        limit=None,
+    )
+    sample_funnel_entry_rows = _frame_rows(
+        (sample_funnel_analysis or {}).get("entry_product_conversion"),
+        [
+            "item_name",
+            "item_sku",
+            "entry_customers",
+            "repeat_30d_pct",
+            "fullsize_any_30d_pct",
+            "fullsize_any_60d_pct",
+            "fullsize_200_60d_pct",
+            "fullsize_500_60d_pct",
+        ],
+        limit=12,
+    )
     combinations_rows = _frame_rows(item_combinations, ["combination_size", "combination", "count", "price"], limit=12)
 
     segment_rows = []
@@ -1017,6 +1049,11 @@ def generate_modern_dashboard(
         "same_item_rows": same_item_rows,
         "same_item_frequency_rows": same_item_frequency_rows,
         "time_to_nth_rows": time_to_nth_rows,
+        "sample_funnel": {
+            "summary": {k: _json_safe(v) for k, v in sample_funnel_summary.items()},
+            "windows": sample_funnel_window_rows,
+            "entry_rows": sample_funnel_entry_rows,
+        },
         "combinations_rows": combinations_rows,
         "segment_rows": segment_rows,
         "consistency": consistency_payload,
@@ -1167,6 +1204,17 @@ def generate_modern_dashboard(
     avg_days_between = _maybe_num(cohort_summary.get("avg_days_between_orders"))
     top_10_share = _num((customer_concentration or {}).get("top_10_pct_revenue_share"))
     top_20_share = _num((customer_concentration or {}).get("top_20_pct_revenue_share"))
+    sample_summary = sample_funnel_summary or {}
+    sample_entry_customers = int(round(_num(sample_summary.get("entry_customers"))))
+    sample_repeat_30d = _maybe_num(sample_summary.get("repeat_30d_pct"))
+    sample_fullsize_30d = _maybe_num(sample_summary.get("fullsize_any_30d_pct"))
+    sample_fullsize_60d = _maybe_num(sample_summary.get("fullsize_any_60d_pct"))
+    sample_median_days_fullsize = _maybe_num(sample_summary.get("median_days_to_fullsize"))
+    sample_top_entry_product = escape(str(sample_summary.get("top_entry_product") or "-"))
+    sample_entry_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('entry_customers'))))}</td><td>{_num(row.get('repeat_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_200_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_500_60d_pct')):.1f}%</td></tr>"
+        for row in sample_funnel_entry_rows
+    ) or '<tr><td colspan="7"><span class="lang-en">No sample funnel data available.</span><span class="lang-sk hidden">Sample funnel data nie su dostupne.</span></td></tr>'
     attribution_qa = (((source_health or {}).get("qa") or {}).get("attribution") or {})
     attribution_warnings = [str(item) for item in list(attribution_qa.get("warnings") or []) if str(item).strip()]
     attribution_warning_items_html = "".join(
@@ -1695,6 +1743,31 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Repeat customers</span><span class="lang-sk hidden">Vracajuci sa zakaznici</span></small><strong>{repeat_customers}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Avg days to 2nd order</span><span class="lang-sk hidden">Priemer dni do 2. objednavky</span></small><strong>{(f"{avg_days_to_2nd:.0f}" if avg_days_to_2nd is not None else "N/A")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Top 10% revenue share</span><span class="lang-sk hidden">Podiel top 10% zakaznikov</span></small><strong>{top_10_share:.1f}%</strong></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Sample funnel</span><span class="lang-sk hidden">Sample funnel</span></h3><p><span class="lang-en">First-order sample customers tracked into repeat and full-size conversion windows.</span><span class="lang-sk hidden">Zakaznici vstupujuci cez sample v prvej objednavke sledovani do repeat a full-size konverznych okien.</span></p></div></div>
+                            <div class="mini-grid">
+                                <div class="mini-card"><small><span class="lang-en">Entry customers</span><span class="lang-sk hidden">Vstupni zakaznici</span></small><strong>{sample_entry_customers}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30 dni</span></small><strong>{_format_mini_value_html(sample_repeat_30d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_30d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_60d, kind="percent", decimals=1)}</strong></div>
+                            </div>
+                            <div class="mini-grid" style="margin-top:12px;">
+                                <div class="mini-card"><small><span class="lang-en">Median days to full-size</span><span class="lang-sk hidden">Median dni do full-size</span></small><strong>{(f"{sample_median_days_fullsize:.0f}" if sample_median_days_fullsize is not None else "N/A")}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Top entry product</span><span class="lang-sk hidden">Top vstupny produkt</span></small><strong>{sample_top_entry_product}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Entry revenue</span><span class="lang-sk hidden">Vstupne trzby</span></small><strong>{_format_mini_value_html(sample_summary.get("entry_revenue"), kind="currency")}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Sample first-order share</span><span class="lang-sk hidden">Podiel sample prvej objednavky</span></small><strong>{_format_mini_value_html(sample_summary.get("sample_first_order_share_pct"), kind="percent", decimals=1)}</strong></div>
+                            </div>
+                            <div class="chart-shell"><canvas id="sampleFunnelChart"></canvas></div>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Sample entry product quality</span><span class="lang-sk hidden">Kvalita sample vstupnych produktov</span></h3><p><span class="lang-en">Top sample entry products ranked by 30d and 60d conversion into repeat and full-size orders.</span><span class="lang-sk hidden">Top sample vstupne produkty podla 30d a 60d konverzie do repeat a full-size objednavok.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Sample</span><span class="lang-sk hidden">Sample</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30d</span></th><th><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30d</span></th><th><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60d</span></th><th>200ml 60d</th><th>500ml 60d</th></tr></thead>
+                                <tbody>{sample_entry_rows_html}</tbody>
+                            </table>
                         </div>
                     </div>
                     <div class="grid-2">
@@ -2435,6 +2508,21 @@ def generate_modern_dashboard(
                 }},
                 options: baseOptions(),
             }});
+            if (document.getElementById('sampleFunnelChart') && hasRows(DATA.sample_funnel.windows)) {{
+                const sampleFunnelOpts = dualAxisOptions();
+                new Chart(document.getElementById('sampleFunnelChart'), {{
+                    data: {{
+                        labels: DATA.sample_funnel.windows.map(x => `${{x.window_days || '-'}}d`),
+                        datasets: [
+                            {{ type: 'line', label: 'Repeat %', data: DATA.sample_funnel.windows.map(x => Number(x.repeat_pct || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Any full-size %', data: DATA.sample_funnel.windows.map(x => Number(x.fullsize_any_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: '200ml %', data: DATA.sample_funnel.windows.map(x => Number(x.fullsize_200_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.1, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: '500ml %', data: DATA.sample_funnel.windows.map(x => Number(x.fullsize_500_pct || 0)), borderColor: '#8b5cf6', tension: .30, borderWidth: 2.1, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: sampleFunnelOpts,
+                }});
+            }}
             new Chart(document.getElementById('cityChart'), {{
                 type: 'bar',
                 data: {{ labels: DATA.cities.map(x => x.city || 'Unknown'), datasets: [{{ label: 'Revenue', data: DATA.cities.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.78)', borderRadius: 8 }}] }},
@@ -3442,6 +3530,12 @@ def generate_modern_dashboard(
             if (hasRows(DATA.item_retention_rows)) customerItems.push({{ id: 'custFirstItemRetentionDetailChart', title: {{ en: 'First item retention', sk: 'Retencia prveho produktu' }}, desc: {{ en: 'Retention quality of first purchased items.', sk: 'Kvalita retencie podla prveho kupeneho produktu.' }} }});
             if (hasRows(DATA.same_item_rows)) customerItems.push({{ id: 'custSameItemRepurchaseDetailChart', title: {{ en: 'Same-item repurchase', sk: 'Opakovany nakup rovnakeho produktu' }}, desc: {{ en: 'Repurchase rate of the same item among buyers.', sk: 'Miera opakovaneho nakupu rovnakeho produktu.' }} }});
             if (hasRows(DATA.time_to_nth_rows)) customerItems.push({{ id: 'custTimeToNthByFirstItemDetailChart', title: {{ en: 'Time to nth by first item', sk: 'Cas do n-tej podla prveho produktu' }}, desc: {{ en: 'How quickly customers reorder depending on first purchased item.', sk: 'Ako rychlo sa vracaju zakaznici podla prveho produktu.' }} }});
+            if (hasRows(DATA.sample_funnel.windows)) {{
+                customerItems.push(
+                    {{ id: 'custSampleFunnelWindowChart', title: {{ en: 'Sample funnel windows', sk: 'Sample funnel okna' }}, desc: {{ en: 'Conversion from sample-entry cohort into repeat and full-size orders.', sk: 'Konverzia zo sample vstupnej kohorty do repeat a full-size objednavok.' }} }},
+                    {{ id: 'custSampleEntryProductChart', title: {{ en: 'Sample entry product quality', sk: 'Kvalita sample vstupnych produktov' }}, desc: {{ en: 'Top sample entry products by 60d full-size conversion.', sk: 'Top sample vstupne produkty podla 60d full-size konverzie.' }} }},
+                );
+            }}
             renderGalleryCards('libraryCustomers', customerItems);
 
             if (document.getElementById('custNewReturningRevenueChart')) {{
@@ -3670,6 +3764,34 @@ def generate_modern_dashboard(
                         ],
                     }},
                     options: firstItemOpts,
+                }});
+            }}
+            if (document.getElementById('custSampleFunnelWindowChart')) {{
+                const funnelOpts = dualAxisOptions();
+                new Chart(document.getElementById('custSampleFunnelWindowChart'), {{
+                    data: {{
+                        labels: DATA.sample_funnel.windows.map(x => `${{x.window_days || '-'}}d`),
+                        datasets: [
+                            {{ type: 'line', label: 'Repeat %', data: DATA.sample_funnel.windows.map(x => Number(x.repeat_pct || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Any full-size %', data: DATA.sample_funnel.windows.map(x => Number(x.fullsize_any_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: '200ml %', data: DATA.sample_funnel.windows.map(x => Number(x.fullsize_200_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.1, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: '500ml %', data: DATA.sample_funnel.windows.map(x => Number(x.fullsize_500_pct || 0)), borderColor: '#8b5cf6', tension: .30, borderWidth: 2.1, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: funnelOpts,
+                }});
+            }}
+            if (document.getElementById('custSampleEntryProductChart')) {{
+                new Chart(document.getElementById('custSampleEntryProductChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.sample_funnel.entry_rows.map(x => (x.item_name || '-').slice(0, 26)),
+                        datasets: [
+                            {{ label: 'Repeat 30d %', data: DATA.sample_funnel.entry_rows.map(x => Number(x.repeat_30d_pct || 0)), backgroundColor: 'rgba(71,102,255,.72)', borderRadius: 8 }},
+                            {{ label: 'Any full-size 60d %', data: DATA.sample_funnel.entry_rows.map(x => Number(x.fullsize_any_60d_pct || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
+                        ],
+                    }},
+                    options: horizontalBarOptions(),
                 }});
             }}
 

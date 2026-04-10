@@ -780,6 +780,29 @@ class BizniWebExporter:
         return df
 
     @staticmethod
+    def _is_sample_item_label(label: Any) -> bool:
+        text = str(label or "").strip().lower()
+        if not text:
+            return False
+        sample_keywords = ['vzor', 'vzorka', 'vzorky', 'sample']
+        return any(keyword in text for keyword in sample_keywords)
+
+    @staticmethod
+    def _fullsize_size_bucket(label: Any) -> Optional[str]:
+        text = str(label or "").strip().lower()
+        if not text:
+            return None
+        if '500ml' in text or '500 ml' in text:
+            return '500ml'
+        if '200ml' in text or '200 ml' in text:
+            return '200ml'
+        return None
+
+    @classmethod
+    def _is_fullsize_item_label(cls, label: Any) -> bool:
+        return cls._fullsize_size_bucket(label) is not None
+
+    @staticmethod
     def _normalize_match_text(value: Any) -> str:
         """Normalize strings for robust contains-based matching across accents/encoding/punctuation."""
         text = unicodedata.normalize('NFKD', str(value or ''))
@@ -2151,6 +2174,7 @@ class BizniWebExporter:
         first_item_retention = self.analyze_retention_by_first_order_item(df)
         same_item_repurchase = self.analyze_same_item_repurchase(df)
         time_to_nth_by_first_item = self.analyze_time_to_nth_by_first_item(df)
+        sample_funnel_analysis = self.analyze_sample_funnel(df)
 
         # Customer email segmentation analysis
         # Combine filtered orders with excluded (failed payment) orders for complete customer view
@@ -2255,6 +2279,7 @@ class BizniWebExporter:
             first_item_retention=first_item_retention,
             same_item_repurchase=same_item_repurchase,
             time_to_nth_by_first_item=time_to_nth_by_first_item,
+            sample_funnel_analysis=sample_funnel_analysis,
             fb_detailed_metrics=fb_detailed_metrics,
             fb_campaigns=fb_campaigns,
             cost_per_order=cost_per_order,
@@ -3198,6 +3223,237 @@ class BizniWebExporter:
         print(f"    - Avg days between orders: {result['summary']['avg_days_between_orders']}")
 
         return result
+
+    def analyze_sample_funnel(self, df: pd.DataFrame, windows: Optional[List[int]] = None, top_n: int = 12) -> dict:
+        """
+        Model Vevo sample funnel from first-order sample entry to repeat/full-size conversion.
+
+        Entry cohort definition:
+        - customer's first order contains at least one sample item
+        - customer's first order does not contain a full-size item
+
+        Conversions are measured from the first sample-entry order to:
+        - any repeat order
+        - any full-size order
+        - first 200ml order
+        - first 500ml order
+        """
+        windows = windows or [7, 14, 30, 60, 90]
+        print(f"\nAnalyzing sample funnel ({', '.join(str(window) for window in windows)} day windows)...")
+
+        required_columns = {'order_num', 'customer_email', 'purchase_date', 'item_label'}
+        if not required_columns.issubset(df.columns):
+            print("  Sample funnel skipped: required columns are missing.")
+            return {'summary': {}, 'window_conversion': pd.DataFrame(), 'entry_product_conversion': pd.DataFrame()}
+
+        export_df = df.copy()
+        export_df['purchase_datetime'] = pd.to_datetime(export_df['purchase_date'], errors='coerce')
+        export_df = export_df.dropna(subset=['purchase_datetime'])
+        export_df['customer_email'] = export_df['customer_email'].astype(str).str.strip().str.lower()
+        export_df = export_df[
+            export_df['customer_email'].notna() &
+            export_df['customer_email'].ne('') &
+            export_df['customer_email'].ne('nan')
+        ].copy()
+
+        if export_df.empty:
+            print("  Sample funnel skipped: no eligible customer journeys after cleanup.")
+            return {'summary': {}, 'window_conversion': pd.DataFrame(), 'entry_product_conversion': pd.DataFrame()}
+
+        revenue_candidates = [
+            'order_revenue_net',
+            'order_total',
+            'item_total_revenue_net',
+            'item_total_without_tax',
+            'item_total_revenue',
+        ]
+        revenue_col = next((column for column in revenue_candidates if column in export_df.columns), None)
+
+        item_flags = export_df[['customer_email', 'order_num', 'purchase_datetime', 'item_label', 'product_sku']].copy()
+        item_flags['is_sample'] = item_flags['item_label'].apply(self._is_sample_item_label)
+        item_flags['size_bucket'] = item_flags['item_label'].apply(self._fullsize_size_bucket)
+        item_flags['is_fullsize'] = item_flags['size_bucket'].notna()
+
+        order_flags = item_flags.groupby(['customer_email', 'order_num'], as_index=False).agg(
+            purchase_datetime=('purchase_datetime', 'min'),
+            contains_sample=('is_sample', 'any'),
+            contains_fullsize=('is_fullsize', 'any'),
+            contains_200=('size_bucket', lambda values: any(value == '200ml' for value in values)),
+            contains_500=('size_bucket', lambda values: any(value == '500ml' for value in values)),
+        )
+
+        orders_df = order_flags.copy()
+        if revenue_col is not None:
+            order_values = export_df[['customer_email', 'order_num', 'purchase_datetime', revenue_col]].drop_duplicates(
+                subset=['customer_email', 'order_num']
+            ).copy()
+            order_values = order_values.rename(columns={revenue_col: 'order_revenue'})
+            orders_df = orders_df.merge(
+                order_values[['customer_email', 'order_num', 'order_revenue']],
+                on=['customer_email', 'order_num'],
+                how='left'
+            )
+        else:
+            orders_df['order_revenue'] = 0.0
+        orders_df['order_revenue'] = orders_df['order_revenue'].fillna(0.0)
+        orders_df = orders_df.sort_values(['customer_email', 'purchase_datetime', 'order_num'])
+
+        first_orders = orders_df.groupby('customer_email', as_index=False).first()
+        sample_entry = first_orders[
+            first_orders['contains_sample'] &
+            (~first_orders['contains_fullsize'])
+        ].copy()
+
+        if sample_entry.empty:
+            print("  Sample funnel result: no first-order sample-entry cohort found.")
+            return {'summary': {}, 'window_conversion': pd.DataFrame(), 'entry_product_conversion': pd.DataFrame()}
+
+        sample_entry = sample_entry.rename(columns={
+            'order_num': 'entry_order_num',
+            'purchase_datetime': 'entry_purchase_datetime',
+            'order_revenue': 'entry_order_revenue',
+        })
+
+        sample_entry_customers = sample_entry['customer_email'].tolist()
+        later_orders = orders_df.merge(
+            sample_entry[['customer_email', 'entry_order_num', 'entry_purchase_datetime']],
+            on='customer_email',
+            how='inner'
+        )
+        later_orders = later_orders[
+            (later_orders['purchase_datetime'] > later_orders['entry_purchase_datetime']) |
+            (
+                (later_orders['purchase_datetime'] == later_orders['entry_purchase_datetime']) &
+                (later_orders['order_num'] != later_orders['entry_order_num'])
+            )
+        ].copy()
+        later_orders['days_since_entry'] = (
+            later_orders['purchase_datetime'] - later_orders['entry_purchase_datetime']
+        ).dt.total_seconds() / 86400.0
+
+        repeat_days = later_orders.groupby('customer_email')['days_since_entry'].min().rename('days_to_repeat')
+        fullsize_days = later_orders[later_orders['contains_fullsize']].groupby('customer_email')['days_since_entry'].min().rename('days_to_any_fullsize')
+        fullsize_200_days = later_orders[later_orders['contains_200']].groupby('customer_email')['days_since_entry'].min().rename('days_to_200ml')
+        fullsize_500_days = later_orders[later_orders['contains_500']].groupby('customer_email')['days_since_entry'].min().rename('days_to_500ml')
+
+        cohort_df = sample_entry[['customer_email', 'entry_order_num', 'entry_purchase_datetime', 'entry_order_revenue']].copy()
+        cohort_df = cohort_df.merge(repeat_days, on='customer_email', how='left')
+        cohort_df = cohort_df.merge(fullsize_days, on='customer_email', how='left')
+        cohort_df = cohort_df.merge(fullsize_200_days, on='customer_email', how='left')
+        cohort_df = cohort_df.merge(fullsize_500_days, on='customer_email', how='left')
+
+        window_rows = []
+        cohort_size = len(cohort_df)
+        for window in windows:
+            repeat_customers = int((cohort_df['days_to_repeat'].fillna(window + 1) <= window).sum())
+            any_fullsize_customers = int((cohort_df['days_to_any_fullsize'].fillna(window + 1) <= window).sum())
+            fullsize_200_customers = int((cohort_df['days_to_200ml'].fillna(window + 1) <= window).sum())
+            fullsize_500_customers = int((cohort_df['days_to_500ml'].fillna(window + 1) <= window).sum())
+            window_rows.append({
+                'window_days': window,
+                'cohort_customers': cohort_size,
+                'repeat_customers': repeat_customers,
+                'repeat_pct': round(repeat_customers / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+                'fullsize_any_customers': any_fullsize_customers,
+                'fullsize_any_pct': round(any_fullsize_customers / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+                'fullsize_200_customers': fullsize_200_customers,
+                'fullsize_200_pct': round(fullsize_200_customers / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+                'fullsize_500_customers': fullsize_500_customers,
+                'fullsize_500_pct': round(fullsize_500_customers / cohort_size * 100, 1) if cohort_size > 0 else 0.0,
+            })
+        window_conversion = pd.DataFrame(window_rows)
+
+        entry_sample_items = item_flags.merge(
+            sample_entry[['customer_email', 'entry_order_num']],
+            left_on=['customer_email', 'order_num'],
+            right_on=['customer_email', 'entry_order_num'],
+            how='inner'
+        )
+        entry_sample_items = entry_sample_items[entry_sample_items['is_sample']].copy()
+
+        entry_rows = []
+        for (item_name, item_sku), group in entry_sample_items.groupby(['item_label', 'product_sku']):
+            customers = group['customer_email'].dropna().unique().tolist()
+            item_cohort = cohort_df[cohort_df['customer_email'].isin(customers)]
+            customer_count = len(item_cohort)
+            if customer_count == 0:
+                continue
+            row = {
+                'item_name': item_name,
+                'item_sku': item_sku,
+                'entry_customers': customer_count,
+            }
+            for window in (30, 60, 90):
+                row[f'repeat_{window}d_pct'] = round(
+                    (item_cohort['days_to_repeat'].fillna(window + 1) <= window).sum() / customer_count * 100, 1
+                )
+                row[f'fullsize_any_{window}d_pct'] = round(
+                    (item_cohort['days_to_any_fullsize'].fillna(window + 1) <= window).sum() / customer_count * 100, 1
+                )
+                row[f'fullsize_200_{window}d_pct'] = round(
+                    (item_cohort['days_to_200ml'].fillna(window + 1) <= window).sum() / customer_count * 100, 1
+                )
+                row[f'fullsize_500_{window}d_pct'] = round(
+                    (item_cohort['days_to_500ml'].fillna(window + 1) <= window).sum() / customer_count * 100, 1
+                )
+            entry_rows.append(row)
+
+        entry_product_conversion = pd.DataFrame(entry_rows)
+        if not entry_product_conversion.empty:
+            entry_product_conversion = entry_product_conversion.sort_values(
+                ['entry_customers', 'fullsize_any_60d_pct'],
+                ascending=[False, False]
+            ).head(top_n).reset_index(drop=True)
+
+        summary = {
+            'entry_customers': cohort_size,
+            'entry_orders': int(sample_entry['entry_order_num'].nunique()),
+            'entry_revenue': round(float(sample_entry['entry_order_revenue'].sum() or 0.0), 2),
+            'sample_first_order_share_pct': round(cohort_size / max(first_orders['customer_email'].nunique(), 1) * 100, 1),
+            'avg_entry_order_value': round(float(sample_entry['entry_order_revenue'].mean() or 0.0), 2),
+            'repeat_30d_pct': round(
+                (cohort_df['days_to_repeat'].fillna(31) <= 30).sum() / cohort_size * 100, 1
+            ) if cohort_size > 0 else 0.0,
+            'fullsize_any_30d_pct': round(
+                (cohort_df['days_to_any_fullsize'].fillna(31) <= 30).sum() / cohort_size * 100, 1
+            ) if cohort_size > 0 else 0.0,
+            'fullsize_any_60d_pct': round(
+                (cohort_df['days_to_any_fullsize'].fillna(61) <= 60).sum() / cohort_size * 100, 1
+            ) if cohort_size > 0 else 0.0,
+            'fullsize_200_60d_pct': round(
+                (cohort_df['days_to_200ml'].fillna(61) <= 60).sum() / cohort_size * 100, 1
+            ) if cohort_size > 0 else 0.0,
+            'fullsize_500_60d_pct': round(
+                (cohort_df['days_to_500ml'].fillna(61) <= 60).sum() / cohort_size * 100, 1
+            ) if cohort_size > 0 else 0.0,
+            'median_days_to_fullsize': round(float(cohort_df['days_to_any_fullsize'].median()), 1) if cohort_df['days_to_any_fullsize'].notna().any() else None,
+            'median_days_to_repeat': round(float(cohort_df['days_to_repeat'].median()), 1) if cohort_df['days_to_repeat'].notna().any() else None,
+            'top_entry_product': entry_product_conversion.iloc[0]['item_name'] if not entry_product_conversion.empty else None,
+        }
+
+        window_filename = self.output_path(
+            f"sample_funnel_windows_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+        )
+        window_conversion.to_csv(window_filename, index=False, encoding='utf-8-sig')
+        if not entry_product_conversion.empty:
+            product_filename = self.output_path(
+                f"sample_funnel_products_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+            )
+            entry_product_conversion.to_csv(product_filename, index=False, encoding='utf-8-sig')
+            print(f"  Sample funnel products saved: {product_filename}")
+        print(f"  Sample funnel windows saved: {window_filename}")
+        print(
+            "  Sample funnel summary: "
+            f"entry_customers={summary['entry_customers']}, "
+            f"fullsize_any_30d={summary['fullsize_any_30d_pct']}%, "
+            f"fullsize_any_60d={summary['fullsize_any_60d_pct']}%"
+        )
+
+        return {
+            'summary': summary,
+            'window_conversion': window_conversion,
+            'entry_product_conversion': entry_product_conversion,
+        }
 
     def analyze_retention_by_first_order_item(self, df: pd.DataFrame, min_first_orders: int = 50, top_n: int = 20) -> dict:
         """
