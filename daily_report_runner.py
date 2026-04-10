@@ -336,7 +336,7 @@ def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
             orders = _to_int(row.get("unique_orders", ""))
             product_costs = _to_float(row.get("product_expense", ""))
             packaging_costs = _to_float(row.get("packaging_cost", ""))
-            shipping_subsidy = _to_float(row.get("shipping_subsidy_cost", ""))
+            shipping_subsidy = _to_float(row.get("shipping_net_cost", row.get("shipping_subsidy_cost", "")))
             facebook_ads = _to_float(row.get("fb_ads_spend", ""))
             google_ads = _to_float(row.get("google_ads_spend", ""))
             total_ads = facebook_ads + google_ads
@@ -359,6 +359,7 @@ def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
                     "product_costs": product_costs,
                     "packaging_costs": packaging_costs,
                     "shipping_subsidy": shipping_subsidy,
+                    "shipping_net": shipping_subsidy,
                     "facebook_ads": facebook_ads,
                     "google_ads": google_ads,
                     "total_ads": total_ads,

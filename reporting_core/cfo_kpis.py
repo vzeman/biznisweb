@@ -136,7 +136,7 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
         orders = int(float(row.get("unique_orders", 0) or 0))
         product_costs = float(row.get("product_expense", 0) or 0)
         packaging_costs = float(row.get("packaging_cost", 0) or 0)
-        shipping_subsidy = float(row.get("shipping_subsidy_cost", 0) or 0)
+        shipping_subsidy = float(row.get("shipping_net_cost", row.get("shipping_subsidy_cost", 0)) or 0)
         facebook_ads = float(row.get("fb_ads_spend", 0) or 0)
         google_ads = float(row.get("google_ads_spend", 0) or 0)
         total_ads = facebook_ads + google_ads
@@ -159,6 +159,7 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
                 "product_costs": product_costs,
                 "packaging_costs": packaging_costs,
                 "shipping_subsidy": shipping_subsidy,
+                "shipping_net": shipping_subsidy,
                 "facebook_ads": facebook_ads,
                 "google_ads": google_ads,
                 "total_ads": total_ads,

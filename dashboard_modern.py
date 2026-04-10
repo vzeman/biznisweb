@@ -97,7 +97,7 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     total_cost = [_num(v) for v in date_agg.get("total_cost", pd.Series([0] * len(date_agg))).tolist()]
     product_cost = [_num(v) for v in date_agg.get("product_expense", pd.Series([0] * len(date_agg))).tolist()]
     packaging = [_num(v) for v in date_agg.get("packaging_cost", pd.Series([0] * len(date_agg))).tolist()]
-    shipping = [_num(v) for v in date_agg.get("shipping_subsidy_cost", pd.Series([0] * len(date_agg))).tolist()]
+    shipping = [_num(v) for v in date_agg.get("shipping_net_cost", date_agg.get("shipping_subsidy_cost", pd.Series([0] * len(date_agg)))).tolist()]
     fixed = [_num(v) for v in date_agg.get("fixed_daily_cost", pd.Series([0] * len(date_agg))).tolist()]
     items = [int(round(_num(v))) for v in date_agg.get("total_items", pd.Series([0] * len(date_agg))).tolist()]
     avg_items = [round((itm / ords) if ords > 0 else 0.0, 4) for itm, ords in zip(items, orders)]
@@ -205,14 +205,14 @@ def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
 
 def _cost_mix(date_agg: pd.DataFrame) -> Dict[str, Any]:
     return {
-        "labels": ["Product", "Packaging", "Shipping", "Facebook Ads", "Google Ads", "Fixed"],
-        "values": [
-            round(_num(date_agg.get("product_expense", pd.Series(dtype=float)).sum()), 2),
-            round(_num(date_agg.get("packaging_cost", pd.Series(dtype=float)).sum()), 2),
-            round(_num(date_agg.get("shipping_subsidy_cost", pd.Series(dtype=float)).sum()), 2),
-            round(_num(date_agg.get("fb_ads_spend", pd.Series(dtype=float)).sum()), 2),
-            round(_num(date_agg.get("google_ads_spend", pd.Series(dtype=float)).sum()), 2),
-            round(_num(date_agg.get("fixed_daily_cost", pd.Series(dtype=float)).sum()), 2),
+            "labels": ["Product", "Packaging", "Net shipping", "Facebook Ads", "Google Ads", "Fixed"],
+            "values": [
+                round(_num(date_agg.get("product_expense", pd.Series(dtype=float)).sum()), 2),
+                round(_num(date_agg.get("packaging_cost", pd.Series(dtype=float)).sum()), 2),
+                round(_num(date_agg.get("shipping_net_cost", date_agg.get("shipping_subsidy_cost", pd.Series(dtype=float))).sum()), 2),
+                round(_num(date_agg.get("fb_ads_spend", pd.Series(dtype=float)).sum()), 2),
+                round(_num(date_agg.get("google_ads_spend", pd.Series(dtype=float)).sum()), 2),
+                round(_num(date_agg.get("fixed_daily_cost", pd.Series(dtype=float)).sum()), 2),
         ],
     }
 
@@ -976,7 +976,7 @@ def generate_modern_dashboard(
     total_ads = round(total_fb_ads + total_google_ads, 2)
     total_product_cost = round(_num(date_agg.get("product_expense", pd.Series(dtype=float)).sum()), 2)
     total_packaging_cost = round(_num(date_agg.get("packaging_cost", pd.Series(dtype=float)).sum()), 2)
-    total_shipping_subsidy = round(_num(date_agg.get("shipping_subsidy_cost", pd.Series(dtype=float)).sum()), 2)
+    total_shipping_subsidy = round(_num(date_agg.get("shipping_net_cost", date_agg.get("shipping_subsidy_cost", pd.Series(dtype=float))).sum()), 2)
     total_fixed_overhead = round(_num(date_agg.get("fixed_daily_cost", pd.Series(dtype=float)).sum()), 2)
     total_costs = round(_num(date_agg.get("total_cost", pd.Series(dtype=float)).sum()), 2)
     total_items = int(round(_num(date_agg.get("total_items", pd.Series(dtype=float)).sum())))
@@ -1031,11 +1031,13 @@ def generate_modern_dashboard(
         ),
     }
 
+    shipping_tone = "positive" if total_shipping_subsidy < 0 else ("neutral" if total_shipping_subsidy == 0 else "negative")
+
     library_tiles = [
         {"en": "Total revenue (net)", "sk": "Celkove trzby (net)", "value": total_revenue, "kind": "currency", "tone": "neutral"},
         {"en": "Product costs", "sk": "Naklady na produkty", "value": total_product_cost, "kind": "currency", "tone": "negative"},
         {"en": "Packaging costs", "sk": "Naklady na balenie", "value": total_packaging_cost, "kind": "currency", "tone": "negative"},
-        {"en": "Shipping subsidy", "sk": "Prispevok na dopravu", "value": total_shipping_subsidy, "kind": "currency", "tone": "negative"},
+        {"en": "Net shipping", "sk": "Ciste shipping", "value": total_shipping_subsidy, "kind": "currency", "tone": shipping_tone, "note_en": "positive = cost, negative = shipping profit", "note_sk": "kladne = naklad, zaporne = shipping zisk"},
         {"en": "Fixed overhead", "sk": "Fixny overhead", "value": total_fixed_overhead, "kind": "currency", "tone": "negative"},
         {"en": "Facebook ads", "sk": "Facebook reklama", "value": total_fb_ads, "kind": "currency", "tone": "negative"},
         {"en": "Google ads", "sk": "Google reklama", "value": total_google_ads, "kind": "currency", "tone": "negative"},
@@ -1713,7 +1715,7 @@ def generate_modern_dashboard(
                             <div class="chart-shell"><canvas id="dailyEconomicsChart"></canvas></div>
                         </div>
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Cost component trend</span><span class="lang-sk hidden">Trend zloziek nakladov</span></h3><p><span class="lang-en">Product, packaging, shipping, fixed and ads in one view.</span><span class="lang-sk hidden">Produkt, balenie, doprava, fix a reklama v jednom pohlade.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Cost component trend</span><span class="lang-sk hidden">Trend zloziek nakladov</span></h3><p><span class="lang-en">Product, packaging, net shipping, fixed and ads in one view.</span><span class="lang-sk hidden">Produkt, balenie, ciste shipping, fix a reklama v jednom pohlade.</span></p></div></div>
                             <div class="chart-shell"><canvas id="costBreakoutChart"></canvas></div>
                         </div>
                     </div>
@@ -2825,7 +2827,7 @@ def generate_modern_dashboard(
                     datasets: [
                         {{ type: 'bar', label: 'Product', data: s.product_cost, backgroundColor: 'rgba(255,138,31,.72)', stack: 'costs', borderRadius: 6 }},
                         {{ type: 'bar', label: 'Packaging', data: s.packaging, backgroundColor: 'rgba(255,177,93,.72)', stack: 'costs', borderRadius: 6 }},
-                        {{ type: 'bar', label: 'Shipping', data: s.shipping, backgroundColor: 'rgba(255,213,157,.9)', stack: 'costs', borderRadius: 6 }},
+                        {{ type: 'bar', label: 'Net shipping', data: s.shipping, backgroundColor: 'rgba(255,213,157,.9)', stack: 'costs', borderRadius: 6 }},
                         {{ type: 'bar', label: 'Fixed', data: s.fixed, backgroundColor: 'rgba(64,56,47,.72)', stack: 'costs', borderRadius: 6 }},
                         {{ type: 'line', label: 'Ads', data: s.total_ads, borderColor: '#4766ff', tension: .28, borderWidth: 2.1, pointRadius: 0, yAxisID: 'y1' }},
                     ],
@@ -3336,7 +3338,7 @@ def generate_modern_dashboard(
                 {{ id: 'econProfitDetailChart', title: {{ en: 'Profit detail', sk: 'Detail zisku' }}, desc: {{ en: 'Profit development isolated from the mixed chart.', sk: 'Vyvoj zisku oddeleny od ostatnych serii.' }} }},
                 {{ id: 'econAovDetailChart', title: {{ en: 'AOV detail', sk: 'Detail AOV' }}, desc: {{ en: 'Basket value trend and 7-day moving average.', sk: 'Trend hodnoty kosika a 7-dnovy priemer.' }} }},
                 {{ id: 'econCostStackDetailChart', title: {{ en: 'Cost stack detail', sk: 'Detail stacku nakladov' }}, desc: {{ en: 'Total cost, product cost and ad spend on one timeline.', sk: 'Total cost, produktovy cost a reklamny spend na jednej osi.' }} }},
-                {{ id: 'econLogisticsDetailChart', title: {{ en: 'Logistics and fixed costs', sk: 'Logistika a fixne naklady' }}, desc: {{ en: 'Packaging, shipping and fixed overhead in one view.', sk: 'Balenie, shipping a fixny overhead v jednom pohlade.' }} }},
+                {{ id: 'econLogisticsDetailChart', title: {{ en: 'Logistics and fixed costs', sk: 'Logistika a fixne naklady' }}, desc: {{ en: 'Packaging, net shipping and fixed overhead in one view.', sk: 'Balenie, ciste shipping a fixny overhead v jednom pohlade.' }} }},
                 {{ id: 'econAverageTrendDetailChart', title: {{ en: 'Running averages', sk: 'Bezace priemery' }}, desc: {{ en: 'Cumulative average revenue and profit for stability reading.', sk: 'Kumulativny priemer trzby a zisku pre citanie stability.' }} }},
                 {{ id: 'econRoiRoasDetailChart', title: {{ en: 'ROI and ROAS detail', sk: 'Detail ROI a ROAS' }}, desc: {{ en: 'Daily ROI against daily blended ROAS.', sk: 'Denne ROI oproti dennemu blended ROAS.' }} }},
                 {{ id: 'econMarginsDetailChart', title: {{ en: 'Margin stack', sk: 'Stack marzi' }}, desc: {{ en: 'Gross, pre-ad and post-ad margins in one line view.', sk: 'Hruba, pre-ad a post-ad marza v jednom pohlade.' }} }},
@@ -3403,7 +3405,7 @@ def generate_modern_dashboard(
                         labels: s.dates,
                         datasets: [
                             {{ type: 'bar', label: 'Packaging', data: s.packaging, backgroundColor: 'rgba(255,177,93,.55)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Shipping', data: s.shipping, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Net shipping', data: s.shipping, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
                             {{ type: 'line', label: 'Fixed', data: s.fixed, borderColor: '#cf5060', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
                         ],
                     }},
@@ -4483,7 +4485,7 @@ def generate_modern_dashboard(
                     {{ id: 'econProductCostsStandaloneChart', title: {{ en: 'Product costs', sk: 'Produktove naklady' }}, desc: {{ en: 'Cost of goods sold through time.', sk: 'Naklady na tovar v case.' }} }},
                     {{ id: 'econGrossMarginStandaloneChart', title: {{ en: 'Gross margin', sk: 'Hruba marza' }}, desc: {{ en: 'Daily gross margin with smoothing.', sk: 'Denne hruba marza s vyhladenim.' }} }},
                     {{ id: 'econPackagingStandaloneChart', title: {{ en: 'Packaging costs', sk: 'Naklady na balenie' }}, desc: {{ en: 'Daily packaging cost load.', sk: 'Denne naklady na balenie.' }} }},
-                    {{ id: 'econShippingStandaloneChart', title: {{ en: 'Shipping subsidy', sk: 'Shipping subsidy' }}, desc: {{ en: 'Daily shipping subsidy or shipping profit line.', sk: 'Denn a shipping subsidy resp. shipping zisk.' }} }},
+                    {{ id: 'econShippingStandaloneChart', title: {{ en: 'Net shipping', sk: 'Ciste shipping' }}, desc: {{ en: 'Daily net shipping line: positive = cost, negative = shipping profit.', sk: 'Denna krivka cisteho shippingu: kladne = naklad, zaporne = shipping zisk.' }} }},
                     {{ id: 'econFixedStandaloneChart', title: {{ en: 'Fixed costs', sk: 'Fixne naklady' }}, desc: {{ en: 'Daily allocation of fixed overhead.', sk: 'Denne alokovane fixne naklady.' }} }},
                     {{ id: 'econItemsSoldStandaloneChart', title: {{ en: 'Items sold', sk: 'Predane kusy' }}, desc: {{ en: 'Total item units sold per day.', sk: 'Celkovy pocet predanych kusov za den.' }} }},
                     {{ id: 'econAvgItemsStandaloneChart', title: {{ en: 'Average items per order', sk: 'Priemer poloziek na objednavku' }}, desc: {{ en: 'Basket depth by number of sold items.', sk: 'Hl bka kosika podla poctu poloziek.' }} }},
@@ -4556,7 +4558,7 @@ def generate_modern_dashboard(
                     type: 'line',
                     data: {{
                         labels: s.dates,
-                        datasets: [{{ label: 'Shipping', data: s.shipping, borderColor: '#4766ff', tension: .32, borderWidth: 2.3, pointRadius: 0 }}],
+                        datasets: [{{ label: 'Net shipping', data: s.shipping, borderColor: '#4766ff', tension: .32, borderWidth: 2.3, pointRadius: 0 }}],
                     }},
                     options: baseOptions(),
                 }});

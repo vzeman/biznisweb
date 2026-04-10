@@ -871,3 +871,83 @@ Next exact step:
     - `custSampleEntryProductChart`
 - Next exact step:
   - start the Roy bundle/accessory model as the next business-model expansion after the Vevo sample funnel model is now live in the modern dashboard.
+### 2026-04-10 (Roy bundle and accessory model)
+- Added Roy-specific anchor device families and accessory groups to `projects/roy/settings.json` so bundle economics no longer depends on ad-hoc string logic in dashboard code.
+- Added a dedicated Roy bundle/accessory model in `export_orders.py` that computes:
+  - pair-level attach rate
+  - incremental order contribution uplift
+  - anchor device family summary
+  - accessory group summary
+- Exposed the new Roy bundle/accessory payload through the modern dashboard renderer in `dashboard_modern.py`.
+- Added new Roy charts and tables:
+  - `prodBundleAccessoryAttachChart`
+  - `prodBundleAccessoryUpliftChart`
+  - `prodBundleAccessoryFamilyChart`
+  - `prodBundleAccessoryGroupChart`
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - Roy March 2026 report regenerated successfully
+  - new bundle/accessory charts render in `data\\roy\\report_20260301-20260331.html`
+- Next exact step:
+  - add cohort-normalized CAC / LTV / payback views so global shortcut metrics are complemented by acquisition-cohort recovery curves.
+### 2026-04-10 (Cohort-normalized unit economics)
+- Added cohort-normalized CAC / LTV / payback views in `export_orders.py` for both VEVO and ROY.
+- The cohort model now computes 30/60/90/180-day acquisition-cohort views with:
+  - customers
+  - revenue LTV
+  - contribution LTV
+  - contribution LTV / CAC
+  - recovery percentage
+  - average / median payback days
+- Added cohort-normalized charts to the modern dashboard in `dashboard_modern.py` for both projects:
+  - `custCohortContributionLtvCacChart`
+  - `custCohortPaybackRecoveryChart`
+  - `custCohortCacVsContributionChart`
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py`
+  - `python export_orders.py --project vevo --from-date 2025-05-03 --to-date 2026-04-09`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-09`
+- Verification outcome:
+  - full-history VEVO and ROY reports regenerate successfully
+  - both reports now contain cohort-normalized unit-economics charts in the customer section / full library
+- Next exact step:
+  - normalize shipping sign semantics so positive values always mean business cost and negative values mean shipping profit, then update labels and formulas consistently across runtime, export and dashboard layers.
+### 2026-04-10 (Shipping net semantics cleanup)
+- Replaced ambiguous `shipping_subsidy_per_order` semantics with canonical `shipping_net_per_order` in the runtime/config layer:
+  - positive value = business shipping cost
+  - negative value = shipping profit / over-recovery
+- Added runtime alias handling in `reporting_core/runtime.py` so existing settings can still load, while new project configs and templates now use:
+  - `shipping_net_per_order`
+- Updated project settings:
+  - `projects/vevo/settings.json` now uses `shipping_net_per_order: 0.2`
+  - `projects/roy/settings.json` now uses `shipping_net_per_order: -0.2`
+  - `templates/reporting-client/settings.template.json` now uses `shipping_net_per_order`
+- Updated export math in `export_orders.py` to use canonical `shipping_net_cost` in:
+  - daily aggregation
+  - total cost
+  - pre-ad contribution
+  - post-ad contribution
+  - geo profitability
+  - financial summaries
+- Preserved backward-compatible aliases where needed so existing consumers do not break, but all key formulas now read `shipping_net_cost` first.
+- Updated downstream readers:
+  - `reporting_core/cfo_kpis.py`
+  - `daily_report_runner.py`
+  - `dashboard_modern.py`
+  - `html_report_generator.py`
+- Dashboard/UI cleanup:
+  - renamed visible labels from `Shipping Subsidy` to `Net shipping`
+  - modern dashboard tiles and charts now explain that positive means cost and negative means shipping profit
+  - legacy/shared generator fallbacks now read `shipping_net_cost` before old subsidy aliases
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py reporting_core\\runtime.py reporting_core\\cfo_kpis.py daily_report_runner.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO and ROY March 2026 reports regenerate successfully
+  - modern HTML outputs now render `Net shipping` instead of the ambiguous subsidy label
+  - shipping math stays stable while sign semantics are now explicit and consistent
+- Next exact step:
+  - add full QA assertions in pipeline for shell/library parity, campaign arithmetic integrity and normalized-dimension completeness (`day_name`, `anchor_item`, `country`).
