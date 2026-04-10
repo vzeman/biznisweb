@@ -84,6 +84,11 @@ def main() -> int:
         )
         require(
             export_orders,
+            "_build_geo_qa",
+            "export_orders.py must build geo confidence QA metadata before report export.",
+        )
+        require(
+            export_orders,
             "\"is_partial\"",
             "export_orders.py must persist partial-data state in source health metadata.",
         )
@@ -101,6 +106,11 @@ def main() -> int:
             dashboard_modern,
             "Attribution QA guardrails",
             "Modern dashboard must surface attribution QA warnings explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "Geo confidence guardrails",
+            "Modern dashboard must surface geo confidence guardrails explicitly.",
         )
         require(
             dashboard_modern,
