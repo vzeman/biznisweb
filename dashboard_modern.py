@@ -779,6 +779,33 @@ def generate_modern_dashboard(
     )
     payday_window_rows = _frame_rows((advanced_dtc_metrics or {}).get("payday_window"), ["window", "orders", "revenue", "profit", "avg_daily_revenue", "avg_daily_profit"], limit=20)
     cohort_payback_rows = _frame_rows((advanced_dtc_metrics or {}).get("cohort_payback"), ["cohort_month", "new_customers", "cohort_cac", "recovery_rate_pct", "avg_payback_days", "median_payback_days"], limit=24)
+    cohort_unit_economics_rows = _frame_rows(
+        (advanced_dtc_metrics or {}).get("cohort_unit_economics"),
+        [
+            "cohort_month",
+            "new_customers",
+            "cohort_age_days",
+            "cohort_paid_spend",
+            "cohort_blended_cac",
+            "revenue_ltv_30d",
+            "revenue_ltv_60d",
+            "revenue_ltv_90d",
+            "revenue_ltv_180d",
+            "contribution_ltv_30d",
+            "contribution_ltv_60d",
+            "contribution_ltv_90d",
+            "contribution_ltv_180d",
+            "contribution_ltv_cac_30d",
+            "contribution_ltv_cac_60d",
+            "contribution_ltv_cac_90d",
+            "contribution_ltv_cac_180d",
+            "payback_recovery_30d_pct",
+            "payback_recovery_60d_pct",
+            "payback_recovery_90d_pct",
+            "payback_recovery_180d_pct",
+        ],
+        limit=24,
+    )
     bundle_accessory_pair_rows = _frame_rows(
         (bundle_accessory_model or {}).get("pair_rows"),
         [
@@ -1092,6 +1119,7 @@ def generate_modern_dashboard(
         "daily_margin_rows": daily_margin_rows,
         "payday_window_rows": payday_window_rows,
         "cohort_payback_rows": cohort_payback_rows,
+        "cohort_unit_economics_rows": cohort_unit_economics_rows,
         "advanced_summary": {k: _maybe_num(v) for k, v in advanced_summary.items()},
         "heatmap_rows": heatmap_rows,
         "b2b_rows": b2b_rows,
@@ -2284,6 +2312,7 @@ def generate_modern_dashboard(
         function fmtInt(v) {{ if (v === null || v === undefined || Number.isNaN(Number(v))) return 'N/A'; return new Intl.NumberFormat('en-US', {{ maximumFractionDigits: 0 }}).format(Number(v)); }}
         function fmtPercent(v) {{ if (v === null || v === undefined || Number.isNaN(Number(v))) return 'N/A'; return `${{Number(v).toFixed(1)}}%`; }}
         function fmtMultiple(v) {{ if (v === null || v === undefined || Number.isNaN(Number(v))) return 'N/A'; return `${{Number(v).toFixed(2)}}x`; }}
+        function nullableNumber(v) {{ return (v === null || v === undefined || Number.isNaN(Number(v))) ? null : Number(v); }}
         function fmtMetric(key, value) {{
             const type = KPI_TYPES[key] || 'text';
             if (type === 'currency') return fmtCurrency(value);
@@ -3566,6 +3595,13 @@ def generate_modern_dashboard(
                     {{ id: 'custCumulativeClvCacChart', title: {{ en: 'Cumulative CLV vs CAC', sk: 'Kumulativne CLV vs CAC' }}, desc: {{ en: 'Cumulative average CLV compared with cumulative CAC.', sk: 'Kumulativne priemerne CLV oproti kumulativnemu CAC.' }} }},
                 );
             }}
+            if (hasRows(DATA.cohort_unit_economics_rows)) {{
+                customerItems.push(
+                    {{ id: 'custCohortContributionLtvCacChart', title: {{ en: 'Cohort contribution LTV/CAC', sk: 'Kohortne contribution LTV/CAC' }}, desc: {{ en: '30/60/90/180-day contribution LTV/CAC by acquisition cohort.', sk: '30/60/90/180-dnove contribution LTV/CAC podla akvizicnej kohorty.' }} }},
+                    {{ id: 'custCohortPaybackRecoveryChart', title: {{ en: 'Cohort payback recovery', sk: 'Kohortna payback recovery' }}, desc: {{ en: 'Share of customers that recover blended CAC within each horizon.', sk: 'Podiel zakaznikov, ktori vratia blended CAC v danom horizonte.' }} }},
+                    {{ id: 'custCohortCacVsContributionChart', title: {{ en: 'Cohort CAC vs contribution LTV', sk: 'Kohortny CAC vs contribution LTV' }}, desc: {{ en: 'Blended CAC versus mature contribution LTV by cohort.', sk: 'Blended CAC oproti zrelemu contribution LTV podla kohorty.' }} }},
+                );
+            }}
             if (hasSeries(DATA.order_size.labels)) {{
                 customerItems.push({{ id: 'custOrderSizeMixDetailChart', title: {{ en: 'Order size mix', sk: 'Mix velkosti objednavok' }}, desc: {{ en: 'Daily order size distribution by basket size.', sk: 'Denny mix velkosti objednavok podla poctu poloziek.' }} }});
             }}
@@ -3667,6 +3703,53 @@ def generate_modern_dashboard(
                         ],
                     }},
                     options: cumOpts,
+                }});
+            }}
+            if (document.getElementById('custCohortContributionLtvCacChart')) {{
+                const cohortRows = DATA.cohort_unit_economics_rows;
+                new Chart(document.getElementById('custCohortContributionLtvCacChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: cohortRows.map(x => x.cohort_month || '-'),
+                        datasets: [
+                            {{ label: '30d', data: cohortRows.map(x => nullableNumber(x.contribution_ltv_cac_30d)), borderColor: '#ffb96d', tension: .30, borderWidth: 2.0, pointRadius: 2, spanGaps: true }},
+                            {{ label: '60d', data: cohortRows.map(x => nullableNumber(x.contribution_ltv_cac_60d)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 2, spanGaps: true }},
+                            {{ label: '90d', data: cohortRows.map(x => nullableNumber(x.contribution_ltv_cac_90d)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 2, spanGaps: true }},
+                            {{ label: '180d', data: cohortRows.map(x => nullableNumber(x.contribution_ltv_cac_180d)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.4, pointRadius: 2, spanGaps: true }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custCohortPaybackRecoveryChart')) {{
+                const cohortRows = DATA.cohort_unit_economics_rows;
+                new Chart(document.getElementById('custCohortPaybackRecoveryChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: cohortRows.map(x => x.cohort_month || '-'),
+                        datasets: [
+                            {{ label: '30d recovery %', data: cohortRows.map(x => nullableNumber(x.payback_recovery_30d_pct)), backgroundColor: 'rgba(255,185,109,.70)', borderRadius: 6 }},
+                            {{ label: '60d recovery %', data: cohortRows.map(x => nullableNumber(x.payback_recovery_60d_pct)), backgroundColor: 'rgba(255,138,31,.68)', borderRadius: 6 }},
+                            {{ label: '90d recovery %', data: cohortRows.map(x => nullableNumber(x.payback_recovery_90d_pct)), backgroundColor: 'rgba(71,102,255,.62)', borderRadius: 6 }},
+                            {{ label: '180d recovery %', data: cohortRows.map(x => nullableNumber(x.payback_recovery_180d_pct)), backgroundColor: 'rgba(31,157,102,.62)', borderRadius: 6 }},
+                        ],
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custCohortCacVsContributionChart')) {{
+                const cohortRows = DATA.cohort_unit_economics_rows;
+                const cohortOpts = dualAxisOptions();
+                new Chart(document.getElementById('custCohortCacVsContributionChart'), {{
+                    data: {{
+                        labels: cohortRows.map(x => x.cohort_month || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Blended CAC', data: cohortRows.map(x => nullableNumber(x.cohort_blended_cac)), backgroundColor: 'rgba(207,80,96,.52)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: '90d contribution LTV', data: cohortRows.map(x => nullableNumber(x.contribution_ltv_90d)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1', spanGaps: true }},
+                            {{ type: 'line', label: '180d contribution LTV', data: cohortRows.map(x => nullableNumber(x.contribution_ltv_180d)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.4, pointRadius: 2, yAxisID: 'y1', spanGaps: true }},
+                        ],
+                    }},
+                    options: cohortOpts,
                 }});
             }}
             if (document.getElementById('custOrderSizeMixDetailChart')) {{

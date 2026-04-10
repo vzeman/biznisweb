@@ -101,7 +101,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Add cohort-normalized CAC / LTV / payback views so marketing efficiency is comparable by acquisition cohort instead of only global aggregate shortcuts.
+- Add geo confidence scoring and low-sample guardrails so country-level reporting does not present tiny samples as strategic market insights.
 
 ## 9) Change Log
 
@@ -179,6 +179,30 @@ Bootstrap entrypoints:
   - daily normalization uses calendar_days (includes zero-order days).
 - Added fairness diagnostics in table: `Calendar Days` and `Active Day Rate`.
 - Added new Day-of-Month analytics (1-31) to reporting pipeline:
+
+### 2026-04-10 (cohort-normalized unit economics)
+- Added cohort-normalized CAC / LTV / payback views into `export_orders.py` so acquisition cohorts can be compared on mature horizons instead of only via global blended shortcuts.
+- New cohort unit economics payload now exports, per acquisition cohort:
+  - blended and FB CAC
+  - 30/60/90/180-day revenue LTV
+  - 30/60/90/180-day contribution LTV
+  - 30/60/90/180-day contribution LTV/CAC
+  - 30/60/90/180-day CAC recovery %
+  - average and median payback days by horizon
+- Added mature weighted summary fields for cohort-normalized contribution LTV/CAC and payback recovery into the advanced DTC summary layer.
+- Wired the new cohort payload into `dashboard_modern.py` and added three customer analytics charts:
+  - `custCohortContributionLtvCacChart`
+  - `custCohortPaybackRecoveryChart`
+  - `custCohortCacVsContributionChart`
+- Added null-safe rendering for immature cohort horizons so missing maturity now renders as gaps instead of fake zeroes.
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py`
+  - `python export_orders.py --project vevo --from-date 2025-05-03 --to-date 2026-04-09`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-09`
+- Verification outcome:
+  - VEVO full-history report `data\\vevo\\report_20250503-20260409.html` contains all three cohort chart IDs
+  - ROY full-history report `data\\roy\\report_20250924-20260409.html` contains all three cohort chart IDs
+  - both exports complete successfully with the new cohort-normalized views embedded in the modern dashboard.
 
 ### 2026-04-03
 - Promoted the modern dashboard shell (`test2`) to the default production HTML renderer.
