@@ -4447,6 +4447,10 @@ class BizniWebExporter:
                     'key_penetration_pct': round((key_orders / total_orders * 100), 1) if total_orders > 0 else 0.0
                 })
         attach_rate = pd.DataFrame(attach_rows).sort_values(['key_orders', 'attach_rate_pct'], ascending=[False, False]) if attach_rows else pd.DataFrame()
+        if not attach_rate.empty:
+            attach_rate['anchor_item'] = attach_rate['key_product']
+            attach_rate['anchor_orders'] = attach_rate['key_orders']
+            attach_rate['attached_item'] = attach_rate['attached_product']
 
         # ---- 10) margin stability index (daily pre-ad margin volatility)
         daily_margin = orders_df.groupby('purchase_date_only').agg({
@@ -4461,6 +4465,7 @@ class BizniWebExporter:
         )
         daily_margin = daily_margin.sort_values('date')
         daily_margin['pre_ad_margin_7d_ma'] = daily_margin['pre_ad_margin_pct'].rolling(window=7, min_periods=1).mean()
+        daily_margin['pre_ad_contribution_margin_pct'] = daily_margin['pre_ad_margin_pct']
 
         margin_mean = float(daily_margin['pre_ad_margin_pct'].mean()) if not daily_margin.empty else 0.0
         margin_std = float(daily_margin['pre_ad_margin_pct'].std(ddof=0)) if len(daily_margin) > 1 else 0.0
@@ -4538,6 +4543,8 @@ class BizniWebExporter:
         window_order = {'1-7': 1, '8-14': 2, '15-21': 3, '22-28': 4, '29-31': 5}
         payday_window['window_order'] = payday_window['window'].map(window_order).fillna(99)
         payday_window = payday_window.sort_values('window_order').drop(columns=['window_order'])
+        if not sku_pareto.empty:
+            sku_pareto['cum_contribution_pct'] = sku_pareto['cum_contribution_share_pct']
 
         result = {
             'summary': {
@@ -5266,6 +5273,10 @@ class BizniWebExporter:
             correlations['google_revenue'] = round(daily_data['google_spend'].corr(daily_data['revenue']), 3)
             correlations['total_ads_orders'] = round(daily_data['total_ad_spend'].corr(daily_data['orders']), 3)
             correlations['total_ads_revenue'] = round(daily_data['total_ad_spend'].corr(daily_data['revenue']), 3)
+            correlations['total_ads_profit'] = round(daily_data['total_ad_spend'].corr(daily_data['profit']), 3)
+            correlations['spend_orders_correlation'] = correlations['total_ads_orders']
+            correlations['spend_revenue_correlation'] = correlations['total_ads_revenue']
+            correlations['spend_profit_correlation'] = correlations['total_ads_profit']
 
         # Calculate optimal spend ranges with 10€ increments
         # Group by spend ranges and calculate average orders/revenue
@@ -5295,7 +5306,8 @@ class BizniWebExporter:
         dow_effectiveness = daily_data.groupby('day_of_week').agg({
             'fb_spend': 'mean',
             'orders': 'mean',
-            'revenue': 'mean'
+            'revenue': 'mean',
+            'profit': 'mean'
         }).reset_index()
         dow_effectiveness['roas'] = (dow_effectiveness['revenue'] / dow_effectiveness['fb_spend']).round(2)
         dow_effectiveness['roas'] = dow_effectiveness['roas'].replace([float('inf'), float('-inf')], 0).fillna(0)
@@ -5304,6 +5316,11 @@ class BizniWebExporter:
         day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         dow_effectiveness['day_order'] = dow_effectiveness['day_of_week'].map({d: i for i, d in enumerate(day_order)})
         dow_effectiveness = dow_effectiveness.sort_values('day_order')
+        dow_effectiveness['day_name'] = dow_effectiveness['day_of_week']
+        dow_effectiveness['avg_fb_spend'] = dow_effectiveness['fb_spend']
+        dow_effectiveness['avg_orders'] = dow_effectiveness['orders']
+        dow_effectiveness['avg_revenue'] = dow_effectiveness['revenue']
+        dow_effectiveness['avg_profit'] = dow_effectiveness['profit']
 
         result = {
             'correlations': correlations,
@@ -5459,7 +5476,8 @@ class BizniWebExporter:
                 'daily_source_spend': round(total_fb_spend, 2),
                 'campaign_source_spend': round(total_campaign_spend, 2),
                 'difference': round(diff, 2),
-                'difference_pct': round(diff_pct, 2)
+                'difference_pct': round(diff_pct, 2),
+                'coverage_ratio': round((total_campaign_spend / total_fb_spend), 4) if total_fb_spend > 0 else None,
             }
 
             campaign_attribution = []
@@ -5498,16 +5516,28 @@ class BizniWebExporter:
                         'ctr': campaign.get('ctr', 0),
                         'cpc': campaign.get('cpc', 0),
                         'estimated_orders': round(estimated_orders, 1),
+                        'attributed_orders_est': round(estimated_orders, 1),
                         'estimated_cpo': round(estimated_cpo, 2),
+                        'cost_per_attributed_order': round(estimated_cpo, 2),
                         'estimated_revenue': round(estimated_revenue, 2),
                         'estimated_roas': round(estimated_roas, 2),
                         'spend_share_pct': round(spend_share * 100, 1),
-                        'click_share_pct': round(click_share * 100, 1)
+                        'click_share_pct': round(click_share * 100, 1),
+                        'attribution_method': '0.6_click_share + 0.4_spend_share',
                     })
 
             # Sort by estimated CPO (best first)
             campaign_attribution.sort(key=lambda x: x['estimated_cpo'] if x['estimated_cpo'] > 0 else float('inf'))
             result['campaign_attribution'] = campaign_attribution
+            estimated_orders_total = sum(row['estimated_orders'] for row in campaign_attribution)
+            result['campaign_attribution_summary'] = {
+                'campaign_source_spend': round(total_campaign_spend, 2),
+                'daily_source_spend': round(total_fb_spend, 2),
+                'coverage_ratio': round((total_campaign_spend / total_fb_spend), 4) if total_fb_spend > 0 else None,
+                'estimated_orders_total': round(estimated_orders_total, 1),
+                'oversubscription_ratio': round((estimated_orders_total / total_orders), 4) if total_orders > 0 else None,
+                'attribution_method': '0.6_click_share + 0.4_spend_share',
+            }
 
         # Find best and worst CPO days
         if daily_cpo:

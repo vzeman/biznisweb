@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-03
+Last updated: 2026-04-10
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -101,7 +101,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Continue visual/UX cleanup of the new production dashboard shell now that the temporary `test2` output track was retired.
+- Add explicit attribution QA guardrails into the pipeline and surface campaign-attribution coverage / oversubscription warnings directly in the dashboard.
 
 ## 9) Change Log
 
@@ -694,3 +694,36 @@ Next exact step:
 - Kept the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` workflow env override in place as an additional safety measure during the Node 24 transition window.
 - Next exact step:
   - push the branch, merge it, and verify on the next `Build and Push ECR` run that the old Node 20 deprecation annotation no longer appears.
+### 2026-04-10 (shared reporting P0 audit fixes)
+- Audited the external recommendations against the real VEVO/ROY reporting code and prioritized only the issues that were actually reproducible in the current codebase.
+- Confirmed and fixed shell-vs-library binding drift in the modern dashboard:
+  - economics mini-cards now read the same financial registry values as the full-library tiles for:
+    - `pre_ad_contribution_per_order`
+    - `break_even_cac`
+    - `payback_orders`
+    - `contribution_ltv_cac`
+- Fixed refund shell binding to use `refunds_analysis.summary` consistently across shell cards, payload and full-library tiles.
+- Added shared render-time normalization for dimension hydration, so UI consumers stop rendering empty/placeholder labels when the producer already has equivalent fields:
+  - `day_name <- day_of_week`
+  - `anchor_item <- key_product`
+  - `anchor_orders <- key_orders`
+  - `attached_item <- attached_product`
+  - `pre_ad_contribution_margin_pct <- pre_ad_margin_pct`
+  - `cum_contribution_pct <- cum_contribution_share_pct`
+- Hardened null propagation / source coverage semantics:
+  - source health `status=ok/manual` is no longer treated as metric availability when coverage is zero,
+  - VEVO `google_ads.active_days=0` now renders `Google CPO = N/A` instead of a misleading `€0.00`,
+  - ROY keeps numeric Google CPO because its manual Google source has positive active-day coverage.
+- Clarified campaign semantics in the Facebook ingestion/rendering path:
+  - preserved platform fields separately from attribution estimates,
+  - campaign rows now expose `platform_conversions` and `cost_per_platform_conversion`,
+  - attribution rows now expose `attributed_orders_est`, `cost_per_attributed_order`, and `attribution_method`,
+  - CPO analysis now emits `campaign_attribution_summary` with `coverage_ratio` and `oversubscription_ratio`.
+- Verified with real March 2026 regenerations:
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Smoke verification outcome:
+  - VEVO shell economics cards show real values instead of zero fallbacks,
+  - VEVO shell `Google CPO` now shows `N/A`,
+  - ROY shell economics cards show real values and keep numeric Google CPO,
+  - no remaining `null` hydration symptoms were found in generated HTML for weekday / attach-rate / geo consumer labels during targeted checks.

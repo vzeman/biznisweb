@@ -290,6 +290,96 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def _rename_keys(row: Dict[str, Any], mapping: Dict[str, str]) -> Dict[str, Any]:
+    normalized = dict(row)
+    for target, source in mapping.items():
+        if normalized.get(target) is None and normalized.get(source) is not None:
+            normalized[target] = normalized.get(source)
+    return normalized
+
+
+def _normalize_dow_effectiveness_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        normalized = _rename_keys(
+            row,
+            {
+                "day_name": "day_of_week",
+                "avg_fb_spend": "fb_spend",
+                "avg_orders": "orders",
+                "avg_revenue": "revenue",
+                "avg_profit": "profit",
+            },
+        )
+        normalized_rows.append(normalized)
+    return normalized_rows
+
+
+def _normalize_attach_rate_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        normalized = _rename_keys(
+            row,
+            {
+                "anchor_item": "key_product",
+                "attached_item": "attached_product",
+                "anchor_orders": "key_orders",
+            },
+        )
+        normalized_rows.append(normalized)
+    return normalized_rows
+
+
+def _normalize_daily_margin_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        normalized = _rename_keys(
+            row,
+            {
+                "pre_ad_contribution_margin_pct": "pre_ad_margin_pct",
+            },
+        )
+        normalized_rows.append(normalized)
+    return normalized_rows
+
+
+def _normalize_sku_pareto_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        normalized = _rename_keys(
+            row,
+            {
+                "cum_contribution_pct": "cum_contribution_share_pct",
+            },
+        )
+        normalized_rows.append(normalized)
+    return normalized_rows
+
+
+def _source_entry(source_health: Optional[dict], key: str) -> Dict[str, Any]:
+    return ((source_health or {}).get("sources") or {}).get(key) or {}
+
+
+def _source_has_metric_coverage(source_health: Optional[dict], key: str) -> bool:
+    entry = _source_entry(source_health, key)
+    status = entry.get("status")
+    if status not in {"ok", "manual"}:
+        return False
+    if entry.get("healthy") is False:
+        return False
+
+    # Distinguish a connected source from one that actually covers the selected window.
+    # Example: Google Ads API can authenticate successfully while returning 0 active days.
+    for coverage_key in ("active_days", "detailed_days", "orders", "hourly_rows", "campaign_count"):
+        if coverage_key in entry:
+            try:
+                return float(entry.get(coverage_key) or 0) > 0
+            except (TypeError, ValueError):
+                return False
+
+    return True
+
+
 def _sanitize_dashboard_html(text: str) -> str:
     if not text:
         return text
@@ -338,6 +428,10 @@ def _format_library_tile_value(value: Any, kind: str = "number", decimals: Optio
         return f"{numeric:+.{precision}f}"
     precision = 2 if decimals is None else decimals
     return f"{numeric:,.{precision}f}"
+
+
+def _format_mini_value_html(value: Any, kind: str = "number", decimals: Optional[int] = None) -> str:
+    return _format_library_tile_value(value, kind=kind, decimals=decimals)
 
 
 def _library_tile_html(
@@ -625,13 +719,13 @@ def generate_modern_dashboard(
             campaign_frame = campaign_frame.sort_values("spend", ascending=False)
             fb_campaign_rows = _frame_rows(
                 campaign_frame,
-                ["campaign_name", "spend", "clicks", "impressions", "ctr", "cpc", "cpm", "reach", "conversions", "cost_per_conversion"],
+                ["campaign_name", "spend", "clicks", "impressions", "ctr", "cpc", "cpm", "reach", "platform_conversions", "conversions", "cost_per_platform_conversion", "cost_per_conversion"],
                 limit=12,
             )
 
     cpo_daily = _frame_rows(_to_frame((cost_per_order or {}).get("daily_cpo")), ["date", "orders", "fb_spend", "revenue", "cpo", "roas"], limit=120)
     weekly_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("weekly_cpo")), ["week_start", "orders", "fb_spend", "cpo"], limit=60)
-    campaign_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("campaign_attribution")), ["campaign_name", "spend", "estimated_orders", "estimated_cpo", "estimated_revenue", "estimated_roas"], limit=12)
+    campaign_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("campaign_attribution")), ["campaign_name", "spend", "attributed_orders_est", "estimated_orders", "cost_per_attributed_order", "estimated_cpo", "estimated_revenue", "estimated_roas", "attribution_method"], limit=12)
     hourly_orders = _frame_rows(_to_frame((cost_per_order or {}).get("hourly_orders")), ["hour", "orders", "revenue"], limit=24)
     fb_hourly_payload = _frame_rows(_to_frame(fb_hourly_stats), ["hour", "spend", "clicks", "impressions", "ctr", "cpc"], limit=24)
     fb_dow_payload = _frame_rows(_to_frame(fb_dow_stats), ["day_of_week", "total_spend", "total_clicks", "ctr", "cpc", "cpm"], limit=7)
@@ -649,13 +743,25 @@ def generate_modern_dashboard(
     else:
         ads_effectiveness_payload = {"labels": [], "orders": [], "revenue": [], "fb_spend": [], "google_spend": [], "profit": []}
     spend_effectiveness_rows = _frame_rows(_to_frame((ads_effectiveness or {}).get("spend_effectiveness")), ["spend_range", "avg_orders", "avg_revenue", "avg_spend", "avg_profit", "roas"], limit=20)
-    dow_effectiveness_rows = _frame_rows(_to_frame((ads_effectiveness or {}).get("dow_effectiveness")), ["day_name", "avg_orders", "avg_revenue", "avg_profit", "avg_fb_spend"], limit=7)
+    dow_effectiveness_rows = _normalize_dow_effectiveness_rows(
+        _frame_rows(
+            _to_frame((ads_effectiveness or {}).get("dow_effectiveness")),
+            ["day_name", "day_of_week", "avg_orders", "orders", "avg_revenue", "revenue", "avg_profit", "profit", "avg_fb_spend", "fb_spend"],
+            limit=7,
+        )
+    )
 
     advanced_summary = (advanced_dtc_metrics or {}).get("summary", {}) if advanced_dtc_metrics else {}
     basket_contribution_rows = _frame_rows((advanced_dtc_metrics or {}).get("basket_contribution"), ["basket_size", "orders", "revenue", "pre_ad_contribution", "contribution_per_order", "contribution_margin_pct"], limit=10)
-    sku_pareto_rows = _frame_rows((advanced_dtc_metrics or {}).get("sku_pareto"), ["sku", "product", "orders", "revenue", "pre_ad_contribution", "cum_contribution_pct"], limit=12)
-    attach_rate_rows = _frame_rows((advanced_dtc_metrics or {}).get("attach_rate"), ["anchor_item", "attached_item", "anchor_orders", "attached_orders", "attach_rate_pct"], limit=12)
-    daily_margin_rows = _frame_rows((advanced_dtc_metrics or {}).get("daily_margin"), ["date", "pre_ad_contribution_margin_pct"], limit=120)
+    sku_pareto_rows = _normalize_sku_pareto_rows(
+        _frame_rows((advanced_dtc_metrics or {}).get("sku_pareto"), ["sku", "product", "orders", "revenue", "pre_ad_contribution", "cum_contribution_pct", "cum_contribution_share_pct"], limit=12)
+    )
+    attach_rate_rows = _normalize_attach_rate_rows(
+        _frame_rows((advanced_dtc_metrics or {}).get("attach_rate"), ["anchor_item", "key_product", "attached_item", "attached_product", "anchor_orders", "key_orders", "attached_orders", "attach_rate_pct"], limit=12)
+    )
+    daily_margin_rows = _normalize_daily_margin_rows(
+        _frame_rows((advanced_dtc_metrics or {}).get("daily_margin"), ["date", "pre_ad_contribution_margin_pct", "pre_ad_margin_pct"], limit=120)
+    )
     payday_window_rows = _frame_rows((advanced_dtc_metrics or {}).get("payday_window"), ["window", "orders", "revenue", "profit", "avg_daily_revenue", "avg_daily_profit"], limit=20)
     cohort_payback_rows = _frame_rows((advanced_dtc_metrics or {}).get("cohort_payback"), ["cohort_month", "new_customers", "cohort_cac", "recovery_rate_pct", "avg_payback_days", "median_payback_days"], limit=24)
 
@@ -724,6 +830,9 @@ def generate_modern_dashboard(
     avg_daily_profit = round(total_profit / active_days, 2)
     avg_fb_cost_per_order = round((total_fb_ads / total_orders) if total_orders > 0 else 0.0, 2)
     refund_summary = (refunds_analysis or {}).get("summary", {})
+    google_source_available = _source_has_metric_coverage(source_health, "google_ads")
+    google_cpo_value = _maybe_num((cost_per_order or {}).get("google_cpo")) if google_source_available else None
+    ads_correlation_source = ((ads_effectiveness or {}).get("correlations") or {})
 
     avg_customer_ltv = _maybe_num((financial_metrics or {}).get("avg_customer_ltv"))
     if avg_customer_ltv is None:
@@ -735,6 +844,9 @@ def generate_modern_dashboard(
 
     break_even_cac = _maybe_num((financial_metrics or {}).get("break_even_cac"))
     current_fb_cac = _maybe_num((financial_metrics or {}).get("current_fb_cac"))
+    shell_pre_ad_per_order = _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_order"))
+    shell_payback_orders = _maybe_num((financial_metrics or {}).get("payback_orders"))
+    shell_contribution_ltv_cac = _maybe_num((financial_metrics or {}).get("contribution_ltv_cac"))
     cac_break_even_ratio = None
     if break_even_cac not in (None, 0) and current_fb_cac is not None:
         cac_break_even_ratio = current_fb_cac / break_even_cac
@@ -746,6 +858,19 @@ def generate_modern_dashboard(
     repeat_purchase_rate = _maybe_num((customer_concentration or {}).get("repeat_purchase_rate"))
     if repeat_purchase_rate is None:
         repeat_purchase_rate = _maybe_num(cohort_summary.get("repeat_rate_pct"))
+
+    ads_correlations = {
+        **ads_correlation_source,
+        "spend_orders_correlation": _maybe_num(
+            ads_correlation_source.get("spend_orders_correlation", ads_correlation_source.get("total_ads_orders"))
+        ),
+        "spend_revenue_correlation": _maybe_num(
+            ads_correlation_source.get("spend_revenue_correlation", ads_correlation_source.get("total_ads_revenue"))
+        ),
+        "spend_profit_correlation": _maybe_num(
+            ads_correlation_source.get("spend_profit_correlation")
+        ),
+    }
 
     library_tiles = [
         {"en": "Total revenue (net)", "sk": "Celkove trzby (net)", "value": total_revenue, "kind": "currency", "tone": "neutral"},
@@ -848,7 +973,7 @@ def generate_modern_dashboard(
         "cohort_time_to_nth_rows": cohort_time_to_nth_rows,
         "cohort_revenue_by_order_rows": cohort_revenue_by_order_rows,
         "mature_cohort_rows": mature_cohort_rows,
-        "refund_rate": round(_num((refunds_analysis or {}).get("refund_rate_pct")), 2),
+        "refund_rate": _maybe_num(refund_summary.get("refund_rate_pct")),
         "returning_customers": returning_payload,
         "clv": clv_payload,
         "order_size": order_size_payload,
@@ -862,7 +987,7 @@ def generate_modern_dashboard(
         "fb_hourly": fb_hourly_payload,
         "fb_dow": fb_dow_payload,
         "ads_effectiveness": ads_effectiveness_payload,
-        "ads_correlations": (ads_effectiveness or {}).get("correlations") or {},
+        "ads_correlations": ads_correlations,
         "spend_effectiveness_rows": spend_effectiveness_rows,
         "dow_effectiveness_rows": dow_effectiveness_rows,
         "basket_contribution_rows": basket_contribution_rows,
@@ -886,7 +1011,7 @@ def generate_modern_dashboard(
         "cpo_summary": {
             "overall_cpo": _maybe_num((cost_per_order or {}).get("overall_cpo")),
             "fb_cpo": _maybe_num((cost_per_order or {}).get("fb_cpo")),
-            "google_cpo": _maybe_num((cost_per_order or {}).get("google_cpo")),
+            "google_cpo": google_cpo_value,
             "best_lag_correlation": _maybe_num((cost_per_order or {}).get("best_lag_correlation")),
             "best_attribution_lag": (cost_per_order or {}).get("best_attribution_lag"),
             "reconciliation": (cost_per_order or {}).get("fb_spend_reconciliation") or {},
@@ -951,7 +1076,7 @@ def generate_modern_dashboard(
     ) or '<tr><td colspan="6"><span class="lang-en">No mature-cohort retention data available.</span><span class="lang-sk hidden">Data zrelych kohort nie su dostupne.</span></td></tr>'
 
     fb_campaign_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('campaign_name') or 'Unknown'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{int(round(_num(row.get('clicks'))))}</td><td>{_num(row.get('ctr')):.2f}%</td><td>€{_num(row.get('cpc')):,.2f}</td><td>{int(round(_num(row.get('conversions'))))}</td></tr>"
+        f"<tr><td>{escape(str(row.get('campaign_name') or 'Unknown'))}</td><td>?{_num(row.get('spend')):,.2f}</td><td>{int(round(_num(row.get('clicks'))))}</td><td>{_num(row.get('ctr')):.2f}%</td><td>?{_num(row.get('cpc')):,.2f}</td><td>{int(round(_num(row.get('platform_conversions', row.get('conversions')))))}</td></tr>"
         for row in fb_campaign_rows
     ) or '<tr><td colspan="6"><span class="lang-en">No campaign data available.</span><span class="lang-sk hidden">Kampaňové dáta nie sú dostupné.</span></td></tr>'
 
@@ -1257,7 +1382,7 @@ def generate_modern_dashboard(
                             <div class="chart-shell compact"><canvas id="costMixChart"></canvas></div>
                             <div class="mini-grid">
                                 <div class="mini-card"><small><span class="lang-en">Total ads</span><span class="lang-sk hidden">Spolu reklama</span></small><strong>€{total_ads:,.0f}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Refund rate</span><span class="lang-sk hidden">Refund rate</span></small><strong>{round(_num((refunds_analysis or {}).get("refund_rate_pct")), 2):.1f}%</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Refund rate</span><span class="lang-sk hidden">Refund rate</span></small><strong>{_format_mini_value_html(refund_summary.get("refund_rate_pct"), kind="percent")}</strong></div>
                                 <div class="mini-card"><small><span class="lang-en">Top city</span><span class="lang-sk hidden">Top mesto</span></small><strong>{escape(top_city)}</strong></div>
                                 <div class="mini-card"><small><span class="lang-en">Top product</span><span class="lang-sk hidden">Top produkt</span></small><strong>{escape(top_product)}</strong></div>
                             </div>
@@ -1272,10 +1397,10 @@ def generate_modern_dashboard(
                     </div>
                     <div class="panel chart-card" style="margin-bottom:18px;">
                         <div class="mini-grid">
-                            <div class="mini-card"><small><span class="lang-en">Pre-ad / order</span><span class="lang-sk hidden">Pre-ad / objednavka</span></small><strong>â‚¬{_num(advanced_summary.get('pre_ad_contribution_per_order')):,.2f}</strong></div>
-                            <div class="mini-card"><small><span class="lang-en">Break-even CAC</span><span class="lang-sk hidden">Break-even CAC</span></small><strong>â‚¬{_num(advanced_summary.get('break_even_cac')):,.2f}</strong></div>
-                            <div class="mini-card"><small><span class="lang-en">Payback orders</span><span class="lang-sk hidden">Payback objednavky</span></small><strong>{_num(advanced_summary.get('payback_orders')):.2f}</strong></div>
-                            <div class="mini-card"><small><span class="lang-en">Contribution LTV/CAC</span><span class="lang-sk hidden">Contribution LTV/CAC</span></small><strong>{_num(advanced_summary.get('contribution_ltv_cac')):.2f}x</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Pre-ad / order</span><span class="lang-sk hidden">Pre-ad / objednavka</span></small><strong>{_format_mini_value_html(shell_pre_ad_per_order, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Break-even CAC</span><span class="lang-sk hidden">Break-even CAC</span></small><strong>{_format_mini_value_html(break_even_cac, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Payback orders</span><span class="lang-sk hidden">Payback objednavky</span></small><strong>{_format_mini_value_html(shell_payback_orders, kind="number", decimals=2)}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Contribution LTV/CAC</span><span class="lang-sk hidden">Contribution LTV/CAC</span></small><strong>{_format_mini_value_html(shell_contribution_ltv_cac, kind="multiple")}</strong></div>
                         </div>
                     </div>
                     <div class="grid-2">
@@ -1326,7 +1451,7 @@ def generate_modern_dashboard(
                         <div class="mini-grid">
                             <div class="mini-card"><small><span class="lang-en">Overall CPO</span><span class="lang-sk hidden">Celkove CPO</span></small><strong>€{_num((cost_per_order or {}).get("overall_cpo")):,.2f}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">FB CPO</span><span class="lang-sk hidden">FB CPO</span></small><strong>€{_num((cost_per_order or {}).get("fb_cpo")):,.2f}</strong></div>
-                            <div class="mini-card"><small><span class="lang-en">Google CPO</span><span class="lang-sk hidden">Google CPO</span></small><strong>€{_num((cost_per_order or {}).get("google_cpo")):,.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Google CPO</span><span class="lang-sk hidden">Google CPO</span></small><strong>{_format_mini_value_html(google_cpo_value, kind="currency")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Best lag</span><span class="lang-sk hidden">Najlepsi lag</span></small><strong>{escape(str((cost_per_order or {}).get("best_attribution_lag") or "N/A"))}</strong></div>
                         </div>
                     </div>
@@ -1365,17 +1490,17 @@ def generate_modern_dashboard(
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Campaign performance</span><span class="lang-sk hidden">Vykon kampani</span></h3><p><span class="lang-en">Campaign level Facebook delivery and conversions.</span><span class="lang-sk hidden">Facebook delivery a konverzie na urovni kampani.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign performance</span><span class="lang-sk hidden">Vykon kampani</span></h3><p><span class="lang-en">Campaign-level Facebook delivery and platform conversions.</span><span class="lang-sk hidden">Facebook delivery a platformove konverzie na urovni kampani.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Clicks</span><span class="lang-sk hidden">Kliky</span></th><th>CTR</th><th>CPC</th><th><span class="lang-en">Conv.</span><span class="lang-sk hidden">Konv.</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Clicks</span><span class="lang-sk hidden">Kliky</span></th><th>CTR</th><th>CPC</th><th><span class="lang-en">Platform conv.</span><span class="lang-sk hidden">Platform konv.</span></th></tr></thead>
                                 <tbody>{fb_campaign_rows_html}</tbody>
                             </table>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Campaign attribution estimate</span><span class="lang-sk hidden">Odhad atribucie kampani</span></h3><p><span class="lang-en">Estimated orders, CPO and ROAS by campaign.</span><span class="lang-sk hidden">Odhad obj., CPO a ROAS podla kampane.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign attribution estimate</span><span class="lang-sk hidden">Odhad atribucie kampani</span></h3><p><span class="lang-en">Estimated attributed orders, attributed CPO and ROAS by campaign.</span><span class="lang-sk hidden">Odhad atribuovanych objednavok, atribucneho CPO a ROAS podla kampane.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th>CPO</th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>ROAS</th></tr></thead>
-                                <tbody>{"".join(f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_num(row.get('estimated_orders')):.1f}</td><td>€{_num(row.get('estimated_cpo')):,.2f}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>" for row in campaign_cpo) or '<tr><td colspan=\"6\"><span class=\"lang-en\">No campaign attribution data available.</span><span class=\"lang-sk hidden\">Atribucne data kampani nie su dostupne.</span></td></tr>'}</tbody>
+                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Attributed orders est.</span><span class="lang-sk hidden">Odhad atrib. obj.</span></th><th><span class="lang-en">Cost / attributed order</span><span class="lang-sk hidden">Naklad / atrib. obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>ROAS</th></tr></thead>
+                                <tbody>{"".join(f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_num(row.get('attributed_orders_est', row.get('estimated_orders'))):.1f}</td><td>€{_num(row.get('cost_per_attributed_order', row.get('estimated_cpo'))):,.2f}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>" for row in campaign_cpo) or '<tr><td colspan=\"6\"><span class=\"lang-en\">No campaign attribution data available.</span><span class=\"lang-sk hidden\">Atribucne data kampani nie su dostupne.</span></td></tr>'}</tbody>
                             </table>
                         </div>
                     </div>
@@ -1429,9 +1554,9 @@ def generate_modern_dashboard(
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">Ads correlation diagnostics</span><span class="lang-sk hidden">Korelacie reklamnych vydavkov</span></h3><p><span class="lang-en">Correlation layer from the full ads effectiveness analysis.</span><span class="lang-sk hidden">Korelacna vrstva z plnej analyzy efektivity reklam.</span></p></div></div>
                             <div class="mini-grid">
-                                <div class="mini-card"><small><span class="lang-en">Spend vs orders</span><span class="lang-sk hidden">Spend vs objednavky</span></small><strong>{_num(((ads_effectiveness or {}).get('correlations') or {}).get('spend_orders_correlation')):.2f}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Spend vs revenue</span><span class="lang-sk hidden">Spend vs trzby</span></small><strong>{_num(((ads_effectiveness or {}).get('correlations') or {}).get('spend_revenue_correlation')):.2f}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Spend vs profit</span><span class="lang-sk hidden">Spend vs zisk</span></small><strong>{_num(((ads_effectiveness or {}).get('correlations') or {}).get('spend_profit_correlation')):.2f}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Spend vs orders</span><span class="lang-sk hidden">Spend vs objednavky</span></small><strong>{_format_mini_value_html(ads_correlations.get('spend_orders_correlation'), kind="number", decimals=2)}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Spend vs revenue</span><span class="lang-sk hidden">Spend vs trzby</span></small><strong>{_format_mini_value_html(ads_correlations.get('spend_revenue_correlation'), kind="number", decimals=2)}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Spend vs profit</span><span class="lang-sk hidden">Spend vs zisk</span></small><strong>{_format_mini_value_html(ads_correlations.get('spend_profit_correlation'), kind="number", decimals=2)}</strong></div>
                                 <div class="mini-card"><small><span class="lang-en">Best lag corr.</span><span class="lang-sk hidden">Best lag corr.</span></small><strong>{_num((cost_per_order or {}).get('best_lag_correlation')):.2f}</strong></div>
                             </div>
                         </div>
@@ -4103,7 +4228,7 @@ def generate_modern_dashboard(
                 const labels = DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24));
                 const convRate = DATA.fb_campaign_rows.map(x => {{
                     const clicks = Number(x.clicks || 0);
-                    const conversions = Number(x.conversions || 0);
+                    const conversions = Number(x.platform_conversions || x.conversions || 0);
                     return clicks > 0 ? (conversions / clicks) * 100 : 0;
                 }});
                 new Chart(document.getElementById('mktCampaignConvRateStandaloneChart'), {{
@@ -4117,7 +4242,7 @@ def generate_modern_dashboard(
                     type: 'bar',
                     data: {{
                         labels: DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
-                        datasets: [{{ label: 'Cost / conversion', data: DATA.fb_campaign_rows.map(x => Number(x.cost_per_conversion || 0)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
+                        datasets: [{{ label: 'Cost / platform conversion', data: DATA.fb_campaign_rows.map(x => Number(x.cost_per_platform_conversion || x.cost_per_conversion || 0)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
                     }},
                     options: horizontalBarOptions(),
                 }});
