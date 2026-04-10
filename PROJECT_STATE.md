@@ -751,3 +751,28 @@ Next exact step:
   - ROY now explicitly warns in dashboard that campaign-level Facebook spend coverage is missing while daily spend exists.
 - Next exact step:
   - add thresholded attribution warning banners to the hero/executive shell so severe coverage or oversubscription issues are visible before the user reaches the marketing section.
+### 2026-04-10 (hero attribution warning banner)
+- Added a thresholded attribution warning banner to the modern dashboard hero shell in `dashboard_modern.py`.
+- The banner now appears before the Executive KPI deck whenever attribution QA emits warnings, with severity-aware styling:
+  - `critical` for missing campaign spend coverage, empty campaign attribution tables, severe coverage drift, severe oversubscription, or platform CPA mismatches,
+  - `warning` for softer attribution QA issues.
+- The hero banner exposes the key QA diagnostics directly in the shell:
+  - coverage ratio
+  - oversubscription ratio
+  - CPA mismatch count
+  - campaign row count
+- The existing raw warning list is reused in the hero banner so the same QA evidence is visible both:
+  - in the shell,
+  - and later in the marketing section.
+- Added a CI assertion in `scripts/security_ci.py` so the build fails if the hero-level attribution warning surface is removed from the modern dashboard.
+- Verified with:
+  - `python -m py_compile dashboard_modern.py export_orders.py facebook_ads.py scripts\\security_ci.py`
+  - `python scripts\\security_ci.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO March 2026 report stays clean with no hero attribution banner when QA is healthy,
+  - ROY March 2026 report now shows a critical hero attribution banner before the Executive KPI deck,
+  - CI passes with the new shell-level guard in place.
+- Next exact step:
+  - start the Vevo sample funnel model as the next shared business-modeling expansion after the P0 reporting hardening is now visible in the shell.

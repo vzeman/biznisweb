@@ -103,6 +103,11 @@ def main() -> int:
             "Modern dashboard must surface attribution QA warnings explicitly.",
         )
         require(
+            dashboard_modern,
+            "hero-alert",
+            "Modern dashboard must surface attribution QA warnings in the hero shell before deeper sections.",
+        )
+        require(
             read(".github/workflows/observability-check.yml"),
             "observability_snapshot.py",
             "Reporting repo must keep an observability workflow baseline.",
