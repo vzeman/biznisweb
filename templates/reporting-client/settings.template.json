@@ -5,7 +5,7 @@
   "enable_email_strategy_report": false,
   "report_from_date": "2026-01-01",
   "packaging_cost_per_order": 0.3,
-  "shipping_subsidy_per_order": 0.0,
+  "shipping_net_per_order": 0.0,
   "fixed_monthly_cost": 0,
   "weather": {
     "enabled": false,

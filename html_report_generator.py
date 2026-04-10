@@ -176,7 +176,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         if 'pre_ad_contribution_profit_per_order' in date_agg.columns
         else [
             (
-                (row['total_revenue'] - row['product_expense'] - row['packaging_cost'] - row.get('shipping_subsidy_cost', 0))
+                (row['total_revenue'] - row['product_expense'] - row['packaging_cost'] - row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0)))
                 / row['unique_orders']
                 if row['unique_orders'] > 0 else 0
             )
@@ -198,7 +198,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     # Calculate total costs for each day (for the all metrics chart)
     total_costs_data = date_agg['total_cost'].tolist()
     packaging_costs_data = date_agg['packaging_cost'].tolist()
-    shipping_subsidy_data = date_agg['shipping_subsidy_cost'].tolist() if 'shipping_subsidy_cost' in date_agg.columns else [0] * len(dates)
+    shipping_subsidy_data = (
+        date_agg['shipping_net_cost'].tolist()
+        if 'shipping_net_cost' in date_agg.columns
+        else (date_agg['shipping_subsidy_cost'].tolist() if 'shipping_subsidy_cost' in date_agg.columns else [0] * len(dates))
+    )
     fixed_daily_costs_data = date_agg['fixed_daily_cost'].tolist()
     items_data = date_agg['total_items'].tolist()
 
@@ -220,7 +224,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     total_revenue = date_agg['total_revenue'].sum()
     total_product_expense = date_agg['product_expense'].sum()
     total_packaging = date_agg['packaging_cost'].sum()
-    total_shipping_subsidy = date_agg['shipping_subsidy_cost'].sum() if 'shipping_subsidy_cost' in date_agg.columns else 0
+    total_shipping_subsidy = (
+        date_agg['shipping_net_cost'].sum()
+        if 'shipping_net_cost' in date_agg.columns
+        else (date_agg['shipping_subsidy_cost'].sum() if 'shipping_subsidy_cost' in date_agg.columns else 0)
+    )
     total_fixed = date_agg['fixed_daily_cost'].sum()
     total_fixed_costs = total_packaging + total_shipping_subsidy + total_fixed
     total_fb_ads = date_agg['fb_ads_spend'].sum()
@@ -1700,7 +1708,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value cost">&#8364;{total_packaging:,.2f}</div>
             </div>
             <div class="card">
-                <div class="card-title">Shipping Subsidy</div>
+                <div class="card-title">Net Shipping</div>
                 <div class="card-value cost">&#8364;{total_shipping_subsidy:,.2f}</div>
             </div>
             <div class="card">
@@ -2025,7 +2033,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         
         <div class="chart-container">
             <h2 class="chart-title">Daily Revenue vs Costs</h2>
-            <p class="chart-explanation">Revenue = net sales income (without VAT) | Product Costs = cost of goods sold | FB Ads = Facebook advertising spend | Google Ads = Google advertising spend | Packaging = per-order packaging cost | Shipping Subsidy = per-order postal subsidy | Fixed Overhead = daily fixed operational cost | Net Profit = Revenue - (Product + Packaging + Shipping Subsidy + Fixed + Ads) | AOV = Average Order Value (Revenue / Orders)</p>
+            <p class="chart-explanation">Revenue = net sales income (without VAT) | Product Costs = cost of goods sold | FB Ads = Facebook advertising spend | Google Ads = Google advertising spend | Packaging = per-order packaging cost | Net Shipping = positive cost to the business, negative shipping profit | Fixed Overhead = daily fixed operational cost | Net Profit = Revenue - (Product + Packaging + Net Shipping + Fixed + Ads) | AOV = Average Order Value (Revenue / Orders)</p>
             <canvas id="revenueChart"></canvas>
         </div>
 
@@ -2049,14 +2057,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-container">
             <h2 class="chart-title">All Metrics Overview</h2>
-            <p class="chart-explanation">Comprehensive view of all daily metrics: Revenue, Total Costs (all expenses combined), Product Costs, Facebook Ads, Google Ads, Packaging Costs, Shipping Subsidy, Fixed Daily Costs, Net Profit, AOV (Average Order Value), and ROI % (Return on Investment percentage)</p>
+            <p class="chart-explanation">Comprehensive view of all daily metrics: Revenue, Total Costs (all expenses combined), Product Costs, Facebook Ads, Google Ads, Packaging Costs, Net Shipping, Fixed Daily Costs, Net Profit, AOV (Average Order Value), and ROI % (Return on Investment percentage)</p>
             <canvas id="allMetricsChart"></canvas>
         </div>
         
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Daily Profit</h2>
-                <p class="chart-explanation">Net Profit = Revenue - Total Costs (includes all product, fixed, packaging, shipping subsidy, and advertising costs)</p>
+            <p class="chart-explanation">Net Profit = Revenue - Total Costs (includes all product, fixed, packaging, net shipping, and advertising costs)</p>
                 <canvas id="profitChart"></canvas>
             </div>
             <div class="chart-container">
@@ -2069,7 +2077,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Cost Breakdown</h2>
-                <p class="chart-explanation">Distribution of total costs across categories: Product Costs (COGS), Packaging Costs, Shipping Subsidy, Fixed Overhead, Facebook Ads, and Google Ads</p>
+            <p class="chart-explanation">Distribution of total costs across categories: Product Costs (COGS), Packaging Costs, Net Shipping, Fixed Overhead, Facebook Ads, and Google Ads</p>
                 <canvas id="costPieChart"></canvas>
             </div>
             <div class="chart-container">
@@ -2089,7 +2097,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily Total Costs</h2>
-                <p class="chart-explanation">Sum of all expenses: Product Costs + Packaging + Shipping Subsidy + Fixed Overhead + Facebook Ads + Google Ads</p>
+            <p class="chart-explanation">Sum of all expenses: Product Costs + Packaging + Net Shipping + Fixed Overhead + Facebook Ads + Google Ads</p>
                 <canvas id="totalCostsChart"></canvas>
             </div>
         </div>
@@ -2102,7 +2110,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Daily Product Gross Margin %</h2>
-                <p class="chart-explanation">Gross margin on products only = (Revenue - Product Costs) / Revenue. Excludes packaging, shipping subsidy, ads, and fixed overhead.</p>
+            <p class="chart-explanation">Gross margin on products only = (Revenue - Product Costs) / Revenue. Excludes packaging, net shipping, ads, and fixed overhead.</p>
                 <canvas id="productGrossMarginChart"></canvas>
             </div>
             <div class="chart-container">
@@ -2132,7 +2140,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <canvas id="packagingCostsChart"></canvas>
             </div>
             <div class="chart-container">
-                <h2 class="chart-title">Daily Shipping Subsidy</h2>
+            <h2 class="chart-title">Daily Net Shipping</h2>
                 <p class="chart-explanation">Postal subsidy paid per order (configured as fixed amount per order)</p>
                 <canvas id="shippingSubsidyChart"></canvas>
             </div>
@@ -2164,7 +2172,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-container">
             <h2 class="chart-title">Daily Contribution per Order (Pre-Ad vs Post-Ad)</h2>
-            <p class="chart-explanation">Pre-Ad contribution/order = (Revenue - Product Costs - Packaging - Shipping Subsidy) / Orders. Post-Ad contribution/order additionally subtracts Ads. Fixed overhead excluded in both.</p>
+            <p class="chart-explanation">Pre-Ad contribution/order = (Revenue - Product Costs - Packaging - Net Shipping) / Orders. Post-Ad contribution/order additionally subtracts Ads. Fixed overhead excluded in both.</p>
             <canvas id="contributionPerOrderChart"></canvas>
         </div>
 
@@ -3886,7 +3894,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     # Add daily rows
     for _, row in date_agg.iterrows():
         profit_class = "profit-positive" if row['net_profit'] > 0 else "profit-negative"
-        fixed_costs = row['packaging_cost'] + row.get('shipping_subsidy_cost', 0) + row['fixed_daily_cost']
+        fixed_costs = row['packaging_cost'] + row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0)) + row['fixed_daily_cost']
         aov = row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
         avg_items_per_order = row['total_items'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
         fb_per_order = row['fb_ads_spend'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
@@ -4781,7 +4789,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-container">
             <h2 class="chart-title">SK/CZ/HU Profitability (Post-Ad Contribution + FB CPO)</h2>
-            <p class="chart-explanation">Country-level post-ad contribution view using net revenue, product costs, packaging, shipping subsidy, and estimated FB spend by campaign naming (fixed overhead excluded). Unattributed FB spend (not mapped to SK/CZ/HU): &#8364;{unattributed_fb:,.2f}.</p>
+            <p class="chart-explanation">Country-level post-ad contribution view using net revenue, product costs, packaging, net shipping, and estimated FB spend by campaign naming (fixed overhead excluded). Unattributed FB spend (not mapped to SK/CZ/HU): &#8364;{unattributed_fb:,.2f}.</p>
             <canvas id="geoProfitabilityChart"></canvas>
         </div>
 
@@ -4799,7 +4807,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Revenue</th>
                         <th class="number">Product Cost</th>
                         <th class="number">Packaging</th>
-                        <th class="number">Shipping Subsidy</th>
+                        <th class="number">Net Shipping</th>
                         <th class="number">FB Spend</th>
                         <th class="number">Post-Ad Contribution Profit</th>
                         <th class="number">Post-Ad Contribution Margin %</th>
@@ -4816,7 +4824,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">&#8364;{row.get('revenue', 0):,.2f}</td>
                         <td class="number">&#8364;{row.get('product_cost', 0):,.2f}</td>
                         <td class="number">&#8364;{row.get('packaging_cost', 0):,.2f}</td>
-                        <td class="number">&#8364;{row.get('shipping_subsidy_cost', 0):,.2f}</td>
+                        <td class="number">&#8364;{row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0)):,.2f}</td>
                         <td class="number">&#8364;{row.get('fb_ads_spend', 0):,.2f}</td>
                         <td class="number {'profit-positive' if row.get('contribution_profit', 0) >= 0 else 'profit-negative'}">&#8364;{row.get('contribution_profit', 0):,.2f}</td>
                         <td class="number {'profit-positive' if row.get('contribution_margin_pct', 0) >= 0 else 'profit-negative'}">{row.get('contribution_margin_pct', 0):.2f}%</td>
@@ -5203,7 +5211,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         <div class="chart-grid">
             <div class="chart-container">
                 <h2 class="chart-title">Total Cost vs Revenue Correlation</h2>
-                <p class="chart-explanation">Scatter plot showing relationship between daily total costs (product + packaging + shipping subsidy + ads + fixed) and revenue. Higher correlation indicates predictable cost-revenue relationship.</p>
+            <p class="chart-explanation">Scatter plot showing relationship between daily total costs (product + packaging + net shipping + ads + fixed) and revenue. Higher correlation indicates predictable cost-revenue relationship.</p>
                 <canvas id="costRevenueChart"></canvas>
             </div>
         </div>
@@ -5601,7 +5609,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             "Total Revenue (Net)": "Celkovy obrat (bez DPH)",
             "Product Costs": "Naklady na produkty",
             "Packaging Costs": "Naklady na balenie",
-            "Shipping Subsidy": "Prispevok na dopravu",
+        "Net Shipping": "Ciste shipping",
             "Fixed Overhead": "Fixne naklady",
             "Facebook Ads": "Facebook reklama",
             "Google Ads": "Google reklama",
@@ -5659,7 +5667,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             "Daily Facebook Ads": "Denne Facebook Ads",
             "Daily Google Ads": "Denne Google Ads",
             "Daily Packaging Costs": "Denne naklady na balenie",
-            "Daily Shipping Subsidy": "Denny prispevok na dopravu",
+        "Daily Net Shipping": "Denny cisty shipping",
             "Daily Fixed Costs": "Denne fixne naklady",
             "Daily Average Order Value": "Denna priemerna hodnota objednavky",
             "Daily Items Sold": "Denny pocet predanych poloziek",
@@ -6271,7 +6279,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tension: 0.4
                     }},
                     {{
-                        label: 'Shipping Subsidy',
+                label: 'Net Shipping',
                         data: {json.dumps(shipping_subsidy_data)},
                         borderColor: '#f97316',
                         backgroundColor: 'rgba(249, 115, 22, 0.1)',
@@ -6618,7 +6626,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         hidden: false
                     }},
                     {{
-                        label: 'Shipping Subsidy',
+                label: 'Net Shipping',
                         data: {json.dumps(shipping_subsidy_data)},
                         borderColor: '#f97316',
                         backgroundColor: 'rgba(249, 115, 22, 0.1)',
@@ -6841,7 +6849,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         new Chart(costPieCtx, {{
             type: 'doughnut',
             data: {{
-                labels: ['Product Costs', 'Packaging Costs', 'Shipping Subsidy', 'Fixed Overhead', 'Facebook Ads', 'Google Ads'],
+                labels: ['Product Costs', 'Packaging Costs', 'Net Shipping', 'Fixed Overhead', 'Facebook Ads', 'Google Ads'],
                 datasets: [{{
                     data: [{total_product_expense:.2f}, {total_packaging:.2f}, {total_shipping_subsidy:.2f}, {total_fixed:.2f}, {total_fb_ads:.2f}, {total_google_ads:.2f}],
                     backgroundColor: ['#ed8936', '#f6ad55', '#f97316', '#48bb78', '#4299e1', '#34D399'],
@@ -7274,14 +7282,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             }}
         }});
 
-        // Shipping Subsidy Chart
+        // Net Shipping Chart
         const shippingSubsidyCtx = document.getElementById('shippingSubsidyChart').getContext('2d');
         new Chart(shippingSubsidyCtx, {{
             type: 'bar',
             data: {{
                 labels: {json.dumps(dates)},
                 datasets: [{{
-                    label: 'Shipping Subsidy',
+                    label: 'Net Shipping',
                     data: {json.dumps(shipping_subsidy_data)},
                     backgroundColor: '#f97316',
                     borderRadius: 5
@@ -7296,7 +7304,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     tooltip: {{
                         callbacks: {{
                             label: function(context) {{
-                                return 'Shipping Subsidy: &#8364;' + context.parsed.y.toFixed(2);
+                                    return 'Net Shipping: &#8364;' + context.parsed.y.toFixed(2);
                             }}
                         }}
                     }}

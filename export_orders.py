@@ -102,7 +102,8 @@ GRAPHQL_TIMEOUT_SEC = int(
 
 # Fixed costs
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
-SHIPPING_SUBSIDY_PER_ORDER = 0.2  # EUR per order (shipping subsidy)
+SHIPPING_SUBSIDY_PER_ORDER = 0.2  # legacy alias; use SHIPPING_NET_PER_ORDER semantics below
+SHIPPING_NET_PER_ORDER = SHIPPING_SUBSIDY_PER_ORDER  # positive = business cost, negative = shipping profit
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
@@ -2743,21 +2744,22 @@ class BizniWebExporter:
         date_agg['google_ads_spend'] = date_agg['google_ads_spend'].fillna(0)
 
         # Add variable per-order logistics costs
-        # Packaging + shipping subsidy both scale with number of orders.
+        # Packaging and net shipping both scale with number of orders.
         date_agg['packaging_cost'] = date_agg['unique_orders'] * PACKAGING_COST_PER_ORDER
-        date_agg['shipping_subsidy_cost'] = date_agg['unique_orders'] * SHIPPING_SUBSIDY_PER_ORDER
+        date_agg['shipping_net_cost'] = date_agg['unique_orders'] * SHIPPING_NET_PER_ORDER
+        date_agg['shipping_subsidy_cost'] = date_agg['shipping_net_cost']  # backward-compatible alias
 
         # Add daily fixed cost based on the date
         date_agg['fixed_daily_cost'] = date_agg['date'].apply(lambda d: round(self.get_daily_fixed_cost(pd.Timestamp(d)), 2))
 
         # Company-level cost (includes fixed overhead)
-        # Total cost = product expense + ads + packaging + shipping subsidy + fixed daily cost
+        # Total cost = product expense + ads + packaging + net shipping + fixed daily cost
         date_agg['total_cost'] = (
             date_agg['product_expense']
             + date_agg['fb_ads_spend']
             + date_agg['google_ads_spend']
             + date_agg['packaging_cost']
-            + date_agg['shipping_subsidy_cost']
+            + date_agg['shipping_net_cost']
             + date_agg['fixed_daily_cost']
         )
 
@@ -2768,7 +2770,7 @@ class BizniWebExporter:
         date_agg['pre_ad_contribution_cost'] = (
             date_agg['product_expense']
             + date_agg['packaging_cost']
-            + date_agg['shipping_subsidy_cost']
+            + date_agg['shipping_net_cost']
         )
         date_agg['pre_ad_contribution_profit'] = date_agg['total_revenue'] - date_agg['pre_ad_contribution_cost']
         date_agg['pre_ad_contribution_margin_pct'] = date_agg.apply(
@@ -2784,7 +2786,7 @@ class BizniWebExporter:
         date_agg['contribution_cost'] = (
             date_agg['product_expense']
             + date_agg['packaging_cost']
-            + date_agg['shipping_subsidy_cost']
+            + date_agg['shipping_net_cost']
             + date_agg['fb_ads_spend']
             + date_agg['google_ads_spend']
         )
@@ -2983,7 +2985,7 @@ class BizniWebExporter:
                 
                 print("\n" + "="*220)
                 print(f"DAILY SUMMARY FOR {month_str.upper()}")
-                print("Fixed Costs = Packaging + Shipping Subsidy + Fixed Daily Cost | AOV = Avg Order Value | FB/Order = Avg FB Cost per Order")
+                print("Fixed Costs = Packaging + Net Shipping + Fixed Daily Cost | AOV = Avg Order Value | FB/Order = Avg FB Cost per Order")
                 print("="*220)
                 
                 print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Revenue (â‚¬)':>12} {'AOV (â‚¬)':>8} {'Product (â‚¬)':>12} {'Fixed Costs (â‚¬)':>14} {'FB Ads (â‚¬)':>12} {'Google Ads (â‚¬)':>14} {'Total Cost (â‚¬)':>14} {'Profit (â‚¬)':>12} {'ROI %':>8}")
@@ -3002,7 +3004,7 @@ class BizniWebExporter:
                 
                 for _, row in month_data.iterrows():
                     date_str = str(row['date'])
-                    fixed_costs = row['packaging_cost'] + row.get('shipping_subsidy_cost', 0) + row['fixed_daily_cost']
+                    fixed_costs = row['packaging_cost'] + row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0)) + row['fixed_daily_cost']
                     aov = row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
                     fb_per_order = row['fb_ads_spend'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
                     google_ads = row.get('google_ads_spend', 0)
@@ -3015,7 +3017,7 @@ class BizniWebExporter:
                     month_revenue += row['total_revenue']
                     month_product_expense += row['product_expense']
                     month_packaging += row['packaging_cost']
-                    month_shipping += row.get('shipping_subsidy_cost', 0)
+                    month_shipping += row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0))
                     month_fixed += row['fixed_daily_cost']
                     month_fb_ads += row['fb_ads_spend']
                     month_google_ads += google_ads
@@ -3055,7 +3057,7 @@ class BizniWebExporter:
             
             for _, row in month_agg.iterrows():
                 month_str = str(row['month'])
-                fixed_costs = row['packaging_cost'] + row.get('shipping_subsidy_cost', 0) + row['fixed_daily_cost']
+                fixed_costs = row['packaging_cost'] + row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0)) + row['fixed_daily_cost']
                 aov = row['total_revenue'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
                 fb_per_order = row['fb_ads_spend'] / row['unique_orders'] if row['unique_orders'] > 0 else 0
                 google_ads = row.get('google_ads_spend', 0)
@@ -3069,7 +3071,7 @@ class BizniWebExporter:
                 month_total_revenue += row['total_revenue']
                 month_total_product_expense += row['product_expense']
                 month_total_packaging += row['packaging_cost']
-                month_total_shipping += row.get('shipping_subsidy_cost', 0)
+                month_total_shipping += row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0))
                 month_total_fixed += row['fixed_daily_cost']
                 month_total_fb_ads += row['fb_ads_spend']
                 month_total_google_ads += google_ads
@@ -4955,9 +4957,10 @@ class BizniWebExporter:
         product_cost_by_order = df.groupby('order_num')['total_expense'].sum()
         orders_df['product_cost'] = orders_df['order_num'].map(product_cost_by_order).fillna(0)
         orders_df['packaging_cost'] = PACKAGING_COST_PER_ORDER
-        orders_df['shipping_subsidy_cost'] = SHIPPING_SUBSIDY_PER_ORDER
+        orders_df['shipping_net_cost'] = SHIPPING_NET_PER_ORDER
+        orders_df['shipping_subsidy_cost'] = orders_df['shipping_net_cost']
         orders_df['pre_ad_contribution'] = (
-            orders_df[revenue_col] - orders_df['product_cost'] - orders_df['packaging_cost'] - orders_df['shipping_subsidy_cost']
+            orders_df[revenue_col] - orders_df['product_cost'] - orders_df['packaging_cost'] - orders_df['shipping_net_cost']
         )
 
         # Mark first vs repeat orders
@@ -5208,7 +5211,7 @@ class BizniWebExporter:
             lambda row: (row['item_total_without_tax'] / row['order_item_revenue']) if row['order_item_revenue'] > 0 else 0,
             axis=1
         )
-        overhead_per_order = PACKAGING_COST_PER_ORDER + SHIPPING_SUBSIDY_PER_ORDER
+        overhead_per_order = PACKAGING_COST_PER_ORDER + SHIPPING_NET_PER_ORDER
         item_df['allocated_overhead'] = item_df['item_rev_share'] * overhead_per_order
         item_df['pre_ad_contribution'] = item_df['item_total_without_tax'] - item_df['total_expense'] - item_df['allocated_overhead']
 
@@ -5539,7 +5542,8 @@ class BizniWebExporter:
         geo.columns = ['country', 'orders', 'revenue', 'product_cost']
 
         geo['packaging_cost'] = geo['orders'] * PACKAGING_COST_PER_ORDER
-        geo['shipping_subsidy_cost'] = geo['orders'] * SHIPPING_SUBSIDY_PER_ORDER
+        geo['shipping_net_cost'] = geo['orders'] * SHIPPING_NET_PER_ORDER
+        geo['shipping_subsidy_cost'] = geo['shipping_net_cost']
 
         fb_spend_by_country = {'sk': 0.0, 'cz': 0.0, 'hu': 0.0}
         fb_spend_unattributed = 0.0
@@ -5563,7 +5567,7 @@ class BizniWebExporter:
                 fb_spend_unattributed += spend
 
         geo['fb_ads_spend'] = geo['country'].map(fb_spend_by_country).fillna(0)
-        geo['contribution_cost'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_subsidy_cost'] + geo['fb_ads_spend']
+        geo['contribution_cost'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['fb_ads_spend']
         geo['contribution_profit'] = geo['revenue'] - geo['contribution_cost']
         geo['contribution_margin_pct'] = geo.apply(
             lambda row: round((row['contribution_profit'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
@@ -5783,15 +5787,19 @@ class BizniWebExporter:
         total_ad_spend = total_fb_spend + total_google_spend
         total_product_cost = date_agg['product_expense'].sum() if 'product_expense' in date_agg.columns else df['total_expense'].sum()
         total_packaging_cost = date_agg['packaging_cost'].sum() if 'packaging_cost' in date_agg.columns else 0
-        total_shipping_subsidy = date_agg['shipping_subsidy_cost'].sum() if 'shipping_subsidy_cost' in date_agg.columns else 0
+        total_shipping_net = (
+            date_agg['shipping_net_cost'].sum()
+            if 'shipping_net_cost' in date_agg.columns
+            else (date_agg['shipping_subsidy_cost'].sum() if 'shipping_subsidy_cost' in date_agg.columns else 0)
+        )
         total_fixed_overhead = date_agg['fixed_daily_cost'].sum() if 'fixed_daily_cost' in date_agg.columns else 0
-        total_company_cost = date_agg['total_cost'].sum() if 'total_cost' in date_agg.columns else (total_product_cost + total_ad_spend + total_packaging_cost + total_shipping_subsidy + total_fixed_overhead)
+        total_company_cost = date_agg['total_cost'].sum() if 'total_cost' in date_agg.columns else (total_product_cost + total_ad_spend + total_packaging_cost + total_shipping_net + total_fixed_overhead)
         total_company_profit = date_agg['net_profit'].sum() if 'net_profit' in date_agg.columns else (df['profit_before_ads'].sum() - total_fb_spend - total_google_spend)
-        total_contribution_cost = date_agg['contribution_cost'].sum() if 'contribution_cost' in date_agg.columns else (total_product_cost + total_packaging_cost + total_shipping_subsidy + total_ad_spend)
+        total_contribution_cost = date_agg['contribution_cost'].sum() if 'contribution_cost' in date_agg.columns else (total_product_cost + total_packaging_cost + total_shipping_net + total_ad_spend)
         total_contribution_profit = date_agg['contribution_profit'].sum() if 'contribution_profit' in date_agg.columns else (total_revenue - total_contribution_cost)
         # Break-even CAC is based on contribution before ad spend:
-        # Revenue - Product Cost - Packaging - Shipping subsidy (fixed overhead excluded by design).
-        total_pre_ad_contribution = total_revenue - total_product_cost - total_packaging_cost - total_shipping_subsidy
+        # Revenue - Product Cost - Packaging - Net shipping (fixed overhead excluded by design).
+        total_pre_ad_contribution = total_revenue - total_product_cost - total_packaging_cost - total_shipping_net
         pre_ad_contribution_per_order = (total_pre_ad_contribution / total_orders) if total_orders > 0 else 0
         pre_ad_contribution_per_customer = (total_pre_ad_contribution / total_customers) if total_customers > 0 else 0
 
@@ -5910,7 +5918,9 @@ class BizniWebExporter:
             'total_ad_spend': round(total_ad_spend, 2),
             'total_revenue': round(total_revenue, 2),
             'total_packaging_cost': round(total_packaging_cost, 2),
-            'total_shipping_subsidy': round(total_shipping_subsidy, 2),
+            'total_shipping_subsidy': round(total_shipping_net, 2),  # backward-compatible key
+            'total_shipping_net': round(total_shipping_net, 2),
+            'shipping_net_semantics': 'positive_cost_negative_profit',
             'total_fixed_overhead': round(total_fixed_overhead, 2),
             'total_new_customers': int(total_new_customers),
             'total_orders': total_orders,
@@ -7005,4 +7015,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

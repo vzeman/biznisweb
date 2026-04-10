@@ -36,6 +36,15 @@ class ProjectRuntime:
     weather: Dict[str, Any]
     reporting_defaults: Dict[str, Any]
 
+    @property
+    def shipping_net_per_order(self) -> float:
+        """Canonical shipping semantics.
+
+        Positive value = net shipping cost to the business.
+        Negative value = shipping profit / shipping margin retained by the business.
+        """
+        return float(self.shipping_subsidy_per_order)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "project_name": self.project_name,
@@ -43,6 +52,7 @@ class ProjectRuntime:
             "api_token": self.api_token,
             "packaging_cost_per_order": self.packaging_cost_per_order,
             "shipping_subsidy_per_order": self.shipping_subsidy_per_order,
+            "shipping_net_per_order": self.shipping_net_per_order,
             "fixed_monthly_cost": self.fixed_monthly_cost,
             "currency_rates_to_eur": dict(self.currency_rates_to_eur),
             "product_expenses": dict(self.product_expenses),
@@ -102,7 +112,12 @@ def load_project_runtime(
         api_url=resolve_biznisweb_api_url(project_name, settings),
         api_token=os.getenv("BIZNISWEB_API_TOKEN", ""),
         packaging_cost_per_order=float(settings.get("packaging_cost_per_order", default_packaging_cost_per_order)),
-        shipping_subsidy_per_order=float(settings.get("shipping_subsidy_per_order", default_shipping_subsidy_per_order)),
+        shipping_subsidy_per_order=float(
+            settings.get(
+                "shipping_net_per_order",
+                settings.get("shipping_subsidy_per_order", default_shipping_subsidy_per_order),
+            )
+        ),
         fixed_monthly_cost=float(settings.get("fixed_monthly_cost", default_fixed_monthly_cost)),
         currency_rates_to_eur={
             str(k).upper(): float(v)
@@ -135,6 +150,7 @@ def load_project_runtime(
 def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any]) -> None:
     target_globals["PACKAGING_COST_PER_ORDER"] = float(runtime.packaging_cost_per_order)
     target_globals["SHIPPING_SUBSIDY_PER_ORDER"] = float(runtime.shipping_subsidy_per_order)
+    target_globals["SHIPPING_NET_PER_ORDER"] = float(runtime.shipping_net_per_order)
     target_globals["FIXED_MONTHLY_COST"] = float(runtime.fixed_monthly_cost)
     target_globals["CURRENCY_RATES_TO_EUR"] = dict(runtime.currency_rates_to_eur)
     target_globals["PRODUCT_EXPENSES"] = dict(runtime.product_expenses)
