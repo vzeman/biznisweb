@@ -766,6 +766,7 @@ def generate_modern_dashboard(
     )
 
     advanced_summary = (advanced_dtc_metrics or {}).get("summary", {}) if advanced_dtc_metrics else {}
+    bundle_accessory_model = (advanced_dtc_metrics or {}).get("bundle_accessory_model", {}) if advanced_dtc_metrics else {}
     basket_contribution_rows = _frame_rows((advanced_dtc_metrics or {}).get("basket_contribution"), ["basket_size", "orders", "revenue", "pre_ad_contribution", "contribution_per_order", "contribution_margin_pct"], limit=10)
     sku_pareto_rows = _normalize_sku_pareto_rows(
         _frame_rows((advanced_dtc_metrics or {}).get("sku_pareto"), ["sku", "product", "orders", "revenue", "pre_ad_contribution", "cum_contribution_pct", "cum_contribution_share_pct"], limit=12)
@@ -778,6 +779,50 @@ def generate_modern_dashboard(
     )
     payday_window_rows = _frame_rows((advanced_dtc_metrics or {}).get("payday_window"), ["window", "orders", "revenue", "profit", "avg_daily_revenue", "avg_daily_profit"], limit=20)
     cohort_payback_rows = _frame_rows((advanced_dtc_metrics or {}).get("cohort_payback"), ["cohort_month", "new_customers", "cohort_cac", "recovery_rate_pct", "avg_payback_days", "median_payback_days"], limit=24)
+    bundle_accessory_pair_rows = _frame_rows(
+        (bundle_accessory_model or {}).get("pair_rows"),
+        [
+            "anchor_group_label",
+            "accessory_group_label",
+            "anchor_orders",
+            "attached_orders",
+            "attach_rate_pct",
+            "avg_order_value_with_accessory",
+            "avg_order_value_without_accessory",
+            "avg_pre_ad_contribution_with_accessory",
+            "avg_pre_ad_contribution_without_accessory",
+            "revenue_uplift_per_order",
+            "contribution_uplift_per_order",
+        ],
+        limit=18,
+    )
+    bundle_accessory_device_rows = _frame_rows(
+        (bundle_accessory_model or {}).get("device_family_rows"),
+        [
+            "anchor_group_label",
+            "anchor_orders",
+            "anchor_avg_order_value",
+            "anchor_avg_pre_ad_contribution",
+            "best_accessory_group_label",
+            "best_attach_rate_pct",
+            "best_contribution_uplift_per_order",
+            "best_revenue_uplift_per_order",
+        ],
+        limit=12,
+    )
+    bundle_accessory_group_rows = _frame_rows(
+        (bundle_accessory_model or {}).get("accessory_group_rows"),
+        [
+            "accessory_group_label",
+            "covered_anchor_groups",
+            "pair_rows",
+            "attached_orders_total",
+            "weighted_attach_rate_pct",
+            "avg_contribution_uplift_per_order",
+            "best_anchor_group_label",
+        ],
+        limit=10,
+    )
 
     heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
     b2b_rows = _frame_rows(b2b_analysis, ["customer_type", "orders", "revenue", "profit", "unique_customers", "aov", "orders_pct", "revenue_pct"], limit=10)
@@ -1038,6 +1083,12 @@ def generate_modern_dashboard(
         "basket_contribution_rows": basket_contribution_rows,
         "sku_pareto_rows": sku_pareto_rows,
         "attach_rate_rows": attach_rate_rows,
+        "bundle_accessory": {
+            "summary": {k: _maybe_num(v) if isinstance(v, (int, float)) else _json_safe(v) for k, v in ((bundle_accessory_model or {}).get("summary") or {}).items()},
+            "pair_rows": bundle_accessory_pair_rows,
+            "device_rows": bundle_accessory_device_rows,
+            "group_rows": bundle_accessory_group_rows,
+        },
         "daily_margin_rows": daily_margin_rows,
         "payday_window_rows": payday_window_rows,
         "cohort_payback_rows": cohort_payback_rows,
@@ -3931,6 +3982,10 @@ def generate_modern_dashboard(
             if (hasRows(DATA.daily_margin_rows)) productItems.push({{ id: 'prodMarginStabilityChart', title: {{ en: 'Daily margin stability', sk: 'Stabilita denneho marginu' }}, desc: {{ en: 'Pre-ad contribution margin through time.', sk: 'Pre-ad contribution margin v case.' }} }});
             if (hasRows(DATA.sku_pareto_rows)) productItems.push({{ id: 'prodParetoLibraryChart', title: {{ en: 'SKU Pareto', sk: 'SKU Pareto' }}, desc: {{ en: 'Contribution concentration across top SKUs.', sk: 'Koncentracia kontribucie napriec top SKU.' }} }});
             if (hasRows(DATA.attach_rate_rows)) productItems.push({{ id: 'prodAttachRateLibraryChart', title: {{ en: 'Attach rate', sk: 'Attach rate' }}, desc: {{ en: 'Most common anchor -> attached item pairs.', sk: 'Najcastejsie dvojice anchor -> attached item.' }} }});
+            if (hasRows(DATA.bundle_accessory.pair_rows)) productItems.push({{ id: 'prodBundleAccessoryAttachChart', title: {{ en: 'Device -> accessory attach rate', sk: 'Attach rate zariadenie -> doplnok' }}, desc: {{ en: 'Config-driven Roy device family attach-rate by accessory group.', sk: 'Konfigurovany Roy attach-rate podla device family a accessory group.' }} }});
+            if (hasRows(DATA.bundle_accessory.pair_rows)) productItems.push({{ id: 'prodBundleAccessoryUpliftChart', title: {{ en: 'Accessory contribution uplift', sk: 'Contribution uplift doplnkov' }}, desc: {{ en: 'Incremental pre-ad contribution per order when the accessory is present.', sk: 'Inkrementalna pre-ad contribution na objednavku pri pritomnosti doplnku.' }} }});
+            if (hasRows(DATA.bundle_accessory.device_rows)) productItems.push({{ id: 'prodBundleAccessoryFamilyChart', title: {{ en: 'Device family summary', sk: 'Sumar device family' }}, desc: {{ en: 'Best accessory group per device family by uplift and attach rate.', sk: 'Najlepsi accessory group pre device family podla upliftu a attach rate.' }} }});
+            if (hasRows(DATA.bundle_accessory.group_rows)) productItems.push({{ id: 'prodBundleAccessoryGroupChart', title: {{ en: 'Accessory group quality', sk: 'Kvalita accessory groups' }}, desc: {{ en: 'Weighted attach-rate and uplift by accessory category.', sk: 'Vazeny attach-rate a uplift podla kategorie doplnkov.' }} }});
             if (hasRows(DATA.b2b_rows)) productItems.push({{ id: 'opsB2bRevenueProfitChart', title: {{ en: 'B2B vs B2C economics', sk: 'Ekonomika B2B vs B2C' }}, desc: {{ en: 'Revenue, profit and AOV by customer type.', sk: 'Trzba, zisk a AOV podla typu zakaznika.' }} }});
             if (hasRows(DATA.order_status_rows)) productItems.push({{ id: 'opsStatusRevenueChart', title: {{ en: 'Order status mix', sk: 'Mix stavov objednavok' }}, desc: {{ en: 'Orders and revenue by final order status.', sk: 'Objednavky a trzba podla finalneho statusu.' }} }});
             if (hasRows(DATA.segment_rows)) productItems.push({{ id: 'opsSegmentPriorityChart', title: {{ en: 'Email segment volume', sk: 'Objem email segmentov' }}, desc: {{ en: 'Size and priority of lifecycle email segments.', sk: 'Velkost a priorita lifecycle email segmentov.' }} }});
@@ -4009,6 +4064,54 @@ def generate_modern_dashboard(
                         datasets: [{{ label: 'Attach rate %', data: DATA.attach_rate_rows.map(x => Number(x.attach_rate_pct || 0)), backgroundColor: 'rgba(71,102,255,.72)', borderRadius: 8 }}],
                     }},
                     options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('prodBundleAccessoryAttachChart')) {{
+                new Chart(document.getElementById('prodBundleAccessoryAttachChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.bundle_accessory.pair_rows.map(x => `${{(x.anchor_group_label || '').slice(0, 18)}} -> ${{(x.accessory_group_label || '').slice(0, 16)}}`),
+                        datasets: [{{ label: 'Attach rate %', data: DATA.bundle_accessory.pair_rows.map(x => Number(x.attach_rate_pct || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('prodBundleAccessoryUpliftChart')) {{
+                new Chart(document.getElementById('prodBundleAccessoryUpliftChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.bundle_accessory.pair_rows.map(x => `${{(x.anchor_group_label || '').slice(0, 18)}} -> ${{(x.accessory_group_label || '').slice(0, 16)}}`),
+                        datasets: [{{ label: 'Contribution uplift / order', data: DATA.bundle_accessory.pair_rows.map(x => Number(x.contribution_uplift_per_order || 0)), backgroundColor: 'rgba(31,157,102,.72)', borderRadius: 8 }}],
+                    }},
+                    options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('prodBundleAccessoryFamilyChart')) {{
+                const familyOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodBundleAccessoryFamilyChart'), {{
+                    data: {{
+                        labels: DATA.bundle_accessory.device_rows.map(x => x.anchor_group_label || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Anchor orders', data: DATA.bundle_accessory.device_rows.map(x => Number(x.anchor_orders || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Best attach rate %', data: DATA.bundle_accessory.device_rows.map(x => Number(x.best_attach_rate_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Best uplift / order', data: DATA.bundle_accessory.device_rows.map(x => Number(x.best_contribution_uplift_per_order || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: familyOpts,
+                }});
+            }}
+            if (document.getElementById('prodBundleAccessoryGroupChart')) {{
+                const groupOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodBundleAccessoryGroupChart'), {{
+                    data: {{
+                        labels: DATA.bundle_accessory.group_rows.map(x => x.accessory_group_label || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Attached orders', data: DATA.bundle_accessory.group_rows.map(x => Number(x.attached_orders_total || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Weighted attach rate %', data: DATA.bundle_accessory.group_rows.map(x => Number(x.weighted_attach_rate_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg uplift / order', data: DATA.bundle_accessory.group_rows.map(x => Number(x.avg_contribution_uplift_per_order || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: groupOpts,
                 }});
             }}
             if (document.getElementById('opsB2bRevenueProfitChart')) {{

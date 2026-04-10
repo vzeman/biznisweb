@@ -101,7 +101,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Add explicit attribution QA guardrails into the pipeline and surface campaign-attribution coverage / oversubscription warnings directly in the dashboard.
+- Add cohort-normalized CAC / LTV / payback views so marketing efficiency is comparable by acquisition cohort instead of only global aggregate shortcuts.
 
 ## 9) Change Log
 
@@ -118,6 +118,12 @@ Bootstrap entrypoints:
   - added `reporting_core.runtime` with `ProjectRuntime` and reusable runtime application/loading helpers,
   - added `reporting_core.contracts` with `ReportingArtifactSet` + canonical output artifact builder,
   - switched `export_orders.py`, `daily_report_runner.py`, and `generate_invoices.py` to import from `reporting_core`,
+
+### 2026-04-10
+- Added Roy bundle/accessory model as a first-class advanced DTC metric using project-configured anchor device families and accessory groups.
+- Bundle/accessory outputs now include pair-level attach rate and contribution uplift, device family summary, and accessory group quality summary.
+- Modern dashboard now renders Roy bundle/accessory charts in the Products/Operations library without changing the current production shell.
+- Verified with real Roy March 2026 export: HTML report generated successfully and new bundle/accessory chart IDs are present in the rendered output.
   - updated daily runner to consume the shared artifact contract instead of rebuilding output paths ad hoc,
   - verified syntax with `python -m py_compile export_orders.py daily_report_runner.py generate_invoices.py project_config.py reporting_core\\__init__.py reporting_core\\config.py reporting_core\\runtime.py reporting_core\\contracts.py`,
   - verified ROY smoke export on `2026-03-01..2026-03-02`,

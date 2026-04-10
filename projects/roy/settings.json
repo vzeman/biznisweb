@@ -120,6 +120,86 @@
     "Pasca na potkany z bukového dreva"
   ],
   "product_expenses_file": "product_expenses.json",
+  "bundle_accessory_model": {
+    "enabled": true,
+    "anchor_groups": [
+      {
+        "key": "discovery",
+        "label": "Wachman Discovery",
+        "patterns": ["Wachman Discovery 4G", "Discovery 4G"]
+      },
+      {
+        "key": "hc800",
+        "label": "Wachman HC800",
+        "patterns": ["Wachman HC800", "HC800"]
+      },
+      {
+        "key": "rio",
+        "label": "Wachman Rio",
+        "patterns": ["Fotopasca Wachman Rio", "Wachman Rio", "Rio Solar 4G"]
+      },
+      {
+        "key": "alfa",
+        "label": "Wachman Alfa",
+        "patterns": ["Wachman Alfa Live 4G", "Wachman Alfa"]
+      },
+      {
+        "key": "aldo",
+        "label": "Wachman Aldo",
+        "patterns": ["Wachman Aldo", "Aldo"]
+      },
+      {
+        "key": "solar",
+        "label": "Wachman Solar",
+        "patterns": ["Fotopasca Wachman Solar Pro", "Wachman Solar Pro", "Wachman Solar Lite"]
+      },
+      {
+        "key": "spider",
+        "label": "Wachman Spider",
+        "patterns": ["Wachman Spider"]
+      },
+      {
+        "key": "slim",
+        "label": "Wachman Slim",
+        "patterns": ["Wachman Slim 4K WIFI", "Wachman Slim"]
+      }
+    ],
+    "accessory_groups": [
+      {
+        "key": "sd_card",
+        "label": "SD card",
+        "patterns": ["Micro SD KARTA", "Micro SD CARD", "MicroSDXC", "SD karta", "SD card"]
+      },
+      {
+        "key": "batteries_power",
+        "label": "Batteries & power",
+        "patterns": [
+          "Baterky pre fotopascu",
+          "Baterky AA pre fotopascu",
+          "Baterie do fotopasti",
+          "Externe napajanie pre fotopascu",
+          "Napajaci kabel pre fotopasce",
+          "Napajaci kabel",
+          "Univerzalne solarne napajanie"
+        ]
+      },
+      {
+        "key": "metal_box",
+        "label": "Metal box",
+        "patterns": ["Ochranny kovovy box", "Ochranny box", "Box na Wachman", "Box na fotopascu"]
+      },
+      {
+        "key": "insurance",
+        "label": "Insurance",
+        "patterns": ["Poistenie balika proti strate a rozbitiu", "Poistenie balika"]
+      },
+      {
+        "key": "mounting_security",
+        "label": "Mounting & security",
+        "patterns": ["Popruh na fotopascu", "Univerzalni popruh", "Zamok na fotopascu", "MasterLock Python", "Drziak na fotopascu"]
+      }
+    ]
+  },
   "currency_rates_to_eur": {
     "EUR": 1.0,
     "CZK": 0.04,
