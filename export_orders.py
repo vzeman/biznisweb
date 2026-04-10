@@ -2408,7 +2408,7 @@ class BizniWebExporter:
         product_trends = self.analyze_product_trends(analytics_df)
         customer_concentration = self.analyze_customer_concentration(analytics_df)
         order_status = self.analyze_order_status(analytics_df)
-        ads_effectiveness = self.analyze_ads_effectiveness(analytics_df)
+        ads_effectiveness = None
         new_vs_returning_revenue = self.analyze_new_vs_returning_revenue(analytics_df)
         refunds_analysis = self.analyze_refunds(analytics_df)
 
@@ -2465,6 +2465,13 @@ class BizniWebExporter:
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(analytics_df, date_agg, clv_return_time_analysis)
         consistency_checks = self.validate_metric_consistency(date_agg, financial_metrics, clv_return_time_analysis)
+        ads_effectiveness = self.analyze_ads_effectiveness(
+            analytics_df,
+            date_agg=date_agg,
+            new_vs_returning_revenue=new_vs_returning_revenue,
+            weather_analysis=weather_analysis,
+            financial_metrics=financial_metrics,
+        )
         cfo_fixed_daily_cost = self.get_default_fixed_daily_cost()
         if date_agg is not None and not date_agg.empty and "date" in date_agg.columns:
             cfo_fixed_daily_cost = self.get_daily_fixed_cost(pd.Timestamp(date_agg["date"].max()))
@@ -5894,7 +5901,650 @@ class BizniWebExporter:
             'daily': daily
         }
 
-    def analyze_ads_effectiveness(self, df: pd.DataFrame) -> dict:
+    @staticmethod
+    def _month_phase_window_label(day_value: Any) -> str:
+        try:
+            day_num = int(day_value)
+        except (TypeError, ValueError):
+            return "unknown"
+        if day_num <= 7:
+            return "1-7"
+        if day_num <= 14:
+            return "8-14"
+        if day_num <= 21:
+            return "15-21"
+        if day_num <= 28:
+            return "22-28"
+        return "29-31"
+
+    @staticmethod
+    def _safe_corr_value(left: pd.Series, right: pd.Series) -> float:
+        correlation = left.corr(right)
+        if pd.isna(correlation):
+            return 0.0
+        return round(float(correlation), 3)
+
+    @staticmethod
+    def _weighted_metric_average(frame: pd.DataFrame, metric: str, weight_col: str = "pair_days") -> float:
+        if frame.empty:
+            return 0.0
+        weights = pd.to_numeric(frame.get(weight_col, 0), errors="coerce").fillna(0)
+        values = pd.to_numeric(frame.get(metric, 0), errors="coerce").fillna(0)
+        if float(weights.sum()) <= 0:
+            return round(float(values.mean()) if not values.empty else 0.0, 4)
+        return round(float(np.average(values, weights=weights)), 4)
+
+    def _build_ads_decision_daily_data(
+        self,
+        df: pd.DataFrame,
+        date_agg: Optional[pd.DataFrame] = None,
+        new_vs_returning_revenue: Optional[dict] = None,
+        weather_analysis: Optional[dict] = None,
+    ) -> pd.DataFrame:
+        if date_agg is not None and not date_agg.empty:
+            daily_data = date_agg.copy()
+            daily_data["date"] = pd.to_datetime(daily_data["date"]).dt.date
+            daily_data = daily_data.rename(columns={
+                "unique_orders": "orders",
+                "total_revenue": "revenue",
+                "fb_ads_spend": "fb_spend",
+                "google_ads_spend": "google_spend",
+                "pre_ad_contribution_profit": "pre_ad_contribution",
+                "contribution_profit": "profit_without_fixed",
+                "net_profit": "profit_with_fixed",
+            })
+            for column in [
+                "orders",
+                "revenue",
+                "fb_spend",
+                "google_spend",
+                "pre_ad_contribution",
+                "profit_without_fixed",
+                "profit_with_fixed",
+                "total_items",
+            ]:
+                if column not in daily_data.columns:
+                    daily_data[column] = 0.0
+            daily_data["orders"] = pd.to_numeric(daily_data["orders"], errors="coerce").fillna(0).astype(int)
+            daily_data["profit"] = pd.to_numeric(daily_data["profit_without_fixed"], errors="coerce").fillna(0.0)
+        else:
+            temp = df.copy()
+            temp["purchase_date_only"] = pd.to_datetime(temp["purchase_date"]).dt.date
+            daily_data = temp.groupby("purchase_date_only").agg(
+                orders=("order_num", "nunique"),
+                revenue=("item_total_without_tax", "sum"),
+                fb_spend=("fb_ads_daily_spend", "first"),
+                google_spend=("google_ads_daily_spend", "first"),
+                pre_ad_contribution=("pre_ad_contribution", "sum"),
+                profit_without_fixed=("profit_before_ads", "sum"),
+                profit_with_fixed=("profit_after_fixed", "sum"),
+                total_items=("item_label", "count"),
+            ).reset_index().rename(columns={"purchase_date_only": "date"})
+            daily_data["profit"] = daily_data["profit_without_fixed"]
+
+        daily_data["date"] = pd.to_datetime(daily_data["date"]).dt.date
+        numeric_cols = [
+            "revenue",
+            "fb_spend",
+            "google_spend",
+            "pre_ad_contribution",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "profit",
+            "total_items",
+        ]
+        for column in numeric_cols:
+            daily_data[column] = pd.to_numeric(daily_data.get(column, 0), errors="coerce").fillna(0.0)
+        daily_data["total_ad_spend"] = daily_data["fb_spend"] + daily_data["google_spend"]
+        daily_data["aov"] = daily_data.apply(
+            lambda row: round((row["revenue"] / row["orders"]) if row["orders"] > 0 else 0.0, 2),
+            axis=1,
+        )
+        daily_data["day_of_week"] = pd.to_datetime(daily_data["date"]).dt.day_name()
+        daily_data["weekday_num"] = pd.to_datetime(daily_data["date"]).dt.weekday
+        daily_data["month_phase_window"] = pd.to_datetime(daily_data["date"]).dt.day.apply(self._month_phase_window_label)
+        daily_data["has_fb_ads"] = daily_data["fb_spend"] > 0.009
+        daily_data["has_google_ads"] = daily_data["google_spend"] > 0.009
+        daily_data["has_any_ads"] = daily_data["total_ad_spend"] > 0.009
+
+        if new_vs_returning_revenue and isinstance(new_vs_returning_revenue.get("daily"), pd.DataFrame):
+            revenue_split = new_vs_returning_revenue["daily"].copy()
+            revenue_split["date"] = pd.to_datetime(revenue_split["date"]).dt.date
+            revenue_split = revenue_split[["date", "new_revenue", "returning_revenue"]]
+            daily_data = daily_data.merge(revenue_split, on="date", how="left")
+        else:
+            daily_data["new_revenue"] = 0.0
+            daily_data["returning_revenue"] = 0.0
+        daily_data["new_revenue"] = pd.to_numeric(daily_data.get("new_revenue", 0), errors="coerce").fillna(0.0)
+        daily_data["returning_revenue"] = pd.to_numeric(daily_data.get("returning_revenue", 0), errors="coerce").fillna(0.0)
+
+        orders = df[["order_num", "customer_email", "purchase_date"]].drop_duplicates(subset=["order_num"]).copy()
+        orders["date"] = pd.to_datetime(orders["purchase_date"]).dt.date
+        orders = orders.sort_values(["customer_email", "date", "order_num"])
+        orders["order_index_for_customer"] = orders.groupby("customer_email").cumcount() + 1
+        orders["is_new_customer_order"] = orders["order_index_for_customer"] == 1
+        daily_customer = orders.groupby("date").agg(
+            new_orders=("is_new_customer_order", "sum"),
+            total_orders=("order_num", "nunique"),
+        ).reset_index()
+        daily_customer["returning_orders"] = daily_customer["total_orders"] - daily_customer["new_orders"]
+        daily_new_customers = (
+            orders[orders["is_new_customer_order"]]
+            .groupby("date")["customer_email"]
+            .nunique()
+            .reset_index(name="new_customers")
+        )
+        daily_returning_customers = (
+            orders[~orders["is_new_customer_order"]]
+            .groupby("date")["customer_email"]
+            .nunique()
+            .reset_index(name="returning_customers")
+        )
+        daily_customer = daily_customer.merge(daily_new_customers, on="date", how="left")
+        daily_customer = daily_customer.merge(daily_returning_customers, on="date", how="left")
+        daily_data = daily_data.merge(
+            daily_customer[["date", "new_orders", "returning_orders", "new_customers", "returning_customers"]],
+            on="date",
+            how="left",
+        )
+        for column in ["new_orders", "returning_orders", "new_customers", "returning_customers"]:
+            daily_data[column] = pd.to_numeric(daily_data.get(column, 0), errors="coerce").fillna(0).astype(int)
+
+        weather_daily = (weather_analysis or {}).get("daily")
+        if weather_daily is not None and not getattr(weather_daily, "empty", True):
+            weather_join = weather_daily.copy()
+            weather_join["date"] = pd.to_datetime(weather_join["date"]).dt.date
+            keep_cols = [col for col in ["date", "weather_bucket", "weather_bad_score"] if col in weather_join.columns]
+            if keep_cols:
+                daily_data = daily_data.merge(weather_join[keep_cols], on="date", how="left")
+
+        return daily_data.sort_values("date").reset_index(drop=True)
+
+    @staticmethod
+    def _classify_incrementality_confidence(
+        *,
+        effective_pair_days: int,
+        matched_key_count: int,
+        overlap_rate: Optional[float],
+    ) -> tuple[str, str]:
+        score = 0
+        if effective_pair_days >= 28:
+            score += 3
+        elif effective_pair_days >= 14:
+            score += 2
+        elif effective_pair_days >= 7:
+            score += 1
+        if matched_key_count >= 5:
+            score += 1
+        elif matched_key_count <= 2:
+            score -= 1
+        if overlap_rate is not None:
+            if overlap_rate >= 0.5:
+                score -= 1
+            elif overlap_rate <= 0.2:
+                score += 1
+        if score >= 4:
+            return "high", "High confidence: enough matched days and limited channel overlap."
+        if score >= 2:
+            return "medium", "Medium confidence: useful signal, but still partly mixed by sample size or overlap."
+        return "low", "Low confidence: few matched days or heavy channel overlap, so read direction more than exact numbers."
+
+    @staticmethod
+    def _build_incrementality_verdict(
+        *,
+        incremental_profit_without_fixed_per_day: float,
+        incremental_profit_with_fixed_per_day: float,
+        incremental_cac: Optional[float],
+        break_even_cac: Optional[float],
+        confidence: str,
+        effective_pair_days: int,
+    ) -> tuple[str, str, str]:
+        if effective_pair_days < 4:
+            return (
+                "Insufficient data",
+                "Too few comparable days to decide if ads help or hurt the business.",
+                "neutral",
+            )
+        if incremental_profit_without_fixed_per_day > 0:
+            if break_even_cac not in (None, 0) and incremental_cac not in (None, 0) and incremental_cac > break_even_cac * 1.05:
+                label = "Hold / test more"
+                reason = "Ad-active days add pre-fixed profit, but the implied CAC is above break-even."
+                tone = "warning"
+            elif incremental_profit_with_fixed_per_day > 0:
+                label = "Scale"
+                reason = "Ad-active days add profit even after ad costs and fixed overhead."
+                tone = "positive"
+            else:
+                label = "Keep, but watch fixed cost"
+                reason = "Ad-active days add profit before fixed cost, but fixed overhead still eats the company result."
+                tone = "warning"
+        elif abs(incremental_profit_without_fixed_per_day) <= 2:
+            label = "Borderline"
+            reason = "Active days and baseline days are too close; keep spend cautious and test a cleaner on/off period."
+            tone = "warning"
+        else:
+            label = "Cut / reduce"
+            reason = "Ad-active days are worse than the baseline days even before fixed cost, so ads are not covering themselves."
+            tone = "negative"
+        if confidence == "low":
+            reason = f"{reason} Confidence is low, so validate with a cleaner on/off test."
+        return label, reason, tone
+
+    def _build_incrementality_comparison(
+        self,
+        daily_data: pd.DataFrame,
+        *,
+        key: str,
+        label_en: str,
+        label_sk: str,
+        method: str,
+        active_mask: pd.Series,
+        control_mask: pd.Series,
+        overlap_rate: Optional[float],
+        break_even_cac: Optional[float],
+    ) -> Optional[Dict[str, Any]]:
+        metric_cols = [
+            "orders",
+            "revenue",
+            "aov",
+            "pre_ad_contribution",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "new_customers",
+            "returning_customers",
+            "new_orders",
+            "returning_orders",
+            "new_revenue",
+            "returning_revenue",
+            "fb_spend",
+            "google_spend",
+            "total_ad_spend",
+        ]
+        active_days = daily_data.loc[active_mask].copy()
+        control_days = daily_data.loc[control_mask].copy()
+        if active_days.empty or control_days.empty:
+            return None
+
+        if method == "matched_weekday":
+            active_grouped = active_days.groupby("day_of_week").agg(
+                pair_days=("date", "count"),
+                **{metric: (metric, "mean") for metric in metric_cols},
+            ).reset_index()
+            control_grouped = control_days.groupby("day_of_week").agg(
+                pair_days=("date", "count"),
+                **{metric: (metric, "mean") for metric in metric_cols},
+            ).reset_index()
+            matched = active_grouped.merge(
+                control_grouped,
+                on="day_of_week",
+                how="inner",
+                suffixes=("_active", "_control"),
+            )
+            if matched.empty:
+                return None
+            matched["pair_days"] = matched[["pair_days_active", "pair_days_control"]].min(axis=1)
+            matched = matched[matched["pair_days"] > 0].copy()
+            if matched.empty:
+                return None
+            comparison = {
+                f"active_avg_{metric}": self._weighted_metric_average(matched, f"{metric}_active")
+                for metric in metric_cols
+            }
+            comparison.update({
+                f"control_avg_{metric}": self._weighted_metric_average(matched, f"{metric}_control")
+                for metric in metric_cols
+            })
+            effective_pair_days = int(round(float(matched["pair_days"].sum())))
+            matched_key_count = int(len(matched))
+        else:
+            comparison = {
+                f"active_avg_{metric}": round(float(pd.to_numeric(active_days[metric], errors="coerce").fillna(0).mean()), 4)
+                for metric in metric_cols
+            }
+            comparison.update({
+                f"control_avg_{metric}": round(float(pd.to_numeric(control_days[metric], errors="coerce").fillna(0).mean()), 4)
+                for metric in metric_cols
+            })
+            effective_pair_days = int(min(len(active_days), len(control_days)))
+            matched_key_count = int(min(active_days["day_of_week"].nunique(), control_days["day_of_week"].nunique()))
+
+        for metric in metric_cols:
+            comparison[f"incremental_{metric}_per_day"] = round(
+                comparison[f"active_avg_{metric}"] - comparison[f"control_avg_{metric}"],
+                4,
+            )
+
+        delta_spend = comparison["incremental_total_ad_spend_per_day"]
+        incremental_roas = (comparison["incremental_revenue_per_day"] / delta_spend) if delta_spend > 0 else None
+        incremental_profit_per_eur = (
+            comparison["incremental_profit_without_fixed_per_day"] / delta_spend
+            if delta_spend > 0 else None
+        )
+        incremental_company_profit_per_eur = (
+            comparison["incremental_profit_with_fixed_per_day"] / delta_spend
+            if delta_spend > 0 else None
+        )
+        incremental_cac = (
+            delta_spend / comparison["incremental_new_customers_per_day"]
+            if delta_spend > 0 and comparison["incremental_new_customers_per_day"] > 0 else None
+        )
+        confidence, confidence_note = self._classify_incrementality_confidence(
+            effective_pair_days=effective_pair_days,
+            matched_key_count=matched_key_count,
+            overlap_rate=overlap_rate,
+        )
+        verdict, verdict_reason, verdict_tone = self._build_incrementality_verdict(
+            incremental_profit_without_fixed_per_day=comparison["incremental_profit_without_fixed_per_day"],
+            incremental_profit_with_fixed_per_day=comparison["incremental_profit_with_fixed_per_day"],
+            incremental_cac=incremental_cac,
+            break_even_cac=break_even_cac,
+            confidence=confidence,
+            effective_pair_days=effective_pair_days,
+        )
+        return {
+            "key": key,
+            "label_en": label_en,
+            "label_sk": label_sk,
+            "method": method,
+            "active_days": int(len(active_days)),
+            "control_days": int(len(control_days)),
+            "effective_pair_days": effective_pair_days,
+            "matched_key_count": matched_key_count,
+            "channel_overlap_rate": round(float(overlap_rate or 0.0) * 100, 1) if overlap_rate is not None else None,
+            "confidence": confidence,
+            "confidence_note_en": confidence_note,
+            "confidence_note_sk": confidence_note,
+            "incremental_roas": round(float(incremental_roas), 3) if incremental_roas is not None else None,
+            "incremental_profit_per_eur": round(float(incremental_profit_per_eur), 3) if incremental_profit_per_eur is not None else None,
+            "incremental_company_profit_per_eur": round(float(incremental_company_profit_per_eur), 3) if incremental_company_profit_per_eur is not None else None,
+            "incremental_cac": round(float(incremental_cac), 2) if incremental_cac is not None else None,
+            "break_even_cac": round(float(break_even_cac), 2) if break_even_cac is not None else None,
+            "verdict": verdict,
+            "verdict_reason_en": verdict_reason,
+            "verdict_reason_sk": verdict_reason,
+            "verdict_tone": verdict_tone,
+            **{metric: round(float(value), 4) if value is not None else None for metric, value in comparison.items()},
+        }
+
+    def analyze_ads_effectiveness(
+        self,
+        df: pd.DataFrame,
+        date_agg: Optional[pd.DataFrame] = None,
+        new_vs_returning_revenue: Optional[dict] = None,
+        weather_analysis: Optional[dict] = None,
+        financial_metrics: Optional[dict] = None,
+    ) -> dict:
+        return self._analyze_ads_effectiveness_v2(
+            df,
+            date_agg=date_agg,
+            new_vs_returning_revenue=new_vs_returning_revenue,
+            weather_analysis=weather_analysis,
+            financial_metrics=financial_metrics,
+        )
+
+    def _analyze_ads_effectiveness_v2(
+        self,
+        df: pd.DataFrame,
+        date_agg: Optional[pd.DataFrame] = None,
+        new_vs_returning_revenue: Optional[dict] = None,
+        weather_analysis: Optional[dict] = None,
+        financial_metrics: Optional[dict] = None,
+    ) -> dict:
+        print("\nAnalyzing ads effectiveness...")
+
+        daily_data = self._build_ads_decision_daily_data(
+            df,
+            date_agg=date_agg,
+            new_vs_returning_revenue=new_vs_returning_revenue,
+            weather_analysis=weather_analysis,
+        )
+
+        correlations = {}
+        if len(daily_data) > 5:
+            correlations['fb_orders'] = self._safe_corr_value(daily_data['fb_spend'], daily_data['orders'])
+            correlations['fb_revenue'] = self._safe_corr_value(daily_data['fb_spend'], daily_data['revenue'])
+            correlations['google_orders'] = self._safe_corr_value(daily_data['google_spend'], daily_data['orders'])
+            correlations['google_revenue'] = self._safe_corr_value(daily_data['google_spend'], daily_data['revenue'])
+            correlations['total_ads_orders'] = self._safe_corr_value(daily_data['total_ad_spend'], daily_data['orders'])
+            correlations['total_ads_revenue'] = self._safe_corr_value(daily_data['total_ad_spend'], daily_data['revenue'])
+            correlations['spend_orders_correlation'] = correlations['total_ads_orders']
+            correlations['spend_revenue_correlation'] = correlations['total_ads_revenue']
+            correlations['spend_profit_correlation'] = self._safe_corr_value(daily_data['total_ad_spend'], daily_data['profit_without_fixed'])
+
+        max_spend = float(daily_data['total_ad_spend'].max()) if not daily_data.empty else 0.0
+        spend_effectiveness = pd.DataFrame(columns=[
+            'spend_range', 'avg_orders', 'avg_revenue', 'avg_spend',
+            'avg_profit_without_fixed', 'avg_profit_with_fixed', 'roas'
+        ])
+        if max_spend > 0:
+            upper_bound = int(np.ceil(max_spend / 10.0) * 10) + 10
+            spend_bins = list(range(0, max(upper_bound, 20) + 1, 10))
+            if len(spend_bins) < 2:
+                spend_bins = [0, 10]
+            spend_labels = [f'{spend_bins[i]}-{spend_bins[i+1]}EUR' for i in range(len(spend_bins) - 1)]
+            daily_data['total_spend_range'] = pd.cut(
+                daily_data['total_ad_spend'],
+                bins=spend_bins,
+                labels=spend_labels,
+                include_lowest=True,
+                right=False,
+            )
+            spend_effectiveness = daily_data.groupby('total_spend_range', observed=True).agg({
+                'orders': 'mean',
+                'revenue': 'mean',
+                'total_ad_spend': 'mean',
+                'profit_without_fixed': 'mean',
+                'profit_with_fixed': 'mean'
+            }).reset_index()
+            spend_effectiveness.columns = ['spend_range', 'avg_orders', 'avg_revenue', 'avg_spend', 'avg_profit_without_fixed', 'avg_profit_with_fixed']
+            spend_effectiveness['avg_profit'] = spend_effectiveness['avg_profit_without_fixed']
+            spend_effectiveness['roas'] = (spend_effectiveness['avg_revenue'] / spend_effectiveness['avg_spend']).round(2)
+            spend_effectiveness['roas'] = spend_effectiveness['roas'].replace([float('inf'), float('-inf')], 0).fillna(0)
+
+        dow_effectiveness = daily_data.groupby('day_of_week').agg({
+            'total_ad_spend': 'mean',
+            'orders': 'mean',
+            'revenue': 'mean',
+            'profit_without_fixed': 'mean',
+            'profit_with_fixed': 'mean'
+        }).reset_index()
+        dow_effectiveness['avg_fb_spend'] = dow_effectiveness['total_ad_spend']
+        dow_effectiveness['avg_orders'] = dow_effectiveness['orders']
+        dow_effectiveness['avg_revenue'] = dow_effectiveness['revenue']
+        dow_effectiveness['avg_profit_without_fixed'] = dow_effectiveness['profit_without_fixed']
+        dow_effectiveness['avg_profit_with_fixed'] = dow_effectiveness['profit_with_fixed']
+        dow_effectiveness['avg_profit'] = dow_effectiveness['profit_without_fixed']
+        dow_effectiveness['roas'] = (dow_effectiveness['revenue'] / dow_effectiveness['total_ad_spend']).round(2)
+        dow_effectiveness['roas'] = dow_effectiveness['roas'].replace([float('inf'), float('-inf')], 0).fillna(0)
+        dow_effectiveness = dow_effectiveness.rename(columns={'day_of_week': 'day_name'})
+        day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        dow_effectiveness['day_order'] = dow_effectiveness['day_name'].map({d: i for i, d in enumerate(day_order)})
+        dow_effectiveness = dow_effectiveness.sort_values('day_order')
+
+        break_even_cac = None
+        if financial_metrics:
+            try:
+                raw_break_even_cac = financial_metrics.get('break_even_cac')
+                break_even_cac = float(raw_break_even_cac) if raw_break_even_cac is not None else None
+            except (TypeError, ValueError):
+                break_even_cac = None
+
+        comparison_specs = [
+            {
+                "key": "all_ads_raw",
+                "label_en": "All ads vs no ads",
+                "label_sk": "Vsetky reklamy vs bez reklam",
+                "method": "raw",
+                "active_mask": daily_data["has_any_ads"],
+                "control_mask": ~daily_data["has_any_ads"],
+                "overlap_rate": None,
+            },
+            {
+                "key": "all_ads_matched_weekday",
+                "label_en": "All ads vs no ads (matched weekdays)",
+                "label_sk": "Vsetky reklamy vs bez reklam (rovnake dni v tyzdni)",
+                "method": "matched_weekday",
+                "active_mask": daily_data["has_any_ads"],
+                "control_mask": ~daily_data["has_any_ads"],
+                "overlap_rate": None,
+            },
+            {
+                "key": "facebook_active_raw",
+                "label_en": "Meta active vs Meta off",
+                "label_sk": "Meta aktivna vs Meta vypnuta",
+                "method": "raw",
+                "active_mask": daily_data["has_fb_ads"],
+                "control_mask": ~daily_data["has_fb_ads"],
+                "overlap_rate": float(daily_data.loc[daily_data["has_fb_ads"], "has_google_ads"].mean()) if daily_data["has_fb_ads"].any() else None,
+            },
+            {
+                "key": "facebook_active_matched_weekday",
+                "label_en": "Meta active vs Meta off (matched weekdays)",
+                "label_sk": "Meta aktivna vs Meta vypnuta (rovnake dni v tyzdni)",
+                "method": "matched_weekday",
+                "active_mask": daily_data["has_fb_ads"],
+                "control_mask": ~daily_data["has_fb_ads"],
+                "overlap_rate": float(daily_data.loc[daily_data["has_fb_ads"], "has_google_ads"].mean()) if daily_data["has_fb_ads"].any() else None,
+            },
+            {
+                "key": "google_active_raw",
+                "label_en": "Google active vs Google off",
+                "label_sk": "Google aktivny vs Google vypnuty",
+                "method": "raw",
+                "active_mask": daily_data["has_google_ads"],
+                "control_mask": ~daily_data["has_google_ads"],
+                "overlap_rate": float(daily_data.loc[daily_data["has_google_ads"], "has_fb_ads"].mean()) if daily_data["has_google_ads"].any() else None,
+            },
+            {
+                "key": "google_active_matched_weekday",
+                "label_en": "Google active vs Google off (matched weekdays)",
+                "label_sk": "Google aktivny vs Google vypnuty (rovnake dni v tyzdni)",
+                "method": "matched_weekday",
+                "active_mask": daily_data["has_google_ads"],
+                "control_mask": ~daily_data["has_google_ads"],
+                "overlap_rate": float(daily_data.loc[daily_data["has_google_ads"], "has_fb_ads"].mean()) if daily_data["has_google_ads"].any() else None,
+            },
+        ]
+        positive_total_spend = pd.to_numeric(
+            daily_data.loc[daily_data["total_ad_spend"] > 0.009, "total_ad_spend"],
+            errors="coerce",
+        ).dropna()
+        if len(positive_total_spend) >= 8 and positive_total_spend.nunique() >= 4:
+            low_spend_threshold = float(positive_total_spend.quantile(0.25))
+            high_spend_threshold = float(positive_total_spend.quantile(0.75))
+            if high_spend_threshold > low_spend_threshold:
+                low_spend_mask = (
+                    (daily_data["total_ad_spend"] > 0.009)
+                    & (daily_data["total_ad_spend"] <= low_spend_threshold)
+                )
+                high_spend_mask = daily_data["total_ad_spend"] >= high_spend_threshold
+                if high_spend_mask.any() and low_spend_mask.any():
+                    comparison_specs.extend([
+                        {
+                            "key": "all_ads_high_vs_low_raw",
+                            "label_en": "Higher-spend days vs lower-spend days",
+                            "label_sk": "Vyssi spend dni vs nizsi spend dni",
+                            "method": "raw",
+                            "active_mask": high_spend_mask,
+                            "control_mask": low_spend_mask,
+                            "overlap_rate": None,
+                        },
+                        {
+                            "key": "all_ads_high_vs_low_matched_weekday",
+                            "label_en": "Higher-spend days vs lower-spend days (matched weekdays)",
+                            "label_sk": "Vyssi spend dni vs nizsi spend dni (rovnake dni v tyzdni)",
+                            "method": "matched_weekday",
+                            "active_mask": high_spend_mask,
+                            "control_mask": low_spend_mask,
+                            "overlap_rate": None,
+                        },
+                    ])
+        incrementality_comparisons: List[Dict[str, Any]] = []
+        for spec in comparison_specs:
+            comparison = self._build_incrementality_comparison(
+                daily_data,
+                key=spec["key"],
+                label_en=spec["label_en"],
+                label_sk=spec["label_sk"],
+                method=spec["method"],
+                active_mask=spec["active_mask"],
+                control_mask=spec["control_mask"],
+                overlap_rate=spec["overlap_rate"],
+                break_even_cac=break_even_cac,
+            )
+            if comparison:
+                incrementality_comparisons.append(comparison)
+
+        primary_incrementality = next(
+            (row for row in incrementality_comparisons if row["key"] == "all_ads_matched_weekday"),
+            None,
+        )
+        if primary_incrementality is None:
+            primary_incrementality = next(
+                (row for row in incrementality_comparisons if row["key"] == "all_ads_raw"),
+                None,
+            )
+        if primary_incrementality is None:
+            primary_incrementality = next(
+                (row for row in incrementality_comparisons if row["key"] == "all_ads_high_vs_low_matched_weekday"),
+                None,
+            )
+        if primary_incrementality is None:
+            primary_incrementality = next(
+                (row for row in incrementality_comparisons if row["key"] == "all_ads_high_vs_low_raw"),
+                incrementality_comparisons[0] if incrementality_comparisons else None,
+            )
+
+        result = {
+            'correlations': correlations,
+            'spend_effectiveness': spend_effectiveness,
+            'dow_effectiveness': dow_effectiveness,
+            'best_roas_range': spend_effectiveness.loc[spend_effectiveness['roas'].idxmax(), 'spend_range'] if not spend_effectiveness.empty else 'N/A',
+            'best_profit_range': spend_effectiveness.loc[spend_effectiveness['avg_profit'].idxmax(), 'spend_range'] if not spend_effectiveness.empty else 'N/A',
+            'daily_data': daily_data[
+                [
+                    'date', 'orders', 'revenue', 'aov',
+                    'fb_spend', 'google_spend', 'total_ad_spend',
+                    'pre_ad_contribution', 'profit_without_fixed', 'profit_with_fixed', 'profit',
+                    'new_customers', 'returning_customers', 'new_orders', 'returning_orders',
+                    'new_revenue', 'returning_revenue',
+                    'has_fb_ads', 'has_google_ads', 'has_any_ads',
+                    'day_of_week', 'month_phase_window'
+                ]
+            ].copy(),
+            'incrementality': {
+                'primary': primary_incrementality or {},
+                'comparisons': incrementality_comparisons,
+            },
+        }
+
+        recommendations = []
+        if primary_incrementality:
+            recommendations.append(
+                f"{primary_incrementality['label_en']}: {primary_incrementality['verdict']}. {primary_incrementality['verdict_reason_en']}"
+            )
+            if primary_incrementality["key"].startswith("all_ads_high_vs_low"):
+                recommendations.append("There were no clean ad-off days in this range, so the baseline uses lower-spend days instead of true zero-spend days.")
+        if correlations.get('spend_orders_correlation', 0) > 0.3:
+            recommendations.append("Paid days and order volume move together, but treat this only as a directional signal.")
+        elif correlations.get('spend_orders_correlation', 0) < 0:
+            recommendations.append("Higher spend does not line up with more orders, so campaign targeting or timing likely needs work.")
+        if any(
+            row.get('channel_overlap_rate') is not None and row.get('channel_overlap_rate', 0) >= 50
+            for row in incrementality_comparisons
+        ):
+            recommendations.append("Meta and Google overlap heavily on some paid days, so per-channel conclusions are lower confidence than the all-ads view.")
+        if not incrementality_comparisons:
+            recommendations.append("There are not enough paid and unpaid days in this range yet to judge ad incrementality.")
+        result['recommendations'] = recommendations
+
+        print(
+            "Ads effectiveness analysis complete. "
+            f"Primary incrementality verdict: {(primary_incrementality or {}).get('verdict', 'N/A')}"
+        )
+        return result
+
+    def _analyze_ads_effectiveness_legacy(self, df: pd.DataFrame) -> dict:
         """Analyze relationship between ad spend and orders/revenue"""
         print("\nAnalyzing ads effectiveness...")
 

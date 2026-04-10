@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-09
+Last updated: 2026-04-10
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -118,6 +118,19 @@ Bootstrap entrypoints:
 - Live dashboard groundwork now exists without changing the existing email-report flow:
   - reporting runs now write `report_latest.html` and `dashboard_payload_latest.json` alongside the dated artifacts,
   - the modern HTML report now embeds its dashboard payload in a dedicated JSON script tag for reliable sidecar extraction,
+- Shared ad incrementality analysis is now wired into both Roy and Vevo reports:
+  - reports now include an `Ad impact verdict` block and an `Incrementality comparison table` in the marketing section,
+  - the shared analytics layer first tries `ads on vs ads off` and, if no clean ad-off days exist, falls back to `higher spend vs lower spend` matched-weekday comparisons,
+  - incrementality data is also embedded in the dashboard JSON payload for future live-dashboard views.
+- Verified locally on side-by-side smoke exports for `2026-02-15..2026-04-09` with `--skip-email --output-tag incrementality_smoke2`:
+  - Roy generated `data/roy/report_20260215-20260409__incrementality_smoke2.html` with 2 incrementality rows and primary verdict `Scale`,
+  - Vevo generated `data/vevo/report_20260215-20260409__incrementality_smoke2.html` with 2 incrementality rows and primary verdict `Cut / reduce`,
+  - both runs still completed the normal HTML/payload pipeline without breaking the email-report generation path.
+- Current state:
+  - Roy and Vevo can now show a direct decision layer for ad effectiveness even when campaigns are always on,
+  - the nightly mail flow was not changed; the new logic only enriches the HTML/dashboard content for future runs.
+- Next exact step:
+  - surface the same incrementality layer inside the live online dashboard UI and add a date-range selector for explicit period-vs-period ad decision reviews.
   - `daily_report_runner.py` uploads stable S3 `latest/` copies for `report_latest.html` and `dashboard_payload_latest.json` when S3 upload is enabled,
   - `live_dashboard_server.py` can serve `/dashboard/<project>` from the latest generated HTML and `/api/<project>/latest` from the latest JSON snapshot.
 - Verified locally on `2026-04-09`:
