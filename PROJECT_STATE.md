@@ -99,11 +99,17 @@ Bootstrap entrypoints:
 - Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 - Shipping semantics are now normalized to net shipping in runtime config and dashboard labels, but CM taxonomy naming is still mixed between legacy labels and CM1/CM2/CM3 terms in some views.
-- Full QA assertions are now computed into `data_quality` sidecars and surfaced in dashboard/email/CloudWatch, but the next business-model layer (Vevo refill cohorts) is still missing.
+- Full QA assertions are now computed into `data_quality` sidecars and surfaced in dashboard/email/CloudWatch.
+- Vevo growth model blocks are now wired into the active dashboard shell:
+  - direct vs assisted profitability
+  - CRM funnel KPI layer
+  - scent-size refill matrix
+  - bundle recommender
+  - promo / discount quality
 
 ## 8) Next Exact Step
 
-- Verify the new short SES email body in a production-equivalent VEVO runtime run after the ECR image rebuild, then continue with Vevo cohort refill model on top of the now-fixed revenue/manual-spend baseline.
+- Review the new Vevo growth sections in the active dashboard on a full-history VEVO export, then decide whether to continue with dedicated refill-model refinement or with stricter campaign-attribution normalization.
 
 ## 9) Change Log
 
