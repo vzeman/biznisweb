@@ -1308,3 +1308,19 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Verification outcome:
   - VEVO full-history export now completes successfully despite empty second-order cohort slices
   - ROY full-history export still completes successfully on the same branch
+
+### 2026-04-11 (Python 3.11 CI syntax compatibility)
+- Fixed a GitHub Actions merge blocker in `dashboard_modern.py` that only surfaced on CI Python 3.11.
+- Root cause:
+  - the large dashboard HTML f-string still contained three inline fallback expressions with escaped quotes,
+  - Python 3.12 accepted the file locally, but CI Python 3.11 rejected it with `SyntaxError: f-string expression part cannot include a backslash`.
+- Moved the affected table-body builders into precomputed HTML variables:
+  - campaign attribution estimate table
+  - same-item purchase frequency table
+  - cohort payback table
+- Verified locally with:
+  - `python -m py_compile dashboard_modern.py export_orders.py daily_report_runner.py html_report_generator.py live_dashboard_server.py`
+  - `python scripts/reporting_qa_smoke.py`
+- Verification outcome:
+  - local syntax checks pass again
+  - the PR branch is now ready for GitHub CI to re-run on a Python-3.11-compatible dashboard renderer

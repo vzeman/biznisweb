@@ -1763,6 +1763,10 @@ def generate_modern_dashboard(
         f"<tr><td>{escape(str(row.get('campaign_name') or 'Unknown'))}</td><td>?{_num(row.get('spend')):,.2f}</td><td>{int(round(_num(row.get('clicks'))))}</td><td>{_num(row.get('ctr')):.2f}%</td><td>?{_num(row.get('cpc')):,.2f}</td><td>{int(round(_num(row.get('platform_conversions', row.get('conversions')))))}</td></tr>"
         for row in fb_campaign_rows
     ) or '<tr><td colspan="6"><span class="lang-en">No campaign data available.</span><span class="lang-sk hidden">Kampaňové dáta nie sú dostupné.</span></td></tr>'
+    campaign_cpo_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_num(row.get('attributed_orders_est', row.get('estimated_orders'))):.1f}</td><td>€{_num(row.get('cost_per_attributed_order', row.get('estimated_cpo'))):,.2f}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>"
+        for row in campaign_cpo
+    ) or '<tr><td colspan="6"><span class="lang-en">No campaign attribution data available.</span><span class="lang-sk hidden">Atribucne data kampani nie su dostupne.</span></td></tr>'
 
     spend_effectiveness_rows_html = "".join(
         (
@@ -1881,6 +1885,14 @@ def generate_modern_dashboard(
         f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('unique_customers'))))}</td><td>{_num(row.get('repurchase_2x_pct')):.1f}%</td><td>{_num(row.get('repurchase_3x_pct')):.1f}%</td><td>{('%.1f' % _num(row.get('avg_days_between_repurchase'))) if row.get('avg_days_between_repurchase') not in (None, '') else 'N/A'}</td></tr>"
         for row in same_item_rows
     ) or '<tr><td colspan="5"><span class="lang-en">No same-item repurchase data available.</span><span class="lang-sk hidden">Repurchase rovnakého produktu nie je dostupný.</span></td></tr>'
+    same_item_frequency_body_html = "".join(
+        f"<tr><td>{int(round(_num(row.get('purchase_frequency'))))}x</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{_num(row.get('percentage')):.1f}%</td></tr>"
+        for row in same_item_frequency_rows
+    ) or '<tr><td colspan="3"><span class="lang-en">No frequency data available.</span><span class="lang-sk hidden">Frekvencne data nie su dostupne.</span></td></tr>'
+    cohort_payback_body_html = "".join(
+        f"<tr><td>{escape(str(row.get('cohort_month') or '-'))}</td><td>{int(round(_num(row.get('new_customers'))))}</td><td>€{_num(row.get('cohort_cac')):,.2f}</td><td>{_num(row.get('recovery_rate_pct')):.1f}%</td><td>{_num(row.get('avg_payback_days')):.1f}</td><td>{_num(row.get('median_payback_days')):.1f}</td></tr>"
+        for row in cohort_payback_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No cohort payback data available.</span><span class="lang-sk hidden">Kohortne payback data nie su dostupne.</span></td></tr>'
 
     time_to_nth_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('first_order_customers'))))}</td><td>{('%.1f' % _num(row.get('avg_days_to_2nd'))) if row.get('avg_days_to_2nd') not in (None, '') else 'N/A'}</td><td>{('%.1f' % _num(row.get('median_days_to_2nd'))) if row.get('median_days_to_2nd') not in (None, '') else 'N/A'}</td><td>{('%.1f' % _num(row.get('avg_days_to_3nd'))) if row.get('avg_days_to_3nd') not in (None, '') else 'N/A'}</td></tr>"
@@ -2447,7 +2459,7 @@ def generate_modern_dashboard(
                             <div class="card-head"><div><h3><span class="lang-en">Campaign attribution estimate</span><span class="lang-sk hidden">Odhad atribucie kampani</span></h3><p><span class="lang-en">Estimated attributed orders, attributed CPO and ROAS by campaign.</span><span class="lang-sk hidden">Odhad atribuovanych objednavok, atribucneho CPO a ROAS podla kampane.</span></p></div></div>
                             <table>
                                 <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Attributed orders est.</span><span class="lang-sk hidden">Odhad atrib. obj.</span></th><th><span class="lang-en">Cost / attributed order</span><span class="lang-sk hidden">Naklad / atrib. obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>ROAS</th></tr></thead>
-                                <tbody>{"".join(f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_num(row.get('attributed_orders_est', row.get('estimated_orders'))):.1f}</td><td>€{_num(row.get('cost_per_attributed_order', row.get('estimated_cpo'))):,.2f}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>" for row in campaign_cpo) or '<tr><td colspan=\"6\"><span class=\"lang-en\">No campaign attribution data available.</span><span class=\"lang-sk hidden\">Atribucne data kampani nie su dostupne.</span></td></tr>'}</tbody>
+                                <tbody>{campaign_cpo_rows_html}</tbody>
                             </table>
                         </div>
                     </div>
@@ -3029,7 +3041,7 @@ def generate_modern_dashboard(
                             <div class="card-head"><div><h3><span class="lang-en">Same-item purchase frequency</span><span class="lang-sk hidden">Frekvencia opakovanych nakupov rovnakeho produktu</span></h3><p><span class="lang-en">How many customers buy the same item 2x, 3x and more.</span><span class="lang-sk hidden">Kolko zakaznikov kupuje ten isty produkt 2x, 3x a viac.</span></p></div></div>
                             <table>
                                 <thead><tr><th><span class="lang-en">Frequency</span><span class="lang-sk hidden">Frekvencia</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
-                                <tbody>{"".join(f"<tr><td>{int(round(_num(row.get('purchase_frequency'))))}x</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{_num(row.get('percentage')):.1f}%</td></tr>" for row in same_item_frequency_rows) or '<tr><td colspan=\"3\"><span class=\"lang-en\">No frequency data available.</span><span class=\"lang-sk hidden\">Frekvencne data nie su dostupne.</span></td></tr>'}</tbody>
+                                <tbody>{same_item_frequency_body_html}</tbody>
                             </table>
                         </div>
                     </div>
@@ -3037,7 +3049,7 @@ def generate_modern_dashboard(
                         <div class="card-head"><div><h3><span class="lang-en">Cohort payback table</span><span class="lang-sk hidden">Kohortna payback tabulka</span></h3><p><span class="lang-en">Acquisition payback by cohort from the advanced DTC block.</span><span class="lang-sk hidden">Payback akvizicie podla kohort z advanced DTC bloku.</span></p></div></div>
                         <table>
                             <thead><tr><th><span class="lang-en">Cohort</span><span class="lang-sk hidden">Kohorta</span></th><th><span class="lang-en">New customers</span><span class="lang-sk hidden">Novi zakaznici</span></th><th><span class="lang-en">CAC</span><span class="lang-sk hidden">CAC</span></th><th><span class="lang-en">Recovery</span><span class="lang-sk hidden">Recovery</span></th><th><span class="lang-en">Avg payback days</span><span class="lang-sk hidden">Priem. payback dni</span></th><th><span class="lang-en">Median days</span><span class="lang-sk hidden">Median dni</span></th></tr></thead>
-                            <tbody>{"".join(f"<tr><td>{escape(str(row.get('cohort_month') or '-'))}</td><td>{int(round(_num(row.get('new_customers'))))}</td><td>€{_num(row.get('cohort_cac')):,.2f}</td><td>{_num(row.get('recovery_rate_pct')):.1f}%</td><td>{_num(row.get('avg_payback_days')):.1f}</td><td>{_num(row.get('median_payback_days')):.1f}</td></tr>" for row in cohort_payback_rows) or '<tr><td colspan=\"6\"><span class=\"lang-en\">No cohort payback data available.</span><span class=\"lang-sk hidden\">Kohortne payback data nie su dostupne.</span></td></tr>'}</tbody>
+                            <tbody>{cohort_payback_body_html}</tbody>
                         </table>
                     </div>
                 </section>
