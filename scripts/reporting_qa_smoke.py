@@ -169,12 +169,50 @@ def assert_margin_stability(exporter: BizniWebExporter) -> None:
     assert unstable["smoothed_extreme_days"] > 0, unstable
 
 
+def assert_product_expense_coverage(exporter: BizniWebExporter) -> None:
+    healthy = exporter._build_product_expense_coverage_qa(
+        pd.DataFrame(
+            {
+                "order_num": ["1", "2"],
+                "item_label": ["Mapped SKU", "Mapped title"],
+                "product_sku": ["SKU-1", "SKU-2"],
+                "item_quantity": [1, 2],
+                "item_total_without_tax": [10.0, 18.0],
+                "profit_before_ads": [4.0, 7.0],
+                "expense_per_item": [6.0, 5.5],
+                "expense_source": ["mapped_product_sku", "mapped_item_label"],
+            }
+        )
+    )
+    assert healthy["status"] == "ok", healthy
+
+    risky = exporter._build_product_expense_coverage_qa(
+        pd.DataFrame(
+            {
+                "order_num": ["1", "2", "3"],
+                "item_label": ["Mapped SKU", "Fallback sample", "Fallback sample"],
+                "product_sku": ["SKU-1", "SKU-FALLBACK", "SKU-FALLBACK"],
+                "item_quantity": [1, 1, 1],
+                "item_total_without_tax": [10.0, 8.0, 7.0],
+                "profit_before_ads": [4.0, 7.0, 6.0],
+                "expense_per_item": [6.0, 1.0, 1.0],
+                "expense_source": ["mapped_product_sku", "fallback_default", "fallback_default"],
+            }
+        )
+    )
+    assert risky["status"] == "critical", risky
+    assert risky["fallback_rows"] == 2, risky
+    assert risky["fallback_revenue_share_pct"] == 60.0, risky
+    assert risky["top_fallback_items"][0]["product_sku"] == "SKU-FALLBACK", risky
+
+
 def main() -> int:
     exporter = make_exporter()
     assert_data_assertions_ok(exporter)
     assert_refund_registry_failure(exporter)
     assert_geo_warning(exporter)
     assert_margin_stability(exporter)
+    assert_product_expense_coverage(exporter)
     print("reporting_qa_smoke.py: OK")
     return 0
 

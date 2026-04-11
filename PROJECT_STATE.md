@@ -111,10 +111,13 @@ Bootstrap entrypoints:
   - promo / discount quality
 - Lifecycle is now visible as an explicit proxy layer built from final statuses plus tracked excluded payment-failure orders.
 - B2B/B2C analytics now expose CM-based unit economics instead of only a raw revenue/profit split.
+- Product cost coverage QA is now active in source-health and the modern dashboard:
+  - VEVO March 2026 export is `critical` because default 1.00 EUR fallback covers 20.34% of item revenue and 22.09% of pre-ad item profit
+  - ROY March 2026 export is `warning` because fallback coverage still touches 3.20% of item revenue and 6.26% of pre-ad item profit
 
 ## 8) Next Exact Step
 
-- Add explicit product-expense fallback coverage QA (default-cost detection / warnings), then decide whether payment-fee ingestion can be added as the next CM-layer hardening step.
+- Backfill the highest-impact `product_expenses.json` gaps highlighted by the new QA (starting with VEVO sample/discovery sets and ROY fallback electronics / SD SKUs), then decide whether payment-fee hardening should come from an expanded BiznisWeb query or a reproducible config-based fee model.
 
 ## 9) Change Log
 
@@ -258,6 +261,31 @@ Bootstrap entrypoints:
   - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py scripts\\security_ci.py`
   - `python scripts\\security_ci.py`
   - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+
+### 2026-04-11 (product cost coverage QA)
+- Added explicit `expense_source` tagging on item rows so item-level costs are classified as:
+  - mapped product SKU
+  - mapped item label
+  - configured overrides
+  - default 1.00 EUR fallback
+- Added `qa.product_expense_coverage` into `source_health` / `data_quality` sidecars with:
+  - fallback row/unit/revenue/profit shares
+  - top fallback items by impact
+  - expense-source mix summary
+- Modern dashboard now renders:
+  - `Product cost coverage`
+  - `Expense source mix`
+  - `Top default-cost items`
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py html_report_generator.py scripts\\reporting_qa_smoke.py scripts\\security_ci.py`
+  - `python scripts\\security_ci.py`
+  - `python scripts\\reporting_qa_smoke.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Current decision on payment fees:
+  - keep `excluded_not_modeled` for now
+  - current `ORDER_QUERY` still does not ingest any payment-fee / payment-method fee field from BiznisWeb
+  - next safe step is to fix product-cost coverage first, then decide whether fees should come from an expanded API payload or a reproducible config layer
   - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
   - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-09`
 - Verification outcome:

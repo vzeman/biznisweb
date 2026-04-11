@@ -1139,6 +1139,200 @@ class BizniWebExporter:
             "label_row_total": label_row_total,
         }
 
+    def _build_product_expense_coverage_qa(self, export_df: Optional[pd.DataFrame]) -> Dict[str, Any]:
+        df = export_df.copy() if isinstance(export_df, pd.DataFrame) else pd.DataFrame()
+        required = {
+            "item_label",
+            "product_sku",
+            "item_quantity",
+            "item_total_without_tax",
+            "profit_before_ads",
+            "expense_per_item",
+            "expense_source",
+        }
+        if df.empty or not required.issubset(set(df.columns)):
+            return {
+                "key": "product_expense_coverage",
+                "label": "Product cost coverage",
+                "status": "ok",
+                "healthy": True,
+                "message": "Product cost coverage QA skipped because the item-level expense payload is unavailable.",
+                "warnings": [],
+                "failures": [],
+                "warning_count": 0,
+                "failure_count": 0,
+            }
+
+        item_df = df.loc[df["item_label"].notna()].copy()
+        if item_df.empty:
+            return {
+                "key": "product_expense_coverage",
+                "label": "Product cost coverage",
+                "status": "ok",
+                "healthy": True,
+                "message": "Product cost coverage QA skipped because there are no item rows in this export window.",
+                "warnings": [],
+                "failures": [],
+                "warning_count": 0,
+                "failure_count": 0,
+            }
+
+        for column in ("item_quantity", "item_total_without_tax", "profit_before_ads", "expense_per_item"):
+            item_df[column] = pd.to_numeric(item_df[column], errors="coerce").fillna(0.0)
+
+        item_df["expense_source"] = item_df["expense_source"].fillna("unknown").astype(str)
+        source_mix_df = (
+            item_df.groupby("expense_source", dropna=False)
+            .agg(
+                rows=("expense_source", "size"),
+                units=("item_quantity", "sum"),
+                revenue=("item_total_without_tax", "sum"),
+                profit_before_ads=("profit_before_ads", "sum"),
+            )
+            .reset_index()
+            .sort_values(["revenue", "rows"], ascending=[False, False])
+            .reset_index(drop=True)
+        )
+
+        total_rows = int(len(item_df.index))
+        total_units = float(item_df["item_quantity"].sum())
+        total_revenue = float(item_df["item_total_without_tax"].sum())
+        total_profit = float(item_df["profit_before_ads"].sum())
+
+        fallback_df = item_df.loc[item_df["expense_source"] == "fallback_default"].copy()
+        fallback_rows = int(len(fallback_df.index))
+        fallback_units = float(fallback_df["item_quantity"].sum())
+        fallback_revenue = float(fallback_df["item_total_without_tax"].sum())
+        fallback_profit = float(fallback_df["profit_before_ads"].sum())
+        fallback_row_share_pct = round((fallback_rows / total_rows) * 100, 2) if total_rows > 0 else 0.0
+        fallback_unit_share_pct = round((fallback_units / total_units) * 100, 2) if total_units > 0 else 0.0
+        fallback_revenue_share_pct = round((fallback_revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0
+        fallback_profit_share_pct = round((fallback_profit / total_profit) * 100, 2) if total_profit > 0 else 0.0
+        unknown_source_rows = int((item_df["expense_source"] == "unknown").sum())
+
+        fallback_items_df = pd.DataFrame()
+        if fallback_rows > 0:
+            fallback_items_df = (
+                fallback_df.groupby(["product_sku", "item_label"], dropna=False)
+                .agg(
+                    rows=("order_num", "size"),
+                    units=("item_quantity", "sum"),
+                    revenue=("item_total_without_tax", "sum"),
+                    profit_before_ads=("profit_before_ads", "sum"),
+                )
+                .reset_index()
+                .sort_values(["revenue", "profit_before_ads", "rows"], ascending=[False, False, False])
+                .reset_index(drop=True)
+            )
+            fallback_items_df["row_share_pct"] = np.where(
+                fallback_rows > 0,
+                (fallback_items_df["rows"] / fallback_rows) * 100,
+                0.0,
+            )
+            fallback_items_df["revenue_share_pct"] = np.where(
+                fallback_revenue > 0,
+                (fallback_items_df["revenue"] / fallback_revenue) * 100,
+                0.0,
+            )
+
+        top_fallback_items = []
+        if not fallback_items_df.empty:
+            for row in fallback_items_df.head(5).to_dict("records"):
+                top_fallback_items.append(
+                    {
+                        "product_sku": row.get("product_sku"),
+                        "item_label": row.get("item_label"),
+                        "rows": int(row.get("rows") or 0),
+                        "units": round(float(row.get("units") or 0.0), 2),
+                        "revenue": round(float(row.get("revenue") or 0.0), 2),
+                        "profit_before_ads": round(float(row.get("profit_before_ads") or 0.0), 2),
+                        "row_share_pct": round(float(row.get("row_share_pct") or 0.0), 2),
+                        "revenue_share_pct": round(float(row.get("revenue_share_pct") or 0.0), 2),
+                    }
+                )
+
+        warnings: List[str] = []
+        failures: List[str] = []
+        if fallback_rows > 0:
+            warnings.append(
+                f"{fallback_rows} item row(s) ({fallback_row_share_pct:.2f}%) use the default 1.00 EUR product cost fallback."
+            )
+            if fallback_revenue_share_pct >= 5 or fallback_profit_share_pct >= 5:
+                warnings.append(
+                    f"Fallback-default rows drive {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit."
+                )
+            if top_fallback_items:
+                preview = ", ".join(
+                    f"{str(row.get('item_label') or 'Unknown')} ({row.get('product_sku') or '-'}, €{float(row.get('revenue') or 0.0):,.2f})"
+                    for row in top_fallback_items[:3]
+                )
+                warnings.append(f"Top default-cost items by revenue: {preview}.")
+
+        if unknown_source_rows > 0:
+            warnings.append(f"{unknown_source_rows} item row(s) are missing expense_source metadata.")
+
+        if fallback_revenue_share_pct >= 10 or fallback_profit_share_pct >= 10:
+            failures.append(
+                f"Default-cost fallback affects {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit, so profit metrics are not decision-safe."
+            )
+        elif fallback_row_share_pct >= 10:
+            warnings.append(
+                f"Default-cost fallback covers {fallback_row_share_pct:.2f}% of item rows; verify product_expenses coverage before using SKU-level profit decisions."
+            )
+
+        source_mix_rows = []
+        for row in source_mix_df.to_dict("records"):
+            row_count = int(row.get("rows") or 0)
+            units = float(row.get("units") or 0.0)
+            revenue = float(row.get("revenue") or 0.0)
+            profit = float(row.get("profit_before_ads") or 0.0)
+            source_mix_rows.append(
+                {
+                    "expense_source": row.get("expense_source"),
+                    "rows": row_count,
+                    "units": round(units, 2),
+                    "revenue": round(revenue, 2),
+                    "profit_before_ads": round(profit, 2),
+                    "row_share_pct": round((row_count / total_rows) * 100, 2) if total_rows > 0 else 0.0,
+                    "unit_share_pct": round((units / total_units) * 100, 2) if total_units > 0 else 0.0,
+                    "revenue_share_pct": round((revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0,
+                    "profit_share_pct": round((profit / total_profit) * 100, 2) if total_profit > 0 else 0.0,
+                }
+            )
+
+        message = (
+            "Product cost coverage passed: all item rows use explicit product expense mapping or configured overrides."
+            if not (failures or warnings)
+            else (failures + warnings)[0]
+        )
+        return {
+            "key": "product_expense_coverage",
+            "label": "Product cost coverage",
+            "status": "critical" if failures else ("warning" if warnings else "ok"),
+            "healthy": not failures,
+            "message": message,
+            "warnings": warnings,
+            "failures": failures,
+            "warning_count": len(warnings),
+            "failure_count": len(failures),
+            "total_item_rows": total_rows,
+            "total_units": round(total_units, 2),
+            "total_revenue": round(total_revenue, 2),
+            "total_profit_before_ads": round(total_profit, 2),
+            "default_cost_eur": 1.0,
+            "fallback_rows": fallback_rows,
+            "fallback_units": round(fallback_units, 2),
+            "fallback_revenue": round(fallback_revenue, 2),
+            "fallback_profit_before_ads": round(fallback_profit, 2),
+            "fallback_row_share_pct": fallback_row_share_pct,
+            "fallback_unit_share_pct": fallback_unit_share_pct,
+            "fallback_revenue_share_pct": fallback_revenue_share_pct,
+            "fallback_profit_share_pct": fallback_profit_share_pct,
+            "unknown_source_rows": unknown_source_rows,
+            "source_mix": source_mix_rows,
+            "top_fallback_items": top_fallback_items,
+        }
+
     def _build_margin_stability_qa(self, date_agg: Optional[pd.DataFrame]) -> Dict[str, Any]:
         date_df = date_agg.copy() if isinstance(date_agg, pd.DataFrame) else pd.DataFrame()
         required = {"date", "total_revenue", "pre_ad_contribution_profit", "fixed_daily_cost", "net_profit"}
@@ -2924,14 +3118,25 @@ class BizniWebExporter:
                     force_margin_15 = self._matches_patterns(item_label, MARGIN_15_LABEL_PATTERNS)
                 if force_zero_cost:
                     expense_per_item = 0.0
+                    expense_source = "zero_cost_override"
                 elif force_zero_margin and item_quantity:
                     expense_per_item = item_total_without_tax / item_quantity
+                    expense_source = "zero_margin_override"
                 elif force_margin_15 and item_quantity:
                     # Keep product margin at 15%: cost = 85% of net unit selling price.
                     expense_per_item = (item_total_without_tax / item_quantity) * 0.85
+                    expense_source = "margin_15_override"
                 else:
                     # First try SKU, then title for backward compatibility, default to 1.0 for unknown products.
-                    expense_per_item = PRODUCT_EXPENSES.get(product_sku, PRODUCT_EXPENSES.get(item_label, 1.0))
+                    if product_sku in PRODUCT_EXPENSES:
+                        expense_per_item = PRODUCT_EXPENSES[product_sku]
+                        expense_source = "mapped_product_sku"
+                    elif item_label in PRODUCT_EXPENSES:
+                        expense_per_item = PRODUCT_EXPENSES[item_label]
+                        expense_source = "mapped_item_label"
+                    else:
+                        expense_per_item = 1.0
+                        expense_source = "fallback_default"
                 total_expense = expense_per_item * item_quantity
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
@@ -2943,6 +3148,7 @@ class BizniWebExporter:
                 row.update({
                     'total_items_in_order': None,
                     'item_number': None,
+                    'product_sku': product_sku,
                     'item_label': item.get('item_label'),
                     'item_ean': item.get('ean'),
                     'item_import_code': item.get('import_code'),
@@ -2961,6 +3167,7 @@ class BizniWebExporter:
                     'item_tax_amount': round(item_tax_amount, 2),  # In EUR
                     'item_recycle_fee': recycle_fee.get('value'),
                     'expense_per_item': expense_per_item,
+                    'expense_source': expense_source,
                     'total_expense': round(total_expense, 2),
                     'profit_before_ads': round(item_profit_before_ads, 2),
                     'roi_before_ads': round(item_roi_before_ads, 2),
@@ -3265,7 +3472,7 @@ class BizniWebExporter:
             'product_sku', 'item_label', 'item_ean', 'item_quantity', 
             'item_currency', 'item_unit_price_original', 'item_unit_price',
             'item_total_without_tax', 'item_tax_rate', 'item_tax_amount', 'item_total_with_tax',
-            'expense_per_item', 'total_expense', 'fb_ads_daily_spend', 'google_ads_daily_spend', 'profit_before_ads', 'roi_before_ads',
+            'expense_per_item', 'expense_source', 'total_expense', 'fb_ads_daily_spend', 'google_ads_daily_spend', 'profit_before_ads', 'roi_before_ads',
             'customer_name', 'customer_email', 'customer_company_id', 'customer_vat_id',
             'order_currency', 'order_total_original', 'order_total', 'order_revenue_net',
             'invoice_street', 'invoice_city', 'invoice_zip', 'invoice_country',
@@ -3412,6 +3619,9 @@ class BizniWebExporter:
             country_analysis=country_analysis,
             geo_profitability=geo_profitability,
             cost_per_order=cost_per_order,
+        )
+        source_health.setdefault("qa", {})["product_expense_coverage"] = self._build_product_expense_coverage_qa(
+            df,
         )
         source_health.setdefault("qa", {})["margin_stability"] = self._build_margin_stability_qa(
             date_agg=date_agg,

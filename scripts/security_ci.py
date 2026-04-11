@@ -115,6 +115,11 @@ def main() -> int:
         )
         require(
             export_orders,
+            "_build_product_expense_coverage_qa",
+            "export_orders.py must build product cost coverage QA before report export.",
+        )
+        require(
+            export_orders,
             "\"is_partial\"",
             "export_orders.py must persist partial-data state in source health metadata.",
         )
@@ -167,6 +172,16 @@ def main() -> int:
             dashboard_modern,
             "Smoothed fixed-margin alerts",
             "Modern dashboard must surface smoothed fixed-margin alerts explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "Product cost coverage",
+            "Modern dashboard must surface product cost coverage explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "Default-cost revenue share",
+            "Modern dashboard must expose fallback revenue share explicitly.",
         )
         require(
             dashboard_modern,
