@@ -135,7 +135,8 @@ class FacebookAdsClient:
         """Generate cache filename for a date range"""
         from_str = date_from.strftime('%Y%m%d')
         to_str = date_to.strftime('%Y%m%d')
-        return self.cache_dir / f"fb_ads_{from_str}_{to_str}.json"
+        account_part = (self.ad_account_id or "unknown").replace('act_', '').replace('-', '')
+        return self.cache_dir / f"fb_ads_{account_part}_{from_str}_{to_str}.json"
     
     def should_use_cache(self, date: datetime) -> bool:
         """Determine if cache should be used for a given date"""

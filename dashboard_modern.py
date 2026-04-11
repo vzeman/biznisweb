@@ -14,10 +14,10 @@ import pandas as pd
 
 
 METRIC_LABELS = {
-    "revenue": {"en": "Revenue", "sk": "Trzby"},
+    "revenue": {"en": "Revenue (net)", "sk": "Tržby (netto)"},
     "profit": {"en": "Profit", "sk": "Zisk"},
     "orders": {"en": "Orders", "sk": "Objednávky"},
-    "aov": {"en": "AOV", "sk": "Priemerná objednávka"},
+    "aov": {"en": "AOV (net)", "sk": "Priemerná objednávka (netto)"},
     "cac": {"en": "CAC", "sk": "CAC"},
     "roas": {"en": "ROAS", "sk": "ROAS"},
     "pre_ad_contribution_margin": {"en": "Pre-ad contribution", "sk": "Pre-ad kontribučná marža"},

@@ -103,7 +103,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Implement Vevo cohort refill model (sample/full-size first-order cohorts, refill windows, and cohort refill timing charts) on top of the now-verified QA assertion layer.
+- Audit Roy Google Ads scope if business owners still consider the live API spend too high, then continue with Vevo cohort refill model on top of the now-fixed revenue/manual-spend baseline.
 
 ## 9) Change Log
 
@@ -1027,3 +1027,15 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - no regression in existing advanced DTC or marketing sections
 - Next exact step:
   - add Vevo cohort refill model so refill timing is measured by first-item cohort and horizon, not only by generic repeat-purchase logic.
+
+### 2026-04-11 (revenue + manual ads regression fix)
+- Disabled manual ads totals as a fallback path unless a project explicitly opts into `prefer_manual_ads_totals=true`.
+- Removed Roy manual FB/Google totals from project settings so Roy now relies only on live Meta/Google Ads sources.
+- Namespaced Facebook and Google Ads caches by ad account/customer IDs to avoid cross-project cache pollution.
+- Fixed order-item revenue sourcing to prefer BizniWeb explicit line totals (`items.sum` as net, `items.sum_with_tax` as gross) instead of inferring VAT from unreliable `is_net_price` flags.
+- Modern dashboard KPI labels now explicitly mark revenue and AOV as net metrics.
+- Verified with no-cache exports:
+  - Roy full range `2025-09-24 .. 2026-04-10`
+  - Vevo full range `2025-05-03 .. 2026-04-10`
+- Roy now connects to the live Google Ads account `Roy.sk` (`5313708530` via MCC `6704852923`) and no longer uses the old fixed spend fallback.
+- Vevo now connects to the live Google Ads account `Vevo.sk` (`7592903323`) with no fixed-spend fallback.

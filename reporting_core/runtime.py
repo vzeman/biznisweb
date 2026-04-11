@@ -33,6 +33,7 @@ class ProjectRuntime:
     exclude_zero_price_label_patterns: List[str]
     manual_fb_ads_total: Optional[float]
     manual_google_ads_total: Optional[float]
+    prefer_manual_ads_totals: bool
     weather: Dict[str, Any]
     reporting_defaults: Dict[str, Any]
 
@@ -64,6 +65,7 @@ class ProjectRuntime:
             "exclude_zero_price_label_patterns": list(self.exclude_zero_price_label_patterns),
             "manual_fb_ads_total": self.manual_fb_ads_total,
             "manual_google_ads_total": self.manual_google_ads_total,
+            "prefer_manual_ads_totals": self.prefer_manual_ads_totals,
             "weather": copy.deepcopy(self.weather),
             "reporting_defaults": dict(self.reporting_defaults),
         }
@@ -142,6 +144,7 @@ def load_project_runtime(
             if settings.get("manual_google_ads_total") is not None
             else None
         ),
+        prefer_manual_ads_totals=bool(settings.get("prefer_manual_ads_totals", False)),
         weather=weather_settings,
         reporting_defaults=resolve_reporting_defaults(project_name, settings),
     )
@@ -164,5 +167,6 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     ]
     target_globals["MANUAL_FB_ADS_TOTAL"] = runtime.manual_fb_ads_total
     target_globals["MANUAL_GOOGLE_ADS_TOTAL"] = runtime.manual_google_ads_total
+    target_globals["PREFER_MANUAL_ADS_TOTALS"] = bool(runtime.prefer_manual_ads_totals)
     target_globals["WEATHER_SETTINGS"] = copy.deepcopy(runtime.weather)
     target_globals["ENABLE_EMAIL_STRATEGY_REPORT"] = bool(runtime.reporting_defaults.get("enable_email_strategy_report", False))

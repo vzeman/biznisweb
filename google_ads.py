@@ -78,7 +78,10 @@ class GoogleAdsClient:
         """Generate cache filename for a date range"""
         from_str = date_from.strftime('%Y%m%d')
         to_str = date_to.strftime('%Y%m%d')
-        return self.cache_dir / f"google_ads_{from_str}_{to_str}.json"
+        customer_part = (self.customer_id or "unknown").replace('-', '')
+        login_part = (self.login_customer_id or "").replace('-', '')
+        suffix = customer_part if not login_part else f"{customer_part}_{login_part}"
+        return self.cache_dir / f"google_ads_{suffix}_{from_str}_{to_str}.json"
     
     def should_use_cache(self, date: datetime) -> bool:
         """Determine if cache should be used for a given date"""
