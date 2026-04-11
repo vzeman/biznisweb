@@ -380,6 +380,23 @@ def _source_has_metric_coverage(source_health: Optional[dict], key: str) -> bool
     return True
 
 
+def _resolve_refund_summary(
+    financial_metrics: Optional[dict],
+    refunds_analysis: Optional[dict],
+) -> Dict[str, Any]:
+    registry = financial_metrics or {}
+    summary = ((refunds_analysis or {}).get("summary") or {}).copy()
+    resolved = {
+        "refund_orders": summary.get("refund_orders"),
+        "refund_rate_pct": summary.get("refund_rate_pct"),
+        "refund_amount": summary.get("refund_amount"),
+    }
+    for key in resolved:
+        if resolved[key] is None:
+            resolved[key] = registry.get(key)
+    return resolved
+
+
 def _sanitize_dashboard_html(text: str) -> str:
     if not text:
         return text
@@ -510,6 +527,7 @@ def generate_modern_dashboard(
     same_item_repurchase: Optional[dict] = None,
     time_to_nth_by_first_item: Optional[dict] = None,
     sample_funnel_analysis: Optional[dict] = None,
+    refill_cohort_analysis: Optional[dict] = None,
     fb_detailed_metrics: Optional[dict] = None,
     fb_campaigns: Optional[list] = None,
     cost_per_order: Optional[dict] = None,
@@ -981,6 +999,45 @@ def generate_modern_dashboard(
         ],
         limit=12,
     )
+    refill_cohort_summary = (refill_cohort_analysis or {}).get("summary", {}) if refill_cohort_analysis else {}
+    refill_cohort_bucket_rows = _frame_rows(
+        (refill_cohort_analysis or {}).get("bucket_rows"),
+        [
+            "entry_bucket_label",
+            "customers",
+            "second_orders",
+            "refill_60d_pct",
+            "refill_90d_pct",
+            "avg_days_to_2nd",
+            "second_order_aov",
+        ],
+        limit=12,
+    )
+    refill_cohort_window_rows = _frame_rows(
+        (refill_cohort_analysis or {}).get("window_rows"),
+        [
+            "entry_bucket_key",
+            "entry_bucket_label",
+            "window_days",
+            "customers",
+            "refill_pct",
+        ],
+        limit=None,
+    )
+    refill_cohort_rows = _frame_rows(
+        (refill_cohort_analysis or {}).get("cohort_rows"),
+        [
+            "cohort_month",
+            "entry_bucket_key",
+            "entry_bucket_label",
+            "customers",
+            "refill_60d_pct",
+            "refill_90d_pct",
+            "avg_days_to_2nd",
+            "second_order_aov",
+        ],
+        limit=None,
+    )
     combinations_rows = _frame_rows(item_combinations, ["combination_size", "combination", "count", "price"], limit=12)
 
     segment_rows = []
@@ -1037,7 +1094,7 @@ def generate_modern_dashboard(
     avg_daily_revenue = round(total_revenue / active_days, 2)
     avg_daily_profit = round(total_profit / active_days, 2)
     avg_fb_cost_per_order = round((total_fb_ads / total_orders) if total_orders > 0 else 0.0, 2)
-    refund_summary = (refunds_analysis or {}).get("summary", {})
+    refund_summary = _resolve_refund_summary(financial_metrics, refunds_analysis)
     google_source_available = _source_has_metric_coverage(source_health, "google_ads")
     google_cpo_value = _maybe_num((cost_per_order or {}).get("google_cpo")) if google_source_available else None
     ads_correlation_source = ((ads_effectiveness or {}).get("correlations") or {})
@@ -1253,6 +1310,12 @@ def generate_modern_dashboard(
             "windows": sample_funnel_window_rows,
             "entry_rows": sample_funnel_entry_rows,
         },
+        "refill_cohorts": {
+            "summary": {k: _json_safe(v) for k, v in refill_cohort_summary.items()},
+            "bucket_rows": refill_cohort_bucket_rows,
+            "window_rows": refill_cohort_window_rows,
+            "cohort_rows": refill_cohort_rows,
+        },
         "combinations_rows": combinations_rows,
         "segment_rows": segment_rows,
         "consistency": consistency_payload,
@@ -1436,7 +1499,7 @@ def generate_modern_dashboard(
     ) or '<div class="health-item"><div class="health-title"><span class="lang-en">Source health</span><span class="lang-sk hidden">Stav zdrojov</span></div><div class="health-status good">ok</div><p><span class="lang-en">No source warnings attached to this run.</span><span class="lang-sk hidden">K tomuto behu nie su pripojene ziadne varovania zdrojov.</span></p></div>'
 
     period_switcher_html = _period_switcher_html(period_switcher)
-    refund_summary = (refunds_analysis or {}).get("summary", {})
+    refund_summary = _resolve_refund_summary(financial_metrics, refunds_analysis)
     repeat_rate = _num(cohort_summary.get("repeat_rate_pct"))
     repeat_customers = int(round(_num(cohort_summary.get("repeat_customers"))))
     avg_days_to_2nd = _maybe_num(cohort_summary.get("avg_days_to_2nd_order"))
@@ -1454,6 +1517,17 @@ def generate_modern_dashboard(
         f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('entry_customers'))))}</td><td>{_num(row.get('repeat_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_200_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_500_60d_pct')):.1f}%</td></tr>"
         for row in sample_funnel_entry_rows
     ) or '<tr><td colspan="7"><span class="lang-en">No sample funnel data available.</span><span class="lang-sk hidden">Sample funnel data nie su dostupne.</span></td></tr>'
+    refill_summary = refill_cohort_summary or {}
+    refill_entry_customers = int(round(_num(refill_summary.get("entry_customers"))))
+    refill_sample_60d = _maybe_num(refill_summary.get("sample_refill_60d_pct"))
+    refill_sample_90d = _maybe_num(refill_summary.get("sample_refill_90d_pct"))
+    refill_sample_days_to_2nd = _maybe_num(refill_summary.get("sample_avg_days_to_2nd"))
+    refill_second_order_aov = _maybe_num(refill_summary.get("avg_second_order_aov"))
+    refill_dominant_bucket = escape(str(refill_summary.get("dominant_entry_bucket") or "-"))
+    refill_bucket_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('entry_bucket_label') or '-'))}</td><td>{int(round(_num(row.get('customers'))))}</td><td>{_num(row.get('refill_60d_pct')):.1f}%</td><td>{_num(row.get('refill_90d_pct')):.1f}%</td><td>{(_format_mini_value_html(row.get('avg_days_to_2nd'), kind='number', decimals=1))}</td><td>{_format_mini_value_html(row.get('second_order_aov'), kind='currency')}</td></tr>"
+        for row in refill_cohort_bucket_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No refill cohort data available.</span><span class="lang-sk hidden">Refill kohortne data nie su dostupne.</span></td></tr>'
     attribution_qa = (((source_health or {}).get("qa") or {}).get("attribution") or {})
     attribution_warnings = [str(item) for item in list(attribution_qa.get("warnings") or []) if str(item).strip()]
     attribution_warning_items_html = "".join(
@@ -2024,6 +2098,29 @@ def generate_modern_dashboard(
                             <table>
                                 <thead><tr><th><span class="lang-en">Sample</span><span class="lang-sk hidden">Sample</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30d</span></th><th><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30d</span></th><th><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60d</span></th><th>200ml 60d</th><th>500ml 60d</th></tr></thead>
                                 <tbody>{sample_entry_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Refill cohort timing</span><span class="lang-sk hidden">Casovanie refill kohort</span></h3><p><span class="lang-en">Second-order refill speed by first-order entry bucket so refill timing is measured by cohort, not only global repeat rate.</span><span class="lang-sk hidden">Rychlost druhej objednavky podla vstupneho bucketu prvej objednavky, aby sa refill meral kohortne a nie len globalnym repeat rate.</span></p></div></div>
+                            <div class="mini-grid">
+                                <div class="mini-card"><small><span class="lang-en">Entry customers</span><span class="lang-sk hidden">Vstupni zakaznici</span></small><strong>{refill_entry_customers}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Sample refill 60d</span><span class="lang-sk hidden">Sample refill 60d</span></small><strong>{_format_mini_value_html(refill_sample_60d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Sample refill 90d</span><span class="lang-sk hidden">Sample refill 90d</span></small><strong>{_format_mini_value_html(refill_sample_90d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Avg days to 2nd</span><span class="lang-sk hidden">Priemer dni do 2. objednavky</span></small><strong>{_format_mini_value_html(refill_sample_days_to_2nd, kind="number", decimals=1)}</strong></div>
+                            </div>
+                            <div class="mini-grid" style="margin-top:12px;">
+                                <div class="mini-card"><small><span class="lang-en">Avg 2nd order AOV</span><span class="lang-sk hidden">Priemerna hodnota 2. objednavky</span></small><strong>{_format_mini_value_html(refill_second_order_aov, kind="currency")}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Dominant entry bucket</span><span class="lang-sk hidden">Dominantny vstupny bucket</span></small><strong>{refill_dominant_bucket}</strong></div>
+                            </div>
+                            <div class="chart-shell"><canvas id="refillCohortWindowChart"></canvas></div>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Refill bucket quality</span><span class="lang-sk hidden">Kvalita refill bucketov</span></h3><p><span class="lang-en">Compare second-order speed and value across sample-only and full-size entry cohorts.</span><span class="lang-sk hidden">Porovnanie rychlosti a hodnoty druhej objednavky medzi sample-only a full-size vstupnymi kohortami.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Entry bucket</span><span class="lang-sk hidden">Vstupny bucket</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th>60d</th><th>90d</th><th><span class="lang-en">Avg days</span><span class="lang-sk hidden">Priemer dni</span></th><th><span class="lang-en">2nd AOV</span><span class="lang-sk hidden">2. AOV</span></th></tr></thead>
+                                <tbody>{refill_bucket_rows_html}</tbody>
                             </table>
                         </div>
                     </div>
@@ -3904,6 +4001,17 @@ def generate_modern_dashboard(
                     {{ id: 'custSampleEntryProductChart', title: {{ en: 'Sample entry product quality', sk: 'Kvalita sample vstupnych produktov' }}, desc: {{ en: 'Top sample entry products by 60d full-size conversion.', sk: 'Top sample vstupne produkty podla 60d full-size konverzie.' }} }},
                 );
             }}
+            if (hasRows(DATA.refill_cohorts.window_rows)) {{
+                customerItems.push(
+                    {{ id: 'custRefillWindowChart', title: {{ en: 'Refill windows by entry bucket', sk: 'Refill okna podla vstupneho bucketu' }}, desc: {{ en: 'How quickly sample and full-size entry cohorts come back for the second order.', sk: 'Ako rychlo sa sample a full-size vstupne kohorty vracaju na druhu objednavku.' }} }},
+                    {{ id: 'custRefillBucketChart', title: {{ en: 'Refill bucket quality', sk: 'Kvalita refill bucketov' }}, desc: {{ en: 'Second-order AOV and refill rates by entry bucket.', sk: 'AOV druhej objednavky a refill rates podla vstupneho bucketu.' }} }},
+                );
+            }}
+            if (hasRows(DATA.refill_cohorts.cohort_rows)) {{
+                customerItems.push(
+                    {{ id: 'custRefillCohortChart', title: {{ en: 'Refill cohort trend', sk: 'Trend refill kohort' }}, desc: {{ en: '90d refill rate and days-to-second-order by cohort month.', sk: '90d refill rate a cas do druhej objednavky podla kohortneho mesiaca.' }} }},
+                );
+            }}
             renderGalleryCards('libraryCustomers', customerItems);
 
             if (document.getElementById('custNewReturningRevenueChart')) {{
@@ -4207,6 +4315,85 @@ def generate_modern_dashboard(
                         ],
                     }},
                     options: horizontalBarOptions(),
+                }});
+            }}
+            if (document.getElementById('refillCohortWindowChart')) {{
+                const refillWindowRows = DATA.refill_cohorts.window_rows || [];
+                const refillWindowLabels = [...new Set(refillWindowRows.map(x => `${{x.window_days || '-'}}d`))];
+                const refillBuckets = [...new Set(refillWindowRows.map(x => x.entry_bucket_label || '-'))].slice(0, 4);
+                const refillColors = ['#ff8a1f', '#4766ff', '#1f9d66', '#8b5cf6'];
+                new Chart(document.getElementById('refillCohortWindowChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: refillWindowLabels,
+                        datasets: refillBuckets.map((bucket, idx) => ({{
+                            label: bucket,
+                            data: refillWindowLabels.map(label => {{
+                                const found = refillWindowRows.find(x => `${{x.window_days || '-'}}d` === label && (x.entry_bucket_label || '-') === bucket);
+                                return found ? Number(found.refill_pct || 0) : null;
+                            }}),
+                            borderColor: refillColors[idx % refillColors.length],
+                            tension: .30,
+                            borderWidth: 2.3,
+                            pointRadius: 3,
+                            spanGaps: true,
+                        }})),
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custRefillWindowChart')) {{
+                const refillWindowRows = DATA.refill_cohorts.window_rows || [];
+                const refillWindowLabels = [...new Set(refillWindowRows.map(x => `${{x.window_days || '-'}}d`))];
+                const refillBuckets = [...new Set(refillWindowRows.map(x => x.entry_bucket_label || '-'))].slice(0, 4);
+                const refillColors = ['#ff8a1f', '#4766ff', '#1f9d66', '#8b5cf6'];
+                new Chart(document.getElementById('custRefillWindowChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: refillWindowLabels,
+                        datasets: refillBuckets.map((bucket, idx) => ({{
+                            label: bucket,
+                            data: refillWindowLabels.map(label => {{
+                                const found = refillWindowRows.find(x => `${{x.window_days || '-'}}d` === label && (x.entry_bucket_label || '-') === bucket);
+                                return found ? Number(found.refill_pct || 0) : null;
+                            }}),
+                            borderColor: refillColors[idx % refillColors.length],
+                            tension: .30,
+                            borderWidth: 2.3,
+                            pointRadius: 3,
+                            spanGaps: true,
+                        }})),
+                    }},
+                    options: baseOptions(),
+                }});
+            }}
+            if (document.getElementById('custRefillBucketChart')) {{
+                const refillBucketRows = DATA.refill_cohorts.bucket_rows || [];
+                const refillBucketOpts = dualAxisOptions();
+                new Chart(document.getElementById('custRefillBucketChart'), {{
+                    data: {{
+                        labels: refillBucketRows.map(x => x.entry_bucket_label || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: '90d refill %', data: refillBucketRows.map(x => Number(x.refill_90d_pct || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg days to 2nd', data: refillBucketRows.map(x => nullableNumber(x.avg_days_to_2nd)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1', spanGaps: true }},
+                            {{ type: 'line', label: '2nd AOV', data: refillBucketRows.map(x => nullableNumber(x.second_order_aov)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1', spanGaps: true }},
+                        ],
+                    }},
+                    options: refillBucketOpts,
+                }});
+            }}
+            if (document.getElementById('custRefillCohortChart')) {{
+                const refillCohortRows = DATA.refill_cohorts.cohort_rows || [];
+                const refillCohortOpts = dualAxisOptions();
+                new Chart(document.getElementById('custRefillCohortChart'), {{
+                    data: {{
+                        labels: refillCohortRows.map(x => `${{x.cohort_month || '-'}} • ${{(x.entry_bucket_label || '-').slice(0, 12)}}`),
+                        datasets: [
+                            {{ type: 'bar', label: '90d refill %', data: refillCohortRows.map(x => Number(x.refill_90d_pct || 0)), backgroundColor: 'rgba(255,138,31,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg days to 2nd', data: refillCohortRows.map(x => nullableNumber(x.avg_days_to_2nd)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1', spanGaps: true }},
+                        ],
+                    }},
+                    options: refillCohortOpts,
                 }});
             }}
 

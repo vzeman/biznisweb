@@ -64,6 +64,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install reporting dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Baseline security assertions
         run: |
           python3 scripts/security_ci.py
+
+      - name: Reporting QA smoke test
+        run: |
+          python3 scripts/reporting_qa_smoke.py

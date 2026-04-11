@@ -36,6 +36,7 @@ def main() -> int:
         read("templates/reporting-client/.env.example")
         read("templates/reporting-client/product_expenses.json")
         read("templates/reporting-client/README_CLIENT_SETUP.md")
+        read("scripts/reporting_qa_smoke.py")
 
         require(
             facebook_ads,
@@ -198,6 +199,7 @@ def main() -> int:
             "generate_invoices.py",
             "scripts/observability_snapshot.py",
             "scripts/scaffold_client.py",
+            "scripts/reporting_qa_smoke.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)
 
