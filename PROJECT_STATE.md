@@ -126,7 +126,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Merge the Roy product-demand analytics branch to `main`, rebuild the production image, and verify that the production Roy full-history report renders the new product-demand section end-to-end.
+- Decide whether ROY should get its own AWS scheduled daily runner or stay manual-only now that the product-demand analytics are already live in `main` and the production image.
 
 ## 9) Change Log
 
@@ -1389,3 +1389,14 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
     - `15` declining products
     - `26` forecasted products
     - `14` displayed brands after guardrails
+
+### 2026-04-11 (ROY product demand analytics on main)
+- Merged PR `#34 Add Roy product demand analytics` into `main`.
+- Verified the merge landed as commit `26fbefc` on `origin/main`.
+- Verified the production image refresh completed successfully via GitHub Actions:
+  - workflow: `Build and Push ECR`
+  - run: `24288614393`
+  - result: `success`
+- Operational note:
+  - the new Roy analytics blocks are now part of the production image used by the reporting runtime
+  - this repo still does not document a separate AWS scheduled daily runner for ROY, so scheduling remains a separate product decision
