@@ -1340,3 +1340,22 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Operational note:
   - this repo currently documents only the VEVO AWS daily email runner as production,
   - ROY reporting is now in `main` too, but a separate ROY scheduled AWS runner is not yet documented in this repo.
+
+### 2026-04-11 (VEVO exclude `madfrog stara odoslana`)
+- Added VEVO project-level excluded order status:
+  - `madfrog stara odoslana`
+- Fixed a reporting bug in `fetch_orders(...)`:
+  - cached historical day buckets were previously extended straight into the export result without re-applying `_filter_by_status(...)`,
+  - this allowed newly excluded statuses to survive inside older cached VEVO history even after the config changed.
+- Runtime impact:
+  - VEVO now excludes `madfrog stara odoslana` both for freshly fetched days and for older cached days.
+- Verified locally with:
+  - `python export_orders.py --project vevo --from-date 2025-05-03 --to-date 2025-05-05`
+  - `python export_orders.py --project vevo --from-date 2025-05-03 --to-date 2026-04-10`
+  - `python scripts/reporting_qa_smoke.py`
+  - `python -m py_compile export_orders.py daily_report_runner.py dashboard_modern.py html_report_generator.py`
+- Verification outcome:
+  - VEVO control window `2025-05-03 .. 2025-05-05` dropped from 5 orders to 2 orders after the exclusion was applied through cache as well
+  - `data/vevo/export_20250503-20250505.csv` no longer contains `madfrog stara odoslana`
+  - `data/vevo/export_20250503-20260410.csv` no longer contains `madfrog stara odoslana`
+  - refreshed full-history VEVO artifacts were regenerated on the current code path

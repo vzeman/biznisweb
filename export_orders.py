@@ -2694,7 +2694,8 @@ class BizniWebExporter:
             if self.should_use_cache(current_date):
                 cached_orders = self.load_from_cache(current_date)
                 if cached_orders:
-                    all_orders.extend(cached_orders)
+                    filtered_cached_orders = self._filter_by_status(cached_orders)
+                    all_orders.extend(filtered_cached_orders)
                     current_date += timedelta(days=1)
                     continue
 
