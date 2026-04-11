@@ -101,16 +101,20 @@ Bootstrap entrypoints:
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 - Shipping semantics are now normalized to net shipping in runtime config and dashboard labels, but CM taxonomy naming is still mixed between legacy labels and CM1/CM2/CM3 terms in some views.
 - Full QA assertions are now computed into `data_quality` sidecars and surfaced in dashboard/email/CloudWatch.
+- Lifecycle remains a proxy because BiznisWeb reporting still exposes only current/final status, not full order-status history.
+- Segment CAC/payback is still incomplete as a hard metric because payment fees and order-level attribution are not modeled deeply enough for final B2B/B2C CAC claims.
 - Vevo growth model blocks are now wired into the active dashboard shell:
   - direct vs assisted profitability
   - CRM funnel KPI layer
   - scent-size refill matrix
   - bundle recommender
   - promo / discount quality
+- Lifecycle is now visible as an explicit proxy layer built from final statuses plus tracked excluded payment-failure orders.
+- B2B/B2C analytics now expose CM-based unit economics instead of only a raw revenue/profit split.
 
 ## 8) Next Exact Step
 
-- Verify the green `Env Check` run on `main`, then continue with full-history validation of the new Vevo growth sections before refining refill-model methodology.
+- Add explicit product-expense fallback coverage QA (default-cost detection / warnings), then decide whether payment-fee ingestion can be added as the next CM-layer hardening step.
 
 ## 9) Change Log
 
@@ -1087,3 +1091,33 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - reporting QA smoke passes locally and is now enforced by CI
 - Next exact step:
   - merge this step to `main`, then implement shared geo confidence scoring and low-sample geo guardrails for both VEVO and ROY.
+
+### 2026-04-11 (B2B/B2C unit economics + lifecycle proxy)
+- Fixed `_build_growth_order_item_frames(...)` so order-level fixed-overhead allocation now uses the same project/runtime daily fixed-cost logic as the main report instead of the old `CFO_FIXED_DAILY_COST_EUR` fallback.
+- Added `excluded_status_orders` tracking in the fetch/filter pipeline so excluded payment-failure orders can be surfaced analytically without polluting reportable revenue exports.
+- Expanded `analyze_b2b_vs_b2c(...)` from a raw split into a segment unit-economics view with:
+  - CM1 / CM2 / CM3 profit
+  - revenue per customer
+  - repeat-customer rate
+  - CM2 / CM3 per order
+  - new vs returning order counts
+- Expanded `analyze_order_status(...)` into two layers:
+  - final-status mix
+  - explicit lifecycle proxy buckets built from final statuses + tracked excluded payment failures
+- Updated the modern dashboard to render the new analytics in the active shell and operations library:
+  - lifecycle proxy chart + table
+  - B2B/B2C unit economics table
+  - B2B/B2C unit-economics library chart
+  - lifecycle proxy library chart
+  - final-status table now shows reportable CM2 per order
+- Verified with:
+  - `python -m py_compile export_orders.py dashboard_modern.py html_report_generator.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts\\reporting_qa_smoke.py`
+- Verification outcome:
+  - VEVO and ROY March 2026 exports regenerate successfully on `codex/segment-unit-econ-lifecycle`
+  - both `report_20260301-20260331.html` outputs contain:
+    - `orderLifecycleProxyChart`
+    - `opsLifecycleProxyChart`
+    - `opsB2bUnitEconomicsChart`

@@ -413,6 +413,7 @@ class BizniWebExporter:
         self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
+        self.excluded_status_orders = []  # Track all excluded status orders for lifecycle proxy reporting
 
     def output_path(self, filename: str) -> Path:
         """Build a path inside project-specific output directory."""
@@ -1253,6 +1254,63 @@ class BizniWebExporter:
         return re.sub(r'\s+', ' ', text).strip()
 
     @classmethod
+    def _classify_lifecycle_bucket(cls, status_value: Any) -> Tuple[str, str, int]:
+        """Map raw/final order statuses into explicit lifecycle proxy buckets."""
+        status_norm = cls._normalize_match_text(status_value)
+        if not status_norm:
+            return "other_unknown", "Other / unknown", 90
+
+        if any(token in status_norm for token in ("vratene", "vraceno", "refund", "returned", "dobropis")):
+            return "refunded_returned", "Refunded / returned", 60
+        if any(
+            token in status_norm
+            for token in (
+                "platnost vyprsala",
+                "platba zamietnuta",
+                "expired",
+                "rejected",
+                "declined",
+                "failed",
+                "cancelled",
+                "canceled",
+                "storno",
+                "zrusen",
+                "zrusena",
+            )
+        ):
+            return "failed_cancelled", "Failed / cancelled", 10
+        if any(
+            token in status_norm
+            for token in (
+                "caka na uhradu",
+                "ceka na uhradu",
+                "awaiting payment",
+                "waiting for payment",
+                "platebni metoda potvrzena",
+            )
+        ):
+            return "awaiting_payment", "Awaiting payment", 20
+        if any(
+            token in status_norm
+            for token in (
+                "caka na vybavenie",
+                "ceka na vyrizeni",
+                "zaplatene",
+                "paid",
+                "processing",
+                "prijata",
+                "accepted",
+                "ready",
+            )
+        ):
+            return "paid_processing", "Paid / processing", 30
+        if any(token in status_norm for token in ("dorucena", "delivered", "prevzata", "completed", "complete")):
+            return "delivered_completed", "Delivered / completed", 50
+        if any(token in status_norm for token in ("odoslana", "odeslana", "shipped", "dispatch", "exped", "sent")):
+            return "shipped_fulfilled", "Shipped / fulfilled", 40
+        return "other_unknown", "Other / unknown", 90
+
+    @classmethod
     def _matches_patterns(cls, label: str, patterns: List[str]) -> bool:
         if not label or not patterns:
             return False
@@ -1317,13 +1375,17 @@ class BizniWebExporter:
         )
 
         orders_per_day = orders_df.groupby("purchase_date_only")["order_num"].nunique()
-        fixed_daily_cost = float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70"))
+        daily_fixed_cost_map = {
+            d: round(self.get_daily_fixed_cost(pd.Timestamp(d)), 2)
+            for d in orders_df["purchase_date_only"].drop_duplicates().tolist()
+        }
         orders_df["orders_that_day"] = orders_df["purchase_date_only"].map(orders_per_day).fillna(0).astype(int)
+        orders_df["fixed_daily_cost"] = orders_df["purchase_date_only"].map(daily_fixed_cost_map).fillna(0.0)
         divisor = orders_df["orders_that_day"].replace(0, np.nan)
         orders_df["allocated_fb_spend"] = (orders_df["fb_ads_daily_spend"] / divisor).fillna(0.0)
         orders_df["allocated_google_spend"] = (orders_df["google_ads_daily_spend"] / divisor).fillna(0.0)
         orders_df["allocated_paid_spend"] = orders_df["allocated_fb_spend"] + orders_df["allocated_google_spend"]
-        orders_df["allocated_fixed_overhead"] = (fixed_daily_cost / divisor).fillna(0.0)
+        orders_df["allocated_fixed_overhead"] = (orders_df["fixed_daily_cost"] / divisor).fillna(0.0)
         orders_df["cm2_profit"] = orders_df["cm1_profit"] - orders_df["allocated_paid_spend"]
         orders_df["cm3_profit"] = orders_df["cm2_profit"] - orders_df["allocated_fixed_overhead"]
         orders_df["pre_ad_contribution"] = orders_df["cm1_profit"]
@@ -2245,6 +2307,7 @@ class BizniWebExporter:
 
         # Clear excluded orders from previous runs
         self.excluded_orders = []
+        self.excluded_status_orders = []
 
         print(f"\nProcessing date range: {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
         print(f"Cache policy: Using cache for data older than {self.cache_days_threshold} days")
@@ -2503,9 +2566,12 @@ class BizniWebExporter:
 
             if status_name not in excluded_statuses:
                 filtered_orders.append(order)
-            elif track_excluded and status_name in failed_payment_statuses:
-                # Track failed payment orders for segmentation
-                self.excluded_orders.append(order)
+            else:
+                if track_excluded:
+                    self.excluded_status_orders.append(order)
+                if track_excluded and status_name in failed_payment_statuses:
+                    # Track failed payment orders for segmentation
+                    self.excluded_orders.append(order)
 
         return filtered_orders
     
@@ -7199,30 +7265,131 @@ class BizniWebExporter:
         }
 
     def analyze_b2b_vs_b2c(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Analyze B2B vs B2C orders"""
+        """Analyze B2B vs B2C orders with segment-level unit economics."""
         print("\nAnalyzing B2B vs B2C split...")
+        if df is None or df.empty:
+            return pd.DataFrame()
 
-        # B2B = has company VAT ID or company ID
-        df['is_b2b'] = df.apply(
-            lambda row: pd.notna(row.get('customer_vat_id')) and str(row.get('customer_vat_id', '')).strip() != ''
-                        or pd.notna(row.get('customer_company_id')) and str(row.get('customer_company_id', '')).strip() != '',
-            axis=1
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        if orders_df.empty:
+            return pd.DataFrame()
+
+        customer_flags = (
+            df[["order_num", "customer_vat_id", "customer_company_id"]]
+            .drop_duplicates(subset=["order_num"])
+            .copy()
+        )
+        customer_flags["is_b2b"] = (
+            customer_flags["customer_vat_id"].fillna("").astype(str).str.strip().ne("")
+            | customer_flags["customer_company_id"].fillna("").astype(str).str.strip().ne("")
         )
 
-        b2b_agg = df.groupby('is_b2b').agg({
-            'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'profit_before_ads': 'sum',
-            'customer_email': 'nunique'
-        }).reset_index()
+        orders_df = orders_df.merge(customer_flags[["order_num", "is_b2b"]], on="order_num", how="left")
+        orders_df["is_b2b"] = orders_df["is_b2b"].fillna(False).astype(bool)
+        orders_df = orders_df.sort_values(["customer_email", "purchase_datetime", "order_num"]).copy()
+        orders_df["customer_order_rank"] = orders_df.groupby("customer_email").cumcount() + 1
+        orders_df["is_new_order"] = orders_df["customer_order_rank"].eq(1)
 
-        b2b_agg.columns = ['is_b2b', 'orders', 'revenue', 'profit', 'unique_customers']
-        b2b_agg['customer_type'] = b2b_agg['is_b2b'].map({True: 'B2B (Companies)', False: 'B2C (Individuals)'})
-        b2b_agg['aov'] = (b2b_agg['revenue'] / b2b_agg['orders']).round(2)
-        b2b_agg['orders_pct'] = (b2b_agg['orders'] / b2b_agg['orders'].sum() * 100).round(1)
-        b2b_agg['revenue_pct'] = (b2b_agg['revenue'] / b2b_agg['revenue'].sum() * 100).round(1)
+        segment_customer_orders = (
+            orders_df.groupby(["is_b2b", "customer_email"])["order_num"]
+            .nunique()
+            .reset_index(name="segment_orders")
+        )
+        repeat_customer_summary = (
+            segment_customer_orders.groupby("is_b2b")
+            .agg(
+                repeat_customers=("segment_orders", lambda s: int((s >= 2).sum())),
+                unique_customers=("customer_email", "nunique"),
+            )
+            .reset_index()
+        )
 
-        print(f"B2B vs B2C analysis complete")
+        new_customer_summary = (
+            orders_df.loc[orders_df["is_new_order"]]
+            .groupby("is_b2b")
+            .agg(
+                new_orders=("order_num", "nunique"),
+                new_customers=("customer_email", "nunique"),
+            )
+            .reset_index()
+        )
+
+        b2b_agg = (
+            orders_df.groupby("is_b2b")
+            .agg(
+                orders=("order_num", "nunique"),
+                revenue=(revenue_col, "sum"),
+                cm1_profit=("cm1_profit", "sum"),
+                cm2_profit=("cm2_profit", "sum"),
+                cm3_profit=("cm3_profit", "sum"),
+                paid_spend=("allocated_paid_spend", "sum"),
+                unique_customers=("customer_email", "nunique"),
+            )
+            .reset_index()
+        )
+        b2b_agg = b2b_agg.merge(
+            repeat_customer_summary[["is_b2b", "repeat_customers"]],
+            on="is_b2b",
+            how="left",
+        )
+        b2b_agg = b2b_agg.merge(
+            new_customer_summary,
+            on="is_b2b",
+            how="left",
+        )
+        for col in ["repeat_customers", "new_orders", "new_customers"]:
+            b2b_agg[col] = b2b_agg[col].fillna(0).astype(int)
+
+        b2b_agg["returning_orders"] = (b2b_agg["orders"] - b2b_agg["new_orders"]).clip(lower=0).astype(int)
+        b2b_agg["customer_type"] = b2b_agg["is_b2b"].map({True: "B2B (Companies)", False: "B2C (Individuals)"})
+        b2b_agg["aov"] = (b2b_agg["revenue"] / b2b_agg["orders"]).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["orders_pct"] = (b2b_agg["orders"] / b2b_agg["orders"].sum() * 100).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["revenue_pct"] = (b2b_agg["revenue"] / b2b_agg["revenue"].sum() * 100).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["orders_per_customer"] = (b2b_agg["orders"] / b2b_agg["unique_customers"]).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["revenue_per_customer"] = (b2b_agg["revenue"] / b2b_agg["unique_customers"]).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["repeat_customer_rate_pct"] = (
+            b2b_agg["repeat_customers"] / b2b_agg["unique_customers"] * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["cm1_profit_per_order"] = (b2b_agg["cm1_profit"] / b2b_agg["orders"]).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["cm2_profit_per_order"] = (b2b_agg["cm2_profit"] / b2b_agg["orders"]).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["cm3_profit_per_order"] = (b2b_agg["cm3_profit"] / b2b_agg["orders"]).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["cm1_margin_pct"] = (
+            b2b_agg["cm1_profit"] / b2b_agg["revenue"] * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["cm2_margin_pct"] = (
+            b2b_agg["cm2_profit"] / b2b_agg["revenue"] * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["cm3_margin_pct"] = (
+            b2b_agg["cm3_profit"] / b2b_agg["revenue"] * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        b2b_agg["profit"] = b2b_agg["cm3_profit"]
+        b2b_agg["segment_order"] = b2b_agg["is_b2b"].map({False: 1, True: 2}).fillna(99)
+        b2b_agg = b2b_agg.sort_values("segment_order").drop(columns=["segment_order"]).reset_index(drop=True)
+
+        round_cols = [
+            "revenue",
+            "cm1_profit",
+            "cm2_profit",
+            "cm3_profit",
+            "profit",
+            "paid_spend",
+            "aov",
+            "orders_pct",
+            "revenue_pct",
+            "orders_per_customer",
+            "revenue_per_customer",
+            "repeat_customer_rate_pct",
+            "cm1_profit_per_order",
+            "cm2_profit_per_order",
+            "cm3_profit_per_order",
+            "cm1_margin_pct",
+            "cm2_margin_pct",
+            "cm3_margin_pct",
+        ]
+        for col in round_cols:
+            b2b_agg[col] = b2b_agg[col].round(2 if "pct" not in col else 1)
+
+        print("B2B vs B2C analysis complete")
         return b2b_agg
 
     def analyze_product_margins(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -7605,19 +7772,154 @@ class BizniWebExporter:
         return checks
 
     def analyze_order_status(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Analyze order status distribution"""
+        """Analyze final order status mix plus an explicit lifecycle proxy."""
         print("\nAnalyzing order status distribution...")
+        if df is None or df.empty:
+            return pd.DataFrame()
 
-        status_agg = df.groupby('status_name').agg({
-            'order_num': 'nunique',
-            'item_total_without_tax': 'sum'
-        }).reset_index()
-        status_agg.columns = ['status', 'orders', 'revenue']
-        status_agg = status_agg.sort_values('orders', ascending=False)
-        status_agg['orders_pct'] = (status_agg['orders'] / status_agg['orders'].sum() * 100).round(1)
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        if orders_df.empty:
+            return pd.DataFrame()
 
-        print(f"Order status analysis complete: {len(status_agg)} statuses")
-        return status_agg
+        status_meta = (
+            df[["order_num", "status_name"]]
+            .drop_duplicates(subset=["order_num"])
+            .copy()
+        )
+        status_meta["status_name"] = status_meta["status_name"].fillna("").astype(str)
+        orders_df = orders_df.merge(status_meta, on="order_num", how="left")
+        orders_df["status_name"] = orders_df["status_name"].fillna("").astype(str)
+        orders_df["status_name_norm"] = orders_df["status_name"].apply(self._normalize_match_text)
+        lifecycle_meta = orders_df["status_name"].apply(self._classify_lifecycle_bucket)
+        orders_df["lifecycle_bucket"] = lifecycle_meta.apply(lambda value: value[0])
+        orders_df["lifecycle_label"] = lifecycle_meta.apply(lambda value: value[1])
+        orders_df["lifecycle_order"] = lifecycle_meta.apply(lambda value: value[2])
+
+        status_agg = (
+            orders_df.groupby("status_name")
+            .agg(
+                orders=("order_num", "nunique"),
+                revenue=(revenue_col, "sum"),
+                cm1_profit=("cm1_profit", "sum"),
+                cm2_profit=("cm2_profit", "sum"),
+                cm3_profit=("cm3_profit", "sum"),
+            )
+            .reset_index()
+            .rename(columns={"status_name": "status"})
+        )
+        status_agg["row_type"] = "status"
+        status_agg["orders_pct"] = (
+            status_agg["orders"] / status_agg["orders"].sum() * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        status_agg["cm2_profit_per_order"] = (
+            status_agg["cm2_profit"] / status_agg["orders"]
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        status_agg["cm3_margin_pct"] = (
+            status_agg["cm3_profit"] / status_agg["revenue"] * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        status_agg["tracked_excluded_orders"] = 0
+        status_agg = status_agg.sort_values("orders", ascending=False).reset_index(drop=True)
+
+        lifecycle_rows = (
+            orders_df.groupby(["lifecycle_bucket", "lifecycle_label", "lifecycle_order"])
+            .agg(
+                orders=("order_num", "nunique"),
+                revenue=(revenue_col, "sum"),
+                cm1_profit=("cm1_profit", "sum"),
+                cm2_profit=("cm2_profit", "sum"),
+                cm3_profit=("cm3_profit", "sum"),
+            )
+            .reset_index()
+        )
+        lifecycle_rows["tracked_excluded_orders"] = 0
+
+        tracked_excluded = []
+        for order in getattr(self, "excluded_status_orders", []) or []:
+            status_name = ((order or {}).get("status", {}) or {}).get("name", "")
+            bucket_key, bucket_label, bucket_order = self._classify_lifecycle_bucket(status_name)
+            tracked_excluded.append(
+                {
+                    "lifecycle_bucket": bucket_key,
+                    "lifecycle_label": bucket_label,
+                    "lifecycle_order": bucket_order,
+                    "orders": 1,
+                    "revenue": 0.0,
+                    "cm1_profit": 0.0,
+                    "cm2_profit": 0.0,
+                    "cm3_profit": 0.0,
+                    "tracked_excluded_orders": 1,
+                }
+            )
+
+        if tracked_excluded:
+            excluded_df = pd.DataFrame(tracked_excluded)
+            lifecycle_rows = pd.concat([lifecycle_rows, excluded_df], ignore_index=True)
+            lifecycle_rows = (
+                lifecycle_rows.groupby(["lifecycle_bucket", "lifecycle_label", "lifecycle_order"], as_index=False)
+                .agg(
+                    orders=("orders", "sum"),
+                    revenue=("revenue", "sum"),
+                    cm1_profit=("cm1_profit", "sum"),
+                    cm2_profit=("cm2_profit", "sum"),
+                    cm3_profit=("cm3_profit", "sum"),
+                    tracked_excluded_orders=("tracked_excluded_orders", "sum"),
+                )
+            )
+
+        lifecycle_rows["row_type"] = "lifecycle"
+        lifecycle_rows["status"] = lifecycle_rows["lifecycle_label"]
+        lifecycle_rows["orders_pct"] = (
+            lifecycle_rows["orders"] / lifecycle_rows["orders"].sum() * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        lifecycle_rows["cm2_profit_per_order"] = (
+            lifecycle_rows["cm2_profit"] / lifecycle_rows["orders"]
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        lifecycle_rows["cm3_margin_pct"] = (
+            lifecycle_rows["cm3_profit"] / lifecycle_rows["revenue"] * 100
+        ).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        lifecycle_rows = lifecycle_rows.sort_values("lifecycle_order").reset_index(drop=True)
+
+        order_status = pd.concat(
+            [
+                status_agg[
+                    [
+                        "row_type",
+                        "status",
+                        "orders",
+                        "revenue",
+                        "cm1_profit",
+                        "cm2_profit",
+                        "cm3_profit",
+                        "orders_pct",
+                        "cm2_profit_per_order",
+                        "cm3_margin_pct",
+                        "tracked_excluded_orders",
+                    ]
+                ],
+                lifecycle_rows[
+                    [
+                        "row_type",
+                        "status",
+                        "orders",
+                        "revenue",
+                        "cm1_profit",
+                        "cm2_profit",
+                        "cm3_profit",
+                        "orders_pct",
+                        "cm2_profit_per_order",
+                        "cm3_margin_pct",
+                        "tracked_excluded_orders",
+                    ]
+                ],
+            ],
+            ignore_index=True,
+        )
+
+        for col in ["revenue", "cm1_profit", "cm2_profit", "cm3_profit", "orders_pct", "cm2_profit_per_order", "cm3_margin_pct"]:
+            order_status[col] = order_status[col].round(2 if "pct" not in col else 1)
+
+        print(f"Order status analysis complete: {len(status_agg)} final statuses, {len(lifecycle_rows)} lifecycle buckets")
+        return order_status
 
     def analyze_refunds(self, df: pd.DataFrame) -> dict:
         """
@@ -7633,13 +7935,7 @@ class BizniWebExporter:
         orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
         orders_df['date'] = orders_df['purchase_datetime'].dt.date
         orders_df['status_name'] = orders_df['status_name'].fillna('').astype(str)
-
-        def normalize_status(status: str) -> str:
-            # Normalize to lowercase ASCII to avoid diacritics/encoding mismatches.
-            normalized = unicodedata.normalize('NFKD', status)
-            return ''.join(ch for ch in normalized if not unicodedata.combining(ch)).lower()
-
-        orders_df['status_name_norm'] = orders_df['status_name'].apply(normalize_status)
+        orders_df['status_name_norm'] = orders_df['status_name'].apply(self._normalize_match_text)
 
         explicit_refund_statuses = {
             'vratene',

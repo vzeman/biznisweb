@@ -961,8 +961,43 @@ def generate_modern_dashboard(
     )
 
     heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
-    b2b_rows = _frame_rows(b2b_analysis, ["customer_type", "orders", "revenue", "profit", "unique_customers", "aov", "orders_pct", "revenue_pct"], limit=10)
-    order_status_rows = _frame_rows(order_status, ["status", "orders", "revenue", "orders_pct"], limit=20)
+    b2b_rows = _frame_rows(
+        b2b_analysis,
+        [
+            "customer_type",
+            "orders",
+            "revenue",
+            "cm2_profit",
+            "cm3_profit",
+            "unique_customers",
+            "aov",
+            "orders_pct",
+            "revenue_pct",
+            "revenue_per_customer",
+            "orders_per_customer",
+            "repeat_customer_rate_pct",
+            "cm2_profit_per_order",
+            "cm3_profit_per_order",
+        ],
+        limit=10,
+    )
+    order_status_frame = order_status.copy() if isinstance(order_status, pd.DataFrame) else pd.DataFrame()
+    if not order_status_frame.empty and "row_type" in order_status_frame.columns:
+        order_status_status_frame = order_status_frame[order_status_frame["row_type"].fillna("status") == "status"].copy()
+        lifecycle_proxy_frame = order_status_frame[order_status_frame["row_type"].fillna("") == "lifecycle"].copy()
+    else:
+        order_status_status_frame = order_status_frame
+        lifecycle_proxy_frame = pd.DataFrame()
+    order_status_rows = _frame_rows(
+        order_status_status_frame,
+        ["status", "orders", "revenue", "cm2_profit_per_order", "orders_pct"],
+        limit=20,
+    )
+    lifecycle_rows = _frame_rows(
+        lifecycle_proxy_frame,
+        ["status", "orders", "orders_pct", "tracked_excluded_orders", "revenue"],
+        limit=20,
+    )
 
     item_retention_rows = _frame_rows((first_item_retention or {}).get("item_retention"), ["item_name", "first_order_customers", "retention_2nd_pct", "retention_3rd_pct", "avg_orders_per_customer"], limit=12)
     same_item_rows = _frame_rows((same_item_repurchase or {}).get("item_repurchase"), ["item_name", "unique_customers", "repurchase_2x_pct", "repurchase_3x_pct", "avg_days_between_repurchase"], limit=12)
@@ -1407,6 +1442,7 @@ def generate_modern_dashboard(
         "heatmap_rows": heatmap_rows,
         "b2b_rows": b2b_rows,
         "order_status_rows": order_status_rows,
+        "lifecycle_rows": lifecycle_rows,
         "item_retention_rows": item_retention_rows,
         "same_item_rows": same_item_rows,
         "same_item_frequency_rows": same_item_frequency_rows,
@@ -1587,14 +1623,19 @@ def generate_modern_dashboard(
     ) or '<tr><td colspan="5"><span class="lang-en">No attach-rate data available.</span><span class="lang-sk hidden">Attach-rate dáta nie sú dostupné.</span></td></tr>'
 
     b2b_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('customer_type') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{int(round(_num(row.get('unique_customers'))))}</td><td>€{_num(row.get('aov')):,.2f}</td></tr>"
+        f"<tr><td>{escape(str(row.get('customer_type') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('cm2_profit')):,.2f}</td><td>€{_num(row.get('revenue_per_customer')):,.2f}</td><td>{_num(row.get('repeat_customer_rate_pct')):.1f}%</td><td>€{_num(row.get('cm3_profit_per_order')):,.2f}</td></tr>"
         for row in b2b_rows
-    ) or '<tr><td colspan="6"><span class="lang-en">No B2B/B2C split available.</span><span class="lang-sk hidden">B2B/B2C split nie je dostupný.</span></td></tr>'
+    ) or '<tr><td colspan="7"><span class="lang-en">No B2B/B2C split available.</span><span class="lang-sk hidden">B2B/B2C split nie je dostupný.</span></td></tr>'
 
     order_status_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('status') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>{_num(row.get('orders_pct')):.1f}%</td></tr>"
+        f"<tr><td>{escape(str(row.get('status') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('cm2_profit_per_order')):,.2f}</td><td>{_num(row.get('orders_pct')):.1f}%</td></tr>"
         for row in order_status_rows
-    ) or '<tr><td colspan="4"><span class="lang-en">No order status data available.</span><span class="lang-sk hidden">Dáta stavov objednávok nie sú dostupné.</span></td></tr>'
+    ) or '<tr><td colspan="5"><span class="lang-en">No order status data available.</span><span class="lang-sk hidden">Dáta stavov objednávok nie sú dostupné.</span></td></tr>'
+
+    lifecycle_rows_html = "".join(
+        f"<tr><td>{escape(str(row.get('status') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>{_num(row.get('orders_pct')):.1f}%</td><td>{int(round(_num(row.get('tracked_excluded_orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td></tr>"
+        for row in lifecycle_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No lifecycle proxy data available.</span><span class="lang-sk hidden">Lifecycle proxy dáta nie sú dostupné.</span></td></tr>'
 
     item_retention_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('first_order_customers'))))}</td><td>{_num(row.get('retention_2nd_pct')):.1f}%</td><td>{_num(row.get('retention_3rd_pct')):.1f}%</td><td>{_num(row.get('avg_orders_per_customer')):.2f}</td></tr>"
@@ -2621,26 +2662,39 @@ def generate_modern_dashboard(
                     </div>
                     <div class="grid-2">
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">B2B vs B2C mix</span><span class="lang-sk hidden">B2B vs B2C mix</span></h3><p><span class="lang-en">Revenue and profit split by customer type.</span><span class="lang-sk hidden">Rozdelenie trzby a zisku podla typu zakaznika.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">B2B vs B2C mix</span><span class="lang-sk hidden">B2B vs B2C mix</span></h3><p><span class="lang-en">Revenue, CM3 profit and AOV by customer type.</span><span class="lang-sk hidden">Rozdelenie trzby, CM3 zisku a AOV podla typu zakaznika.</span></p></div></div>
                             <div class="chart-shell"><canvas id="b2bMixChart"></canvas></div>
                         </div>
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Order status structure</span><span class="lang-sk hidden">Struktura stavov objednavok</span></h3><p><span class="lang-en">How order volume is distributed across statuses.</span><span class="lang-sk hidden">Ako sa objem objednavok rozdeluje medzi stavy.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Order status structure</span><span class="lang-sk hidden">Struktura stavov objednavok</span></h3><p><span class="lang-en">How order volume is distributed across final statuses.</span><span class="lang-sk hidden">Ako sa objem objednavok rozdeluje medzi finalne stavy.</span></p></div></div>
                             <div class="chart-shell"><canvas id="orderStatusChart"></canvas></div>
                         </div>
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Lifecycle proxy</span><span class="lang-sk hidden">Lifecycle proxy</span></h3><p><span class="lang-en">Proxy buckets from final statuses, including tracked excluded payment failures.</span><span class="lang-sk hidden">Proxy bucket-y z finalnych statusov, vratane tracknutych vylucenych payment failure objednavok.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="orderLifecycleProxyChart"></canvas></div>
+                        </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">B2B/B2C table</span><span class="lang-sk hidden">B2B/B2C tabulka</span></h3><p><span class="lang-en">Revenue, profit and customer count by segment.</span><span class="lang-sk hidden">Trzby, zisk a pocet zakaznikov podla segmentu.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Lifecycle proxy table</span><span class="lang-sk hidden">Lifecycle proxy tabulka</span></h3><p><span class="lang-en">Bucket mix with tracked excluded orders and reportable revenue.</span><span class="lang-sk hidden">Mix bucketov s tracknutymi vylucenymi objednavkami a reportovanou trzbou.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Type</span><span class="lang-sk hidden">Typ</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th>AOV</th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Bucket</span><span class="lang-sk hidden">Bucket</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th><th><span class="lang-en">Tracked excluded</span><span class="lang-sk hidden">Tracknute vylucene</span></th><th><span class="lang-en">Reportable revenue</span><span class="lang-sk hidden">Reportovana trzba</span></th></tr></thead>
+                                <tbody>{lifecycle_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">B2B/B2C unit economics</span><span class="lang-sk hidden">B2B/B2C unit economics</span></h3><p><span class="lang-en">Segment CM2, repeat rate and per-customer monetization.</span><span class="lang-sk hidden">Segmentovy CM2, repeat rate a monetizacia na zakaznika.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Type</span><span class="lang-sk hidden">Typ</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>CM2</th><th><span class="lang-en">Revenue/customer</span><span class="lang-sk hidden">Trzba/zakaznik</span></th><th><span class="lang-en">Repeat rate</span><span class="lang-sk hidden">Repeat rate</span></th><th>CM3 / <span class="lang-en">order</span><span class="lang-sk hidden">obj.</span></th></tr></thead>
                                 <tbody>{b2b_rows_html}</tbody>
                             </table>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Order status table</span><span class="lang-sk hidden">Tabulka stavov objednavok</span></h3><p><span class="lang-en">Order count and revenue by status.</span><span class="lang-sk hidden">Pocet objednavok a trzba podla stavu.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Order status table</span><span class="lang-sk hidden">Tabulka stavov objednavok</span></h3><p><span class="lang-en">Final status mix with reportable CM2 per order.</span><span class="lang-sk hidden">Mix finalnych statusov s reportovanym CM2 na objednavku.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Status</span><span class="lang-sk hidden">Stav</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Status</span><span class="lang-sk hidden">Stav</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>CM2 / <span class="lang-en">order</span><span class="lang-sk hidden">obj.</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
                                 <tbody>{order_status_rows_html}</tbody>
                             </table>
                         </div>
@@ -3674,7 +3728,7 @@ def generate_modern_dashboard(
                         labels: DATA.b2b_rows.map(x => x.customer_type || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Revenue', data: DATA.b2b_rows.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Profit', data: DATA.b2b_rows.map(x => Number(x.profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CM3 profit', data: DATA.b2b_rows.map(x => Number(x.cm3_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
                             {{ type: 'line', label: 'AOV', data: DATA.b2b_rows.map(x => Number(x.aov || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
@@ -3689,6 +3743,19 @@ def generate_modern_dashboard(
                         datasets: [{{ label: 'Orders', data: DATA.order_status_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }}],
                     }},
                     options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if (DATA.lifecycle_rows.length) {{
+                const lifecycleOpts = dualAxisOptions();
+                new Chart(document.getElementById('orderLifecycleProxyChart'), {{
+                    data: {{
+                        labels: DATA.lifecycle_rows.map(x => x.status || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Orders', data: DATA.lifecycle_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Reportable revenue', data: DATA.lifecycle_rows.map(x => Number(x.revenue || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: lifecycleOpts,
                 }});
             }}
         }}
@@ -4729,8 +4796,10 @@ def generate_modern_dashboard(
             if (hasRows(DATA.bundle_recommender.recommendation_rows)) productItems.push({{ id: 'prodBundleRecommenderChart', title: {{ en: 'Bundle recommender score', sk: 'Bundle recommender score' }}, desc: {{ en: 'Top family recommendations by attach-rate and CM2 uplift.', sk: 'Top family odporucania podla attach-rate a CM2 upliftu.' }} }});
             if (hasRows(DATA.bundle_recommender.anchor_rows)) productItems.push({{ id: 'prodBundleAnchorChart', title: {{ en: 'Anchor family recommendations', sk: 'Odporucania anchor family' }}, desc: {{ en: 'Best next-family recommendation per anchor family.', sk: 'Najlepsie next-family odporucanie pre kazdu anchor family.' }} }});
             if (hasRows(DATA.promo_discount.bucket_rows)) productItems.push({{ id: 'opsPromoDiscountChart', title: {{ en: 'Promo / discount quality', sk: 'Kvalita promo / discountov' }}, desc: {{ en: 'Detected discount penetration and CM2 quality by new/returning buckets.', sk: 'Detegovana discount penetracia a CM2 kvalita podla new/returning bucketov.' }} }});
-            if (hasRows(DATA.b2b_rows)) productItems.push({{ id: 'opsB2bRevenueProfitChart', title: {{ en: 'B2B vs B2C economics', sk: 'Ekonomika B2B vs B2C' }}, desc: {{ en: 'Revenue, profit and AOV by customer type.', sk: 'Trzba, zisk a AOV podla typu zakaznika.' }} }});
+            if (hasRows(DATA.b2b_rows)) productItems.push({{ id: 'opsB2bRevenueProfitChart', title: {{ en: 'B2B vs B2C economics', sk: 'Ekonomika B2B vs B2C' }}, desc: {{ en: 'Revenue, CM3 profit and AOV by customer type.', sk: 'Trzba, CM3 zisk a AOV podla typu zakaznika.' }} }});
+            if (hasRows(DATA.b2b_rows)) productItems.push({{ id: 'opsB2bUnitEconomicsChart', title: {{ en: 'B2B vs B2C unit economics', sk: 'B2B vs B2C unit economics' }}, desc: {{ en: 'CM2/CM3 per order and repeat rate by segment.', sk: 'CM2/CM3 na objednavku a repeat rate podla segmentu.' }} }});
             if (hasRows(DATA.order_status_rows)) productItems.push({{ id: 'opsStatusRevenueChart', title: {{ en: 'Order status mix', sk: 'Mix stavov objednavok' }}, desc: {{ en: 'Orders and revenue by final order status.', sk: 'Objednavky a trzba podla finalneho statusu.' }} }});
+            if (hasRows(DATA.lifecycle_rows)) productItems.push({{ id: 'opsLifecycleProxyChart', title: {{ en: 'Lifecycle proxy', sk: 'Lifecycle proxy' }}, desc: {{ en: 'Proxy bucket mix including tracked excluded payment failures.', sk: 'Proxy mix bucketov vratane tracknutych vylucenych payment failure objednavok.' }} }});
             if (hasRows(DATA.segment_rows)) productItems.push({{ id: 'opsSegmentPriorityChart', title: {{ en: 'Email segment volume', sk: 'Objem email segmentov' }}, desc: {{ en: 'Size and priority of lifecycle email segments.', sk: 'Velkost a priorita lifecycle email segmentov.' }} }});
             if (DATA.consistency && (DATA.consistency.roas_delta !== null || DATA.consistency.margin_delta !== null || DATA.consistency.cac_delta !== null)) productItems.push({{ id: 'opsConsistencyChart', title: {{ en: 'Consistency checks', sk: 'Konzistencne kontroly' }}, desc: {{ en: 'Sanity check deltas across ROAS, margin and CAC.', sk: 'Sanity check odchylky pre ROAS, margin a CAC.' }} }});
             renderGalleryCards('libraryProductsOps', productItems);
@@ -4934,11 +5003,25 @@ def generate_modern_dashboard(
                         labels: DATA.b2b_rows.map(x => x.customer_type || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Revenue', data: DATA.b2b_rows.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Profit', data: DATA.b2b_rows.map(x => Number(x.profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CM3 profit', data: DATA.b2b_rows.map(x => Number(x.cm3_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
                             {{ type: 'line', label: 'AOV', data: DATA.b2b_rows.map(x => Number(x.aov || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: b2bOpts,
+                }});
+            }}
+            if (document.getElementById('opsB2bUnitEconomicsChart')) {{
+                const b2bUnitOpts = dualAxisOptions();
+                new Chart(document.getElementById('opsB2bUnitEconomicsChart'), {{
+                    data: {{
+                        labels: DATA.b2b_rows.map(x => x.customer_type || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'CM2 / order', data: DATA.b2b_rows.map(x => Number(x.cm2_profit_per_order || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CM3 / order', data: DATA.b2b_rows.map(x => Number(x.cm3_profit_per_order || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Repeat rate %', data: DATA.b2b_rows.map(x => Number(x.repeat_customer_rate_pct || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: b2bUnitOpts,
                 }});
             }}
             if (document.getElementById('opsStatusRevenueChart')) {{
@@ -4952,6 +5035,20 @@ def generate_modern_dashboard(
                         ],
                     }},
                     options: statusOpts,
+                }});
+            }}
+            if (document.getElementById('opsLifecycleProxyChart')) {{
+                const lifecycleOpts = dualAxisOptions();
+                new Chart(document.getElementById('opsLifecycleProxyChart'), {{
+                    data: {{
+                        labels: DATA.lifecycle_rows.map(x => x.status || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Orders', data: DATA.lifecycle_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Tracked excluded', data: DATA.lifecycle_rows.map(x => Number(x.tracked_excluded_orders || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Reportable revenue', data: DATA.lifecycle_rows.map(x => Number(x.revenue || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: lifecycleOpts,
                 }});
             }}
             if (document.getElementById('opsSegmentPriorityChart')) {{
