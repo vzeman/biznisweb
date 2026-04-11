@@ -873,21 +873,44 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
 def build_email_body(
     from_date: str,
     to_date: str,
-    summary_text: str,
     reporting_defaults: Dict[str, Any],
     data_quality: Optional[Dict[str, Any]] = None,
 ) -> str:
     display_name = reporting_defaults["display_name"]
     reporting_system_name = reporting_defaults["reporting_system_name"]
-    data_quality_block = build_data_quality_summary(data_quality or {})
-    return (
-        "Dobry den,\n\n"
-        f"v prilohe posielam denny {display_name} report v HTML formate.\n"
-        f"Sledovane obdobie: {from_date} az {to_date}.\n\n"
-        f"{summary_text}\n\n"
-        f"{data_quality_block}\n\n"
-        f"Tento email bol odoslany automaticky zo systemu {reporting_system_name}.\n"
+    dq = data_quality or {}
+    overall_status = str(dq.get("overall_status") or "unknown").upper()
+    qa_status = str(dq.get("qa_status") or "unknown").upper()
+    qa_failure_count = int(dq.get("qa_failure_count") or 0)
+    qa_warning_count = int(dq.get("qa_warning_count") or 0)
+    is_partial = bool(dq.get("is_partial"))
+
+    lines = [
+        "Dobry den,",
+        "",
+        f"v prilohe posielam denny {display_name} report v HTML formate.",
+        f"Sledovane obdobie: {from_date} az {to_date}.",
+        "",
+        f"Stav dat: {overall_status} / QA {qa_status}",
+    ]
+
+    if is_partial or qa_failure_count > 0 or qa_warning_count > 0:
+        lines.append(
+            "Poznamka: report obsahuje datove upozornenia. "
+            f"QA failures: {qa_failure_count}, QA warnings: {qa_warning_count}. "
+            "Detail je priamo v reporte v sekciach Source health a QA."
+        )
+    else:
+        lines.append("Data presli kontrolami bez kritickeho upozornenia.")
+
+    lines.extend(
+        [
+            "",
+            f"Tento email bol odoslany automaticky zo systemu {reporting_system_name}.",
+        ]
     )
+
+    return "\n".join(lines)
 
 
 def put_metric(metric_name: str, value: float, project: str, reporting_defaults: Dict[str, Any], unit: str = "Count") -> None:
@@ -1057,8 +1080,7 @@ def main() -> None:
         return
 
     subject = build_email_subject(reporting_defaults)
-    summary_text = build_report_summary(output_paths)
-    body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults, data_quality)
+    body_text = build_email_body(from_date, to_date, reporting_defaults, data_quality)
     message_id = send_email_ses(
         subject=subject,
         body_text=body_text,

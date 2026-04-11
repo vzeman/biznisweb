@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-10
+Last updated: 2026-04-11
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -103,7 +103,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Audit Roy Google Ads scope if business owners still consider the live API spend too high, then continue with Vevo cohort refill model on top of the now-fixed revenue/manual-spend baseline.
+- Verify the new short SES email body in a production-equivalent VEVO runtime run after the ECR image rebuild, then continue with Vevo cohort refill model on top of the now-fixed revenue/manual-spend baseline.
 
 ## 9) Change Log
 
@@ -1039,3 +1039,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - Vevo full range `2025-05-03 .. 2026-04-10`
 - Roy now connects to the live Google Ads account `Roy.sk` (`5313708530` via MCC `6704852923`) and no longer uses the old fixed spend fallback.
 - Vevo now connects to the live Google Ads account `Vevo.sk` (`7592903323`) with no fixed-spend fallback.
+
+### 2026-04-11 (short SES email body regression fix)
+- Identified that `daily_report_runner.py` still sent the old long-form executive summary in the SES plain-text body.
+- Replaced the body template with a short production mail:
+  - attachment notice
+  - covered date range
+  - concise data quality status
+  - one short QA warning note only when needed
+- Removed the old `build_report_summary(...)` output from the actual SES send path; the long CFO-style narrative is no longer injected into the mail body.
+- Verified locally with:
+  - `python -m py_compile daily_report_runner.py`
+  - direct function render of `build_email_body(...)`
+- Expected runtime effect:
+  - the daily scheduled VEVO mail should again send the short, clear body once the updated image is built and pulled by the scheduled ECS task.
