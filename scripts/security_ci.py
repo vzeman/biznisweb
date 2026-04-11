@@ -36,7 +36,9 @@ def main() -> int:
         read("templates/reporting-client/.env.example")
         read("templates/reporting-client/product_expenses.json")
         read("templates/reporting-client/README_CLIENT_SETUP.md")
+        read("projects/vevo/product_name_aliases.json")
         read("scripts/reporting_qa_smoke.py")
+        read("scripts/import_product_expenses_excel.py")
 
         require(
             facebook_ads,
@@ -115,6 +117,11 @@ def main() -> int:
         )
         require(
             export_orders,
+            "_build_product_expense_coverage_qa",
+            "export_orders.py must build product cost coverage QA before report export.",
+        )
+        require(
+            export_orders,
             "\"is_partial\"",
             "export_orders.py must persist partial-data state in source health metadata.",
         )
@@ -170,6 +177,16 @@ def main() -> int:
         )
         require(
             dashboard_modern,
+            "Product cost coverage",
+            "Modern dashboard must surface product cost coverage explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "Default-cost revenue share",
+            "Modern dashboard must expose fallback revenue share explicitly.",
+        )
+        require(
+            dashboard_modern,
             "CM1 / CM2 / CM3 taxonomy",
             "Modern dashboard must surface normalized CM taxonomy explicitly.",
         )
@@ -199,6 +216,7 @@ def main() -> int:
             "generate_invoices.py",
             "scripts/observability_snapshot.py",
             "scripts/scaffold_client.py",
+            "scripts/import_product_expenses_excel.py",
             "scripts/reporting_qa_smoke.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)

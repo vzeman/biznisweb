@@ -101,16 +101,25 @@ Bootstrap entrypoints:
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 - Shipping semantics are now normalized to net shipping in runtime config and dashboard labels, but CM taxonomy naming is still mixed between legacy labels and CM1/CM2/CM3 terms in some views.
 - Full QA assertions are now computed into `data_quality` sidecars and surfaced in dashboard/email/CloudWatch.
+- Lifecycle remains a proxy because BiznisWeb reporting still exposes only current/final status, not full order-status history.
+- Segment CAC/payback is still incomplete as a hard metric because payment fees and order-level attribution are not modeled deeply enough for final B2B/B2C CAC claims.
 - Vevo growth model blocks are now wired into the active dashboard shell:
   - direct vs assisted profitability
   - CRM funnel KPI layer
   - scent-size refill matrix
   - bundle recommender
   - promo / discount quality
+- Lifecycle is now visible as an explicit proxy layer built from final statuses plus tracked excluded payment-failure orders.
+- B2B/B2C analytics now expose CM-based unit economics instead of only a raw revenue/profit split.
+- Product cost coverage QA is now active in source-health and the modern dashboard:
+  - VEVO March 2026 export now passes with `0.00%` fallback revenue share after re-importing the April 2026 Excel costs and restoring title-first / alias-aware expense matching
+  - ROY March 2026 export is `warning` because fallback coverage still touches 3.20% of item revenue and 6.26% of pre-ad item profit
+- VEVO now resolves ambiguous shared-EAN fragrance SKUs by exact item label / compound key before identifier fallback, so Natural vs Premium 500ml/200ml lines no longer collapse onto the same cost.
+- ROY now supports project-configured excluded order statuses for realized revenue filtering, so non-revenue final states can be removed without hardcoded edits in `export_orders.py`.
 
 ## 8) Next Exact Step
 
-- Verify the green `Env Check` run on `main`, then continue with full-history validation of the new Vevo growth sections before refining refill-model methodology.
+- Merge `codex/segment-unit-econ-lifecycle` into `main` through a reviewed PR, then refresh the production reporting runtime so the transferred April features are the only active source of truth.
 
 ## 9) Change Log
 
@@ -211,6 +220,38 @@ Bootstrap entrypoints:
 ### 2026-04-10 (geo confidence guardrails)
 - Added project-level `geo_confidence` settings for VEVO and ROY with separate country/city thresholds.
 - Export layer now computes confidence metadata per country/city:
+
+### 2026-04-11
+- Restored the missing VEVO April 2026 cost pipeline inside the active reporting line instead of the stale side branch:
+  - added repo-local Excel importer `scripts/import_product_expenses_excel.py`,
+  - imported the latest VEVO workbook from `D:\product_expense_rebuild_20250503-20260407 (4).xlsx`,
+  - added `projects/vevo/product_name_aliases.json`,
+  - enabled VEVO `expense_match_mode = title_first` in `projects/vevo/settings.json`,
+  - extended `reporting_core.runtime` to load `expense_match_mode` and alias files,
+  - extended `export_orders.py` to resolve costs by exact label / compound key before shared EAN fallback and to canonicalize VEVO reporting identities for analytics.
+- Verified on fresh March 2026 exports:
+  - VEVO `Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)` now uses `6.14 EUR`,
+  - VEVO `Parfum do prania Vevo Premium No.07 Ylang Absolute (500ml)` now uses `13.9 EUR`,
+  - VEVO `Parfum do prania Vevo Premium No.09 Pure Garden (500ml)` now uses `14.36 EUR`,
+  - VEVO `Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)` resolves via compound key at `6.69 EUR`,
+  - VEVO product cost fallback share is now `0.00%` revenue / `0.00%` profit for March 2026.
+- Verified locally with:
+  - `python -m py_compile export_orders.py reporting_core/runtime.py dashboard_modern.py html_report_generator.py scripts/security_ci.py scripts/import_product_expenses_excel.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts/security_ci.py`
+  - `python scripts/reporting_qa_smoke.py`
+- Transferred the April-side ROY non-revenue order status filtering into the active runtime/config path:
+  - added shared `excluded_order_statuses` runtime support in `reporting_core/runtime.py`,
+  - replaced hardcoded realized-revenue filters in `export_orders.py` with a shared helper,
+  - wired ROY-specific excluded statuses into `projects/roy/settings.json`,
+  - exposed the setting in `templates/reporting-client/settings.template.json`,
+  - aligned failed-payment-only segmentation with the shared failed-payment status list.
+- Verified locally with:
+  - `python -m py_compile export_orders.py reporting_core/runtime.py dashboard_modern.py html_report_generator.py`
+  - `python export_orders.py --project roy --from-date 2026-04-07 --to-date 2026-04-07`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts/reporting_qa_smoke.py`
   - `confidence_status`
   - `confidence_score`
   - `low_sample`
@@ -254,6 +295,31 @@ Bootstrap entrypoints:
   - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py scripts\\security_ci.py`
   - `python scripts\\security_ci.py`
   - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+
+### 2026-04-11 (product cost coverage QA)
+- Added explicit `expense_source` tagging on item rows so item-level costs are classified as:
+  - mapped product SKU
+  - mapped item label
+  - configured overrides
+  - default 1.00 EUR fallback
+- Added `qa.product_expense_coverage` into `source_health` / `data_quality` sidecars with:
+  - fallback row/unit/revenue/profit shares
+  - top fallback items by impact
+  - expense-source mix summary
+- Modern dashboard now renders:
+  - `Product cost coverage`
+  - `Expense source mix`
+  - `Top default-cost items`
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py html_report_generator.py scripts\\reporting_qa_smoke.py scripts\\security_ci.py`
+  - `python scripts\\security_ci.py`
+  - `python scripts\\reporting_qa_smoke.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Current decision on payment fees:
+  - keep `excluded_not_modeled` for now
+  - current `ORDER_QUERY` still does not ingest any payment-fee / payment-method fee field from BiznisWeb
+  - next safe step is to fix product-cost coverage first, then decide whether fees should come from an expanded API payload or a reproducible config layer
   - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
   - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-09`
 - Verification outcome:
@@ -1087,3 +1153,174 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - reporting QA smoke passes locally and is now enforced by CI
 - Next exact step:
   - merge this step to `main`, then implement shared geo confidence scoring and low-sample geo guardrails for both VEVO and ROY.
+
+### 2026-04-11 (B2B/B2C unit economics + lifecycle proxy)
+- Fixed `_build_growth_order_item_frames(...)` so order-level fixed-overhead allocation now uses the same project/runtime daily fixed-cost logic as the main report instead of the old `CFO_FIXED_DAILY_COST_EUR` fallback.
+- Added `excluded_status_orders` tracking in the fetch/filter pipeline so excluded payment-failure orders can be surfaced analytically without polluting reportable revenue exports.
+- Expanded `analyze_b2b_vs_b2c(...)` from a raw split into a segment unit-economics view with:
+  - CM1 / CM2 / CM3 profit
+  - revenue per customer
+  - repeat-customer rate
+  - CM2 / CM3 per order
+  - new vs returning order counts
+- Expanded `analyze_order_status(...)` into two layers:
+  - final-status mix
+  - explicit lifecycle proxy buckets built from final statuses + tracked excluded payment failures
+- Updated the modern dashboard to render the new analytics in the active shell and operations library:
+  - lifecycle proxy chart + table
+  - B2B/B2C unit economics table
+  - B2B/B2C unit-economics library chart
+  - lifecycle proxy library chart
+  - final-status table now shows reportable CM2 per order
+- Verified with:
+  - `python -m py_compile export_orders.py dashboard_modern.py html_report_generator.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts\\reporting_qa_smoke.py`
+- Verification outcome:
+  - VEVO and ROY March 2026 exports regenerate successfully on `codex/segment-unit-econ-lifecycle`
+  - both `report_20260301-20260331.html` outputs contain:
+    - `orderLifecycleProxyChart`
+    - `opsLifecycleProxyChart`
+    - `opsB2bUnitEconomicsChart`
+
+### 2026-04-11 (VEVO/ROY dashboard fixed vs no-fixed profit views)
+- Transferred the April-side fixed / no-fixed profit presentation into the active dashboard line without overwriting the newer CM-based runtime logic.
+- Extended export-side analytics to emit explicit with-fixed and without-fixed economics across the affected drilldowns:
+  - weekday / week-of-month / day-of-month patterns
+  - weather impact
+  - geographic profitability
+  - product margins
+  - customer concentration
+  - ads effectiveness
+  - basket contribution
+  - SKU Pareto
+- Updated the modern dashboard to surface both views side-by-side across the active shell and library:
+  - main revenue / profit charts now show both profit curves
+  - margin charts now separate ex-fixed vs incl-fixed pre/post-ad margins
+  - marketing tables and charts now show spend output with both profit variants
+  - geo, product, customer, basket and SKU Pareto tables now expose both values explicitly
+  - library drilldowns for patterns / products / economics now render both fixed states instead of a single legacy profit alias
+- Verified with:
+  - `python -m py_compile dashboard_modern.py export_orders.py html_report_generator.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts\\reporting_qa_smoke.py`
+- Verification outcome:
+  - VEVO and ROY March 2026 reports regenerate successfully
+  - rendered HTML for both projects now contains explicit `Profit ex fixed` / `Profit incl. fixed` and matching contribution / margin variants across the affected tables and charts
+
+### 2026-04-11 (daily email summaries with current metrics)
+- Transferred the April-side daily email summary content into the active runner without losing the newer QA-status intro added later.
+- Replaced the old unused long-form executive summary body with the newer sectioned summary structure built from current export data:
+  - quick overview
+  - what is good
+  - what weakened
+  - likely cause
+  - next-step recommendation
+  - data note
+- Wired the generated summary back into `build_email_body(...)` so the SES mail now sends:
+  - attachment + covered period
+  - data-quality / QA status
+  - the new metric-driven daily summary
+  - closing system note
+- Verified with:
+  - `python -m py_compile daily_report_runner.py`
+  - direct render of `build_report_summary(...)` + `build_email_body(...)` for VEVO March 2026 artifacts
+  - direct render of `build_report_summary(...)` + `build_email_body(...)` for ROY March 2026 artifacts
+  - `python scripts\\security_ci.py`
+- Verification outcome:
+  - VEVO and ROY summary text now renders from the actual current artifacts
+  - QA warning / partial-data note remains visible at the top of the email
+
+### 2026-04-11 (live dashboard latest-artifact view)
+- Transferred the April-side live dashboard latest-artifact view into the active reporting line without overwriting the newer March/April reporting hardening work.
+- Extended the shared artifact contract so every export now writes:
+  - the range-specific HTML report
+  - `report_latest.html`
+  - the range-specific dashboard payload JSON extracted from the rendered report
+  - `dashboard_payload_latest.json`
+- Updated the modern dashboard HTML renderer so the embedded report payload is emitted in a stable JSON script block that can be extracted safely for the live dashboard API.
+- Updated the daily runner S3 upload flow so the stable latest artifacts are uploaded alongside the dated outputs for direct live-dashboard consumption.
+- Added `live_dashboard_server.py` as a repo-local live viewer that serves:
+  - health endpoint
+  - project list
+  - latest project payload API
+  - report iframe route
+  - live dashboard route with period switching
+- Verified locally with:
+  - `python -m py_compile live_dashboard_server.py export_orders.py dashboard_modern.py daily_report_runner.py reporting_core\\contracts.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - localhost smoke checks:
+    - `GET /health`
+    - `GET /api/vevo/latest?period=full`
+    - `GET /api/roy/latest?period=full`
+    - `GET /dashboard/vevo?period=full`
+    - `GET /dashboard/roy?period=full`
+- Verification outcome:
+  - live dashboard routes now render against the newest VEVO and ROY artifacts
+  - both project dashboards expose the expected `data-marker=\"live-dashboard-app\"`
+  - stable latest report and payload artifacts are now produced by the export pipeline instead of depending on ad hoc local files
+
+### 2026-04-11 (ad incrementality analysis)
+- Transferred the April-side ad incrementality analysis into the active reporting line without reverting the newer QA, CM and cost-coverage work.
+- Replaced the old simplified ads-effectiveness fallback in `export_orders.py` with a richer daily decision model that now:
+  - builds a daily ads dataset from aggregated report outputs
+  - carries new vs returning split into the ads layer
+  - compares ad-active vs baseline days when ad-off days exist
+  - falls back to higher-spend vs lower-spend comparisons when the account is always on
+  - produces verdict, confidence and incremental spend/revenue/profit/CAC metrics
+- Extended the modern dashboard payload and HTML report with:
+  - `incrementality_primary`
+  - `incrementality_rows`
+  - `Ad impact verdict`
+  - `Incrementality comparison table`
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py live_dashboard_server.py daily_report_runner.py reporting_core\\contracts.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts\\reporting_qa_smoke.py`
+  - `python scripts\\security_ci.py`
+  - localhost live snapshot check:
+    - `GET /health`
+    - `GET /api/vevo/latest?period=full`
+    - `GET /api/roy/latest?period=full`
+- Verification outcome:
+  - VEVO March 2026 now exposes two higher-spend-vs-lower-spend incrementality views with primary verdict `Scale`
+  - ROY March 2026 now exposes two higher-spend-vs-lower-spend incrementality views with primary verdict `Hold / test more`
+  - live API snapshots now carry the incrementality payload used by the read-only live dashboard
+
+### 2026-04-11 (full-history regeneration + refill cohort hardening)
+- Regenerated the active full-history VEVO and ROY reports on `codex/segment-unit-econ-lifecycle` using the current production-candidate reporting code:
+  - VEVO `2025-05-03 .. 2026-04-10`
+  - ROY `2025-09-24 .. 2026-04-10`
+- Hardened `analyze_refill_cohorts(...)` in `export_orders.py` so VEVO full-history exports no longer crash when a cohort slice has no second-order match rows.
+- The refill cohort merge now backfills the missing second-order columns with null/false defaults before downstream timing and window calculations.
+- Fresh full-history artifacts now exist locally for both projects:
+  - `data/vevo/report_20250503-20260410.html`
+  - `data/roy/report_20250924-20260410.html`
+  - matching `report_latest.html`, `dashboard_payload_*.json`, `data_quality_*.json`, and CSV exports for both projects
+- Verified locally with:
+  - `python -m py_compile export_orders.py`
+  - `python export_orders.py --project vevo --from-date 2025-05-03 --to-date 2026-04-10`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-10`
+- Verification outcome:
+  - VEVO full-history export now completes successfully despite empty second-order cohort slices
+  - ROY full-history export still completes successfully on the same branch
+
+### 2026-04-11 (Python 3.11 CI syntax compatibility)
+- Fixed a GitHub Actions merge blocker in `dashboard_modern.py` that only surfaced on CI Python 3.11.
+- Root cause:
+  - the large dashboard HTML f-string still contained three inline fallback expressions with escaped quotes,
+  - Python 3.12 accepted the file locally, but CI Python 3.11 rejected it with `SyntaxError: f-string expression part cannot include a backslash`.
+- Moved the affected table-body builders into precomputed HTML variables:
+  - campaign attribution estimate table
+  - same-item purchase frequency table
+  - cohort payback table
+- Verified locally with:
+  - `python -m py_compile dashboard_modern.py export_orders.py daily_report_runner.py html_report_generator.py live_dashboard_server.py`
+  - `python scripts/reporting_qa_smoke.py`
+- Verification outcome:
+  - local syntax checks pass again
+  - the PR branch is now ready for GitHub CI to re-run on a Python-3.11-compatible dashboard renderer
