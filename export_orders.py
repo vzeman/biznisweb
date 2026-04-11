@@ -1231,6 +1231,10 @@ class BizniWebExporter:
         config = self.project_settings.get("bundle_accessory_model") or {}
         return config if isinstance(config, dict) else {}
 
+    def _product_family_groups_config(self) -> List[Dict[str, Any]]:
+        groups = self.project_settings.get("product_family_groups") or []
+        return groups if isinstance(groups, list) else []
+
     def _match_named_group(self, label: Any, groups: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
         for group in groups or []:
             if self._matches_patterns(str(label or ""), group.get("patterns") or []):
@@ -1239,6 +1243,238 @@ class BizniWebExporter:
                 if group_key:
                     return group_key, group_label
         return None, None
+
+    @staticmethod
+    def _source_proxy_from_spend(fb_spend: Any, google_spend: Any) -> Tuple[str, str]:
+        fb_value = float(fb_spend or 0.0)
+        google_value = float(google_spend or 0.0)
+        if fb_value > 0 and google_value > 0:
+            return "mixed_paid_day", "Mixed paid day"
+        if fb_value > 0:
+            return "facebook_paid_day", "Facebook-paid day"
+        if google_value > 0:
+            return "google_paid_day", "Google-paid day"
+        return "organic_unknown_day", "Organic / unknown day"
+
+    def analyze_acquisition_source_product_family_cube(
+        self,
+        orders_df: pd.DataFrame,
+        item_df: pd.DataFrame,
+        customer_orders: pd.DataFrame,
+        revenue_col: str,
+    ) -> dict:
+        family_groups = self._product_family_groups_config()
+        if not family_groups or orders_df.empty or item_df.empty or customer_orders.empty:
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        required_item_columns = {"order_num", "item_label", "item_total_without_tax"}
+        if not required_item_columns.issubset(item_df.columns):
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        classified_rows = []
+        for row in item_df[["order_num", "item_label", "item_total_without_tax"]].itertuples(index=False):
+            family_key, family_label = self._match_named_group(row.item_label, family_groups)
+            if not family_key:
+                continue
+            classified_rows.append(
+                {
+                    "order_num": row.order_num,
+                    "product_family_key": family_key,
+                    "product_family_label": family_label,
+                    "item_total_without_tax": float(row.item_total_without_tax or 0.0),
+                }
+            )
+
+        if not classified_rows:
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        classified_df = pd.DataFrame(classified_rows)
+        family_by_order = (
+            classified_df.groupby(["order_num", "product_family_key", "product_family_label"], as_index=False)
+            .agg(order_family_revenue=("item_total_without_tax", "sum"))
+            .sort_values(["order_num", "order_family_revenue"], ascending=[True, False])
+            .drop_duplicates(subset=["order_num"])
+        )
+        order_family_map = family_by_order.set_index("order_num")[["product_family_key", "product_family_label"]]
+
+        order_source_frame = orders_df[
+            [
+                "order_num",
+                "customer_email",
+                "purchase_datetime",
+                revenue_col,
+                "pre_ad_contribution",
+                "fb_ads_daily_spend",
+                "google_ads_daily_spend",
+            ]
+        ].drop_duplicates(subset=["order_num"]).copy()
+        order_source_frame = order_source_frame.merge(order_family_map, left_on="order_num", right_index=True, how="left")
+        order_source_frame["product_family_key"] = order_source_frame["product_family_key"].fillna("other_unclassified")
+        order_source_frame["product_family_label"] = order_source_frame["product_family_label"].fillna("Other / unclassified")
+        proxy_pairs = order_source_frame.apply(
+            lambda row: self._source_proxy_from_spend(row.get("fb_ads_daily_spend"), row.get("google_ads_daily_spend")),
+            axis=1,
+        )
+        order_source_frame["source_proxy_key"] = proxy_pairs.apply(lambda value: value[0])
+        order_source_frame["source_proxy_label"] = proxy_pairs.apply(lambda value: value[1])
+
+        first_orders = (
+            order_source_frame.sort_values(["customer_email", "purchase_datetime"])
+            .drop_duplicates(subset=["customer_email"], keep="first")
+            .copy()
+        )
+        first_orders["first_order_revenue"] = first_orders[revenue_col]
+        first_orders["first_order_contribution"] = first_orders["pre_ad_contribution"]
+
+        customer_enriched = customer_orders.merge(
+            first_orders[
+                [
+                    "customer_email",
+                    "source_proxy_key",
+                    "source_proxy_label",
+                    "product_family_key",
+                    "product_family_label",
+                ]
+            ],
+            on="customer_email",
+            how="left",
+        )
+
+        def _repeat_within_days(group: pd.DataFrame, days: int) -> int:
+            return int(((group["days_since_first"] > 0) & (group["days_since_first"] <= days)).any())
+
+        customer_level_rows = []
+        for customer_email, group in customer_enriched.groupby("customer_email"):
+            first_row = group.sort_values("purchase_datetime").iloc[0]
+            window_90 = group[group["days_since_first"] <= 90].copy()
+            customer_level_rows.append(
+                {
+                    "customer_email": customer_email,
+                    "source_proxy_key": first_row.get("source_proxy_key"),
+                    "source_proxy_label": first_row.get("source_proxy_label"),
+                    "product_family_key": first_row.get("product_family_key"),
+                    "product_family_label": first_row.get("product_family_label"),
+                    "first_order_revenue": float(first_row.get("first_order_revenue") or 0.0),
+                    "first_order_contribution": float(first_row.get("first_order_contribution") or 0.0),
+                    "orders_total": int(group["order_num"].nunique()),
+                    "repeat_60d_flag": _repeat_within_days(group, 60),
+                    "repeat_90d_flag": _repeat_within_days(group, 90),
+                    "revenue_ltv_90d": float(window_90[revenue_col].sum()),
+                    "contribution_ltv_90d": float(window_90["pre_ad_contribution"].sum()),
+                }
+            )
+
+        customer_level = pd.DataFrame(customer_level_rows)
+        if customer_level.empty:
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        cube_rows = (
+            customer_level.groupby(
+                ["source_proxy_key", "source_proxy_label", "product_family_key", "product_family_label"],
+                as_index=False,
+            )
+            .agg(
+                new_customers=("customer_email", "nunique"),
+                first_order_revenue=("first_order_revenue", "sum"),
+                first_order_contribution=("first_order_contribution", "sum"),
+                repeat_60d_customers=("repeat_60d_flag", "sum"),
+                repeat_90d_customers=("repeat_90d_flag", "sum"),
+                revenue_ltv_90d=("revenue_ltv_90d", "sum"),
+                contribution_ltv_90d=("contribution_ltv_90d", "sum"),
+            )
+        )
+        cube_rows["first_order_aov"] = cube_rows.apply(
+            lambda row: (row["first_order_revenue"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["first_order_contribution_per_order"] = cube_rows.apply(
+            lambda row: (row["first_order_contribution"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["repeat_60d_rate_pct"] = cube_rows.apply(
+            lambda row: (row["repeat_60d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["repeat_90d_rate_pct"] = cube_rows.apply(
+            lambda row: (row["repeat_90d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["revenue_ltv_90d_per_customer"] = cube_rows.apply(
+            lambda row: (row["revenue_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["contribution_ltv_90d_per_customer"] = cube_rows.apply(
+            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows = cube_rows.sort_values(
+            ["new_customers", "contribution_ltv_90d_per_customer", "repeat_90d_rate_pct"],
+            ascending=[False, False, False],
+        ).reset_index(drop=True)
+
+        source_rows = (
+            cube_rows.groupby(["source_proxy_key", "source_proxy_label"], as_index=False)
+            .agg(
+                new_customers=("new_customers", "sum"),
+                revenue_ltv_90d=("revenue_ltv_90d", "sum"),
+                contribution_ltv_90d=("contribution_ltv_90d", "sum"),
+            )
+        )
+        source_rows["contribution_ltv_90d_per_customer"] = source_rows.apply(
+            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+
+        family_rows = (
+            cube_rows.groupby(["product_family_key", "product_family_label"], as_index=False)
+            .agg(
+                new_customers=("new_customers", "sum"),
+                first_order_revenue=("first_order_revenue", "sum"),
+                contribution_ltv_90d=("contribution_ltv_90d", "sum"),
+                repeat_90d_customers=("repeat_90d_customers", "sum"),
+            )
+        )
+        family_rows["repeat_90d_rate_pct"] = family_rows.apply(
+            lambda row: (row["repeat_90d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        family_rows["contribution_ltv_90d_per_customer"] = family_rows.apply(
+            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+
+        return {
+            "summary": {
+                "proxy_method": "first_order_day_paid_spend_presence",
+                "source_count": int(source_rows["source_proxy_key"].nunique()) if not source_rows.empty else 0,
+                "family_count": int(family_rows["product_family_key"].nunique()) if not family_rows.empty else 0,
+                "cube_rows": int(len(cube_rows)),
+                "new_customers_covered": int(cube_rows["new_customers"].sum()) if not cube_rows.empty else 0,
+            },
+            "cube_rows": cube_rows,
+            "source_rows": source_rows.sort_values("new_customers", ascending=False).reset_index(drop=True),
+            "family_rows": family_rows.sort_values("new_customers", ascending=False).reset_index(drop=True),
+        }
 
     def analyze_bundle_accessory_model(
         self,
