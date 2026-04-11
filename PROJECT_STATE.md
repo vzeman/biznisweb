@@ -112,12 +112,13 @@ Bootstrap entrypoints:
 - Lifecycle is now visible as an explicit proxy layer built from final statuses plus tracked excluded payment-failure orders.
 - B2B/B2C analytics now expose CM-based unit economics instead of only a raw revenue/profit split.
 - Product cost coverage QA is now active in source-health and the modern dashboard:
-  - VEVO March 2026 export is `critical` because default 1.00 EUR fallback covers 20.34% of item revenue and 22.09% of pre-ad item profit
+  - VEVO March 2026 export now passes with `0.00%` fallback revenue share after re-importing the April 2026 Excel costs and restoring title-first / alias-aware expense matching
   - ROY March 2026 export is `warning` because fallback coverage still touches 3.20% of item revenue and 6.26% of pre-ad item profit
+- VEVO now resolves ambiguous shared-EAN fragrance SKUs by exact item label / compound key before identifier fallback, so Natural vs Premium 500ml/200ml lines no longer collapse onto the same cost.
 
 ## 8) Next Exact Step
 
-- Backfill the highest-impact `product_expenses.json` gaps highlighted by the new QA (starting with VEVO sample/discovery sets and ROY fallback electronics / SD SKUs), then decide whether payment-fee hardening should come from an expanded BiznisWeb query or a reproducible config-based fee model.
+- Merge the restored VEVO April-cost pipeline into the production path (`main`) and then continue with the remaining ROY fallback-cost cleanup / payment-fee hardening.
 
 ## 9) Change Log
 
@@ -218,6 +219,27 @@ Bootstrap entrypoints:
 ### 2026-04-10 (geo confidence guardrails)
 - Added project-level `geo_confidence` settings for VEVO and ROY with separate country/city thresholds.
 - Export layer now computes confidence metadata per country/city:
+
+### 2026-04-11
+- Restored the missing VEVO April 2026 cost pipeline inside the active reporting line instead of the stale side branch:
+  - added repo-local Excel importer `scripts/import_product_expenses_excel.py`,
+  - imported the latest VEVO workbook from `D:\product_expense_rebuild_20250503-20260407 (4).xlsx`,
+  - added `projects/vevo/product_name_aliases.json`,
+  - enabled VEVO `expense_match_mode = title_first` in `projects/vevo/settings.json`,
+  - extended `reporting_core.runtime` to load `expense_match_mode` and alias files,
+  - extended `export_orders.py` to resolve costs by exact label / compound key before shared EAN fallback and to canonicalize VEVO reporting identities for analytics.
+- Verified on fresh March 2026 exports:
+  - VEVO `Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)` now uses `6.14 EUR`,
+  - VEVO `Parfum do prania Vevo Premium No.07 Ylang Absolute (500ml)` now uses `13.9 EUR`,
+  - VEVO `Parfum do prania Vevo Premium No.09 Pure Garden (500ml)` now uses `14.36 EUR`,
+  - VEVO `Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)` resolves via compound key at `6.69 EUR`,
+  - VEVO product cost fallback share is now `0.00%` revenue / `0.00%` profit for March 2026.
+- Verified locally with:
+  - `python -m py_compile export_orders.py reporting_core/runtime.py dashboard_modern.py html_report_generator.py scripts/security_ci.py scripts/import_product_expenses_excel.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts/security_ci.py`
+  - `python scripts/reporting_qa_smoke.py`
   - `confidence_status`
   - `confidence_score`
   - `low_sample`
