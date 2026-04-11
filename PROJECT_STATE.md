@@ -115,10 +115,11 @@ Bootstrap entrypoints:
   - VEVO March 2026 export now passes with `0.00%` fallback revenue share after re-importing the April 2026 Excel costs and restoring title-first / alias-aware expense matching
   - ROY March 2026 export is `warning` because fallback coverage still touches 3.20% of item revenue and 6.26% of pre-ad item profit
 - VEVO now resolves ambiguous shared-EAN fragrance SKUs by exact item label / compound key before identifier fallback, so Natural vs Premium 500ml/200ml lines no longer collapse onto the same cost.
+- ROY now supports project-configured excluded order statuses for realized revenue filtering, so non-revenue final states can be removed without hardcoded edits in `export_orders.py`.
 
 ## 8) Next Exact Step
 
-- Merge the restored VEVO April-cost pipeline into the production path (`main`) and then continue with the remaining ROY fallback-cost cleanup / payment-fee hardening.
+- Transfer the VEVO dashboard-wide fixed / no-fixed profit views from the April side branch into the active reporting line and verify the rendered report.
 
 ## 9) Change Log
 
@@ -239,6 +240,17 @@ Bootstrap entrypoints:
   - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
   - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
   - `python scripts/security_ci.py`
+  - `python scripts/reporting_qa_smoke.py`
+- Transferred the April-side ROY non-revenue order status filtering into the active runtime/config path:
+  - added shared `excluded_order_statuses` runtime support in `reporting_core/runtime.py`,
+  - replaced hardcoded realized-revenue filters in `export_orders.py` with a shared helper,
+  - wired ROY-specific excluded statuses into `projects/roy/settings.json`,
+  - exposed the setting in `templates/reporting-client/settings.template.json`,
+  - aligned failed-payment-only segmentation with the shared failed-payment status list.
+- Verified locally with:
+  - `python -m py_compile export_orders.py reporting_core/runtime.py dashboard_modern.py html_report_generator.py`
+  - `python export_orders.py --project roy --from-date 2026-04-07 --to-date 2026-04-07`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
   - `python scripts/reporting_qa_smoke.py`
   - `confidence_status`
   - `confidence_score`

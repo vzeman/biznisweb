@@ -113,6 +113,7 @@ ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 
 MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
 MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15% product margin
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
+EXCLUDED_ORDER_STATUSES: List[str] = []  # Optional project-specific order statuses excluded from realized revenue
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
 PREFER_MANUAL_ADS_TOTALS = False
@@ -191,6 +192,28 @@ LEGACY_VEVO_PRODUCT_EXPENSES = {
     'H-A5F3BBB3': 0,          # Poistenie proti rozbitiu
 }
 PRODUCT_EXPENSES = dict(LEGACY_VEVO_PRODUCT_EXPENSES)
+DEFAULT_EXCLUDED_ORDER_STATUSES = [
+    'Storno',
+    'Platba online - platnosť vypršala',
+    'Platba online - platba zamietnutá',
+    'Čaká na úhradu',
+    'GoPay - platebni metoda potvrzena',
+]
+FAILED_PAYMENT_STATUSES = [
+    'Platba online - platnosť vypršala',
+    'Platba online - platba zamietnutá',
+]
+
+
+def get_excluded_order_statuses() -> List[str]:
+    seen = set()
+    ordered: List[str] = []
+    for status_name in [*DEFAULT_EXCLUDED_ORDER_STATUSES, *EXCLUDED_ORDER_STATUSES]:
+        normalized = str(status_name).strip()
+        if normalized and normalized not in seen:
+            ordered.append(normalized)
+            seen.add(normalized)
+    return ordered
 
 def parse_input_date(value: str) -> datetime:
     """Parse common CLI/env date formats for safer project onboarding."""
@@ -2404,13 +2427,7 @@ class BizniWebExporter:
         logger.info(f"Filtered to {len(date_filtered_orders)} orders within date range for month")
 
         # Filter out orders with excluded statuses
-        excluded_statuses = [
-            'Storno',
-            'Platba online - platnosĹĄ vyprĹˇala',
-            'Platba online - platba zamietnutĂˇ',
-            'ÄŚakĂˇ na Ăşhradu',
-            'GoPay - platebni metoda potvrzena'
-        ]
+        excluded_statuses = get_excluded_order_statuses()
 
         filtered_orders = []
         excluded_counts = {}
@@ -2845,19 +2862,10 @@ class BizniWebExporter:
             orders: List of orders to filter
             track_excluded: If True, store excluded orders for later segmentation analysis
         """
-        excluded_statuses = [
-            'Storno',
-            'Platba online - platnosĹĄ vyprĹˇala',
-            'Platba online - platba zamietnutĂˇ',
-            'ÄŚakĂˇ na Ăşhradu',
-            'GoPay - platebni metoda potvrzena'
-        ]
+        excluded_statuses = get_excluded_order_statuses()
 
         # Statuses for failed payment segmentation (subset of excluded)
-        failed_payment_statuses = [
-            'Platba online - platnosĹĄ vyprĹˇala',
-            'Platba online - platba zamietnutĂˇ'
-        ]
+        failed_payment_statuses = FAILED_PAYMENT_STATUSES
 
         filtered_orders = []
         for order in orders:
@@ -3045,13 +3053,7 @@ class BizniWebExporter:
         logger.info(f"Filtered to {len(date_filtered_orders)} orders within date range")
 
         # Filter out orders with excluded statuses
-        excluded_statuses = [
-            'Storno',
-            'Platba online - platnosĹĄ vyprĹˇala',
-            'Platba online - platba zamietnutĂˇ',
-            'ÄŚakĂˇ na Ăşhradu',
-            'GoPay - platebni metoda potvrzena'
-        ]
+        excluded_statuses = get_excluded_order_statuses()
 
         filtered_orders = []
         excluded_counts = {}
@@ -8818,7 +8820,7 @@ class BizniWebExporter:
 
         if all_orders_raw:
             # Extract customer emails from failed payment orders
-            failed_statuses = ['Platba online - platnosĹĄ vyprĹˇala', 'Platba online - platba zamietnutĂˇ']
+            failed_statuses = FAILED_PAYMENT_STATUSES
 
             failed_orders = []
             all_customer_orders = {}  # Track all orders per customer email
@@ -8865,7 +8867,7 @@ class BizniWebExporter:
 
         segments['failed_payment_only'] = {
             'data': failed_payment_customers,
-            'description': 'ZĂˇkaznĂ­ci, ktorĂ­ nedokonÄŤili Ĺľiadnu objednĂˇvku - vĹˇetky ich objednĂˇvky majĂş stav "Platba online - platnosĹĄ vyprĹˇala" alebo "Platba online - platba zamietnutĂˇ"',
+            'description': 'Zákazníci, ktorí nedokončili žiadnu objednávku - všetky ich objednávky skončili zlyhanou online platbou',
             'description_en': 'Customers who never completed any order - all their orders have failed payment status',
             'count': len(failed_payment_customers),
             'email_purpose': 'Recovery - pomoc s dokonÄŤenĂ­m objednĂˇvky',

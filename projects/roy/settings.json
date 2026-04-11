@@ -7,6 +7,12 @@
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 4900,
+  "excluded_order_statuses": [
+    "Stripe - cancelled",
+    "Stripe - expired",
+    "Vrátené",
+    "Dobropis"
+  ],
   "weather": {
     "enabled": true,
     "timezone": "Europe/Bratislava",
