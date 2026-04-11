@@ -89,7 +89,9 @@ def _ma(values: List[float], window: int) -> List[Optional[float]]:
 def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     dates = date_agg["date"].astype(str).tolist()
     revenue = [_num(v) for v in date_agg["total_revenue"].tolist()]
-    profit = [_num(v) for v in date_agg["net_profit"].tolist()]
+    profit_without_fixed = [_num(v) for v in date_agg.get("contribution_profit", pd.Series([0] * len(date_agg))).tolist()]
+    profit_with_fixed = [_num(v) for v in date_agg.get("net_profit", pd.Series([0] * len(date_agg))).tolist()]
+    profit = profit_with_fixed
     orders = [int(round(_num(v))) for v in date_agg["unique_orders"].tolist()]
     aov = [round((rev / ords) if ords > 0 else 0.0, 4) for rev, ords in zip(revenue, orders)]
     fb_ads = [_num(v) for v in date_agg.get("fb_ads_spend", pd.Series([0] * len(date_agg))).tolist()]
@@ -103,10 +105,32 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     avg_items = [round((itm / ords) if ords > 0 else 0.0, 4) for itm, ords in zip(items, orders)]
     total_ads = [round(f + g, 4) for f, g in zip(fb_ads, google_ads)]
     roas = [round((rev / ads) if ads > 0 else 0.0, 4) for rev, ads in zip(revenue, total_ads)]
-    pre_margin = [_num(v) for v in date_agg.get("pre_ad_contribution_margin_pct", pd.Series([0] * len(date_agg))).tolist()]
-    post_margin = [_num(v) for v in date_agg.get("post_ad_contribution_margin_pct", pd.Series([0] * len(date_agg))).tolist()]
-    pre_contribution_per_order = [_num(v) for v in date_agg.get("pre_ad_contribution_profit_per_order", pd.Series([0] * len(date_agg))).tolist()]
-    post_contribution_per_order = [_num(v) for v in date_agg.get("contribution_profit_per_order", pd.Series([0] * len(date_agg))).tolist()]
+    pre_margin_without_fixed = [_num(v) for v in date_agg.get("pre_ad_contribution_margin_pct", pd.Series([0] * len(date_agg))).tolist()]
+    pre_margin_with_fixed = [
+        round((((p - f) / rev) * 100), 4) if rev > 0 else 0.0
+        for p, f, rev in zip(
+            date_agg.get("pre_ad_contribution_profit", pd.Series([0] * len(date_agg))).tolist(),
+            fixed,
+            revenue,
+        )
+    ]
+    post_margin_without_fixed = [_num(v) for v in date_agg.get("post_ad_contribution_margin_pct", pd.Series([0] * len(date_agg))).tolist()]
+    post_margin_with_fixed = [round(((prof / rev) * 100), 4) if rev > 0 else 0.0 for prof, rev in zip(profit_with_fixed, revenue)]
+    pre_margin = pre_margin_with_fixed
+    post_margin = post_margin_with_fixed
+    pre_contribution_per_order_without_fixed = [_num(v) for v in date_agg.get("pre_ad_contribution_profit_per_order", pd.Series([0] * len(date_agg))).tolist()]
+    pre_contribution_per_order_with_fixed = [
+        round(((p - f) / ords), 4) if ords > 0 else 0.0
+        for p, f, ords in zip(
+            date_agg.get("pre_ad_contribution_profit", pd.Series([0] * len(date_agg))).tolist(),
+            fixed,
+            orders,
+        )
+    ]
+    post_contribution_per_order_without_fixed = [_num(v) for v in date_agg.get("contribution_profit_per_order", pd.Series([0] * len(date_agg))).tolist()]
+    post_contribution_per_order_with_fixed = [round((prof / ords), 4) if ords > 0 else 0.0 for prof, ords in zip(profit_with_fixed, orders)]
+    pre_contribution_per_order = pre_contribution_per_order_with_fixed
+    post_contribution_per_order = post_contribution_per_order_with_fixed
     roi = [_num(v) for v in date_agg.get("roi_percent", pd.Series([0] * len(date_agg))).tolist()]
     gross_margin = [
         round(((rev - cost) / rev * 100) if rev > 0 else 0.0, 4)
@@ -124,6 +148,8 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     return {
         "dates": dates,
         "revenue": revenue,
+        "profit_without_fixed": profit_without_fixed,
+        "profit_with_fixed": profit_with_fixed,
         "profit": profit,
         "orders": orders,
         "aov": aov,
@@ -138,13 +164,23 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
         "google_ads": google_ads,
         "total_ads": total_ads,
         "roas": roas,
+        "pre_margin_without_fixed": pre_margin_without_fixed,
+        "pre_margin_with_fixed": pre_margin_with_fixed,
         "pre_margin": pre_margin,
+        "post_margin_without_fixed": post_margin_without_fixed,
+        "post_margin_with_fixed": post_margin_with_fixed,
         "post_margin": post_margin,
+        "pre_contribution_per_order_without_fixed": pre_contribution_per_order_without_fixed,
+        "pre_contribution_per_order_with_fixed": pre_contribution_per_order_with_fixed,
         "pre_contribution_per_order": pre_contribution_per_order,
+        "post_contribution_per_order_without_fixed": post_contribution_per_order_without_fixed,
+        "post_contribution_per_order_with_fixed": post_contribution_per_order_with_fixed,
         "post_contribution_per_order": post_contribution_per_order,
         "roi": roi,
         "gross_margin": gross_margin,
         "revenue_ma7": _ma(revenue, 7),
+        "profit_without_fixed_ma7": _ma(profit_without_fixed, 7),
+        "profit_with_fixed_ma7": _ma(profit_with_fixed, 7),
         "profit_ma7": _ma(profit, 7),
         "orders_ma7": _ma([float(v) for v in orders], 7),
         "aov_ma7": _ma(aov, 7),
@@ -553,13 +589,13 @@ def generate_modern_dashboard(
         limit=8,
     )
     products = _top_rows(
-        product_margins.sort_values(["profit", "revenue"], ascending=[False, False]) if product_margins is not None and not product_margins.empty else product_margins,
-        ["product", "sku", "orders", "revenue", "profit", "margin_pct"],
+        product_margins.sort_values(["profit_with_fixed", "revenue"], ascending=[False, False]) if product_margins is not None and not product_margins.empty else product_margins,
+        ["product", "sku", "orders", "revenue", "profit_without_fixed", "profit_with_fixed", "margin_without_fixed_pct", "margin_with_fixed_pct"],
         limit=8,
     )
     product_margin_chart_rows = _top_rows(
-        product_margins.sort_values(["margin_pct", "profit"], ascending=[False, False]) if product_margins is not None and not product_margins.empty else product_margins,
-        ["product", "margin_pct", "profit", "revenue"],
+        product_margins.sort_values(["margin_with_fixed_pct", "profit_with_fixed"], ascending=[False, False]) if product_margins is not None and not product_margins.empty else product_margins,
+        ["product", "margin_without_fixed_pct", "margin_with_fixed_pct", "profit_without_fixed", "profit_with_fixed", "revenue"],
         limit=10,
     )
     trend_rows = _top_rows(
@@ -578,8 +614,16 @@ def generate_modern_dashboard(
             "country",
             "orders",
             "revenue",
+            "contribution_profit_without_fixed",
+            "contribution_profit_without_fixed_guarded",
+            "contribution_profit_with_fixed",
+            "contribution_profit_with_fixed_guarded",
             "contribution_profit",
             "contribution_profit_guarded",
+            "contribution_margin_without_fixed_pct",
+            "contribution_margin_without_fixed_pct_guarded",
+            "contribution_margin_with_fixed_pct",
+            "contribution_margin_with_fixed_pct_guarded",
             "contribution_margin_pct",
             "contribution_margin_pct_guarded",
             "fb_cpo",
@@ -613,7 +657,7 @@ def generate_modern_dashboard(
     embedded_period_reports = embedded_period_reports or {}
     customer_top_rows = _top_rows(
         (customer_concentration or {}).get("top_10_customers"),
-        ["customer", "orders", "revenue", "profit", "revenue_pct"],
+        ["customer", "orders", "revenue", "profit_without_fixed", "profit_with_fixed", "revenue_pct"],
         limit=8,
     )
     cohort_summary = (cohort_analysis or {}).get("summary", {}) if cohort_analysis else {}
@@ -668,23 +712,29 @@ def generate_modern_dashboard(
             "labels": day_of_week_analysis["day_name"].astype(str).tolist(),
             "orders": [round(_num(v), 2) for v in day_of_week_analysis["orders"].tolist()],
             "revenue": [round(_num(v), 2) for v in day_of_week_analysis["revenue"].tolist()],
+            "profit_without_fixed": [round(_num(v), 2) for v in day_of_week_analysis.get("profit_without_fixed", pd.Series([0] * len(day_of_week_analysis))).tolist()],
+            "profit_with_fixed": [round(_num(v), 2) for v in day_of_week_analysis.get("profit_with_fixed", pd.Series([0] * len(day_of_week_analysis))).tolist()],
             "profit": [round(_num(v), 2) for v in day_of_week_analysis.get("profit", pd.Series([0] * len(day_of_week_analysis))).tolist()],
             "aov": [round(_num(v), 2) for v in day_of_week_analysis.get("aov", pd.Series([0] * len(day_of_week_analysis))).tolist()],
             "fb_spend": [round(_num(v), 2) for v in day_of_week_analysis.get("fb_spend", pd.Series([0] * len(day_of_week_analysis))).tolist()],
         }
     else:
-        day_of_week = {"labels": [], "orders": [], "revenue": [], "profit": [], "aov": [], "fb_spend": []}
+        day_of_week = {"labels": [], "orders": [], "revenue": [], "profit_without_fixed": [], "profit_with_fixed": [], "profit": [], "aov": [], "fb_spend": []}
 
     if week_of_month_analysis is not None and not week_of_month_analysis.empty:
         week_of_month = {
             "labels": week_of_month_analysis["week_label"].astype(str).tolist(),
             "revenue": [round(_num(v), 2) for v in week_of_month_analysis["revenue"].tolist()],
+            "profit_without_fixed": [round(_num(v), 2) for v in week_of_month_analysis.get("profit_without_fixed", pd.Series([0] * len(week_of_month_analysis))).tolist()],
+            "profit_with_fixed": [round(_num(v), 2) for v in week_of_month_analysis.get("profit_with_fixed", pd.Series([0] * len(week_of_month_analysis))).tolist()],
             "profit": [round(_num(v), 2) for v in week_of_month_analysis["profit"].tolist()],
             "avg_daily_revenue": [round(_num(v), 2) for v in week_of_month_analysis["avg_daily_revenue"].tolist()],
+            "avg_daily_profit_without_fixed": [round(_num(v), 2) for v in week_of_month_analysis.get("avg_daily_profit_without_fixed", pd.Series([0] * len(week_of_month_analysis))).tolist()],
+            "avg_daily_profit_with_fixed": [round(_num(v), 2) for v in week_of_month_analysis.get("avg_daily_profit_with_fixed", pd.Series([0] * len(week_of_month_analysis))).tolist()],
             "avg_daily_profit": [round(_num(v), 2) for v in week_of_month_analysis["avg_daily_profit"].tolist()],
         }
     else:
-        week_of_month = {"labels": [], "revenue": [], "profit": [], "avg_daily_revenue": [], "avg_daily_profit": []}
+        week_of_month = {"labels": [], "revenue": [], "profit_without_fixed": [], "profit_with_fixed": [], "profit": [], "avg_daily_revenue": [], "avg_daily_profit_without_fixed": [], "avg_daily_profit_with_fixed": [], "avg_daily_profit": []}
 
     if day_of_month_analysis is not None and not day_of_month_analysis.empty:
         day_of_month = {
@@ -692,10 +742,12 @@ def generate_modern_dashboard(
             "orders": [round(_num(v), 2) for v in day_of_month_analysis["orders"].tolist()],
             "revenue": [round(_num(v), 2) for v in day_of_month_analysis["revenue"].tolist()],
             "avg_revenue": [round(_num(v), 2) for v in day_of_month_analysis["avg_revenue_per_occurrence"].tolist()],
+            "avg_profit_without_fixed": [round(_num(v), 2) for v in day_of_month_analysis.get("avg_profit_per_occurrence_without_fixed", pd.Series([0] * len(day_of_month_analysis))).tolist()],
+            "avg_profit_with_fixed": [round(_num(v), 2) for v in day_of_month_analysis.get("avg_profit_per_occurrence_with_fixed", pd.Series([0] * len(day_of_month_analysis))).tolist()],
             "avg_profit": [round(_num(v), 2) for v in day_of_month_analysis["avg_profit_per_occurrence"].tolist()],
         }
     else:
-        day_of_month = {"labels": [], "orders": [], "revenue": [], "avg_revenue": [], "avg_profit": []}
+        day_of_month = {"labels": [], "orders": [], "revenue": [], "avg_revenue": [], "avg_profit_without_fixed": [], "avg_profit_with_fixed": [], "avg_profit": []}
 
     weather_daily = (weather_analysis or {}).get("daily")
     weather_bucket = (weather_analysis or {}).get("bucket_summary")
@@ -703,21 +755,25 @@ def generate_modern_dashboard(
         weather_payload = {
             "dates": pd.to_datetime(weather_daily["date"]).dt.strftime("%Y-%m-%d").tolist(),
             "revenue": [round(_num(v), 2) for v in weather_daily["total_revenue"].tolist()],
+            "profit_without_fixed": [round(_num(v), 2) for v in weather_daily.get("profit_without_fixed", pd.Series([0] * len(weather_daily))).tolist()],
+            "profit_with_fixed": [round(_num(v), 2) for v in weather_daily.get("profit_with_fixed", pd.Series([0] * len(weather_daily))).tolist()],
             "profit": [round(_num(v), 2) for v in weather_daily["net_profit"].tolist()],
             "precipitation": [round(_num(v), 2) for v in weather_daily["precipitation_sum"].tolist()],
             "bad_score": [round(_num(v), 2) for v in weather_daily["weather_bad_score"].tolist()],
         }
     else:
-        weather_payload = {"dates": [], "revenue": [], "profit": [], "precipitation": [], "bad_score": []}
+        weather_payload = {"dates": [], "revenue": [], "profit_without_fixed": [], "profit_with_fixed": [], "profit": [], "precipitation": [], "bad_score": []}
 
     if weather_bucket is not None and not getattr(weather_bucket, "empty", True):
         weather_bucket_payload = {
             "labels": weather_bucket["weather_bucket"].astype(str).tolist(),
             "revenue_delta": [round(_num(v), 2) for v in weather_bucket["revenue_vs_weekday_baseline"].tolist()],
+            "profit_delta_without_fixed": [round(_num(v), 2) for v in weather_bucket.get("profit_without_fixed_vs_weekday_baseline", pd.Series([0] * len(weather_bucket))).tolist()],
+            "profit_delta_with_fixed": [round(_num(v), 2) for v in weather_bucket.get("profit_with_fixed_vs_weekday_baseline", pd.Series([0] * len(weather_bucket))).tolist()],
             "profit_delta": [round(_num(v), 2) for v in weather_bucket["profit_vs_weekday_baseline"].tolist()],
         }
     else:
-        weather_bucket_payload = {"labels": [], "revenue_delta": [], "profit_delta": []}
+        weather_bucket_payload = {"labels": [], "revenue_delta": [], "profit_delta_without_fixed": [], "profit_delta_with_fixed": [], "profit_delta": []}
 
     refunds_daily = (refunds_analysis or {}).get("daily")
     if refunds_daily is not None and not getattr(refunds_daily, "empty", True):
@@ -815,32 +871,34 @@ def generate_modern_dashboard(
             "revenue": [round(_num(v), 2) for v in ads_daily["revenue"].tolist()],
             "fb_spend": [round(_num(v), 2) for v in ads_daily["fb_spend"].tolist()],
             "google_spend": [round(_num(v), 2) for v in ads_daily["google_spend"].tolist()],
+            "profit_without_fixed": [round(_num(v), 2) for v in ads_daily.get("profit_without_fixed", pd.Series(dtype=float)).tolist()],
+            "profit_with_fixed": [round(_num(v), 2) for v in ads_daily.get("profit_with_fixed", pd.Series(dtype=float)).tolist()],
             "profit": [round(_num(v), 2) for v in ads_daily["profit"].tolist()],
         }
     else:
-        ads_effectiveness_payload = {"labels": [], "orders": [], "revenue": [], "fb_spend": [], "google_spend": [], "profit": []}
-    spend_effectiveness_rows = _frame_rows(_to_frame((ads_effectiveness or {}).get("spend_effectiveness")), ["spend_range", "avg_orders", "avg_revenue", "avg_spend", "avg_profit", "roas"], limit=20)
+        ads_effectiveness_payload = {"labels": [], "orders": [], "revenue": [], "fb_spend": [], "google_spend": [], "profit_without_fixed": [], "profit_with_fixed": [], "profit": []}
+    spend_effectiveness_rows = _frame_rows(_to_frame((ads_effectiveness or {}).get("spend_effectiveness")), ["spend_range", "avg_orders", "avg_revenue", "avg_spend", "avg_profit_without_fixed", "avg_profit_with_fixed", "roas"], limit=20)
     dow_effectiveness_rows = _normalize_dow_effectiveness_rows(
         _frame_rows(
             _to_frame((ads_effectiveness or {}).get("dow_effectiveness")),
-            ["day_name", "day_of_week", "avg_orders", "orders", "avg_revenue", "revenue", "avg_profit", "profit", "avg_fb_spend", "fb_spend"],
+            ["day_name", "day_of_week", "avg_orders", "orders", "avg_revenue", "revenue", "avg_profit_without_fixed", "avg_profit_with_fixed", "avg_profit", "profit", "avg_fb_spend", "fb_spend"],
             limit=7,
         )
     )
 
     advanced_summary = (advanced_dtc_metrics or {}).get("summary", {}) if advanced_dtc_metrics else {}
     bundle_accessory_model = (advanced_dtc_metrics or {}).get("bundle_accessory_model", {}) if advanced_dtc_metrics else {}
-    basket_contribution_rows = _frame_rows((advanced_dtc_metrics or {}).get("basket_contribution"), ["basket_size", "orders", "revenue", "pre_ad_contribution", "contribution_per_order", "contribution_margin_pct"], limit=10)
+    basket_contribution_rows = _frame_rows((advanced_dtc_metrics or {}).get("basket_contribution"), ["basket_size", "orders", "revenue", "pre_ad_contribution_without_fixed", "pre_ad_contribution_with_fixed", "contribution_per_order_without_fixed", "contribution_per_order_with_fixed", "contribution_margin_without_fixed_pct", "contribution_margin_with_fixed_pct"], limit=10)
     sku_pareto_rows = _normalize_sku_pareto_rows(
-        _frame_rows((advanced_dtc_metrics or {}).get("sku_pareto"), ["sku", "product", "orders", "revenue", "pre_ad_contribution", "cum_contribution_pct", "cum_contribution_share_pct"], limit=12)
+        _frame_rows((advanced_dtc_metrics or {}).get("sku_pareto"), ["sku", "product", "orders", "revenue", "pre_ad_contribution_without_fixed", "pre_ad_contribution_with_fixed", "cum_contribution_without_fixed_pct", "cum_contribution_with_fixed_pct", "cum_contribution_pct", "cum_contribution_share_pct"], limit=12)
     )
     attach_rate_rows = _normalize_attach_rate_rows(
         _frame_rows((advanced_dtc_metrics or {}).get("attach_rate"), ["anchor_item", "key_product", "attached_item", "attached_product", "anchor_orders", "key_orders", "attached_orders", "attach_rate_pct"], limit=12)
     )
     daily_margin_rows = _normalize_daily_margin_rows(
-        _frame_rows((advanced_dtc_metrics or {}).get("daily_margin"), ["date", "pre_ad_contribution_margin_pct", "pre_ad_margin_pct"], limit=120)
+        _frame_rows((advanced_dtc_metrics or {}).get("daily_margin"), ["date", "pre_ad_margin_without_fixed_pct", "pre_ad_margin_with_fixed_pct", "pre_ad_contribution_margin_pct", "pre_ad_margin_pct"], limit=120)
     )
-    payday_window_rows = _frame_rows((advanced_dtc_metrics or {}).get("payday_window"), ["window", "orders", "revenue", "profit", "avg_daily_revenue", "avg_daily_profit"], limit=20)
+    payday_window_rows = _frame_rows((advanced_dtc_metrics or {}).get("payday_window"), ["window", "orders", "revenue", "avg_daily_revenue", "avg_profit_per_day_without_fixed", "avg_profit_per_day_with_fixed", "avg_profit_per_day"], limit=20)
     cohort_payback_rows = _frame_rows((advanced_dtc_metrics or {}).get("cohort_payback"), ["cohort_month", "new_customers", "cohort_cac", "recovery_rate_pct", "avg_payback_days", "median_payback_days"], limit=24)
     cohort_unit_economics_rows = _frame_rows(
         (advanced_dtc_metrics or {}).get("cohort_unit_economics"),
@@ -1498,9 +1556,20 @@ def generate_modern_dashboard(
     payload_json = json.dumps(payload, ensure_ascii=False)
 
     product_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('sku') or ''))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{_num(row.get('margin_pct')):.1f}%</td><td>{int(round(_num(row.get('orders'))))}</td></tr>"
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{escape(str(row.get('sku') or ''))}</td>"
+            f"<td>&euro;{_num(row.get('revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('profit_without_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('profit_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('margin_without_fixed_pct')):.1f}%</td>"
+            f"<td>{_num(row.get('margin_with_fixed_pct')):.1f}%</td>"
+            f"<td>{int(round(_num(row.get('orders'))))}</td>"
+            "</tr>"
+        )
         for row in products
-    ) or '<tr><td colspan="6"><span class="lang-en">No product data available.</span><span class="lang-sk hidden">Produktové dáta nie sú dostupné.</span></td></tr>'
+    ) or '<tr><td colspan="8"><span class="lang-en">No product data available.</span><span class="lang-sk hidden">Produktové dáta nie sú dostupné.</span></td></tr>'
 
     product_trend_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('trend') or '-'))}</td><td>{_num(row.get('revenue_growth_pct')):+.1f}%</td><td>{_num(row.get('qty_growth_pct')):+.1f}%</td><td>€{_num(row.get('total_revenue')):,.2f}</td></tr>"
@@ -1516,13 +1585,15 @@ def generate_modern_dashboard(
             "</div></td>"
             f"<td>{int(round(_num(row.get('orders'))))}</td>"
             f"<td>{_format_library_tile_value(row.get('revenue'), kind='currency')}</td>"
-            f"<td>{_format_library_tile_value(row.get('contribution_profit_guarded'), kind='currency')}</td>"
-            f"<td>{_format_library_tile_value(row.get('contribution_margin_pct_guarded'), kind='percent')}</td>"
+            f"<td>{_format_library_tile_value(row.get('contribution_profit_without_fixed_guarded'), kind='currency')}</td>"
+            f"<td>{_format_library_tile_value(row.get('contribution_profit_with_fixed_guarded'), kind='currency')}</td>"
+            f"<td>{_format_library_tile_value(row.get('contribution_margin_without_fixed_pct_guarded'), kind='percent')}</td>"
+            f"<td>{_format_library_tile_value(row.get('contribution_margin_with_fixed_pct_guarded'), kind='percent')}</td>"
             f"<td>{_format_library_tile_value(row.get('fb_cpo_guarded'), kind='currency')}</td>"
             "</tr>"
         )
         for row in geo_rows
-    ) or '<tr><td colspan="6"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupna.</span></td></tr>'
+    ) or '<tr><td colspan="8"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupna.</span></td></tr>'
     geo_warning_items = list(geo_qa.get("warnings") or [])
     geo_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in geo_warning_items)
     geo_warning_block_html = (
@@ -1577,9 +1648,18 @@ def generate_modern_dashboard(
     )
 
     customer_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('customer') or 'Unknown'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('profit')):,.2f}</td><td>{_num(row.get('revenue_pct')):.1f}%</td></tr>"
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('customer') or 'Unknown'))}</td>"
+            f"<td>{int(round(_num(row.get('orders'))))}</td>"
+            f"<td>&euro;{_num(row.get('revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('profit_without_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('profit_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('revenue_pct')):.1f}%</td>"
+            "</tr>"
+        )
         for row in customer_top_rows
-    ) or '<tr><td colspan="5"><span class="lang-en">No customer concentration data available.</span><span class="lang-sk hidden">Koncentrácia zákazníkov nie je dostupná.</span></td></tr>'
+    ) or '<tr><td colspan="6"><span class="lang-en">No customer concentration data available.</span><span class="lang-sk hidden">Koncentrácia zákazníkov nie je dostupná.</span></td></tr>'
 
     cohort_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('cohort') or '-'))}</td><td>{_num(row.get('retention_2nd_pct')):.1f}%</td><td>{_num(row.get('retention_3rd_pct')):.1f}%</td><td>{_num(row.get('retention_4th_pct')):.1f}%</td><td>{_num(row.get('retention_5th_pct')):.1f}%</td></tr>"
@@ -1623,24 +1703,65 @@ def generate_modern_dashboard(
     ) or '<tr><td colspan="6"><span class="lang-en">No campaign data available.</span><span class="lang-sk hidden">Kampaňové dáta nie sú dostupné.</span></td></tr>'
 
     spend_effectiveness_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('spend_range') or '-'))}</td><td>€{_num(row.get('avg_spend')):,.2f}</td><td>{_num(row.get('avg_orders')):.1f}</td><td>€{_num(row.get('avg_revenue')):,.2f}</td><td>€{_num(row.get('avg_profit')):,.2f}</td><td>{_num(row.get('roas')):.2f}x</td></tr>"
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('spend_range') or '-'))}</td>"
+            f"<td>&euro;{_num(row.get('avg_spend')):,.2f}</td>"
+            f"<td>{_num(row.get('avg_orders')):.1f}</td>"
+            f"<td>&euro;{_num(row.get('avg_revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('avg_profit_without_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('avg_profit_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('roas')):.2f}x</td>"
+            "</tr>"
+        )
         for row in spend_effectiveness_rows
-    ) or '<tr><td colspan="6"><span class="lang-en">No spend effectiveness data available.</span><span class="lang-sk hidden">Dáta spend efektivity nie sú dostupné.</span></td></tr>'
+    ) or '<tr><td colspan="7"><span class="lang-en">No spend effectiveness data available.</span><span class="lang-sk hidden">Dáta spend efektivity nie sú dostupné.</span></td></tr>'
     dow_effectiveness_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('day_name') or '-'))}</td><td>&euro;{_num(row.get('avg_fb_spend')):,.2f}</td><td>{_num(row.get('avg_orders')):.1f}</td><td>&euro;{_num(row.get('avg_revenue')):,.2f}</td><td>&euro;{_num(row.get('avg_profit')):,.2f}</td></tr>"
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('day_name') or '-'))}</td>"
+            f"<td>&euro;{_num(row.get('avg_fb_spend')):,.2f}</td>"
+            f"<td>{_num(row.get('avg_orders')):.1f}</td>"
+            f"<td>&euro;{_num(row.get('avg_revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('avg_profit_without_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('avg_profit_with_fixed')):,.2f}</td>"
+            "</tr>"
+        )
         for row in dow_effectiveness_rows
-    ) or '<tr><td colspan="5"><span class="lang-en">No day-of-week effectiveness data available.</span><span class="lang-sk hidden">Day-of-week efektivita nie je dostupna.</span></td></tr>'
+    ) or '<tr><td colspan="6"><span class="lang-en">No day-of-week effectiveness data available.</span><span class="lang-sk hidden">Day-of-week efektivita nie je dostupna.</span></td></tr>'
 
 
     basket_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('basket_size') or '-'))}</td><td>{int(round(_num(row.get('orders'))))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('pre_ad_contribution')):,.2f}</td><td>€{_num(row.get('contribution_per_order')):,.2f}</td><td>{_num(row.get('contribution_margin_pct')):.1f}%</td></tr>"
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('basket_size') or '-'))}</td>"
+            f"<td>{int(round(_num(row.get('orders'))))}</td>"
+            f"<td>&euro;{_num(row.get('revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('pre_ad_contribution_without_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('pre_ad_contribution_with_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('contribution_per_order_without_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('contribution_per_order_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('contribution_margin_without_fixed_pct')):.1f}%</td>"
+            f"<td>{_num(row.get('contribution_margin_with_fixed_pct')):.1f}%</td>"
+            "</tr>"
+        )
         for row in basket_contribution_rows
-    ) or '<tr><td colspan="6"><span class="lang-en">No basket contribution data available.</span><span class="lang-sk hidden">Dáta kontribúcie košíka nie sú dostupné.</span></td></tr>'
+    ) or '<tr><td colspan="9"><span class="lang-en">No basket contribution data available.</span><span class="lang-sk hidden">Dáta kontribúcie košíka nie sú dostupné.</span></td></tr>'
 
     sku_pareto_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('sku') or ''))}</td><td>€{_num(row.get('revenue')):,.2f}</td><td>€{_num(row.get('pre_ad_contribution')):,.2f}</td><td>{_num(row.get('cum_contribution_pct')):.1f}%</td></tr>"
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{escape(str(row.get('sku') or ''))}</td>"
+            f"<td>&euro;{_num(row.get('revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('pre_ad_contribution_without_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('pre_ad_contribution_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('cum_contribution_without_fixed_pct')):.1f}%</td>"
+            f"<td>{_num(row.get('cum_contribution_with_fixed_pct')):.1f}%</td>"
+            "</tr>"
+        )
         for row in sku_pareto_rows
-    ) or '<tr><td colspan="5"><span class="lang-en">No SKU Pareto data available.</span><span class="lang-sk hidden">SKU Pareto dáta nie sú dostupné.</span></td></tr>'
+    ) or '<tr><td colspan="7"><span class="lang-en">No SKU Pareto data available.</span><span class="lang-sk hidden">SKU Pareto dáta nie sú dostupné.</span></td></tr>'
 
     attach_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('anchor_item') or '-'))}</td><td>{escape(str(row.get('attached_item') or '-'))}</td><td>{int(round(_num(row.get('anchor_orders'))))}</td><td>{int(round(_num(row.get('attached_orders'))))}</td><td>{_num(row.get('attach_rate_pct')):.1f}%</td></tr>"
@@ -2120,7 +2241,7 @@ def generate_modern_dashboard(
                     <div class="panel table-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Basket contribution table</span><span class="lang-sk hidden">Tabulka kontribucie kosika</span></h3><p><span class="lang-en">All basket-size economics in one table.</span><span class="lang-sk hidden">Cely pohlad na ekonomiku podla velkosti kosika.</span></p></div></div>
                         <table>
-                            <thead><tr><th><span class="lang-en">Basket</span><span class="lang-sk hidden">Kosik</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution</span><span class="lang-sk hidden">Kontribucia</span></th><th><span class="lang-en">Per order</span><span class="lang-sk hidden">Na obj.</span></th><th><span class="lang-en">Margin</span><span class="lang-sk hidden">Marza</span></th></tr></thead>
+                            <thead><tr><th><span class="lang-en">Basket</span><span class="lang-sk hidden">Kosik</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution ex fixed</span><span class="lang-sk hidden">Kontribucia bez fixov</span></th><th><span class="lang-en">Contribution incl. fixed</span><span class="lang-sk hidden">Kontribucia s fixami</span></th><th><span class="lang-en">Per order ex fixed</span><span class="lang-sk hidden">Na obj. bez fixov</span></th><th><span class="lang-en">Per order incl. fixed</span><span class="lang-sk hidden">Na obj. s fixami</span></th><th><span class="lang-en">Margin ex fixed</span><span class="lang-sk hidden">Marza bez fixov</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th></tr></thead>
                             <tbody>{basket_rows_html}</tbody>
                         </table>
                     </div>
@@ -2167,7 +2288,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Spend bucket effectiveness</span><span class="lang-sk hidden">Efektivita spend bucketov</span></h3><p><span class="lang-en">Average output by spend range.</span><span class="lang-sk hidden">Priemerny vystup podla spend rozsahu.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th><th>ROAS</th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th>ROAS</th></tr></thead>
                                 <tbody>{spend_effectiveness_rows_html}</tbody>
                             </table>
                         </div>
@@ -2192,7 +2313,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Day-of-week effectiveness</span><span class="lang-sk hidden">Day-of-week efektivita</span></h3><p><span class="lang-en">Average spend, orders, revenue and profit by weekday.</span><span class="lang-sk hidden">Priemerny spend, objednavky, trzby a zisk podla dna v tyzdni.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Day</span><span class="lang-sk hidden">Den</span></th><th><span class="lang-en">FB spend</span><span class="lang-sk hidden">FB spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Day</span><span class="lang-sk hidden">Den</span></th><th><span class="lang-en">FB spend</span><span class="lang-sk hidden">FB spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th></tr></thead>
                                 <tbody>{dow_effectiveness_rows_html}</tbody>
                             </table>
                         </div>
@@ -2363,7 +2484,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Top customers by revenue</span><span class="lang-sk hidden">Top zakaznici podla trzby</span></h3><p><span class="lang-en">Customer concentration tells you how dependent revenue is on a small group.</span><span class="lang-sk hidden">Koncentracia zakaznikov ukaze zavislost trzby od malej skupiny.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Customer</span><span class="lang-sk hidden">Zakaznik</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Customer</span><span class="lang-sk hidden">Zakaznik</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th><span class="lang-en">Share</span><span class="lang-sk hidden">Podiel</span></th></tr></thead>
                                 <tbody>{customer_rows_html}</tbody>
                             </table>
                         </div>
@@ -2602,7 +2723,7 @@ def generate_modern_dashboard(
                     <div class="panel table-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">Country-level contribution view from the richer report.</span><span class="lang-sk hidden">Country-level contribution pohlad z bohatsieho reportu.</span></p></div></div>
                         <table>
-                            <thead><tr><th><span class="lang-en">Country</span><span class="lang-sk hidden">Krajina</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution</span><span class="lang-sk hidden">Contribution</span></th><th><span class="lang-en">Margin</span><span class="lang-sk hidden">Marza</span></th><th>FB CPO</th></tr></thead>
+                            <thead><tr><th><span class="lang-en">Country</span><span class="lang-sk hidden">Krajina</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution ex fixed</span><span class="lang-sk hidden">Kontribucia bez fixov</span></th><th><span class="lang-en">Contribution incl. fixed</span><span class="lang-sk hidden">Kontribucia s fixami</span></th><th><span class="lang-en">Margin ex fixed</span><span class="lang-sk hidden">Marza bez fixov</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th><th>FB CPO</th></tr></thead>
                             <tbody>{geo_rows_html}</tbody>
                         </table>
                     </div>
@@ -2631,8 +2752,10 @@ def generate_modern_dashboard(
                                     <th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th>
                                     <th>SKU</th>
                                     <th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th>
-                                    <th><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></th>
-                                    <th><span class="lang-en">Margin</span><span class="lang-sk hidden">Marza</span></th>
+                                    <th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th>
+                                    <th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th>
+                                    <th><span class="lang-en">Margin ex fixed</span><span class="lang-sk hidden">Marza bez fixov</span></th>
+                                    <th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th>
                                     <th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th>
                                 </tr>
                             </thead>
@@ -2660,7 +2783,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">SKU Pareto table</span><span class="lang-sk hidden">SKU Pareto tabulka</span></h3><p><span class="lang-en">Contribution concentration by top SKUs.</span><span class="lang-sk hidden">Koncentracia contribution podla top SKU.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th>SKU</th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution</span><span class="lang-sk hidden">Contribution</span></th><th><span class="lang-en">Cum. share</span><span class="lang-sk hidden">Kumul. podiel</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th>SKU</th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution ex fixed</span><span class="lang-sk hidden">Kontribucia bez fixov</span></th><th><span class="lang-en">Contribution incl. fixed</span><span class="lang-sk hidden">Kontribucia s fixami</span></th><th><span class="lang-en">Cum. ex fixed</span><span class="lang-sk hidden">Kumul. bez fixov</span></th><th><span class="lang-en">Cum. incl. fixed</span><span class="lang-sk hidden">Kumul. s fixami</span></th></tr></thead>
                                 <tbody>{sku_pareto_rows_html}</tbody>
                             </table>
                         </div>
@@ -3085,9 +3208,11 @@ def generate_modern_dashboard(
                     labels: s.dates,
                     datasets: [
                         {{ label: 'Revenue', data: s.revenue, borderColor: '#ff8a1f', backgroundColor: (ctx) => gradient(ctx, 'rgba(255,138,31,.28)', 'rgba(255,138,31,.02)'), fill: true, tension: .38, borderWidth: 3, pointRadius: 0 }},
-                        {{ label: 'Profit', data: s.profit, borderColor: '#1f9d66', tension: .34, borderWidth: 2.4, pointRadius: 0 }},
+                        {{ label: 'Profit ex fixed', data: s.profit_without_fixed, borderColor: '#0f766e', tension: .34, borderWidth: 2.2, pointRadius: 0 }},
+                        {{ label: 'Profit incl. fixed', data: s.profit_with_fixed, borderColor: '#1f9d66', tension: .34, borderWidth: 2.6, pointRadius: 0 }},
                         {{ label: 'Revenue 7d MA', data: s.revenue_ma7, borderColor: '#d95c00', borderDash: [8, 6], tension: .35, borderWidth: 2, pointRadius: 0 }},
-                        {{ label: 'Profit 7d MA', data: s.profit_ma7, borderColor: '#0f6b44', borderDash: [8, 6], tension: .35, borderWidth: 2, pointRadius: 0 }},
+                        {{ label: 'Profit ex fixed 7d MA', data: s.profit_without_fixed_ma7, borderColor: '#0d9488', borderDash: [8, 6], tension: .35, borderWidth: 1.8, pointRadius: 0 }},
+                        {{ label: 'Profit incl. fixed 7d MA', data: s.profit_with_fixed_ma7, borderColor: '#0f6b44', borderDash: [8, 6], tension: .35, borderWidth: 2, pointRadius: 0 }},
                     ],
                 }},
                 options: baseOptions(),
@@ -3118,8 +3243,10 @@ def generate_modern_dashboard(
                 data: {{
                     labels: s.dates,
                     datasets: [
-                        {{ label: 'Pre-ad margin', data: s.pre_margin, borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .35, borderWidth: 2.5, pointRadius: 0 }},
-                        {{ label: 'Post-ad margin', data: s.post_margin, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 0 }},
+                        {{ label: 'Pre-ad margin ex fixed', data: s.pre_margin_without_fixed, borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .35, borderWidth: 2.4, pointRadius: 0 }},
+                        {{ label: 'Pre-ad margin incl. fixed', data: s.pre_margin_with_fixed, borderColor: '#d95c00', borderDash: [8, 6], tension: .35, borderWidth: 2.0, pointRadius: 0 }},
+                        {{ label: 'Post-ad margin ex fixed', data: s.post_margin_without_fixed, borderColor: '#0f766e', tension: .35, borderWidth: 2.4, pointRadius: 0 }},
+                        {{ label: 'Post-ad margin incl. fixed', data: s.post_margin_with_fixed, borderColor: '#1f9d66', borderDash: [8, 6], tension: .35, borderWidth: 2.0, pointRadius: 0 }},
                     ],
                 }},
                 options: baseOptions(),
@@ -3175,7 +3302,8 @@ def generate_modern_dashboard(
                         labels: DATA.geo_rows.map(x => `${{(x.country || 'Unknown').toUpperCase()}}${{x.low_sample ? ' *' : ''}}`),
                         datasets: [
                             {{ type: 'bar', label: 'Revenue', data: DATA.geo_rows.map(x => Number(x.revenue || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'bar', label: 'Contribution', data: DATA.geo_rows.map(x => x.contribution_profit_guarded == null ? null : Number(x.contribution_profit_guarded || 0)), backgroundColor: 'rgba(31,157,102,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Contribution ex fixed', data: DATA.geo_rows.map(x => x.contribution_profit_without_fixed_guarded == null ? null : Number(x.contribution_profit_without_fixed_guarded || 0)), backgroundColor: 'rgba(15,118,110,.50)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Contribution incl. fixed', data: DATA.geo_rows.map(x => x.contribution_profit_with_fixed_guarded == null ? null : Number(x.contribution_profit_with_fixed_guarded || 0)), backgroundColor: 'rgba(31,157,102,.58)', borderRadius: 8, yAxisID: 'y' }},
                             {{ type: 'line', label: 'FB CPO', data: DATA.geo_rows.map(x => x.fb_cpo_guarded == null ? null : Number(x.fb_cpo_guarded || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
@@ -3215,6 +3343,8 @@ def generate_modern_dashboard(
                         datasets: [
                             {{ type: 'bar', label: 'Revenue', data: DATA.day_of_week.revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
                             {{ type: 'line', label: 'Orders', data: DATA.day_of_week.orders, borderColor: '#4766ff', tension: .35, borderWidth: 2.4, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Profit ex fixed', data: DATA.day_of_week.profit_without_fixed, borderColor: '#0f766e', tension: .35, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit incl. fixed', data: DATA.day_of_week.profit_with_fixed, borderColor: '#1f9d66', tension: .35, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
                             {{ type: 'line', label: 'FB spend', data: DATA.day_of_week.fb_spend, borderColor: '#8a2c3d', borderDash: [8, 6], tension: .35, borderWidth: 2, pointRadius: 3, yAxisID: 'y' }},
                         ],
                     }},
@@ -3229,7 +3359,8 @@ def generate_modern_dashboard(
                         labels: DATA.week_of_month.labels,
                         datasets: [
                             {{ type: 'bar', label: 'Avg daily revenue', data: DATA.week_of_month.avg_daily_revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Avg daily profit', data: DATA.week_of_month.avg_daily_profit, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg daily profit ex fixed', data: DATA.week_of_month.avg_daily_profit_without_fixed, borderColor: '#0f766e', tension: .35, borderWidth: 2.1, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg daily profit incl. fixed', data: DATA.week_of_month.avg_daily_profit_with_fixed, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: womOpts,
@@ -3243,7 +3374,8 @@ def generate_modern_dashboard(
                         labels: DATA.day_of_month.labels,
                         datasets: [
                             {{ type: 'bar', label: 'Avg revenue / occurrence', data: DATA.day_of_month.avg_revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Avg profit / occurrence', data: DATA.day_of_month.avg_profit, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg profit / occurrence ex fixed', data: DATA.day_of_month.avg_profit_without_fixed, borderColor: '#0f766e', tension: .35, borderWidth: 2.1, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg profit / occurrence incl. fixed', data: DATA.day_of_month.avg_profit_with_fixed, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 0, yAxisID: 'y1' }},
                         ],
                     }},
                     options: domOpts,
@@ -3255,7 +3387,8 @@ def generate_modern_dashboard(
                         labels: DATA.weather_bucket.labels,
                         datasets: [
                             {{ type: 'bar', label: 'Revenue delta', data: DATA.weather_bucket.revenue_delta, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
-                            {{ type: 'line', label: 'Profit delta', data: DATA.weather_bucket.profit_delta, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 3 }},
+                            {{ type: 'line', label: 'Profit delta ex fixed', data: DATA.weather_bucket.profit_delta_without_fixed, borderColor: '#0f766e', tension: .35, borderWidth: 2.1, pointRadius: 3 }},
+                            {{ type: 'line', label: 'Profit delta incl. fixed', data: DATA.weather_bucket.profit_delta_with_fixed, borderColor: '#1f9d66', tension: .35, borderWidth: 2.5, pointRadius: 3 }},
                         ],
                     }},
                     options: baseOptions(),
@@ -3264,8 +3397,14 @@ def generate_modern_dashboard(
             if (DATA.product_margin_chart_rows.length) {{
                 new Chart(document.getElementById('productMarginBreakoutChart'), {{
                     type: 'bar',
-                    data: {{ labels: DATA.product_margin_chart_rows.map(x => (x.product || 'Unknown').slice(0, 28)), datasets: [{{ label: 'Margin %', data: DATA.product_margin_chart_rows.map(x => Number(x.margin_pct || 0)), backgroundColor: DATA.product_margin_chart_rows.map(x => Number(x.margin_pct || 0) >= 0 ? 'rgba(31,157,102,.72)' : 'rgba(207,80,96,.72)'), borderRadius: 8 }}] }},
-                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                    data: {{
+                        labels: DATA.product_margin_chart_rows.map(x => (x.product || 'Unknown').slice(0, 28)),
+                        datasets: [
+                            {{ label: 'Margin ex fixed %', data: DATA.product_margin_chart_rows.map(x => Number(x.margin_without_fixed_pct || 0)), backgroundColor: DATA.product_margin_chart_rows.map(x => Number(x.margin_without_fixed_pct || 0) >= 0 ? 'rgba(15,118,110,.72)' : 'rgba(207,80,96,.62)'), borderRadius: 8 }},
+                            {{ label: 'Margin incl. fixed %', data: DATA.product_margin_chart_rows.map(x => Number(x.margin_with_fixed_pct || 0)), backgroundColor: DATA.product_margin_chart_rows.map(x => Number(x.margin_with_fixed_pct || 0) >= 0 ? 'rgba(31,157,102,.72)' : 'rgba(154,52,18,.62)'), borderRadius: 8 }},
+                        ],
+                    }},
+                    options: {{ ...baseOptions(), indexAxis: 'y' }},
                 }});
             }}
             if (DATA.trend_rows.length) {{
@@ -3282,7 +3421,8 @@ def generate_modern_dashboard(
                     labels: s.dates,
                     datasets: [
                         {{ type: 'line', label: 'Revenue', data: s.revenue, borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .34, borderWidth: 2.6, pointRadius: 0, yAxisID: 'y' }},
-                        {{ type: 'line', label: 'Profit', data: s.profit, borderColor: '#1f9d66', tension: .34, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
+                        {{ type: 'line', label: 'Profit ex fixed', data: s.profit_without_fixed, borderColor: '#0f766e', tension: .34, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y' }},
+                        {{ type: 'line', label: 'Profit incl. fixed', data: s.profit_with_fixed, borderColor: '#1f9d66', tension: .34, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
                         {{ type: 'line', label: 'Total cost', data: s.total_cost, borderColor: '#8a2c3d', tension: .28, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y' }},
                         {{ type: 'line', label: 'Ads', data: s.total_ads, borderColor: '#4766ff', borderDash: [8, 6], tension: .28, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
                     ],
@@ -3320,8 +3460,10 @@ def generate_modern_dashboard(
                 data: {{
                     labels: s.dates,
                     datasets: [
-                        {{ label: 'Pre-ad / order', data: s.pre_contribution_per_order, borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .32, borderWidth: 2.4, pointRadius: 0 }},
-                        {{ label: 'Post-ad / order', data: s.post_contribution_per_order, borderColor: '#1f9d66', tension: .32, borderWidth: 2.4, pointRadius: 0 }},
+                        {{ label: 'Pre-ad / order ex fixed', data: s.pre_contribution_per_order_without_fixed, borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .32, borderWidth: 2.2, pointRadius: 0 }},
+                        {{ label: 'Pre-ad / order incl. fixed', data: s.pre_contribution_per_order_with_fixed, borderColor: '#d95c00', borderDash: [8, 6], tension: .32, borderWidth: 2.0, pointRadius: 0 }},
+                        {{ label: 'Post-ad / order ex fixed', data: s.post_contribution_per_order_without_fixed, borderColor: '#0f766e', tension: .32, borderWidth: 2.2, pointRadius: 0 }},
+                        {{ label: 'Post-ad / order incl. fixed', data: s.post_contribution_per_order_with_fixed, borderColor: '#1f9d66', borderDash: [8, 6], tension: .32, borderWidth: 2.2, pointRadius: 0 }},
                     ],
                 }},
                 options: baseOptions(),
@@ -3433,7 +3575,8 @@ def generate_modern_dashboard(
                             {{ type: 'bar', label: 'FB spend', data: DATA.ads_effectiveness.fb_spend, backgroundColor: 'rgba(71,102,255,.32)', borderRadius: 6, yAxisID: 'y' }},
                             {{ type: 'bar', label: 'Google spend', data: DATA.ads_effectiveness.google_spend, backgroundColor: 'rgba(151,168,255,.32)', borderRadius: 6, yAxisID: 'y' }},
                             {{ type: 'line', label: 'Revenue', data: DATA.ads_effectiveness.revenue, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
-                            {{ type: 'line', label: 'Profit', data: DATA.ads_effectiveness.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Profit ex fixed', data: DATA.ads_effectiveness.profit_without_fixed, borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Profit incl. fixed', data: DATA.ads_effectiveness.profit_with_fixed, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
                         ],
                     }},
                     options: adsOpts,
@@ -3680,7 +3823,8 @@ def generate_modern_dashboard(
                         labels: DATA.weather.dates,
                         datasets: [
                             {{ type: 'line', label: 'Revenue', data: DATA.weather.revenue, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Profit', data: DATA.weather.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit ex fixed', data: DATA.weather.profit_without_fixed, borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit incl. fixed', data: DATA.weather.profit_with_fixed, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
                             {{ type: 'bar', label: 'Bad weather score', data: DATA.weather.bad_score, backgroundColor: 'rgba(71,102,255,.30)', borderRadius: 6, yAxisID: 'y1' }},
                         ],
                     }},
@@ -3695,7 +3839,8 @@ def generate_modern_dashboard(
                         labels: DATA.payday_window_rows.map(x => x.window || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Avg daily revenue', data: DATA.payday_window_rows.map(x => Number(x.avg_daily_revenue || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Avg daily profit', data: DATA.payday_window_rows.map(x => Number(x.avg_daily_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg daily profit ex fixed', data: DATA.payday_window_rows.map(x => Number(x.avg_profit_per_day_without_fixed || 0)), borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg daily profit incl. fixed', data: DATA.payday_window_rows.map(x => Number(x.avg_profit_per_day_with_fixed || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: paydayOpts,
@@ -3756,8 +3901,10 @@ def generate_modern_dashboard(
                     data: {{
                         labels: DATA.sku_pareto_rows.map(x => (x.product || 'Unknown').slice(0, 26)),
                         datasets: [
-                            {{ type: 'bar', label: 'Contribution', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Cum. contribution %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_pct || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'bar', label: 'Contribution ex fixed', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution_without_fixed || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Contribution incl. fixed', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution_with_fixed || 0)), backgroundColor: 'rgba(31,157,102,.50)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Cum. ex fixed %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_without_fixed_pct || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Cum. incl. fixed %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_with_fixed_pct || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: paretoOpts,
@@ -3845,8 +3992,10 @@ def generate_modern_dashboard(
                     data: {{
                         labels: s.dates,
                         datasets: [
-                            {{ label: 'Profit', data: s.profit, borderColor: '#1f9d66', backgroundColor: (ctx) => gradient(ctx, 'rgba(31,157,102,.20)', 'rgba(31,157,102,.02)'), fill: true, tension: .34, borderWidth: 2.6, pointRadius: 0 }},
-                            {{ label: 'Profit 7d MA', data: s.profit_ma7, borderColor: '#0f6b44', borderDash: [8, 6], tension: .34, borderWidth: 2.0, pointRadius: 0 }},
+                            {{ label: 'Profit ex fixed', data: s.profit_without_fixed, borderColor: '#0f766e', backgroundColor: (ctx) => gradient(ctx, 'rgba(15,118,110,.20)', 'rgba(15,118,110,.02)'), fill: true, tension: .34, borderWidth: 2.2, pointRadius: 0 }},
+                            {{ label: 'Profit incl. fixed', data: s.profit_with_fixed, borderColor: '#1f9d66', tension: .34, borderWidth: 2.6, pointRadius: 0 }},
+                            {{ label: 'Profit ex fixed 7d MA', data: s.profit_without_fixed_ma7, borderColor: '#0d9488', borderDash: [8, 6], tension: .34, borderWidth: 1.8, pointRadius: 0 }},
+                            {{ label: 'Profit incl. fixed 7d MA', data: s.profit_with_fixed_ma7, borderColor: '#0f6b44', borderDash: [8, 6], tension: .34, borderWidth: 2.0, pointRadius: 0 }},
                         ],
                     }},
                     options: baseOptions(),
@@ -4120,7 +4269,8 @@ def generate_modern_dashboard(
                         labels: DATA.spend_effectiveness_rows.map(x => x.spend_range || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Avg revenue', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_revenue || 0)), backgroundColor: 'rgba(255,138,31,.52)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Avg profit', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit ex fixed', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_profit_without_fixed || 0)), borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit incl. fixed', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_profit_with_fixed || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
                             {{ type: 'line', label: 'Avg orders', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_orders || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
@@ -4134,7 +4284,8 @@ def generate_modern_dashboard(
                         labels: DATA.dow_effectiveness_rows.map(x => x.day_name || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Avg revenue', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_revenue || 0)), backgroundColor: 'rgba(255,138,31,.52)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Avg profit', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_profit || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit ex fixed', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_profit_without_fixed || 0)), borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg profit incl. fixed', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_profit_with_fixed || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y' }},
                             {{ type: 'line', label: 'Avg FB spend', data: DATA.dow_effectiveness_rows.map(x => Number(x.avg_fb_spend || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
@@ -4746,7 +4897,8 @@ def generate_modern_dashboard(
                     data: {{
                         labels: DATA.day_of_week.labels,
                         datasets: [
-                            {{ type: 'bar', label: 'Profit', data: DATA.day_of_week.profit, backgroundColor: 'rgba(31,157,102,.64)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Profit ex fixed', data: DATA.day_of_week.profit_without_fixed, backgroundColor: 'rgba(15,118,110,.58)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Profit incl. fixed', data: DATA.day_of_week.profit_with_fixed, backgroundColor: 'rgba(31,157,102,.64)', borderRadius: 8, yAxisID: 'y' }},
                             {{ type: 'line', label: 'FB spend', data: DATA.day_of_week.fb_spend, borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
@@ -4760,7 +4912,8 @@ def generate_modern_dashboard(
                         labels: DATA.week_of_month.labels,
                         datasets: [
                             {{ type: 'bar', label: 'Revenue', data: DATA.week_of_month.revenue, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Profit', data: DATA.week_of_month.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Profit ex fixed', data: DATA.week_of_month.profit_without_fixed, borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Profit incl. fixed', data: DATA.week_of_month.profit_with_fixed, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: womOpts,
@@ -4773,7 +4926,8 @@ def generate_modern_dashboard(
                         labels: DATA.week_of_month.labels,
                         datasets: [
                             {{ type: 'bar', label: 'Avg daily revenue', data: DATA.week_of_month.avg_daily_revenue, backgroundColor: 'rgba(255,138,31,.58)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Avg daily profit', data: DATA.week_of_month.avg_daily_profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg daily profit ex fixed', data: DATA.week_of_month.avg_daily_profit_without_fixed, borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg daily profit incl. fixed', data: DATA.week_of_month.avg_daily_profit_with_fixed, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: womAvgOpts,
@@ -4799,7 +4953,8 @@ def generate_modern_dashboard(
                         labels: DATA.day_of_month.labels,
                         datasets: [
                             {{ type: 'bar', label: 'Avg revenue', data: DATA.day_of_month.avg_revenue, backgroundColor: 'rgba(255,138,31,.58)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Avg profit', data: DATA.day_of_month.avg_profit, borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg profit ex fixed', data: DATA.day_of_month.avg_profit_without_fixed, borderColor: '#0f766e', tension: .28, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg profit incl. fixed', data: DATA.day_of_month.avg_profit_with_fixed, borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
                         ],
                     }},
                     options: domAvgOpts,
@@ -4812,7 +4967,8 @@ def generate_modern_dashboard(
                         labels: DATA.weather_bucket.labels,
                         datasets: [
                             {{ label: 'Revenue delta', data: DATA.weather_bucket.revenue_delta, backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8 }},
-                            {{ label: 'Profit delta', data: DATA.weather_bucket.profit_delta, backgroundColor: 'rgba(31,157,102,.72)', borderRadius: 8 }},
+                            {{ label: 'Profit delta ex fixed', data: DATA.weather_bucket.profit_delta_without_fixed, backgroundColor: 'rgba(15,118,110,.66)', borderRadius: 8 }},
+                            {{ label: 'Profit delta incl. fixed', data: DATA.weather_bucket.profit_delta_with_fixed, backgroundColor: 'rgba(31,157,102,.72)', borderRadius: 8 }},
                         ],
                     }},
                     options: horizontalBarOptions(),
@@ -4825,7 +4981,8 @@ def generate_modern_dashboard(
                         labels: DATA.weather.dates,
                         datasets: [
                             {{ type: 'line', label: 'Revenue', data: DATA.weather.revenue, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Profit', data: DATA.weather.profit, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit ex fixed', data: DATA.weather.profit_without_fixed, borderColor: '#0f766e', tension: .30, borderWidth: 2.0, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Profit incl. fixed', data: DATA.weather.profit_with_fixed, borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y' }},
                             {{ type: 'bar', label: 'Precipitation', data: DATA.weather.precipitation, backgroundColor: 'rgba(71,102,255,.34)', borderRadius: 6, yAxisID: 'y1' }},
                         ],
                     }},
@@ -4876,8 +5033,8 @@ def generate_modern_dashboard(
                         labels: DATA.basket_contribution_rows.map(x => x.basket_size || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Orders', data: DATA.basket_contribution_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Contribution/order', data: DATA.basket_contribution_rows.map(x => Number(x.contribution_per_order || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
-                            {{ type: 'line', label: 'Contribution margin %', data: DATA.basket_contribution_rows.map(x => Number(x.contribution_margin_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Contribution/order ex fixed', data: DATA.basket_contribution_rows.map(x => Number(x.contribution_per_order_without_fixed || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Contribution/order incl. fixed', data: DATA.basket_contribution_rows.map(x => Number(x.contribution_per_order_with_fixed || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: basketOpts,
@@ -4902,7 +5059,10 @@ def generate_modern_dashboard(
                     type: 'line',
                     data: {{
                         labels: DATA.daily_margin_rows.map(x => x.date || '-'),
-                        datasets: [{{ label: 'Pre-ad margin %', data: DATA.daily_margin_rows.map(x => Number(x.pre_ad_contribution_margin_pct || 0)), borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .30, borderWidth: 2.3, pointRadius: 0 }}],
+                        datasets: [
+                            {{ label: 'Pre-ad margin ex fixed %', data: DATA.daily_margin_rows.map(x => Number(x.pre_ad_margin_without_fixed_pct || 0)), borderColor: '#ff8a1f', backgroundColor: 'rgba(255,138,31,.10)', fill: true, tension: .30, borderWidth: 2.1, pointRadius: 0 }},
+                            {{ label: 'Pre-ad margin incl. fixed %', data: DATA.daily_margin_rows.map(x => Number(x.pre_ad_margin_with_fixed_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.3, pointRadius: 0 }},
+                        ],
                     }},
                     options: baseOptions(),
                 }});
@@ -4914,8 +5074,10 @@ def generate_modern_dashboard(
                     data: {{
                         labels: DATA.sku_pareto_rows.map(x => (x.product || 'Unknown').slice(0, 26)),
                         datasets: [
-                            {{ type: 'bar', label: 'Contribution', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution || 0)), backgroundColor: 'rgba(255,138,31,.72)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Cum. contribution %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_pct || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'bar', label: 'Contribution ex fixed', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution_without_fixed || 0)), backgroundColor: 'rgba(255,138,31,.62)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Contribution incl. fixed', data: DATA.sku_pareto_rows.map(x => Number(x.pre_ad_contribution_with_fixed || 0)), backgroundColor: 'rgba(31,157,102,.50)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Cum. ex fixed %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_without_fixed_pct || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Cum. incl. fixed %', data: DATA.sku_pareto_rows.map(x => Number(x.cum_contribution_with_fixed_pct || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.3, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: paretoOpts,
@@ -5420,7 +5582,8 @@ def generate_modern_dashboard(
                             {{ label: 'Product cost', data: s.product_cost, borderColor: '#b35d00', tension: .28, borderWidth: 1.8, pointRadius: 0 }},
                             {{ label: 'FB ads', data: s.fb_ads, borderColor: '#4766ff', tension: .28, borderWidth: 1.8, pointRadius: 0 }},
                             {{ label: 'Google ads', data: s.google_ads, borderColor: '#8b5cf6', tension: .28, borderWidth: 1.8, pointRadius: 0 }},
-                            {{ label: 'Profit', data: s.profit, borderColor: '#1f9d66', tension: .28, borderWidth: 2.0, pointRadius: 0 }},
+                            {{ label: 'Profit ex fixed', data: s.profit_without_fixed, borderColor: '#0f766e', tension: .28, borderWidth: 1.8, pointRadius: 0 }},
+                            {{ label: 'Profit incl. fixed', data: s.profit_with_fixed, borderColor: '#1f9d66', tension: .28, borderWidth: 2.0, pointRadius: 0 }},
                         ],
                     }},
                     options: baseOptions(),

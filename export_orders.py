@@ -1774,6 +1774,26 @@ class BizniWebExporter:
 
         return orders_df, item_df, resolved_revenue_col
 
+    def _build_order_geo_frame(self, df: pd.DataFrame, orders_df: pd.DataFrame) -> pd.DataFrame:
+        """Attach country/city metadata to an order-level frame with delivery->invoice fallbacks."""
+        geo_source = df[["order_num"]].copy()
+        geo_source["geo_country"] = df["delivery_country"] if "delivery_country" in df.columns else None
+        geo_source["geo_country"] = geo_source["geo_country"].replace("", np.nan)
+        if "invoice_country" in df.columns:
+            geo_source["geo_country"] = geo_source["geo_country"].fillna(df["invoice_country"])
+        geo_source["geo_country"] = geo_source["geo_country"].fillna("Unknown").astype(str).str.strip()
+
+        geo_source["geo_city"] = df["delivery_city"] if "delivery_city" in df.columns else None
+        geo_source["geo_city"] = geo_source["geo_city"].replace("", np.nan)
+        if "invoice_city" in df.columns:
+            geo_source["geo_city"] = geo_source["geo_city"].fillna(df["invoice_city"])
+        geo_source["geo_city"] = geo_source["geo_city"].apply(
+            lambda value: str(value).strip() if pd.notna(value) and str(value).strip() else np.nan
+        )
+
+        geo_source = geo_source.drop_duplicates(subset=["order_num"]).copy()
+        return orders_df.merge(geo_source, on="order_num", how="left")
+
     def _match_named_group(self, label: Any, groups: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
         for group in groups or []:
             if self._matches_patterns(str(label or ""), group.get("patterns") or []):
@@ -6397,19 +6417,33 @@ class BizniWebExporter:
         """Analyze orders and revenue by day of week"""
         print("\nAnalyzing day of week patterns...")
 
-        df['day_of_week'] = pd.to_datetime(df['purchase_date']).dt.dayofweek
-        df['day_name'] = pd.to_datetime(df['purchase_date']).dt.day_name()
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        if orders_df.empty:
+            return pd.DataFrame(columns=[
+                "day_of_week", "day_name", "orders", "revenue",
+                "profit_without_fixed", "profit_with_fixed", "profit",
+                "fb_spend", "google_spend", "orders_pct", "revenue_pct", "aov",
+            ])
+
+        orders_df['day_of_week'] = orders_df['purchase_datetime'].dt.dayofweek
+        orders_df['day_name'] = orders_df['purchase_datetime'].dt.day_name()
 
         # Aggregate by day of week (using unique orders)
-        orders_per_day = df.groupby(['day_of_week', 'day_name']).agg({
-            'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'profit_before_ads': 'sum',
-            'fb_ads_daily_spend': lambda x: x.drop_duplicates().sum(),
-            'google_ads_daily_spend': lambda x: x.drop_duplicates().sum()
+        orders_per_day = orders_df.groupby(['day_of_week', 'day_name']).agg({
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum',
+            'allocated_fb_spend': 'sum',
+            'allocated_google_spend': 'sum',
         }).reset_index()
 
-        orders_per_day.columns = ['day_of_week', 'day_name', 'orders', 'revenue', 'profit', 'fb_spend', 'google_spend']
+        orders_per_day.columns = [
+            'day_of_week', 'day_name', 'orders', 'revenue',
+            'profit_without_fixed', 'profit_with_fixed',
+            'fb_spend', 'google_spend',
+        ]
+        orders_per_day['profit'] = orders_per_day['profit_with_fixed']
         orders_per_day = orders_per_day.sort_values('day_of_week')
 
         # Calculate averages and percentages
@@ -6426,8 +6460,9 @@ class BizniWebExporter:
         """Analyze orders, revenue, and profitability by week-in-month using equal 4x7-day windows."""
         print("\nAnalyzing week-of-month patterns...")
 
-        wom_df = df.copy()
-        wom_df['purchase_datetime_wom'] = pd.to_datetime(wom_df['purchase_date'])
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        wom_df = orders_df.copy()
+        wom_df['purchase_datetime_wom'] = wom_df['purchase_datetime']
         wom_df['purchase_date_only'] = wom_df['purchase_datetime_wom'].dt.date
         wom_df['year_month'] = wom_df['purchase_datetime_wom'].dt.to_period('M').astype(str)
         wom_df['day_in_month'] = wom_df['purchase_datetime_wom'].dt.day
@@ -6443,6 +6478,8 @@ class BizniWebExporter:
             base = pd.DataFrame({'week_of_month': [1, 2, 3, 4]})
             base['orders'] = 0
             base['revenue'] = 0.0
+            base['profit_without_fixed'] = 0.0
+            base['profit_with_fixed'] = 0.0
             base['profit'] = 0.0
             base['active_days'] = 0
             base['active_months'] = 0
@@ -6451,8 +6488,12 @@ class BizniWebExporter:
             base['orders_pct'] = 0.0
             base['revenue_pct'] = 0.0
             base['aov'] = 0.0
+            base['profit_margin_without_fixed_pct'] = 0.0
+            base['profit_margin_with_fixed_pct'] = 0.0
             base['profit_margin_pct'] = 0.0
             base['avg_daily_revenue'] = 0.0
+            base['avg_daily_profit_without_fixed'] = 0.0
+            base['avg_daily_profit_with_fixed'] = 0.0
             base['avg_daily_profit'] = 0.0
             base['avg_orders_per_day'] = 0.0
             base['active_day_ratio_pct'] = 0.0
@@ -6478,15 +6519,19 @@ class BizniWebExporter:
 
         wom_orders_agg = wom_df.groupby('week_of_month').agg({
             'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'profit_before_ads': 'sum',
+            revenue_col: 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum',
             'purchase_date_only': 'nunique',
             'year_month': 'nunique'
         }).reset_index()
 
         wom_orders_agg.columns = [
-            'week_of_month', 'orders', 'revenue', 'profit', 'active_days', 'active_months'
+            'week_of_month', 'orders', 'revenue',
+            'profit_without_fixed', 'profit_with_fixed',
+            'active_days', 'active_months'
         ]
+        wom_orders_agg['profit'] = wom_orders_agg['profit_with_fixed']
 
         calendar_days = calendar_df.groupby('week_of_month').agg({
             'date': 'nunique'
@@ -6496,7 +6541,7 @@ class BizniWebExporter:
         wom_agg = wom_agg.merge(wom_orders_agg, on='week_of_month', how='left')
         wom_agg = wom_agg.merge(calendar_days, on='week_of_month', how='left')
 
-        for col in ['orders', 'revenue', 'profit', 'active_days', 'active_months', 'calendar_days']:
+        for col in ['orders', 'revenue', 'profit_without_fixed', 'profit_with_fixed', 'profit', 'active_days', 'active_months', 'calendar_days']:
             wom_agg[col] = wom_agg[col].fillna(0)
         wom_agg['orders'] = wom_agg['orders'].astype(int)
         wom_agg['active_days'] = wom_agg['active_days'].astype(int)
@@ -6516,17 +6561,25 @@ class BizniWebExporter:
         wom_agg['aov'] = (wom_agg['revenue'] / wom_agg['orders']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
-        wom_agg['profit_margin_pct'] = ((wom_agg['profit'] / wom_agg['revenue']) * 100).replace(
+        wom_agg['profit_margin_without_fixed_pct'] = ((wom_agg['profit_without_fixed'] / wom_agg['revenue']) * 100).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(1)
+        wom_agg['profit_margin_with_fixed_pct'] = ((wom_agg['profit_with_fixed'] / wom_agg['revenue']) * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+        wom_agg['profit_margin_pct'] = wom_agg['profit_margin_with_fixed_pct']
 
         # Normalize by total calendar days in each month phase (not only active order days).
         wom_agg['avg_daily_revenue'] = (wom_agg['revenue'] / wom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
-        wom_agg['avg_daily_profit'] = (wom_agg['profit'] / wom_agg['calendar_days']).replace(
+        wom_agg['avg_daily_profit_without_fixed'] = (wom_agg['profit_without_fixed'] / wom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
+        wom_agg['avg_daily_profit_with_fixed'] = (wom_agg['profit_with_fixed'] / wom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        wom_agg['avg_daily_profit'] = wom_agg['avg_daily_profit_with_fixed']
         wom_agg['avg_orders_per_day'] = (wom_agg['orders'] / wom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
@@ -6548,8 +6601,9 @@ class BizniWebExporter:
         """Analyze orders, revenue, and profitability by day number within month (1-31)."""
         print("\nAnalyzing day-of-month patterns...")
 
-        dom_df = df.copy()
-        dom_df['purchase_datetime_dom'] = pd.to_datetime(dom_df['purchase_date'])
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        dom_df = orders_df.copy()
+        dom_df['purchase_datetime_dom'] = dom_df['purchase_datetime']
         dom_df['purchase_date_only'] = dom_df['purchase_datetime_dom'].dt.date
         dom_df['day_in_month'] = dom_df['purchase_datetime_dom'].dt.day
         dom_df['year_month'] = dom_df['purchase_datetime_dom'].dt.to_period('M').astype(str)
@@ -6561,6 +6615,8 @@ class BizniWebExporter:
             base = pd.DataFrame({'day_in_month': list(range(1, 32))})
             base['orders'] = 0
             base['revenue'] = 0.0
+            base['profit_without_fixed'] = 0.0
+            base['profit_with_fixed'] = 0.0
             base['profit'] = 0.0
             base['active_days'] = 0
             base['calendar_days'] = 0
@@ -6568,8 +6624,12 @@ class BizniWebExporter:
             base['orders_pct'] = 0.0
             base['revenue_pct'] = 0.0
             base['aov'] = 0.0
+            base['profit_margin_without_fixed_pct'] = 0.0
+            base['profit_margin_with_fixed_pct'] = 0.0
             base['profit_margin_pct'] = 0.0
             base['avg_revenue_per_occurrence'] = 0.0
+            base['avg_profit_per_occurrence_without_fixed'] = 0.0
+            base['avg_profit_per_occurrence_with_fixed'] = 0.0
             base['avg_profit_per_occurrence'] = 0.0
             base['avg_orders_per_occurrence'] = 0.0
             base['active_day_ratio_pct'] = 0.0
@@ -6593,11 +6653,13 @@ class BizniWebExporter:
 
         dom_orders_agg = dom_df.groupby('day_in_month').agg({
             'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'profit_before_ads': 'sum',
+            revenue_col: 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum',
             'purchase_date_only': 'nunique'
         }).reset_index()
-        dom_orders_agg.columns = ['day_in_month', 'orders', 'revenue', 'profit', 'active_days']
+        dom_orders_agg.columns = ['day_in_month', 'orders', 'revenue', 'profit_without_fixed', 'profit_with_fixed', 'active_days']
+        dom_orders_agg['profit'] = dom_orders_agg['profit_with_fixed']
 
         calendar_days = calendar_df.groupby('day_in_month').agg({
             'date': 'nunique'
@@ -6607,7 +6669,7 @@ class BizniWebExporter:
         dom_agg = dom_agg.merge(dom_orders_agg, on='day_in_month', how='left')
         dom_agg = dom_agg.merge(calendar_days, on='day_in_month', how='left')
 
-        for col in ['orders', 'revenue', 'profit', 'active_days', 'calendar_days']:
+        for col in ['orders', 'revenue', 'profit_without_fixed', 'profit_with_fixed', 'profit', 'active_days', 'calendar_days']:
             dom_agg[col] = dom_agg[col].fillna(0)
         dom_agg['orders'] = dom_agg['orders'].astype(int)
         dom_agg['active_days'] = dom_agg['active_days'].astype(int)
@@ -6626,17 +6688,25 @@ class BizniWebExporter:
         dom_agg['aov'] = (dom_agg['revenue'] / dom_agg['orders']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
-        dom_agg['profit_margin_pct'] = ((dom_agg['profit'] / dom_agg['revenue']) * 100).replace(
+        dom_agg['profit_margin_without_fixed_pct'] = ((dom_agg['profit_without_fixed'] / dom_agg['revenue']) * 100).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(1)
+        dom_agg['profit_margin_with_fixed_pct'] = ((dom_agg['profit_with_fixed'] / dom_agg['revenue']) * 100).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(1)
+        dom_agg['profit_margin_pct'] = dom_agg['profit_margin_with_fixed_pct']
 
         # Fair phase comparison: normalize by number of calendar occurrences of each day.
         dom_agg['avg_revenue_per_occurrence'] = (dom_agg['revenue'] / dom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
-        dom_agg['avg_profit_per_occurrence'] = (dom_agg['profit'] / dom_agg['calendar_days']).replace(
+        dom_agg['avg_profit_per_occurrence_without_fixed'] = (dom_agg['profit_without_fixed'] / dom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
+        dom_agg['avg_profit_per_occurrence_with_fixed'] = (dom_agg['profit_with_fixed'] / dom_agg['calendar_days']).replace(
+            [float('inf'), float('-inf')], 0
+        ).fillna(0).round(2)
+        dom_agg['avg_profit_per_occurrence'] = dom_agg['avg_profit_per_occurrence_with_fixed']
         dom_agg['avg_orders_per_occurrence'] = (dom_agg['orders'] / dom_agg['calendar_days']).replace(
             [float('inf'), float('-inf')], 0
         ).fillna(0).round(2)
@@ -6686,6 +6756,13 @@ class BizniWebExporter:
 
         analysis_df = date_agg.copy()
         analysis_df["date"] = pd.to_datetime(analysis_df["date"]).dt.date
+        analysis_df["profit_without_fixed"] = pd.to_numeric(
+            analysis_df.get("contribution_profit", 0), errors="coerce"
+        ).fillna(0.0)
+        analysis_df["profit_with_fixed"] = pd.to_numeric(
+            analysis_df.get("net_profit", 0), errors="coerce"
+        ).fillna(0.0)
+        analysis_df["profit"] = analysis_df["profit_with_fixed"]
         analysis_df["aov"] = analysis_df.apply(
             lambda row: round((row["total_revenue"] / row["unique_orders"]) if row["unique_orders"] > 0 else 0, 2),
             axis=1
@@ -6694,12 +6771,14 @@ class BizniWebExporter:
 
         weekday_baseline = analysis_df.groupby("weekday").agg({
             "total_revenue": "mean",
-            "net_profit": "mean",
+            "profit_without_fixed": "mean",
+            "profit_with_fixed": "mean",
             "unique_orders": "mean",
             "aov": "mean",
         }).rename(columns={
             "total_revenue": "weekday_expected_revenue",
-            "net_profit": "weekday_expected_profit",
+            "profit_without_fixed": "weekday_expected_profit_without_fixed",
+            "profit_with_fixed": "weekday_expected_profit_with_fixed",
             "unique_orders": "weekday_expected_orders",
             "aov": "weekday_expected_aov",
         }).reset_index()
@@ -6739,44 +6818,63 @@ class BizniWebExporter:
 
         valid["weather_bucket"] = valid.apply(classify_weather_bucket, axis=1)
         valid["revenue_vs_weekday_baseline"] = valid["total_revenue"] - valid["weekday_expected_revenue"]
-        valid["profit_vs_weekday_baseline"] = valid["net_profit"] - valid["weekday_expected_profit"]
+        valid["profit_without_fixed_vs_weekday_baseline"] = (
+            valid["profit_without_fixed"] - valid["weekday_expected_profit_without_fixed"]
+        )
+        valid["profit_with_fixed_vs_weekday_baseline"] = (
+            valid["profit_with_fixed"] - valid["weekday_expected_profit_with_fixed"]
+        )
+        valid["profit_vs_weekday_baseline"] = valid["profit_with_fixed_vs_weekday_baseline"]
         valid["orders_vs_weekday_baseline"] = valid["unique_orders"] - valid["weekday_expected_orders"]
         valid["aov_vs_weekday_baseline"] = valid["aov"] - valid["weekday_expected_aov"]
 
         overall_avg_revenue = valid["total_revenue"].mean()
-        overall_avg_profit = valid["net_profit"].mean()
+        overall_avg_profit_without_fixed = valid["profit_without_fixed"].mean()
+        overall_avg_profit_with_fixed = valid["profit_with_fixed"].mean()
         overall_avg_orders = valid["unique_orders"].mean()
 
         bucket_summary = valid.groupby("weather_bucket").agg({
             "date": "count",
             "total_revenue": "mean",
-            "net_profit": "mean",
+            "profit_without_fixed": "mean",
+            "profit_with_fixed": "mean",
             "unique_orders": "mean",
             "aov": "mean",
             "temperature_2m_mean": "mean",
             "precipitation_sum": "mean",
             "revenue_vs_weekday_baseline": "mean",
-            "profit_vs_weekday_baseline": "mean",
+            "profit_without_fixed_vs_weekday_baseline": "mean",
+            "profit_with_fixed_vs_weekday_baseline": "mean",
             "orders_vs_weekday_baseline": "mean",
             "aov_vs_weekday_baseline": "mean",
         }).reset_index().rename(columns={
             "date": "days",
             "total_revenue": "avg_daily_revenue",
-            "net_profit": "avg_daily_profit",
+            "profit_without_fixed": "avg_daily_profit_without_fixed",
+            "profit_with_fixed": "avg_daily_profit_with_fixed",
             "unique_orders": "avg_daily_orders",
             "aov": "avg_aov",
             "temperature_2m_mean": "avg_temperature",
             "precipitation_sum": "avg_precipitation",
         })
+        bucket_summary["avg_daily_profit"] = bucket_summary["avg_daily_profit_with_fixed"]
+        bucket_summary["profit_vs_weekday_baseline"] = bucket_summary["profit_with_fixed_vs_weekday_baseline"]
 
         bucket_summary["revenue_uplift_pct"] = bucket_summary.apply(
             lambda row: round((row["avg_daily_revenue"] / overall_avg_revenue - 1) * 100, 2) if overall_avg_revenue else 0,
             axis=1
         )
-        bucket_summary["profit_uplift_pct"] = bucket_summary.apply(
-            lambda row: round((row["avg_daily_profit"] / overall_avg_profit - 1) * 100, 2) if overall_avg_profit else 0,
+        bucket_summary["profit_without_fixed_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_profit_without_fixed"] / overall_avg_profit_without_fixed - 1) * 100, 2)
+            if overall_avg_profit_without_fixed else 0,
             axis=1
         )
+        bucket_summary["profit_with_fixed_uplift_pct"] = bucket_summary.apply(
+            lambda row: round((row["avg_daily_profit_with_fixed"] / overall_avg_profit_with_fixed - 1) * 100, 2)
+            if overall_avg_profit_with_fixed else 0,
+            axis=1
+        )
+        bucket_summary["profit_uplift_pct"] = bucket_summary["profit_with_fixed_uplift_pct"]
         bucket_summary["orders_uplift_pct"] = bucket_summary.apply(
             lambda row: round((row["avg_daily_orders"] / overall_avg_orders - 1) * 100, 2) if overall_avg_orders else 0,
             axis=1
@@ -6801,15 +6899,21 @@ class BizniWebExporter:
 
         correlations = {
             "rain_revenue": safe_corr(valid["precipitation_sum"], valid["total_revenue"]),
-            "rain_profit": safe_corr(valid["precipitation_sum"], valid["net_profit"]),
+            "rain_profit_without_fixed": safe_corr(valid["precipitation_sum"], valid["profit_without_fixed"]),
+            "rain_profit_with_fixed": safe_corr(valid["precipitation_sum"], valid["profit_with_fixed"]),
             "rain_orders": safe_corr(valid["precipitation_sum"], valid["unique_orders"]),
             "temp_revenue": safe_corr(valid["temperature_2m_mean"], valid["total_revenue"]),
-            "temp_profit": safe_corr(valid["temperature_2m_mean"], valid["net_profit"]),
+            "temp_profit_without_fixed": safe_corr(valid["temperature_2m_mean"], valid["profit_without_fixed"]),
+            "temp_profit_with_fixed": safe_corr(valid["temperature_2m_mean"], valid["profit_with_fixed"]),
             "temp_orders": safe_corr(valid["temperature_2m_mean"], valid["unique_orders"]),
             "bad_score_revenue": safe_corr(valid["weather_bad_score"], valid["total_revenue"]),
-            "bad_score_profit": safe_corr(valid["weather_bad_score"], valid["net_profit"]),
+            "bad_score_profit_without_fixed": safe_corr(valid["weather_bad_score"], valid["profit_without_fixed"]),
+            "bad_score_profit_with_fixed": safe_corr(valid["weather_bad_score"], valid["profit_with_fixed"]),
             "bad_score_orders": safe_corr(valid["weather_bad_score"], valid["unique_orders"]),
         }
+        correlations["rain_profit"] = correlations["rain_profit_with_fixed"]
+        correlations["temp_profit"] = correlations["temp_profit_with_fixed"]
+        correlations["bad_score_profit"] = correlations["bad_score_profit_with_fixed"]
 
         lag_correlations: Dict[str, Dict[str, Optional[float]]] = {}
         valid = valid.sort_values("date").reset_index(drop=True)
@@ -6817,9 +6921,11 @@ class BizniWebExporter:
             weather_score = valid["weather_bad_score"].shift(lag) if lag > 0 else valid["weather_bad_score"]
             lag_correlations[f"lag_{lag}_day"] = {
                 "revenue": safe_corr(weather_score, valid["total_revenue"]),
-                "profit": safe_corr(weather_score, valid["net_profit"]),
+                "profit_without_fixed": safe_corr(weather_score, valid["profit_without_fixed"]),
+                "profit_with_fixed": safe_corr(weather_score, valid["profit_with_fixed"]),
                 "orders": safe_corr(weather_score, valid["unique_orders"]),
             }
+            lag_correlations[f"lag_{lag}_day"]["profit"] = lag_correlations[f"lag_{lag}_day"]["profit_with_fixed"]
 
         analysis_csv = valid[[
             "date",
@@ -6834,11 +6940,13 @@ class BizniWebExporter:
             "precipitation_hours",
             "wind_speed_10m_max",
             "total_revenue",
-            "net_profit",
+            "profit_without_fixed",
+            "profit_with_fixed",
             "unique_orders",
             "aov",
             "revenue_vs_weekday_baseline",
-            "profit_vs_weekday_baseline",
+            "profit_without_fixed_vs_weekday_baseline",
+            "profit_with_fixed_vs_weekday_baseline",
             "orders_vs_weekday_baseline",
             "aov_vs_weekday_baseline",
         ]].copy()
@@ -6874,29 +6982,11 @@ class BizniWebExporter:
         """
         print("\nAnalyzing advanced DTC metrics...")
         revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'
-
-        # ---- Build robust order-level frame
-        orders_df = df[['order_num', 'customer_email', 'purchase_date', revenue_col, 'total_items_in_order']].drop_duplicates(subset=['order_num']).copy()
-        order_spend = (
-            df.groupby('order_num')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
-            .first()
-            .reset_index()
-        )
-        orders_df = orders_df.merge(order_spend, on='order_num', how='left')
-        orders_df['fb_ads_daily_spend'] = pd.to_numeric(orders_df['fb_ads_daily_spend'], errors='coerce').fillna(0.0)
-        orders_df['google_ads_daily_spend'] = pd.to_numeric(orders_df['google_ads_daily_spend'], errors='coerce').fillna(0.0)
-        orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
-        orders_df['purchase_date_only'] = orders_df['purchase_datetime'].dt.date
-        orders_df['cohort_month'] = orders_df['purchase_datetime'].dt.to_period('M').astype(str)
-
-        product_cost_by_order = df.groupby('order_num')['total_expense'].sum()
-        orders_df['product_cost'] = orders_df['order_num'].map(product_cost_by_order).fillna(0)
-        orders_df['packaging_cost'] = PACKAGING_COST_PER_ORDER
-        orders_df['shipping_net_cost'] = SHIPPING_NET_PER_ORDER
+        orders_df, item_df, revenue_col = self._build_growth_order_item_frames(df, revenue_col=revenue_col)
         orders_df['shipping_subsidy_cost'] = orders_df['shipping_net_cost']
-        orders_df['pre_ad_contribution'] = (
-            orders_df[revenue_col] - orders_df['product_cost'] - orders_df['packaging_cost'] - orders_df['shipping_net_cost']
-        )
+        orders_df['pre_ad_contribution_without_fixed'] = orders_df['cm1_profit']
+        orders_df['pre_ad_contribution_with_fixed'] = orders_df['cm1_profit'] - orders_df['allocated_fixed_overhead']
+        orders_df['pre_ad_contribution'] = orders_df['cm1_profit']
 
         # Mark first vs repeat orders
         first_order_date = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
@@ -7125,48 +7215,70 @@ class BizniWebExporter:
         basket_contrib = orders_df.groupby('basket_size').agg({
             'order_num': 'count',
             revenue_col: 'sum',
-            'pre_ad_contribution': 'sum'
+            'pre_ad_contribution_without_fixed': 'sum',
+            'pre_ad_contribution_with_fixed': 'sum'
         }).reset_index()
-        basket_contrib.columns = ['basket_size', 'orders', 'revenue', 'pre_ad_contribution']
-        basket_contrib['contribution_per_order'] = basket_contrib.apply(
-            lambda row: round((row['pre_ad_contribution'] / row['orders']) if row['orders'] > 0 else 0, 2), axis=1
+        basket_contrib.columns = [
+            'basket_size', 'orders', 'revenue',
+            'pre_ad_contribution_without_fixed', 'pre_ad_contribution_with_fixed'
+        ]
+        basket_contrib['pre_ad_contribution'] = basket_contrib['pre_ad_contribution_without_fixed']
+        basket_contrib['contribution_per_order_without_fixed'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution_without_fixed'] / row['orders']) if row['orders'] > 0 else 0, 2), axis=1
         )
-        basket_contrib['contribution_margin_pct'] = basket_contrib.apply(
-            lambda row: round((row['pre_ad_contribution'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 1), axis=1
+        basket_contrib['contribution_per_order_with_fixed'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution_with_fixed'] / row['orders']) if row['orders'] > 0 else 0, 2), axis=1
         )
+        basket_contrib['contribution_per_order'] = basket_contrib['contribution_per_order_without_fixed']
+        basket_contrib['contribution_margin_without_fixed_pct'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution_without_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 1), axis=1
+        )
+        basket_contrib['contribution_margin_with_fixed_pct'] = basket_contrib.apply(
+            lambda row: round((row['pre_ad_contribution_with_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 1), axis=1
+        )
+        basket_contrib['contribution_margin_pct'] = basket_contrib['contribution_margin_without_fixed_pct']
         basket_order = {'1 item': 1, '2 items': 2, '3 items': 3, '4 items': 4, '5+ items': 5, 'unknown': 99}
         basket_contrib['basket_order'] = basket_contrib['basket_size'].map(basket_order).fillna(99)
         basket_contrib = basket_contrib.sort_values('basket_order').drop(columns=['basket_order'])
 
         # ---- 8) SKU Pareto on pre-ad contribution (with proportional order overhead allocation)
-        item_df = df[['order_num', 'product_sku', 'item_label', 'item_total_without_tax', 'total_expense']].copy()
-        order_item_revenue = item_df.groupby('order_num')['item_total_without_tax'].sum().rename('order_item_revenue')
-        item_df = item_df.merge(order_item_revenue, on='order_num', how='left')
-        item_df['item_rev_share'] = item_df.apply(
-            lambda row: (row['item_total_without_tax'] / row['order_item_revenue']) if row['order_item_revenue'] > 0 else 0,
-            axis=1
-        )
-        overhead_per_order = PACKAGING_COST_PER_ORDER + SHIPPING_NET_PER_ORDER
-        item_df['allocated_overhead'] = item_df['item_rev_share'] * overhead_per_order
-        item_df['pre_ad_contribution'] = item_df['item_total_without_tax'] - item_df['total_expense'] - item_df['allocated_overhead']
+        item_df['pre_ad_contribution_without_fixed'] = item_df['cm1_profit']
+        item_df['pre_ad_contribution_with_fixed'] = item_df['cm1_profit'] - item_df['allocated_fixed_overhead']
+        item_df['pre_ad_contribution'] = item_df['pre_ad_contribution_without_fixed']
 
         sku_pareto = item_df.groupby('product_sku').agg({
             'item_label': 'first',
             'order_num': 'nunique',
             'item_total_without_tax': 'sum',
             'total_expense': 'sum',
-            'pre_ad_contribution': 'sum'
+            'pre_ad_contribution_without_fixed': 'sum',
+            'pre_ad_contribution_with_fixed': 'sum'
         }).reset_index()
-        sku_pareto.columns = ['sku', 'product', 'orders', 'revenue', 'cost', 'pre_ad_contribution']
-        sku_pareto = sku_pareto.sort_values('pre_ad_contribution', ascending=False).reset_index(drop=True)
-        total_contrib_sku = float(sku_pareto['pre_ad_contribution'].sum())
-        if total_contrib_sku != 0:
-            sku_pareto['contribution_share_pct'] = (sku_pareto['pre_ad_contribution'] / total_contrib_sku * 100).round(2)
-            sku_pareto['cum_contribution_share_pct'] = sku_pareto['contribution_share_pct'].cumsum().round(2)
+        sku_pareto.columns = ['sku', 'product', 'orders', 'revenue', 'cost', 'pre_ad_contribution_without_fixed', 'pre_ad_contribution_with_fixed']
+        sku_pareto['pre_ad_contribution'] = sku_pareto['pre_ad_contribution_without_fixed']
+        sku_pareto = sku_pareto.sort_values('pre_ad_contribution_without_fixed', ascending=False).reset_index(drop=True)
+        total_contrib_without_fixed_sku = float(sku_pareto['pre_ad_contribution_without_fixed'].sum())
+        total_contrib_with_fixed_sku = float(sku_pareto['pre_ad_contribution_with_fixed'].sum())
+        if total_contrib_without_fixed_sku != 0:
+            sku_pareto['contribution_share_without_fixed_pct'] = (
+                sku_pareto['pre_ad_contribution_without_fixed'] / total_contrib_without_fixed_sku * 100
+            ).round(2)
+            sku_pareto['cum_contribution_without_fixed_pct'] = sku_pareto['contribution_share_without_fixed_pct'].cumsum().round(2)
         else:
-            sku_pareto['contribution_share_pct'] = 0.0
-            sku_pareto['cum_contribution_share_pct'] = 0.0
-        sku_pareto_80_count = int((sku_pareto['cum_contribution_share_pct'] < 80).sum() + 1) if not sku_pareto.empty else 0
+            sku_pareto['contribution_share_without_fixed_pct'] = 0.0
+            sku_pareto['cum_contribution_without_fixed_pct'] = 0.0
+        if total_contrib_with_fixed_sku != 0:
+            sku_pareto['contribution_share_with_fixed_pct'] = (
+                sku_pareto['pre_ad_contribution_with_fixed'] / total_contrib_with_fixed_sku * 100
+            ).round(2)
+            sku_pareto['cum_contribution_with_fixed_pct'] = sku_pareto['contribution_share_with_fixed_pct'].cumsum().round(2)
+        else:
+            sku_pareto['contribution_share_with_fixed_pct'] = 0.0
+            sku_pareto['cum_contribution_with_fixed_pct'] = 0.0
+        sku_pareto['contribution_share_pct'] = sku_pareto['contribution_share_without_fixed_pct']
+        sku_pareto['cum_contribution_share_pct'] = sku_pareto['cum_contribution_without_fixed_pct']
+        sku_pareto['cum_contribution_pct'] = sku_pareto['cum_contribution_without_fixed_pct']
+        sku_pareto_80_count = int((sku_pareto['cum_contribution_without_fixed_pct'] < 80).sum() + 1) if not sku_pareto.empty else 0
 
         # ---- 9) attach rate for key products (top 10 by order penetration)
         order_sku = item_df.groupby('order_num')['product_sku'].apply(lambda x: set(x.dropna().astype(str))).reset_index()
@@ -7250,14 +7362,21 @@ class BizniWebExporter:
         # ---- 10) margin stability index (daily pre-ad margin volatility)
         daily_margin = orders_df.groupby('purchase_date_only').agg({
             revenue_col: 'sum',
-            'pre_ad_contribution': 'sum',
+            'pre_ad_contribution_without_fixed': 'sum',
+            'pre_ad_contribution_with_fixed': 'sum',
             'order_num': 'count'
         }).reset_index()
-        daily_margin.columns = ['date', 'revenue', 'pre_ad_contribution', 'orders']
-        daily_margin['pre_ad_margin_pct'] = daily_margin.apply(
-            lambda row: (row['pre_ad_contribution'] / row['revenue'] * 100) if row['revenue'] > 0 else 0,
+        daily_margin.columns = ['date', 'revenue', 'pre_ad_contribution_without_fixed', 'pre_ad_contribution_with_fixed', 'orders']
+        daily_margin['pre_ad_contribution'] = daily_margin['pre_ad_contribution_without_fixed']
+        daily_margin['pre_ad_margin_without_fixed_pct'] = daily_margin.apply(
+            lambda row: (row['pre_ad_contribution_without_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0,
             axis=1
         )
+        daily_margin['pre_ad_margin_with_fixed_pct'] = daily_margin.apply(
+            lambda row: (row['pre_ad_contribution_with_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0,
+            axis=1
+        )
+        daily_margin['pre_ad_margin_pct'] = daily_margin['pre_ad_margin_without_fixed_pct']
         daily_margin = daily_margin.sort_values('date')
         daily_margin['pre_ad_margin_7d_ma'] = daily_margin['pre_ad_margin_pct'].rolling(window=7, min_periods=1).mean()
         daily_margin['pre_ad_contribution_margin_pct'] = daily_margin['pre_ad_margin_pct']
@@ -7300,9 +7419,11 @@ class BizniWebExporter:
         payday_window = phase_orders.groupby('window').agg({
             'order_num': 'count',
             revenue_col: 'sum',
-            'pre_ad_contribution': 'sum'
+            'pre_ad_contribution_without_fixed': 'sum',
+            'pre_ad_contribution_with_fixed': 'sum'
         }).reset_index()
-        payday_window.columns = ['window', 'orders', 'revenue', 'pre_ad_contribution']
+        payday_window.columns = ['window', 'orders', 'revenue', 'pre_ad_contribution_without_fixed', 'pre_ad_contribution_with_fixed']
+        payday_window['pre_ad_contribution'] = payday_window['pre_ad_contribution_without_fixed']
         cal_days = phase_calendar.groupby('window')['date'].count().reset_index().rename(columns={'date': 'calendar_days'})
         payday_window = payday_window.merge(cal_days, on='window', how='right').fillna(0)
         payday_window['orders'] = payday_window['orders'].astype(int)
@@ -7315,8 +7436,16 @@ class BizniWebExporter:
             lambda row: (row['revenue'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
             axis=1
         )
+        payday_window['avg_profit_per_day_without_fixed'] = payday_window.apply(
+            lambda row: (row['pre_ad_contribution_without_fixed'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
+        payday_window['avg_profit_per_day_with_fixed'] = payday_window.apply(
+            lambda row: (row['pre_ad_contribution_with_fixed'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            axis=1
+        )
         payday_window['avg_profit_per_day'] = payday_window.apply(
-            lambda row: (row['pre_ad_contribution'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
+            lambda row: (row['pre_ad_contribution_without_fixed'] / row['calendar_days']) if row['calendar_days'] > 0 else 0,
             axis=1
         )
         overall_avg_revenue = (
@@ -7419,28 +7548,18 @@ class BizniWebExporter:
         """Analyze orders by geographic location"""
         print("\nAnalyzing geographic distribution...")
 
-        geo_df = df.copy()
-        geo_df['geo_country'] = geo_df.get('delivery_country')
-        geo_df['geo_country'] = geo_df['geo_country'].replace('', np.nan)
-        if 'invoice_country' in geo_df.columns:
-            geo_df['geo_country'] = geo_df['geo_country'].fillna(geo_df['invoice_country'])
-        geo_df['geo_country'] = geo_df['geo_country'].fillna('Unknown')
-
-        geo_df['geo_city'] = geo_df.get('delivery_city')
-        geo_df['geo_city'] = geo_df['geo_city'].replace('', np.nan)
-        if 'invoice_city' in geo_df.columns:
-            geo_df['geo_city'] = geo_df['geo_city'].fillna(geo_df['invoice_city'])
-        geo_df['geo_city'] = geo_df['geo_city'].apply(
-            lambda value: str(value).strip() if pd.notna(value) and str(value).strip() else np.nan
-        )
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        geo_df = self._build_order_geo_frame(df, orders_df)
 
         # By country
         country_agg = geo_df.groupby('geo_country').agg({
-            'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'profit_before_ads': 'sum'
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum'
         }).reset_index()
-        country_agg.columns = ['country', 'orders', 'revenue', 'profit']
+        country_agg.columns = ['country', 'orders', 'revenue', 'profit_without_fixed', 'profit_with_fixed']
+        country_agg['profit'] = country_agg['profit_with_fixed']
         country_agg = country_agg.sort_values('revenue', ascending=False)
         country_agg['revenue_pct'] = (country_agg['revenue'] / country_agg['revenue'].sum() * 100).round(1)
         country_meta = country_agg['orders'].apply(lambda value: self._geo_confidence_payload(value, level="country"))
@@ -7449,13 +7568,15 @@ class BizniWebExporter:
         # By city (top 20), prefer delivery city and fallback to invoice city if delivery is missing.
         city_source = geo_df[geo_df['geo_city'].notna()].copy()
         city_agg = city_source.groupby(['geo_city', 'geo_country']).agg({
-            'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'profit_before_ads': 'sum'
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum'
         }).reset_index()
-        city_agg.columns = ['city', 'country', 'orders', 'revenue', 'profit']
+        city_agg.columns = ['city', 'country', 'orders', 'revenue', 'profit_without_fixed', 'profit_with_fixed']
+        city_agg['profit'] = city_agg['profit_with_fixed']
         city_agg = city_agg.sort_values(['revenue', 'orders'], ascending=[False, False]).head(20)
-        city_agg['revenue_pct'] = (city_agg['revenue'] / geo_df['item_total_without_tax'].sum() * 100).round(1)
+        city_agg['revenue_pct'] = (city_agg['revenue'] / geo_df[revenue_col].sum() * 100).round(1)
         city_meta = city_agg['orders'].apply(lambda value: self._geo_confidence_payload(value, level="city"))
         city_agg = pd.concat([city_agg, pd.DataFrame(city_meta.tolist(), index=city_agg.index)], axis=1)
 
@@ -7469,23 +7590,8 @@ class BizniWebExporter:
         """
         print("\nAnalyzing geo profitability (SK/CZ/HU)...")
 
-        # Build one row per order with country + order economics.
-        # Prefer delivery country, fallback to invoice country if missing.
-        geo_df = df.copy()
-        if 'delivery_country' in geo_df.columns:
-            geo_df['geo_country'] = geo_df['delivery_country']
-        else:
-            geo_df['geo_country'] = None
-        geo_df['geo_country'] = geo_df['geo_country'].replace('', np.nan)
-        if 'invoice_country' in geo_df.columns:
-            geo_df['geo_country'] = geo_df['geo_country'].fillna(geo_df['invoice_country'])
-
-        order_level = geo_df.groupby('order_num').agg({
-            'geo_country': 'first',
-            'item_total_without_tax': 'sum',
-            'total_expense': 'sum'
-        }).reset_index()
-        order_level.columns = ['order_num', 'country', 'revenue', 'product_cost']
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        order_level = self._build_order_geo_frame(df, orders_df).rename(columns={"geo_country": "country"}).copy()
         order_level['country'] = order_level['country'].fillna('unknown').astype(str).str.lower().str.strip()
 
         # Normalize common country aliases.
@@ -7510,14 +7616,14 @@ class BizniWebExporter:
             }
 
         geo = order_level.groupby('country').agg({
-            'order_num': 'nunique',
-            'revenue': 'sum',
-            'product_cost': 'sum'
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'product_cost': 'sum',
+            'packaging_cost': 'sum',
+            'shipping_net_cost': 'sum',
+            'allocated_fixed_overhead': 'sum'
         }).reset_index()
-        geo.columns = ['country', 'orders', 'revenue', 'product_cost']
-
-        geo['packaging_cost'] = geo['orders'] * PACKAGING_COST_PER_ORDER
-        geo['shipping_net_cost'] = geo['orders'] * SHIPPING_NET_PER_ORDER
+        geo.columns = ['country', 'orders', 'revenue', 'product_cost', 'packaging_cost', 'shipping_net_cost', 'fixed_cost']
         geo['shipping_subsidy_cost'] = geo['shipping_net_cost']
 
         fb_spend_by_country = {'sk': 0.0, 'cz': 0.0, 'hu': 0.0}
@@ -7542,12 +7648,21 @@ class BizniWebExporter:
                 fb_spend_unattributed += spend
 
         geo['fb_ads_spend'] = geo['country'].map(fb_spend_by_country).fillna(0)
-        geo['contribution_cost'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['fb_ads_spend']
-        geo['contribution_profit'] = geo['revenue'] - geo['contribution_cost']
-        geo['contribution_margin_pct'] = geo.apply(
-            lambda row: round((row['contribution_profit'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
+        geo['contribution_cost_without_fixed'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['fb_ads_spend']
+        geo['contribution_profit_without_fixed'] = geo['revenue'] - geo['contribution_cost_without_fixed']
+        geo['contribution_margin_without_fixed_pct'] = geo.apply(
+            lambda row: round((row['contribution_profit_without_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
             axis=1
         )
+        geo['contribution_cost_with_fixed'] = geo['contribution_cost_without_fixed'] + geo['fixed_cost']
+        geo['contribution_profit_with_fixed'] = geo['revenue'] - geo['contribution_cost_with_fixed']
+        geo['contribution_margin_with_fixed_pct'] = geo.apply(
+            lambda row: round((row['contribution_profit_with_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
+            axis=1
+        )
+        geo['contribution_cost'] = geo['contribution_cost_with_fixed']
+        geo['contribution_profit'] = geo['contribution_profit_with_fixed']
+        geo['contribution_margin_pct'] = geo['contribution_margin_with_fixed_pct']
         geo['fb_cpo'] = geo.apply(
             lambda row: round((row['fb_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
             axis=1
@@ -7558,6 +7673,22 @@ class BizniWebExporter:
         )
         geo_meta = geo['orders'].apply(lambda value: self._geo_confidence_payload(value, level="country"))
         geo = pd.concat([geo, pd.DataFrame(geo_meta.tolist(), index=geo.index)], axis=1)
+        geo['contribution_profit_without_fixed_guarded'] = geo.apply(
+            lambda row: row['contribution_profit_without_fixed'] if not bool(row.get('hide_economics')) else np.nan,
+            axis=1,
+        )
+        geo['contribution_profit_with_fixed_guarded'] = geo.apply(
+            lambda row: row['contribution_profit_with_fixed'] if not bool(row.get('hide_economics')) else np.nan,
+            axis=1,
+        )
+        geo['contribution_margin_without_fixed_pct_guarded'] = geo.apply(
+            lambda row: row['contribution_margin_without_fixed_pct'] if not bool(row.get('hide_economics')) else np.nan,
+            axis=1,
+        )
+        geo['contribution_margin_with_fixed_pct_guarded'] = geo.apply(
+            lambda row: row['contribution_margin_with_fixed_pct'] if not bool(row.get('hide_economics')) else np.nan,
+            axis=1,
+        )
         geo['contribution_profit_guarded'] = geo.apply(
             lambda row: row['contribution_profit'] if not bool(row.get('hide_economics')) else np.nan,
             axis=1,
@@ -7572,7 +7703,12 @@ class BizniWebExporter:
         )
 
         # Round financial values for display.
-        for col in ['revenue', 'product_cost', 'packaging_cost', 'shipping_subsidy_cost', 'fb_ads_spend', 'contribution_cost', 'contribution_profit', 'contribution_profit_guarded']:
+        for col in [
+            'revenue', 'product_cost', 'packaging_cost', 'shipping_subsidy_cost', 'fixed_cost', 'fb_ads_spend',
+            'contribution_cost_without_fixed', 'contribution_profit_without_fixed', 'contribution_profit_without_fixed_guarded',
+            'contribution_cost_with_fixed', 'contribution_profit_with_fixed', 'contribution_profit_with_fixed_guarded',
+            'contribution_cost', 'contribution_profit', 'contribution_profit_guarded'
+        ]:
             geo[col] = geo[col].round(2)
 
         geo = geo.sort_values('revenue', ascending=False).reset_index(drop=True)
@@ -7716,19 +7852,28 @@ class BizniWebExporter:
         """Analyze profit margins by product (grouped by product_sku)"""
         print("\nAnalyzing product margins...")
 
-        product_margins = df.groupby('product_sku').agg({
-            'item_label': 'first',  # Keep product name for display
+        _, item_df, _ = self._build_growth_order_item_frames(df)
+        product_margins = item_df.groupby('product_sku').agg({
+            'item_label': 'first',
             'item_quantity': 'sum',
             'item_total_without_tax': 'sum',
             'total_expense': 'sum',
-            'profit_before_ads': 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum',
             'order_num': 'nunique'
         }).reset_index()
 
-        product_margins.columns = ['sku', 'product', 'quantity', 'revenue', 'cost', 'profit', 'orders']
-        product_margins['margin_pct'] = ((product_margins['profit'] / product_margins['revenue']) * 100).round(1)
-        product_margins['margin_pct'] = product_margins['margin_pct'].fillna(0)
-        product_margins = product_margins.sort_values('margin_pct', ascending=False)
+        product_margins.columns = [
+            'sku', 'product', 'quantity', 'revenue', 'cost',
+            'profit_without_fixed', 'profit_with_fixed', 'orders'
+        ]
+        product_margins['margin_without_fixed_pct'] = ((product_margins['profit_without_fixed'] / product_margins['revenue']) * 100).round(1)
+        product_margins['margin_with_fixed_pct'] = ((product_margins['profit_with_fixed'] / product_margins['revenue']) * 100).round(1)
+        product_margins['margin_without_fixed_pct'] = product_margins['margin_without_fixed_pct'].fillna(0)
+        product_margins['margin_with_fixed_pct'] = product_margins['margin_with_fixed_pct'].fillna(0)
+        product_margins['profit'] = product_margins['profit_with_fixed']
+        product_margins['margin_pct'] = product_margins['margin_with_fixed_pct']
+        product_margins = product_margins.sort_values('margin_with_fixed_pct', ascending=False)
 
         print(f"Product margin analysis complete: {len(product_margins)} products")
         return product_margins
@@ -7799,12 +7944,15 @@ class BizniWebExporter:
         """Analyze customer concentration (top customers % of revenue)"""
         print("\nAnalyzing customer concentration...")
 
-        customer_revenue = df.groupby('customer_email').agg({
-            'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'profit_before_ads': 'sum'
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        customer_revenue = orders_df.groupby('customer_email').agg({
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum'
         }).reset_index()
-        customer_revenue.columns = ['customer', 'orders', 'revenue', 'profit']
+        customer_revenue.columns = ['customer', 'orders', 'revenue', 'profit_without_fixed', 'profit_with_fixed']
+        customer_revenue['profit'] = customer_revenue['profit_with_fixed']
         customer_revenue = customer_revenue.sort_values('revenue', ascending=False)
 
         total_revenue = customer_revenue['revenue'].sum()
@@ -8320,18 +8468,17 @@ class BizniWebExporter:
         """Analyze relationship between ad spend and orders/revenue"""
         print("\nAnalyzing ads effectiveness...")
 
-        # Convert to date only (remove time component)
-        df['purchase_date_only'] = pd.to_datetime(df['purchase_date']).dt.date
-
-        # Daily aggregation for correlation - use date only
-        daily_data = df.groupby('purchase_date_only').agg({
-            'order_num': 'nunique',
-            'item_total_without_tax': 'sum',
-            'fb_ads_daily_spend': 'first',
-            'google_ads_daily_spend': 'first',
-            'profit_before_ads': 'sum'
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        daily_data = orders_df.groupby('purchase_date_only').agg({
+            'order_num': 'count',
+            revenue_col: 'sum',
+            'allocated_fb_spend': 'sum',
+            'allocated_google_spend': 'sum',
+            'cm2_profit': 'sum',
+            'cm3_profit': 'sum'
         }).reset_index()
-        daily_data.columns = ['date', 'orders', 'revenue', 'fb_spend', 'google_spend', 'profit']
+        daily_data.columns = ['date', 'orders', 'revenue', 'fb_spend', 'google_spend', 'profit_without_fixed', 'profit_with_fixed']
+        daily_data['profit'] = daily_data['profit_with_fixed']
         daily_data['total_ad_spend'] = daily_data['fb_spend'] + daily_data['google_spend']
 
         # Calculate correlations
@@ -8359,9 +8506,14 @@ class BizniWebExporter:
             'orders': 'mean',
             'revenue': 'mean',
             'fb_spend': 'mean',
-            'profit': 'mean'
+            'profit_without_fixed': 'mean',
+            'profit_with_fixed': 'mean'
         }).reset_index()
-        spend_effectiveness.columns = ['spend_range', 'avg_orders', 'avg_revenue', 'avg_spend', 'avg_profit']
+        spend_effectiveness.columns = [
+            'spend_range', 'avg_orders', 'avg_revenue', 'avg_spend',
+            'avg_profit_without_fixed', 'avg_profit_with_fixed'
+        ]
+        spend_effectiveness['avg_profit'] = spend_effectiveness['avg_profit_with_fixed']
 
         # Calculate ROAS per spend range
         spend_effectiveness['roas'] = (spend_effectiveness['avg_revenue'] / spend_effectiveness['avg_spend']).round(2)
@@ -8369,7 +8521,7 @@ class BizniWebExporter:
 
         # Find best performing spend range
         best_roas_range = spend_effectiveness.loc[spend_effectiveness['roas'].idxmax(), 'spend_range'] if not spend_effectiveness.empty else 'N/A'
-        best_profit_range = spend_effectiveness.loc[spend_effectiveness['avg_profit'].idxmax(), 'spend_range'] if not spend_effectiveness.empty else 'N/A'
+        best_profit_range = spend_effectiveness.loc[spend_effectiveness['avg_profit_with_fixed'].idxmax(), 'spend_range'] if not spend_effectiveness.empty else 'N/A'
 
         # Day of week ad effectiveness
         daily_data['day_of_week'] = pd.to_datetime(daily_data['date']).dt.day_name()
@@ -8377,7 +8529,8 @@ class BizniWebExporter:
             'fb_spend': 'mean',
             'orders': 'mean',
             'revenue': 'mean',
-            'profit': 'mean'
+            'profit_without_fixed': 'mean',
+            'profit_with_fixed': 'mean'
         }).reset_index()
         dow_effectiveness['roas'] = (dow_effectiveness['revenue'] / dow_effectiveness['fb_spend']).round(2)
         dow_effectiveness['roas'] = dow_effectiveness['roas'].replace([float('inf'), float('-inf')], 0).fillna(0)
@@ -8390,7 +8543,9 @@ class BizniWebExporter:
         dow_effectiveness['avg_fb_spend'] = dow_effectiveness['fb_spend']
         dow_effectiveness['avg_orders'] = dow_effectiveness['orders']
         dow_effectiveness['avg_revenue'] = dow_effectiveness['revenue']
-        dow_effectiveness['avg_profit'] = dow_effectiveness['profit']
+        dow_effectiveness['avg_profit_without_fixed'] = dow_effectiveness['profit_without_fixed']
+        dow_effectiveness['avg_profit_with_fixed'] = dow_effectiveness['profit_with_fixed']
+        dow_effectiveness['avg_profit'] = dow_effectiveness['profit_with_fixed']
 
         result = {
             'correlations': correlations,
@@ -8398,7 +8553,9 @@ class BizniWebExporter:
             'dow_effectiveness': dow_effectiveness,
             'best_roas_range': best_roas_range,
             'best_profit_range': best_profit_range,
-            'daily_data': daily_data[['date', 'orders', 'revenue', 'fb_spend', 'google_spend', 'profit']].copy()
+            'daily_data': daily_data[
+                ['date', 'orders', 'revenue', 'fb_spend', 'google_spend', 'profit_without_fixed', 'profit_with_fixed', 'profit']
+            ].copy()
         }
 
         # Recommendations

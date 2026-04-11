@@ -119,7 +119,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Transfer the VEVO dashboard-wide fixed / no-fixed profit views from the April side branch into the active reporting line and verify the rendered report.
+- Transfer the April-side daily report email copy into the active reporting line and verify the rendered SES body stays short and consistent.
 
 ## 9) Change Log
 
@@ -1183,3 +1183,29 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
     - `orderLifecycleProxyChart`
     - `opsLifecycleProxyChart`
     - `opsB2bUnitEconomicsChart`
+
+### 2026-04-11 (VEVO/ROY dashboard fixed vs no-fixed profit views)
+- Transferred the April-side fixed / no-fixed profit presentation into the active dashboard line without overwriting the newer CM-based runtime logic.
+- Extended export-side analytics to emit explicit with-fixed and without-fixed economics across the affected drilldowns:
+  - weekday / week-of-month / day-of-month patterns
+  - weather impact
+  - geographic profitability
+  - product margins
+  - customer concentration
+  - ads effectiveness
+  - basket contribution
+  - SKU Pareto
+- Updated the modern dashboard to surface both views side-by-side across the active shell and library:
+  - main revenue / profit charts now show both profit curves
+  - margin charts now separate ex-fixed vs incl-fixed pre/post-ad margins
+  - marketing tables and charts now show spend output with both profit variants
+  - geo, product, customer, basket and SKU Pareto tables now expose both values explicitly
+  - library drilldowns for patterns / products / economics now render both fixed states instead of a single legacy profit alias
+- Verified with:
+  - `python -m py_compile dashboard_modern.py export_orders.py html_report_generator.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts\\reporting_qa_smoke.py`
+- Verification outcome:
+  - VEVO and ROY March 2026 reports regenerate successfully
+  - rendered HTML for both projects now contains explicit `Profit ex fixed` / `Profit incl. fixed` and matching contribution / margin variants across the affected tables and charts
