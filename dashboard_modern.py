@@ -6,6 +6,7 @@ Production dashboard renderer used by the main HTML reporting output.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime
 from html import escape
 from typing import Any, Dict, List, Optional
@@ -46,6 +47,8 @@ COMPARISON_LABELS = {
     },
 }
 
+DASHBOARD_PAYLOAD_SCRIPT_ID = "report-dashboard-json"
+
 
 def _num(value: Any, default: float = 0.0) -> float:
     try:
@@ -71,6 +74,33 @@ def _maybe_num(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return str(value)
+
+
+def _json_script_content(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, default=_json_default).replace("<", "\\u003c")
+
+
+def extract_embedded_dashboard_payload(html_text: str) -> Dict[str, Any]:
+    pattern = (
+        rf'<script\s+id="{re.escape(DASHBOARD_PAYLOAD_SCRIPT_ID)}"\s+type="application/json">'
+        rf"(?P<payload>.*?)</script>"
+    )
+    match = re.search(pattern, html_text, flags=re.DOTALL | re.IGNORECASE)
+    if not match:
+        raise ValueError("Embedded dashboard payload script tag not found in report HTML.")
+    payload_raw = match.group("payload").strip()
+    if not payload_raw:
+        raise ValueError("Embedded dashboard payload is empty.")
+    payload = json.loads(payload_raw)
+    if not isinstance(payload, dict):
+        raise ValueError("Embedded dashboard payload must decode to a JSON object.")
+    return payload
 
 
 def _ma(values: List[float], window: int) -> List[Optional[float]]:
@@ -1553,7 +1583,7 @@ def generate_modern_dashboard(
             "reconciliation": (cost_per_order or {}).get("fb_spend_reconciliation") or {},
         },
     }
-    payload_json = json.dumps(payload, ensure_ascii=False)
+    payload_json = _json_script_content(payload)
 
     product_rows_html = "".join(
         (
@@ -2970,8 +3000,9 @@ def generate_modern_dashboard(
             </div>
         </main>
     </div>
+    <script id="{DASHBOARD_PAYLOAD_SCRIPT_ID}" type="application/json">{payload_json}</script>
     <script>
-        const DATA = {payload_json};
+        const DATA = JSON.parse(document.getElementById('{DASHBOARD_PAYLOAD_SCRIPT_ID}').textContent || '{{}}');
         const INLINE_EMBEDDED_PERIOD_REPORTS = window.__EMBEDDED_PERIOD_REPORTS__ || {json.dumps(embedded_period_reports)};
         const KPI_TYPES = {{
             revenue: 'currency', profit: 'currency', orders: 'integer', aov: 'currency',

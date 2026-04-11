@@ -13,9 +13,10 @@ import traceback
 import hashlib
 import base64
 import re
+import shutil
 import unicodedata
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import calendar
@@ -78,6 +79,7 @@ except ImportError:
         def get_daily_spend(self, *args, **kwargs):
             return {}
 
+from dashboard_modern import extract_embedded_dashboard_payload
 from html_report_generator import generate_html_report, generate_email_strategy_report
 
 # Load base environment variables from repo root .env (if present).
@@ -844,6 +846,38 @@ class BizniWebExporter:
             json.dump(source_health, f, ensure_ascii=False, indent=2)
         print(f"Data quality metadata saved: {quality_path}")
         return quality_path
+
+    def _write_dashboard_payload_files(
+        self,
+        *,
+        html_content: str,
+        source_health: Dict[str, Any],
+        period_switcher: Optional[Dict[str, Any]],
+        date_from: datetime,
+        date_to: datetime,
+        report_title: str,
+    ) -> Tuple[Path, Path]:
+        dashboard_payload = extract_embedded_dashboard_payload(html_content)
+        snapshot = {
+            "project": self.project_name,
+            "report_title": report_title,
+            "date_from": date_from.strftime("%Y-%m-%d"),
+            "date_to": date_to.strftime("%Y-%m-%d"),
+            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "output_tag": self.output_tag,
+            "source_health": source_health or {},
+            "period_switcher": period_switcher or {},
+            "dashboard": dashboard_payload,
+        }
+        payload_path = self.output_path(f"dashboard_payload_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.json")
+        latest_path = self.output_path("dashboard_payload_latest.json")
+        with open(payload_path, "w", encoding="utf-8") as handle:
+            json.dump(snapshot, handle, ensure_ascii=False, indent=2)
+        with open(latest_path, "w", encoding="utf-8") as handle:
+            json.dump(snapshot, handle, ensure_ascii=False, indent=2)
+        print(f"Dashboard payload saved: {payload_path}")
+        print(f"Dashboard latest payload saved: {latest_path}")
+        return payload_path, latest_path
 
     def _geo_confidence_settings(self, level: str) -> Dict[str, int]:
         raw = dict((self.project_settings or {}).get("geo_confidence") or {})
@@ -3358,7 +3392,7 @@ class BizniWebExporter:
 
         source_health: Dict[str, Any] = {
             "project": self.project_name,
-            "generated_at_utc": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "date_range": {
                 "from": date_from.strftime("%Y-%m-%d"),
                 "to": date_to.strftime("%Y-%m-%d"),
@@ -3817,7 +3851,21 @@ class BizniWebExporter:
         with open(html_filename, 'w', encoding='utf-8-sig') as f:
             f.write(html_content)
         print(f"HTML report saved: {html_filename}")
+        latest_report_filename = self.output_path("report_latest.html")
+        shutil.copyfile(html_filename, latest_report_filename)
+        print(f"Latest HTML report saved: {latest_report_filename}")
         self._write_data_quality_file(source_health, date_from, date_to)
+        try:
+            self._write_dashboard_payload_files(
+                html_content=html_content,
+                source_health=source_health,
+                period_switcher=period_switcher,
+                date_from=date_from,
+                date_to=date_to,
+                report_title=self.reporting_defaults["reporting_system_name"],
+            )
+        except Exception as exc:
+            print(f"WARNING: Dashboard payload sidecar was not saved: {exc}")
 
         # Generate Email Strategy Report
         if ENABLE_EMAIL_STRATEGY_REPORT and customer_email_segments and cohort_analysis:

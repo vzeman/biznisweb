@@ -119,7 +119,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Transfer the April-side live dashboard latest-artifact view into the active reporting line and verify it renders the newest VEVO / ROY artifacts correctly.
+- Transfer the April-side ad incrementality analysis into the active reporting line and verify it renders in both the generated reports and the live dashboard.
 
 ## 9) Change Log
 
@@ -1232,3 +1232,33 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Verification outcome:
   - VEVO and ROY summary text now renders from the actual current artifacts
   - QA warning / partial-data note remains visible at the top of the email
+
+### 2026-04-11 (live dashboard latest-artifact view)
+- Transferred the April-side live dashboard latest-artifact view into the active reporting line without overwriting the newer March/April reporting hardening work.
+- Extended the shared artifact contract so every export now writes:
+  - the range-specific HTML report
+  - `report_latest.html`
+  - the range-specific dashboard payload JSON extracted from the rendered report
+  - `dashboard_payload_latest.json`
+- Updated the modern dashboard HTML renderer so the embedded report payload is emitted in a stable JSON script block that can be extracted safely for the live dashboard API.
+- Updated the daily runner S3 upload flow so the stable latest artifacts are uploaded alongside the dated outputs for direct live-dashboard consumption.
+- Added `live_dashboard_server.py` as a repo-local live viewer that serves:
+  - health endpoint
+  - project list
+  - latest project payload API
+  - report iframe route
+  - live dashboard route with period switching
+- Verified locally with:
+  - `python -m py_compile live_dashboard_server.py export_orders.py dashboard_modern.py daily_report_runner.py reporting_core\\contracts.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - localhost smoke checks:
+    - `GET /health`
+    - `GET /api/vevo/latest?period=full`
+    - `GET /api/roy/latest?period=full`
+    - `GET /dashboard/vevo?period=full`
+    - `GET /dashboard/roy?period=full`
+- Verification outcome:
+  - live dashboard routes now render against the newest VEVO and ROY artifacts
+  - both project dashboards expose the expected `data-marker=\"live-dashboard-app\"`
+  - stable latest report and payload artifacts are now produced by the export pipeline instead of depending on ad hoc local files
