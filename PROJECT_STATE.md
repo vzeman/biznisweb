@@ -65,7 +65,7 @@ Bootstrap entrypoints:
 - Repo-scoped `PROJECT_STATE.md` exists
 - Bootstrap scripts now exist for macOS/Linux and Windows PowerShell
 - VEVO ECS schedule `vevo-daily-report-email` is enabled for `01:00 Europe/Bratislava`
-- VEVO production task definition `vevo-reporting-daily:3` uses full-history runtime range from `2025-05-03` to `yesterday`
+- VEVO production task definition `vevo-reporting-daily:4` uses full-history runtime range from `2025-05-03` to `yesterday`
 - VEVO task role CloudWatch metric policy now allows the active namespace `BizniswebReporting` (and keeps backward-compatible `VevoReporting`)
 - Manual ECS production-equivalent run succeeded on `2026-04-03` with:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
@@ -119,7 +119,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Merge `codex/segment-unit-econ-lifecycle` into `main` through a reviewed PR, then refresh the production reporting runtime so the transferred April features are the only active source of truth.
+- Verify the next scheduled VEVO production email run from `vevo-daily-report-email` against the new `main` image, then decide whether ROY should get its own AWS daily runner or stay manual-only for now.
 
 ## 9) Change Log
 
@@ -1324,3 +1324,19 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Verification outcome:
   - local syntax checks pass again
   - the PR branch is now ready for GitHub CI to re-run on a Python-3.11-compatible dashboard renderer
+
+### 2026-04-11 (production activation on main)
+- Merged PR `#31 Finalize April reporting transfers` into `main`.
+- Verified the merge landed as commit `e13b329` on `origin/main`.
+- Verified the production image refresh completed successfully via GitHub Actions:
+  - workflow: `Build and Push ECR`
+  - run: `24286215777`
+  - result: `success`
+- Production hard-gate confirmation for the active daily runner:
+  - instance-id: `N/A` (scheduled ECS task, no fixed EC2 host)
+  - IP: `N/A` (no fixed host / no localhost endpoint)
+  - service name: `vevo-daily-report-email` scheduler targeting ECS family `vevo-reporting-daily:4`
+  - image path: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+- Operational note:
+  - this repo currently documents only the VEVO AWS daily email runner as production,
+  - ROY reporting is now in `main` too, but a separate ROY scheduled AWS runner is not yet documented in this repo.
