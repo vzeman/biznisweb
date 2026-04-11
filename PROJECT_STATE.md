@@ -1003,3 +1003,27 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - consistency checks remain green after CM taxonomy exposure
 - Next exact step:
   - add acquisition-source x product-family cube for ROY and VEVO so channel efficiency can be evaluated by product family instead of only globally.
+### 2026-04-11 (Acquisition-source x product-family cube)
+- Added order-level ad spend hydration into the advanced DTC pipeline so first-order source proxies can be derived consistently from the first purchase day.
+- Wired the existing `analyze_acquisition_source_product_family_cube(...)` model into `analyze_advanced_dtc_metrics(...)` and exposed it in the exported advanced metrics payload as:
+  - `acquisition_product_family_cube`
+- Extended the modern dashboard payload in `dashboard_modern.py` with:
+  - `acquisition_family.cube_rows`
+  - `acquisition_family.source_rows`
+  - `acquisition_family.family_rows`
+  - `acquisition_family.summary`
+- Added three new marketing library charts to the modern dashboard for both VEVO and ROY:
+  - `Source proxy x product family`
+  - `90d contribution by source proxy x family`
+  - `Source proxy summary`
+- The new view is explicitly proxy-based, using paid-day presence (`facebook_paid_day`, `google_paid_day`, `mixed_paid_day`, `organic_unknown_day`) rather than pretending to be exact order-level attribution.
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO and ROY March 2026 reports regenerate successfully
+  - both rendered HTML reports contain the new acquisition-family charts and chart bindings
+  - no regression in existing advanced DTC or marketing sections
+- Next exact step:
+  - add Vevo cohort refill model so refill timing is measured by first-item cohort and horizon, not only by generic repeat-purchase logic.

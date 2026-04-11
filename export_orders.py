@@ -5529,6 +5529,14 @@ class BizniWebExporter:
 
         # ---- Build robust order-level frame
         orders_df = df[['order_num', 'customer_email', 'purchase_date', revenue_col, 'total_items_in_order']].drop_duplicates(subset=['order_num']).copy()
+        order_spend = (
+            df.groupby('order_num')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
+            .first()
+            .reset_index()
+        )
+        orders_df = orders_df.merge(order_spend, on='order_num', how='left')
+        orders_df['fb_ads_daily_spend'] = pd.to_numeric(orders_df['fb_ads_daily_spend'], errors='coerce').fillna(0.0)
+        orders_df['google_ads_daily_spend'] = pd.to_numeric(orders_df['google_ads_daily_spend'], errors='coerce').fillna(0.0)
         orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
         orders_df['purchase_date_only'] = orders_df['purchase_datetime'].dt.date
         orders_df['cohort_month'] = orders_df['purchase_datetime'].dt.to_period('M').astype(str)
@@ -5855,6 +5863,12 @@ class BizniWebExporter:
 
         # ---- Roy bundle/accessory model (config-driven, optional per project)
         bundle_accessory_model = self.analyze_bundle_accessory_model(orders_df, item_df, revenue_col)
+        acquisition_product_family_cube = self.analyze_acquisition_source_product_family_cube(
+            orders_df=orders_df,
+            item_df=item_df,
+            customer_orders=customer_orders,
+            revenue_col=revenue_col,
+        )
 
         # ---- 10) margin stability index (daily pre-ad margin volatility)
         daily_margin = orders_df.groupby('purchase_date_only').agg({
@@ -5972,6 +5986,7 @@ class BizniWebExporter:
             'sku_pareto': sku_pareto,
             'attach_rate': attach_rate,
             'bundle_accessory_model': bundle_accessory_model,
+            'acquisition_product_family_cube': acquisition_product_family_cube,
             'daily_margin': daily_margin,
             'payday_window': payday_window,
         }
