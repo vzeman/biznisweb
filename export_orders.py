@@ -730,8 +730,13 @@ class BizniWebExporter:
         degraded = [source["label"] for source in sources if source.get("status") in {"warning", "error"}]
         qa_checks = list((source_health.get("qa") or {}).values())
         qa_warnings = [check.get("label") or check.get("key") or "QA" for check in qa_checks if check.get("status") == "warning"]
+        qa_errors = [check.get("label") or check.get("key") or "QA" for check in qa_checks if check.get("status") in {"error", "critical"}]
+        qa_failure_count = int(sum(int(check.get("failure_count") or 0) for check in qa_checks))
+        qa_warning_count = int(sum(int(check.get("warning_count") or 0) for check in qa_checks))
         if degraded:
             overall_status = "partial"
+        elif qa_errors:
+            overall_status = "critical"
         elif qa_warnings:
             overall_status = "warning"
         else:
@@ -739,13 +744,23 @@ class BizniWebExporter:
         source_health["overall_status"] = overall_status
         source_health["is_partial"] = bool(degraded)
         source_health["partial_sources"] = degraded
-        source_health["qa_status"] = "warning" if qa_warnings else "ok"
+        source_health["qa_status"] = "critical" if qa_errors else ("warning" if qa_warnings else "ok")
         source_health["qa_warnings"] = qa_warnings
+        source_health["qa_errors"] = qa_errors
+        source_health["qa_failure_count"] = qa_failure_count
+        source_health["qa_warning_count"] = qa_warning_count
+        source_health["qa_check_count"] = len(qa_checks)
         if degraded:
             source_health["summary"] = (
                 "Partial data: "
                 + ", ".join(degraded)
                 + " did not load cleanly in this run. Metrics depending on these sources may be incomplete or zero-filled."
+            )
+        elif qa_errors:
+            source_health["summary"] = (
+                "Critical data QA issues were raised for "
+                + ", ".join(qa_errors)
+                + ". Treat affected metrics as unsafe for decision-making until the assertions are resolved."
             )
         elif qa_warnings:
             source_health["summary"] = (
@@ -833,11 +848,27 @@ class BizniWebExporter:
         ignore_count = 0
         observe_count = 0
         ready_count = 0
+        ignore_orders = 0.0
+        observe_orders = 0.0
+        ignore_revenue = 0.0
+        observe_revenue = 0.0
+        total_orders = 0.0
+        total_revenue = 0.0
 
         if not geo_df.empty and "confidence_status" in geo_df.columns:
+            if "orders" in geo_df.columns:
+                total_orders = float(pd.to_numeric(geo_df["orders"], errors="coerce").fillna(0).sum())
+            if "revenue" in geo_df.columns:
+                total_revenue = float(pd.to_numeric(geo_df["revenue"], errors="coerce").fillna(0).sum())
             ignore_count = int((geo_df["confidence_status"] == "ignore").sum())
             observe_count = int((geo_df["confidence_status"] == "observe").sum())
             ready_count = int((geo_df["confidence_status"] == "ready").sum())
+            if total_orders > 0 and "orders" in geo_df.columns:
+                ignore_orders = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "ignore", "orders"], errors="coerce").fillna(0).sum())
+                observe_orders = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "observe", "orders"], errors="coerce").fillna(0).sum())
+            if total_revenue > 0 and "revenue" in geo_df.columns:
+                ignore_revenue = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "ignore", "revenue"], errors="coerce").fillna(0).sum())
+                observe_revenue = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "observe", "revenue"], errors="coerce").fillna(0).sum())
             if ignore_count > 0:
                 warnings.append(
                     f"{ignore_count} country row(s) are below the minimum geo sample threshold and should not be treated as strategic market insight."
@@ -849,11 +880,20 @@ class BizniWebExporter:
 
         unknown_country_rate = None
         if not country_df.empty and "country" in country_df.columns:
-            total_orders = float(country_df["orders"].sum()) if "orders" in country_df.columns else 0.0
-            unknown_orders = float(country_df.loc[country_df["country"].astype(str).str.lower() == "unknown", "orders"].sum()) if total_orders > 0 else 0.0
-            unknown_country_rate = round((unknown_orders / total_orders) * 100, 2) if total_orders > 0 else 0.0
+            total_country_orders = float(country_df["orders"].sum()) if "orders" in country_df.columns else 0.0
+            unknown_orders = float(country_df.loc[country_df["country"].astype(str).str.lower() == "unknown", "orders"].sum()) if total_country_orders > 0 else 0.0
+            unknown_country_rate = round((unknown_orders / total_country_orders) * 100, 2) if total_country_orders > 0 else 0.0
             if unknown_country_rate > 0:
                 warnings.append(f"Unknown country coverage is {unknown_country_rate:.2f}% of orders.")
+
+        ignore_order_share_pct = round((ignore_orders / total_orders) * 100, 2) if total_orders > 0 else 0.0
+        observe_order_share_pct = round((observe_orders / total_orders) * 100, 2) if total_orders > 0 else 0.0
+        ignore_revenue_share_pct = round((ignore_revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0
+        observe_revenue_share_pct = round((observe_revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0
+        if ignore_order_share_pct >= 10 or ignore_revenue_share_pct >= 10:
+            warnings.append(
+                f"Low-confidence geo rows still represent {ignore_order_share_pct:.2f}% of orders and {ignore_revenue_share_pct:.2f}% of revenue."
+            )
 
         message = (
             "Geo confidence guardrails passed: country sample sizes are large enough for strategic comparison."
@@ -867,10 +907,18 @@ class BizniWebExporter:
             "healthy": not warnings,
             "message": message,
             "warnings": warnings,
+            "warning_count": len(warnings),
+            "failure_count": 0,
             "ignore_count": ignore_count,
             "observe_count": observe_count,
             "ready_count": ready_count,
             "unknown_country_rate": unknown_country_rate,
+            "ignore_order_share_pct": ignore_order_share_pct,
+            "observe_order_share_pct": observe_order_share_pct,
+            "ignore_revenue_share_pct": ignore_revenue_share_pct,
+            "observe_revenue_share_pct": observe_revenue_share_pct,
+            "low_confidence_order_share_pct": round(ignore_order_share_pct + observe_order_share_pct, 2),
+            "low_confidence_revenue_share_pct": round(ignore_revenue_share_pct + observe_revenue_share_pct, 2),
         }
 
     def _build_data_assertions_qa(
@@ -886,6 +934,7 @@ class BizniWebExporter:
         cost_per_order: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         warnings: List[str] = []
+        failures: List[str] = []
         metrics = financial_metrics or {}
         checks = consistency_checks or {}
         refund_summary = (refunds_analysis or {}).get("summary") or {}
@@ -911,7 +960,7 @@ class BizniWebExporter:
         ]
         missing_financial_keys = [key for key in required_financial_keys if metrics.get(key) is None]
         if missing_financial_keys:
-            warnings.append(
+            failures.append(
                 "Critical economics registry keys are missing: " + ", ".join(missing_financial_keys[:5])
             )
 
@@ -932,24 +981,24 @@ class BizniWebExporter:
         if payback_orders is not None and expected_payback is not None and abs(payback_orders - expected_payback) > 0.05:
             shell_parity_failures += 1
         if shell_parity_failures > 0:
-            warnings.append(
+            failures.append(
                 f"{shell_parity_failures} shell/library economics parity check(s) failed."
             )
 
         if refund_summary.get("refund_orders") and metrics.get("refund_rate_pct") is None:
-            warnings.append("Refund orders exist but refund summary metrics are missing from the registry.")
+            failures.append("Refund orders exist but refund summary metrics are missing from the registry.")
 
         if checks:
             if checks.get("roas_ok") is False:
-                warnings.append(
+                failures.append(
                     f"ROAS consistency delta is {checks.get('roas_delta')}. Reported and derived ROAS do not match."
                 )
             if checks.get("company_margin_ok") is False:
-                warnings.append(
+                failures.append(
                     f"Company margin consistency delta is {checks.get('company_margin_delta_pct')} percentage points."
                 )
             if checks.get("cac_ok") is False:
-                warnings.append(
+                failures.append(
                     f"CAC consistency delta is {checks.get('cac_delta')}. Check spend/new-customer denominator alignment."
                 )
 
@@ -997,11 +1046,11 @@ class BizniWebExporter:
                     attributed_cpa_mismatches += 1
 
         if platform_cpa_mismatches > 0:
-            warnings.append(
+            failures.append(
                 f"{platform_cpa_mismatches} campaign row(s) have platform CPA that does not match spend/platform conversions."
             )
         if attributed_cpa_mismatches > 0:
-            warnings.append(
+            failures.append(
                 f"{attributed_cpa_mismatches} campaign row(s) have cost_per_attributed_order that does not match spend/attributed_orders_est."
             )
 
@@ -1011,22 +1060,31 @@ class BizniWebExporter:
         if attributed_orders_total is not None and total_orders and total_orders > 0:
             attributed_orders_ratio = attributed_orders_total / total_orders
             if attributed_orders_ratio > 1.05:
-                warnings.append(
+                failures.append(
                     f"Attributed campaign orders sum to {attributed_orders_total:.1f}, which exceeds total orders ({total_orders:.0f}) beyond tolerance."
                 )
 
+        label_row_total = len(dow_df.index) + len(attach_df.index) + len(country_df.index) + len(geo_df.index)
+        missing_label_total = day_name_missing + anchor_missing + attached_missing + anchor_orders_missing + country_missing + geo_country_missing
+        null_label_rate_pct = round((missing_label_total / label_row_total) * 100, 2) if label_row_total > 0 else 0.0
+        if null_label_rate_pct > 0:
+            warnings.append(f"Dimension completeness warning: {null_label_rate_pct:.2f}% of labeled QA rows are missing a required label.")
+
         message = (
             "Data assertions passed: economics registry, arithmetic and dimensions are within tolerance."
-            if not warnings
-            else warnings[0]
+            if not (failures or warnings)
+            else (failures + warnings)[0]
         )
         return {
             "key": "data_assertions",
             "label": "Data assertions",
-            "status": "warning" if warnings else "ok",
-            "healthy": not warnings,
+            "status": "critical" if failures else ("warning" if warnings else "ok"),
+            "healthy": not failures,
             "message": message,
             "warnings": warnings,
+            "failures": failures,
+            "warning_count": len(warnings),
+            "failure_count": len(failures),
             "missing_financial_keys": missing_financial_keys,
             "shell_parity_failures": shell_parity_failures,
             "day_name_missing": day_name_missing,
@@ -1035,9 +1093,13 @@ class BizniWebExporter:
             "anchor_orders_missing": anchor_orders_missing,
             "country_missing": country_missing,
             "geo_country_missing": geo_country_missing,
+            "missing_label_total": missing_label_total,
+            "null_label_rate_pct": null_label_rate_pct,
             "platform_cpa_mismatches": platform_cpa_mismatches,
             "attributed_cpa_mismatches": attributed_cpa_mismatches,
             "attributed_orders_ratio": round(attributed_orders_ratio, 4) if attributed_orders_ratio is not None else None,
+            "attributed_orders_tolerance_breached": bool(attributed_orders_ratio is not None and attributed_orders_ratio > 1.05),
+            "label_row_total": label_row_total,
         }
 
     def _build_margin_stability_qa(self, date_agg: Optional[pd.DataFrame]) -> Dict[str, Any]:
@@ -1095,6 +1157,8 @@ class BizniWebExporter:
             "healthy": not warnings,
             "message": message,
             "warnings": warnings,
+            "warning_count": len(warnings),
+            "failure_count": 0,
             "raw_extreme_days": raw_extreme_days,
             "smoothed_extreme_days": smoothed_extreme_days,
             "min_smoothed_margin_pct": round(min_smoothed, 2) if min_smoothed is not None else None,
@@ -1167,6 +1231,10 @@ class BizniWebExporter:
         config = self.project_settings.get("bundle_accessory_model") or {}
         return config if isinstance(config, dict) else {}
 
+    def _product_family_groups_config(self) -> List[Dict[str, Any]]:
+        groups = self.project_settings.get("product_family_groups") or []
+        return groups if isinstance(groups, list) else []
+
     def _match_named_group(self, label: Any, groups: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
         for group in groups or []:
             if self._matches_patterns(str(label or ""), group.get("patterns") or []):
@@ -1175,6 +1243,238 @@ class BizniWebExporter:
                 if group_key:
                     return group_key, group_label
         return None, None
+
+    @staticmethod
+    def _source_proxy_from_spend(fb_spend: Any, google_spend: Any) -> Tuple[str, str]:
+        fb_value = float(fb_spend or 0.0)
+        google_value = float(google_spend or 0.0)
+        if fb_value > 0 and google_value > 0:
+            return "mixed_paid_day", "Mixed paid day"
+        if fb_value > 0:
+            return "facebook_paid_day", "Facebook-paid day"
+        if google_value > 0:
+            return "google_paid_day", "Google-paid day"
+        return "organic_unknown_day", "Organic / unknown day"
+
+    def analyze_acquisition_source_product_family_cube(
+        self,
+        orders_df: pd.DataFrame,
+        item_df: pd.DataFrame,
+        customer_orders: pd.DataFrame,
+        revenue_col: str,
+    ) -> dict:
+        family_groups = self._product_family_groups_config()
+        if not family_groups or orders_df.empty or item_df.empty or customer_orders.empty:
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        required_item_columns = {"order_num", "item_label", "item_total_without_tax"}
+        if not required_item_columns.issubset(item_df.columns):
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        classified_rows = []
+        for row in item_df[["order_num", "item_label", "item_total_without_tax"]].itertuples(index=False):
+            family_key, family_label = self._match_named_group(row.item_label, family_groups)
+            if not family_key:
+                continue
+            classified_rows.append(
+                {
+                    "order_num": row.order_num,
+                    "product_family_key": family_key,
+                    "product_family_label": family_label,
+                    "item_total_without_tax": float(row.item_total_without_tax or 0.0),
+                }
+            )
+
+        if not classified_rows:
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        classified_df = pd.DataFrame(classified_rows)
+        family_by_order = (
+            classified_df.groupby(["order_num", "product_family_key", "product_family_label"], as_index=False)
+            .agg(order_family_revenue=("item_total_without_tax", "sum"))
+            .sort_values(["order_num", "order_family_revenue"], ascending=[True, False])
+            .drop_duplicates(subset=["order_num"])
+        )
+        order_family_map = family_by_order.set_index("order_num")[["product_family_key", "product_family_label"]]
+
+        order_source_frame = orders_df[
+            [
+                "order_num",
+                "customer_email",
+                "purchase_datetime",
+                revenue_col,
+                "pre_ad_contribution",
+                "fb_ads_daily_spend",
+                "google_ads_daily_spend",
+            ]
+        ].drop_duplicates(subset=["order_num"]).copy()
+        order_source_frame = order_source_frame.merge(order_family_map, left_on="order_num", right_index=True, how="left")
+        order_source_frame["product_family_key"] = order_source_frame["product_family_key"].fillna("other_unclassified")
+        order_source_frame["product_family_label"] = order_source_frame["product_family_label"].fillna("Other / unclassified")
+        proxy_pairs = order_source_frame.apply(
+            lambda row: self._source_proxy_from_spend(row.get("fb_ads_daily_spend"), row.get("google_ads_daily_spend")),
+            axis=1,
+        )
+        order_source_frame["source_proxy_key"] = proxy_pairs.apply(lambda value: value[0])
+        order_source_frame["source_proxy_label"] = proxy_pairs.apply(lambda value: value[1])
+
+        first_orders = (
+            order_source_frame.sort_values(["customer_email", "purchase_datetime"])
+            .drop_duplicates(subset=["customer_email"], keep="first")
+            .copy()
+        )
+        first_orders["first_order_revenue"] = first_orders[revenue_col]
+        first_orders["first_order_contribution"] = first_orders["pre_ad_contribution"]
+
+        customer_enriched = customer_orders.merge(
+            first_orders[
+                [
+                    "customer_email",
+                    "source_proxy_key",
+                    "source_proxy_label",
+                    "product_family_key",
+                    "product_family_label",
+                ]
+            ],
+            on="customer_email",
+            how="left",
+        )
+
+        def _repeat_within_days(group: pd.DataFrame, days: int) -> int:
+            return int(((group["days_since_first"] > 0) & (group["days_since_first"] <= days)).any())
+
+        customer_level_rows = []
+        for customer_email, group in customer_enriched.groupby("customer_email"):
+            first_row = group.sort_values("purchase_datetime").iloc[0]
+            window_90 = group[group["days_since_first"] <= 90].copy()
+            customer_level_rows.append(
+                {
+                    "customer_email": customer_email,
+                    "source_proxy_key": first_row.get("source_proxy_key"),
+                    "source_proxy_label": first_row.get("source_proxy_label"),
+                    "product_family_key": first_row.get("product_family_key"),
+                    "product_family_label": first_row.get("product_family_label"),
+                    "first_order_revenue": float(first_row.get("first_order_revenue") or 0.0),
+                    "first_order_contribution": float(first_row.get("first_order_contribution") or 0.0),
+                    "orders_total": int(group["order_num"].nunique()),
+                    "repeat_60d_flag": _repeat_within_days(group, 60),
+                    "repeat_90d_flag": _repeat_within_days(group, 90),
+                    "revenue_ltv_90d": float(window_90[revenue_col].sum()),
+                    "contribution_ltv_90d": float(window_90["pre_ad_contribution"].sum()),
+                }
+            )
+
+        customer_level = pd.DataFrame(customer_level_rows)
+        if customer_level.empty:
+            return {
+                "summary": {},
+                "cube_rows": pd.DataFrame(),
+                "source_rows": pd.DataFrame(),
+                "family_rows": pd.DataFrame(),
+            }
+
+        cube_rows = (
+            customer_level.groupby(
+                ["source_proxy_key", "source_proxy_label", "product_family_key", "product_family_label"],
+                as_index=False,
+            )
+            .agg(
+                new_customers=("customer_email", "nunique"),
+                first_order_revenue=("first_order_revenue", "sum"),
+                first_order_contribution=("first_order_contribution", "sum"),
+                repeat_60d_customers=("repeat_60d_flag", "sum"),
+                repeat_90d_customers=("repeat_90d_flag", "sum"),
+                revenue_ltv_90d=("revenue_ltv_90d", "sum"),
+                contribution_ltv_90d=("contribution_ltv_90d", "sum"),
+            )
+        )
+        cube_rows["first_order_aov"] = cube_rows.apply(
+            lambda row: (row["first_order_revenue"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["first_order_contribution_per_order"] = cube_rows.apply(
+            lambda row: (row["first_order_contribution"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["repeat_60d_rate_pct"] = cube_rows.apply(
+            lambda row: (row["repeat_60d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["repeat_90d_rate_pct"] = cube_rows.apply(
+            lambda row: (row["repeat_90d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["revenue_ltv_90d_per_customer"] = cube_rows.apply(
+            lambda row: (row["revenue_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows["contribution_ltv_90d_per_customer"] = cube_rows.apply(
+            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        cube_rows = cube_rows.sort_values(
+            ["new_customers", "contribution_ltv_90d_per_customer", "repeat_90d_rate_pct"],
+            ascending=[False, False, False],
+        ).reset_index(drop=True)
+
+        source_rows = (
+            cube_rows.groupby(["source_proxy_key", "source_proxy_label"], as_index=False)
+            .agg(
+                new_customers=("new_customers", "sum"),
+                revenue_ltv_90d=("revenue_ltv_90d", "sum"),
+                contribution_ltv_90d=("contribution_ltv_90d", "sum"),
+            )
+        )
+        source_rows["contribution_ltv_90d_per_customer"] = source_rows.apply(
+            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+
+        family_rows = (
+            cube_rows.groupby(["product_family_key", "product_family_label"], as_index=False)
+            .agg(
+                new_customers=("new_customers", "sum"),
+                first_order_revenue=("first_order_revenue", "sum"),
+                contribution_ltv_90d=("contribution_ltv_90d", "sum"),
+                repeat_90d_customers=("repeat_90d_customers", "sum"),
+            )
+        )
+        family_rows["repeat_90d_rate_pct"] = family_rows.apply(
+            lambda row: (row["repeat_90d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+        family_rows["contribution_ltv_90d_per_customer"] = family_rows.apply(
+            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            axis=1,
+        )
+
+        return {
+            "summary": {
+                "proxy_method": "first_order_day_paid_spend_presence",
+                "source_count": int(source_rows["source_proxy_key"].nunique()) if not source_rows.empty else 0,
+                "family_count": int(family_rows["product_family_key"].nunique()) if not family_rows.empty else 0,
+                "cube_rows": int(len(cube_rows)),
+                "new_customers_covered": int(cube_rows["new_customers"].sum()) if not cube_rows.empty else 0,
+            },
+            "cube_rows": cube_rows,
+            "source_rows": source_rows.sort_values("new_customers", ascending=False).reset_index(drop=True),
+            "family_rows": family_rows.sort_values("new_customers", ascending=False).reset_index(drop=True),
+        }
 
     def analyze_bundle_accessory_model(
         self,
@@ -5229,6 +5529,14 @@ class BizniWebExporter:
 
         # ---- Build robust order-level frame
         orders_df = df[['order_num', 'customer_email', 'purchase_date', revenue_col, 'total_items_in_order']].drop_duplicates(subset=['order_num']).copy()
+        order_spend = (
+            df.groupby('order_num')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
+            .first()
+            .reset_index()
+        )
+        orders_df = orders_df.merge(order_spend, on='order_num', how='left')
+        orders_df['fb_ads_daily_spend'] = pd.to_numeric(orders_df['fb_ads_daily_spend'], errors='coerce').fillna(0.0)
+        orders_df['google_ads_daily_spend'] = pd.to_numeric(orders_df['google_ads_daily_spend'], errors='coerce').fillna(0.0)
         orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
         orders_df['purchase_date_only'] = orders_df['purchase_datetime'].dt.date
         orders_df['cohort_month'] = orders_df['purchase_datetime'].dt.to_period('M').astype(str)
@@ -5555,6 +5863,12 @@ class BizniWebExporter:
 
         # ---- Roy bundle/accessory model (config-driven, optional per project)
         bundle_accessory_model = self.analyze_bundle_accessory_model(orders_df, item_df, revenue_col)
+        acquisition_product_family_cube = self.analyze_acquisition_source_product_family_cube(
+            orders_df=orders_df,
+            item_df=item_df,
+            customer_orders=customer_orders,
+            revenue_col=revenue_col,
+        )
 
         # ---- 10) margin stability index (daily pre-ad margin volatility)
         daily_margin = orders_df.groupby('purchase_date_only').agg({
@@ -5672,6 +5986,7 @@ class BizniWebExporter:
             'sku_pareto': sku_pareto,
             'attach_rate': attach_rate,
             'bundle_accessory_model': bundle_accessory_model,
+            'acquisition_product_family_cube': acquisition_product_family_cube,
             'daily_margin': daily_margin,
             'payday_window': payday_window,
         }

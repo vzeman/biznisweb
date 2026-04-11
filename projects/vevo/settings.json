@@ -32,6 +32,88 @@
       "chart_min_orders": 3
     }
   },
+  "product_family_groups": [
+    {
+      "key": "sample_sets",
+      "label": "Sample sets",
+      "patterns": ["Vzorky", "Sample Set", "Discovery Set"]
+    },
+    {
+      "key": "sample_singles",
+      "label": "Sample singles",
+      "patterns": ["Vzorka 10ml", "10ml)"]
+    },
+    {
+      "key": "fullsize_200",
+      "label": "Full-size 200ml",
+      "patterns": ["(200ml)", "200 ml"]
+    },
+    {
+      "key": "fullsize_500",
+      "label": "Full-size 500ml",
+      "patterns": ["(500ml)", "500 ml"]
+    },
+    {
+      "key": "laundry_gel",
+      "label": "Laundry gel",
+      "patterns": ["Praci gel", "Praci gel", "Laundry gel"]
+    },
+    {
+      "key": "floor_care",
+      "label": "Floor care",
+      "patterns": ["Parfum na podlahy", "podlahy"]
+    },
+    {
+      "key": "cleaning_shot",
+      "label": "Cleaning shot",
+      "patterns": ["Vevo Shot"]
+    },
+    {
+      "key": "accessories",
+      "label": "Accessories",
+      "patterns": ["Odmerka", "Poistenie", "Tringelt"]
+    }
+  ],
+  "vevo_growth_model": {
+    "sample_entry_patterns": ["Vzorky", "Sample Set", "Discovery Set", "Vzorka 10ml"],
+    "sample_set_patterns": ["Vzorky", "Sample Set", "Discovery Set"],
+    "fullsize_200_patterns": ["(200ml)", "200 ml"],
+    "fullsize_500_patterns": ["(500ml)", "500 ml"],
+    "bundle_anchor_patterns": ["Vzorky", "Sample Set", "(200ml)", "(500ml)"],
+    "bundle_attached_patterns": ["Odmerka", "Praci gel", "Laundry gel", "Vevo Shot", "Poistenie"],
+    "scent_patterns": [
+      {
+        "key": "cotton_paradise",
+        "label": "Cotton Paradise",
+        "patterns": ["Cotton Paradise", "No.01"]
+      },
+      {
+        "key": "sweet_paradise",
+        "label": "Sweet Paradise",
+        "patterns": ["Sweet Paradise", "No.02"]
+      },
+      {
+        "key": "royal_cotton",
+        "label": "Royal Cotton",
+        "patterns": ["Royal Cotton", "No.06"]
+      },
+      {
+        "key": "ylang_absolute",
+        "label": "Ylang Absolute",
+        "patterns": ["Ylang Absolute", "No.07"]
+      },
+      {
+        "key": "cotton_dream",
+        "label": "Cotton Dream",
+        "patterns": ["Cotton Dream", "No.08"]
+      },
+      {
+        "key": "pure_garden",
+        "label": "Pure Garden",
+        "patterns": ["Pure Garden", "No.09"]
+      }
+    ]
+  },
   "product_expenses_file": "product_expenses.json",
   "currency_rates_to_eur": {
     "EUR": 1.0,

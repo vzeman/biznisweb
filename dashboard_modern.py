@@ -894,6 +894,53 @@ def generate_modern_dashboard(
         ],
         limit=10,
     )
+    acquisition_family_cube = (advanced_dtc_metrics or {}).get("acquisition_product_family_cube", {}) if advanced_dtc_metrics else {}
+    acquisition_family_cube_rows = _frame_rows(
+        (acquisition_family_cube or {}).get("cube_rows"),
+        [
+            "source_proxy_key",
+            "source_proxy_label",
+            "product_family_key",
+            "product_family_label",
+            "new_customers",
+            "first_order_revenue",
+            "first_order_contribution",
+            "first_order_aov",
+            "first_order_contribution_per_order",
+            "repeat_60d_rate_pct",
+            "repeat_90d_rate_pct",
+            "revenue_ltv_90d",
+            "contribution_ltv_90d",
+            "revenue_ltv_90d_per_customer",
+            "contribution_ltv_90d_per_customer",
+        ],
+        limit=40,
+    )
+    acquisition_family_source_rows = _frame_rows(
+        (acquisition_family_cube or {}).get("source_rows"),
+        [
+            "source_proxy_key",
+            "source_proxy_label",
+            "new_customers",
+            "revenue_ltv_90d",
+            "contribution_ltv_90d",
+            "contribution_ltv_90d_per_customer",
+        ],
+        limit=10,
+    )
+    acquisition_family_family_rows = _frame_rows(
+        (acquisition_family_cube or {}).get("family_rows"),
+        [
+            "product_family_key",
+            "product_family_label",
+            "new_customers",
+            "first_order_revenue",
+            "contribution_ltv_90d",
+            "repeat_90d_rate_pct",
+            "contribution_ltv_90d_per_customer",
+        ],
+        limit=20,
+    )
 
     heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
     b2b_rows = _frame_rows(b2b_analysis, ["customer_type", "orders", "revenue", "profit", "unique_customers", "aov", "orders_pct", "revenue_pct"], limit=10)
@@ -1183,6 +1230,12 @@ def generate_modern_dashboard(
             "device_rows": bundle_accessory_device_rows,
             "group_rows": bundle_accessory_group_rows,
         },
+        "acquisition_family": {
+            "summary": {k: _maybe_num(v) if isinstance(v, (int, float)) else _json_safe(v) for k, v in ((acquisition_family_cube or {}).get("summary") or {}).items()},
+            "cube_rows": acquisition_family_cube_rows,
+            "source_rows": acquisition_family_source_rows,
+            "family_rows": acquisition_family_family_rows,
+        },
         "daily_margin_rows": daily_margin_rows,
         "payday_window_rows": payday_window_rows,
         "cohort_payback_rows": cohort_payback_rows,
@@ -1249,12 +1302,19 @@ def generate_modern_dashboard(
         else '<p class="muted-note"><span class="lang-en">No low-sample geo warnings for the current report window.</span><span class="lang-sk hidden">V aktualnom okne nie su ziadne geo warningy pre malu vzorku.</span></p>'
     )
     data_assertion_warning_items = list(data_assertions_qa.get("warnings") or [])
+    data_assertion_failure_items = list(data_assertions_qa.get("failures") or [])
     data_assertion_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in data_assertion_warning_items)
+    data_assertion_failure_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in data_assertion_failure_items)
     data_assertion_warning_block_html = (
-        f'<ul class="warning-list">{data_assertion_warning_items_html}</ul>'
-        if data_assertion_warning_items_html
-        else '<p class="muted-note"><span class="lang-en">Data assertions passed for the current report window.</span><span class="lang-sk hidden">Datove assertions pre aktualne okno presli bez warningov.</span></p>'
-    )
+        (
+            f'<div class="warning-block"><p class="muted-note"><span class="lang-en">Critical QA failures</span><span class="lang-sk hidden">Kriticke QA chyby</span></p><ul class="warning-list">{data_assertion_failure_items_html}</ul></div>'
+            if data_assertion_failure_items_html else ""
+        )
+        + (
+            f'<div class="warning-block"><p class="muted-note"><span class="lang-en">Warnings</span><span class="lang-sk hidden">Warningy</span></p><ul class="warning-list">{data_assertion_warning_items_html}</ul></div>'
+            if data_assertion_warning_items_html else ""
+        )
+    ) or '<p class="muted-note"><span class="lang-en">Data assertions passed for the current report window.</span><span class="lang-sk hidden">Datove assertions pre aktualne okno presli bez warningov.</span></p>'
     margin_stability_warning_items = list(margin_stability_qa.get("warnings") or [])
     margin_stability_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in margin_stability_warning_items)
     margin_stability_warning_block_html = (
@@ -2214,15 +2274,21 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Observe countries</span><span class="lang-sk hidden">Sledovane krajiny</span></small><strong>{int(round(_num(geo_qa.get("observe_count"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Ignore countries</span><span class="lang-sk hidden">Ignorovane krajiny</span></small><strong>{int(round(_num(geo_qa.get("ignore_count"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Unknown country rate</span><span class="lang-sk hidden">Podiel neznamej krajiny</span></small><strong>{_format_mini_value_html(geo_qa.get("unknown_country_rate"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Low-conf. order share</span><span class="lang-sk hidden">Podiel objednavok s nizkou istotou</span></small><strong>{_format_mini_value_html(geo_qa.get("low_confidence_order_share_pct"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Low-conf. revenue share</span><span class="lang-sk hidden">Podiel trzby s nizkou istotou</span></small><strong>{_format_mini_value_html(geo_qa.get("low_confidence_revenue_share_pct"), kind="percent")}</strong></div>
                         </div>
                         {geo_warning_block_html}
                     </div>
                     <div class="panel table-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Data assertions</span><span class="lang-sk hidden">Datove assertions</span></h3><p><span class="lang-en">Pipeline-level parity, arithmetic and dimension completeness checks.</span><span class="lang-sk hidden">Kontroly parity, aritmetiky a uplnosti dimenzii priamo v pipeline.</span></p></div></div>
                         <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Critical failures</span><span class="lang-sk hidden">Kriticke chyby</span></small><strong>{int(round(_num(data_assertions_qa.get("failure_count"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Warnings</span><span class="lang-sk hidden">Warningy</span></small><strong>{int(round(_num(data_assertions_qa.get("warning_count"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Shell parity failures</span><span class="lang-sk hidden">Shell parity chyby</span></small><strong>{int(round(_num(data_assertions_qa.get("shell_parity_failures"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Platform CPA mismatches</span><span class="lang-sk hidden">Platform CPA nezrovnalosti</span></small><strong>{int(round(_num(data_assertions_qa.get("platform_cpa_mismatches"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Attributed CPA mismatches</span><span class="lang-sk hidden">Attributed CPA nezrovnalosti</span></small><strong>{int(round(_num(data_assertions_qa.get("attributed_cpa_mismatches"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Null label rate</span><span class="lang-sk hidden">Podiel null labelov</span></small><strong>{_format_mini_value_html(data_assertions_qa.get("null_label_rate_pct"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Attributed orders ratio</span><span class="lang-sk hidden">Pomer attributed objednavok</span></small><strong>{_format_mini_value_html(_num(data_assertions_qa.get("attributed_orders_ratio")) * 100 if data_assertions_qa.get("attributed_orders_ratio") is not None else None, kind="percent")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Missing country labels</span><span class="lang-sk hidden">Chybajuce country labely</span></small><strong>{int(round(_num(data_assertions_qa.get("country_missing"))))}</strong></div>
                         </div>
                         {data_assertion_warning_block_html}
@@ -3547,6 +3613,13 @@ def generate_modern_dashboard(
                 );
             }}
             if (hasRows(DATA.dow_effectiveness_rows)) marketingItems.push({{ id: 'mktDowRevenueSpendChart', title: {{ en: 'Weekday revenue and spend', sk: 'Trzba a spend podla dna' }}, desc: {{ en: 'Average weekday business output versus FB spend.', sk: 'Priemerny vykon dna oproti FB spendu.' }} }});
+            if (hasRows(DATA.acquisition_family.cube_rows)) {{
+                marketingItems.push(
+                    {{ id: 'mktSourceFamilyMixChart', title: {{ en: 'Source proxy x product family', sk: 'Source proxy x produktova family' }}, desc: {{ en: 'New-customer mix by paid-day source proxy and dominant first-order family.', sk: 'Mix novych zakaznikov podla paid-day source proxy a dominantnej family prveho nakupu.' }} }},
+                    {{ id: 'mktSourceFamilyContributionChart', title: {{ en: '90d contribution by source proxy x family', sk: '90d contribution podla source proxy x family' }}, desc: {{ en: 'Downstream 90d contribution quality by source proxy and first-order family.', sk: 'Kvalita downstream 90d contribution podla source proxy a family prveho nakupu.' }} }},
+                );
+            }}
+            if (hasRows(DATA.acquisition_family.source_rows)) marketingItems.push({{ id: 'mktSourceProxySummaryChart', title: {{ en: 'Source proxy summary', sk: 'Sumar source proxy' }}, desc: {{ en: 'New-customer volume and contribution LTV per customer by source proxy.', sk: 'Objem novych zakaznikov a contribution LTV na zakaznika podla source proxy.' }} }});
             renderGalleryCards('libraryMarketing', marketingItems);
 
             if (document.getElementById('mktDailyCpoRoasChart')) {{
@@ -3720,6 +3793,66 @@ def generate_modern_dashboard(
                         ],
                     }},
                     options: dowSpendOpts,
+                }});
+            }}
+            if (document.getElementById('mktSourceFamilyMixChart')) {{
+                const cubeRows = DATA.acquisition_family.cube_rows || [];
+                const familyLabels = [...new Set(cubeRows.map(x => x.product_family_label || 'Other / unclassified'))];
+                const sourceLabels = [...new Set(cubeRows.map(x => x.source_proxy_label || 'Unknown source'))];
+                const colorMap = {{
+                    'Facebook-paid day': 'rgba(255,138,31,.72)',
+                    'Google-paid day': 'rgba(71,102,255,.68)',
+                    'Mixed paid day': 'rgba(31,157,102,.68)',
+                    'Organic / unknown day': 'rgba(143,130,120,.62)',
+                }};
+                const mixOpts = baseOptions();
+                mixOpts.scales.x.stacked = true;
+                mixOpts.scales.y.stacked = true;
+                new Chart(document.getElementById('mktSourceFamilyMixChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: familyLabels,
+                        datasets: sourceLabels.map(source => ({{
+                            label: source,
+                            data: familyLabels.map(family => {{
+                                const row = cubeRows.find(x => (x.source_proxy_label || 'Unknown source') === source && (x.product_family_label || 'Other / unclassified') === family);
+                                return Number((row && row.new_customers) || 0);
+                            }}),
+                            backgroundColor: colorMap[source] || 'rgba(255,138,31,.55)',
+                            borderRadius: 8,
+                        }})),
+                    }},
+                    options: mixOpts,
+                }});
+            }}
+            if (document.getElementById('mktSourceFamilyContributionChart')) {{
+                const rows = [...(DATA.acquisition_family.cube_rows || [])]
+                    .sort((a, b) => Number(b.contribution_ltv_90d_per_customer || 0) - Number(a.contribution_ltv_90d_per_customer || 0))
+                    .slice(0, 12);
+                const familyContributionOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktSourceFamilyContributionChart'), {{
+                    data: {{
+                        labels: rows.map(x => `${{x.source_proxy_label || 'Unknown'}} • ${{x.product_family_label || 'Other'}}`.slice(0, 32)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Contribution LTV 90d / customer', data: rows.map(x => Number(x.contribution_ltv_90d_per_customer || 0)), backgroundColor: 'rgba(31,157,102,.68)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Repeat 90d %', data: rows.map(x => Number(x.repeat_90d_rate_pct || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: familyContributionOpts,
+                }});
+            }}
+            if (document.getElementById('mktSourceProxySummaryChart')) {{
+                const rows = DATA.acquisition_family.source_rows || [];
+                const sourceSummaryOpts = dualAxisOptions();
+                new Chart(document.getElementById('mktSourceProxySummaryChart'), {{
+                    data: {{
+                        labels: rows.map(x => x.source_proxy_label || 'Unknown'),
+                        datasets: [
+                            {{ type: 'bar', label: 'New customers', data: rows.map(x => Number(x.new_customers || 0)), backgroundColor: 'rgba(255,138,31,.66)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Contribution LTV 90d / customer', data: rows.map(x => Number(x.contribution_ltv_90d_per_customer || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: sourceSummaryOpts,
                 }});
             }}
         }}

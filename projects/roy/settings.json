@@ -131,6 +131,58 @@
     "ArboBand biele lepové dosky 5 ks na ochranu kvetov",
     "Pasca na potkany z bukového dreva"
   ],
+  "product_family_groups": [
+    {
+      "key": "trail_cameras",
+      "label": "Trail cameras",
+      "patterns": ["Fotopasca", "Wachman", "Welltar", "Suntek", "Braun", "HC800", "Rio", "Discovery", "Alfa", "Spider", "Aldo"]
+    },
+    {
+      "key": "thermal_optics",
+      "label": "Thermal optics",
+      "patterns": ["Pixfra", "Pard Night", "Night Stalker", "Sirius", "Chiron"]
+    },
+    {
+      "key": "night_vision_optics",
+      "label": "Night vision & optics",
+      "patterns": ["NV007", "Dalekohlad", "Walther 2x20", "optika", "kolimator"]
+    },
+    {
+      "key": "memory_storage",
+      "label": "Memory & storage",
+      "patterns": ["Micro SD", "SD card", "SD karta", "MicroSD"]
+    },
+    {
+      "key": "power_accessories",
+      "label": "Power accessories",
+      "patterns": ["Baterky", "Baterie", "Napajaci kabel", "Externe napajanie", "solarne napajanie", "AA"]
+    },
+    {
+      "key": "protection_mounting",
+      "label": "Protection & mounting",
+      "patterns": ["Ochranny box", "kovovy box", "Box na", "Popruh", "Zamok", "Drziak"]
+    },
+    {
+      "key": "insurance_service",
+      "label": "Insurance & service",
+      "patterns": ["Poistenie", "servis", "Reklamacia", "Reklamace", "Warranty claim", "Dobropis"]
+    },
+    {
+      "key": "apparel_outdoor",
+      "label": "Apparel & outdoor",
+      "patterns": ["Bunda", "Mikina", "Tricko", "Tričko", "Nohavice", "Ruksak", "Ladvinka", "Helikon", "Pentagon", "MFH"]
+    },
+    {
+      "key": "knives_axes",
+      "label": "Knives & axes",
+      "patterns": ["Knife", "noz", "nôž", "Axe", "sekera", "Albainox", "Karambit", "Roy Survival Axe", "Roy EDC"]
+    },
+    {
+      "key": "pest_control_misc",
+      "label": "Pest control & misc",
+      "patterns": ["Pasca", "Mucholapka", "ArboBand", "RataStop", "FRUTABAND", "Nanoprotech", "vosk", "farby na tvar"]
+    }
+  ],
   "product_expenses_file": "product_expenses.json",
   "bundle_accessory_model": {
     "enabled": true,
