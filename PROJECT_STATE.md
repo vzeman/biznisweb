@@ -1290,3 +1290,21 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - VEVO March 2026 now exposes two higher-spend-vs-lower-spend incrementality views with primary verdict `Scale`
   - ROY March 2026 now exposes two higher-spend-vs-lower-spend incrementality views with primary verdict `Hold / test more`
   - live API snapshots now carry the incrementality payload used by the read-only live dashboard
+
+### 2026-04-11 (full-history regeneration + refill cohort hardening)
+- Regenerated the active full-history VEVO and ROY reports on `codex/segment-unit-econ-lifecycle` using the current production-candidate reporting code:
+  - VEVO `2025-05-03 .. 2026-04-10`
+  - ROY `2025-09-24 .. 2026-04-10`
+- Hardened `analyze_refill_cohorts(...)` in `export_orders.py` so VEVO full-history exports no longer crash when a cohort slice has no second-order match rows.
+- The refill cohort merge now backfills the missing second-order columns with null/false defaults before downstream timing and window calculations.
+- Fresh full-history artifacts now exist locally for both projects:
+  - `data/vevo/report_20250503-20260410.html`
+  - `data/roy/report_20250924-20260410.html`
+  - matching `report_latest.html`, `dashboard_payload_*.json`, `data_quality_*.json`, and CSV exports for both projects
+- Verified locally with:
+  - `python -m py_compile export_orders.py`
+  - `python export_orders.py --project vevo --from-date 2025-05-03 --to-date 2026-04-10`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-10`
+- Verification outcome:
+  - VEVO full-history export now completes successfully despite empty second-order cohort slices
+  - ROY full-history export still completes successfully on the same branch

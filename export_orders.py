@@ -5184,6 +5184,14 @@ class BizniWebExporter:
             on='customer_email',
             how='left'
         )
+        if 'second_purchase_datetime' not in cohort_df.columns:
+            cohort_df['second_purchase_datetime'] = pd.NaT
+        for column in ['second_order_revenue', 'second_order_aov']:
+            if column not in cohort_df.columns:
+                cohort_df[column] = np.nan
+        for column in ['second_contains_fullsize', 'second_contains_200', 'second_contains_500']:
+            if column not in cohort_df.columns:
+                cohort_df[column] = False
         cohort_df['days_to_2nd'] = (
             cohort_df['second_purchase_datetime'] - cohort_df['purchase_datetime']
         ).dt.total_seconds() / 86400.0
