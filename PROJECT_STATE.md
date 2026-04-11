@@ -119,7 +119,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Transfer the April-side daily report email copy into the active reporting line and verify the rendered SES body stays short and consistent.
+- Transfer the April-side live dashboard latest-artifact view into the active reporting line and verify it renders the newest VEVO / ROY artifacts correctly.
 
 ## 9) Change Log
 
@@ -1209,3 +1209,26 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Verification outcome:
   - VEVO and ROY March 2026 reports regenerate successfully
   - rendered HTML for both projects now contains explicit `Profit ex fixed` / `Profit incl. fixed` and matching contribution / margin variants across the affected tables and charts
+
+### 2026-04-11 (daily email summaries with current metrics)
+- Transferred the April-side daily email summary content into the active runner without losing the newer QA-status intro added later.
+- Replaced the old unused long-form executive summary body with the newer sectioned summary structure built from current export data:
+  - quick overview
+  - what is good
+  - what weakened
+  - likely cause
+  - next-step recommendation
+  - data note
+- Wired the generated summary back into `build_email_body(...)` so the SES mail now sends:
+  - attachment + covered period
+  - data-quality / QA status
+  - the new metric-driven daily summary
+  - closing system note
+- Verified with:
+  - `python -m py_compile daily_report_runner.py`
+  - direct render of `build_report_summary(...)` + `build_email_body(...)` for VEVO March 2026 artifacts
+  - direct render of `build_report_summary(...)` + `build_email_body(...)` for ROY March 2026 artifacts
+  - `python scripts\\security_ci.py`
+- Verification outcome:
+  - VEVO and ROY summary text now renders from the actual current artifacts
+  - QA warning / partial-data note remains visible at the top of the email
