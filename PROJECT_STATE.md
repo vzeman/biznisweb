@@ -119,7 +119,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Transfer the April-side ad incrementality analysis into the active reporting line and verify it renders in both the generated reports and the live dashboard.
+- Merge `codex/segment-unit-econ-lifecycle` into `main` through a reviewed PR, then refresh the production reporting runtime so the transferred April features are the only active source of truth.
 
 ## 9) Change Log
 
@@ -1262,3 +1262,31 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - live dashboard routes now render against the newest VEVO and ROY artifacts
   - both project dashboards expose the expected `data-marker=\"live-dashboard-app\"`
   - stable latest report and payload artifacts are now produced by the export pipeline instead of depending on ad hoc local files
+
+### 2026-04-11 (ad incrementality analysis)
+- Transferred the April-side ad incrementality analysis into the active reporting line without reverting the newer QA, CM and cost-coverage work.
+- Replaced the old simplified ads-effectiveness fallback in `export_orders.py` with a richer daily decision model that now:
+  - builds a daily ads dataset from aggregated report outputs
+  - carries new vs returning split into the ads layer
+  - compares ad-active vs baseline days when ad-off days exist
+  - falls back to higher-spend vs lower-spend comparisons when the account is always on
+  - produces verdict, confidence and incremental spend/revenue/profit/CAC metrics
+- Extended the modern dashboard payload and HTML report with:
+  - `incrementality_primary`
+  - `incrementality_rows`
+  - `Ad impact verdict`
+  - `Incrementality comparison table`
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py live_dashboard_server.py daily_report_runner.py reporting_core\\contracts.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts\\reporting_qa_smoke.py`
+  - `python scripts\\security_ci.py`
+  - localhost live snapshot check:
+    - `GET /health`
+    - `GET /api/vevo/latest?period=full`
+    - `GET /api/roy/latest?period=full`
+- Verification outcome:
+  - VEVO March 2026 now exposes two higher-spend-vs-lower-spend incrementality views with primary verdict `Scale`
+  - ROY March 2026 now exposes two higher-spend-vs-lower-spend incrementality views with primary verdict `Hold / test more`
+  - live API snapshots now carry the incrementality payload used by the read-only live dashboard

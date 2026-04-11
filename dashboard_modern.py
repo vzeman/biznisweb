@@ -915,6 +915,36 @@ def generate_modern_dashboard(
             limit=7,
         )
     )
+    incrementality_payload = (ads_effectiveness or {}).get("incrementality") or {}
+    incrementality_primary = incrementality_payload.get("primary") or {}
+    incrementality_rows = _frame_rows(
+        _to_frame(incrementality_payload.get("comparisons")),
+        [
+            "key",
+            "label_en",
+            "label_sk",
+            "method",
+            "active_days",
+            "control_days",
+            "effective_pair_days",
+            "channel_overlap_rate",
+            "incremental_total_ad_spend_per_day",
+            "incremental_revenue_per_day",
+            "incremental_profit_without_fixed_per_day",
+            "incremental_profit_with_fixed_per_day",
+            "incremental_roas",
+            "incremental_cac",
+            "break_even_cac",
+            "verdict",
+            "verdict_reason_en",
+            "verdict_reason_sk",
+            "verdict_tone",
+            "confidence",
+            "confidence_note_en",
+            "confidence_note_sk",
+        ],
+        limit=12,
+    )
 
     advanced_summary = (advanced_dtc_metrics or {}).get("summary", {}) if advanced_dtc_metrics else {}
     bundle_accessory_model = (advanced_dtc_metrics or {}).get("bundle_accessory_model", {}) if advanced_dtc_metrics else {}
@@ -1508,6 +1538,8 @@ def generate_modern_dashboard(
         "ads_correlations": ads_correlations,
         "spend_effectiveness_rows": spend_effectiveness_rows,
         "dow_effectiveness_rows": dow_effectiveness_rows,
+        "incrementality_primary": incrementality_primary,
+        "incrementality_rows": incrementality_rows,
         "basket_contribution_rows": basket_contribution_rows,
         "sku_pareto_rows": sku_pareto_rows,
         "attach_rate_rows": attach_rate_rows,
@@ -1759,6 +1791,33 @@ def generate_modern_dashboard(
         )
         for row in dow_effectiveness_rows
     ) or '<tr><td colspan="6"><span class="lang-en">No day-of-week effectiveness data available.</span><span class="lang-sk hidden">Day-of-week efektivita nie je dostupna.</span></td></tr>'
+    incrementality_verdict = escape(str(incrementality_primary.get("verdict") or "N/A"))
+    incrementality_reason_en = escape(str(incrementality_primary.get("verdict_reason_en") or "Not enough paid and unpaid days yet."))
+    incrementality_reason_sk = escape(str(incrementality_primary.get("verdict_reason_sk") or "Zatial nie je dost paid a unpaid dni na spolahlive porovnanie."))
+    incrementality_confidence = escape(str(incrementality_primary.get("confidence") or "N/A")).upper()
+    incrementality_confidence_note_en = escape(str(incrementality_primary.get("confidence_note_en") or ""))
+    incrementality_confidence_note_sk = escape(
+        str(incrementality_primary.get("confidence_note_sk") or incrementality_confidence_note_en)
+    )
+    incrementality_tone = escape(str(incrementality_primary.get("verdict_tone") or "neutral"))
+    incrementality_rows_html = "".join(
+        (
+            f"<tr><td>{escape(str(row.get('label_en') or row.get('key') or '-'))}</td>"
+            f"<td>{escape(str(row.get('method') or '-'))}</td>"
+            f"<td>{int(round(_num(row.get('active_days'))))}</td>"
+            f"<td>{int(round(_num(row.get('control_days'))))}</td>"
+            f"<td>{int(round(_num(row.get('effective_pair_days'))))}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_total_ad_spend_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_revenue_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_profit_without_fixed_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_profit_with_fixed_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_roas'), kind='multiple')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_cac'), kind='currency')}</td>"
+            f"<td>{escape(str(row.get('verdict') or '-'))}</td>"
+            f"<td>{escape(str(row.get('confidence') or '-')).upper()}</td></tr>"
+        )
+        for row in incrementality_rows
+    ) or '<tr><td colspan="13"><span class="lang-en">No incrementality comparison is available yet.</span><span class="lang-sk hidden">Incrementality porovnanie zatial nie je dostupne.</span></td></tr>'
 
 
     basket_rows_html = "".join(
@@ -2320,6 +2379,59 @@ def generate_modern_dashboard(
                             <table>
                                 <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th>ROAS</th></tr></thead>
                                 <tbody>{spend_effectiveness_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel">
+                            <div class="card-head"><div><h3><span class="lang-en">Ad impact verdict</span><span class="lang-sk hidden">Verdikt dopadu reklam</span></h3><p><span class="lang-en">Uses ads on/off when available, otherwise falls back to higher-spend vs lower-spend days.</span><span class="lang-sk hidden">Pouziva ads on/off porovnanie ked existuje, inak fallback na vyssi spend vs nizsi spend dni.</span></p></div></div>
+                            <div class="library-tile-grid">
+                                <div class="library-tile tone-{incrementality_tone}">
+                                    <small><span class="lang-en">Verdict</span><span class="lang-sk hidden">Verdikt</span></small>
+                                    <div class="library-tile-value">{incrementality_verdict}</div>
+                                    <div class="library-note"><span class="lang-en">{incrementality_reason_en}</span><span class="lang-sk hidden">{incrementality_reason_sk}</span></div>
+                                </div>
+                                <div class="library-tile tone-neutral">
+                                    <small><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></small>
+                                    <div class="library-tile-value">{incrementality_confidence}</div>
+                                    <div class="library-note"><span class="lang-en">{incrementality_confidence_note_en}</span><span class="lang-sk hidden">{incrementality_confidence_note_sk}</span></div>
+                                </div>
+                                <div class="library-tile tone-neutral">
+                                    <small><span class="lang-en">Primary view</span><span class="lang-sk hidden">Primarny pohlad</span></small>
+                                    <div class="library-tile-value">{escape(str(incrementality_primary.get('label_en') or 'N/A'))}</div>
+                                </div>
+                                <div class="library-tile tone-neutral">
+                                    <small><span class="lang-en">Incremental spend / day</span><span class="lang-sk hidden">Prirastkovy spend / den</span></small>
+                                    <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_total_ad_spend_per_day'), kind="currency")}</div>
+                                </div>
+                                <div class="library-tile tone-positive">
+                                    <small><span class="lang-en">Incremental revenue / day</span><span class="lang-sk hidden">Prirastkova trzba / den</span></small>
+                                    <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_revenue_per_day'), kind="currency")}</div>
+                                </div>
+                                <div class="library-tile tone-positive">
+                                    <small><span class="lang-en">Incremental profit / day (pre-fixed)</span><span class="lang-sk hidden">Prirastkovy zisk / den (pred fixami)</span></small>
+                                    <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_profit_without_fixed_per_day'), kind="currency")}</div>
+                                </div>
+                                <div class="library-tile tone-positive">
+                                    <small><span class="lang-en">Incremental company profit / day</span><span class="lang-sk hidden">Prirastkovy firemny zisk / den</span></small>
+                                    <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_profit_with_fixed_per_day'), kind="currency")}</div>
+                                </div>
+                                <div class="library-tile tone-neutral">
+                                    <small><span class="lang-en">Incremental ROAS</span><span class="lang-sk hidden">Prirastkovy ROAS</span></small>
+                                    <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_roas'), kind="multiple")}</div>
+                                </div>
+                                <div class="library-tile tone-neutral">
+                                    <small><span class="lang-en">Incremental CAC</span><span class="lang-sk hidden">Prirastkovy CAC</span></small>
+                                    <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_cac'), kind="currency")}</div>
+                                    <div class="library-note"><span class="lang-en">Break-even CAC {_format_library_tile_value(incrementality_primary.get('break_even_cac'), 'currency')}</span><span class="lang-sk hidden">Break-even CAC {_format_library_tile_value(incrementality_primary.get('break_even_cac'), 'currency')}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Incrementality comparison table</span><span class="lang-sk hidden">Tabulka incrementality porovnania</span></h3><p><span class="lang-en">Shows on/off views when possible and higher-spend vs lower-spend fallback when the account is always on.</span><span class="lang-sk hidden">Ukazuje on/off pohlad ked je mozny a fallback vyssi spend vs nizsi spend ked ucet bezi stale.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">View</span><span class="lang-sk hidden">Pohlad</span></th><th><span class="lang-en">Method</span><span class="lang-sk hidden">Metoda</span></th><th><span class="lang-en">Paid days</span><span class="lang-sk hidden">Paid dni</span></th><th><span class="lang-en">Control days</span><span class="lang-sk hidden">Kontrolne dni</span></th><th><span class="lang-en">Comparable days</span><span class="lang-sk hidden">Porovnatelne dni</span></th><th><span class="lang-en">Inc. spend/day</span><span class="lang-sk hidden">Inc. spend/den</span></th><th><span class="lang-en">Inc. revenue/day</span><span class="lang-sk hidden">Inc. trzba/den</span></th><th><span class="lang-en">Inc. profit/day pre-fixed</span><span class="lang-sk hidden">Inc. zisk/den pred fixami</span></th><th><span class="lang-en">Inc. company profit/day</span><span class="lang-sk hidden">Inc. firemny zisk/den</span></th><th><span class="lang-en">Inc. ROAS</span><span class="lang-sk hidden">Inc. ROAS</span></th><th><span class="lang-en">Inc. CAC</span><span class="lang-sk hidden">Inc. CAC</span></th><th><span class="lang-en">Verdict</span><span class="lang-sk hidden">Verdikt</span></th><th><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></th></tr></thead>
+                                <tbody>{incrementality_rows_html}</tbody>
                             </table>
                         </div>
                     </div>
