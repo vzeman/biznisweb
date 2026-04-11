@@ -116,10 +116,17 @@ Bootstrap entrypoints:
   - ROY March 2026 export is `warning` because fallback coverage still touches 3.20% of item revenue and 6.26% of pre-ad item profit
 - VEVO now resolves ambiguous shared-EAN fragrance SKUs by exact item label / compound key before identifier fallback, so Natural vs Premium 500ml/200ml lines no longer collapse onto the same cost.
 - ROY now supports project-configured excluded order statuses for realized revenue filtering, so non-revenue final states can be removed without hardcoded edits in `export_orders.py`.
+- ROY dashboard now exposes product-demand analytics in the active modern report:
+  - growing products
+  - declining products
+  - product seasonality
+  - product sales forecast from historical data
+  - top brands by revenue
+  - top brands by profit
 
 ## 8) Next Exact Step
 
-- Verify the next scheduled VEVO production email run from `vevo-daily-report-email` against the new `main` image, then decide whether ROY should get its own AWS daily runner or stay manual-only for now.
+- Merge the Roy product-demand analytics branch to `main`, rebuild the production image, and verify that the production Roy full-history report renders the new product-demand section end-to-end.
 
 ## 9) Change Log
 
@@ -1359,3 +1366,26 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `data/vevo/export_20250503-20250505.csv` no longer contains `madfrog stara odoslana`
   - `data/vevo/export_20250503-20260410.csv` no longer contains `madfrog stara odoslana`
   - refreshed full-history VEVO artifacts were regenerated on the current code path
+
+### 2026-04-11 (ROY product demand analytics)
+- Added Roy-only product-demand analytics into `export_orders.py` and the active modern dashboard:
+  - growing products based on recent 4-week revenue vs previous 4 weeks
+  - declining products on the same comparison window
+  - product seasonality based on full historical months in the selected report range
+  - next-30-day product sales forecast from weekly historical revenue and units
+  - top brands by revenue
+  - top brands by profit
+- Added project-configured Roy brand groups in `projects/roy/settings.json` to avoid noisy pseudo-brand labels.
+- Added brand display guardrails so tiny one-order / low-revenue brands do not dominate the profit ranking tables.
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py html_report_generator.py`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-10`
+  - `python scripts/reporting_qa_smoke.py`
+- Verification outcome:
+  - full-history Roy report regenerates successfully
+  - dashboard payload now includes `roy_product_demand.summary`, trend rows, seasonality rows, forecast rows, and brand ranking rows
+  - full-history Roy payload currently reports:
+    - `23` growing products
+    - `15` declining products
+    - `26` forecasted products
+    - `14` displayed brands after guardrails

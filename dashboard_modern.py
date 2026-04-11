@@ -1078,6 +1078,104 @@ def generate_modern_dashboard(
         ],
         limit=20,
     )
+    roy_product_demand = (advanced_dtc_metrics or {}).get("roy_product_demand", {}) if advanced_dtc_metrics else {}
+    roy_product_demand_summary = (roy_product_demand or {}).get("summary", {}) if roy_product_demand else {}
+    roy_growing_rows = _frame_rows(
+        (roy_product_demand or {}).get("growing_rows"),
+        [
+            "sku",
+            "product",
+            "prior_window_revenue",
+            "recent_window_revenue",
+            "prior_window_units",
+            "recent_window_units",
+            "revenue_growth_pct",
+            "qty_growth_pct",
+            "revenue_delta",
+            "total_revenue",
+            "trend_window_weeks",
+        ],
+        limit=10,
+    )
+    roy_declining_rows = _frame_rows(
+        (roy_product_demand or {}).get("declining_rows"),
+        [
+            "sku",
+            "product",
+            "prior_window_revenue",
+            "recent_window_revenue",
+            "prior_window_units",
+            "recent_window_units",
+            "revenue_growth_pct",
+            "qty_growth_pct",
+            "revenue_delta",
+            "total_revenue",
+            "trend_window_weeks",
+        ],
+        limit=10,
+    )
+    roy_seasonality_rows = _frame_rows(
+        (roy_product_demand or {}).get("seasonality_rows"),
+        [
+            "sku",
+            "product",
+            "best_month",
+            "best_month_index",
+            "worst_month",
+            "worst_month_index",
+            "seasonality_swing_pct",
+            "months_with_sales",
+            "total_revenue",
+        ],
+        limit=10,
+    )
+    roy_forecast_rows = _frame_rows(
+        (roy_product_demand or {}).get("forecast_rows"),
+        [
+            "sku",
+            "product",
+            "recent_30d_revenue",
+            "forecast_30d_revenue",
+            "forecast_30d_units",
+            "forecast_delta_pct",
+            "confidence",
+            "weeks_used",
+            "days_since_last_sale",
+        ],
+        limit=10,
+    )
+    roy_brand_revenue_rows = _frame_rows(
+        (roy_product_demand or {}).get("brand_revenue_rows"),
+        [
+            "brand_key",
+            "brand_label",
+            "orders",
+            "products",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_with_fixed_pct",
+            "margin_without_fixed_pct",
+        ],
+        limit=12,
+    )
+    roy_brand_profit_rows = _frame_rows(
+        (roy_product_demand or {}).get("brand_profit_rows"),
+        [
+            "brand_key",
+            "brand_label",
+            "orders",
+            "products",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_with_fixed_pct",
+            "margin_without_fixed_pct",
+        ],
+        limit=12,
+    )
 
     heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
     b2b_rows = _frame_rows(
@@ -1555,6 +1653,15 @@ def generate_modern_dashboard(
             "source_rows": acquisition_family_source_rows,
             "family_rows": acquisition_family_family_rows,
         },
+        "roy_product_demand": {
+            "summary": {k: _maybe_num(v) if isinstance(v, (int, float)) else _json_safe(v) for k, v in ((roy_product_demand or {}).get("summary") or {}).items()},
+            "growing_rows": roy_growing_rows,
+            "declining_rows": roy_declining_rows,
+            "seasonality_rows": roy_seasonality_rows,
+            "forecast_rows": roy_forecast_rows,
+            "brand_revenue_rows": roy_brand_revenue_rows,
+            "brand_profit_rows": roy_brand_profit_rows,
+        },
         "daily_margin_rows": daily_margin_rows,
         "payday_window_rows": payday_window_rows,
         "cohort_payback_rows": cohort_payback_rows,
@@ -1616,6 +1723,8 @@ def generate_modern_dashboard(
         },
     }
     payload_json = _json_script_content(payload)
+    roy_trend_window_weeks = max(2, int(round(_num(roy_product_demand_summary.get("trend_window_weeks"))))) if roy_product_demand_summary else 4
+    roy_forecast_horizon_days = max(1, int(round(_num(roy_product_demand_summary.get("forecast_horizon_days"))))) if roy_product_demand_summary else 30
 
     product_rows_html = "".join(
         (
@@ -1637,6 +1746,155 @@ def generate_modern_dashboard(
         f"<tr><td>{escape(str(row.get('product') or 'Unknown'))}</td><td>{escape(str(row.get('trend') or '-'))}</td><td>{_num(row.get('revenue_growth_pct')):+.1f}%</td><td>{_num(row.get('qty_growth_pct')):+.1f}%</td><td>€{_num(row.get('total_revenue')):,.2f}</td></tr>"
         for row in trend_rows
     ) or '<tr><td colspan="5"><span class="lang-en">No product trend data available.</span><span class="lang-sk hidden">Produktové trendy nie sú dostupné.</span></td></tr>'
+
+    roy_growing_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>&euro;{_num(row.get('prior_window_revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('recent_window_revenue')):,.2f}</td>"
+            f"<td>{_num(row.get('revenue_growth_pct')):+.1f}%</td>"
+            f"<td>{_num(row.get('qty_growth_pct')):+.1f}%</td>"
+            "</tr>"
+        )
+        for row in roy_growing_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No meaningful growing products in the recent comparison window.</span><span class="lang-sk hidden">V poslednom porovnavanom okne nie su ziadne vyrazne rastuce produkty.</span></td></tr>'
+    roy_declining_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>&euro;{_num(row.get('prior_window_revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('recent_window_revenue')):,.2f}</td>"
+            f"<td>{_num(row.get('revenue_growth_pct')):+.1f}%</td>"
+            f"<td>{_num(row.get('qty_growth_pct')):+.1f}%</td>"
+            "</tr>"
+        )
+        for row in roy_declining_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No meaningful declining products in the recent comparison window.</span><span class="lang-sk hidden">V poslednom porovnavanom okne nie su ziadne vyrazne klesajuce produkty.</span></td></tr>'
+    roy_seasonality_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{escape(str(row.get('best_month') or '-'))}</td>"
+            f"<td>{_num(row.get('best_month_index')):.1f}</td>"
+            f"<td>{escape(str(row.get('worst_month') or '-'))}</td>"
+            f"<td>{_num(row.get('worst_month_index')):.1f}</td>"
+            f"<td>{_num(row.get('seasonality_swing_pct')):.1f}</td>"
+            "</tr>"
+        )
+        for row in roy_seasonality_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">Not enough full historical months for product seasonality yet.</span><span class="lang-sk hidden">Na produktovu sezonnost zatial nie je dost plnych historickych mesiacov.</span></td></tr>'
+    roy_forecast_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>&euro;{_num(row.get('recent_30d_revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('forecast_30d_revenue')):,.2f}</td>"
+            f"<td>{_num(row.get('forecast_30d_units')):.1f}</td>"
+            f"<td>{_num(row.get('forecast_delta_pct')):+.1f}%</td>"
+            f"<td>{escape(str(row.get('confidence') or '-'))}</td>"
+            "</tr>"
+        )
+        for row in roy_forecast_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">Not enough stable product history for product-level sales forecasting yet.</span><span class="lang-sk hidden">Na forecast predaja na urovni produktu zatial nie je dost stabilnej historie.</span></td></tr>'
+    roy_brand_revenue_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('brand_label') or 'Unknown'))}</td>"
+            f"<td>&euro;{_num(row.get('revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('profit_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('margin_with_fixed_pct')):.1f}%</td>"
+            f"<td>{int(round(_num(row.get('orders'))))}</td>"
+            f"<td>{int(round(_num(row.get('products'))))}</td>"
+            "</tr>"
+        )
+        for row in roy_brand_revenue_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No brand aggregation data available.</span><span class="lang-sk hidden">Agregacia znaciek nie je dostupna.</span></td></tr>'
+    roy_brand_profit_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('brand_label') or 'Unknown'))}</td>"
+            f"<td>&euro;{_num(row.get('profit_with_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('revenue')):,.2f}</td>"
+            f"<td>{_num(row.get('margin_with_fixed_pct')):.1f}%</td>"
+            f"<td>{int(round(_num(row.get('orders'))))}</td>"
+            f"<td>{int(round(_num(row.get('products'))))}</td>"
+            "</tr>"
+        )
+        for row in roy_brand_profit_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No brand profit data available.</span><span class="lang-sk hidden">Data o ziskovosti znaciek nie su dostupne.</span></td></tr>'
+    roy_product_demand_section_html = ""
+    if any([roy_growing_rows, roy_declining_rows, roy_seasonality_rows, roy_forecast_rows, roy_brand_revenue_rows, roy_brand_profit_rows]):
+        roy_product_demand_section_html = f"""
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Growing products</span><span class="lang-sk hidden">Rastúce produkty</span></h3><p><span class="lang-en">Recent {roy_trend_window_weeks}-week revenue versus the previous {roy_trend_window_weeks} weeks.</span><span class="lang-sk hidden">Posledných {roy_trend_window_weeks} týzdnov tržieb oproti predošlým {roy_trend_window_weeks} týždnom.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="royGrowingProductsChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Declining products</span><span class="lang-sk hidden">Klesajúce produkty</span></h3><p><span class="lang-en">Products losing the most revenue in the same recent comparison window.</span><span class="lang-sk hidden">Produkty s najväčším poklesom tržieb v rovnakom porovnavacom okne.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="royDecliningProductsChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Growing product table</span><span class="lang-sk hidden">Tabulka rastucich produktov</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Prev window revenue</span><span class="lang-sk hidden">Trzby predosle okno</span></th><th><span class="lang-en">Recent revenue</span><span class="lang-sk hidden">Trzby posledne okno</span></th><th><span class="lang-en">Revenue growth</span><span class="lang-sk hidden">Rast trzby</span></th><th><span class="lang-en">Qty growth</span><span class="lang-sk hidden">Rast kusov</span></th></tr></thead>
+                                <tbody>{roy_growing_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Declining product table</span><span class="lang-sk hidden">Tabulka klesajucich produktov</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Prev window revenue</span><span class="lang-sk hidden">Trzby predosle okno</span></th><th><span class="lang-en">Recent revenue</span><span class="lang-sk hidden">Trzby posledne okno</span></th><th><span class="lang-en">Revenue growth</span><span class="lang-sk hidden">Rast trzby</span></th><th><span class="lang-en">Qty growth</span><span class="lang-sk hidden">Rast kusov</span></th></tr></thead>
+                                <tbody>{roy_declining_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Product seasonality</span><span class="lang-sk hidden">Sezonnost produktov</span></h3><p><span class="lang-en">Peak and trough month index based on full historical months in the report range.</span><span class="lang-sk hidden">Peak a trough index podla plnych historickych mesiacov v reportovanom rozsahu.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="royProductSeasonalityChart"></canvas></div>
+                        </div>
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Product sales forecast</span><span class="lang-sk hidden">Predikcia predaja produktov</span></h3><p><span class="lang-en">Blended trend + recent-history forecast for the next {roy_forecast_horizon_days} days.</span><span class="lang-sk hidden">Blended trend + nedavna historia pre odhad najblizsich {roy_forecast_horizon_days} dni.</span></p></div></div>
+                            <div class="chart-shell"><canvas id="royProductForecastChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Seasonality table</span><span class="lang-sk hidden">Tabulka sezonnosti</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Best month</span><span class="lang-sk hidden">Najlepsi mesiac</span></th><th><span class="lang-en">Peak index</span><span class="lang-sk hidden">Peak index</span></th><th><span class="lang-en">Worst month</span><span class="lang-sk hidden">Najslabsi mesiac</span></th><th><span class="lang-en">Trough index</span><span class="lang-sk hidden">Trough index</span></th><th><span class="lang-en">Swing</span><span class="lang-sk hidden">Swing</span></th></tr></thead>
+                                <tbody>{roy_seasonality_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Forecast table</span><span class="lang-sk hidden">Tabulka forecastu</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Recent 30d revenue</span><span class="lang-sk hidden">Trzby poslednych 30 dni</span></th><th><span class="lang-en">Forecast {roy_forecast_horizon_days}d</span><span class="lang-sk hidden">Forecast {roy_forecast_horizon_days}d</span></th><th><span class="lang-en">Forecast units</span><span class="lang-sk hidden">Forecast kusov</span></th><th><span class="lang-en">Delta</span><span class="lang-sk hidden">Delta</span></th><th><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></th></tr></thead>
+                                <tbody>{roy_forecast_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Top brands by revenue</span><span class="lang-sk hidden">Top znacky podla trzby</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Brand</span><span class="lang-sk hidden">Znacka</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></th></tr></thead>
+                                <tbody>{roy_brand_revenue_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Top brands by profit</span><span class="lang-sk hidden">Top znacky podla zisku</span></h3></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Brand</span><span class="lang-sk hidden">Znacka</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></th></tr></thead>
+                                <tbody>{roy_brand_profit_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+        """
 
     geo_rows_html = "".join(
         (
@@ -2923,6 +3181,7 @@ def generate_modern_dashboard(
                             <tbody>{product_trend_rows_html}</tbody>
                         </table>
                     </div>
+                    {roy_product_demand_section_html}
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">SKU Pareto contribution</span><span class="lang-sk hidden">SKU Pareto contribution</span></h3><p><span class="lang-en">Cumulative contribution concentration by SKU.</span><span class="lang-sk hidden">Kumulovana koncentracia contribution podla SKU.</span></p></div></div>
@@ -3567,6 +3826,58 @@ def generate_modern_dashboard(
                     type: 'bar',
                     data: {{ labels: DATA.trend_rows.map(x => (x.product || 'Unknown').slice(0, 28)), datasets: [{{ label: 'Revenue growth %', data: DATA.trend_rows.map(x => Number(x.revenue_growth_pct || 0)), backgroundColor: DATA.trend_rows.map(x => Number(x.revenue_growth_pct || 0) >= 0 ? 'rgba(31,157,102,.72)' : 'rgba(207,80,96,.72)'), borderRadius: 8 }}] }},
                     options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if ((DATA.roy_product_demand || {{}}).growing_rows?.length && document.getElementById('royGrowingProductsChart')) {{
+                new Chart(document.getElementById('royGrowingProductsChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.roy_product_demand.growing_rows.map(x => (x.product || 'Unknown').slice(0, 28)),
+                        datasets: [{{ label: 'Revenue growth %', data: DATA.roy_product_demand.growing_rows.map(x => Number(x.revenue_growth_pct || 0)), backgroundColor: 'rgba(31,157,102,.72)', borderRadius: 8 }}],
+                    }},
+                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if ((DATA.roy_product_demand || {{}}).declining_rows?.length && document.getElementById('royDecliningProductsChart')) {{
+                new Chart(document.getElementById('royDecliningProductsChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.roy_product_demand.declining_rows.map(x => (x.product || 'Unknown').slice(0, 28)),
+                        datasets: [{{ label: 'Revenue growth %', data: DATA.roy_product_demand.declining_rows.map(x => Number(x.revenue_growth_pct || 0)), backgroundColor: 'rgba(207,80,96,.72)', borderRadius: 8 }}],
+                    }},
+                    options: {{ ...baseOptions(), indexAxis: 'y', plugins: {{ ...baseOptions().plugins, legend: {{ display: false }} }} }},
+                }});
+            }}
+            if ((DATA.roy_product_demand || {{}}).seasonality_rows?.length && document.getElementById('royProductSeasonalityChart')) {{
+                new Chart(document.getElementById('royProductSeasonalityChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: DATA.roy_product_demand.seasonality_rows.map(x => (x.product || 'Unknown').slice(0, 24)),
+                        datasets: [
+                            {{ label: 'Peak index', data: DATA.roy_product_demand.seasonality_rows.map(x => Number(x.best_month_index || 0)), backgroundColor: 'rgba(255,138,31,.70)', borderRadius: 8 }},
+                            {{ label: 'Trough index', data: DATA.roy_product_demand.seasonality_rows.map(x => Number(x.worst_month_index || 0)), backgroundColor: 'rgba(71,102,255,.58)', borderRadius: 8 }},
+                        ],
+                    }},
+                    options: {{ ...baseOptions(), indexAxis: 'y' }},
+                }});
+            }}
+            if ((DATA.roy_product_demand || {{}}).forecast_rows?.length && document.getElementById('royProductForecastChart')) {{
+                new Chart(document.getElementById('royProductForecastChart'), {{
+                    data: {{
+                        labels: DATA.roy_product_demand.forecast_rows.map(x => (x.product || 'Unknown').slice(0, 24)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Recent 30d revenue', data: DATA.roy_product_demand.forecast_rows.map(x => Number(x.recent_30d_revenue || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8 }},
+                            {{ type: 'bar', label: 'Forecast 30d revenue', data: DATA.roy_product_demand.forecast_rows.map(x => Number(x.forecast_30d_revenue || 0)), backgroundColor: 'rgba(31,157,102,.72)', borderRadius: 8 }},
+                            {{ type: 'line', label: 'Forecast delta %', data: DATA.roy_product_demand.forecast_rows.map(x => Number(x.forecast_delta_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: {{
+                        ...baseOptions(),
+                        scales: {{
+                            ...baseOptions().scales,
+                            y1: {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }},
+                        }},
+                    }},
                 }});
             }}
             const economicsOpts = baseOptions();

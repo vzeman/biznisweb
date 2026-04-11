@@ -187,6 +187,113 @@
       "patterns": ["Pasca", "Mucholapka", "ArboBand", "RataStop", "FRUTABAND", "Nanoprotech", "vosk", "farby na tvar"]
     }
   ],
+  "brand_groups": [
+    {
+      "key": "wachman",
+      "label": "Wachman",
+      "patterns": ["Wachman"]
+    },
+    {
+      "key": "maco_stop",
+      "label": "MACO STOP",
+      "patterns": ["MACO STOP"]
+    },
+    {
+      "key": "welltar",
+      "label": "Welltar",
+      "patterns": ["Welltar"]
+    },
+    {
+      "key": "roy",
+      "label": "Roy",
+      "patterns": ["Roy "]
+    },
+    {
+      "key": "verbatim",
+      "label": "Verbatim",
+      "patterns": ["Verbatim"]
+    },
+    {
+      "key": "pard",
+      "label": "Pard",
+      "patterns": ["Pard "]
+    },
+    {
+      "key": "pixfra",
+      "label": "Pixfra",
+      "patterns": ["Pixfra"]
+    },
+    {
+      "key": "braun",
+      "label": "Braun",
+      "patterns": ["Braun"]
+    },
+    {
+      "key": "suntek",
+      "label": "Suntek",
+      "patterns": ["Suntek"]
+    },
+    {
+      "key": "helikon",
+      "label": "Helikon",
+      "patterns": ["Helikon"]
+    },
+    {
+      "key": "pentagon",
+      "label": "Pentagon",
+      "patterns": ["Pentagon"]
+    },
+    {
+      "key": "albainox",
+      "label": "Albainox",
+      "patterns": ["Albainox"]
+    },
+    {
+      "key": "walther",
+      "label": "Walther",
+      "patterns": ["Walther"]
+    },
+    {
+      "key": "mfh",
+      "label": "MFH",
+      "patterns": ["MFH"]
+    },
+    {
+      "key": "seeland",
+      "label": "Seeland",
+      "patterns": ["Seeland"]
+    },
+    {
+      "key": "wenger",
+      "label": "Wenger",
+      "patterns": ["Wenger"]
+    },
+    {
+      "key": "tagart",
+      "label": "Tagart",
+      "patterns": ["Tagart"]
+    },
+    {
+      "key": "bighorn",
+      "label": "Bighorn",
+      "patterns": ["Bighorn"]
+    },
+    {
+      "key": "m_tramp",
+      "label": "M-TRAMP",
+      "patterns": ["M-TRAMP", "M-Tramp"]
+    },
+    {
+      "key": "spromise",
+      "label": "Spromise",
+      "patterns": ["Spromise"]
+    },
+    {
+      "key": "blackfire",
+      "label": "BlackFire",
+      "patterns": ["BlackFire"]
+    }
+  ],
   "product_expenses_file": "product_expenses.json",
   "bundle_accessory_model": {
     "enabled": true,

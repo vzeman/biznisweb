@@ -1690,6 +1690,17 @@ class BizniWebExporter:
         groups = self.project_settings.get("product_family_groups") or []
         return groups if isinstance(groups, list) else []
 
+    def _brand_groups_config(self) -> List[Dict[str, Any]]:
+        groups = self.project_settings.get("brand_groups") or []
+        return groups if isinstance(groups, list) else []
+
+    def _extract_product_brand(self, label: Any) -> Tuple[str, str]:
+        brand_key, brand_label = self._match_named_group(label, self._brand_groups_config())
+        if brand_key:
+            return brand_key, brand_label
+
+        return "other_unknown", "Other / unknown"
+
     def _build_growth_order_item_frames(
         self,
         df: pd.DataFrame,
@@ -7392,6 +7403,12 @@ class BizniWebExporter:
             customer_orders=customer_orders,
             revenue_col=revenue_col,
         )
+        roy_product_demand = self.analyze_roy_product_demand_analytics(
+            df,
+            orders_df=orders_df,
+            item_df=item_df,
+            revenue_col=revenue_col,
+        )
         vevo_direct_assisted_profitability = {"summary": {}, "entry_rows": pd.DataFrame(), "window_rows": pd.DataFrame()}
         vevo_scent_size_refill_matrix = {"summary": {}, "same_scent_rows": pd.DataFrame(), "migration_rows": pd.DataFrame()}
         vevo_bundle_recommender = {"summary": {}, "recommendation_rows": pd.DataFrame(), "anchor_rows": pd.DataFrame()}
@@ -7556,6 +7573,7 @@ class BizniWebExporter:
             'attach_rate': attach_rate,
             'bundle_accessory_model': bundle_accessory_model,
             'acquisition_product_family_cube': acquisition_product_family_cube,
+            'roy_product_demand': roy_product_demand,
             'vevo_direct_assisted_profitability': vevo_direct_assisted_profitability,
             'vevo_scent_size_refill_matrix': vevo_scent_size_refill_matrix,
             'vevo_bundle_recommender': vevo_bundle_recommender,
@@ -8002,6 +8020,374 @@ class BizniWebExporter:
 
         print(f"Product trends analysis complete: {len(trends)} products")
         return trends
+
+    def analyze_roy_product_demand_analytics(
+        self,
+        df: pd.DataFrame,
+        orders_df: Optional[pd.DataFrame] = None,
+        item_df: Optional[pd.DataFrame] = None,
+        revenue_col: Optional[str] = None,
+    ) -> dict:
+        if self.project_name != "roy":
+            return {
+                "summary": {},
+                "growing_rows": pd.DataFrame(),
+                "declining_rows": pd.DataFrame(),
+                "seasonality_rows": pd.DataFrame(),
+                "forecast_rows": pd.DataFrame(),
+                "brand_revenue_rows": pd.DataFrame(),
+                "brand_profit_rows": pd.DataFrame(),
+            }
+
+        print("\nAnalyzing Roy product demand analytics...")
+
+        if orders_df is None or item_df is None:
+            orders_df, item_df, revenue_col = self._build_growth_order_item_frames(df, revenue_col=revenue_col)
+
+        if item_df is None or item_df.empty:
+            return {
+                "summary": {},
+                "growing_rows": pd.DataFrame(),
+                "declining_rows": pd.DataFrame(),
+                "seasonality_rows": pd.DataFrame(),
+                "forecast_rows": pd.DataFrame(),
+                "brand_revenue_rows": pd.DataFrame(),
+                "brand_profit_rows": pd.DataFrame(),
+            }
+
+        demand_df = item_df.copy()
+        demand_df["purchase_datetime"] = pd.to_datetime(demand_df["purchase_datetime"], errors="coerce")
+        demand_df = demand_df.dropna(subset=["purchase_datetime", "product_sku", "item_label"]).copy()
+        if demand_df.empty:
+            return {
+                "summary": {},
+                "growing_rows": pd.DataFrame(),
+                "declining_rows": pd.DataFrame(),
+                "seasonality_rows": pd.DataFrame(),
+                "forecast_rows": pd.DataFrame(),
+                "brand_revenue_rows": pd.DataFrame(),
+                "brand_profit_rows": pd.DataFrame(),
+            }
+
+        numeric_columns = ["item_quantity", "item_total_without_tax", "cm2_profit", "cm3_profit"]
+        for column in numeric_columns:
+            demand_df[column] = pd.to_numeric(demand_df[column], errors="coerce").fillna(0.0)
+
+        demand_df["week_start"] = demand_df["purchase_datetime"].dt.to_period("W").dt.start_time
+        demand_df["month_start"] = demand_df["purchase_datetime"].dt.to_period("M").dt.to_timestamp()
+
+        product_summary = (
+            demand_df.groupby("product_sku")
+            .agg(
+                product=("item_label", "first"),
+                orders=("order_num", "nunique"),
+                units=("item_quantity", "sum"),
+                revenue=("item_total_without_tax", "sum"),
+                profit_without_fixed=("cm2_profit", "sum"),
+                profit_with_fixed=("cm3_profit", "sum"),
+                first_sale=("purchase_datetime", "min"),
+                last_sale=("purchase_datetime", "max"),
+            )
+            .reset_index()
+        )
+
+        weekly = (
+            demand_df.groupby(["product_sku", "week_start"])
+            .agg(
+                product=("item_label", "first"),
+                revenue=("item_total_without_tax", "sum"),
+                units=("item_quantity", "sum"),
+                profit_with_fixed=("cm3_profit", "sum"),
+            )
+            .reset_index()
+            .sort_values(["product_sku", "week_start"])
+        )
+
+        def _growth_pct(base_value: float, current_value: float) -> float:
+            if abs(base_value) < 1e-9:
+                return 100.0 if current_value > 0 else 0.0
+            return ((current_value - base_value) / base_value) * 100.0
+
+        def _forecast_series(values: np.ndarray, horizon: int = 4) -> np.ndarray:
+            series = np.asarray(values, dtype=float)
+            if series.size == 0:
+                return np.zeros(horizon, dtype=float)
+            x = np.arange(series.size, dtype=float)
+            if series.size >= 2 and np.any(series != series[0]):
+                slope, intercept = np.polyfit(x, series, 1)
+            else:
+                slope, intercept = 0.0, float(series.mean())
+            recent_mean = float(series[-min(4, series.size):].mean()) if series.size else 0.0
+            recent_peak = float(series[-min(8, series.size):].max()) if series.size else 0.0
+            future_x = np.arange(series.size, series.size + horizon, dtype=float)
+            trend_projection = intercept + slope * future_x
+            blended = (trend_projection * 0.65) + (recent_mean * 0.35)
+            cap = max(recent_peak * 2.0, recent_mean * 2.0, 0.0)
+            if cap > 0:
+                blended = np.clip(blended, 0.0, cap)
+            else:
+                blended = np.zeros(horizon, dtype=float)
+            return blended
+
+        def _forecast_confidence(values: np.ndarray) -> str:
+            series = np.asarray(values, dtype=float)
+            if series.size == 0:
+                return "Low"
+            recent = series[-min(8, series.size):]
+            active_share = float(np.mean(recent > 0))
+            recent_mean = float(recent.mean()) if recent.size else 0.0
+            recent_std = float(recent.std(ddof=0)) if recent.size > 1 else 0.0
+            cv = (recent_std / recent_mean) if recent_mean > 0 else float("inf")
+            if active_share >= 0.75 and cv <= 0.6:
+                return "High"
+            if active_share >= 0.5 and cv <= 1.0:
+                return "Medium"
+            return "Low"
+
+        week_index = pd.DatetimeIndex([])
+        if not weekly.empty:
+            week_index = pd.date_range(
+                start=weekly["week_start"].min(),
+                end=weekly["week_start"].max(),
+                freq="W-MON",
+            )
+        trend_window_weeks = min(4, max(2, len(week_index) // 2)) if len(week_index) >= 4 else 0
+        forecast_horizon_weeks = 4
+        growing_rows: List[Dict[str, Any]] = []
+        declining_rows: List[Dict[str, Any]] = []
+        forecast_rows: List[Dict[str, Any]] = []
+        latest_sale = pd.to_datetime(demand_df["purchase_datetime"]).max()
+
+        if trend_window_weeks >= 2 and len(week_index) >= trend_window_weeks * 2:
+            for row in product_summary.itertuples(index=False):
+                series = (
+                    weekly.loc[weekly["product_sku"] == row.product_sku, ["week_start", "revenue", "units"]]
+                    .set_index("week_start")
+                    .reindex(week_index, fill_value=0.0)
+                )
+                if series.empty:
+                    continue
+                prior = series.iloc[-(trend_window_weeks * 2):-trend_window_weeks]
+                recent = series.iloc[-trend_window_weeks:]
+                prior_revenue = float(prior["revenue"].sum())
+                recent_revenue = float(recent["revenue"].sum())
+                prior_units = float(prior["units"].sum())
+                recent_units = float(recent["units"].sum())
+                combined_revenue = prior_revenue + recent_revenue
+                combined_units = prior_units + recent_units
+                if combined_revenue < 250 and combined_units < 4:
+                    continue
+
+                revenue_growth_pct = round(_growth_pct(prior_revenue, recent_revenue), 1)
+                qty_growth_pct = round(_growth_pct(prior_units, recent_units), 1)
+                revenue_delta = round(recent_revenue - prior_revenue, 2)
+                qty_delta = round(recent_units - prior_units, 2)
+
+                demand_row = {
+                    "sku": row.product_sku,
+                    "product": row.product,
+                    "prior_window_revenue": round(prior_revenue, 2),
+                    "recent_window_revenue": round(recent_revenue, 2),
+                    "prior_window_units": round(prior_units, 2),
+                    "recent_window_units": round(recent_units, 2),
+                    "revenue_growth_pct": revenue_growth_pct,
+                    "qty_growth_pct": qty_growth_pct,
+                    "revenue_delta": revenue_delta,
+                    "qty_delta": qty_delta,
+                    "total_revenue": round(float(row.revenue or 0.0), 2),
+                    "trend_window_weeks": trend_window_weeks,
+                }
+                if recent_revenue > prior_revenue and revenue_growth_pct >= 15:
+                    growing_rows.append(demand_row)
+                if recent_revenue < prior_revenue and revenue_growth_pct <= -15:
+                    declining_rows.append(demand_row)
+
+                recent_series = series["revenue"].tail(min(12, len(series))).to_numpy(dtype=float)
+                recent_units_series = series["units"].tail(min(12, len(series))).to_numpy(dtype=float)
+                if recent_series.size < 6:
+                    continue
+                if (latest_sale - row.last_sale).days > 45:
+                    continue
+                if float(row.revenue or 0.0) < 300:
+                    continue
+                forecast_rev_weeks = _forecast_series(recent_series, horizon=forecast_horizon_weeks)
+                forecast_units_weeks = _forecast_series(recent_units_series, horizon=forecast_horizon_weeks)
+                recent_window_days = max(7 * min(4, recent_series.size), 7)
+                recent_revenue_30d = float(recent_series[-min(4, recent_series.size):].sum()) * (30.0 / recent_window_days)
+                forecast_revenue_30d = float(forecast_rev_weeks.sum()) * (30.0 / (forecast_horizon_weeks * 7.0))
+                forecast_units_30d = float(forecast_units_weeks.sum()) * (30.0 / (forecast_horizon_weeks * 7.0))
+                forecast_rows.append(
+                    {
+                        "sku": row.product_sku,
+                        "product": row.product,
+                        "recent_30d_revenue": round(recent_revenue_30d, 2),
+                        "forecast_30d_revenue": round(forecast_revenue_30d, 2),
+                        "forecast_30d_units": round(forecast_units_30d, 1),
+                        "forecast_delta_pct": round(_growth_pct(recent_revenue_30d, forecast_revenue_30d), 1),
+                        "confidence": _forecast_confidence(recent_series),
+                        "weeks_used": int(recent_series.size),
+                        "days_since_last_sale": int((latest_sale - row.last_sale).days),
+                    }
+                )
+
+        growing_rows_df = (
+            pd.DataFrame(growing_rows).sort_values(["revenue_delta", "recent_window_revenue"], ascending=[False, False]).reset_index(drop=True)
+            if growing_rows else pd.DataFrame()
+        )
+        declining_rows_df = (
+            pd.DataFrame(declining_rows).sort_values(["revenue_delta", "prior_window_revenue"], ascending=[True, False]).reset_index(drop=True)
+            if declining_rows else pd.DataFrame()
+        )
+        forecast_rows_df = (
+            pd.DataFrame(forecast_rows).sort_values(["forecast_30d_revenue", "forecast_delta_pct"], ascending=[False, False]).reset_index(drop=True)
+            if forecast_rows else pd.DataFrame()
+        )
+
+        full_months = pd.PeriodIndex([], freq="M")
+        seasonality_rows_df = pd.DataFrame()
+        min_dt = demand_df["purchase_datetime"].dt.normalize().min()
+        max_dt = demand_df["purchase_datetime"].dt.normalize().max()
+        full_start = min_dt if min_dt.day == 1 else (min_dt + pd.offsets.MonthBegin(1))
+        max_month_last_day = (max_dt + pd.offsets.MonthEnd(0)).day
+        full_end = max_dt if max_dt.day == max_month_last_day else (max_dt - pd.offsets.MonthEnd(1))
+        if full_start <= full_end:
+            full_months = pd.period_range(full_start.to_period("M"), full_end.to_period("M"), freq="M")
+        if len(full_months) >= 3:
+            month_index = pd.to_datetime(full_months.astype(str))
+            calendar_df = pd.DataFrame({"month_start": month_index})
+            calendar_df["calendar_days"] = calendar_df["month_start"].dt.days_in_month
+            seasonality_monthly = (
+                demand_df[demand_df["month_start"].isin(month_index)]
+                .groupby(["product_sku", "month_start"])
+                .agg(
+                    product=("item_label", "first"),
+                    revenue=("item_total_without_tax", "sum"),
+                    units=("item_quantity", "sum"),
+                )
+                .reset_index()
+            )
+            eligible_products = product_summary.loc[
+                (product_summary["revenue"] >= 300) & (product_summary["orders"] >= 3),
+                ["product_sku", "product", "revenue"],
+            ].copy()
+            if not eligible_products.empty:
+                seasonal_grid = pd.MultiIndex.from_product(
+                    [eligible_products["product_sku"].tolist(), month_index.tolist()],
+                    names=["product_sku", "month_start"],
+                ).to_frame(index=False)
+                seasonality_grid = seasonal_grid.merge(
+                    eligible_products[["product_sku", "product", "revenue"]].rename(columns={"revenue": "total_revenue"}),
+                    on="product_sku",
+                    how="left",
+                )
+                seasonality_grid = seasonality_grid.merge(
+                    seasonality_monthly[["product_sku", "month_start", "revenue", "units"]],
+                    on=["product_sku", "month_start"],
+                    how="left",
+                ).merge(calendar_df, on="month_start", how="left")
+                seasonality_grid["revenue"] = seasonality_grid["revenue"].fillna(0.0)
+                seasonality_grid["units"] = seasonality_grid["units"].fillna(0.0)
+                seasonality_grid["avg_daily_revenue"] = seasonality_grid["revenue"] / seasonality_grid["calendar_days"].replace(0, np.nan)
+                summary_rows = []
+                for sku, sku_months in seasonality_grid.groupby("product_sku"):
+                    baseline = float(sku_months["avg_daily_revenue"].mean()) if not sku_months.empty else 0.0
+                    if baseline <= 0:
+                        continue
+                    sku_months = sku_months.copy()
+                    sku_months["seasonality_index"] = (sku_months["avg_daily_revenue"] / baseline) * 100.0
+                    months_with_sales = int((sku_months["revenue"] > 0).sum())
+                    if months_with_sales < 3:
+                        continue
+                    best_row = sku_months.loc[sku_months["seasonality_index"].idxmax()]
+                    worst_row = sku_months.loc[sku_months["seasonality_index"].idxmin()]
+                    summary_rows.append(
+                        {
+                            "sku": sku,
+                            "product": best_row["product"],
+                            "best_month": pd.Timestamp(best_row["month_start"]).strftime("%Y-%m"),
+                            "best_month_index": round(float(best_row["seasonality_index"]), 1),
+                            "worst_month": pd.Timestamp(worst_row["month_start"]).strftime("%Y-%m"),
+                            "worst_month_index": round(float(worst_row["seasonality_index"]), 1),
+                            "seasonality_swing_pct": round(float(best_row["seasonality_index"] - worst_row["seasonality_index"]), 1),
+                            "months_with_sales": months_with_sales,
+                            "total_revenue": round(float(best_row["total_revenue"] or 0.0), 2),
+                        }
+                    )
+                if summary_rows:
+                    seasonality_rows_df = (
+                        pd.DataFrame(summary_rows)
+                        .sort_values(["seasonality_swing_pct", "total_revenue"], ascending=[False, False])
+                        .reset_index(drop=True)
+                    )
+
+        brand_rows = []
+        brand_df = demand_df.copy()
+        brand_df[["brand_key", "brand_label"]] = brand_df["item_label"].apply(
+            lambda value: pd.Series(self._extract_product_brand(value))
+        )
+        brand_summary = (
+            brand_df.groupby(["brand_key", "brand_label"])
+            .agg(
+                orders=("order_num", "nunique"),
+                products=("product_sku", "nunique"),
+                units=("item_quantity", "sum"),
+                revenue=("item_total_without_tax", "sum"),
+                profit_without_fixed=("cm2_profit", "sum"),
+                profit_with_fixed=("cm3_profit", "sum"),
+            )
+            .reset_index()
+        )
+        if not brand_summary.empty:
+            brand_summary["margin_with_fixed_pct"] = np.where(
+                brand_summary["revenue"] != 0,
+                (brand_summary["profit_with_fixed"] / brand_summary["revenue"]) * 100.0,
+                0.0,
+            )
+            brand_summary["margin_without_fixed_pct"] = np.where(
+                brand_summary["revenue"] != 0,
+                (brand_summary["profit_without_fixed"] / brand_summary["revenue"]) * 100.0,
+                0.0,
+            )
+            brand_summary = brand_summary.sort_values(["revenue", "profit_with_fixed"], ascending=[False, False]).reset_index(drop=True)
+
+        brand_display_summary = brand_summary.copy()
+        if not brand_display_summary.empty:
+            brand_display_summary = brand_display_summary.loc[
+                (brand_display_summary["revenue"] >= 250.0) | (brand_display_summary["orders"] >= 3)
+            ].reset_index(drop=True)
+
+        brand_revenue_rows_df = (
+            brand_display_summary.sort_values(["revenue", "profit_with_fixed"], ascending=[False, False]).reset_index(drop=True)
+            if not brand_display_summary.empty else pd.DataFrame()
+        )
+        brand_profit_rows_df = (
+            brand_display_summary.sort_values(["profit_with_fixed", "revenue"], ascending=[False, False]).reset_index(drop=True)
+            if not brand_display_summary.empty else pd.DataFrame()
+        )
+
+        result = {
+            "summary": {
+                "trend_window_weeks": int(trend_window_weeks),
+                "forecast_horizon_days": 30,
+                "forecast_reference_date": latest_sale.strftime("%Y-%m-%d") if pd.notna(latest_sale) else None,
+                "seasonality_full_months": int(len(full_months)),
+                "growing_count": int(len(growing_rows_df)),
+                "declining_count": int(len(declining_rows_df)),
+                "forecast_count": int(len(forecast_rows_df)),
+                "brand_count": int(len(brand_display_summary)),
+            },
+            "growing_rows": growing_rows_df,
+            "declining_rows": declining_rows_df,
+            "seasonality_rows": seasonality_rows_df,
+            "forecast_rows": forecast_rows_df,
+            "brand_revenue_rows": brand_revenue_rows_df,
+            "brand_profit_rows": brand_profit_rows_df,
+        }
+        print(
+            f"Roy product demand analytics complete: growing={len(growing_rows_df)}, "
+            f"declining={len(declining_rows_df)}, forecasted={len(forecast_rows_df)}, brands={len(brand_summary)}"
+        )
+        return result
 
     def analyze_customer_concentration(self, df: pd.DataFrame) -> dict:
         """Analyze customer concentration (top customers % of revenue)"""
