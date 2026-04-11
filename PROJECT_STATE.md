@@ -1053,3 +1053,30 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - direct function render of `build_email_body(...)`
 - Expected runtime effect:
   - the daily scheduled VEVO mail should again send the short, clear body once the updated image is built and pulled by the scheduled ECS task.
+
+### 2026-04-11 (Vevo cohort refill model + reporting QA smoke)
+- Added a dedicated Vevo refill cohort model in `export_orders.py` so refill timing is measured by first-order entry bucket and cohort month, not only by generic repeat-purchase logic.
+- Export now produces refill artifacts:
+  - `refill_cohort_buckets_<range>.csv`
+  - `refill_cohort_windows_<range>.csv`
+  - `refill_cohort_months_<range>.csv`
+- Wired `refill_cohort_analysis` through `html_report_generator.py` into the modern dashboard renderer.
+- Extended `dashboard_modern.py` with a refill cohort block in the Customers section and new full-library charts:
+  - `Refill cohort timing`
+  - `Refill bucket quality`
+  - `custRefillWindowChart`
+  - `custRefillBucketChart`
+  - `custRefillCohortChart`
+- Fixed refund QA parity checks so refund summary metrics are asserted against the shared financial registry instead of only checking presence.
+- Added `scripts/reporting_qa_smoke.py` and wired it into `env-check.yml` plus `scripts/security_ci.py` so behavior-level reporting QA runs in CI, not only static checks.
+- Verified with:
+  - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py scripts\security_ci.py scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+- Verification outcome:
+  - VEVO March 2026 report regenerates successfully
+  - refill cohort charts render in the modern dashboard without breaking existing sections
+  - reporting QA smoke passes locally and is now enforced by CI
+- Next exact step:
+  - merge this step to `main`, then implement shared geo confidence scoring and low-sample geo guardrails for both VEVO and ROY.

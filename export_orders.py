@@ -1004,8 +1004,25 @@ class BizniWebExporter:
                 f"{shell_parity_failures} shell/library economics parity check(s) failed."
             )
 
-        if refund_summary.get("refund_orders") and metrics.get("refund_rate_pct") is None:
-            failures.append("Refund orders exist but refund summary metrics are missing from the registry.")
+        refund_registry_keys = ["refund_orders", "refund_rate_pct", "refund_amount"]
+        has_refund_summary = any(key in refund_summary for key in refund_registry_keys)
+        if has_refund_summary:
+            missing_refund_registry_keys = [key for key in refund_registry_keys if metrics.get(key) is None]
+            if missing_refund_registry_keys:
+                failures.append(
+                    "Refund summary metrics are missing from the shared registry: "
+                    + ", ".join(missing_refund_registry_keys)
+                )
+            else:
+                for key, tolerance in (("refund_orders", 0.0), ("refund_rate_pct", 0.05), ("refund_amount", 0.05)):
+                    left = self._safe_float(metrics.get(key))
+                    right = self._safe_float(refund_summary.get(key))
+                    if left is None or right is None:
+                        continue
+                    if abs(left - right) > tolerance:
+                        failures.append(
+                            f"Refund registry mismatch for {key}: registry={left}, refund_summary={right}."
+                        )
 
         if checks:
             if checks.get("roas_ok") is False:
@@ -3103,6 +3120,7 @@ class BizniWebExporter:
         same_item_repurchase = self.analyze_same_item_repurchase(df)
         time_to_nth_by_first_item = self.analyze_time_to_nth_by_first_item(df)
         sample_funnel_analysis = self.analyze_sample_funnel(df)
+        refill_cohort_analysis = self.analyze_refill_cohorts(df)
 
         # Customer email segmentation analysis
         # Combine filtered orders with excluded (failed payment) orders for complete customer view
@@ -3147,6 +3165,14 @@ class BizniWebExporter:
 
         # Calculate financial metrics
         financial_metrics = self.calculate_financial_metrics(df, date_agg, clv_return_time_analysis)
+        refund_summary = (refunds_analysis or {}).get("summary") or {}
+        financial_metrics.update(
+            {
+                "refund_orders": int(refund_summary.get("refund_orders") or 0),
+                "refund_rate_pct": round(float(refund_summary.get("refund_rate_pct") or 0.0), 2),
+                "refund_amount": round(float(refund_summary.get("refund_amount") or 0.0), 2),
+            }
+        )
         consistency_checks = self.validate_metric_consistency(date_agg, financial_metrics, clv_return_time_analysis)
         cfo_kpi_payload = build_cfo_kpi_payload(
             date_agg=date_agg,
@@ -3225,6 +3251,7 @@ class BizniWebExporter:
             same_item_repurchase=same_item_repurchase,
             time_to_nth_by_first_item=time_to_nth_by_first_item,
             sample_funnel_analysis=sample_funnel_analysis,
+            refill_cohort_analysis=refill_cohort_analysis,
             fb_detailed_metrics=fb_detailed_metrics,
             fb_campaigns=fb_campaigns,
             cost_per_order=cost_per_order,
@@ -4245,7 +4272,13 @@ class BizniWebExporter:
         ]
         revenue_col = next((column for column in revenue_candidates if column in export_df.columns), None)
 
-        item_flags = export_df[['customer_email', 'order_num', 'purchase_datetime', 'item_label', 'product_sku']].copy()
+        item_flag_columns = ['customer_email', 'order_num', 'purchase_datetime', 'item_label']
+        if 'product_sku' in export_df.columns:
+            item_flag_columns.append('product_sku')
+        else:
+            export_df['product_sku'] = None
+            item_flag_columns.append('product_sku')
+        item_flags = export_df[item_flag_columns].copy()
         item_flags['is_sample'] = item_flags['item_label'].apply(self._is_sample_item_label)
         item_flags['size_bucket'] = item_flags['item_label'].apply(self._fullsize_size_bucket)
         item_flags['is_fullsize'] = item_flags['size_bucket'].notna()
@@ -4429,6 +4462,227 @@ class BizniWebExporter:
             'summary': summary,
             'window_conversion': window_conversion,
             'entry_product_conversion': entry_product_conversion,
+        }
+
+    def analyze_refill_cohorts(self, df: pd.DataFrame, windows: Optional[List[int]] = None) -> dict:
+        """
+        Vevo refill cohort model based on the first-order size bucket.
+
+        This focuses on the first -> second order transition:
+        - entry bucket composition on the first order
+        - refill rate within 30/60/90/120 day windows
+        - time to second order
+        - second-order AOV and second-order full-size mix
+        """
+        if self.project_name != "vevo":
+            return {'summary': {}, 'bucket_rows': pd.DataFrame(), 'window_rows': pd.DataFrame(), 'cohort_rows': pd.DataFrame()}
+
+        windows = windows or [30, 60, 90, 120]
+        print(f"\nAnalyzing Vevo refill cohorts ({', '.join(str(window) for window in windows)} day windows)...")
+
+        required_columns = {'order_num', 'customer_email', 'purchase_date', 'item_label'}
+        if not required_columns.issubset(df.columns):
+            print("  Refill cohorts skipped: required columns are missing.")
+            return {'summary': {}, 'bucket_rows': pd.DataFrame(), 'window_rows': pd.DataFrame(), 'cohort_rows': pd.DataFrame()}
+
+        export_df = df.copy()
+        export_df['purchase_datetime'] = pd.to_datetime(export_df['purchase_date'], errors='coerce')
+        export_df = export_df.dropna(subset=['purchase_datetime'])
+        export_df['customer_email'] = export_df['customer_email'].astype(str).str.strip().str.lower()
+        export_df = export_df[
+            export_df['customer_email'].notna() &
+            export_df['customer_email'].ne('') &
+            export_df['customer_email'].ne('nan')
+        ].copy()
+
+        if export_df.empty:
+            print("  Refill cohorts skipped: no eligible customer journeys after cleanup.")
+            return {'summary': {}, 'bucket_rows': pd.DataFrame(), 'window_rows': pd.DataFrame(), 'cohort_rows': pd.DataFrame()}
+
+        revenue_candidates = [
+            'order_revenue_net',
+            'order_total',
+            'item_total_revenue_net',
+            'item_total_without_tax',
+            'item_total_revenue',
+        ]
+        revenue_col = next((column for column in revenue_candidates if column in export_df.columns), None)
+
+        item_flags = export_df[['customer_email', 'order_num', 'purchase_datetime', 'item_label', 'product_sku']].copy()
+        item_flags['is_sample'] = item_flags['item_label'].apply(self._is_sample_item_label)
+        item_flags['size_bucket'] = item_flags['item_label'].apply(self._fullsize_size_bucket)
+        item_flags['is_fullsize'] = item_flags['size_bucket'].notna()
+
+        order_flags = item_flags.groupby(['customer_email', 'order_num'], as_index=False).agg(
+            purchase_datetime=('purchase_datetime', 'min'),
+            contains_sample=('is_sample', 'any'),
+            contains_fullsize=('is_fullsize', 'any'),
+            contains_200=('size_bucket', lambda values: any(value == '200ml' for value in values)),
+            contains_500=('size_bucket', lambda values: any(value == '500ml' for value in values)),
+        )
+
+        orders_df = order_flags.copy()
+        if revenue_col is not None:
+            order_values = export_df[['customer_email', 'order_num', 'purchase_datetime', revenue_col]].drop_duplicates(
+                subset=['customer_email', 'order_num']
+            ).copy()
+            order_values = order_values.rename(columns={revenue_col: 'order_revenue'})
+            orders_df = orders_df.merge(
+                order_values[['customer_email', 'order_num', 'order_revenue']],
+                on=['customer_email', 'order_num'],
+                how='left'
+            )
+        else:
+            orders_df['order_revenue'] = 0.0
+        orders_df['order_revenue'] = orders_df['order_revenue'].fillna(0.0)
+        orders_df = orders_df.sort_values(['customer_email', 'purchase_datetime', 'order_num']).reset_index(drop=True)
+        orders_df['customer_order_num'] = orders_df.groupby('customer_email').cumcount() + 1
+        orders_df['cohort_month'] = orders_df['purchase_datetime'].dt.to_period('M').astype(str)
+
+        def first_order_bucket(row: pd.Series) -> Tuple[str, str]:
+            if bool(row.get('contains_sample')) and not bool(row.get('contains_fullsize')):
+                return 'sample_only', 'Sample only'
+            if bool(row.get('contains_200')) and not bool(row.get('contains_500')):
+                return 'fullsize_200', '200ml first order'
+            if bool(row.get('contains_500')) and not bool(row.get('contains_200')):
+                return 'fullsize_500', '500ml first order'
+            if bool(row.get('contains_200')) and bool(row.get('contains_500')):
+                return 'mixed_fullsize', 'Mixed full-size'
+            if bool(row.get('contains_fullsize')):
+                return 'fullsize_other', 'Full-size other'
+            return 'other', 'Other'
+
+        first_orders = orders_df[orders_df['customer_order_num'] == 1].copy()
+        first_orders[['entry_bucket_key', 'entry_bucket_label']] = first_orders.apply(
+            lambda row: pd.Series(first_order_bucket(row)),
+            axis=1,
+        )
+        first_orders['entry_aov'] = first_orders['order_revenue'].fillna(0.0)
+
+        second_orders = orders_df[orders_df['customer_order_num'] == 2].copy()
+        if not second_orders.empty:
+            second_orders = second_orders.rename(columns={
+                'purchase_datetime': 'second_purchase_datetime',
+                'order_revenue': 'second_order_revenue',
+                'contains_fullsize': 'second_contains_fullsize',
+                'contains_200': 'second_contains_200',
+                'contains_500': 'second_contains_500',
+            })
+            second_orders['second_order_aov'] = second_orders['second_order_revenue'].fillna(0.0)
+
+        cohort_df = first_orders.merge(
+            second_orders[[
+                'customer_email',
+                'second_purchase_datetime',
+                'second_order_revenue',
+                'second_order_aov',
+                'second_contains_fullsize',
+                'second_contains_200',
+                'second_contains_500',
+            ]] if not second_orders.empty else pd.DataFrame(columns=['customer_email']),
+            on='customer_email',
+            how='left'
+        )
+        cohort_df['days_to_2nd'] = (
+            cohort_df['second_purchase_datetime'] - cohort_df['purchase_datetime']
+        ).dt.total_seconds() / 86400.0
+
+        eligible_buckets = cohort_df.groupby('entry_bucket_key')['customer_email'].nunique().reset_index(name='customers')
+        eligible_buckets = eligible_buckets[eligible_buckets['customers'] >= 10]
+        cohort_df = cohort_df[cohort_df['entry_bucket_key'].isin(eligible_buckets['entry_bucket_key'])].copy()
+
+        if cohort_df.empty:
+            print("  Refill cohorts skipped: no entry buckets met minimum sample threshold.")
+            return {'summary': {}, 'bucket_rows': pd.DataFrame(), 'window_rows': pd.DataFrame(), 'cohort_rows': pd.DataFrame()}
+
+        bucket_rows = []
+        for (bucket_key, bucket_label), group in cohort_df.groupby(['entry_bucket_key', 'entry_bucket_label']):
+            customers = len(group)
+            second_orders_count = int(group['second_purchase_datetime'].notna().sum())
+            row = {
+                'entry_bucket_key': bucket_key,
+                'entry_bucket_label': bucket_label,
+                'customers': customers,
+                'second_orders': second_orders_count,
+                'entry_revenue': round(float(group['order_revenue'].sum() or 0.0), 2),
+                'entry_aov': round(float(group['entry_aov'].mean() or 0.0), 2),
+                'second_order_aov': round(float(group.loc[group['second_order_aov'].notna(), 'second_order_aov'].mean() or 0.0), 2),
+                'avg_days_to_2nd': round(float(group.loc[group['days_to_2nd'].notna(), 'days_to_2nd'].mean() or 0.0), 1) if group['days_to_2nd'].notna().any() else None,
+                'median_days_to_2nd': round(float(group.loc[group['days_to_2nd'].notna(), 'days_to_2nd'].median() or 0.0), 1) if group['days_to_2nd'].notna().any() else None,
+                'second_fullsize_pct': round(float(group.loc[group['second_purchase_datetime'].notna(), 'second_contains_fullsize'].fillna(False).mean() * 100), 1) if second_orders_count > 0 else None,
+                'second_200_pct': round(float(group.loc[group['second_purchase_datetime'].notna(), 'second_contains_200'].fillna(False).mean() * 100), 1) if second_orders_count > 0 else None,
+                'second_500_pct': round(float(group.loc[group['second_purchase_datetime'].notna(), 'second_contains_500'].fillna(False).mean() * 100), 1) if second_orders_count > 0 else None,
+            }
+            for window in windows:
+                row[f'refill_{window}d_pct'] = round(float((group['days_to_2nd'].fillna(window + 1) <= window).mean() * 100), 1)
+            bucket_rows.append(row)
+        bucket_rows_df = pd.DataFrame(bucket_rows).sort_values('customers', ascending=False).reset_index(drop=True)
+
+        window_rows = []
+        for window in windows:
+            for _, row in bucket_rows_df.iterrows():
+                window_rows.append({
+                    'entry_bucket_key': row['entry_bucket_key'],
+                    'entry_bucket_label': row['entry_bucket_label'],
+                    'window_days': window,
+                    'customers': int(row['customers']),
+                    'refill_pct': float(row.get(f'refill_{window}d_pct') or 0.0),
+                })
+        window_rows_df = pd.DataFrame(window_rows)
+
+        cohort_rows = []
+        for (cohort_month, bucket_key, bucket_label), group in cohort_df.groupby(['cohort_month', 'entry_bucket_key', 'entry_bucket_label']):
+            customers = len(group)
+            if customers < 5:
+                continue
+            cohort_rows.append({
+                'cohort_month': cohort_month,
+                'entry_bucket_key': bucket_key,
+                'entry_bucket_label': bucket_label,
+                'customers': customers,
+                'refill_60d_pct': round(float((group['days_to_2nd'].fillna(61) <= 60).mean() * 100), 1),
+                'refill_90d_pct': round(float((group['days_to_2nd'].fillna(91) <= 90).mean() * 100), 1),
+                'avg_days_to_2nd': round(float(group.loc[group['days_to_2nd'].notna(), 'days_to_2nd'].mean() or 0.0), 1) if group['days_to_2nd'].notna().any() else None,
+                'second_order_aov': round(float(group.loc[group['second_order_aov'].notna(), 'second_order_aov'].mean() or 0.0), 2),
+            })
+        cohort_rows_df = pd.DataFrame(cohort_rows)
+
+        def safe_round(value: Any, decimals: int = 1) -> Optional[float]:
+            numeric = self._safe_float(value)
+            if numeric is None:
+                return None
+            return round(numeric, decimals)
+
+        summary = {
+            'entry_customers': int(cohort_df['customer_email'].nunique()),
+            'dominant_entry_bucket': str(bucket_rows_df.iloc[0]['entry_bucket_label']) if not bucket_rows_df.empty else None,
+            'sample_refill_60d_pct': safe_round(bucket_rows_df.loc[bucket_rows_df['entry_bucket_key'] == 'sample_only', 'refill_60d_pct'].iloc[0] if 'sample_only' in bucket_rows_df['entry_bucket_key'].values else None, 1),
+            'sample_refill_90d_pct': safe_round(bucket_rows_df.loc[bucket_rows_df['entry_bucket_key'] == 'sample_only', 'refill_90d_pct'].iloc[0] if 'sample_only' in bucket_rows_df['entry_bucket_key'].values else None, 1),
+            'sample_avg_days_to_2nd': safe_round(bucket_rows_df.loc[bucket_rows_df['entry_bucket_key'] == 'sample_only', 'avg_days_to_2nd'].iloc[0] if 'sample_only' in bucket_rows_df['entry_bucket_key'].values else None, 1),
+            'fullsize_200_refill_90d_pct': safe_round(bucket_rows_df.loc[bucket_rows_df['entry_bucket_key'] == 'fullsize_200', 'refill_90d_pct'].iloc[0] if 'fullsize_200' in bucket_rows_df['entry_bucket_key'].values else None, 1),
+            'fullsize_500_refill_90d_pct': safe_round(bucket_rows_df.loc[bucket_rows_df['entry_bucket_key'] == 'fullsize_500', 'refill_90d_pct'].iloc[0] if 'fullsize_500' in bucket_rows_df['entry_bucket_key'].values else None, 1),
+            'avg_second_order_aov': round(float(bucket_rows_df['second_order_aov'].mean() or 0.0), 2) if not bucket_rows_df.empty else None,
+        }
+
+        date_min = export_df['purchase_datetime'].min().strftime('%Y%m%d')
+        date_max = export_df['purchase_datetime'].max().strftime('%Y%m%d')
+        bucket_rows_df.to_csv(self.output_path(f"refill_cohort_buckets_{date_min}-{date_max}.csv"), index=False, encoding='utf-8-sig')
+        window_rows_df.to_csv(self.output_path(f"refill_cohort_windows_{date_min}-{date_max}.csv"), index=False, encoding='utf-8-sig')
+        if not cohort_rows_df.empty:
+            cohort_rows_df.to_csv(self.output_path(f"refill_cohort_months_{date_min}-{date_max}.csv"), index=False, encoding='utf-8-sig')
+
+        print(
+            "  Refill cohort summary: "
+            f"entry_customers={summary['entry_customers']}, "
+            f"sample_60d={summary.get('sample_refill_60d_pct')}, "
+            f"sample_90d={summary.get('sample_refill_90d_pct')}"
+        )
+
+        return {
+            'summary': summary,
+            'bucket_rows': bucket_rows_df,
+            'window_rows': window_rows_df,
+            'cohort_rows': cohort_rows_df,
         }
 
     def analyze_retention_by_first_order_item(self, df: pd.DataFrame, min_first_orders: int = 50, top_n: int = 20) -> dict:
