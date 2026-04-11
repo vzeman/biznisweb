@@ -1267,9 +1267,127 @@ class BizniWebExporter:
         config = self.project_settings.get("bundle_accessory_model") or {}
         return config if isinstance(config, dict) else {}
 
+    def _vevo_growth_config(self) -> Dict[str, Any]:
+        config = self.project_settings.get("vevo_growth_model") or {}
+        return config if isinstance(config, dict) else {}
+
     def _product_family_groups_config(self) -> List[Dict[str, Any]]:
         groups = self.project_settings.get("product_family_groups") or []
         return groups if isinstance(groups, list) else []
+
+    def _build_growth_order_item_frames(
+        self,
+        df: pd.DataFrame,
+        revenue_col: Optional[str] = None,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
+        resolved_revenue_col = revenue_col or ("order_revenue_net" if "order_revenue_net" in df.columns else "order_total")
+
+        orders_df = df[
+            ["order_num", "customer_email", "purchase_date", resolved_revenue_col, "total_items_in_order"]
+        ].drop_duplicates(subset=["order_num"]).copy()
+        orders_df["purchase_datetime"] = pd.to_datetime(orders_df["purchase_date"], errors="coerce")
+        orders_df = orders_df.dropna(subset=["purchase_datetime"]).copy()
+        orders_df["customer_email"] = orders_df["customer_email"].astype(str).str.strip().str.lower()
+        orders_df = orders_df[
+            orders_df["customer_email"].notna()
+            & orders_df["customer_email"].ne("")
+            & orders_df["customer_email"].ne("nan")
+        ].copy()
+        orders_df["purchase_date_only"] = orders_df["purchase_datetime"].dt.date
+        orders_df["cohort_month"] = orders_df["purchase_datetime"].dt.to_period("M").astype(str)
+
+        order_spend = (
+            df.groupby("order_num")[["fb_ads_daily_spend", "google_ads_daily_spend"]]
+            .first()
+            .reset_index()
+        )
+        orders_df = orders_df.merge(order_spend, on="order_num", how="left")
+        orders_df["fb_ads_daily_spend"] = pd.to_numeric(orders_df["fb_ads_daily_spend"], errors="coerce").fillna(0.0)
+        orders_df["google_ads_daily_spend"] = pd.to_numeric(orders_df["google_ads_daily_spend"], errors="coerce").fillna(0.0)
+
+        product_cost_by_order = df.groupby("order_num")["total_expense"].sum()
+        orders_df["product_cost"] = orders_df["order_num"].map(product_cost_by_order).fillna(0.0)
+        orders_df["packaging_cost"] = PACKAGING_COST_PER_ORDER
+        orders_df["shipping_net_cost"] = SHIPPING_NET_PER_ORDER
+        orders_df["cm1_profit"] = (
+            orders_df[resolved_revenue_col].fillna(0.0)
+            - orders_df["product_cost"]
+            - orders_df["packaging_cost"]
+            - orders_df["shipping_net_cost"]
+        )
+
+        orders_per_day = orders_df.groupby("purchase_date_only")["order_num"].nunique()
+        fixed_daily_cost = float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70"))
+        orders_df["orders_that_day"] = orders_df["purchase_date_only"].map(orders_per_day).fillna(0).astype(int)
+        divisor = orders_df["orders_that_day"].replace(0, np.nan)
+        orders_df["allocated_fb_spend"] = (orders_df["fb_ads_daily_spend"] / divisor).fillna(0.0)
+        orders_df["allocated_google_spend"] = (orders_df["google_ads_daily_spend"] / divisor).fillna(0.0)
+        orders_df["allocated_paid_spend"] = orders_df["allocated_fb_spend"] + orders_df["allocated_google_spend"]
+        orders_df["allocated_fixed_overhead"] = (fixed_daily_cost / divisor).fillna(0.0)
+        orders_df["cm2_profit"] = orders_df["cm1_profit"] - orders_df["allocated_paid_spend"]
+        orders_df["cm3_profit"] = orders_df["cm2_profit"] - orders_df["allocated_fixed_overhead"]
+        orders_df["pre_ad_contribution"] = orders_df["cm1_profit"]
+
+        item_df = df[
+            [
+                "order_num",
+                "customer_email",
+                "purchase_date",
+                "product_sku",
+                "item_label",
+                "item_quantity",
+                "item_total_without_tax",
+                "item_total_with_tax",
+                "item_unit_price",
+                "item_line_sum_original",
+                "item_line_sum_with_tax_original",
+                "item_unit_price_original",
+                "total_expense",
+            ]
+        ].copy()
+        item_df["purchase_datetime"] = pd.to_datetime(item_df["purchase_date"], errors="coerce")
+        item_df = item_df.dropna(subset=["purchase_datetime"]).copy()
+        item_df["customer_email"] = item_df["customer_email"].astype(str).str.strip().str.lower()
+        item_df = item_df[
+            item_df["customer_email"].notna()
+            & item_df["customer_email"].ne("")
+            & item_df["customer_email"].ne("nan")
+        ].copy()
+
+        order_item_revenue = item_df.groupby("order_num")["item_total_without_tax"].sum().rename("order_item_revenue")
+        item_df = item_df.merge(order_item_revenue, on="order_num", how="left")
+        item_df = item_df.merge(
+            orders_df[
+                [
+                    "order_num",
+                    "allocated_paid_spend",
+                    "allocated_fixed_overhead",
+                    "packaging_cost",
+                    "shipping_net_cost",
+                ]
+            ],
+            on="order_num",
+            how="left",
+        )
+        item_df["item_rev_share"] = item_df.apply(
+            lambda row: (row["item_total_without_tax"] / row["order_item_revenue"]) if row["order_item_revenue"] > 0 else 0.0,
+            axis=1,
+        )
+        item_df["allocated_order_overhead"] = item_df["item_rev_share"] * (
+            item_df["packaging_cost"].fillna(0.0) + item_df["shipping_net_cost"].fillna(0.0)
+        )
+        item_df["allocated_paid_spend"] = item_df["item_rev_share"] * item_df["allocated_paid_spend"].fillna(0.0)
+        item_df["allocated_fixed_overhead"] = item_df["item_rev_share"] * item_df["allocated_fixed_overhead"].fillna(0.0)
+        item_df["cm1_profit"] = (
+            item_df["item_total_without_tax"].fillna(0.0)
+            - item_df["total_expense"].fillna(0.0)
+            - item_df["allocated_order_overhead"].fillna(0.0)
+        )
+        item_df["cm2_profit"] = item_df["cm1_profit"] - item_df["allocated_paid_spend"].fillna(0.0)
+        item_df["cm3_profit"] = item_df["cm2_profit"] - item_df["allocated_fixed_overhead"].fillna(0.0)
+        item_df["pre_ad_contribution"] = item_df["cm1_profit"]
+
+        return orders_df, item_df, resolved_revenue_col
 
     def _match_named_group(self, label: Any, groups: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
         for group in groups or []:
@@ -1291,6 +1409,22 @@ class BizniWebExporter:
         if google_value > 0:
             return "google_paid_day", "Google-paid day"
         return "organic_unknown_day", "Organic / unknown day"
+
+    def _vevo_scent_match(self, label: Any) -> Tuple[Optional[str], Optional[str]]:
+        config = self._vevo_growth_config()
+        scent_groups = config.get("scent_patterns") or []
+        return self._match_named_group(label, scent_groups)
+
+    def _vevo_size_stage(self, label: Any) -> Optional[str]:
+        config = self._vevo_growth_config()
+        text = str(label or "")
+        if self._matches_patterns(text, config.get("sample_entry_patterns") or []):
+            return "sample"
+        if self._matches_patterns(text, config.get("fullsize_200_patterns") or []):
+            return "200ml"
+        if self._matches_patterns(text, config.get("fullsize_500_patterns") or []):
+            return "500ml"
+        return None
 
     def analyze_acquisition_source_product_family_cube(
         self,
@@ -3126,6 +3260,13 @@ class BizniWebExporter:
         # Combine filtered orders with excluded (failed payment) orders for complete customer view
         all_orders_for_segmentation = orders + self.excluded_orders
         customer_email_segments = self.analyze_customer_email_segments(df, all_orders_for_segmentation)
+        if isinstance(advanced_dtc_metrics, dict):
+            advanced_dtc_metrics["vevo_crm_funnel_kpis"] = self.analyze_vevo_crm_funnel_kpis(
+                customer_email_segments=customer_email_segments,
+                sample_funnel_analysis=sample_funnel_analysis,
+                refill_cohort_analysis=refill_cohort_analysis,
+                direct_assisted_analysis=advanced_dtc_metrics.get("vevo_direct_assisted_profitability"),
+            )
 
         # Create aggregated reports
         date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
@@ -4685,6 +4826,510 @@ class BizniWebExporter:
             'cohort_rows': cohort_rows_df,
         }
 
+    def analyze_vevo_direct_assisted_profitability(
+        self,
+        df: pd.DataFrame,
+        orders_df: Optional[pd.DataFrame] = None,
+        item_df: Optional[pd.DataFrame] = None,
+        revenue_col: Optional[str] = None,
+        windows: Optional[List[int]] = None,
+        min_customers: int = 10,
+    ) -> dict:
+        if self.project_name != "vevo":
+            return {"summary": {}, "entry_rows": pd.DataFrame(), "window_rows": pd.DataFrame()}
+
+        windows = windows or [30, 60, 90, 180]
+        print(f"\nAnalyzing Vevo direct vs assisted profitability ({', '.join(str(w) for w in windows)}d)...")
+        if orders_df is None or item_df is None:
+            orders_df, item_df, revenue_col = self._build_growth_order_item_frames(df, revenue_col=revenue_col)
+        else:
+            revenue_col = revenue_col or ("order_revenue_net" if "order_revenue_net" in orders_df.columns else "order_total")
+
+        if orders_df.empty or item_df.empty:
+            return {"summary": {}, "entry_rows": pd.DataFrame(), "window_rows": pd.DataFrame()}
+
+        config = self._vevo_growth_config()
+        entry_patterns = config.get("sample_entry_patterns") or []
+        if not entry_patterns:
+            return {"summary": {}, "entry_rows": pd.DataFrame(), "window_rows": pd.DataFrame()}
+
+        first_orders = orders_df.sort_values(["customer_email", "purchase_datetime", "order_num"]).groupby("customer_email", as_index=False).first()
+        first_order_map = first_orders[["customer_email", "order_num", "purchase_datetime", "cm1_profit", "cm2_profit", "cm3_profit"]].rename(
+            columns={"order_num": "entry_order_num", "purchase_datetime": "entry_purchase_datetime"}
+        )
+        first_items = item_df.merge(
+            first_order_map[["customer_email", "entry_order_num"]],
+            left_on=["customer_email", "order_num"],
+            right_on=["customer_email", "entry_order_num"],
+            how="inner",
+        )
+        first_items["is_sample_entry"] = first_items["item_label"].apply(lambda label: self._matches_patterns(str(label or ""), entry_patterns))
+        first_items["size_stage"] = first_items["item_label"].apply(self._vevo_size_stage)
+        first_items["contains_fullsize"] = first_items["size_stage"].isin(["200ml", "500ml"])
+        eligible_entry_orders = first_items.groupby(["customer_email", "entry_order_num"], as_index=False).agg(
+            contains_sample_entry=("is_sample_entry", "any"),
+            contains_fullsize=("contains_fullsize", "any"),
+        )
+        eligible_entry_orders = eligible_entry_orders[
+            eligible_entry_orders["contains_sample_entry"] & (~eligible_entry_orders["contains_fullsize"])
+        ].copy()
+        if eligible_entry_orders.empty:
+            return {"summary": {}, "entry_rows": pd.DataFrame(), "window_rows": pd.DataFrame()}
+
+        eligible_customers = eligible_entry_orders["customer_email"].unique().tolist()
+        entry_item_rows = first_items.merge(
+            eligible_entry_orders[["customer_email", "entry_order_num"]],
+            on=["customer_email", "entry_order_num"],
+            how="inner",
+        )
+        entry_item_rows = entry_item_rows[entry_item_rows["is_sample_entry"]].copy()
+        if entry_item_rows.empty:
+            return {"summary": {}, "entry_rows": pd.DataFrame(), "window_rows": pd.DataFrame()}
+
+        entry_item_rows["entry_product"] = entry_item_rows["item_label"].fillna("Unknown")
+        later_orders = orders_df.merge(
+            first_order_map[first_order_map["customer_email"].isin(eligible_customers)][["customer_email", "entry_order_num", "entry_purchase_datetime"]],
+            on="customer_email",
+            how="inner",
+        )
+        later_orders = later_orders[
+            (later_orders["purchase_datetime"] > later_orders["entry_purchase_datetime"])
+            | (
+                (later_orders["purchase_datetime"] == later_orders["entry_purchase_datetime"])
+                & (later_orders["order_num"] != later_orders["entry_order_num"])
+            )
+        ].copy()
+        later_orders["days_since_entry"] = (
+            later_orders["purchase_datetime"] - later_orders["entry_purchase_datetime"]
+        ).dt.total_seconds() / 86400.0
+
+        direct_base = first_order_map[first_order_map["customer_email"].isin(eligible_customers)].copy()
+        direct_base = direct_base.rename(columns={"entry_order_num": "order_num"})
+
+        entry_rows = []
+        for entry_product, group in entry_item_rows.groupby("entry_product"):
+            cohort_customers = sorted(group["customer_email"].unique().tolist())
+            if len(cohort_customers) < min_customers:
+                continue
+
+            cohort_direct = direct_base[direct_base["customer_email"].isin(cohort_customers)].copy()
+            cohort_later = later_orders[later_orders["customer_email"].isin(cohort_customers)].copy()
+            repeat_90d = int((cohort_later.groupby("customer_email")["days_since_entry"].min().fillna(9999) <= 90).sum())
+            row = {
+                "entry_product": entry_product,
+                "customers": len(cohort_customers),
+                "direct_cm1_per_customer": round(float(cohort_direct["cm1_profit"].sum()) / len(cohort_customers), 2),
+                "direct_cm2_per_customer": round(float(cohort_direct["cm2_profit"].sum()) / len(cohort_customers), 2),
+                "direct_cm3_per_customer": round(float(cohort_direct["cm3_profit"].sum()) / len(cohort_customers), 2),
+                "repeat_90d_pct": round(repeat_90d / len(cohort_customers) * 100, 1),
+            }
+            for window in windows:
+                cohort_window = cohort_later[cohort_later["days_since_entry"] <= window].copy()
+                downstream_cm1 = float(cohort_window["cm1_profit"].sum()) / len(cohort_customers)
+                downstream_cm2 = float(cohort_window["cm2_profit"].sum()) / len(cohort_customers)
+                downstream_cm3 = float(cohort_window["cm3_profit"].sum()) / len(cohort_customers)
+                total_cm3 = row["direct_cm3_per_customer"] + downstream_cm3
+                assisted_share = (downstream_cm3 / total_cm3 * 100) if abs(total_cm3) > 1e-9 else 0.0
+                row.update(
+                    {
+                        f"downstream_cm1_{window}d_per_customer": round(downstream_cm1, 2),
+                        f"downstream_cm2_{window}d_per_customer": round(downstream_cm2, 2),
+                        f"downstream_cm3_{window}d_per_customer": round(downstream_cm3, 2),
+                        f"total_cm3_{window}d_per_customer": round(total_cm3, 2),
+                        f"assisted_share_{window}d_pct": round(assisted_share, 1),
+                    }
+                )
+            entry_rows.append(row)
+
+        entry_rows_df = pd.DataFrame(entry_rows).sort_values(["customers", "total_cm3_90d_per_customer"], ascending=[False, False]) if entry_rows else pd.DataFrame()
+
+        summary = {}
+        window_rows = []
+        if eligible_customers:
+            cohort_direct = direct_base.copy()
+            cohort_later = later_orders.copy()
+            summary = {
+                "entry_customers": len(eligible_customers),
+                "avg_direct_cm3_per_customer": round(float(cohort_direct["cm3_profit"].sum()) / len(eligible_customers), 2),
+                "avg_direct_cm2_per_customer": round(float(cohort_direct["cm2_profit"].sum()) / len(eligible_customers), 2),
+            }
+            for window in windows:
+                cohort_window = cohort_later[cohort_later["days_since_entry"] <= window].copy()
+                downstream_cm3 = float(cohort_window["cm3_profit"].sum()) / len(eligible_customers)
+                direct_cm3 = summary["avg_direct_cm3_per_customer"]
+                total_cm3 = direct_cm3 + downstream_cm3
+                assisted_share = (downstream_cm3 / total_cm3 * 100) if abs(total_cm3) > 1e-9 else 0.0
+                repeat_customers = int((cohort_window.groupby("customer_email")["days_since_entry"].min().fillna(9999) <= window).sum())
+                window_rows.append(
+                    {
+                        "window_days": window,
+                        "customers": len(eligible_customers),
+                        "repeat_customers": repeat_customers,
+                        "repeat_pct": round(repeat_customers / len(eligible_customers) * 100, 1),
+                        "downstream_cm3_per_customer": round(downstream_cm3, 2),
+                        "total_cm3_per_customer": round(total_cm3, 2),
+                        "assisted_share_pct": round(assisted_share, 1),
+                    }
+                )
+                summary[f"downstream_cm3_{window}d_per_customer"] = round(downstream_cm3, 2)
+                summary[f"assisted_share_{window}d_pct"] = round(assisted_share, 1)
+
+        return {
+            "summary": summary,
+            "entry_rows": entry_rows_df,
+            "window_rows": pd.DataFrame(window_rows),
+        }
+
+    def analyze_vevo_crm_funnel_kpis(
+        self,
+        customer_email_segments: Optional[dict],
+        sample_funnel_analysis: Optional[dict],
+        refill_cohort_analysis: Optional[dict],
+        direct_assisted_analysis: Optional[dict],
+    ) -> dict:
+        if self.project_name != "vevo":
+            return {"summary": {}, "segment_rows": pd.DataFrame()}
+        if not isinstance(customer_email_segments, dict):
+            return {"summary": {}, "segment_rows": pd.DataFrame()}
+
+        sample_summary = (sample_funnel_analysis or {}).get("summary") or {}
+        refill_summary = (refill_cohort_analysis or {}).get("summary") or {}
+        assisted_summary = (direct_assisted_analysis or {}).get("summary") or {}
+        targets = {
+            "sample_not_converted": (
+                "Convert sample customers to full-size",
+                "fullsize_any_60d_pct",
+                float(sample_summary.get("fullsize_any_60d_pct") or 0.0),
+                "percent",
+            ),
+            "one_time_buyers_30_days": (
+                "Drive second order",
+                "sample_refill_90d_pct",
+                float(refill_summary.get("sample_refill_90d_pct") or 0.0),
+                "percent",
+            ),
+            "repeat_buyers_90_days": (
+                "Win back dormant repeat buyers",
+                "avg_second_order_aov",
+                float(refill_summary.get("avg_second_order_aov") or 0.0),
+                "currency",
+            ),
+            "vip_customers": (
+                "Protect high-value cohort",
+                "avg_direct_cm3_per_customer",
+                float(assisted_summary.get("avg_direct_cm3_per_customer") or 0.0),
+                "currency",
+            ),
+            "churning_customers": (
+                "Recover contribution before churn",
+                "assisted_share_90d_pct",
+                float(assisted_summary.get("assisted_share_90d_pct") or 0.0),
+                "percent",
+            ),
+        }
+        rows = []
+        for key, segment in customer_email_segments.items():
+            if not isinstance(segment, dict):
+                continue
+            goal_label, metric_key, baseline_value, baseline_kind = targets.get(
+                key,
+                (
+                    "Lifecycle retention",
+                    "sample_refill_90d_pct",
+                    float(refill_summary.get("sample_refill_90d_pct") or 0.0),
+                    "percent",
+                ),
+            )
+            rows.append(
+                {
+                    "segment": key,
+                    "count": int(segment.get("count") or 0),
+                    "priority": int(segment.get("priority") or 0),
+                    "goal_label": goal_label,
+                    "target_metric_key": metric_key,
+                    "baseline_value": round(float(baseline_value or 0.0), 2),
+                    "baseline_kind": baseline_kind,
+                    "send_timing_en": segment.get("send_timing_en") or segment.get("send_timing") or "-",
+                    "send_timing_sk": segment.get("send_timing") or segment.get("send_timing_en") or "-",
+                    "discount_suggestion": segment.get("discount_suggestion") or "-",
+                    "description_en": segment.get("description_en") or segment.get("description") or key,
+                    "description_sk": segment.get("description") or segment.get("description_en") or key,
+                }
+            )
+        rows_df = pd.DataFrame(rows).sort_values(["priority", "count"], ascending=[True, False]) if rows else pd.DataFrame()
+        summary = {
+            "segments_total": int(len(rows_df)),
+            "customers_targetable": int(rows_df["count"].sum()) if not rows_df.empty else 0,
+            "top_segment": str(rows_df.iloc[0]["segment"]) if not rows_df.empty else None,
+        }
+        return {"summary": summary, "segment_rows": rows_df.head(12)}
+
+    def analyze_vevo_scent_size_refill_matrix(
+        self,
+        df: pd.DataFrame,
+        item_df: Optional[pd.DataFrame] = None,
+        revenue_col: Optional[str] = None,
+    ) -> dict:
+        if self.project_name != "vevo":
+            return {"summary": {}, "same_scent_rows": pd.DataFrame(), "migration_rows": pd.DataFrame()}
+
+        if item_df is None:
+            _, item_df, revenue_col = self._build_growth_order_item_frames(df, revenue_col=revenue_col)
+        if item_df.empty:
+            return {"summary": {}, "same_scent_rows": pd.DataFrame(), "migration_rows": pd.DataFrame()}
+
+        scent_items = item_df[["customer_email", "order_num", "purchase_datetime", "item_label"]].copy()
+        scent_items[["scent_key", "scent_label"]] = scent_items["item_label"].apply(
+            lambda label: pd.Series(self._vevo_scent_match(label))
+        )
+        scent_items["size_stage"] = scent_items["item_label"].apply(self._vevo_size_stage)
+        scent_items = scent_items[scent_items["scent_key"].notna() & scent_items["size_stage"].notna()].copy()
+        if scent_items.empty:
+            return {"summary": {}, "same_scent_rows": pd.DataFrame(), "migration_rows": pd.DataFrame()}
+
+        stage_first = (
+            scent_items.groupby(["customer_email", "scent_key", "scent_label", "size_stage"])["purchase_datetime"]
+            .min()
+            .unstack("size_stage")
+            .reset_index()
+        )
+        for col in ["sample", "200ml", "500ml"]:
+            if col not in stage_first.columns:
+                stage_first[col] = pd.NaT
+
+        five_hundred = scent_items[scent_items["size_stage"] == "500ml"][["customer_email", "scent_key", "purchase_datetime", "order_num"]].drop_duplicates()
+        five_hundred = five_hundred.sort_values(["customer_email", "scent_key", "purchase_datetime", "order_num"])
+        five_hundred["idx"] = five_hundred.groupby(["customer_email", "scent_key"]).cumcount() + 1
+        second_500 = five_hundred[five_hundred["idx"] == 2][["customer_email", "scent_key", "purchase_datetime"]].rename(
+            columns={"purchase_datetime": "second_500_purchase_datetime"}
+        )
+        stage_first = stage_first.merge(second_500, on=["customer_email", "scent_key"], how="left")
+
+        same_rows = []
+        for (scent_key, scent_label), group in stage_first.groupby(["scent_key", "scent_label"]):
+            sample_base = group[group["sample"].notna()].copy()
+            full200_base = group[group["200ml"].notna()].copy()
+            full500_base = group[group["500ml"].notna()].copy()
+            sample_customers = len(sample_base)
+            customers_200 = len(full200_base)
+            customers_500 = len(full500_base)
+            sample_to_200 = sample_base["200ml"].notna() & (sample_base["200ml"] > sample_base["sample"])
+            sample_to_500 = sample_base["500ml"].notna() & (sample_base["500ml"] > sample_base["sample"])
+            two_to_five = full200_base["500ml"].notna() & (full200_base["500ml"] > full200_base["200ml"])
+            five_repeat = full500_base["second_500_purchase_datetime"].notna() & (full500_base["second_500_purchase_datetime"] > full500_base["500ml"])
+
+            same_rows.append(
+                {
+                    "scent_key": scent_key,
+                    "scent_label": scent_label,
+                    "sample_customers": sample_customers,
+                    "sample_to_200_pct": round(sample_to_200.mean() * 100, 1) if sample_customers else 0.0,
+                    "sample_to_500_pct": round(sample_to_500.mean() * 100, 1) if sample_customers else 0.0,
+                    "sample_to_200_avg_days": round(float((sample_base.loc[sample_to_200, "200ml"] - sample_base.loc[sample_to_200, "sample"]).dt.days.mean()), 1) if sample_to_200.any() else np.nan,
+                    "sample_to_500_avg_days": round(float((sample_base.loc[sample_to_500, "500ml"] - sample_base.loc[sample_to_500, "sample"]).dt.days.mean()), 1) if sample_to_500.any() else np.nan,
+                    "entry_200_customers": customers_200,
+                    "200_to_500_pct": round(two_to_five.mean() * 100, 1) if customers_200 else 0.0,
+                    "200_to_500_avg_days": round(float((full200_base.loc[two_to_five, "500ml"] - full200_base.loc[two_to_five, "200ml"]).dt.days.mean()), 1) if two_to_five.any() else np.nan,
+                    "entry_500_customers": customers_500,
+                    "500_repeat_pct": round(five_repeat.mean() * 100, 1) if customers_500 else 0.0,
+                    "500_repeat_avg_days": round(float((full500_base.loc[five_repeat, "second_500_purchase_datetime"] - full500_base.loc[five_repeat, "500ml"]).dt.days.mean()), 1) if five_repeat.any() else np.nan,
+                }
+            )
+
+        same_rows_df = pd.DataFrame(same_rows).sort_values(["sample_customers", "sample_to_200_pct"], ascending=[False, False]) if same_rows else pd.DataFrame()
+
+        sample_base = stage_first[stage_first["sample"].notna()][["customer_email", "scent_key", "scent_label", "sample"]].rename(columns={"sample": "sample_purchase_datetime"})
+        fullsize_orders = scent_items[scent_items["size_stage"].isin(["200ml", "500ml"])][["customer_email", "scent_key", "scent_label", "purchase_datetime", "size_stage"]].drop_duplicates()
+        migration_candidates = sample_base.merge(fullsize_orders, on="customer_email", how="left", suffixes=("_base", "_target"))
+        migration_candidates = migration_candidates[
+            migration_candidates["scent_key_base"].notna()
+            & migration_candidates["scent_key_target"].notna()
+            & (migration_candidates["scent_key_base"] != migration_candidates["scent_key_target"])
+            & (migration_candidates["purchase_datetime"] > migration_candidates["sample_purchase_datetime"])
+        ].copy()
+        migration_candidates = migration_candidates.sort_values(["customer_email", "scent_key_base", "purchase_datetime"])
+        migration_candidates = migration_candidates.drop_duplicates(subset=["customer_email", "scent_key_base"], keep="first")
+        migration_rows = []
+        for (scent_key, scent_label), group in sample_base.groupby(["scent_key", "scent_label"]):
+            cohort_customers = len(group)
+            migrated = migration_candidates[migration_candidates["scent_key_base"] == scent_key].copy()
+            migration_rows.append(
+                {
+                    "base_scent_key": scent_key,
+                    "base_scent_label": scent_label,
+                    "sample_customers": cohort_customers,
+                    "cross_scent_customers": int(migrated["customer_email"].nunique()),
+                    "cross_scent_pct": round(migrated["customer_email"].nunique() / cohort_customers * 100, 1) if cohort_customers else 0.0,
+                    "avg_days_to_cross_scent": round(float((migrated["purchase_datetime"] - migrated["sample_purchase_datetime"]).dt.days.mean()), 1) if not migrated.empty else np.nan,
+                    "top_target_scent": str(migrated["scent_label_target"].mode().iloc[0]) if not migrated.empty else None,
+                }
+            )
+        migration_rows_df = pd.DataFrame(migration_rows).sort_values(["sample_customers", "cross_scent_pct"], ascending=[False, False]) if migration_rows else pd.DataFrame()
+
+        summary = {
+            "tracked_scents": int(len(same_rows_df)),
+            "sample_scent_customers": int(sample_base["customer_email"].nunique()),
+            "top_same_scent_refill": str(same_rows_df.iloc[0]["scent_label"]) if not same_rows_df.empty else None,
+            "top_cross_scent_migration": str(migration_rows_df.iloc[0]["base_scent_label"]) if not migration_rows_df.empty else None,
+        }
+        return {"summary": summary, "same_scent_rows": same_rows_df, "migration_rows": migration_rows_df}
+
+    def analyze_vevo_bundle_recommender(
+        self,
+        df: pd.DataFrame,
+        orders_df: Optional[pd.DataFrame] = None,
+        item_df: Optional[pd.DataFrame] = None,
+        revenue_col: Optional[str] = None,
+    ) -> dict:
+        if self.project_name != "vevo":
+            return {"summary": {}, "recommendation_rows": pd.DataFrame(), "anchor_rows": pd.DataFrame()}
+
+        if orders_df is None or item_df is None:
+            orders_df, item_df, revenue_col = self._build_growth_order_item_frames(df, revenue_col=revenue_col)
+        if orders_df.empty or item_df.empty:
+            return {"summary": {}, "recommendation_rows": pd.DataFrame(), "anchor_rows": pd.DataFrame()}
+
+        family_rows = item_df[["order_num", "item_label"]].copy()
+        family_rows[["family_key", "family_label"]] = family_rows["item_label"].apply(
+            lambda label: pd.Series(self._match_named_group(label, self._product_family_groups_config()))
+        )
+        family_rows = family_rows[family_rows["family_key"].notna()].drop_duplicates(subset=["order_num", "family_key"])
+        if family_rows.empty:
+            return {"summary": {}, "recommendation_rows": pd.DataFrame(), "anchor_rows": pd.DataFrame()}
+
+        family_sets = family_rows.groupby("order_num")["family_key"].apply(set).to_dict()
+        family_labels = family_rows.drop_duplicates(subset=["family_key"]).set_index("family_key")["family_label"].to_dict()
+        anchor_keys = [key for key in ["sample_sets", "sample_singles", "fullsize_200", "fullsize_500"] if key in set(family_rows["family_key"])]
+        candidate_keys = sorted(set(family_rows["family_key"]))
+        recommendation_rows = []
+        for anchor in anchor_keys:
+            anchor_orders = [order_num for order_num, families in family_sets.items() if anchor in families]
+            if len(anchor_orders) < 10:
+                continue
+            anchor_frame = orders_df[orders_df["order_num"].isin(anchor_orders)].copy()
+            for attached in candidate_keys:
+                if attached == anchor:
+                    continue
+                attached_orders = [order_num for order_num in anchor_orders if attached in family_sets.get(order_num, set())]
+                if len(attached_orders) < 5:
+                    continue
+                with_frame = anchor_frame[anchor_frame["order_num"].isin(attached_orders)].copy()
+                without_frame = anchor_frame[~anchor_frame["order_num"].isin(attached_orders)].copy()
+                with_cm2 = float(with_frame["cm2_profit"].mean()) if not with_frame.empty else np.nan
+                without_cm2 = float(without_frame["cm2_profit"].mean()) if not without_frame.empty else 0.0
+                with_revenue = float(with_frame[revenue_col].mean()) if not with_frame.empty else np.nan
+                without_revenue = float(without_frame[revenue_col].mean()) if not without_frame.empty else 0.0
+                uplift = with_cm2 - without_cm2 if pd.notna(with_cm2) else np.nan
+                attach_rate = len(attached_orders) / len(anchor_orders) * 100 if anchor_orders else 0.0
+                recommendation_rows.append(
+                    {
+                        "anchor_family_key": anchor,
+                        "anchor_family_label": family_labels.get(anchor, anchor),
+                        "attached_family_key": attached,
+                        "attached_family_label": family_labels.get(attached, attached),
+                        "anchor_orders": len(anchor_orders),
+                        "attached_orders": len(attached_orders),
+                        "attach_rate_pct": round(attach_rate, 1),
+                        "avg_revenue_with_attached": round(with_revenue, 2) if pd.notna(with_revenue) else np.nan,
+                        "avg_revenue_without_attached": round(without_revenue, 2),
+                        "avg_cm2_with_attached": round(with_cm2, 2) if pd.notna(with_cm2) else np.nan,
+                        "avg_cm2_without_attached": round(without_cm2, 2),
+                        "revenue_uplift_per_order": round(with_revenue - without_revenue, 2) if pd.notna(with_revenue) else np.nan,
+                        "cm2_uplift_per_order": round(uplift, 2) if pd.notna(uplift) else np.nan,
+                        "recommendation_score": round(max(uplift or 0.0, 0.0) * (attach_rate / 100.0), 2),
+                    }
+                )
+        recommendation_rows_df = pd.DataFrame(recommendation_rows).sort_values(["recommendation_score", "attach_rate_pct"], ascending=[False, False]) if recommendation_rows else pd.DataFrame()
+
+        anchor_rows = []
+        if not recommendation_rows_df.empty:
+            for anchor, group in recommendation_rows_df.groupby("anchor_family_key"):
+                best = group.iloc[0]
+                anchor_rows.append(
+                    {
+                        "anchor_family_key": anchor,
+                        "anchor_family_label": best["anchor_family_label"],
+                        "anchor_orders": int(best["anchor_orders"]),
+                        "top_attached_family_label": best["attached_family_label"],
+                        "top_attach_rate_pct": float(best["attach_rate_pct"]),
+                        "top_cm2_uplift_per_order": float(best["cm2_uplift_per_order"]),
+                    }
+                )
+        anchor_rows_df = pd.DataFrame(anchor_rows).sort_values("anchor_orders", ascending=False) if anchor_rows else pd.DataFrame()
+
+        summary = {
+            "anchor_families": int(len(anchor_rows_df)),
+            "recommendation_rows": int(len(recommendation_rows_df)),
+            "top_recommendation": (
+                f"{recommendation_rows_df.iloc[0]['anchor_family_label']} -> {recommendation_rows_df.iloc[0]['attached_family_label']}"
+                if not recommendation_rows_df.empty else None
+            ),
+        }
+        return {"summary": summary, "recommendation_rows": recommendation_rows_df.head(18), "anchor_rows": anchor_rows_df}
+
+    def analyze_promo_discount_quality(
+        self,
+        df: pd.DataFrame,
+        orders_df: Optional[pd.DataFrame] = None,
+        item_df: Optional[pd.DataFrame] = None,
+        revenue_col: Optional[str] = None,
+    ) -> dict:
+        if orders_df is None or item_df is None:
+            orders_df, item_df, revenue_col = self._build_growth_order_item_frames(df, revenue_col=revenue_col)
+        if orders_df.empty or item_df.empty:
+            return {"summary": {}, "bucket_rows": pd.DataFrame()}
+
+        discount_frame = item_df.copy()
+        discount_frame["expected_line_net"] = (
+            pd.to_numeric(discount_frame["item_unit_price"], errors="coerce").fillna(0.0)
+            * pd.to_numeric(discount_frame["item_quantity"], errors="coerce").fillna(0.0)
+        )
+        discount_frame["detected_discount_net"] = (
+            discount_frame["expected_line_net"] - pd.to_numeric(discount_frame["item_total_without_tax"], errors="coerce").fillna(0.0)
+        ).clip(lower=0.0)
+        order_discount = discount_frame.groupby("order_num")["detected_discount_net"].sum()
+        orders_local = orders_df.copy()
+        orders_local["detected_discount_net"] = orders_local["order_num"].map(order_discount).fillna(0.0)
+        first_order_date = orders_local.groupby("customer_email")["purchase_datetime"].min().to_dict()
+        orders_local["is_returning"] = orders_local.apply(
+            lambda row: row["purchase_datetime"] > first_order_date.get(row["customer_email"], row["purchase_datetime"]),
+            axis=1,
+        )
+        orders_local["order_type"] = orders_local["is_returning"].map({False: "new_customer", True: "returning_customer"})
+        orders_local["discount_status"] = np.where(orders_local["detected_discount_net"] > 0.01, "discounted", "no_detected_discount")
+        orders_local["bucket"] = orders_local["order_type"] + " • " + orders_local["discount_status"]
+
+        bucket_rows = (
+            orders_local.groupby("bucket", as_index=False)
+            .agg(
+                orders=("order_num", "count"),
+                revenue=(revenue_col, "sum"),
+                detected_discount_net=("detected_discount_net", "sum"),
+                cm2_profit=("cm2_profit", "sum"),
+            )
+            .copy()
+        )
+        bucket_rows["discount_penetration_pct"] = bucket_rows["orders"] / max(len(orders_local), 1) * 100
+        bucket_rows["cm2_margin_pct"] = np.where(bucket_rows["revenue"] > 0, bucket_rows["cm2_profit"] / bucket_rows["revenue"] * 100, np.nan)
+        bucket_rows["avg_discount_per_order"] = np.where(bucket_rows["orders"] > 0, bucket_rows["detected_discount_net"] / bucket_rows["orders"], 0.0)
+        bucket_rows = bucket_rows.sort_values("orders", ascending=False)
+
+        discounted_orders = int((orders_local["detected_discount_net"] > 0.01).sum())
+        total_discount = float(orders_local["detected_discount_net"].sum())
+        gross_before_discount = float(orders_local[revenue_col].sum() + total_discount)
+        summary = {
+            "coupon_tracking_available": False,
+            "discounted_orders": discounted_orders,
+            "discount_penetration_pct": round(discounted_orders / len(orders_local) * 100, 1) if len(orders_local) else 0.0,
+            "detected_discount_net_total": round(total_discount, 2),
+            "gross_before_discount": round(gross_before_discount, 2),
+            "net_after_discount": round(float(orders_local[revenue_col].sum()), 2),
+            "gross_to_net_discount_pct": round(total_discount / gross_before_discount * 100, 2) if gross_before_discount > 0 else 0.0,
+            "avg_discount_per_discounted_order": round(total_discount / discounted_orders, 2) if discounted_orders else 0.0,
+            "tracking_note": "Coupon / voucher events are not available in BizniWeb exports; discount quality uses detected line-value gaps only.",
+        }
+        return {"summary": summary, "bucket_rows": bucket_rows}
+
     def analyze_retention_by_first_order_item(self, df: pd.DataFrame, min_first_orders: int = 50, top_n: int = 20) -> dict:
         """
         Analyze customer retention based on items in their first order.
@@ -6186,6 +6831,35 @@ class BizniWebExporter:
             customer_orders=customer_orders,
             revenue_col=revenue_col,
         )
+        vevo_direct_assisted_profitability = {"summary": {}, "entry_rows": pd.DataFrame(), "window_rows": pd.DataFrame()}
+        vevo_scent_size_refill_matrix = {"summary": {}, "same_scent_rows": pd.DataFrame(), "migration_rows": pd.DataFrame()}
+        vevo_bundle_recommender = {"summary": {}, "recommendation_rows": pd.DataFrame(), "anchor_rows": pd.DataFrame()}
+        promo_discount_quality = {"summary": {}, "bucket_rows": pd.DataFrame()}
+        if self.project_name == "vevo":
+            growth_orders_df, growth_item_df, growth_revenue_col = self._build_growth_order_item_frames(df, revenue_col=revenue_col)
+            vevo_direct_assisted_profitability = self.analyze_vevo_direct_assisted_profitability(
+                df,
+                orders_df=growth_orders_df,
+                item_df=growth_item_df,
+                revenue_col=growth_revenue_col,
+            )
+            vevo_scent_size_refill_matrix = self.analyze_vevo_scent_size_refill_matrix(
+                df,
+                item_df=growth_item_df,
+                revenue_col=growth_revenue_col,
+            )
+            vevo_bundle_recommender = self.analyze_vevo_bundle_recommender(
+                df,
+                orders_df=growth_orders_df,
+                item_df=growth_item_df,
+                revenue_col=growth_revenue_col,
+            )
+            promo_discount_quality = self.analyze_promo_discount_quality(
+                df,
+                orders_df=growth_orders_df,
+                item_df=growth_item_df,
+                revenue_col=growth_revenue_col,
+            )
 
         # ---- 10) margin stability index (daily pre-ad margin volatility)
         daily_margin = orders_df.groupby('purchase_date_only').agg({
@@ -6304,6 +6978,10 @@ class BizniWebExporter:
             'attach_rate': attach_rate,
             'bundle_accessory_model': bundle_accessory_model,
             'acquisition_product_family_cube': acquisition_product_family_cube,
+            'vevo_direct_assisted_profitability': vevo_direct_assisted_profitability,
+            'vevo_scent_size_refill_matrix': vevo_scent_size_refill_matrix,
+            'vevo_bundle_recommender': vevo_bundle_recommender,
+            'promo_discount_quality': promo_discount_quality,
             'daily_margin': daily_margin,
             'payday_window': payday_window,
         }

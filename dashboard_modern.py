@@ -1038,6 +1038,112 @@ def generate_modern_dashboard(
         ],
         limit=None,
     )
+    direct_assisted = (advanced_dtc_metrics or {}).get("vevo_direct_assisted_profitability", {}) if advanced_dtc_metrics else {}
+    direct_assisted_entry_rows = _frame_rows(
+        (direct_assisted or {}).get("entry_rows"),
+        [
+            "entry_product",
+            "customers",
+            "direct_cm3_per_customer",
+            "downstream_cm3_90d_per_customer",
+            "total_cm3_90d_per_customer",
+            "assisted_share_90d_pct",
+            "repeat_90d_pct",
+        ],
+        limit=12,
+    )
+    direct_assisted_window_rows = _frame_rows(
+        (direct_assisted or {}).get("window_rows"),
+        [
+            "window_days",
+            "customers",
+            "repeat_customers",
+            "repeat_pct",
+            "downstream_cm3_per_customer",
+            "total_cm3_per_customer",
+            "assisted_share_pct",
+        ],
+        limit=None,
+    )
+    crm_funnel = (advanced_dtc_metrics or {}).get("vevo_crm_funnel_kpis", {}) if advanced_dtc_metrics else {}
+    crm_funnel_rows = _frame_rows(
+        (crm_funnel or {}).get("segment_rows"),
+        [
+            "segment",
+            "count",
+            "priority",
+            "goal_label",
+            "target_metric_key",
+            "baseline_value",
+            "baseline_kind",
+            "send_timing_en",
+            "send_timing_sk",
+        ],
+        limit=12,
+    )
+    scent_size = (advanced_dtc_metrics or {}).get("vevo_scent_size_refill_matrix", {}) if advanced_dtc_metrics else {}
+    scent_same_rows = _frame_rows(
+        (scent_size or {}).get("same_scent_rows"),
+        [
+            "scent_label",
+            "sample_customers",
+            "sample_to_200_pct",
+            "sample_to_500_pct",
+            "200_to_500_pct",
+            "500_repeat_pct",
+        ],
+        limit=12,
+    )
+    scent_migration_rows = _frame_rows(
+        (scent_size or {}).get("migration_rows"),
+        [
+            "base_scent_label",
+            "sample_customers",
+            "cross_scent_customers",
+            "cross_scent_pct",
+            "avg_days_to_cross_scent",
+            "top_target_scent",
+        ],
+        limit=12,
+    )
+    bundle_recommender = (advanced_dtc_metrics or {}).get("vevo_bundle_recommender", {}) if advanced_dtc_metrics else {}
+    bundle_recommender_rows = _frame_rows(
+        (bundle_recommender or {}).get("recommendation_rows"),
+        [
+            "anchor_family_label",
+            "attached_family_label",
+            "anchor_orders",
+            "attach_rate_pct",
+            "cm2_uplift_per_order",
+            "recommendation_score",
+        ],
+        limit=18,
+    )
+    bundle_recommender_anchor_rows = _frame_rows(
+        (bundle_recommender or {}).get("anchor_rows"),
+        [
+            "anchor_family_label",
+            "anchor_orders",
+            "top_attached_family_label",
+            "top_attach_rate_pct",
+            "top_cm2_uplift_per_order",
+        ],
+        limit=12,
+    )
+    promo_discount = (advanced_dtc_metrics or {}).get("promo_discount_quality", {}) if advanced_dtc_metrics else {}
+    promo_discount_rows = _frame_rows(
+        (promo_discount or {}).get("bucket_rows"),
+        [
+            "bucket",
+            "orders",
+            "revenue",
+            "detected_discount_net",
+            "discount_penetration_pct",
+            "avg_discount_per_order",
+            "cm2_margin_pct",
+        ],
+        limit=12,
+    )
     combinations_rows = _frame_rows(item_combinations, ["combination_size", "combination", "count", "price"], limit=12)
 
     segment_rows = []
@@ -1315,6 +1421,29 @@ def generate_modern_dashboard(
             "bucket_rows": refill_cohort_bucket_rows,
             "window_rows": refill_cohort_window_rows,
             "cohort_rows": refill_cohort_rows,
+        },
+        "direct_assisted": {
+            "summary": {k: _json_safe(v) for k, v in ((direct_assisted or {}).get("summary") or {}).items()},
+            "entry_rows": direct_assisted_entry_rows,
+            "window_rows": direct_assisted_window_rows,
+        },
+        "crm_funnel": {
+            "summary": {k: _json_safe(v) for k, v in ((crm_funnel or {}).get("summary") or {}).items()},
+            "segment_rows": crm_funnel_rows,
+        },
+        "scent_size": {
+            "summary": {k: _json_safe(v) for k, v in ((scent_size or {}).get("summary") or {}).items()},
+            "same_rows": scent_same_rows,
+            "migration_rows": scent_migration_rows,
+        },
+        "bundle_recommender": {
+            "summary": {k: _json_safe(v) for k, v in ((bundle_recommender or {}).get("summary") or {}).items()},
+            "recommendation_rows": bundle_recommender_rows,
+            "anchor_rows": bundle_recommender_anchor_rows,
+        },
+        "promo_discount": {
+            "summary": {k: _json_safe(v) for k, v in ((promo_discount or {}).get("summary") or {}).items()},
+            "bucket_rows": promo_discount_rows,
         },
         "combinations_rows": combinations_rows,
         "segment_rows": segment_rows,
@@ -4012,6 +4141,21 @@ def generate_modern_dashboard(
                     {{ id: 'custRefillCohortChart', title: {{ en: 'Refill cohort trend', sk: 'Trend refill kohort' }}, desc: {{ en: '90d refill rate and days-to-second-order by cohort month.', sk: '90d refill rate a cas do druhej objednavky podla kohortneho mesiaca.' }} }},
                 );
             }}
+            if (hasRows(DATA.direct_assisted.entry_rows)) {{
+                customerItems.push(
+                    {{ id: 'custDirectAssistedEntryChart', title: {{ en: 'Direct vs assisted CM3 by entry product', sk: 'Direct vs assisted CM3 podla vstupneho produktu' }}, desc: {{ en: 'How much CM3 comes directly from the first order versus downstream orders.', sk: 'Kolko CM3 vznikne priamo v prvej objednavke a kolko downstream.' }} }},
+                );
+            }}
+            if (hasRows(DATA.direct_assisted.window_rows)) {{
+                customerItems.push(
+                    {{ id: 'custDirectAssistedWindowChart', title: {{ en: 'Assisted profitability windows', sk: 'Okna asistovanej profitability' }}, desc: {{ en: 'Downstream CM3 recovery and assisted share over 30/60/90/180 day windows.', sk: 'Downstream CM3 recovery a assisted share v 30/60/90/180 dnoch.' }} }},
+                );
+            }}
+            if (hasRows(DATA.crm_funnel.segment_rows)) {{
+                customerItems.push(
+                    {{ id: 'custCrmFunnelChart', title: {{ en: 'CRM funnel KPI layer', sk: 'CRM funnel KPI vrstva' }}, desc: {{ en: 'Operational CRM segments tied to measurable KPI baselines.', sk: 'Operativne CRM segmenty naviazane na meratelne KPI baseline.' }} }},
+                );
+            }}
             renderGalleryCards('libraryCustomers', customerItems);
 
             if (document.getElementById('custNewReturningRevenueChart')) {{
@@ -4396,6 +4540,49 @@ def generate_modern_dashboard(
                     options: refillCohortOpts,
                 }});
             }}
+            if (document.getElementById('custDirectAssistedEntryChart')) {{
+                const directEntryOpts = dualAxisOptions();
+                new Chart(document.getElementById('custDirectAssistedEntryChart'), {{
+                    data: {{
+                        labels: DATA.direct_assisted.entry_rows.map(x => (x.entry_product || '-').slice(0, 24)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Direct CM3 / customer', data: DATA.direct_assisted.entry_rows.map(x => Number(x.direct_cm3_per_customer || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Total CM3 90d / customer', data: DATA.direct_assisted.entry_rows.map(x => Number(x.total_cm3_90d_per_customer || 0)), backgroundColor: 'rgba(31,157,102,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Assisted share 90d %', data: DATA.direct_assisted.entry_rows.map(x => Number(x.assisted_share_90d_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: directEntryOpts,
+                }});
+            }}
+            if (document.getElementById('custDirectAssistedWindowChart')) {{
+                const directWindowOpts = dualAxisOptions();
+                new Chart(document.getElementById('custDirectAssistedWindowChart'), {{
+                    data: {{
+                        labels: DATA.direct_assisted.window_rows.map(x => `${{x.window_days || '-'}}d`),
+                        datasets: [
+                            {{ type: 'bar', label: 'Downstream CM3 / customer', data: DATA.direct_assisted.window_rows.map(x => Number(x.downstream_cm3_per_customer || 0)), backgroundColor: 'rgba(31,157,102,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Total CM3 / customer', data: DATA.direct_assisted.window_rows.map(x => Number(x.total_cm3_per_customer || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Assisted share %', data: DATA.direct_assisted.window_rows.map(x => Number(x.assisted_share_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: directWindowOpts,
+                }});
+            }}
+            if (document.getElementById('custCrmFunnelChart')) {{
+                const crmRows = [...(DATA.crm_funnel.segment_rows || [])].sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999));
+                const crmOpts = dualAxisOptions();
+                new Chart(document.getElementById('custCrmFunnelChart'), {{
+                    data: {{
+                        labels: crmRows.map(x => (x.segment || '-').slice(0, 22)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Customers', data: crmRows.map(x => Number(x.count || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Priority', data: crmRows.map(x => Number(x.priority || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Baseline KPI', data: crmRows.map(x => Number(x.baseline_value || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: crmOpts,
+                }});
+            }}
 
             const patternItems = [];
             if (hasSeries(DATA.day_of_week.labels)) {{
@@ -4537,6 +4724,11 @@ def generate_modern_dashboard(
             if (hasRows(DATA.bundle_accessory.pair_rows)) productItems.push({{ id: 'prodBundleAccessoryUpliftChart', title: {{ en: 'Accessory contribution uplift', sk: 'Contribution uplift doplnkov' }}, desc: {{ en: 'Incremental pre-ad contribution per order when the accessory is present.', sk: 'Inkrementalna pre-ad contribution na objednavku pri pritomnosti doplnku.' }} }});
             if (hasRows(DATA.bundle_accessory.device_rows)) productItems.push({{ id: 'prodBundleAccessoryFamilyChart', title: {{ en: 'Device family summary', sk: 'Sumar device family' }}, desc: {{ en: 'Best accessory group per device family by uplift and attach rate.', sk: 'Najlepsi accessory group pre device family podla upliftu a attach rate.' }} }});
             if (hasRows(DATA.bundle_accessory.group_rows)) productItems.push({{ id: 'prodBundleAccessoryGroupChart', title: {{ en: 'Accessory group quality', sk: 'Kvalita accessory groups' }}, desc: {{ en: 'Weighted attach-rate and uplift by accessory category.', sk: 'Vazeny attach-rate a uplift podla kategorie doplnkov.' }} }});
+            if (hasRows(DATA.scent_size.same_rows)) productItems.push({{ id: 'prodScentRefillChart', title: {{ en: 'Scent-size refill matrix', sk: 'Scent-size refill matrix' }}, desc: {{ en: 'Same-scent migration from sample to 200ml/500ml and 200ml to 500ml.', sk: 'Same-scent migracia zo sample na 200ml/500ml a z 200ml na 500ml.' }} }});
+            if (hasRows(DATA.scent_size.migration_rows)) productItems.push({{ id: 'prodScentMigrationChart', title: {{ en: 'Cross-scent migration', sk: 'Cross-scent migracia' }}, desc: {{ en: 'How often sample customers move into a different scent family.', sk: 'Ako casto sample zakaznici prejdu do ineho scentu.' }} }});
+            if (hasRows(DATA.bundle_recommender.recommendation_rows)) productItems.push({{ id: 'prodBundleRecommenderChart', title: {{ en: 'Bundle recommender score', sk: 'Bundle recommender score' }}, desc: {{ en: 'Top family recommendations by attach-rate and CM2 uplift.', sk: 'Top family odporucania podla attach-rate a CM2 upliftu.' }} }});
+            if (hasRows(DATA.bundle_recommender.anchor_rows)) productItems.push({{ id: 'prodBundleAnchorChart', title: {{ en: 'Anchor family recommendations', sk: 'Odporucania anchor family' }}, desc: {{ en: 'Best next-family recommendation per anchor family.', sk: 'Najlepsie next-family odporucanie pre kazdu anchor family.' }} }});
+            if (hasRows(DATA.promo_discount.bucket_rows)) productItems.push({{ id: 'opsPromoDiscountChart', title: {{ en: 'Promo / discount quality', sk: 'Kvalita promo / discountov' }}, desc: {{ en: 'Detected discount penetration and CM2 quality by new/returning buckets.', sk: 'Detegovana discount penetracia a CM2 kvalita podla new/returning bucketov.' }} }});
             if (hasRows(DATA.b2b_rows)) productItems.push({{ id: 'opsB2bRevenueProfitChart', title: {{ en: 'B2B vs B2C economics', sk: 'Ekonomika B2B vs B2C' }}, desc: {{ en: 'Revenue, profit and AOV by customer type.', sk: 'Trzba, zisk a AOV podla typu zakaznika.' }} }});
             if (hasRows(DATA.order_status_rows)) productItems.push({{ id: 'opsStatusRevenueChart', title: {{ en: 'Order status mix', sk: 'Mix stavov objednavok' }}, desc: {{ en: 'Orders and revenue by final order status.', sk: 'Objednavky a trzba podla finalneho statusu.' }} }});
             if (hasRows(DATA.segment_rows)) productItems.push({{ id: 'opsSegmentPriorityChart', title: {{ en: 'Email segment volume', sk: 'Objem email segmentov' }}, desc: {{ en: 'Size and priority of lifecycle email segments.', sk: 'Velkost a priorita lifecycle email segmentov.' }} }});
@@ -4663,6 +4855,76 @@ def generate_modern_dashboard(
                         ],
                     }},
                     options: groupOpts,
+                }});
+            }}
+            if (document.getElementById('prodScentRefillChart')) {{
+                const scentOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodScentRefillChart'), {{
+                    data: {{
+                        labels: DATA.scent_size.same_rows.map(x => (x.scent_label || '-').slice(0, 20)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Sample -> 200ml %', data: DATA.scent_size.same_rows.map(x => Number(x.sample_to_200_pct || 0)), backgroundColor: 'rgba(255,138,31,.66)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Sample -> 500ml %', data: DATA.scent_size.same_rows.map(x => Number(x.sample_to_500_pct || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: '200ml -> 500ml %', data: DATA.scent_size.same_rows.map(x => Number(x['200_to_500_pct'] || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: '500ml repeat %', data: DATA.scent_size.same_rows.map(x => Number(x['500_repeat_pct'] || 0)), borderColor: '#8b5cf6', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: scentOpts,
+                }});
+            }}
+            if (document.getElementById('prodScentMigrationChart')) {{
+                const migrationOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodScentMigrationChart'), {{
+                    data: {{
+                        labels: DATA.scent_size.migration_rows.map(x => (x.base_scent_label || '-').slice(0, 20)),
+                        datasets: [
+                            {{ type: 'bar', label: 'Cross-scent %', data: DATA.scent_size.migration_rows.map(x => Number(x.cross_scent_pct || 0)), backgroundColor: 'rgba(255,138,31,.66)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Avg days', data: DATA.scent_size.migration_rows.map(x => Number(x.avg_days_to_cross_scent || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: migrationOpts,
+                }});
+            }}
+            if (document.getElementById('prodBundleRecommenderChart')) {{
+                const recOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodBundleRecommenderChart'), {{
+                    data: {{
+                        labels: DATA.bundle_recommender.recommendation_rows.map(x => `${{(x.anchor_family_label || '').slice(0, 14)}} -> ${{(x.attached_family_label || '').slice(0, 14)}}`),
+                        datasets: [
+                            {{ type: 'bar', label: 'Recommendation score', data: DATA.bundle_recommender.recommendation_rows.map(x => Number(x.recommendation_score || 0)), backgroundColor: 'rgba(31,157,102,.60)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CM2 uplift / order', data: DATA.bundle_recommender.recommendation_rows.map(x => Number(x.cm2_uplift_per_order || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Attach rate %', data: DATA.bundle_recommender.recommendation_rows.map(x => Number(x.attach_rate_pct || 0)), borderColor: '#4766ff', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: recOpts,
+                }});
+            }}
+            if (document.getElementById('prodBundleAnchorChart')) {{
+                const anchorOpts = dualAxisOptions();
+                new Chart(document.getElementById('prodBundleAnchorChart'), {{
+                    data: {{
+                        labels: DATA.bundle_recommender.anchor_rows.map(x => x.anchor_family_label || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Anchor orders', data: DATA.bundle_recommender.anchor_rows.map(x => Number(x.anchor_orders || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Top attach rate %', data: DATA.bundle_recommender.anchor_rows.map(x => Number(x.top_attach_rate_pct || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Top CM2 uplift', data: DATA.bundle_recommender.anchor_rows.map(x => Number(x.top_cm2_uplift_per_order || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: anchorOpts,
+                }});
+            }}
+            if (document.getElementById('opsPromoDiscountChart')) {{
+                const promoOpts = dualAxisOptions();
+                new Chart(document.getElementById('opsPromoDiscountChart'), {{
+                    data: {{
+                        labels: DATA.promo_discount.bucket_rows.map(x => x.bucket || '-'),
+                        datasets: [
+                            {{ type: 'bar', label: 'Orders', data: DATA.promo_discount.bucket_rows.map(x => Number(x.orders || 0)), backgroundColor: 'rgba(71,102,255,.56)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'CM2 margin %', data: DATA.promo_discount.bucket_rows.map(x => Number(x.cm2_margin_pct || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Avg discount / order', data: DATA.promo_discount.bucket_rows.map(x => Number(x.avg_discount_per_order || 0)), borderColor: '#ff8a1f', tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: promoOpts,
                 }});
             }}
             if (document.getElementById('opsB2bRevenueProfitChart')) {{
