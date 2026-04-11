@@ -71,6 +71,7 @@ Bootstrap entrypoints:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
   - SES delivery confirmed in CloudWatch logs
   - no remaining `PutMetricData` warning in the verified log stream
+- Fixed `html_report_generator.py` period-switcher syntax so `Env Check` / `reporting_qa_smoke.py` pass again on GitHub Actions and on local Python 3.11.
 
 ## 6) Integration Notes (External Systems)
 
@@ -109,7 +110,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Review the new Vevo growth sections in the active dashboard on a full-history VEVO export, then decide whether to continue with dedicated refill-model refinement or with stricter campaign-attribution normalization.
+- Verify the green `Env Check` run on `main`, then continue with full-history validation of the new Vevo growth sections before refining refill-model methodology.
 
 ## 9) Change Log
 

@@ -327,12 +327,30 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 """
             )
 
+        heading_html = ""
+        desc_html = ""
+        if not compact:
+            heading_html = (
+                '<h3 class="period-switcher-heading" '
+                'data-en="Choose a complete report period" '
+                'data-sk="Vyber cele obdobie reportu">'
+                "Choose a complete report period"
+                "</h3>"
+            )
+            desc_html = (
+                '<p class="period-switcher-desc" '
+                'data-en="This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period." '
+                'data-sk="Toto prepne cely report konzistentne: KPI karty, grafy, tabulky, mesta, produkty aj diagnostika sa prepocitaju na vybrane serverovo vyratane obdobie.">'
+                "This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period."
+                "</p>"
+            )
+
         return f"""
         <div class="{mode_class}" data-period-current="{escape(current_key)}">
             <div class="period-switcher-copy">
                 <div class="section-kicker" data-en="{label_en}" data-sk="{label_sk}">{label_en}</div>
-                {"<h3 class=\"period-switcher-heading\" data-en=\"Choose a complete report period\" data-sk=\"Vyber cele obdobie reportu\">Choose a complete report period</h3>" if not compact else ""}
-                {"<p class=\"period-switcher-desc\" data-en=\"This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period.\" data-sk=\"Toto prepne cely report konzistentne: KPI karty, grafy, tabulky, mesta, produkty aj diagnostika sa prepocitaju na vybrane serverovo vyratane obdobie.\">This changes the entire report consistently: KPI cards, charts, tables, cities, products and diagnostics all switch to the selected server-calculated period.</p>" if not compact else ""}
+                {heading_html}
+                {desc_html}
             </div>
             <div class="period-switcher-controls">
                 <div class="period-switcher-options">
