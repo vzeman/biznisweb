@@ -113,6 +113,7 @@ MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
+PREFER_MANUAL_ADS_TOTALS = False
 WEATHER_SETTINGS: Dict[str, Any] = {
     "enabled": False,
     "timezone": "Europe/Bratislava",
@@ -309,6 +310,24 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
           }
         }
         price {
+          value
+          formatted
+          is_net_price
+          currency {
+            symbol
+            code
+          }
+        }
+        sum {
+          value
+          formatted
+          is_net_price
+          currency {
+            symbol
+            code
+          }
+        }
+        sum_with_tax {
           value
           formatted
           is_net_price
@@ -2617,30 +2636,48 @@ class BizniWebExporter:
             item_rows = []
             for item in items:
                 item_price = item.get('price', {}) or {}
+                item_sum = item.get('sum', {}) or {}
+                item_sum_with_tax = item.get('sum_with_tax', {}) or {}
                 weight = item.get('weight', {}) or {}
                 recycle_fee = item.get('recycle_fee', {}) or {}
                 
-                # Get item currency (use order currency if not specified)
-                item_currency = item_price.get('currency', {}).get('code') if item_price.get('currency') else order_currency
-                
-                # Calculate prices with and without tax
+                # Get item currency (prefer explicit line totals, then unit price, then order currency).
+                item_currency = (
+                    (item_sum.get('currency', {}) or {}).get('code')
+                    or (item_sum_with_tax.get('currency', {}) or {}).get('code')
+                    or (item_price.get('currency', {}) or {}).get('code')
+                    or order_currency
+                )
+
                 item_price_value_original = item_price.get('value', 0) or 0
-                # Convert to EUR
                 item_price_value = self.convert_to_eur(item_price_value_original, item_currency)
                 item_quantity = item.get('quantity', 1) or 1
                 item_tax_rate = item.get('tax_rate', 0) or 0
-                
-                # Calculate total price for this item (price * quantity) in EUR
-                item_total_with_tax = item_price_value * item_quantity
-                
-                # Calculate price without tax
-                # Price without tax = Price with tax / (1 + tax_rate/100)
-                if item_tax_rate > 0:
-                    item_total_without_tax = item_total_with_tax / (1 + item_tax_rate / 100)
-                    item_tax_amount = item_total_with_tax - item_total_without_tax
+                tax_multiplier = (1 + item_tax_rate / 100) if item_tax_rate > 0 else 1.0
+                item_line_net_original = item_sum.get('value')
+                item_line_gross_original = item_sum_with_tax.get('value')
+
+                # BizniWeb returns reliable line totals in `sum` (net) and `sum_with_tax` (gross).
+                # The `is_net_price` flags on these payloads are not reliable enough to drive business
+                # logic, so prefer the explicit total fields and use VAT math only as fallback.
+                if item_line_net_original is not None:
+                    item_total_without_tax = self.convert_to_eur(item_line_net_original, item_currency)
+                    if item_line_gross_original is not None:
+                        item_total_with_tax = self.convert_to_eur(item_line_gross_original, item_currency)
+                    else:
+                        item_total_with_tax = item_total_without_tax * tax_multiplier
+                elif item_line_gross_original is not None:
+                    item_total_with_tax = self.convert_to_eur(item_line_gross_original, item_currency)
+                    if item_tax_rate > 0:
+                        item_total_without_tax = item_total_with_tax / tax_multiplier
+                    else:
+                        item_total_without_tax = item_total_with_tax
                 else:
-                    item_total_without_tax = item_total_with_tax
-                    item_tax_amount = 0
+                    # Final fallback when line sums are missing: BizniWeb unit prices behave as net in
+                    # the live data for both Roy and Vevo, even when `is_net_price` is inverted.
+                    item_total_without_tax = item_price_value * item_quantity
+                    item_total_with_tax = item_total_without_tax * tax_multiplier
+                item_tax_amount = item_total_with_tax - item_total_without_tax
                 
                 # Get expense per item from mapping (using product_sku - EAN or hash)
                 item_label = item.get('item_label', '')
@@ -2700,6 +2737,8 @@ class BizniWebExporter:
                     'item_currency': item_currency,
                     'item_unit_price_original': item_price_value_original,
                     'item_unit_price': item_price_value,  # In EUR
+                    'item_line_sum_original': item_line_net_original,
+                    'item_line_sum_with_tax_original': item_line_gross_original,
                     'item_total_with_tax': round(item_total_with_tax, 2),  # In EUR
                     'item_total_without_tax': round(item_total_without_tax, 2),  # In EUR
                     'item_tax_amount': round(item_tax_amount, 2),  # In EUR
@@ -2790,7 +2829,7 @@ class BizniWebExporter:
         fb_campaigns = []
         fb_hourly_stats = []
         fb_dow_stats = []
-        if MANUAL_FB_ADS_TOTAL is not None:
+        if PREFER_MANUAL_ADS_TOTALS and MANUAL_FB_ADS_TOTAL is not None:
             fb_daily_spend = self._distribute_total_spend(MANUAL_FB_ADS_TOTAL, date_from, date_to)
             print(
                 f"Using manual Facebook Ads total: {MANUAL_FB_ADS_TOTAL:.2f} EUR "
@@ -2860,6 +2899,18 @@ class BizniWebExporter:
                     campaign_count=len(fb_campaigns),
                     hourly_rows=len(fb_hourly_stats),
                 )
+        elif MANUAL_FB_ADS_TOTAL is not None:
+            source_health["sources"]["facebook_ads"] = self._build_source_entry(
+                key="facebook_ads",
+                label="Facebook Ads",
+                status="disabled",
+                mode="manual_total_available_but_disabled",
+                message=(
+                    f"Manual Facebook Ads total {MANUAL_FB_ADS_TOTAL:.2f} EUR is configured, "
+                    "but manual ads mode is disabled. No FB spend loaded."
+                ),
+                healthy=True,
+            )
         else:
             source_health["sources"]["facebook_ads"] = self._build_source_entry(
                 key="facebook_ads",
@@ -2872,7 +2923,7 @@ class BizniWebExporter:
         
         # Fetch Google Ads spend data
         google_ads_daily_spend = {}
-        if MANUAL_GOOGLE_ADS_TOTAL is not None:
+        if PREFER_MANUAL_ADS_TOTALS and MANUAL_GOOGLE_ADS_TOTAL is not None:
             google_ads_daily_spend = self._distribute_total_spend(MANUAL_GOOGLE_ADS_TOTAL, date_from, date_to)
             print(
                 f"Using manual Google Ads total: {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR "
@@ -2914,6 +2965,18 @@ class BizniWebExporter:
                     healthy=True,
                     active_days=len(google_ads_daily_spend),
                 )
+        elif MANUAL_GOOGLE_ADS_TOTAL is not None:
+            source_health["sources"]["google_ads"] = self._build_source_entry(
+                key="google_ads",
+                label="Google Ads",
+                status="disabled",
+                mode="manual_total_available_but_disabled",
+                message=(
+                    f"Manual Google Ads total {MANUAL_GOOGLE_ADS_TOTAL:.2f} EUR is configured, "
+                    "but manual ads mode is disabled. No Google spend loaded."
+                ),
+                healthy=True,
+            )
         else:
             source_health["sources"]["google_ads"] = self._build_source_entry(
                 key="google_ads",
