@@ -730,8 +730,13 @@ class BizniWebExporter:
         degraded = [source["label"] for source in sources if source.get("status") in {"warning", "error"}]
         qa_checks = list((source_health.get("qa") or {}).values())
         qa_warnings = [check.get("label") or check.get("key") or "QA" for check in qa_checks if check.get("status") == "warning"]
+        qa_errors = [check.get("label") or check.get("key") or "QA" for check in qa_checks if check.get("status") in {"error", "critical"}]
+        qa_failure_count = int(sum(int(check.get("failure_count") or 0) for check in qa_checks))
+        qa_warning_count = int(sum(int(check.get("warning_count") or 0) for check in qa_checks))
         if degraded:
             overall_status = "partial"
+        elif qa_errors:
+            overall_status = "critical"
         elif qa_warnings:
             overall_status = "warning"
         else:
@@ -739,13 +744,23 @@ class BizniWebExporter:
         source_health["overall_status"] = overall_status
         source_health["is_partial"] = bool(degraded)
         source_health["partial_sources"] = degraded
-        source_health["qa_status"] = "warning" if qa_warnings else "ok"
+        source_health["qa_status"] = "critical" if qa_errors else ("warning" if qa_warnings else "ok")
         source_health["qa_warnings"] = qa_warnings
+        source_health["qa_errors"] = qa_errors
+        source_health["qa_failure_count"] = qa_failure_count
+        source_health["qa_warning_count"] = qa_warning_count
+        source_health["qa_check_count"] = len(qa_checks)
         if degraded:
             source_health["summary"] = (
                 "Partial data: "
                 + ", ".join(degraded)
                 + " did not load cleanly in this run. Metrics depending on these sources may be incomplete or zero-filled."
+            )
+        elif qa_errors:
+            source_health["summary"] = (
+                "Critical data QA issues were raised for "
+                + ", ".join(qa_errors)
+                + ". Treat affected metrics as unsafe for decision-making until the assertions are resolved."
             )
         elif qa_warnings:
             source_health["summary"] = (
@@ -833,11 +848,27 @@ class BizniWebExporter:
         ignore_count = 0
         observe_count = 0
         ready_count = 0
+        ignore_orders = 0.0
+        observe_orders = 0.0
+        ignore_revenue = 0.0
+        observe_revenue = 0.0
+        total_orders = 0.0
+        total_revenue = 0.0
 
         if not geo_df.empty and "confidence_status" in geo_df.columns:
+            if "orders" in geo_df.columns:
+                total_orders = float(pd.to_numeric(geo_df["orders"], errors="coerce").fillna(0).sum())
+            if "revenue" in geo_df.columns:
+                total_revenue = float(pd.to_numeric(geo_df["revenue"], errors="coerce").fillna(0).sum())
             ignore_count = int((geo_df["confidence_status"] == "ignore").sum())
             observe_count = int((geo_df["confidence_status"] == "observe").sum())
             ready_count = int((geo_df["confidence_status"] == "ready").sum())
+            if total_orders > 0 and "orders" in geo_df.columns:
+                ignore_orders = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "ignore", "orders"], errors="coerce").fillna(0).sum())
+                observe_orders = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "observe", "orders"], errors="coerce").fillna(0).sum())
+            if total_revenue > 0 and "revenue" in geo_df.columns:
+                ignore_revenue = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "ignore", "revenue"], errors="coerce").fillna(0).sum())
+                observe_revenue = float(pd.to_numeric(geo_df.loc[geo_df["confidence_status"] == "observe", "revenue"], errors="coerce").fillna(0).sum())
             if ignore_count > 0:
                 warnings.append(
                     f"{ignore_count} country row(s) are below the minimum geo sample threshold and should not be treated as strategic market insight."
@@ -849,11 +880,20 @@ class BizniWebExporter:
 
         unknown_country_rate = None
         if not country_df.empty and "country" in country_df.columns:
-            total_orders = float(country_df["orders"].sum()) if "orders" in country_df.columns else 0.0
-            unknown_orders = float(country_df.loc[country_df["country"].astype(str).str.lower() == "unknown", "orders"].sum()) if total_orders > 0 else 0.0
-            unknown_country_rate = round((unknown_orders / total_orders) * 100, 2) if total_orders > 0 else 0.0
+            total_country_orders = float(country_df["orders"].sum()) if "orders" in country_df.columns else 0.0
+            unknown_orders = float(country_df.loc[country_df["country"].astype(str).str.lower() == "unknown", "orders"].sum()) if total_country_orders > 0 else 0.0
+            unknown_country_rate = round((unknown_orders / total_country_orders) * 100, 2) if total_country_orders > 0 else 0.0
             if unknown_country_rate > 0:
                 warnings.append(f"Unknown country coverage is {unknown_country_rate:.2f}% of orders.")
+
+        ignore_order_share_pct = round((ignore_orders / total_orders) * 100, 2) if total_orders > 0 else 0.0
+        observe_order_share_pct = round((observe_orders / total_orders) * 100, 2) if total_orders > 0 else 0.0
+        ignore_revenue_share_pct = round((ignore_revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0
+        observe_revenue_share_pct = round((observe_revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0
+        if ignore_order_share_pct >= 10 or ignore_revenue_share_pct >= 10:
+            warnings.append(
+                f"Low-confidence geo rows still represent {ignore_order_share_pct:.2f}% of orders and {ignore_revenue_share_pct:.2f}% of revenue."
+            )
 
         message = (
             "Geo confidence guardrails passed: country sample sizes are large enough for strategic comparison."
@@ -867,10 +907,18 @@ class BizniWebExporter:
             "healthy": not warnings,
             "message": message,
             "warnings": warnings,
+            "warning_count": len(warnings),
+            "failure_count": 0,
             "ignore_count": ignore_count,
             "observe_count": observe_count,
             "ready_count": ready_count,
             "unknown_country_rate": unknown_country_rate,
+            "ignore_order_share_pct": ignore_order_share_pct,
+            "observe_order_share_pct": observe_order_share_pct,
+            "ignore_revenue_share_pct": ignore_revenue_share_pct,
+            "observe_revenue_share_pct": observe_revenue_share_pct,
+            "low_confidence_order_share_pct": round(ignore_order_share_pct + observe_order_share_pct, 2),
+            "low_confidence_revenue_share_pct": round(ignore_revenue_share_pct + observe_revenue_share_pct, 2),
         }
 
     def _build_data_assertions_qa(
@@ -886,6 +934,7 @@ class BizniWebExporter:
         cost_per_order: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         warnings: List[str] = []
+        failures: List[str] = []
         metrics = financial_metrics or {}
         checks = consistency_checks or {}
         refund_summary = (refunds_analysis or {}).get("summary") or {}
@@ -911,7 +960,7 @@ class BizniWebExporter:
         ]
         missing_financial_keys = [key for key in required_financial_keys if metrics.get(key) is None]
         if missing_financial_keys:
-            warnings.append(
+            failures.append(
                 "Critical economics registry keys are missing: " + ", ".join(missing_financial_keys[:5])
             )
 
@@ -932,24 +981,24 @@ class BizniWebExporter:
         if payback_orders is not None and expected_payback is not None and abs(payback_orders - expected_payback) > 0.05:
             shell_parity_failures += 1
         if shell_parity_failures > 0:
-            warnings.append(
+            failures.append(
                 f"{shell_parity_failures} shell/library economics parity check(s) failed."
             )
 
         if refund_summary.get("refund_orders") and metrics.get("refund_rate_pct") is None:
-            warnings.append("Refund orders exist but refund summary metrics are missing from the registry.")
+            failures.append("Refund orders exist but refund summary metrics are missing from the registry.")
 
         if checks:
             if checks.get("roas_ok") is False:
-                warnings.append(
+                failures.append(
                     f"ROAS consistency delta is {checks.get('roas_delta')}. Reported and derived ROAS do not match."
                 )
             if checks.get("company_margin_ok") is False:
-                warnings.append(
+                failures.append(
                     f"Company margin consistency delta is {checks.get('company_margin_delta_pct')} percentage points."
                 )
             if checks.get("cac_ok") is False:
-                warnings.append(
+                failures.append(
                     f"CAC consistency delta is {checks.get('cac_delta')}. Check spend/new-customer denominator alignment."
                 )
 
@@ -997,11 +1046,11 @@ class BizniWebExporter:
                     attributed_cpa_mismatches += 1
 
         if platform_cpa_mismatches > 0:
-            warnings.append(
+            failures.append(
                 f"{platform_cpa_mismatches} campaign row(s) have platform CPA that does not match spend/platform conversions."
             )
         if attributed_cpa_mismatches > 0:
-            warnings.append(
+            failures.append(
                 f"{attributed_cpa_mismatches} campaign row(s) have cost_per_attributed_order that does not match spend/attributed_orders_est."
             )
 
@@ -1011,22 +1060,31 @@ class BizniWebExporter:
         if attributed_orders_total is not None and total_orders and total_orders > 0:
             attributed_orders_ratio = attributed_orders_total / total_orders
             if attributed_orders_ratio > 1.05:
-                warnings.append(
+                failures.append(
                     f"Attributed campaign orders sum to {attributed_orders_total:.1f}, which exceeds total orders ({total_orders:.0f}) beyond tolerance."
                 )
 
+        label_row_total = len(dow_df.index) + len(attach_df.index) + len(country_df.index) + len(geo_df.index)
+        missing_label_total = day_name_missing + anchor_missing + attached_missing + anchor_orders_missing + country_missing + geo_country_missing
+        null_label_rate_pct = round((missing_label_total / label_row_total) * 100, 2) if label_row_total > 0 else 0.0
+        if null_label_rate_pct > 0:
+            warnings.append(f"Dimension completeness warning: {null_label_rate_pct:.2f}% of labeled QA rows are missing a required label.")
+
         message = (
             "Data assertions passed: economics registry, arithmetic and dimensions are within tolerance."
-            if not warnings
-            else warnings[0]
+            if not (failures or warnings)
+            else (failures + warnings)[0]
         )
         return {
             "key": "data_assertions",
             "label": "Data assertions",
-            "status": "warning" if warnings else "ok",
-            "healthy": not warnings,
+            "status": "critical" if failures else ("warning" if warnings else "ok"),
+            "healthy": not failures,
             "message": message,
             "warnings": warnings,
+            "failures": failures,
+            "warning_count": len(warnings),
+            "failure_count": len(failures),
             "missing_financial_keys": missing_financial_keys,
             "shell_parity_failures": shell_parity_failures,
             "day_name_missing": day_name_missing,
@@ -1035,9 +1093,13 @@ class BizniWebExporter:
             "anchor_orders_missing": anchor_orders_missing,
             "country_missing": country_missing,
             "geo_country_missing": geo_country_missing,
+            "missing_label_total": missing_label_total,
+            "null_label_rate_pct": null_label_rate_pct,
             "platform_cpa_mismatches": platform_cpa_mismatches,
             "attributed_cpa_mismatches": attributed_cpa_mismatches,
             "attributed_orders_ratio": round(attributed_orders_ratio, 4) if attributed_orders_ratio is not None else None,
+            "attributed_orders_tolerance_breached": bool(attributed_orders_ratio is not None and attributed_orders_ratio > 1.05),
+            "label_row_total": label_row_total,
         }
 
     def _build_margin_stability_qa(self, date_agg: Optional[pd.DataFrame]) -> Dict[str, Any]:
@@ -1095,6 +1157,8 @@ class BizniWebExporter:
             "healthy": not warnings,
             "message": message,
             "warnings": warnings,
+            "warning_count": len(warnings),
+            "failure_count": 0,
             "raw_extreme_days": raw_extreme_days,
             "smoothed_extreme_days": smoothed_extreme_days,
             "min_smoothed_margin_pct": round(min_smoothed, 2) if min_smoothed is not None else None,

@@ -1249,12 +1249,19 @@ def generate_modern_dashboard(
         else '<p class="muted-note"><span class="lang-en">No low-sample geo warnings for the current report window.</span><span class="lang-sk hidden">V aktualnom okne nie su ziadne geo warningy pre malu vzorku.</span></p>'
     )
     data_assertion_warning_items = list(data_assertions_qa.get("warnings") or [])
+    data_assertion_failure_items = list(data_assertions_qa.get("failures") or [])
     data_assertion_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in data_assertion_warning_items)
+    data_assertion_failure_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in data_assertion_failure_items)
     data_assertion_warning_block_html = (
-        f'<ul class="warning-list">{data_assertion_warning_items_html}</ul>'
-        if data_assertion_warning_items_html
-        else '<p class="muted-note"><span class="lang-en">Data assertions passed for the current report window.</span><span class="lang-sk hidden">Datove assertions pre aktualne okno presli bez warningov.</span></p>'
-    )
+        (
+            f'<div class="warning-block"><p class="muted-note"><span class="lang-en">Critical QA failures</span><span class="lang-sk hidden">Kriticke QA chyby</span></p><ul class="warning-list">{data_assertion_failure_items_html}</ul></div>'
+            if data_assertion_failure_items_html else ""
+        )
+        + (
+            f'<div class="warning-block"><p class="muted-note"><span class="lang-en">Warnings</span><span class="lang-sk hidden">Warningy</span></p><ul class="warning-list">{data_assertion_warning_items_html}</ul></div>'
+            if data_assertion_warning_items_html else ""
+        )
+    ) or '<p class="muted-note"><span class="lang-en">Data assertions passed for the current report window.</span><span class="lang-sk hidden">Datove assertions pre aktualne okno presli bez warningov.</span></p>'
     margin_stability_warning_items = list(margin_stability_qa.get("warnings") or [])
     margin_stability_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in margin_stability_warning_items)
     margin_stability_warning_block_html = (
@@ -2214,15 +2221,21 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Observe countries</span><span class="lang-sk hidden">Sledovane krajiny</span></small><strong>{int(round(_num(geo_qa.get("observe_count"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Ignore countries</span><span class="lang-sk hidden">Ignorovane krajiny</span></small><strong>{int(round(_num(geo_qa.get("ignore_count"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Unknown country rate</span><span class="lang-sk hidden">Podiel neznamej krajiny</span></small><strong>{_format_mini_value_html(geo_qa.get("unknown_country_rate"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Low-conf. order share</span><span class="lang-sk hidden">Podiel objednavok s nizkou istotou</span></small><strong>{_format_mini_value_html(geo_qa.get("low_confidence_order_share_pct"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Low-conf. revenue share</span><span class="lang-sk hidden">Podiel trzby s nizkou istotou</span></small><strong>{_format_mini_value_html(geo_qa.get("low_confidence_revenue_share_pct"), kind="percent")}</strong></div>
                         </div>
                         {geo_warning_block_html}
                     </div>
                     <div class="panel table-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Data assertions</span><span class="lang-sk hidden">Datove assertions</span></h3><p><span class="lang-en">Pipeline-level parity, arithmetic and dimension completeness checks.</span><span class="lang-sk hidden">Kontroly parity, aritmetiky a uplnosti dimenzii priamo v pipeline.</span></p></div></div>
                         <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Critical failures</span><span class="lang-sk hidden">Kriticke chyby</span></small><strong>{int(round(_num(data_assertions_qa.get("failure_count"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Warnings</span><span class="lang-sk hidden">Warningy</span></small><strong>{int(round(_num(data_assertions_qa.get("warning_count"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Shell parity failures</span><span class="lang-sk hidden">Shell parity chyby</span></small><strong>{int(round(_num(data_assertions_qa.get("shell_parity_failures"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Platform CPA mismatches</span><span class="lang-sk hidden">Platform CPA nezrovnalosti</span></small><strong>{int(round(_num(data_assertions_qa.get("platform_cpa_mismatches"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Attributed CPA mismatches</span><span class="lang-sk hidden">Attributed CPA nezrovnalosti</span></small><strong>{int(round(_num(data_assertions_qa.get("attributed_cpa_mismatches"))))}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Null label rate</span><span class="lang-sk hidden">Podiel null labelov</span></small><strong>{_format_mini_value_html(data_assertions_qa.get("null_label_rate_pct"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Attributed orders ratio</span><span class="lang-sk hidden">Pomer attributed objednavok</span></small><strong>{_format_mini_value_html(_num(data_assertions_qa.get("attributed_orders_ratio")) * 100 if data_assertions_qa.get("attributed_orders_ratio") is not None else None, kind="percent")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Missing country labels</span><span class="lang-sk hidden">Chybajuce country labely</span></small><strong>{int(round(_num(data_assertions_qa.get("country_missing"))))}</strong></div>
                         </div>
                         {data_assertion_warning_block_html}

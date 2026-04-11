@@ -180,6 +180,33 @@ def load_data_quality(path: Optional[Path]) -> Dict[str, Any]:
         }
 
 
+def build_data_quality_summary(data_quality: Dict[str, Any]) -> str:
+    overall_status = str(data_quality.get("overall_status") or "unknown").upper()
+    qa_status = str(data_quality.get("qa_status") or "unknown").upper()
+    summary = str(data_quality.get("summary") or "No data quality summary is available.")
+    qa_failure_count = int(data_quality.get("qa_failure_count") or 0)
+    qa_warning_count = int(data_quality.get("qa_warning_count") or 0)
+    partial_sources = list(data_quality.get("partial_sources") or [])
+    qa_errors = list(data_quality.get("qa_errors") or [])
+    qa_warnings = list(data_quality.get("qa_warnings") or [])
+
+    lines = [
+        "DATA QUALITY",
+        f"- Overall status: {overall_status}",
+        f"- QA status: {qa_status}",
+        f"- QA failures: {qa_failure_count}",
+        f"- QA warnings: {qa_warning_count}",
+        f"- Summary: {summary}",
+    ]
+    if partial_sources:
+        lines.append(f"- Partial sources: {', '.join(map(str, partial_sources[:5]))}")
+    if qa_errors:
+        lines.append(f"- Critical QA checks: {', '.join(map(str, qa_errors[:5]))}")
+    if qa_warnings:
+        lines.append(f"- Warning QA checks: {', '.join(map(str, qa_warnings[:5]))}")
+    return "\n".join(lines)
+
+
 def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
     bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
     prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
@@ -843,14 +870,22 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     ])
 
 
-def build_email_body(from_date: str, to_date: str, summary_text: str, reporting_defaults: Dict[str, Any]) -> str:
+def build_email_body(
+    from_date: str,
+    to_date: str,
+    summary_text: str,
+    reporting_defaults: Dict[str, Any],
+    data_quality: Optional[Dict[str, Any]] = None,
+) -> str:
     display_name = reporting_defaults["display_name"]
     reporting_system_name = reporting_defaults["reporting_system_name"]
+    data_quality_block = build_data_quality_summary(data_quality or {})
     return (
         "Dobry den,\n\n"
         f"v prilohe posielam denny {display_name} report v HTML formate.\n"
         f"Sledovane obdobie: {from_date} az {to_date}.\n\n"
         f"{summary_text}\n\n"
+        f"{data_quality_block}\n\n"
         f"Tento email bol odoslany automaticky zo systemu {reporting_system_name}.\n"
     )
 
@@ -1001,6 +1036,21 @@ def main() -> None:
         raise FileNotFoundError(f"Expected output files not found: {missing}")
 
     s3_upload_outputs(project, output_paths)
+    data_quality = load_data_quality(output_paths.get("data_quality_json"))
+    put_metric("ReportQaWarnings", int(data_quality.get("qa_warning_count") or 0), project, reporting_defaults)
+    put_metric("ReportQaFailures", int(data_quality.get("qa_failure_count") or 0), project, reporting_defaults)
+    put_metric(
+        "ReportQaCritical",
+        1 if str(data_quality.get("qa_status") or "").lower() == "critical" else 0,
+        project,
+        reporting_defaults,
+    )
+    put_metric(
+        "ReportPartialData",
+        1 if bool(data_quality.get("is_partial")) else 0,
+        project,
+        reporting_defaults,
+    )
 
     if args.skip_email:
         print("Email sending skipped by flag.")
@@ -1008,7 +1058,7 @@ def main() -> None:
 
     subject = build_email_subject(reporting_defaults)
     summary_text = build_report_summary(output_paths)
-    body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults)
+    body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults, data_quality)
     message_id = send_email_ses(
         subject=subject,
         body_text=body_text,

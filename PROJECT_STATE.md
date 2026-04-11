@@ -98,10 +98,12 @@ Bootstrap entrypoints:
 - Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_modern.py`) instead of the retired daily runner rendering path.
 - Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
+- Shipping semantics are now normalized to net shipping in runtime config and dashboard labels, but CM taxonomy naming is still mixed between legacy labels and CM1/CM2/CM3 terms in some views.
+- Full QA assertions are now computed into `data_quality` sidecars and surfaced in dashboard/email/CloudWatch, but the next business-model layer (Vevo refill cohorts) is still missing.
 
 ## 8) Next Exact Step
 
-- Normalize shipping sign convention across both projects so `shipping` / `shipping_subsidy` has one clear meaning in export, dashboard labels, and profitability math.
+- Implement Vevo cohort refill model (sample/full-size first-order cohorts, refill windows, and cohort refill timing charts) on top of the now-verified QA assertion layer.
 
 ## 9) Change Log
 
@@ -218,6 +220,28 @@ Bootstrap entrypoints:
   - Geo confidence guardrails panel
   - confidence badges for country rows
   - guarded geo profitability chart/table values (`N/A` on low-sample markets)
+
+### 2026-04-11 (QA assertions + shipping semantics)
+- Verified shared QA assertion layer end-to-end on real March 2026 VEVO and ROY exports.
+- Export layer now computes `qa.assertions` with:
+  - shell/library parity checks for critical economics metrics,
+  - refund binding presence,
+  - platform/attributed CPA arithmetic mismatch detection,
+  - attributed orders tolerance checks,
+  - missing dimension counts (`day_name`, `anchor_item`, `attached_item`, `anchor_orders`, `country`),
+  - `null_label_rate_pct`, `qa_failure_count`, `qa_warning_count`.
+- Daily runner now includes data-quality summary in email body and publishes CloudWatch QA metrics:
+  - `ReportQaWarnings`
+  - `ReportQaFailures`
+  - `ReportQaCritical`
+  - `ReportPartialData`
+- Modern dashboard now renders both failure and warning assertion blocks plus richer geo confidence share cards.
+- Shipping terminology was normalized from subsidy-style wording to `Net shipping` / `shipping_net_cost` in config, export, and dashboard labels.
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py scripts\\security_ci.py`
+  - `python scripts\\security_ci.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python export_orders.py --project roy --from-date 2026-03-01 --to-date 2026-03-31`
 - Added CI guardrails so geo QA metadata and the dashboard geo-confidence panel cannot disappear silently.
 - Verification target:
   - `python -m py_compile export_orders.py html_report_generator.py dashboard_modern.py scripts\\security_ci.py`
@@ -979,4 +1003,3 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - consistency checks remain green after CM taxonomy exposure
 - Next exact step:
   - add acquisition-source x product-family cube for ROY and VEVO so channel efficiency can be evaluated by product family instead of only globally.
-

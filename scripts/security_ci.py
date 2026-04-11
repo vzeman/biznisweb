@@ -94,6 +94,21 @@ def main() -> int:
         )
         require(
             export_orders,
+            "\"qa_failure_count\"",
+            "export_orders.py must aggregate QA failure counts into source health metadata.",
+        )
+        require(
+            export_orders,
+            "\"qa_warning_count\"",
+            "export_orders.py must aggregate QA warning counts into source health metadata.",
+        )
+        require(
+            export_orders,
+            "\"null_label_rate_pct\"",
+            "export_orders.py must expose null label rate in data assertions QA.",
+        )
+        require(
+            export_orders,
             "_build_margin_stability_qa",
             "export_orders.py must build smoothed margin stability QA before report export.",
         )
@@ -106,6 +121,21 @@ def main() -> int:
             daily_runner,
             "report_html",
             "daily_report_runner.py must still attach the generated main HTML report artifact.",
+        )
+        require(
+            daily_runner,
+            "build_data_quality_summary",
+            "daily_report_runner.py must summarize data quality in the email body.",
+        )
+        require(
+            daily_runner,
+            "ReportQaFailures",
+            "daily_report_runner.py must publish QA failure CloudWatch metrics.",
+        )
+        require(
+            daily_runner,
+            "ReportQaWarnings",
+            "daily_report_runner.py must publish QA warning CloudWatch metrics.",
         )
         require(
             html_report_generator + dashboard_modern,
@@ -126,6 +156,11 @@ def main() -> int:
             dashboard_modern,
             "Data assertions",
             "Modern dashboard must surface data assertion warnings explicitly.",
+        )
+        require(
+            dashboard_modern,
+            "Critical failures",
+            "Modern dashboard must expose QA failure counts in data assertions cards.",
         )
         require(
             dashboard_modern,
