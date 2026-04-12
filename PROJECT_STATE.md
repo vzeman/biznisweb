@@ -66,11 +66,17 @@ Bootstrap entrypoints:
 - Bootstrap scripts now exist for macOS/Linux and Windows PowerShell
 - VEVO ECS schedule `vevo-daily-report-email` is enabled for `01:00 Europe/Bratislava`
 - VEVO production task definition `vevo-reporting-daily:4` uses full-history runtime range from `2025-05-03` to `yesterday`
+- ROY ECS schedule `roy-daily-report-email` is enabled for `01:00 Europe/Bratislava`
+- ROY production task definition `roy-reporting-daily:2` now uses full-history runtime range from `2025-09-24` to `yesterday`
 - VEVO task role CloudWatch metric policy now allows the active namespace `BizniswebReporting` (and keeps backward-compatible `VevoReporting`)
 - Manual ECS production-equivalent run succeeded on `2026-04-03` with:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
   - SES delivery confirmed in CloudWatch logs
   - no remaining `PutMetricData` warning in the verified log stream
+- Manual ROY ECS production-equivalent run succeeded on `2026-04-12` with:
+  - HTML report saved as `data/roy/report_20250924-20260411.html`
+  - SES delivery confirmed in CloudWatch logs
+  - scheduler target updated to `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:2`
 - Fixed `html_report_generator.py` period-switcher syntax so `Env Check` / `reporting_qa_smoke.py` pass again on GitHub Actions and on local Python 3.11.
 
 ## 6) Integration Notes (External Systems)
@@ -126,7 +132,7 @@ Bootstrap entrypoints:
 
 ## 8) Next Exact Step
 
-- Decide whether ROY should get its own AWS scheduled daily runner or stay manual-only now that the product-demand analytics are already live in `main` and the production image.
+- Verify the next scheduled ROY production email run from `roy-daily-report-email` against task definition `roy-reporting-daily:2`, then decide whether ROY recipients stay single-recipient or should be expanded.
 
 ## 9) Change Log
 
@@ -1400,3 +1406,28 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Operational note:
   - the new Roy analytics blocks are now part of the production image used by the reporting runtime
   - this repo still does not document a separate AWS scheduled daily runner for ROY, so scheduling remains a separate product decision
+
+### 2026-04-12 (ROY scheduled daily runner verification + alignment)
+- Verified that ROY already had an active AWS scheduler and runtime secret:
+  - scheduler: `roy-daily-report-email`
+  - ECS cluster: `vevo-reporting-cluster`
+  - runtime secret: `roy/reporting/runtime-env`
+  - log group: `/ecs/roy-reporting-daily`
+- Found a production drift:
+  - ROY scheduler was still targeting `roy-reporting-daily:1`
+  - task definition revision `1` still used `REPORT_FROM_DATE=2025-09-22`
+  - current project source-of-truth in `projects/roy/settings.json` uses `2025-09-24`
+- Registered new ECS task definition revision `roy-reporting-daily:2` with:
+  - `REPORT_FROM_DATE=2025-09-24`
+  - unchanged cluster/network/security/image/secret wiring
+- Ran a manual production-equivalent ECS task on `roy-reporting-daily:2` and verified in CloudWatch:
+  - task exited with `exitCode=0`
+  - private runtime IP during task execution: `172.31.15.32`
+  - `HTML report saved: data/roy/report_20250924-20260411.html`
+  - `Latest HTML report saved: data/roy/report_latest.html`
+  - `SES message sent`
+- Updated scheduler `roy-daily-report-email` to target:
+  - `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:2`
+- Operational note:
+  - ROY now has a real scheduled AWS daily email runner and it is aligned with the current reporting start date
+  - the current runtime secret still sends ROY report emails to `mil.terem@gmail.com`
