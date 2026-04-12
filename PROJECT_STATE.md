@@ -104,6 +104,7 @@ Bootstrap entrypoints:
 - Legacy `__test` and `__test2` artifacts are no longer part of the active workflow.
 - Env Check CI baseline now validates partial-data rendering in the active HTML layer (`html_report_generator.py` / `dashboard_modern.py`) instead of the retired daily runner rendering path.
 - Production dashboard now keeps `Executive KPI deck` on its own `Daily / Weekly / Monthly` switch while the rest of the report uses a separate global analytics window switcher in the sidebar.
+- Executive KPI deck now supports `All-time` alongside Daily / Weekly / Monthly in both VEVO and ROY reports, using the shared CFO KPI payload and the active modern dashboard shell.
 - Period bundle generation is enabled for plain production reports, so the sidebar analytics switch now works outside of test-tag exports too.
 - Shipping semantics are now normalized to net shipping in runtime config and dashboard labels, but CM taxonomy naming is still mixed between legacy labels and CM1/CM2/CM3 terms in some views.
 - Full QA assertions are now computed into `data_quality` sidecars and surfaced in dashboard/email/CloudWatch.
@@ -131,7 +132,7 @@ Bootstrap entrypoints:
   - top brands by profit
 
 ## 8) Next Exact Step
-
+- Monitor the next production VEVO and ROY daily runner outputs to confirm the new Executive KPI `All-time` toggle is present in the emailed HTML attachments.
 - Verify the next scheduled ROY production email run from `roy-daily-report-email` against task definition `roy-reporting-daily:2`, then decide whether ROY recipients stay single-recipient or should be expanded.
 
 ## 9) Change Log

@@ -253,6 +253,12 @@ def _window_aggregate(
     }
 
 
+def _all_time_window_days(sorted_dates: List[date]) -> int:
+    if not sorted_dates:
+        return 0
+    return max((sorted_dates[-1] - sorted_dates[0]).days + 1, 1)
+
+
 def build_cfo_kpi_payload(
     date_agg: pd.DataFrame,
     export_df: Optional[pd.DataFrame],
@@ -285,6 +291,11 @@ def build_cfo_kpi_payload(
                 return True
         return False
 
+    sorted_dates = sorted(row_by_date.keys())
+    all_time_days = _all_time_window_days(sorted_dates)
+    all_time_prev_end = sorted_dates[0] - timedelta(days=1) if sorted_dates else last_date
+    all_time_year_end = _shift_years(last_date, -1)
+
     day_cur = _window_aggregate(row_by_date, last_date, 1, customer_by_date, order_records, fixed_daily_cost_eur)
     day_prev = _window_aggregate(row_by_date, prev_day, 1, customer_by_date, order_records, fixed_daily_cost_eur) if prev_day in row_by_date else None
     day_week = _window_aggregate(row_by_date, same_weekday_last_week, 1, customer_by_date, order_records, fixed_daily_cost_eur) if same_weekday_last_week in row_by_date else None
@@ -300,6 +311,18 @@ def build_cfo_kpi_payload(
     w30_prev = _window_aggregate(row_by_date, monthly_prev_end, 30, customer_by_date, order_records, fixed_daily_cost_eur) if has_window_data(monthly_prev_end, 30) else None
     w30_year = _window_aggregate(row_by_date, monthly_last_year_end, 30, customer_by_date, order_records, fixed_daily_cost_eur) if has_window_data(monthly_last_year_end, 30) else None
 
+    all_time = _window_aggregate(row_by_date, last_date, all_time_days, customer_by_date, order_records, fixed_daily_cost_eur)
+    all_time_prev = (
+        _window_aggregate(row_by_date, all_time_prev_end, all_time_days, customer_by_date, order_records, fixed_daily_cost_eur)
+        if all_time_days > 0 and has_window_data(all_time_prev_end, all_time_days)
+        else None
+    )
+    all_time_year = (
+        _window_aggregate(row_by_date, all_time_year_end, all_time_days, customer_by_date, order_records, fixed_daily_cost_eur)
+        if all_time_days > 0 and has_window_data(all_time_year_end, all_time_days)
+        else None
+    )
+
     metric_defs = [
         {"key": "revenue", "label": "Revenue", "direction": "up"},
         {"key": "profit", "label": "Profit", "direction": "up"},
@@ -313,11 +336,11 @@ def build_cfo_kpi_payload(
     ]
 
     metric_keys = [metric["key"] for metric in metric_defs]
-    sorted_dates = sorted(row_by_date.keys())
     trend_labels = {
         "daily": {"en": "14d trend", "sk": "Trend 14 dni"},
         "weekly": {"en": "8x 7d trend", "sk": "Trend 8x 7 dni"},
         "monthly": {"en": "8x 30d trend", "sk": "Trend 8x 30 dni"},
+        "all_time": {"en": "12x 30d trend", "sk": "Trend 12x 30 dni"},
     }
 
     def safe_kpi_value(metric_key: str, aggregate: Optional[Dict[str, Optional[float]]]) -> Optional[float]:
@@ -383,6 +406,10 @@ def build_cfo_kpi_payload(
     w30_prev_vals = snapshot(w30_prev) if w30_prev else {}
     w30_year_vals = snapshot(w30_year) if w30_year else {}
 
+    all_time_vals = snapshot(all_time)
+    all_time_prev_vals = snapshot(all_time_prev) if all_time_prev else {}
+    all_time_year_vals = snapshot(all_time_year) if all_time_year else {}
+
     def delta(current: Optional[float], reference: Optional[float]) -> Optional[float]:
         if current is None or reference is None:
             return None
@@ -392,6 +419,7 @@ def build_cfo_kpi_payload(
         "daily": {},
         "weekly": {},
         "monthly": {},
+        "all_time": {},
     }
 
     for metric in metric_defs:
@@ -410,6 +438,10 @@ def build_cfo_kpi_payload(
         comparisons["monthly"][metric_key] = {
             "vs_prev_30d": delta(w30_vals.get(metric_key), w30_prev_vals.get(metric_key)),
             "vs_year": delta(w30_vals.get(metric_key), w30_year_vals.get(metric_key)),
+        }
+        comparisons["all_time"][metric_key] = {
+            "vs_prev_span": delta(all_time_vals.get(metric_key), all_time_prev_vals.get(metric_key)),
+            "vs_year": delta(all_time_vals.get(metric_key), all_time_year_vals.get(metric_key)),
         }
 
     return {
@@ -433,6 +465,12 @@ def build_cfo_kpi_payload(
                 "metrics": w30_vals,
                 "secondary_metrics": secondary_snapshot(w30),
                 "trend": trend_snapshot(30, 8, "monthly"),
+            },
+            "all_time": {
+                "label": "All-time",
+                "metrics": all_time_vals,
+                "secondary_metrics": secondary_snapshot(all_time),
+                "trend": trend_snapshot(30, min(12, len(sorted_dates)), "all_time"),
             },
         },
         "comparisons": comparisons,

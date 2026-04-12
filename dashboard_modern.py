@@ -30,6 +30,7 @@ WINDOW_LABELS = {
     "daily": {"en": "Last day", "sk": "Posledný deň"},
     "weekly": {"en": "Last 7 days", "sk": "Posledných 7 dní"},
     "monthly": {"en": "Last 30 days", "sk": "Posledných 30 dní"},
+    "all_time": {"en": "All-time", "sk": "Za celé obdobie"},
 }
 
 COMPARISON_LABELS = {
@@ -44,6 +45,10 @@ COMPARISON_LABELS = {
     "monthly": {
         "vs_prev_30d": {"en": "vs previous 30d", "sk": "vs predošlých 30 dní"},
         "vs_year": {"en": "vs same month last year", "sk": "vs rovnaké obdobie minulý rok"},
+    },
+    "all_time": {
+        "vs_prev_span": {"en": "vs previous same span", "sk": "vs predchádzajúce rovnaké obdobie"},
+        "vs_year": {"en": "vs same span last year", "sk": "vs rovnaké obdobie minulý rok"},
     },
 }
 
@@ -305,8 +310,8 @@ def _period_switcher_html(period_switcher: Optional[dict]) -> str:
         '<div class="label"><span class="lang-en">Analytics window</span><span class="lang-sk hidden">Analyticke okno</span></div>'
         '<div class="period-summary">'
         f'<strong><span class="lang-en">{current_range_en}</span><span class="lang-sk hidden">{current_range_sk}</span></strong>'
-        '<small><span class="lang-en">Applies to all chart sections below. Executive KPI deck keeps its own Daily / Weekly / Monthly switch.</span>'
-        '<span class="lang-sk hidden">Plati pre vsetky sekcie s grafmi nizsie. Executive KPI deck ma vlastne prepinanie Denne / Tyzdenne / Mesacne.</span></small>'
+        '<small><span class="lang-en">Applies to all chart sections below. Executive KPI deck keeps its own Daily / Weekly / Monthly / All-time switch.</span>'
+        '<span class="lang-sk hidden">Plati pre vsetky sekcie s grafmi nizsie. Executive KPI deck ma vlastne prepinanie Denne / Tyzdenne / Mesacne / Cele obdobie.</span></small>'
         '</div>'
         '<div class="pill-row pill-row-wrap">' + "".join(links) + '</div>'
         '</div>'
@@ -2495,6 +2500,7 @@ def generate_modern_dashboard(
                             <button type="button" class="window-btn" data-window="daily"><span class="lang-en">Daily</span><span class="lang-sk hidden">Denne</span></button>
                             <button type="button" class="window-btn" data-window="weekly"><span class="lang-en">Weekly</span><span class="lang-sk hidden">Týždenne</span></button>
                             <button type="button" class="window-btn" data-window="monthly"><span class="lang-en">Monthly</span><span class="lang-sk hidden">Mesačne</span></button>
+                            <button type="button" class="window-btn" data-window="all_time"><span class="lang-en">All-time</span><span class="lang-sk hidden">Celé obdobie</span></button>
                         </div>
                         <div id="kpiGrid" class="kpi-grid"></div>
                     </div>
