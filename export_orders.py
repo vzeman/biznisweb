@@ -107,6 +107,7 @@ PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
 SHIPPING_SUBSIDY_PER_ORDER = 0.2  # legacy alias; use SHIPPING_NET_PER_ORDER semantics below
 SHIPPING_NET_PER_ORDER = SHIPPING_SUBSIDY_PER_ORDER  # positive = business cost, negative = shipping profit
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
+FIXED_DAILY_COST = 0  # EUR per day; when set, overrides monthly fixed-cost spreading
 EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
 PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for canonical reporting product names
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
@@ -2375,6 +2376,8 @@ class BizniWebExporter:
     
     def get_daily_fixed_cost(self, date: datetime) -> float:
         """Calculate daily fixed cost based on days in the month"""
+        if FIXED_DAILY_COST > 0:
+            return float(FIXED_DAILY_COST)
         days_in_month = calendar.monthrange(date.year, date.month)[1]
         return FIXED_MONTHLY_COST / days_in_month
     
@@ -3773,7 +3776,7 @@ class BizniWebExporter:
         cfo_kpi_payload = build_cfo_kpi_payload(
             date_agg=date_agg,
             export_df=analytics_df,
-            fixed_daily_cost_eur=float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70")),
+            fixed_daily_cost_eur=float(self.get_daily_fixed_cost(pd.Timestamp(date_agg["date"].max())) if not date_agg.empty else 0.0),
         )
 
         # Cost Per Order analysis with campaign attribution
@@ -8568,6 +8571,36 @@ class BizniWebExporter:
             daily_data["returning_revenue"] = 0.0
         daily_data["new_revenue"] = pd.to_numeric(daily_data.get("new_revenue", 0), errors="coerce").fillna(0.0)
         daily_data["returning_revenue"] = pd.to_numeric(daily_data.get("returning_revenue", 0), errors="coerce").fillna(0.0)
+        daily_data["new_revenue_share_pct"] = np.where(
+            daily_data["revenue"] > 0,
+            daily_data["new_revenue"] / daily_data["revenue"] * 100,
+            np.nan,
+        )
+        daily_data["returning_revenue_share_pct"] = np.where(
+            daily_data["revenue"] > 0,
+            daily_data["returning_revenue"] / daily_data["revenue"] * 100,
+            np.nan,
+        )
+        daily_data["ad_spend_share_pct"] = np.where(
+            daily_data["revenue"] > 0,
+            daily_data["total_ad_spend"] / daily_data["revenue"] * 100,
+            np.nan,
+        )
+        daily_data["cm2_margin_pct"] = np.where(
+            daily_data["revenue"] > 0,
+            daily_data["profit_without_fixed"] / daily_data["revenue"] * 100,
+            np.nan,
+        )
+        daily_data["cm3_margin_pct"] = np.where(
+            daily_data["revenue"] > 0,
+            daily_data["profit_with_fixed"] / daily_data["revenue"] * 100,
+            np.nan,
+        )
+        daily_data["cm3_per_ad_eur"] = np.where(
+            daily_data["total_ad_spend"] > 0,
+            daily_data["profit_with_fixed"] / daily_data["total_ad_spend"],
+            np.nan,
+        )
 
         orders = df[["order_num", "customer_email", "purchase_date"]].drop_duplicates(subset=["order_num"]).copy()
         orders["date"] = pd.to_datetime(orders["purchase_date"]).dt.date
@@ -8927,6 +8960,13 @@ class BizniWebExporter:
             'roas_fb': round(total_revenue / total_fb_spend, 2) if total_fb_spend > 0 else 0,
             'roas_google': round(total_revenue / total_google_spend, 2) if total_google_spend > 0 else 0,
             'mer': round(total_revenue / total_ad_spend, 2) if total_ad_spend > 0 else 0,
+            'marketing_spend_share_pct': round(total_ad_spend / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'fixed_overhead_share_pct': round(total_fixed_overhead / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'marketing_and_fixed_share_pct': round((total_ad_spend + total_fixed_overhead) / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'cm2_to_cm3_overhead_drag': round(total_fixed_overhead, 2),
+            'cm2_to_cm3_overhead_drag_pct': round(total_fixed_overhead / total_revenue * 100, 1) if total_revenue > 0 else 0,
+            'cm2_per_ad_eur': round(total_contribution_profit / total_ad_spend, 2) if total_ad_spend > 0 else None,
+            'cm3_per_ad_eur': round(total_company_profit / total_ad_spend, 2) if total_ad_spend > 0 else None,
             'revenue_per_customer': round(total_revenue / total_customers, 2) if total_customers > 0 else 0,
             'orders_per_customer': round(total_orders / total_customers, 2) if total_customers > 0 else 0,
             'cost_per_order': round(total_company_cost / total_orders, 2) if total_orders > 0 else 0,
@@ -9333,6 +9373,9 @@ class BizniWebExporter:
                 "avg_spend",
                 "avg_profit_without_fixed",
                 "avg_profit_with_fixed",
+                "avg_cm3_margin_pct",
+                "avg_returning_revenue_share_pct",
+                "avg_aov",
                 "roas",
             ]
         )
@@ -9357,6 +9400,9 @@ class BizniWebExporter:
                     total_ad_spend=("total_ad_spend", "mean"),
                     profit_without_fixed=("profit_without_fixed", "mean"),
                     profit_with_fixed=("profit_with_fixed", "mean"),
+                    cm3_margin_pct=("cm3_margin_pct", "mean"),
+                    returning_revenue_share_pct=("returning_revenue_share_pct", "mean"),
+                    aov=("aov", "mean"),
                 )
                 .reset_index()
             )
@@ -9367,10 +9413,55 @@ class BizniWebExporter:
                 "avg_spend",
                 "avg_profit_without_fixed",
                 "avg_profit_with_fixed",
+                "avg_cm3_margin_pct",
+                "avg_returning_revenue_share_pct",
+                "avg_aov",
             ]
             spend_effectiveness["avg_profit"] = spend_effectiveness["avg_profit_without_fixed"]
             spend_effectiveness["roas"] = (spend_effectiveness["avg_revenue"] / spend_effectiveness["avg_spend"]).round(2)
             spend_effectiveness["roas"] = spend_effectiveness["roas"].replace([float("inf"), float("-inf")], 0).fillna(0)
+
+        paid_days = daily_data[daily_data["has_any_ads"]].copy()
+        if paid_days.empty:
+            paid_day_cm3_win_rate_pct = None
+            paid_day_returning_revenue_share_pct = None
+            paid_day_aov = None
+        else:
+            paid_day_cm3_win_rate_pct = round(float((paid_days["profit_with_fixed"] > 0).mean() * 100), 1)
+            paid_revenue_total = float(paid_days["revenue"].sum())
+            paid_day_returning_revenue_share_pct = (
+                round(float(paid_days["returning_revenue"].sum() / paid_revenue_total * 100), 1)
+                if paid_revenue_total > 0
+                else None
+            )
+            paid_orders_total = float(paid_days["orders"].sum())
+            paid_day_aov = round(float(paid_revenue_total / paid_orders_total), 2) if paid_orders_total > 0 else None
+
+        best_cm3_range = (
+            spend_effectiveness.loc[spend_effectiveness["avg_profit_with_fixed"].idxmax(), "spend_range"]
+            if not spend_effectiveness.empty
+            else "N/A"
+        )
+        best_cm3_margin_range = (
+            spend_effectiveness.loc[spend_effectiveness["avg_cm3_margin_pct"].idxmax(), "spend_range"]
+            if not spend_effectiveness.empty
+            else "N/A"
+        )
+        decision_summary = {
+            "total_marketing_spend": float((financial_metrics or {}).get("total_ad_spend") or daily_data["total_ad_spend"].sum()),
+            "marketing_spend_share_pct": float((financial_metrics or {}).get("marketing_spend_share_pct") or 0.0),
+            "cm3_profit": float((financial_metrics or {}).get("cm3_profit") or 0.0),
+            "cm3_margin_pct": float((financial_metrics or {}).get("cm3_margin_pct") or 0.0),
+            "cm3_per_ad_eur": (float((financial_metrics or {}).get("cm3_per_ad_eur")) if (financial_metrics or {}).get("cm3_per_ad_eur") is not None else None),
+            "cm2_to_cm3_overhead_drag": float((financial_metrics or {}).get("cm2_to_cm3_overhead_drag") or 0.0),
+            "cm2_to_cm3_overhead_drag_pct": float((financial_metrics or {}).get("cm2_to_cm3_overhead_drag_pct") or 0.0),
+            "paid_days": int(len(paid_days)),
+            "paid_day_cm3_win_rate_pct": paid_day_cm3_win_rate_pct,
+            "paid_day_returning_revenue_share_pct": paid_day_returning_revenue_share_pct,
+            "paid_day_aov": paid_day_aov,
+            "best_cm3_range": str(best_cm3_range),
+            "best_cm3_margin_range": str(best_cm3_margin_range),
+        }
 
         dow_effectiveness = (
             daily_data.groupby("day_of_week")
@@ -9547,9 +9638,10 @@ class BizniWebExporter:
             "best_roas_range": spend_effectiveness.loc[spend_effectiveness["roas"].idxmax(), "spend_range"]
             if not spend_effectiveness.empty
             else "N/A",
-            "best_profit_range": spend_effectiveness.loc[spend_effectiveness["avg_profit"].idxmax(), "spend_range"]
-            if not spend_effectiveness.empty
-            else "N/A",
+            "best_profit_range": best_cm3_range,
+            "best_cm3_range": best_cm3_range,
+            "best_cm3_margin_range": best_cm3_margin_range,
+            "decision_summary": decision_summary,
             "daily_data": daily_data[
                 [
                     "date",
@@ -9569,6 +9661,12 @@ class BizniWebExporter:
                     "returning_orders",
                     "new_revenue",
                     "returning_revenue",
+                    "new_revenue_share_pct",
+                    "returning_revenue_share_pct",
+                    "ad_spend_share_pct",
+                    "cm2_margin_pct",
+                    "cm3_margin_pct",
+                    "cm3_per_ad_eur",
                     "has_fb_ads",
                     "has_google_ads",
                     "has_any_ads",
@@ -9604,6 +9702,21 @@ class BizniWebExporter:
             )
         if not incrementality_comparisons:
             recommendations.append("There are not enough paid and unpaid days in this range yet to judge ad incrementality.")
+        if decision_summary["best_cm3_range"] not in {"N/A", ""}:
+            recommendations.append(
+                f"Current data says the healthiest spend corridor for CM3 is {decision_summary['best_cm3_range']}."
+            )
+        if decision_summary["paid_day_cm3_win_rate_pct"] is not None and decision_summary["paid_day_cm3_win_rate_pct"] < 50:
+            recommendations.append(
+                "Less than half of paid days stay CM3-positive after fixed costs, so scale only inside the profitable spend corridor."
+            )
+        if (
+            decision_summary["paid_day_returning_revenue_share_pct"] is not None
+            and decision_summary["paid_day_returning_revenue_share_pct"] < 30
+        ):
+            recommendations.append(
+                "Paid-day revenue is still too dependent on new customers; CRM and remarketing should improve before pushing budget harder."
+            )
         result["recommendations"] = recommendations
 
         print(
@@ -10356,6 +10469,7 @@ def main():
         default_packaging_cost_per_order=PACKAGING_COST_PER_ORDER,
         default_shipping_subsidy_per_order=SHIPPING_SUBSIDY_PER_ORDER,
         default_fixed_monthly_cost=FIXED_MONTHLY_COST,
+        default_fixed_daily_cost=FIXED_DAILY_COST,
     )
     apply_project_runtime(runtime, globals())
 

@@ -140,7 +140,8 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
         facebook_ads = float(row.get("fb_ads_spend", 0) or 0)
         google_ads = float(row.get("google_ads_spend", 0) or 0)
         total_ads = facebook_ads + google_ads
-        profit = float(row.get("net_profit", 0) or 0)
+        profit = float(row.get("contribution_profit", row.get("net_profit", 0)) or 0)
+        fixed_overhead = float(row.get("fixed_daily_cost", 0) or 0)
         pre_ad_contribution = float(row.get("pre_ad_contribution_profit", 0) or 0)
         contribution_margin_percent = float(row.get("pre_ad_contribution_margin_pct", 0) or 0)
 
@@ -164,6 +165,7 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
                 "google_ads": google_ads,
                 "total_ads": total_ads,
                 "profit": profit,
+                "fixed_overhead": fixed_overhead,
                 "roas": roas,
                 "contribution_margin_percent": contribution_margin_percent,
                 "pre_ad_contribution": pre_ad_contribution,
@@ -189,6 +191,7 @@ def _window_aggregate(
     fb_ads = 0.0
     google_ads = 0.0
     profit = 0.0
+    fixed_overhead = 0.0
     pre_ad_contribution = 0.0
     new_customers = 0
     returning_orders = 0
@@ -204,6 +207,7 @@ def _window_aggregate(
             fb_ads += float(row["facebook_ads"])
             google_ads += float(row["google_ads"])
             profit += float(row["profit"])
+            fixed_overhead += float(row.get("fixed_overhead", 0.0) or 0.0)
             pre_ad_contribution += float(row["pre_ad_contribution"])
 
         customer = customer_by_date.get(d, {})
@@ -222,7 +226,9 @@ def _window_aggregate(
     payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
     unique_customers = _window_unique_customers(order_records, end_date, days)
     ltv = (revenue / unique_customers) if unique_customers > 0 else None
-    company_profit_with_fixed = profit - (fixed_daily_cost_eur * days)
+    fallback_fixed_total = fixed_daily_cost_eur * days
+    fixed_overhead_total = fixed_overhead if fixed_overhead > 0 else fallback_fixed_total
+    company_profit_with_fixed = profit - fixed_overhead_total
     company_margin_with_fixed = (company_profit_with_fixed / revenue * 100) if revenue > 0 else 0.0
 
     return {
@@ -232,6 +238,7 @@ def _window_aggregate(
         "fb_ads": fb_ads,
         "google_ads": google_ads,
         "profit": profit,
+        "fixed_overhead": fixed_overhead_total,
         "pre_ad_contribution": pre_ad_contribution,
         "aov": aov,
         "roas": roas,

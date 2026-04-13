@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-11
+Last updated: 2026-04-13
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -78,6 +78,21 @@ Bootstrap entrypoints:
   - SES delivery confirmed in CloudWatch logs
   - scheduler target updated to `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:2`
 - Fixed `html_report_generator.py` period-switcher syntax so `Env Check` / `reporting_qa_smoke.py` pass again on GitHub Actions and on local Python 3.11.
+- VEVO runtime now supports explicit `fixed_daily_cost`, and March 2026 verification confirms `CM3` now diverges from `CM2` once fixed overhead is applied (`fixed_daily_cost = 70 EUR`).
+- VEVO modern dashboard now surfaces practical marketing decision metrics:
+  - total marketing spend
+  - spend / revenue
+  - CM3 margin
+  - CM3 per ad euro
+  - CM2 -> CM3 drag
+  - paid-day CM3 win rate
+  - returning revenue share on paid days
+  - best CM3 spend ranges
+- VEVO spend-bucket effectiveness table now shows:
+  - CM3 margin
+  - returning revenue share
+  - AOV
+- CFO KPI helper no longer double-subtracts fixed costs when building company-margin views from `date_agg`.
 
 ## 6) Integration Notes (External Systems)
 
@@ -136,6 +151,30 @@ Bootstrap entrypoints:
 - Verify the next scheduled ROY production email run from `roy-daily-report-email` against task definition `roy-reporting-daily:2`, then decide whether ROY recipients stay single-recipient or should be expanded.
 
 ## 9) Change Log
+
+### 2026-04-13
+- Added shared runtime support for explicit per-day fixed overhead via `fixed_daily_cost` while preserving monthly fixed-cost support.
+- Set VEVO project runtime to `fixed_daily_cost = 70` so CM3 metrics include fixed overhead in the active reporting path.
+- Fixed CFO KPI aggregation mismatch:
+  - daily rows now use post-ad profit ex fixed (`contribution_profit`) as the pre-CM3 layer,
+  - company-margin-with-fixed now subtracts actual fixed overhead from the daily rows instead of reapplying a blind constant over already-net profit.
+- Added new marketing decision metrics into the active modern dashboard and payload:
+  - marketing spend / revenue
+  - CM3 per ad euro
+  - CM2 -> CM3 drag
+  - paid-day CM3 win rate
+  - returning revenue share on paid days
+  - best CM3 spend range
+  - best CM3 margin range
+- Expanded spend-bucket effectiveness rows with CM3 margin, returning revenue share, and AOV.
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py reporting_core/runtime.py reporting_core/cfo_kpis.py`
+  - `python export_orders.py --project vevo --from-date 2026-03-01 --to-date 2026-03-31`
+  - `python scripts/reporting_qa_smoke.py`
+- Verification outcome:
+  - `aggregate_by_date_20260301-20260331.csv` shows `fixed_daily_cost = 70.0` and `CM2 != CM3`
+  - `dashboard_payload_20260301-20260331.json` now contains `dashboard.marketing_decision_summary`
+  - rendered HTML contains the new marketing cards and the expanded spend-bucket table
 
 ### 2026-03-30
 - Added env governance baseline: `.env.required`, pre-commit hook, CI env check.
