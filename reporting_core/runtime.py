@@ -26,6 +26,7 @@ class ProjectRuntime:
     packaging_cost_per_order: float
     shipping_subsidy_per_order: float
     fixed_monthly_cost: float
+    fixed_daily_cost: float
     currency_rates_to_eur: Dict[str, float]
     product_expenses: Dict[str, float]
     zero_margin_brands: List[str]
@@ -62,6 +63,7 @@ class ProjectRuntime:
             "shipping_subsidy_per_order": self.shipping_subsidy_per_order,
             "shipping_net_per_order": self.shipping_net_per_order,
             "fixed_monthly_cost": self.fixed_monthly_cost,
+            "fixed_daily_cost": self.fixed_daily_cost,
             "currency_rates_to_eur": dict(self.currency_rates_to_eur),
             "product_expenses": dict(self.product_expenses),
             "zero_margin_brands": list(self.zero_margin_brands),
@@ -88,6 +90,7 @@ def load_project_runtime(
     default_packaging_cost_per_order: float,
     default_shipping_subsidy_per_order: float,
     default_fixed_monthly_cost: float,
+    default_fixed_daily_cost: float,
     default_weather_timezone: str = "Europe/Bratislava",
 ) -> ProjectRuntime:
     project_path = project_dir(project_name)
@@ -144,6 +147,7 @@ def load_project_runtime(
             )
         ),
         fixed_monthly_cost=float(settings.get("fixed_monthly_cost", default_fixed_monthly_cost)),
+        fixed_daily_cost=float(settings.get("fixed_daily_cost", default_fixed_daily_cost)),
         currency_rates_to_eur={
             str(k).upper(): float(v)
             for k, v in dict(settings.get("currency_rates_to_eur", default_currency_rates or {})).items()
@@ -184,6 +188,7 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     target_globals["SHIPPING_SUBSIDY_PER_ORDER"] = float(runtime.shipping_subsidy_per_order)
     target_globals["SHIPPING_NET_PER_ORDER"] = float(runtime.shipping_net_per_order)
     target_globals["FIXED_MONTHLY_COST"] = float(runtime.fixed_monthly_cost)
+    target_globals["FIXED_DAILY_COST"] = float(runtime.fixed_daily_cost)
     target_globals["CURRENCY_RATES_TO_EUR"] = dict(runtime.currency_rates_to_eur)
     target_globals["PRODUCT_EXPENSES"] = dict(runtime.product_expenses)
     target_globals["ZERO_MARGIN_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_margin_brands if str(v).strip()]

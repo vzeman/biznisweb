@@ -912,7 +912,22 @@ def generate_modern_dashboard(
         }
     else:
         ads_effectiveness_payload = {"labels": [], "orders": [], "revenue": [], "fb_spend": [], "google_spend": [], "profit_without_fixed": [], "profit_with_fixed": [], "profit": []}
-    spend_effectiveness_rows = _frame_rows(_to_frame((ads_effectiveness or {}).get("spend_effectiveness")), ["spend_range", "avg_orders", "avg_revenue", "avg_spend", "avg_profit_without_fixed", "avg_profit_with_fixed", "roas"], limit=20)
+    spend_effectiveness_rows = _frame_rows(
+        _to_frame((ads_effectiveness or {}).get("spend_effectiveness")),
+        [
+            "spend_range",
+            "avg_orders",
+            "avg_revenue",
+            "avg_spend",
+            "avg_profit_without_fixed",
+            "avg_profit_with_fixed",
+            "avg_cm3_margin_pct",
+            "avg_returning_revenue_share_pct",
+            "avg_aov",
+            "roas",
+        ],
+        limit=20,
+    )
     dow_effectiveness_rows = _normalize_dow_effectiveness_rows(
         _frame_rows(
             _to_frame((ads_effectiveness or {}).get("dow_effectiveness")),
@@ -1461,6 +1476,7 @@ def generate_modern_dashboard(
     google_source_available = _source_has_metric_coverage(source_health, "google_ads")
     google_cpo_value = _maybe_num((cost_per_order or {}).get("google_cpo")) if google_source_available else None
     ads_correlation_source = ((ads_effectiveness or {}).get("correlations") or {})
+    marketing_decision_summary = (ads_effectiveness or {}).get("decision_summary") or {}
 
     avg_customer_ltv = _maybe_num((financial_metrics or {}).get("avg_customer_ltv"))
     if avg_customer_ltv is None:
@@ -1485,6 +1501,14 @@ def generate_modern_dashboard(
     cm3_profit = _maybe_num((financial_metrics or {}).get("cm3_profit"))
     cm3_margin_pct = _maybe_num((financial_metrics or {}).get("cm3_margin_pct"))
     cm3_profit_per_order = _maybe_num((financial_metrics or {}).get("cm3_profit_per_order"))
+    marketing_spend_share_pct = _maybe_num((financial_metrics or {}).get("marketing_spend_share_pct"))
+    cm3_per_ad_eur = _maybe_num((financial_metrics or {}).get("cm3_per_ad_eur"))
+    fixed_overhead_drag = _maybe_num((financial_metrics or {}).get("cm2_to_cm3_overhead_drag"))
+    fixed_overhead_drag_pct = _maybe_num((financial_metrics or {}).get("cm2_to_cm3_overhead_drag_pct"))
+    paid_day_cm3_win_rate_pct = _maybe_num(marketing_decision_summary.get("paid_day_cm3_win_rate_pct"))
+    paid_day_returning_revenue_share_pct = _maybe_num(marketing_decision_summary.get("paid_day_returning_revenue_share_pct"))
+    best_cm3_range = str(marketing_decision_summary.get("best_cm3_range") or "N/A")
+    best_cm3_margin_range = str(marketing_decision_summary.get("best_cm3_margin_range") or "N/A")
     cm_taxonomy_note = str((financial_metrics or {}).get("cm_taxonomy_note") or "")
     cac_break_even_ratio = None
     if break_even_cac not in (None, 0) and current_fb_cac is not None:
@@ -1643,6 +1667,7 @@ def generate_modern_dashboard(
         "dow_effectiveness_rows": dow_effectiveness_rows,
         "incrementality_primary": incrementality_primary,
         "incrementality_rows": incrementality_rows,
+        "marketing_decision_summary": (ads_effectiveness or {}).get("decision_summary") or {},
         "basket_contribution_rows": basket_contribution_rows,
         "sku_pareto_rows": sku_pareto_rows,
         "attach_rate_rows": attach_rate_rows,
@@ -2040,6 +2065,9 @@ def generate_modern_dashboard(
             f"<td>&euro;{_num(row.get('avg_revenue')):,.2f}</td>"
             f"<td>&euro;{_num(row.get('avg_profit_without_fixed')):,.2f}</td>"
             f"<td>&euro;{_num(row.get('avg_profit_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('avg_cm3_margin_pct')):.1f}%</td>"
+            f"<td>{_num(row.get('avg_returning_revenue_share_pct')):.1f}%</td>"
+            f"<td>&euro;{_num(row.get('avg_aov')):,.2f}</td>"
             f"<td>{_num(row.get('roas')):.2f}x</td>"
             "</tr>"
         )
@@ -2573,6 +2601,18 @@ def generate_modern_dashboard(
                         </div>
                         <p class="muted-note">{escape(cm_taxonomy_note) if cm_taxonomy_note else '<span class="lang-en">CM1 currently excludes payment fees because the reporting model does not ingest them separately.</span><span class="lang-sk hidden">CM1 zatial vylucuje payment fees, pretoze reporting ich zatial nenasava samostatne.</span>'}</p>
                     </div>
+                    <div class="panel chart-card" style="margin-bottom:18px;">
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Marketing spend</span><span class="lang-sk hidden">Marketing spend</span></small><strong>{_format_mini_value_html(_maybe_num((financial_metrics or {}).get("total_ad_spend")), kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Spend / revenue</span><span class="lang-sk hidden">Spend / trzby</span></small><strong>{_format_mini_value_html(marketing_spend_share_pct, kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">CM3 margin</span><span class="lang-sk hidden">CM3 marza</span></small><strong>{_format_mini_value_html(cm3_margin_pct, kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">CM3 per ad euro</span><span class="lang-sk hidden">CM3 na euro reklamy</span></small><strong>{_format_mini_value_html(cm3_per_ad_eur, kind="multiple")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">CM2 to CM3 drag</span><span class="lang-sk hidden">CM2 na CM3 drag</span></small><strong>{_format_mini_value_html(fixed_overhead_drag, kind="currency")}</strong><span class="delta neutral">{_format_mini_value_html(fixed_overhead_drag_pct, kind="percent")}</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Paid-day CM3 win rate</span><span class="lang-sk hidden">Uspesnost paid dni v CM3</span></small><strong>{_format_mini_value_html(paid_day_cm3_win_rate_pct, kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Returning rev. on paid days</span><span class="lang-sk hidden">Vracajuce trzby v paid dnoch</span></small><strong>{_format_mini_value_html(paid_day_returning_revenue_share_pct, kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Best CM3 spend range</span><span class="lang-sk hidden">Najlepsi CM3 spend rozsah</span></small><strong>{escape(best_cm3_range)}</strong><span class="delta neutral">{escape(best_cm3_margin_range)}</span></div>
+                        </div>
+                    </div>
                     <div class="grid-2">
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">Revenue vs total costs</span><span class="lang-sk hidden">Trzby vs celkove naklady</span></h3><p><span class="lang-en">Daily revenue compared with full cost base.</span><span class="lang-sk hidden">Denne trzby oproti plnej nakladovej baze.</span></p></div></div>
@@ -2653,7 +2693,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Spend bucket effectiveness</span><span class="lang-sk hidden">Efektivita spend bucketov</span></h3><p><span class="lang-en">Average output by spend range.</span><span class="lang-sk hidden">Priemerny vystup podla spend rozsahu.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th>ROAS</th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th><span class="lang-en">CM3 margin</span><span class="lang-sk hidden">CM3 marza</span></th><th><span class="lang-en">Returning rev. share</span><span class="lang-sk hidden">Podiel vracajucich sa trz.</span></th><th><span class="lang-en">AOV</span><span class="lang-sk hidden">AOV</span></th><th>ROAS</th></tr></thead>
                                 <tbody>{spend_effectiveness_rows_html}</tbody>
                             </table>
                         </div>
