@@ -39,7 +39,6 @@ from reporting_core import (
 
 ROOT_DIR = Path(__file__).resolve().parent
 DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-CFO_FIXED_DAILY_COST_EUR = float(os.getenv("CFO_FIXED_DAILY_COST_EUR", "70"))
 STABLE_LIVE_ARTIFACT_NAMES = {
     "report_latest.html",
     "dashboard_payload_latest.json",
@@ -384,6 +383,7 @@ def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
             profit = _to_float(row.get("net_profit", ""))
             pre_ad_contribution = _to_float(row.get("pre_ad_contribution_profit", ""))
             contribution_margin_percent = _to_float(row.get("pre_ad_contribution_margin_pct", ""))
+            fixed_daily_cost = _to_float(row.get("fixed_daily_cost", ""))
 
             aov = (revenue / orders) if orders > 0 else 0.0
             roas = (revenue / total_ads) if total_ads > 0 else 0.0
@@ -405,6 +405,7 @@ def _load_daily_rows(date_csv: Path) -> List[Dict[str, Any]]:
                     "google_ads": google_ads,
                     "total_ads": total_ads,
                     "profit": profit,
+                    "fixed_daily_cost": fixed_daily_cost,
                     "roas": roas,
                     "contribution_margin_percent": contribution_margin_percent,
                     "pre_ad_contribution": pre_ad_contribution,
@@ -504,6 +505,7 @@ def _window_aggregate(
     google_ads = 0.0
     profit = 0.0
     pre_ad_contribution = 0.0
+    fixed_overhead = 0.0
     new_customers = 0
     returning_orders = 0
     returning_customers = 0
@@ -519,6 +521,7 @@ def _window_aggregate(
             google_ads += float(row["google_ads"])
             profit += float(row["profit"])
             pre_ad_contribution += float(row["pre_ad_contribution"])
+            fixed_overhead += float(row.get("fixed_daily_cost", 0.0) or 0.0)
 
         customer = customer_by_date.get(d, {})
         new_customers += int(customer.get("new_customers", 0))
@@ -536,7 +539,8 @@ def _window_aggregate(
     payback_orders = (cac / contribution_per_order) if (cac is not None and contribution_per_order > 0) else None
     unique_customers = _window_unique_customers(order_records, end_date, days)
     ltv = (revenue / unique_customers) if unique_customers > 0 else None
-    company_profit_with_fixed = profit - (CFO_FIXED_DAILY_COST_EUR * days)
+    # aggregate_by_date CSV rows already use net_profit, which includes fixed overhead
+    company_profit_with_fixed = profit
     company_margin_with_fixed = (company_profit_with_fixed / revenue * 100) if revenue > 0 else 0.0
 
     return {
@@ -554,6 +558,7 @@ def _window_aggregate(
         "post_ad_margin": post_ad_margin,
         "company_margin_with_fixed": company_margin_with_fixed,
         "company_profit_with_fixed": company_profit_with_fixed,
+        "fixed_overhead": fixed_overhead,
         "contribution_per_order": contribution_per_order,
         "profit_per_order": profit_per_order,
         "new_customers": float(new_customers),
