@@ -18,7 +18,9 @@ on:
       - facebook_ads.py
       - google_ads.py
       - reporting_core/**
-      - projects/vevo/**
+      - projects/**
+      - templates/**
+      - scripts/reporting_qa_smoke.py
       - .github/workflows/build-and-push-ecr.yml
 
 env:
@@ -34,6 +36,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install reporting dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Reporting regression smoke gate
+        run: |
+          python scripts/reporting_qa_smoke.py
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
