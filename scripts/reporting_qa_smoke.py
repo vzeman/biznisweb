@@ -15,8 +15,18 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from export_orders import BizniWebExporter
+from daily_report_runner import _window_aggregate as runner_window_aggregate
+from export_orders import (
+    BizniWebExporter,
+    CURRENCY_RATES_TO_EUR,
+    FIXED_DAILY_COST,
+    FIXED_MONTHLY_COST,
+    PACKAGING_COST_PER_ORDER,
+    PRODUCT_EXPENSES,
+    SHIPPING_SUBSIDY_PER_ORDER,
+)
 from html_report_generator import generate_html_report
+from reporting_core import load_project_runtime, load_project_settings
 from reporting_core.cfo_kpis import build_cfo_kpi_payload
 
 
@@ -347,6 +357,63 @@ def assert_dashboard_consistency_payload_mapping() -> None:
     assert consistency["cac_ok"] is False, consistency
 
 
+def assert_roy_fixed_cost_source_of_truth() -> None:
+    settings = load_project_settings("roy")
+    runtime = load_project_runtime(
+        "roy",
+        settings=settings,
+        legacy_product_expenses=PRODUCT_EXPENSES,
+        default_currency_rates=CURRENCY_RATES_TO_EUR,
+        default_packaging_cost_per_order=PACKAGING_COST_PER_ORDER,
+        default_shipping_subsidy_per_order=SHIPPING_SUBSIDY_PER_ORDER,
+        default_fixed_monthly_cost=FIXED_MONTHLY_COST,
+        default_fixed_daily_cost=FIXED_DAILY_COST,
+    )
+    assert math.isclose(runtime.fixed_monthly_cost, 5500.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
+    assert math.isclose(runtime.fixed_daily_cost, 0.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
+
+
+def assert_daily_runner_fixed_overhead_not_double_subtracted() -> None:
+    row_by_date = {
+        datetime(2026, 4, 1).date(): {
+            "revenue": 100.0,
+            "orders": 1,
+            "total_ads": 10.0,
+            "facebook_ads": 4.0,
+            "google_ads": 6.0,
+            "profit": 20.0,
+            "pre_ad_contribution": 40.0,
+            "fixed_daily_cost": 15.0,
+        },
+        datetime(2026, 4, 2).date(): {
+            "revenue": 200.0,
+            "orders": 2,
+            "total_ads": 20.0,
+            "facebook_ads": 8.0,
+            "google_ads": 12.0,
+            "profit": 50.0,
+            "pre_ad_contribution": 90.0,
+            "fixed_daily_cost": 15.0,
+        },
+    }
+    aggregate = runner_window_aggregate(
+        row_by_date=row_by_date,
+        end_date=datetime(2026, 4, 2).date(),
+        days=2,
+        customer_by_date={},
+        order_records=[],
+    )
+    assert math.isclose(float(aggregate["profit"]), 70.0, rel_tol=1e-9, abs_tol=1e-9), aggregate
+    assert math.isclose(float(aggregate["company_profit_with_fixed"]), 70.0, rel_tol=1e-9, abs_tol=1e-9), aggregate
+    assert math.isclose(
+        float(aggregate["company_margin_with_fixed"]),
+        70.0 / 300.0 * 100.0,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    ), aggregate
+    assert math.isclose(float(aggregate["fixed_overhead"]), 30.0, rel_tol=1e-9, abs_tol=1e-9), aggregate
+
+
 def main() -> int:
     exporter = make_exporter()
     assert_data_assertions_ok(exporter)
@@ -357,6 +424,8 @@ def main() -> int:
     assert_product_expense_coverage(exporter)
     assert_cfo_kpi_layer_invariants()
     assert_dashboard_consistency_payload_mapping()
+    assert_roy_fixed_cost_source_of_truth()
+    assert_daily_runner_fixed_overhead_not_double_subtracted()
     print("reporting_qa_smoke.py: OK")
     return 0
 

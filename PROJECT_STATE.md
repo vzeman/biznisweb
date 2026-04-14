@@ -1540,3 +1540,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - the ROY `prodcheck3` marker payload returned `consistency.* = null`; this did not block the deployed KPI fix or localhost HTML verification, but if ROY is expected to show those consistency deltas in UI, it should get a dedicated follow-up audit
 - Next exact step:
   - optionally audit why ROY `consistency` fields are null in the prodcheck artifact and decide whether that is expected dataset behavior or another dashboard binding gap
+
+### 2026-04-14 (ROY fixed cost source-of-truth raised to 5500 EUR/month)
+- Updated ROY project settings source-of-truth in `projects/roy/settings.json`:
+  - `fixed_monthly_cost`: `4900` -> `5500`
+- Removed runner-level fixed-cost drift in `daily_report_runner.py`:
+  - `_window_aggregate()` no longer subtracts a stale global fallback from `net_profit`
+  - runner company-profit-with-fixed now follows the exported `net_profit` rows, which already include fixed overhead
+- Added regression guards in `scripts/reporting_qa_smoke.py`:
+  - assert ROY runtime loads `fixed_monthly_cost = 5500`
+  - assert daily runner does not double-subtract fixed overhead from aggregate rows
+- Expected runtime effect after production image refresh:
+  - future ROY daily runs will load `5500 EUR/month` from Git-backed project settings
+  - April daily fixed allocation becomes `183.33 EUR/day` before CSV rounding
+- Next exact step:
+  - merge the branch, wait for the guarded ECR build to finish, then verify on a manual ROY ECS task that localhost marker output reports `fixed_monthly_cost = 5500`
