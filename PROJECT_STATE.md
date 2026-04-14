@@ -1492,3 +1492,25 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Operational note:
   - ROY now has a real scheduled AWS daily email runner and it is aligned with the current reporting start date
   - the current runtime secret still sends ROY report emails to `mil.terem@gmail.com`
+
+### 2026-04-14 (production regression gate + host verification hardening)
+- Verified the KPI regression fixes were merged to `main` as PR `#39` and the production image refresh completed:
+  - merge commit on `main`: `28a7c2692b0baa50755b77384e7f0514ac1476b3`
+  - ECR `latest` digest after merge: `sha256:d4188b3febd622e7c308dc08e4aa8a79ca214af4addae86820a2ad689cafb47f`
+- Ran a manual VEVO production-equivalent ECS task on the new image and verified host-level artifact rendering with a localhost marker in CloudWatch:
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/2dbe88c1a6d948e78fded177a3fe108f`
+  - private runtime IP: `172.31.4.112`
+  - marker: `LOCALHOST_MARKER_OK`
+  - verified serialized consistency payload fields (`roas_delta`, `margin_delta`, `cac_delta`) were present in the generated dashboard artifact
+- Found a production-verification gap during the equivalent ROY host check:
+  - the runtime image did not include `curl`, so a strict `curl localhost` host verification wrapper exited `127` before the report marker step
+  - this was a verification-tooling gap, not evidence of the KPI regression returning
+- Hardened production deployment to make this class of issue much harder to reintroduce:
+  - added `curl` into the Docker runtime image so future host checks can use the required localhost verification path directly
+  - added `python scripts/reporting_qa_smoke.py` as a hard gate inside `.github/workflows/build-and-push-ecr.yml` before any ECR login/build/push
+  - broadened build trigger paths to include `projects/**`, `templates/**`, and `scripts/reporting_qa_smoke.py` so runtime-shaping changes cannot silently miss a production image refresh
+- Verification to run after merge of this hardening branch:
+  - GitHub Actions `Build and Push ECR` must pass with the new smoke gate
+  - rerun manual ROY ECS verification with `curl localhost` marker on the refreshed image
+- Next exact step:
+  - merge the hardening branch, wait for the guarded ECR build to finish, then rerun the ROY manual host-level verification and confirm the marker payload in CloudWatch
