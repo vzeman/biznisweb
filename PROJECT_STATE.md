@@ -1514,3 +1514,29 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - rerun manual ROY ECS verification with `curl localhost` marker on the refreshed image
 - Next exact step:
   - merge the hardening branch, wait for the guarded ECR build to finish, then rerun the ROY manual host-level verification and confirm the marker payload in CloudWatch
+
+### 2026-04-14 (production regression gate completed)
+- Merged PR `#40 Harden production reporting deployment gate` into `main`:
+  - merge commit on `main`: `0d8fc675d26cba54dc67b772cb6815d89d6beac6`
+  - PR URL: `https://github.com/vzeman/biznisweb/pull/40`
+- Verified the guarded production image refresh completed successfully:
+  - workflow: `Build and Push ECR`
+  - run: `24381166896`
+  - result: `success`
+  - confirmed smoke gate step `Reporting regression smoke gate` passed before image push
+  - refreshed ECR `latest` digest: `sha256:75124d167ae8cdaa24b13f558b7229e8440fa0ad979530eb705432b74ed38ae8`
+- Ran a manual ROY production-equivalent ECS task on the refreshed image and verified host-level localhost rendering with `curl`:
+  - task definition: `roy-reporting-daily:2`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/03b85008c74249989259296410da2bcc`
+  - private runtime IP: `172.31.46.224`
+  - image digest in task: `sha256:75124d167ae8cdaa24b13f558b7229e8440fa0ad979530eb705432b74ed38ae8`
+  - task exit code: `0`
+  - marker: `LOCALHOST_MARKER_OK`
+  - generated HTML confirmed the geo QA warning text was present (`geo_warning_present=true`)
+- Operational conclusion:
+  - the KPI regression fix is now in production
+  - production image publication is now gated by the reporting smoke test, so a future broken `main` change should fail before it can overwrite ECR `latest`
+- Known follow-up worth auditing separately:
+  - the ROY `prodcheck3` marker payload returned `consistency.* = null`; this did not block the deployed KPI fix or localhost HTML verification, but if ROY is expected to show those consistency deltas in UI, it should get a dedicated follow-up audit
+- Next exact step:
+  - optionally audit why ROY `consistency` fields are null in the prodcheck artifact and decide whether that is expected dataset behavior or another dashboard binding gap
