@@ -93,6 +93,10 @@ Bootstrap entrypoints:
   - returning revenue share
   - AOV
 - CFO KPI helper no longer double-subtracts fixed costs when building company-margin views from `date_agg`.
+- CFO KPI smoke coverage now validates layer mapping and window invariants:
+  - `profit` must reconcile to post-ad profit ex fixed (`contribution_profit`)
+  - `company_margin_with_fixed` secondary value must reconcile to CM3 / net profit
+  - margin percentages must reconcile back to their absolute profit layers
 
 ## 6) Integration Notes (External Systems)
 
@@ -151,6 +155,18 @@ Bootstrap entrypoints:
 - Verify the next scheduled ROY production email run from `roy-daily-report-email` against task definition `roy-reporting-daily:2`, then decide whether ROY recipients stay single-recipient or should be expanded.
 
 ## 9) Change Log
+
+### 2026-04-14
+- Added regression coverage for CFO KPI deck layer mapping in `scripts/reporting_qa_smoke.py`.
+- Smoke QA now asserts for `daily`, `weekly`, `monthly`, and `all_time` that:
+  - revenue reconciles to raw series totals
+  - KPI `profit` reconciles to `contribution_profit`
+  - secondary company-profit value reconciles to `net_profit`
+  - post-ad and company margins recompute correctly from absolute values
+- Hardened `reporting_core/cfo_kpis.py` date parsing so KPI payload building accepts `date`, `datetime`, and `pd.Timestamp`, not only strict `YYYY-MM-DD` strings.
+- Verified locally with:
+  - `python -m py_compile scripts/reporting_qa_smoke.py reporting_core/cfo_kpis.py`
+  - `python scripts/reporting_qa_smoke.py`
 
 ### 2026-04-13
 - Added shared runtime support for explicit per-day fixed overhead via `fixed_daily_cost` while preserving monthly fixed-cost support.

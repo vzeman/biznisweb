@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import math
 import pathlib
 import sys
+from datetime import timedelta
 
 import pandas as pd
 
@@ -12,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from export_orders import BizniWebExporter
+from reporting_core.cfo_kpis import build_cfo_kpi_payload
 
 
 def make_exporter() -> BizniWebExporter:
@@ -206,6 +209,79 @@ def assert_product_expense_coverage(exporter: BizniWebExporter) -> None:
     assert risky["top_fallback_items"][0]["product_sku"] == "SKU-FALLBACK", risky
 
 
+def assert_cfo_kpi_layer_invariants() -> None:
+    date_agg = pd.DataFrame(
+        {
+            "date": pd.date_range("2026-03-01", periods=3, freq="D"),
+            "total_quantity": [3, 4, 2],
+            "total_revenue": [100.0, 200.0, 50.0],
+            "product_expense": [30.0, 60.0, 20.0],
+            "unique_orders": [2, 4, 1],
+            "fb_ads_spend": [5.0, 10.0, 2.0],
+            "google_ads_spend": [5.0, 10.0, 3.0],
+            "packaging_cost": [2.0, 4.0, 1.0],
+            "shipping_net_cost": [3.0, 6.0, 1.0],
+            "pre_ad_contribution_profit": [65.0, 130.0, 28.0],
+            "pre_ad_contribution_margin_pct": [65.0, 65.0, 56.0],
+            "contribution_profit": [55.0, 110.0, 23.0],
+            "net_profit": [45.0, 90.0, 18.0],
+            "fixed_daily_cost": [10.0, 20.0, 5.0],
+        }
+    )
+
+    payload = build_cfo_kpi_payload(date_agg=date_agg, export_df=None, fixed_daily_cost_eur=999.0)
+    assert payload["default_window"] == "monthly", payload
+
+    date_agg = date_agg.copy()
+    date_agg["date"] = pd.to_datetime(date_agg["date"]).dt.date
+    last_date = date_agg["date"].max()
+    first_date = date_agg["date"].min()
+    all_time_days = (last_date - first_date).days + 1
+
+    def expected(days: int) -> dict:
+        start_date = last_date - timedelta(days=days - 1)
+        window = date_agg[(date_agg["date"] >= start_date) & (date_agg["date"] <= last_date)]
+        revenue = float(window["total_revenue"].sum())
+        profit_without_fixed = float(window["contribution_profit"].sum())
+        profit_with_fixed = float(window["net_profit"].sum())
+        orders = float(window["unique_orders"].sum())
+        return {
+            "revenue": revenue,
+            "profit": profit_without_fixed,
+            "company_profit": profit_with_fixed,
+            "orders": orders,
+            "post_margin": (profit_without_fixed / revenue * 100) if revenue > 0 else 0.0,
+            "company_margin": (profit_with_fixed / revenue * 100) if revenue > 0 else 0.0,
+        }
+
+    def assert_close(actual: float, exp: float, label: str) -> None:
+        assert math.isclose(actual, exp, rel_tol=1e-9, abs_tol=1e-9), f"{label}: {actual} != {exp}"
+
+    for window_key, days in {"daily": 1, "weekly": 7, "monthly": 30, "all_time": all_time_days}.items():
+        current = payload["windows"][window_key]
+        metrics = current["metrics"]
+        secondary = current["secondary_metrics"]
+        exp = expected(days)
+
+        assert_close(float(metrics["revenue"]), exp["revenue"], f"{window_key} revenue")
+        assert_close(float(metrics["profit"]), exp["profit"], f"{window_key} profit_without_fixed")
+        assert_close(float(secondary["company_margin_with_fixed"]), exp["company_profit"], f"{window_key} company_profit_with_fixed")
+        assert_close(float(metrics["orders"]), exp["orders"], f"{window_key} orders")
+        assert_close(float(metrics["post_ad_margin"]), exp["post_margin"], f"{window_key} post_ad_margin")
+        assert_close(
+            float(metrics["company_margin_with_fixed"]),
+            exp["company_margin"],
+            f"{window_key} company_margin_with_fixed",
+        )
+
+    assert not math.isclose(
+        float(payload["windows"]["monthly"]["metrics"]["profit"]),
+        float(payload["windows"]["monthly"]["secondary_metrics"]["company_margin_with_fixed"]),
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    ), payload["windows"]["monthly"]
+
+
 def main() -> int:
     exporter = make_exporter()
     assert_data_assertions_ok(exporter)
@@ -213,6 +289,7 @@ def main() -> int:
     assert_geo_warning(exporter)
     assert_margin_stability(exporter)
     assert_product_expense_coverage(exporter)
+    assert_cfo_kpi_layer_invariants()
     print("reporting_qa_smoke.py: OK")
     return 0
 

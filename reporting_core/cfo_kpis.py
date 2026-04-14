@@ -124,12 +124,19 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
         return rows
 
     for _, row in date_agg.iterrows():
-        date_value = str(row.get("date") or "").strip()
-        if not date_value:
+        date_value = row.get("date")
+        if pd.isna(date_value):
             continue
         try:
-            d = datetime.strptime(date_value, "%Y-%m-%d").date()
-        except ValueError:
+            if isinstance(date_value, pd.Timestamp):
+                d = date_value.date()
+            elif isinstance(date_value, datetime):
+                d = date_value.date()
+            elif isinstance(date_value, date):
+                d = date_value
+            else:
+                d = pd.to_datetime(str(date_value).strip()).date()
+        except (TypeError, ValueError):
             continue
 
         revenue = float(row.get("total_revenue", 0) or 0)
