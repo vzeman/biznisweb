@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import math
 import pathlib
+import re
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 
@@ -14,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from export_orders import BizniWebExporter
+from html_report_generator import generate_html_report
 from reporting_core.cfo_kpis import build_cfo_kpi_payload
 
 
@@ -62,6 +65,33 @@ def base_cost_per_order() -> dict:
             "total_orders": 100.0,
         },
     }
+
+
+def sample_date_agg() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "date": pd.date_range("2026-03-01", periods=3, freq="D"),
+            "total_items": [3, 5, 2],
+            "total_quantity": [3, 4, 2],
+            "total_revenue": [100.0, 200.0, 50.0],
+            "product_expense": [30.0, 60.0, 20.0],
+            "unique_orders": [2, 4, 1],
+            "fb_ads_spend": [5.0, 10.0, 2.0],
+            "google_ads_spend": [5.0, 10.0, 3.0],
+            "packaging_cost": [2.0, 4.0, 1.0],
+            "shipping_net_cost": [3.0, 6.0, 1.0],
+            "pre_ad_contribution_profit": [65.0, 130.0, 28.0],
+            "pre_ad_contribution_margin_pct": [65.0, 65.0, 56.0],
+            "pre_ad_contribution_profit_per_order": [32.5, 32.5, 28.0],
+            "contribution_profit": [55.0, 110.0, 23.0],
+            "contribution_profit_per_order": [27.5, 27.5, 23.0],
+            "post_ad_contribution_margin_pct": [55.0, 55.0, 46.0],
+            "net_profit": [45.0, 90.0, 18.0],
+            "fixed_daily_cost": [10.0, 20.0, 5.0],
+            "total_cost": [55.0, 110.0, 32.0],
+            "roi_percent": [81.82, 81.82, 56.25],
+        }
+    )
 
 
 def assert_data_assertions_ok(exporter: BizniWebExporter) -> None:
@@ -143,6 +173,26 @@ def assert_geo_warning(exporter: BizniWebExporter) -> None:
     assert qa["unknown_country_rate"] == 10.0, qa
 
 
+def assert_geo_google_spend_warning(exporter: BizniWebExporter) -> None:
+    qa = exporter._build_geo_qa(
+        country_analysis=pd.DataFrame({"country": ["sk"], "orders": [100]}),
+        geo_profitability={
+            "table": pd.DataFrame(
+                {
+                    "country": ["sk"],
+                    "orders": [100],
+                    "revenue": [1500.0],
+                    "confidence_status": ["ready"],
+                }
+            )
+        },
+        date_agg=sample_date_agg(),
+    )
+    assert qa["status"] == "warning", qa
+    assert math.isclose(float(qa["unallocated_google_spend"]), 18.0, rel_tol=1e-9, abs_tol=1e-9), qa
+    assert any("Google Ads country allocation" in msg for msg in qa["warnings"]), qa
+
+
 def assert_margin_stability(exporter: BizniWebExporter) -> None:
     stable = exporter._build_margin_stability_qa(
         pd.DataFrame(
@@ -210,24 +260,7 @@ def assert_product_expense_coverage(exporter: BizniWebExporter) -> None:
 
 
 def assert_cfo_kpi_layer_invariants() -> None:
-    date_agg = pd.DataFrame(
-        {
-            "date": pd.date_range("2026-03-01", periods=3, freq="D"),
-            "total_quantity": [3, 4, 2],
-            "total_revenue": [100.0, 200.0, 50.0],
-            "product_expense": [30.0, 60.0, 20.0],
-            "unique_orders": [2, 4, 1],
-            "fb_ads_spend": [5.0, 10.0, 2.0],
-            "google_ads_spend": [5.0, 10.0, 3.0],
-            "packaging_cost": [2.0, 4.0, 1.0],
-            "shipping_net_cost": [3.0, 6.0, 1.0],
-            "pre_ad_contribution_profit": [65.0, 130.0, 28.0],
-            "pre_ad_contribution_margin_pct": [65.0, 65.0, 56.0],
-            "contribution_profit": [55.0, 110.0, 23.0],
-            "net_profit": [45.0, 90.0, 18.0],
-            "fixed_daily_cost": [10.0, 20.0, 5.0],
-        }
-    )
+    date_agg = sample_date_agg()
 
     payload = build_cfo_kpi_payload(date_agg=date_agg, export_df=None, fixed_daily_cost_eur=999.0)
     assert payload["default_window"] == "monthly", payload
@@ -282,14 +315,48 @@ def assert_cfo_kpi_layer_invariants() -> None:
     ), payload["windows"]["monthly"]
 
 
+def assert_dashboard_consistency_payload_mapping() -> None:
+    date_agg = sample_date_agg()
+    cfo_kpi_payload = build_cfo_kpi_payload(date_agg=date_agg, export_df=None, fixed_daily_cost_eur=15.0)
+    html = generate_html_report(
+        date_agg=date_agg,
+        date_product_agg=pd.DataFrame(),
+        items_agg=pd.DataFrame(),
+        date_from=datetime(2026, 3, 1),
+        date_to=datetime(2026, 3, 3),
+        report_title="QA Smoke",
+        consistency_checks={
+            "roas_delta": 0.1234,
+            "company_margin_delta_pct": -0.02,
+            "cac_delta": 0.56,
+            "roas_ok": False,
+            "company_margin_ok": True,
+            "cac_ok": False,
+        },
+        cfo_kpi_payload=cfo_kpi_payload,
+    )
+    match = re.search(r'<script id="report-dashboard-json" type="application/json">(.*?)</script>', html, re.S)
+    assert match, "dashboard payload script missing"
+    payload = json.loads(match.group(1))
+    consistency = payload["consistency"]
+    assert math.isclose(float(consistency["roas_delta"]), 0.1234, rel_tol=1e-9, abs_tol=1e-9), consistency
+    assert math.isclose(float(consistency["margin_delta"]), -0.02, rel_tol=1e-9, abs_tol=1e-9), consistency
+    assert math.isclose(float(consistency["cac_delta"]), 0.56, rel_tol=1e-9, abs_tol=1e-9), consistency
+    assert consistency["roas_ok"] is False, consistency
+    assert consistency["margin_ok"] is True, consistency
+    assert consistency["cac_ok"] is False, consistency
+
+
 def main() -> int:
     exporter = make_exporter()
     assert_data_assertions_ok(exporter)
     assert_refund_registry_failure(exporter)
     assert_geo_warning(exporter)
+    assert_geo_google_spend_warning(exporter)
     assert_margin_stability(exporter)
     assert_product_expense_coverage(exporter)
     assert_cfo_kpi_layer_invariants()
+    assert_dashboard_consistency_payload_mapping()
     print("reporting_qa_smoke.py: OK")
     return 0
 

@@ -164,8 +164,13 @@ Bootstrap entrypoints:
   - secondary company-profit value reconciles to `net_profit`
   - post-ad and company margins recompute correctly from absolute values
 - Hardened `reporting_core/cfo_kpis.py` date parsing so KPI payload building accepts `date`, `datetime`, and `pd.Timestamp`, not only strict `YYYY-MM-DD` strings.
+- Fixed modern dashboard `consistency` payload mapping so ROAS / margin / CAC deltas and OK flags now serialize from the live validation keys instead of stale field names.
+- Geo QA now warns explicitly when country profitability excludes non-zero Google Ads spend, because country rows currently model Facebook-attributed spend only.
+- Expanded `scripts/reporting_qa_smoke.py` with regressions for:
+  - dashboard consistency payload serialization
+  - geo profitability warning when Google spend is present but not country-attributed
 - Verified locally with:
-  - `python -m py_compile scripts/reporting_qa_smoke.py reporting_core/cfo_kpis.py`
+  - `python -m py_compile dashboard_modern.py export_orders.py scripts/reporting_qa_smoke.py`
   - `python scripts/reporting_qa_smoke.py`
 
 ### 2026-04-13

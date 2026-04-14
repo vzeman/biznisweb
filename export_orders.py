@@ -935,10 +935,16 @@ class BizniWebExporter:
             "chart_min_orders": settings["chart_min_orders"],
         }
 
-    def _build_geo_qa(self, country_analysis: Optional[pd.DataFrame], geo_profitability: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_geo_qa(
+        self,
+        country_analysis: Optional[pd.DataFrame],
+        geo_profitability: Optional[Dict[str, Any]],
+        date_agg: Optional[pd.DataFrame] = None,
+    ) -> Dict[str, Any]:
         country_df = country_analysis.copy() if isinstance(country_analysis, pd.DataFrame) else pd.DataFrame()
         geo_table = (geo_profitability or {}).get("table")
         geo_df = geo_table.copy() if isinstance(geo_table, pd.DataFrame) else pd.DataFrame()
+        date_df = date_agg.copy() if isinstance(date_agg, pd.DataFrame) else pd.DataFrame()
 
         warnings: List[str] = []
         ignore_count = 0
@@ -950,6 +956,7 @@ class BizniWebExporter:
         observe_revenue = 0.0
         total_orders = 0.0
         total_revenue = 0.0
+        unallocated_google_spend = 0.0
 
         if not geo_df.empty and "confidence_status" in geo_df.columns:
             if "orders" in geo_df.columns:
@@ -972,6 +979,14 @@ class BizniWebExporter:
             if observe_count > 0:
                 warnings.append(
                     f"{observe_count} country row(s) are in observe mode only. Treat margin/CPO reads as directional rather than decisive."
+                )
+        if not date_df.empty and "google_ads_spend" in date_df.columns:
+            unallocated_google_spend = float(
+                pd.to_numeric(date_df["google_ads_spend"], errors="coerce").fillna(0).sum()
+            )
+            if not geo_df.empty and unallocated_google_spend > 0.05:
+                warnings.append(
+                    f"Geo profitability excludes Google Ads country allocation, so EUR {unallocated_google_spend:.2f} of Google spend is not reflected in the country contribution rows."
                 )
 
         unknown_country_rate = None
@@ -1015,6 +1030,7 @@ class BizniWebExporter:
             "observe_revenue_share_pct": observe_revenue_share_pct,
             "low_confidence_order_share_pct": round(ignore_order_share_pct + observe_order_share_pct, 2),
             "low_confidence_revenue_share_pct": round(ignore_revenue_share_pct + observe_revenue_share_pct, 2),
+            "unallocated_google_spend": round(unallocated_google_spend, 2),
         }
 
     def _build_data_assertions_qa(
@@ -3794,6 +3810,7 @@ class BizniWebExporter:
         source_health.setdefault("qa", {})["geo"] = self._build_geo_qa(
             country_analysis=country_analysis,
             geo_profitability=geo_profitability,
+            date_agg=date_agg,
         )
         source_health.setdefault("qa", {})["data_assertions"] = self._build_data_assertions_qa(
             financial_metrics=financial_metrics,
