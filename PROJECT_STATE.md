@@ -1555,3 +1555,31 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - April daily fixed allocation becomes `183.33 EUR/day` before CSV rounding
 - Next exact step:
   - merge the branch, wait for the guarded ECR build to finish, then verify on a manual ROY ECS task that localhost marker output reports `fixed_monthly_cost = 5500`
+
+### 2026-04-14 (ROY fixed cost 5500 EUR/month live in production)
+- Merged PR `#42 Raise ROY fixed cost to 5500 EUR` into `main`:
+  - merge commit on `main`: `981f17f444074fb02b5551512ac8026067d3d6f6`
+  - PR URL: `https://github.com/vzeman/biznisweb/pull/42`
+- Verified the guarded production image refresh completed successfully:
+  - workflow: `Build and Push ECR`
+  - run: `24381555697`
+  - result: `success`
+  - confirmed smoke gate step `Reporting regression smoke gate` passed before image push
+- Ran a manual ROY production-equivalent ECS task on the refreshed image and verified runtime config directly on host via `curl localhost` marker:
+  - schedule/service name: `roy-daily-report-email`
+  - task definition: `roy-reporting-daily:2`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/cb2ad219d0ff45bd8aeabd7b365cd4d5`
+  - private runtime IP: `172.31.34.177`
+  - image digest in task: `sha256:466427162365093665b5727c5e3d8b765bf40937b378b2248caa269579ccd7dd`
+  - task exit code: `0`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker: `LOCALHOST_MARKER_OK`
+  - marker payload:
+    - `fixed_monthly_cost = 5500.0`
+    - `fixed_daily_cost_override = 0.0`
+    - `daily_fixed_cost_for_2026_04_15 = 183.33333333333334`
+- Operational conclusion:
+  - tomorrow's ROY scheduled run will start using `5500 EUR/month`
+  - because the value lives in Git-backed project settings on `main` and the production image build is now gated plus triggered by `projects/**`, it should not silently flip back to `4900` without another explicit code/config change
+- Next exact step:
+  - no immediate action required unless ROY fixed costs change again in source-of-truth
