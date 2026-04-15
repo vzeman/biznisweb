@@ -11,6 +11,8 @@ Do not treat any local Desktop/Downloads scripts as authoritative.
 - Never keep required runtime/deploy logic only on one PC.
 - Production/runtime secrets must not be committed.
 - Update `PROJECT_STATE.md` after each major change.
+- This repository owns Reporting only; Doklady and OpenClaw must live in their own repositories.
+- Treat branches as short-lived work units, not as long-lived product buckets.
 
 ## Multi-PC Workflow
 
@@ -88,4 +90,16 @@ This creates a new `projects/<slug>/` bundle from `templates/reporting-client/`.
 
 This repo contains the reporting codebase.
 OpenClaw and Doklady may integrate with it, but they are not managed here.
+Canonical product split:
+- Reporting: `vzeman/biznisweb`
+- Doklady: `Terem21/doklady-saas`
+- OpenClaw: `Terem21/openclaw-agents-platform`
+
+## Branch discipline
+
+- `main` is the source of truth for reporting.
+- Use short-lived branches for concrete work only, for example `codex/roy-inventory-metrics`.
+- Delete merged branches quickly so GitHub branch lists stay operationally readable.
+- If a branch starts representing a separate product, stop and move that product into its own repository.
+
 Use `PROJECT_STATE.md` only for this repo plus short integration notes.

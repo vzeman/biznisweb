@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-13
+Last updated: 2026-04-15
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -33,8 +33,10 @@ Purpose: repo-scoped handoff and execution state for this codebase.
 
 ## 3) Current Branching / Workflow Rules
 
-- Reporting work stays on `main`
+- Reporting work stays in this repository on `main`
+- Doklady work moved out to the standalone `Terem21/doklady-saas` repository
 - OpenClaw work was moved out to the standalone `openclaw-agents-platform` repository
+- Use short-lived task branches only; branches are not product boundaries
 - `main` only through reviewed merge
 - Before work: `git fetch --all --prune && git pull --rebase`
 - After major step: commit + push immediately
@@ -103,6 +105,7 @@ Bootstrap entrypoints:
 ### Doklady
 - Integration is API-level only
 - Doklady remains system-of-record for accounting document state
+- Canonical code repository: `Terem21/doklady-saas`
 - Do not store Doklady runtime assumptions here beyond API contract references
 
 ### OpenClaw
@@ -151,10 +154,15 @@ Bootstrap entrypoints:
   - top brands by profit
 
 ## 8) Next Exact Step
+- Review the remaining active reporting branches (`codex/qa-geo-guardrails`, `codex/roy-meta-project-env`) and either open/merge PRs or close them intentionally.
 - Monitor the next production VEVO and ROY daily runner outputs to confirm the new Executive KPI `All-time` toggle is present in the emailed HTML attachments.
-- Verify the next scheduled ROY production email run from `roy-daily-report-email` against task definition `roy-reporting-daily:2`, then decide whether ROY recipients stay single-recipient or should be expanded.
 
 ## 9) Change Log
+
+### 2026-04-15
+- Split Doklady into its own GitHub repository: `Terem21/doklady-saas`.
+- Reporting workflow now treats repositories as product boundaries and branches as short-lived task scopes only.
+- Prepared reporting repo branch cleanup by identifying merged/superseded remote branches versus the still-active reporting branches.
 
 ### 2026-04-14
 - Added regression coverage for CFO KPI deck layer mapping in `scripts/reporting_qa_smoke.py`.
