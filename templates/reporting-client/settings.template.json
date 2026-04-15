@@ -8,6 +8,14 @@
   "shipping_net_per_order": 0.0,
   "fixed_monthly_cost": 0,
   "fixed_daily_cost": 0,
+  "inventory_model": {
+    "enabled": false,
+    "lang_code": "SK",
+    "critical_days_of_cover": 14,
+    "warning_days_of_cover": 30,
+    "watch_days_of_cover": 45,
+    "dead_stock_days": 90
+  },
   "excluded_order_statuses": [],
   "weather": {
     "enabled": false,

@@ -7,6 +7,14 @@
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 5500,
+  "inventory_model": {
+    "enabled": true,
+    "lang_code": "SK",
+    "critical_days_of_cover": 14,
+    "warning_days_of_cover": 30,
+    "watch_days_of_cover": 45,
+    "dead_stock_days": 90
+  },
   "excluded_order_statuses": [
     "Stripe - cancelled",
     "Stripe - expired",
