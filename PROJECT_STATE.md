@@ -164,16 +164,21 @@ Bootstrap entrypoints:
   - stock-risk watchlist with projected stockout dates
   - dead-stock candidates
   - inventory cost-coverage diagnostics
+  - restock-priority scoring
+  - revenue-at-risk rollups
+  - inventory turns by brand / family
+  - forecast backtest accuracy
 
 ## 8) Next Exact Step
-- Review the live Roy inventory metrics with the business owner and confirm alert semantics:
+- Review the live Roy inventory metrics with the business owner and confirm the alert semantics for the now-implemented inventory layer:
   - which stock-risk thresholds should trigger action (`Critical`, `Low`, `Watch`)
+  - whether alerting should trigger on 30-day risk only or also on the 45-day watch bucket
   - whether inventory value should be watched at cost only or also at retail
   - which dead-stock cutoff should be treated as operationally actionable
-- After threshold approval, turn the current Roy inventory snapshot into explicit alerting outputs:
-  - low-stock notifications for products with recent demand
-  - forecasted stockout warning horizon
-  - restock-priority ordering that combines forecast demand, gross margin, and current cover days
+- Before automating alerts, tighten the forecast model because current backtest accuracy is weak on the first live sample:
+  - reduce over-forecast bias on volatile SKUs
+  - decide whether alerts should use recent-demand fallback, forecast, or a weighted blend by confidence
+  - then turn the validated logic into explicit low-stock / stockout alert outputs
 
 ## 9) Change Log
 
@@ -192,31 +197,56 @@ Bootstrap entrypoints:
   - inventory valuation table
   - stock-risk watchlist
   - dead-stock table
+- Extended Roy inventory analytics with operational inventory metrics:
+  - restock-priority score and bucket (`Urgent`, `High`, `Plan`, `Monitor`)
+  - 30d / 45d revenue-at-risk and profit-at-risk rollups
+  - dead-stock share on total inventory value / units
+  - negative-stock unit-gap tracking
+  - inventory turns and estimated days-in-inventory by brand and product family
+  - forecast holdout backtest accuracy rows and summary KPIs
+- Added Roy dashboard rendering for the extra inventory operations layer:
+  - revenue-at-risk table
+  - restock-priority table
+  - inventory turns by family
+  - inventory turns by brand
+  - forecast backtest accuracy table
 - Added explicit `inventory_model` settings to:
   - `projects/roy/settings.json`
   - `templates/reporting-client/settings.template.json`
 - Verified locally with:
   - `python -m py_compile export_orders.py dashboard_modern.py`
   - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-14 --output-tag inventory_probe`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-14 --output-tag inventory_ops`
 - Verification outcome on live Roy data:
   - Biznisweb inventory snapshot fetch succeeded (`56` pages, `2370` warehouse rows)
   - full-history Roy dashboard payload now reports:
     - `1669` tracked products
-    - `417` products with stock
-    - `43101` available units
-    - `EUR 120176.49` inventory cost value
-    - `EUR 343958.90` inventory retail value
-    - `94.39%` unit coverage by mapped costs
-    - `87.81%` retail-value coverage by mapped costs
-    - `29` critical / negative-stock items
-    - `36` items at 30-day stock risk
-    - `14` out-of-stock items with recent demand
-    - `330` dead-stock candidates worth `EUR 1866.59` at mapped cost
+    - `410` products with stock
+    - `12347` available units
+    - `EUR 50910.11` inventory cost value
+    - `EUR 183338.35` inventory retail value
+    - `81.28%` unit coverage by mapped costs
+    - `78.48%` retail-value coverage by mapped costs
+    - `32` critical / negative-stock items
+    - `39` items at 30-day stock risk
+    - `43` items at 45-day stock risk
+    - `17` out-of-stock items with recent demand
+    - `10` negative-stock products with `115` units below zero
+    - `328` dead-stock candidates worth `EUR 1866.59` at mapped cost
+    - dead-stock share now surfaces as `3.67%` of mapped inventory cost and `17.08%` of on-hand units
+    - revenue at risk now surfaces as `EUR 18336.52` over the 30-day risk bucket and `EUR 20802.32` over the 45-day bucket
+    - current restock watchlist contains `31` urgent and `7` high-priority products
+    - forecast backtest currently covers `25` products, but the first live sample is still weak (`74.77%` WAPE, `12.00%` within 20% error)
   - rendered HTML now contains the new sections:
     - `Inventory snapshot`
     - `Inventory valuation`
     - `Stock risk watchlist`
     - `Dead stock candidates`
+    - `Revenue at risk`
+    - `Restock priority`
+    - `Inventory turns by family`
+    - `Inventory turns by brand`
+    - `Forecast backtest accuracy`
 - Split Doklady into its own GitHub repository: `Terem21/doklady-saas`.
 - Reporting workflow now treats repositories as product boundaries and branches as short-lived task scopes only.
 - Prepared reporting repo branch cleanup by identifying merged/superseded remote branches versus the still-active reporting branches.

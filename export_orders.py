@@ -1776,6 +1776,13 @@ class BizniWebExporter:
 
         return "other_unknown", "Other / unknown"
 
+    def _extract_product_family(self, label: Any) -> Tuple[str, str]:
+        family_key, family_label = self._match_named_group(label, self._product_family_groups_config())
+        if family_key:
+            return family_key, family_label
+
+        return "other_unclassified", "Other / unclassified"
+
     def fetch_product_inventory_snapshot(self, lang_code: str = "SK", page_limit: int = 30) -> pd.DataFrame:
         """Fetch current product inventory snapshot from BizniWeb."""
         print("\nFetching product inventory snapshot...")
@@ -8276,6 +8283,11 @@ class BizniWebExporter:
                 "inventory_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
+                "restock_priority_rows": pd.DataFrame(),
+                "revenue_at_risk_rows": pd.DataFrame(),
+                "brand_turn_rows": pd.DataFrame(),
+                "family_turn_rows": pd.DataFrame(),
+                "forecast_accuracy_rows": pd.DataFrame(),
                 "brand_revenue_rows": pd.DataFrame(),
                 "brand_profit_rows": pd.DataFrame(),
             }
@@ -8295,6 +8307,11 @@ class BizniWebExporter:
                 "inventory_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
+                "restock_priority_rows": pd.DataFrame(),
+                "revenue_at_risk_rows": pd.DataFrame(),
+                "brand_turn_rows": pd.DataFrame(),
+                "family_turn_rows": pd.DataFrame(),
+                "forecast_accuracy_rows": pd.DataFrame(),
                 "brand_revenue_rows": pd.DataFrame(),
                 "brand_profit_rows": pd.DataFrame(),
             }
@@ -8312,6 +8329,11 @@ class BizniWebExporter:
                 "inventory_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
+                "restock_priority_rows": pd.DataFrame(),
+                "revenue_at_risk_rows": pd.DataFrame(),
+                "brand_turn_rows": pd.DataFrame(),
+                "family_turn_rows": pd.DataFrame(),
+                "forecast_accuracy_rows": pd.DataFrame(),
                 "brand_revenue_rows": pd.DataFrame(),
                 "brand_profit_rows": pd.DataFrame(),
             }
@@ -8391,6 +8413,13 @@ class BizniWebExporter:
                 return "Medium"
             return "Low"
 
+        def _forecast_abs_pct_error(actual_value: float, forecast_value: float) -> float:
+            actual = float(actual_value or 0.0)
+            forecast = float(forecast_value or 0.0)
+            if actual <= 0:
+                return 0.0 if forecast <= 0 else 100.0
+            return abs(forecast - actual) / actual * 100.0
+
         week_index = pd.DatetimeIndex([])
         if not weekly.empty:
             week_index = pd.date_range(
@@ -8410,6 +8439,7 @@ class BizniWebExporter:
         growing_rows: List[Dict[str, Any]] = []
         declining_rows: List[Dict[str, Any]] = []
         forecast_rows: List[Dict[str, Any]] = []
+        forecast_accuracy_rows: List[Dict[str, Any]] = []
         latest_sale = pd.to_datetime(demand_df["purchase_datetime"]).max()
         snapshot_ts = pd.Timestamp(datetime.now())
         demand_anchor = latest_sale.normalize() if pd.notna(latest_sale) else snapshot_ts.normalize()
@@ -8421,6 +8451,7 @@ class BizniWebExporter:
             .agg(
                 recent_30d_units=("item_quantity", "sum"),
                 recent_30d_revenue=("item_total_without_tax", "sum"),
+                recent_30d_profit_with_fixed=("cm3_profit", "sum"),
             )
             .reset_index()
         )
@@ -8430,6 +8461,7 @@ class BizniWebExporter:
             .agg(
                 recent_90d_units=("item_quantity", "sum"),
                 recent_90d_revenue=("item_total_without_tax", "sum"),
+                recent_90d_profit_with_fixed=("cm3_profit", "sum"),
             )
             .reset_index()
         )
@@ -8507,6 +8539,45 @@ class BizniWebExporter:
                         "days_since_last_sale": int((latest_sale - row.last_sale).days),
                     }
                 )
+                if recent_series.size >= (forecast_horizon_weeks + 6):
+                    history_revenue_series = recent_series[:-forecast_horizon_weeks]
+                    history_units_series = recent_units_series[:-forecast_horizon_weeks]
+                    actual_revenue_weeks = recent_series[-forecast_horizon_weeks:]
+                    actual_units_weeks = recent_units_series[-forecast_horizon_weeks:]
+                    backtest_revenue_weeks = _forecast_series(history_revenue_series, horizon=forecast_horizon_weeks)
+                    backtest_units_weeks = _forecast_series(history_units_series, horizon=forecast_horizon_weeks)
+                    backtest_scale = 30.0 / (forecast_horizon_weeks * 7.0)
+                    actual_revenue_backtest = float(actual_revenue_weeks.sum()) * backtest_scale
+                    forecast_revenue_backtest = float(backtest_revenue_weeks.sum()) * backtest_scale
+                    actual_units_backtest = float(actual_units_weeks.sum()) * backtest_scale
+                    forecast_units_backtest = float(backtest_units_weeks.sum()) * backtest_scale
+                    revenue_error_abs_pct = _forecast_abs_pct_error(actual_revenue_backtest, forecast_revenue_backtest)
+                    units_error_abs_pct = _forecast_abs_pct_error(actual_units_backtest, forecast_units_backtest)
+                    if actual_revenue_backtest > 0 or forecast_revenue_backtest > 0:
+                        forecast_accuracy_rows.append(
+                            {
+                                "sku": row.product_sku,
+                                "product": row.product,
+                                "backtest_window_start": series.index[-forecast_horizon_weeks].strftime("%Y-%m-%d"),
+                                "backtest_window_end": series.index[-1].strftime("%Y-%m-%d"),
+                                "actual_30d_revenue": round(actual_revenue_backtest, 2),
+                                "forecast_30d_revenue": round(forecast_revenue_backtest, 2),
+                                "actual_30d_units": round(actual_units_backtest, 1),
+                                "forecast_30d_units": round(forecast_units_backtest, 1),
+                                "revenue_error_abs_pct": round(revenue_error_abs_pct, 1),
+                                "units_error_abs_pct": round(units_error_abs_pct, 1),
+                                "revenue_accuracy_pct": round(max(0.0, 100.0 - min(revenue_error_abs_pct, 100.0)), 1),
+                                "bias_label": (
+                                    "Over forecast"
+                                    if forecast_revenue_backtest > (actual_revenue_backtest * 1.1)
+                                    else "Under forecast"
+                                    if forecast_revenue_backtest < (actual_revenue_backtest * 0.9)
+                                    else "On target"
+                                ),
+                                "confidence": _forecast_confidence(history_revenue_series),
+                                "weeks_used": int(history_revenue_series.size),
+                            }
+                        )
 
         growing_rows_df = (
             pd.DataFrame(growing_rows).sort_values(["revenue_delta", "recent_window_revenue"], ascending=[False, False]).reset_index(drop=True)
@@ -8519,6 +8590,12 @@ class BizniWebExporter:
         forecast_rows_df = (
             pd.DataFrame(forecast_rows).sort_values(["forecast_30d_revenue", "forecast_delta_pct"], ascending=[False, False]).reset_index(drop=True)
             if forecast_rows else pd.DataFrame()
+        )
+        forecast_accuracy_rows_df = (
+            pd.DataFrame(forecast_accuracy_rows)
+            .sort_values(["actual_30d_revenue", "revenue_accuracy_pct"], ascending=[False, False])
+            .reset_index(drop=True)
+            if forecast_accuracy_rows else pd.DataFrame()
         )
         if forecast_rows_df.empty:
             forecast_rows_df = pd.DataFrame(
@@ -8533,6 +8610,25 @@ class BizniWebExporter:
                     "confidence",
                     "weeks_used",
                     "days_since_last_sale",
+                ]
+            )
+        if forecast_accuracy_rows_df.empty:
+            forecast_accuracy_rows_df = pd.DataFrame(
+                columns=[
+                    "sku",
+                    "product",
+                    "backtest_window_start",
+                    "backtest_window_end",
+                    "actual_30d_revenue",
+                    "forecast_30d_revenue",
+                    "actual_30d_units",
+                    "forecast_30d_units",
+                    "revenue_error_abs_pct",
+                    "units_error_abs_pct",
+                    "revenue_accuracy_pct",
+                    "bias_label",
+                    "confidence",
+                    "weeks_used",
                 ]
             )
 
@@ -8661,6 +8757,10 @@ class BizniWebExporter:
         inventory_rows_df = pd.DataFrame()
         stock_risk_rows_df = pd.DataFrame()
         dead_stock_rows_df = pd.DataFrame()
+        restock_priority_rows_df = pd.DataFrame()
+        revenue_at_risk_rows_df = pd.DataFrame()
+        brand_turn_rows_df = pd.DataFrame()
+        family_turn_rows_df = pd.DataFrame()
         inventory_products_df = pd.DataFrame()
         inventory_status = "disabled" if not inventory_enabled else "unavailable"
         inventory_fetch_error = None
@@ -8747,6 +8847,8 @@ class BizniWebExporter:
                         "orders",
                         "units",
                         "revenue",
+                        "profit_without_fixed",
+                        "profit_with_fixed",
                         "first_sale",
                         "last_sale",
                     ]
@@ -8771,14 +8873,13 @@ class BizniWebExporter:
                 forecast_rows_df[
                     [
                         "sku",
-                        "recent_30d_units",
+                        "forecast_30d_revenue",
                         "forecast_30d_units",
                         "forecast_delta_pct",
                         "confidence",
                     ]
                 ].rename(
                     columns={
-                        "recent_30d_units": "forecast_recent_30d_units",
                         "confidence": "forecast_confidence",
                     }
                 ),
@@ -8790,11 +8891,15 @@ class BizniWebExporter:
                 "orders",
                 "units",
                 "revenue",
+                "profit_without_fixed",
+                "profit_with_fixed",
                 "recent_30d_units",
                 "recent_30d_revenue",
+                "recent_30d_profit_with_fixed",
                 "recent_90d_units",
                 "recent_90d_revenue",
-                "forecast_recent_30d_units",
+                "recent_90d_profit_with_fixed",
+                "forecast_30d_revenue",
                 "forecast_30d_units",
                 "forecast_delta_pct",
             ):
@@ -8805,6 +8910,21 @@ class BizniWebExporter:
 
             inventory_products_df["last_sale"] = pd.to_datetime(inventory_products_df["last_sale"], errors="coerce")
             inventory_products_df["first_sale"] = pd.to_datetime(inventory_products_df["first_sale"], errors="coerce")
+            inventory_products_df["margin_without_fixed_pct"] = np.where(
+                inventory_products_df["revenue"] != 0,
+                (inventory_products_df["profit_without_fixed"] / inventory_products_df["revenue"]) * 100.0,
+                0.0,
+            )
+            inventory_products_df["margin_with_fixed_pct"] = np.where(
+                inventory_products_df["revenue"] != 0,
+                (inventory_products_df["profit_with_fixed"] / inventory_products_df["revenue"]) * 100.0,
+                0.0,
+            )
+            inventory_products_df["recent_margin_with_fixed_pct"] = np.where(
+                inventory_products_df["recent_90d_revenue"] > 0,
+                (inventory_products_df["recent_90d_profit_with_fixed"] / inventory_products_df["recent_90d_revenue"]) * 100.0,
+                inventory_products_df["margin_with_fixed_pct"],
+            )
             inventory_products_df["days_since_last_sale"] = np.where(
                 inventory_products_df["last_sale"].notna(),
                 (snapshot_ts.normalize() - inventory_products_df["last_sale"].dt.normalize()).dt.days,
@@ -8818,6 +8938,29 @@ class BizniWebExporter:
             inventory_products_df["days_of_cover"] = np.where(
                 inventory_products_df["daily_units_for_alert"] > 0,
                 inventory_products_df["available_quantity"] / inventory_products_df["daily_units_for_alert"],
+                np.nan,
+            )
+            inventory_products_df["alert_30d_revenue"] = np.maximum(
+                inventory_products_df["recent_30d_revenue"],
+                inventory_products_df["forecast_30d_revenue"],
+            )
+            inventory_products_df["alert_30d_profit_estimate"] = (
+                inventory_products_df["alert_30d_revenue"] * inventory_products_df["recent_margin_with_fixed_pct"] / 100.0
+            )
+            inventory_products_df["recent_90d_cost_of_sales"] = (
+                inventory_products_df["recent_90d_units"] * inventory_products_df["cost_per_unit"].fillna(0.0)
+            )
+            inventory_products_df["annualized_recent_90d_cost_of_sales"] = (
+                inventory_products_df["recent_90d_cost_of_sales"] * (365.0 / 90.0)
+            )
+            inventory_products_df["inventory_turns_annualized"] = np.where(
+                inventory_products_df["inventory_cost_value"] > 0,
+                inventory_products_df["annualized_recent_90d_cost_of_sales"] / inventory_products_df["inventory_cost_value"],
+                np.nan,
+            )
+            inventory_products_df["days_in_inventory_estimate"] = np.where(
+                inventory_products_df["inventory_turns_annualized"] > 0,
+                365.0 / inventory_products_df["inventory_turns_annualized"],
                 np.nan,
             )
             stockout_dt = pd.Series(pd.NaT, index=inventory_products_df.index, dtype="datetime64[ns]")
@@ -8874,6 +9017,91 @@ class BizniWebExporter:
             }
             inventory_products_df["stock_risk_level"] = inventory_products_df.apply(_inventory_risk_label, axis=1)
             inventory_products_df["stock_risk_rank"] = inventory_products_df["stock_risk_level"].map(risk_rank).fillna(99).astype(int)
+            inventory_products_df["negative_stock_units_gap"] = np.where(
+                inventory_products_df["available_quantity_raw"] < 0,
+                np.abs(inventory_products_df["available_quantity_raw"]),
+                0.0,
+            )
+            inventory_products_df["risk_30d_flag"] = inventory_products_df["stock_risk_level"].isin(
+                ["Negative stock", "Out of stock", "Critical", "Low"]
+            )
+            inventory_products_df["risk_45d_flag"] = inventory_products_df["stock_risk_level"].isin(
+                ["Negative stock", "Out of stock", "Critical", "Low", "Watch"]
+            )
+            inventory_products_df["critical_flag"] = inventory_products_df["stock_risk_level"].isin(
+                ["Negative stock", "Out of stock", "Critical"]
+            )
+            inventory_products_df["dead_stock_cost_component"] = np.where(
+                inventory_products_df["dead_stock_flag"],
+                inventory_products_df["inventory_cost_value"],
+                0.0,
+            )
+            inventory_products_df["dead_stock_units_component"] = np.where(
+                inventory_products_df["dead_stock_flag"],
+                inventory_products_df["available_quantity"],
+                0.0,
+            )
+            inventory_products_df["has_stock_flag"] = inventory_products_df["available_quantity"] > 0
+            inventory_products_df[["brand_key", "brand_label"]] = inventory_products_df["product"].apply(
+                lambda value: pd.Series(self._extract_product_brand(value))
+            )
+            inventory_products_df[["family_key", "family_label"]] = inventory_products_df["product"].apply(
+                lambda value: pd.Series(self._extract_product_family(value))
+            )
+
+            demand_reference = max(float(inventory_products_df["alert_30d_units"].quantile(0.9)), 1.0)
+            margin_reference = max(
+                float(inventory_products_df["recent_margin_with_fixed_pct"].clip(lower=0).quantile(0.9)),
+                10.0,
+            )
+            inventory_products_df["scarcity_score"] = np.where(
+                inventory_products_df["stock_risk_level"].isin(["Negative stock", "Out of stock"]),
+                1.0,
+                np.clip(
+                    (watch_days_of_cover - inventory_products_df["days_of_cover"].fillna(watch_days_of_cover))
+                    / max(float(watch_days_of_cover), 1.0),
+                    0.0,
+                    1.0,
+                ),
+            )
+            inventory_products_df["demand_score"] = np.clip(
+                inventory_products_df["alert_30d_units"] / demand_reference,
+                0.0,
+                1.0,
+            )
+            inventory_products_df["margin_score"] = np.clip(
+                inventory_products_df["recent_margin_with_fixed_pct"].clip(lower=0.0) / margin_reference,
+                0.0,
+                1.0,
+            )
+            inventory_products_df["restock_status_bonus"] = inventory_products_df["stock_risk_level"].map(
+                {
+                    "Negative stock": 0.18,
+                    "Out of stock": 0.18,
+                    "Critical": 0.10,
+                    "Low": 0.05,
+                    "Watch": 0.02,
+                }
+            ).fillna(0.0)
+            inventory_products_df["restock_priority_score"] = np.clip(
+                (
+                    inventory_products_df["scarcity_score"] * 0.50
+                    + inventory_products_df["demand_score"] * 0.35
+                    + inventory_products_df["margin_score"] * 0.15
+                    + inventory_products_df["restock_status_bonus"]
+                ) * 100.0,
+                0.0,
+                100.0,
+            )
+            inventory_products_df["restock_priority_bucket"] = np.select(
+                [
+                    inventory_products_df["restock_priority_score"] >= 80,
+                    inventory_products_df["restock_priority_score"] >= 60,
+                    inventory_products_df["restock_priority_score"] >= 40,
+                ],
+                ["Urgent", "High", "Plan"],
+                default="Monitor",
+            )
 
             inventory_rows_df = (
                 inventory_products_df.loc[
@@ -8898,6 +9126,70 @@ class BizniWebExporter:
                 .sort_values(["inventory_cost_value", "inventory_retail_value"], ascending=[False, False])
                 .reset_index(drop=True)
             )
+            revenue_at_risk_rows_df = (
+                inventory_products_df.loc[
+                    inventory_products_df["risk_45d_flag"] & (inventory_products_df["alert_30d_revenue"] > 0)
+                ]
+                .sort_values(["stock_risk_rank", "alert_30d_revenue"], ascending=[True, False])
+                .reset_index(drop=True)
+            )
+            restock_priority_rows_df = (
+                inventory_products_df.loc[
+                    inventory_products_df["risk_45d_flag"] & (inventory_products_df["alert_30d_units"] > 0)
+                ]
+                .sort_values(["restock_priority_score", "alert_30d_revenue"], ascending=[False, False])
+                .reset_index(drop=True)
+            )
+
+            def _inventory_turn_rows(frame: pd.DataFrame, key_col: str, label_col: str) -> pd.DataFrame:
+                if frame.empty:
+                    return pd.DataFrame()
+                grouped = (
+                    frame.groupby([key_col, label_col], as_index=False)
+                    .agg(
+                        products=("sku", "nunique"),
+                        products_with_stock=("has_stock_flag", "sum"),
+                        available_quantity=("available_quantity", "sum"),
+                        inventory_cost_value=("inventory_cost_value", "sum"),
+                        inventory_retail_value=("inventory_retail_value", "sum"),
+                        recent_90d_units=("recent_90d_units", "sum"),
+                        recent_90d_revenue=("recent_90d_revenue", "sum"),
+                        recent_90d_cost_of_sales=("recent_90d_cost_of_sales", "sum"),
+                        alert_30d_revenue=("alert_30d_revenue", "sum"),
+                        risk_30d_count=("risk_30d_flag", "sum"),
+                        critical_count=("critical_flag", "sum"),
+                        negative_stock_units_gap=("negative_stock_units_gap", "sum"),
+                        dead_stock_cost_value=("dead_stock_cost_component", "sum"),
+                    )
+                )
+                grouped = grouped.loc[
+                    (grouped["available_quantity"] > 0)
+                    | (grouped["inventory_cost_value"] > 0)
+                    | (grouped["inventory_retail_value"] > 0)
+                ].copy()
+                grouped["inventory_turns_annualized"] = np.where(
+                    grouped["inventory_cost_value"] > 0,
+                    (grouped["recent_90d_cost_of_sales"] * (365.0 / 90.0)) / grouped["inventory_cost_value"],
+                    np.nan,
+                )
+                grouped["days_in_inventory_estimate"] = np.where(
+                    grouped["inventory_turns_annualized"] > 0,
+                    365.0 / grouped["inventory_turns_annualized"],
+                    np.nan,
+                )
+                grouped["dead_stock_share_pct"] = np.where(
+                    grouped["inventory_cost_value"] > 0,
+                    (grouped["dead_stock_cost_value"] / grouped["inventory_cost_value"]) * 100.0,
+                    0.0,
+                )
+                return (
+                    grouped.rename(columns={key_col: "group_key", label_col: "group_label"})
+                    .sort_values(["inventory_cost_value", "alert_30d_revenue"], ascending=[False, False])
+                    .reset_index(drop=True)
+                )
+
+            brand_turn_rows_df = _inventory_turn_rows(inventory_products_df, "brand_key", "brand_label")
+            family_turn_rows_df = _inventory_turn_rows(inventory_products_df, "family_key", "family_label")
 
             if not forecast_rows_df.empty:
                 forecast_rows_df = forecast_rows_df.merge(
@@ -8961,8 +9253,64 @@ class BizniWebExporter:
                 "negative_stock_count": int(
                     (inventory_products_df["stock_risk_level"] == "Negative stock").sum()
                 ) if not inventory_products_df.empty else 0,
+                "negative_stock_units_gap": round(float(inventory_products_df["negative_stock_units_gap"].sum()), 1) if not inventory_products_df.empty else 0.0,
                 "dead_stock_count": int(dead_stock_rows_df.shape[0]) if not dead_stock_rows_df.empty else 0,
                 "dead_stock_cost_value": round(float(dead_stock_rows_df["inventory_cost_value"].sum()), 2) if not dead_stock_rows_df.empty else 0.0,
+                "dead_stock_cost_share_pct": round(
+                    float(dead_stock_rows_df["inventory_cost_value"].sum()) / float(inventory_products_df["inventory_cost_value"].sum()) * 100.0,
+                    2,
+                ) if not dead_stock_rows_df.empty and not inventory_products_df.empty and float(inventory_products_df["inventory_cost_value"].sum()) > 0 else 0.0,
+                "dead_stock_units_share_pct": round(
+                    float(dead_stock_rows_df["available_quantity"].sum()) / float(inventory_products_df["available_quantity"].sum()) * 100.0,
+                    2,
+                ) if not dead_stock_rows_df.empty and not inventory_products_df.empty and float(inventory_products_df["available_quantity"].sum()) > 0 else 0.0,
+                "revenue_at_risk_30d": round(
+                    float(inventory_products_df.loc[inventory_products_df["risk_30d_flag"], "alert_30d_revenue"].sum()),
+                    2,
+                ) if not inventory_products_df.empty else 0.0,
+                "profit_at_risk_30d": round(
+                    float(inventory_products_df.loc[inventory_products_df["risk_30d_flag"], "alert_30d_profit_estimate"].sum()),
+                    2,
+                ) if not inventory_products_df.empty else 0.0,
+                "revenue_at_risk_45d": round(
+                    float(inventory_products_df.loc[inventory_products_df["risk_45d_flag"], "alert_30d_revenue"].sum()),
+                    2,
+                ) if not inventory_products_df.empty else 0.0,
+                "profit_at_risk_45d": round(
+                    float(inventory_products_df.loc[inventory_products_df["risk_45d_flag"], "alert_30d_profit_estimate"].sum()),
+                    2,
+                ) if not inventory_products_df.empty else 0.0,
+                "restock_priority_urgent_count": int(
+                    (inventory_products_df["restock_priority_score"] >= 80).sum()
+                ) if not inventory_products_df.empty else 0,
+                "restock_priority_high_count": int(
+                    (
+                        (inventory_products_df["restock_priority_score"] >= 60)
+                        & (inventory_products_df["restock_priority_score"] < 80)
+                    ).sum()
+                ) if not inventory_products_df.empty else 0,
+                "brand_turn_groups": int(len(brand_turn_rows_df)),
+                "family_turn_groups": int(len(family_turn_rows_df)),
+                "forecast_backtest_products": int(len(forecast_accuracy_rows_df)),
+                "forecast_backtest_wape_pct": round(
+                    float(
+                        np.abs(
+                            forecast_accuracy_rows_df["forecast_30d_revenue"]
+                            - forecast_accuracy_rows_df["actual_30d_revenue"]
+                        ).sum()
+                        / float(forecast_accuracy_rows_df["actual_30d_revenue"].sum())
+                        * 100.0
+                    ),
+                    2,
+                ) if not forecast_accuracy_rows_df.empty and float(forecast_accuracy_rows_df["actual_30d_revenue"].sum()) > 0 else 0.0,
+                "forecast_backtest_median_accuracy_pct": round(
+                    float(forecast_accuracy_rows_df["revenue_accuracy_pct"].median()),
+                    2,
+                ) if not forecast_accuracy_rows_df.empty else 0.0,
+                "forecast_backtest_within_20_pct": round(
+                    float((forecast_accuracy_rows_df["revenue_error_abs_pct"] <= 20.0).mean() * 100.0),
+                    2,
+                ) if not forecast_accuracy_rows_df.empty else 0.0,
             },
             "growing_rows": growing_rows_df,
             "declining_rows": declining_rows_df,
@@ -8971,13 +9319,19 @@ class BizniWebExporter:
             "inventory_rows": inventory_rows_df,
             "stock_risk_rows": stock_risk_rows_df,
             "dead_stock_rows": dead_stock_rows_df,
+            "restock_priority_rows": restock_priority_rows_df,
+            "revenue_at_risk_rows": revenue_at_risk_rows_df,
+            "brand_turn_rows": brand_turn_rows_df,
+            "family_turn_rows": family_turn_rows_df,
+            "forecast_accuracy_rows": forecast_accuracy_rows_df,
             "brand_revenue_rows": brand_revenue_rows_df,
             "brand_profit_rows": brand_profit_rows_df,
         }
         print(
             f"Roy product demand analytics complete: growing={len(growing_rows_df)}, "
             f"declining={len(declining_rows_df)}, forecasted={len(forecast_rows_df)}, "
-            f"inventory_rows={len(inventory_rows_df)}, brands={len(brand_summary)}"
+            f"inventory_rows={len(inventory_rows_df)}, restock_rows={len(restock_priority_rows_df)}, "
+            f"forecast_backtests={len(forecast_accuracy_rows_df)}, brands={len(brand_summary)}"
         )
         return result
 
