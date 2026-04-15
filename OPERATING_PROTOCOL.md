@@ -15,8 +15,15 @@ The goal is to keep one source of truth, avoid cross-PC drift, and prevent branc
 ## Project Map
 
 - Reporting: `biznisweb` repo, branch `main`
-- Doklady: `biznisweb` repo, branch `codex/doklady-saas-clean`
+- Doklady: `doklady-saas` repo, branch `main`
 - OpenClaw: `openclaw-agents-platform` repo, branch `main`
+
+## Branch Model
+
+- Repositories separate products.
+- Branches separate short-lived changes inside one product.
+- Do not keep long-lived product branches inside a shared repository.
+- Delete merged or superseded task branches quickly.
 
 ## Session Start Rules
 
@@ -68,6 +75,7 @@ Then update `PROJECT_STATE.md` with:
   - `.env.example`
   - `.env.required`
 - Hooks and bootstrap must be repo-local and reproducible from the repository.
+- Reporting, Doklady, and OpenClaw must keep their own `PROJECT_STATE.md` and their own GitHub source of truth.
 
 ## Safety Rules
 
