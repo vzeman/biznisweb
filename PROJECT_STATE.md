@@ -185,6 +185,10 @@ Bootstrap entrypoints:
 ## 9) Change Log
 
 ### 2026-04-16
+- Clarified the top KPI meaning for VEVO/modern reporting:
+  - the existing top-level `Profit` KPI is the absolute post-ad profit layer (`contribution_profit` / `post_ad_contribution_profit`), not net profit after fixed overhead
+  - renamed the exposed label to `Post-ad profit (€)` / `Post-ad zisk (€)` in the active dashboard payload, modern metric library, legacy CFO top-card renderer, and live dashboard context view
+  - added smoke coverage asserting the KPI payload now exposes the explicit post-ad profit label
 - Applied the agreed ROY inventory business rules in config:
   - thresholds confirmed for `Critical <= 14d`, `Low <= 30d`, `Watch <= 45d`, `Dead stock >= 90d`
   - alert delivery narrowed to the 30-day bucket, 45-day rows kept as watchlist only

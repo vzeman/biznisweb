@@ -501,7 +501,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         )
         cfo_top_cards = [
             ("revenue", "Revenue", "Obrat"),
-            ("profit", "Profit", "Zisk"),
+            ("profit", "Post-ad profit (€)", "Post-ad zisk (€)"),
             ("orders", "Orders", "Objednavky"),
             ("aov", "AOV", "Priemerna hodnota objednavky"),
             ("cac", "CAC", "CAC"),
@@ -1892,7 +1892,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div style="color: #718096; font-size: 0.8rem;">Base for payback (order-level)</div>
             </div>
             <div class="card">
-                <div class="card-title">Post-Ad Contribution Profit</div>
+                <div class="card-title">Post-Ad Profit (€)</div>
                 <div class="card-value {'profit' if post_ad_contribution_profit > 0 else 'cost'}">&#8364;{post_ad_contribution_profit:,.2f}</div>
                 <div style="color: #718096; font-size: 0.8rem;">Excludes fixed overhead</div>
             </div>

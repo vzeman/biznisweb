@@ -349,12 +349,14 @@ def assert_dashboard_consistency_payload_mapping() -> None:
     assert match, "dashboard payload script missing"
     payload = json.loads(match.group(1))
     consistency = payload["consistency"]
+    profit_metric = next(metric for metric in payload["kpis"]["metric_defs"] if metric["key"] == "profit")
     assert math.isclose(float(consistency["roas_delta"]), 0.1234, rel_tol=1e-9, abs_tol=1e-9), consistency
     assert math.isclose(float(consistency["margin_delta"]), -0.02, rel_tol=1e-9, abs_tol=1e-9), consistency
     assert math.isclose(float(consistency["cac_delta"]), 0.56, rel_tol=1e-9, abs_tol=1e-9), consistency
     assert consistency["roas_ok"] is False, consistency
     assert consistency["margin_ok"] is True, consistency
     assert consistency["cac_ok"] is False, consistency
+    assert profit_metric["label_en"] == "Post-ad profit (€)", profit_metric
 
 
 def assert_roy_fixed_cost_source_of_truth() -> None:
