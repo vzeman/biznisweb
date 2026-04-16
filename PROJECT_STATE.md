@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-15
+Last updated: 2026-04-16
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -168,19 +168,60 @@ Bootstrap entrypoints:
   - revenue-at-risk rollups
   - inventory turns by brand / family
   - forecast backtest accuracy
+- ROY inventory alert workflow is now wired through the active render/output path on the task branch:
+  - `dashboard_payload.json` now carries actionable `alert_rows`
+  - the modern HTML dashboard now renders a dedicated `Actionable inventory alerts` table
+  - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Review the live Roy inventory metrics with the business owner and confirm the alert semantics for the now-implemented inventory layer:
-  - which stock-risk thresholds should trigger action (`Critical`, `Low`, `Watch`)
-  - whether alerting should trigger on 30-day risk only or also on the 45-day watch bucket
-  - whether inventory value should be watched at cost only or also at retail
-  - which dead-stock cutoff should be treated as operationally actionable
-- Before automating alerts, tighten the forecast model because current backtest accuracy is weak on the first live sample:
-  - reduce over-forecast bias on volatile SKUs
-  - decide whether alerts should use recent-demand fallback, forecast, or a weighted blend by confidence
-  - then turn the validated logic into explicit low-stock / stockout alert outputs
+- Merge and deploy the `codex/roy-inventory-metrics` branch so the new ROY stock alert section reaches the real scheduled daily email path.
+- After deploy, verify on the production ECS host/run that:
+  - the generated ROY HTML contains `Actionable inventory alerts`
+  - the sent daily email includes the `SKLADOVE ALERTY` block
+- Then implement inbound-stock modeling so reorder alerts stop being purely conservative:
+  - define the source of truth for goods on the way
+  - map inbound quantities to product/SKU
+  - fold inbound stock into `net_available_quantity` and reorder recommendations
 
 ## 9) Change Log
+
+### 2026-04-16
+- Applied the agreed ROY inventory business rules in config:
+  - thresholds confirmed for `Critical <= 14d`, `Low <= 30d`, `Watch <= 45d`, `Dead stock >= 90d`
+  - alert delivery narrowed to the 30-day bucket, 45-day rows kept as watchlist only
+  - primary inventory basis = cost, secondary = retail
+  - restock prioritization switched to margin without fixed overhead
+  - lead times configured by brand:
+    - `maco_stop = 10 wd`
+    - `wachman = 20 wd`
+    - `roy = 50 wd`
+  - alert exclusions configured for service / reklamacie / gifts / spare parts / test / obvious noise
+  - initial bundle-to-component rule added for MACO STOP spray sets
+- Extended ROY inventory analytics runtime with:
+  - actionable `alert_rows`
+  - conservative alert-demand blend by forecast confidence
+  - reorder deadline / reorder quantity / `Order now` vs `Prepare PO`
+  - hero-brand handling for Wachman and MACO STOP
+  - bundle-demand shifting onto component SKUs
+  - explicit inbound-stock placeholder state (`not_modeled`)
+- Wired the new inventory alert outputs into the active report surfaces:
+  - `dashboard_modern.py` renders summary mini-cards plus the new actionable alert table
+  - `daily_report_runner.py` reads `dashboard_payload.json` and appends `SKLADOVE ALERTY` into the outbound email text
+- Verified locally on live ROY data with a one-pass export:
+  - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py`
+  - production-equivalent ROY export for `2025-09-24 -> 2026-04-15` using output tag `inventory_alerts_verify`
+  - generated artifacts:
+    - `data/roy/report_20250924-20260415__inventory_alerts_verify.html`
+    - `data/roy/dashboard_payload_20250924-20260415__inventory_alerts_verify.json`
+  - verification outcome:
+    - `29` actionable 30d alerts
+    - `13` hero-SKU alerts
+    - `29` `Order now`, `0` `Prepare PO`
+    - `EUR 18,001.42` revenue at risk over 30d
+    - `EUR 50,795.03` inventory cost value
+    - `12` excluded noise rows
+    - HTML contains `Actionable inventory alerts`
+    - email summary text contains `SKLADOVE ALERTY`
 
 ### 2026-04-15
 - Added Roy inventory snapshot ingestion from Biznisweb GraphQL product data:

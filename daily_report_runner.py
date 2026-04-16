@@ -583,6 +583,114 @@ def _comparison_line_optional(label: str, current: Optional[float], previous: Op
     return _comparison_line(label, float(current), float(previous))
 
 
+def _load_dashboard_payload(path: Optional[Path]) -> Dict[str, Any]:
+    if not path or not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _build_roy_inventory_alert_summary(file_paths: Dict[str, Path]) -> str:
+    payload = _load_dashboard_payload(file_paths.get("dashboard_payload_json"))
+    dashboard = payload.get("dashboard") if isinstance(payload.get("dashboard"), dict) else payload
+    if not isinstance(dashboard, dict):
+        return ""
+
+    roy_inventory = dashboard.get("roy_product_demand") or {}
+    if not isinstance(roy_inventory, dict):
+        return ""
+
+    summary = roy_inventory.get("summary") or {}
+    if not isinstance(summary, dict):
+        summary = {}
+    alert_rows = list(roy_inventory.get("alert_rows") or [])
+    if not summary and not alert_rows:
+        return ""
+
+    inventory_status = str(summary.get("inventory_status") or "unavailable").strip().lower()
+    snapshot_date = str(summary.get("inventory_snapshot_date") or "-")
+    horizon_days = max(1, int(float(summary.get("alert_delivery_horizon_days") or 30)))
+    alert_count = int(float(summary.get("alert_delivery_count") or 0))
+    hero_count = int(float(summary.get("alert_delivery_hero_count") or 0))
+    reorder_now_count = int(float(summary.get("alert_reorder_now_count") or 0))
+    prepare_po_count = int(float(summary.get("alert_prepare_po_count") or 0))
+    excluded_count = int(float(summary.get("alert_excluded_count") or 0))
+    lead_time_count = int(float(summary.get("lead_time_configured_alert_count") or 0))
+    bundle_rule_count = int(float(summary.get("bundle_component_rule_count") or 0))
+    bundle_shift_30d = float(summary.get("bundle_component_adjustment_30d_units") or 0.0)
+    bundle_shift_90d = float(summary.get("bundle_component_adjustment_90d_units") or 0.0)
+    inbound_status = str(summary.get("inbound_stock_status") or "not_modeled").replace("_", " ")
+    inbound_source = str(summary.get("inbound_stock_source") or "not_modeled")
+    inventory_cost_value = float(summary.get("inventory_cost_value") or 0.0)
+    revenue_at_risk_30d = float(summary.get("revenue_at_risk_30d") or 0.0)
+    profit_at_risk_30d = float(summary.get("profit_at_risk_30d") or 0.0)
+    risk_45d_count = int(float(summary.get("stock_risk_45d_count") or 0))
+
+    lines = ["SKLADOVE ALERTY"]
+    if inventory_status != "ok":
+        lines.append(
+            f"- Inventory snapshot status: {inventory_status.upper()} (snapshot {snapshot_date})."
+        )
+        if inbound_status != "configured":
+            lines.append(f"- Inbound stock zatial nie je modelovany ({inbound_source}).")
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            (
+                f"- Snapshot skladu: {snapshot_date}. Akcne {horizon_days}d alerty: {alert_count}, "
+                f"z toho hero SKU {hero_count}. 45d watchlist: {risk_45d_count}."
+            ),
+            (
+                f"- Objednat teraz: {reorder_now_count}; pripravit PO: {prepare_po_count}; "
+                f"lead-time nastavene alerty: {lead_time_count}."
+            ),
+            (
+                f"- Hodnota skladu v nakupnych cenach: {_fmt_eur(inventory_cost_value)}. "
+                f"Trzby v riziku {horizon_days}d: {_fmt_eur(revenue_at_risk_30d)}; "
+                f"zisk v riziku: {_fmt_eur(profit_at_risk_30d)}."
+            ),
+        ]
+    )
+    if excluded_count > 0:
+        lines.append(
+            f"- Z alertov je odfiltrovanych {excluded_count} poloziek (servis/reklamacie/darceky/test SKU a bundle noise)."
+        )
+    if bundle_rule_count > 0:
+        lines.append(
+            f"- Bundle dopyt sa presuva na komponenty cez {bundle_rule_count} pravidla: +{bundle_shift_30d:.1f} ks za 30d a +{bundle_shift_90d:.1f} ks za 90d."
+        )
+    if inbound_status != "configured":
+        lines.append(f"- Inbound stock zatial nie je modelovany ({inbound_source}), takze alerty su konzervativnejsie.")
+
+    top_alerts = alert_rows[:5]
+    if top_alerts:
+        lines.append("- Top alerty na dnes:")
+        for row in top_alerts:
+            product = str(row.get("product") or "Unknown product")
+            risk = str(row.get("stock_risk_level") or "-")
+            available = float(row.get("available_quantity") or 0.0)
+            days_of_cover = float(row.get("days_of_cover") or 0.0)
+            lead_time = int(float(row.get("lead_time_working_days") or 0))
+            reorder_by = str(row.get("reorder_by_date") or "-")
+            reorder_units = int(round(float(row.get("suggested_reorder_units") or 0.0)))
+            action = str(row.get("reorder_action_label") or "-")
+            revenue_risk = float(row.get("alert_30d_revenue") or 0.0)
+            hero_flag = " HERO" if bool(row.get("strategic_stock_flag")) else ""
+            lines.append(
+                f"  - {product}{hero_flag}: {risk}, sklad {available:.1f} ks, cover {days_of_cover:.1f} dna, "
+                f"LT {lead_time} wd, objednat do {reorder_by}, odporucane {reorder_units} ks, akcia {action}, "
+                f"trzba v riziku {_fmt_eur(revenue_risk)}."
+            )
+    else:
+        lines.append("- Dnes nie su ziadne akcne 30-dnove stock alerty.")
+
+    return "\n".join(lines)
+
+
 def build_report_summary(file_paths: Dict[str, Path]) -> str:
     date_csv = file_paths.get("aggregate_by_date_csv")
     if not date_csv or not date_csv.exists():
@@ -782,14 +890,18 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     if w30["cac"] is None:
         context_lines.append("- CAC v casti porovnani moze byt miestami prazdne, ak v danom okne nebolo dost novych zakaznikov.")
 
-    return "\n\n".join([
+    sections = [
         "\n".join(overview_lines),
         "\n".join(good_lines),
         "\n".join(weaker_lines),
         "\n".join(insight_lines),
         "\n".join(action_lines),
         "\n".join(context_lines),
-    ])
+    ]
+    inventory_alert_summary = _build_roy_inventory_alert_summary(file_paths)
+    if inventory_alert_summary:
+        sections.append(inventory_alert_summary)
+    return "\n\n".join(sections)
 
 
 def build_email_body(

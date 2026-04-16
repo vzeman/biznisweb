@@ -8283,6 +8283,7 @@ class BizniWebExporter:
                 "inventory_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
+                "alert_rows": pd.DataFrame(),
                 "restock_priority_rows": pd.DataFrame(),
                 "revenue_at_risk_rows": pd.DataFrame(),
                 "brand_turn_rows": pd.DataFrame(),
@@ -8307,6 +8308,7 @@ class BizniWebExporter:
                 "inventory_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
+                "alert_rows": pd.DataFrame(),
                 "restock_priority_rows": pd.DataFrame(),
                 "revenue_at_risk_rows": pd.DataFrame(),
                 "brand_turn_rows": pd.DataFrame(),
@@ -8329,6 +8331,7 @@ class BizniWebExporter:
                 "inventory_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
+                "alert_rows": pd.DataFrame(),
                 "restock_priority_rows": pd.DataFrame(),
                 "revenue_at_risk_rows": pd.DataFrame(),
                 "brand_turn_rows": pd.DataFrame(),
@@ -8434,6 +8437,46 @@ class BizniWebExporter:
         warning_days_of_cover = max(critical_days_of_cover, int(inventory_config.get("warning_days_of_cover", 30) or 30))
         watch_days_of_cover = max(warning_days_of_cover, int(inventory_config.get("watch_days_of_cover", 45) or 45))
         dead_stock_days = max(watch_days_of_cover, int(inventory_config.get("dead_stock_days", 90) or 90))
+        alert_delivery_horizon_days = max(
+            1,
+            int(inventory_config.get("alert_delivery_horizon_days", warning_days_of_cover) or warning_days_of_cover),
+        )
+        primary_value_basis = str(inventory_config.get("primary_value_basis", "cost")).strip().lower() or "cost"
+        secondary_value_basis = str(inventory_config.get("secondary_value_basis", "retail")).strip().lower() or "retail"
+        reorder_cover_days = max(
+            alert_delivery_horizon_days,
+            int(inventory_config.get("reorder_cover_days", warning_days_of_cover) or warning_days_of_cover),
+        )
+        hero_reorder_cover_days = max(
+            reorder_cover_days,
+            int(inventory_config.get("hero_reorder_cover_days", watch_days_of_cover) or watch_days_of_cover),
+        )
+        forecast_uplift_weights_raw = inventory_config.get("forecast_uplift_weights") or {}
+        forecast_uplift_weights = {
+            "high": float(forecast_uplift_weights_raw.get("high", 0.5) or 0.5),
+            "medium": float(forecast_uplift_weights_raw.get("medium", 0.3) or 0.3),
+            "low": float(forecast_uplift_weights_raw.get("low", 0.15) or 0.15),
+        }
+        hero_brand_keys = {
+            str(value).strip().lower()
+            for value in (inventory_config.get("hero_brand_keys") or [])
+            if str(value).strip()
+        }
+        lead_time_working_days_by_brand = {
+            str(key).strip().lower(): max(0, int(value or 0))
+            for key, value in (inventory_config.get("lead_time_working_days_by_brand") or {}).items()
+            if str(key).strip()
+        }
+        alert_exclusion_patterns = [
+            str(pattern).strip()
+            for pattern in (inventory_config.get("alert_exclusion_label_patterns") or [])
+            if str(pattern).strip()
+        ]
+        bundle_component_rules = inventory_config.get("bundle_component_rules") or []
+        bundle_component_rules = bundle_component_rules if isinstance(bundle_component_rules, list) else []
+        inbound_stock_config = inventory_config.get("inbound_stock") or {}
+        inbound_stock_enabled = bool(inbound_stock_config.get("enabled"))
+        inbound_stock_source = str(inbound_stock_config.get("source") or "").strip() or "not_modeled"
         trend_window_weeks = min(4, max(2, len(week_index) // 2)) if len(week_index) >= 4 else 0
         forecast_horizon_weeks = 4
         growing_rows: List[Dict[str, Any]] = []
@@ -8451,6 +8494,7 @@ class BizniWebExporter:
             .agg(
                 recent_30d_units=("item_quantity", "sum"),
                 recent_30d_revenue=("item_total_without_tax", "sum"),
+                recent_30d_profit_without_fixed=("cm2_profit", "sum"),
                 recent_30d_profit_with_fixed=("cm3_profit", "sum"),
             )
             .reset_index()
@@ -8461,6 +8505,7 @@ class BizniWebExporter:
             .agg(
                 recent_90d_units=("item_quantity", "sum"),
                 recent_90d_revenue=("item_total_without_tax", "sum"),
+                recent_90d_profit_without_fixed=("cm2_profit", "sum"),
                 recent_90d_profit_with_fixed=("cm3_profit", "sum"),
             )
             .reset_index()
@@ -8757,6 +8802,7 @@ class BizniWebExporter:
         inventory_rows_df = pd.DataFrame()
         stock_risk_rows_df = pd.DataFrame()
         dead_stock_rows_df = pd.DataFrame()
+        alert_rows_df = pd.DataFrame()
         restock_priority_rows_df = pd.DataFrame()
         revenue_at_risk_rows_df = pd.DataFrame()
         brand_turn_rows_df = pd.DataFrame()
@@ -8764,6 +8810,7 @@ class BizniWebExporter:
         inventory_products_df = pd.DataFrame()
         inventory_status = "disabled" if not inventory_enabled else "unavailable"
         inventory_fetch_error = None
+        matched_bundle_rule_count = 0
 
         inventory_frame = pd.DataFrame()
         if inventory_enabled:
@@ -8895,9 +8942,11 @@ class BizniWebExporter:
                 "profit_with_fixed",
                 "recent_30d_units",
                 "recent_30d_revenue",
+                "recent_30d_profit_without_fixed",
                 "recent_30d_profit_with_fixed",
                 "recent_90d_units",
                 "recent_90d_revenue",
+                "recent_90d_profit_without_fixed",
                 "recent_90d_profit_with_fixed",
                 "forecast_30d_revenue",
                 "forecast_30d_units",
@@ -8910,6 +8959,99 @@ class BizniWebExporter:
 
             inventory_products_df["last_sale"] = pd.to_datetime(inventory_products_df["last_sale"], errors="coerce")
             inventory_products_df["first_sale"] = pd.to_datetime(inventory_products_df["first_sale"], errors="coerce")
+            inventory_products_df["forecast_confidence"] = (
+                inventory_products_df["forecast_confidence"]
+                .fillna("Low")
+                .astype(str)
+                .replace({"nan": "Low", "": "Low"})
+            )
+            inventory_products_df[["brand_key", "brand_label"]] = inventory_products_df["product"].apply(
+                lambda value: pd.Series(self._extract_product_brand(value))
+            )
+            inventory_products_df[["family_key", "family_label"]] = inventory_products_df["product"].apply(
+                lambda value: pd.Series(self._extract_product_family(value))
+            )
+            inventory_products_df["strategic_stock_flag"] = inventory_products_df["brand_key"].isin(hero_brand_keys)
+            inventory_products_df["lead_time_working_days"] = (
+                inventory_products_df["brand_key"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .map(lead_time_working_days_by_brand)
+                .fillna(0)
+                .astype(int)
+            )
+            inventory_products_df["lead_time_calendar_days"] = np.ceil(
+                inventory_products_df["lead_time_working_days"] * (7.0 / 5.0)
+            ).astype(int)
+            inventory_products_df["inbound_units"] = 0.0
+            inventory_products_df["inbound_status"] = (
+                inbound_stock_source if inbound_stock_enabled else "not_modeled"
+            )
+            inventory_products_df["net_available_quantity"] = (
+                inventory_products_df["available_quantity"] + inventory_products_df["inbound_units"]
+            )
+            inventory_products_df["bundle_sku_flag"] = False
+            inventory_products_df["exclude_bundle_from_alerts_flag"] = False
+            inventory_products_df["bundle_component_recent_30d_units"] = 0.0
+            inventory_products_df["bundle_component_recent_90d_units"] = 0.0
+            inventory_products_df["bundle_component_forecast_30d_units"] = 0.0
+
+            if bundle_component_rules:
+                for rule in bundle_component_rules:
+                    bundle_patterns = [
+                        str(pattern).strip()
+                        for pattern in (rule.get("bundle_patterns") or [])
+                        if str(pattern).strip()
+                    ]
+                    component_rules = rule.get("components") or []
+                    if not bundle_patterns or not component_rules:
+                        continue
+                    bundle_mask = inventory_products_df["product"].apply(
+                        lambda value: self._matches_patterns(value, bundle_patterns)
+                    )
+                    if not bundle_mask.any():
+                        continue
+                    matched_bundle_rule_count += 1
+                    inventory_products_df.loc[bundle_mask, "bundle_sku_flag"] = True
+                    if bool(rule.get("exclude_bundle_from_alerts", False)):
+                        inventory_products_df.loc[bundle_mask, "exclude_bundle_from_alerts_flag"] = True
+                    bundle_recent_30d_units = float(
+                        inventory_products_df.loc[bundle_mask, "recent_30d_units"].sum()
+                    )
+                    bundle_recent_90d_units = float(
+                        inventory_products_df.loc[bundle_mask, "recent_90d_units"].sum()
+                    )
+                    bundle_forecast_30d_units = float(
+                        inventory_products_df.loc[bundle_mask, "forecast_30d_units"].sum()
+                    )
+                    for component_rule in component_rules:
+                        component_patterns = [
+                            str(pattern).strip()
+                            for pattern in (component_rule.get("component_patterns") or [])
+                            if str(pattern).strip()
+                        ]
+                        component_qty = float(component_rule.get("quantity") or 1.0)
+                        if not component_patterns or component_qty <= 0:
+                            continue
+                        component_mask = inventory_products_df["product"].apply(
+                            lambda value: self._matches_patterns(value, component_patterns)
+                        )
+                        if not component_mask.any():
+                            continue
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_recent_30d_units",
+                        ] += bundle_recent_30d_units * component_qty
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_recent_90d_units",
+                        ] += bundle_recent_90d_units * component_qty
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_forecast_30d_units",
+                        ] += bundle_forecast_30d_units * component_qty
+
             inventory_products_df["margin_without_fixed_pct"] = np.where(
                 inventory_products_df["revenue"] != 0,
                 (inventory_products_df["profit_without_fixed"] / inventory_products_df["revenue"]) * 100.0,
@@ -8925,30 +9067,77 @@ class BizniWebExporter:
                 (inventory_products_df["recent_90d_profit_with_fixed"] / inventory_products_df["recent_90d_revenue"]) * 100.0,
                 inventory_products_df["margin_with_fixed_pct"],
             )
+            inventory_products_df["recent_margin_without_fixed_pct"] = np.where(
+                inventory_products_df["recent_90d_revenue"] > 0,
+                (inventory_products_df["recent_90d_profit_without_fixed"] / inventory_products_df["recent_90d_revenue"]) * 100.0,
+                inventory_products_df["margin_without_fixed_pct"],
+            )
             inventory_products_df["days_since_last_sale"] = np.where(
                 inventory_products_df["last_sale"].notna(),
                 (snapshot_ts.normalize() - inventory_products_df["last_sale"].dt.normalize()).dt.days,
                 np.nan,
             )
-            inventory_products_df["alert_30d_units"] = np.maximum(
-                inventory_products_df["recent_30d_units"],
-                inventory_products_df["forecast_30d_units"],
+            inventory_products_df["effective_recent_30d_units"] = (
+                inventory_products_df["recent_30d_units"]
+                + inventory_products_df["bundle_component_recent_30d_units"]
+            )
+            inventory_products_df["effective_recent_90d_units"] = (
+                inventory_products_df["recent_90d_units"]
+                + inventory_products_df["bundle_component_recent_90d_units"]
+            )
+            inventory_products_df["effective_forecast_30d_units"] = (
+                inventory_products_df["forecast_30d_units"]
+                + inventory_products_df["bundle_component_forecast_30d_units"]
+            )
+            inventory_products_df["forecast_uplift_weight"] = (
+                inventory_products_df["forecast_confidence"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .map(forecast_uplift_weights)
+                .fillna(forecast_uplift_weights["low"])
+            )
+            positive_unit_uplift = np.maximum(
+                inventory_products_df["effective_forecast_30d_units"]
+                - inventory_products_df["effective_recent_30d_units"],
+                0.0,
+            )
+            inventory_products_df["alert_30d_units"] = (
+                inventory_products_df["effective_recent_30d_units"]
+                + positive_unit_uplift * inventory_products_df["forecast_uplift_weight"]
+            )
+            no_recent_units_mask = inventory_products_df["effective_recent_30d_units"] <= 0
+            inventory_products_df.loc[no_recent_units_mask, "alert_30d_units"] = (
+                inventory_products_df.loc[no_recent_units_mask, "effective_forecast_30d_units"]
+                * inventory_products_df.loc[no_recent_units_mask, "forecast_uplift_weight"]
             )
             inventory_products_df["daily_units_for_alert"] = inventory_products_df["alert_30d_units"] / 30.0
             inventory_products_df["days_of_cover"] = np.where(
                 inventory_products_df["daily_units_for_alert"] > 0,
-                inventory_products_df["available_quantity"] / inventory_products_df["daily_units_for_alert"],
+                inventory_products_df["net_available_quantity"] / inventory_products_df["daily_units_for_alert"],
                 np.nan,
             )
-            inventory_products_df["alert_30d_revenue"] = np.maximum(
-                inventory_products_df["recent_30d_revenue"],
-                inventory_products_df["forecast_30d_revenue"],
+            positive_revenue_uplift = np.maximum(
+                inventory_products_df["forecast_30d_revenue"] - inventory_products_df["recent_30d_revenue"],
+                0.0,
+            )
+            inventory_products_df["alert_30d_revenue"] = (
+                inventory_products_df["recent_30d_revenue"]
+                + positive_revenue_uplift * inventory_products_df["forecast_uplift_weight"]
+            )
+            no_recent_revenue_mask = inventory_products_df["recent_30d_revenue"] <= 0
+            inventory_products_df.loc[no_recent_revenue_mask, "alert_30d_revenue"] = (
+                inventory_products_df.loc[no_recent_revenue_mask, "forecast_30d_revenue"]
+                * inventory_products_df.loc[no_recent_revenue_mask, "forecast_uplift_weight"]
             )
             inventory_products_df["alert_30d_profit_estimate"] = (
                 inventory_products_df["alert_30d_revenue"] * inventory_products_df["recent_margin_with_fixed_pct"] / 100.0
             )
+            inventory_products_df["alert_30d_contribution_estimate"] = (
+                inventory_products_df["alert_30d_revenue"] * inventory_products_df["recent_margin_without_fixed_pct"] / 100.0
+            )
             inventory_products_df["recent_90d_cost_of_sales"] = (
-                inventory_products_df["recent_90d_units"] * inventory_products_df["cost_per_unit"].fillna(0.0)
+                inventory_products_df["effective_recent_90d_units"] * inventory_products_df["cost_per_unit"].fillna(0.0)
             )
             inventory_products_df["annualized_recent_90d_cost_of_sales"] = (
                 inventory_products_df["recent_90d_cost_of_sales"] * (365.0 / 90.0)
@@ -8981,7 +9170,7 @@ class BizniWebExporter:
                 & (
                     inventory_products_df["last_sale"].isna()
                     | (inventory_products_df["days_since_last_sale"] >= dead_stock_days)
-                    | (inventory_products_df["recent_90d_units"] <= 0)
+                    | (inventory_products_df["effective_recent_90d_units"] <= 0)
                 )
             )
 
@@ -9042,16 +9231,89 @@ class BizniWebExporter:
                 0.0,
             )
             inventory_products_df["has_stock_flag"] = inventory_products_df["available_quantity"] > 0
-            inventory_products_df[["brand_key", "brand_label"]] = inventory_products_df["product"].apply(
-                lambda value: pd.Series(self._extract_product_brand(value))
+            alert_exclusion_reason = pd.Series("", index=inventory_products_df.index, dtype="object")
+            if alert_exclusion_patterns:
+                pattern_exclusion_mask = inventory_products_df["product"].apply(
+                    lambda value: self._matches_patterns(value, alert_exclusion_patterns)
+                )
+                alert_exclusion_reason.loc[pattern_exclusion_mask] = "Excluded by inventory alert pattern"
+            bundle_alert_exclusion_mask = (
+                inventory_products_df["bundle_sku_flag"]
+                & inventory_products_df["exclude_bundle_from_alerts_flag"]
             )
-            inventory_products_df[["family_key", "family_label"]] = inventory_products_df["product"].apply(
-                lambda value: pd.Series(self._extract_product_family(value))
+            alert_exclusion_reason.loc[
+                (alert_exclusion_reason == "") & bundle_alert_exclusion_mask
+            ] = "Bundle demand is shifted to configured components"
+            inventory_products_df["alert_excluded_flag"] = alert_exclusion_reason != ""
+            inventory_products_df["alert_excluded_reason"] = alert_exclusion_reason.replace("", None)
+            inventory_products_df["lead_time_demand_units"] = (
+                inventory_products_df["daily_units_for_alert"]
+                * inventory_products_df["lead_time_calendar_days"]
+            )
+            inventory_products_df["reorder_target_cover_days"] = (
+                inventory_products_df["lead_time_calendar_days"]
+                + np.where(
+                    inventory_products_df["strategic_stock_flag"],
+                    hero_reorder_cover_days,
+                    reorder_cover_days,
+                )
+            )
+            inventory_products_df["suggested_reorder_units"] = np.ceil(
+                np.maximum(
+                    (
+                        inventory_products_df["daily_units_for_alert"]
+                        * inventory_products_df["reorder_target_cover_days"]
+                    ) - inventory_products_df["net_available_quantity"],
+                    0.0,
+                )
+            )
+            reorder_by_dt = pd.Series(pd.NaT, index=inventory_products_df.index, dtype="datetime64[ns]")
+            reorder_deadline_mask = stockout_dt.notna() & (inventory_products_df["lead_time_working_days"] > 0)
+            for idx in inventory_products_df.index[reorder_deadline_mask]:
+                reorder_by_dt.at[idx] = stockout_dt.at[idx] - pd.offsets.BDay(
+                    int(inventory_products_df.at[idx, "lead_time_working_days"])
+                )
+            inventory_products_df["reorder_by_date"] = reorder_by_dt.dt.strftime("%Y-%m-%d")
+            inventory_products_df.loc[reorder_by_dt.isna(), "reorder_by_date"] = None
+            inventory_products_df["days_until_reorder"] = np.where(
+                reorder_by_dt.notna(),
+                (reorder_by_dt.dt.normalize() - snapshot_ts.normalize()).dt.days,
+                np.nan,
+            )
+            inventory_products_df["lead_time_breach_flag"] = (
+                (inventory_products_df["lead_time_calendar_days"] > 0)
+                & inventory_products_df["days_of_cover"].notna()
+                & (inventory_products_df["days_of_cover"] <= inventory_products_df["lead_time_calendar_days"])
+            )
+            inventory_products_df["reorder_now_flag"] = (
+                inventory_products_df["risk_30d_flag"]
+                & (
+                    (inventory_products_df["lead_time_working_days"] <= 0)
+                    | reorder_by_dt.isna()
+                    | (reorder_by_dt.dt.normalize() <= snapshot_ts.normalize())
+                )
+            )
+            inventory_products_df["prepare_po_flag"] = (
+                inventory_products_df["risk_30d_flag"]
+                & ~inventory_products_df["reorder_now_flag"]
+                & inventory_products_df["days_until_reorder"].notna()
+                & (inventory_products_df["days_until_reorder"] <= 7)
+            )
+            inventory_products_df["reorder_action_label"] = np.select(
+                [
+                    inventory_products_df["alert_excluded_flag"],
+                    inventory_products_df["reorder_now_flag"],
+                    inventory_products_df["prepare_po_flag"],
+                    inventory_products_df["risk_30d_flag"],
+                    inventory_products_df["risk_45d_flag"],
+                ],
+                ["Excluded", "Order now", "Prepare PO", "30d alert", "45d watch"],
+                default="Monitor",
             )
 
             demand_reference = max(float(inventory_products_df["alert_30d_units"].quantile(0.9)), 1.0)
             margin_reference = max(
-                float(inventory_products_df["recent_margin_with_fixed_pct"].clip(lower=0).quantile(0.9)),
+                float(inventory_products_df["recent_margin_without_fixed_pct"].clip(lower=0).quantile(0.9)),
                 10.0,
             )
             inventory_products_df["scarcity_score"] = np.where(
@@ -9070,9 +9332,14 @@ class BizniWebExporter:
                 1.0,
             )
             inventory_products_df["margin_score"] = np.clip(
-                inventory_products_df["recent_margin_with_fixed_pct"].clip(lower=0.0) / margin_reference,
+                inventory_products_df["recent_margin_without_fixed_pct"].clip(lower=0.0) / margin_reference,
                 0.0,
                 1.0,
+            )
+            inventory_products_df["strategic_score_bonus"] = np.where(
+                inventory_products_df["strategic_stock_flag"],
+                0.05,
+                0.0,
             )
             inventory_products_df["restock_status_bonus"] = inventory_products_df["stock_risk_level"].map(
                 {
@@ -9088,6 +9355,7 @@ class BizniWebExporter:
                     inventory_products_df["scarcity_score"] * 0.50
                     + inventory_products_df["demand_score"] * 0.35
                     + inventory_products_df["margin_score"] * 0.15
+                    + inventory_products_df["strategic_score_bonus"]
                     + inventory_products_df["restock_status_bonus"]
                 ) * 100.0,
                 0.0,
@@ -9103,13 +9371,17 @@ class BizniWebExporter:
                 default="Monitor",
             )
 
+            value_sort_column = "inventory_retail_value" if primary_value_basis == "retail" else "inventory_cost_value"
+            secondary_value_sort_column = (
+                "inventory_cost_value" if value_sort_column == "inventory_retail_value" else "inventory_retail_value"
+            )
             inventory_rows_df = (
                 inventory_products_df.loc[
                     (inventory_products_df["available_quantity"] > 0)
                     | (inventory_products_df["inventory_cost_value"] > 0)
                     | (inventory_products_df["inventory_retail_value"] > 0)
                 ]
-                .sort_values(["inventory_cost_value", "inventory_retail_value"], ascending=[False, False])
+                .sort_values([value_sort_column, secondary_value_sort_column], ascending=[False, False])
                 .reset_index(drop=True)
             )
             stock_risk_rows_df = (
@@ -9123,21 +9395,43 @@ class BizniWebExporter:
             )
             dead_stock_rows_df = (
                 inventory_products_df.loc[inventory_products_df["dead_stock_flag"]]
-                .sort_values(["inventory_cost_value", "inventory_retail_value"], ascending=[False, False])
+                .sort_values([value_sort_column, secondary_value_sort_column], ascending=[False, False])
+                .reset_index(drop=True)
+            )
+            alert_rows_df = (
+                inventory_products_df.loc[
+                    inventory_products_df["risk_30d_flag"]
+                    & ~inventory_products_df["alert_excluded_flag"]
+                    & (inventory_products_df["alert_30d_units"] > 0)
+                ]
+                .sort_values(
+                    [
+                        "reorder_now_flag",
+                        "strategic_stock_flag",
+                        "stock_risk_rank",
+                        "restock_priority_score",
+                        "alert_30d_revenue",
+                    ],
+                    ascending=[False, False, True, False, False],
+                )
                 .reset_index(drop=True)
             )
             revenue_at_risk_rows_df = (
                 inventory_products_df.loc[
-                    inventory_products_df["risk_45d_flag"] & (inventory_products_df["alert_30d_revenue"] > 0)
+                    inventory_products_df["risk_45d_flag"]
+                    & ~inventory_products_df["alert_excluded_flag"]
+                    & (inventory_products_df["alert_30d_revenue"] > 0)
                 ]
-                .sort_values(["stock_risk_rank", "alert_30d_revenue"], ascending=[True, False])
+                .sort_values(["reorder_now_flag", "stock_risk_rank", "alert_30d_revenue"], ascending=[False, True, False])
                 .reset_index(drop=True)
             )
             restock_priority_rows_df = (
                 inventory_products_df.loc[
-                    inventory_products_df["risk_45d_flag"] & (inventory_products_df["alert_30d_units"] > 0)
+                    inventory_products_df["risk_45d_flag"]
+                    & ~inventory_products_df["alert_excluded_flag"]
+                    & (inventory_products_df["alert_30d_units"] > 0)
                 ]
-                .sort_values(["restock_priority_score", "alert_30d_revenue"], ascending=[False, False])
+                .sort_values(["reorder_now_flag", "restock_priority_score", "alert_30d_revenue"], ascending=[False, False, False])
                 .reset_index(drop=True)
             )
 
@@ -9152,7 +9446,7 @@ class BizniWebExporter:
                         available_quantity=("available_quantity", "sum"),
                         inventory_cost_value=("inventory_cost_value", "sum"),
                         inventory_retail_value=("inventory_retail_value", "sum"),
-                        recent_90d_units=("recent_90d_units", "sum"),
+                        recent_90d_units=("effective_recent_90d_units", "sum"),
                         recent_90d_revenue=("recent_90d_revenue", "sum"),
                         recent_90d_cost_of_sales=("recent_90d_cost_of_sales", "sum"),
                         alert_30d_revenue=("alert_30d_revenue", "sum"),
@@ -9230,6 +9524,8 @@ class BizniWebExporter:
                 "inventory_available_units": round(float(inventory_products_df["available_quantity"].sum()), 1) if not inventory_products_df.empty else 0.0,
                 "inventory_cost_value": round(float(inventory_products_df["inventory_cost_value"].sum()), 2) if not inventory_products_df.empty else 0.0,
                 "inventory_retail_value": round(float(inventory_products_df["inventory_retail_value"].sum()), 2) if not inventory_products_df.empty else 0.0,
+                "inventory_primary_value_basis": primary_value_basis,
+                "inventory_secondary_value_basis": secondary_value_basis,
                 "inventory_cost_coverage_units_pct": round(
                     float(inventory_products_df["mapped_available_quantity"].sum()) / float(inventory_products_df["available_quantity"].sum()) * 100.0,
                     2,
@@ -9265,30 +9561,42 @@ class BizniWebExporter:
                     2,
                 ) if not dead_stock_rows_df.empty and not inventory_products_df.empty and float(inventory_products_df["available_quantity"].sum()) > 0 else 0.0,
                 "revenue_at_risk_30d": round(
-                    float(inventory_products_df.loc[inventory_products_df["risk_30d_flag"], "alert_30d_revenue"].sum()),
+                    float(alert_rows_df["alert_30d_revenue"].sum()),
                     2,
-                ) if not inventory_products_df.empty else 0.0,
+                ) if not alert_rows_df.empty else 0.0,
                 "profit_at_risk_30d": round(
-                    float(inventory_products_df.loc[inventory_products_df["risk_30d_flag"], "alert_30d_profit_estimate"].sum()),
+                    float(alert_rows_df["alert_30d_profit_estimate"].sum()),
                     2,
-                ) if not inventory_products_df.empty else 0.0,
+                ) if not alert_rows_df.empty else 0.0,
                 "revenue_at_risk_45d": round(
-                    float(inventory_products_df.loc[inventory_products_df["risk_45d_flag"], "alert_30d_revenue"].sum()),
+                    float(revenue_at_risk_rows_df["alert_30d_revenue"].sum()),
                     2,
-                ) if not inventory_products_df.empty else 0.0,
+                ) if not revenue_at_risk_rows_df.empty else 0.0,
                 "profit_at_risk_45d": round(
-                    float(inventory_products_df.loc[inventory_products_df["risk_45d_flag"], "alert_30d_profit_estimate"].sum()),
+                    float(revenue_at_risk_rows_df["alert_30d_profit_estimate"].sum()),
                     2,
-                ) if not inventory_products_df.empty else 0.0,
+                ) if not revenue_at_risk_rows_df.empty else 0.0,
                 "restock_priority_urgent_count": int(
-                    (inventory_products_df["restock_priority_score"] >= 80).sum()
-                ) if not inventory_products_df.empty else 0,
+                    (restock_priority_rows_df["restock_priority_score"] >= 80).sum()
+                ) if not restock_priority_rows_df.empty else 0,
                 "restock_priority_high_count": int(
                     (
-                        (inventory_products_df["restock_priority_score"] >= 60)
-                        & (inventory_products_df["restock_priority_score"] < 80)
+                        (restock_priority_rows_df["restock_priority_score"] >= 60)
+                        & (restock_priority_rows_df["restock_priority_score"] < 80)
                     ).sum()
-                ) if not inventory_products_df.empty else 0,
+                ) if not restock_priority_rows_df.empty else 0,
+                "alert_delivery_horizon_days": int(alert_delivery_horizon_days),
+                "alert_delivery_count": int(len(alert_rows_df)),
+                "alert_delivery_hero_count": int(alert_rows_df["strategic_stock_flag"].sum()) if not alert_rows_df.empty else 0,
+                "alert_reorder_now_count": int(alert_rows_df["reorder_now_flag"].sum()) if not alert_rows_df.empty else 0,
+                "alert_prepare_po_count": int(alert_rows_df["prepare_po_flag"].sum()) if not alert_rows_df.empty else 0,
+                "alert_excluded_count": int(inventory_products_df["alert_excluded_flag"].sum()) if not inventory_products_df.empty else 0,
+                "lead_time_configured_alert_count": int((alert_rows_df["lead_time_working_days"] > 0).sum()) if not alert_rows_df.empty else 0,
+                "bundle_component_rule_count": int(matched_bundle_rule_count),
+                "bundle_component_adjustment_30d_units": round(float(inventory_products_df["bundle_component_recent_30d_units"].sum()), 1) if not inventory_products_df.empty else 0.0,
+                "bundle_component_adjustment_90d_units": round(float(inventory_products_df["bundle_component_recent_90d_units"].sum()), 1) if not inventory_products_df.empty else 0.0,
+                "inbound_stock_status": "configured" if inbound_stock_enabled else "not_modeled",
+                "inbound_stock_source": inbound_stock_source,
                 "brand_turn_groups": int(len(brand_turn_rows_df)),
                 "family_turn_groups": int(len(family_turn_rows_df)),
                 "forecast_backtest_products": int(len(forecast_accuracy_rows_df)),
@@ -9319,6 +9627,7 @@ class BizniWebExporter:
             "inventory_rows": inventory_rows_df,
             "stock_risk_rows": stock_risk_rows_df,
             "dead_stock_rows": dead_stock_rows_df,
+            "alert_rows": alert_rows_df,
             "restock_priority_rows": restock_priority_rows_df,
             "revenue_at_risk_rows": revenue_at_risk_rows_df,
             "brand_turn_rows": brand_turn_rows_df,
@@ -9330,7 +9639,8 @@ class BizniWebExporter:
         print(
             f"Roy product demand analytics complete: growing={len(growing_rows_df)}, "
             f"declining={len(declining_rows_df)}, forecasted={len(forecast_rows_df)}, "
-            f"inventory_rows={len(inventory_rows_df)}, restock_rows={len(restock_priority_rows_df)}, "
+            f"inventory_rows={len(inventory_rows_df)}, alert_rows={len(alert_rows_df)}, "
+            f"restock_rows={len(restock_priority_rows_df)}, "
             f"forecast_backtests={len(forecast_accuracy_rows_df)}, brands={len(brand_summary)}"
         )
         return result

@@ -13,7 +13,78 @@
     "critical_days_of_cover": 14,
     "warning_days_of_cover": 30,
     "watch_days_of_cover": 45,
-    "dead_stock_days": 90
+    "dead_stock_days": 90,
+    "alert_delivery_horizon_days": 30,
+    "primary_value_basis": "cost",
+    "secondary_value_basis": "retail",
+    "forecast_uplift_weights": {
+      "high": 0.5,
+      "medium": 0.3,
+      "low": 0.15
+    },
+    "reorder_cover_days": 30,
+    "hero_reorder_cover_days": 45,
+    "hero_brand_keys": [
+      "wachman",
+      "maco_stop"
+    ],
+    "lead_time_working_days_by_brand": {
+      "maco_stop": 10,
+      "wachman": 20,
+      "roy": 50
+    },
+    "alert_exclusion_label_patterns": [
+      "reklamacia",
+      "reklamace",
+      "warranty claim",
+      "pozarucny servis",
+      "servis",
+      "darcek",
+      "zadarmo",
+      "nahradny diel",
+      "nahradne diely",
+      "testovaci",
+      "testovacie",
+      "update fw",
+      "poistenie balika",
+      "licencia",
+      "maketa",
+      "atrapa",
+      "set mini"
+    ],
+    "bundle_component_rules": [
+      {
+        "bundle_patterns": [
+          "set maco stop velky",
+          "set proti medvedom velky",
+          "set proti medvedom",
+          "set sprej na medveda 300ml s kapsickou",
+          "set proti medvedom velky (miesto maleho)"
+        ],
+        "exclude_bundle_from_alerts": true,
+        "components": [
+          {
+            "component_patterns": [
+              "maco stop extreme 300ml",
+              "najsilnejsi sprej na medvede maco stop extreme 300ml",
+              "a legerosebb medve spray maco stop extreme 300ml"
+            ],
+            "quantity": 1
+          },
+          {
+            "component_patterns": [
+              "puzdro maco stop na sprej 300ml",
+              "puzdro na spreje 300ml univerzal"
+            ],
+            "quantity": 1
+          }
+        ]
+      }
+    ],
+    "inbound_stock": {
+      "enabled": false,
+      "source": "todo"
+    }
   },
   "excluded_order_statuses": [
     "Stripe - cancelled",

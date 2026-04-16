@@ -14,7 +14,25 @@
     "critical_days_of_cover": 14,
     "warning_days_of_cover": 30,
     "watch_days_of_cover": 45,
-    "dead_stock_days": 90
+    "dead_stock_days": 90,
+    "alert_delivery_horizon_days": 30,
+    "primary_value_basis": "cost",
+    "secondary_value_basis": "retail",
+    "forecast_uplift_weights": {
+      "high": 0.5,
+      "medium": 0.3,
+      "low": 0.15
+    },
+    "reorder_cover_days": 30,
+    "hero_reorder_cover_days": 45,
+    "hero_brand_keys": [],
+    "lead_time_working_days_by_brand": {},
+    "alert_exclusion_label_patterns": [],
+    "bundle_component_rules": [],
+    "inbound_stock": {
+      "enabled": false,
+      "source": ""
+    }
   },
   "excluded_order_statuses": [],
   "weather": {
