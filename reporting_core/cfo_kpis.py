@@ -339,7 +339,7 @@ def build_cfo_kpi_payload(
 
     metric_defs = [
         {"key": "revenue", "label": "Revenue", "direction": "up"},
-        {"key": "profit", "label": "Profit", "direction": "up"},
+        {"key": "profit", "label": "Post-ad profit (€)", "direction": "up"},
         {"key": "orders", "label": "Orders", "direction": "up"},
         {"key": "aov", "label": "AOV", "direction": "up"},
         {"key": "cac", "label": "CAC", "direction": "down"},

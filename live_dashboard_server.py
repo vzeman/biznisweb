@@ -413,7 +413,7 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
         renderCards('contextGrid', [
           { label:text(windowPayload.label_en, 'Current window'), value:text(windowPayload.label_sk, ''), note:'Window definition from generated report', raw:0, className:'value' },
           { label:'Revenue', value:formatMoney(metrics.revenue), note:'Window metric', raw:metrics.revenue },
-          { label:'Profit (pre-fixed)', value:formatMoney(metrics.profit), note:'Window metric', raw:metrics.profit },
+          { label:'Post-ad profit (€)', value:formatMoney(metrics.profit), note:'Excludes fixed overhead', raw:metrics.profit },
           { label:'Orders', value:formatInt(metrics.orders), note:'Window metric', raw:metrics.orders },
           { label:'AOV', value:formatMoney(metrics.aov), note:'Window metric', raw:metrics.aov },
           { label:'CAC', value:formatMoney(metrics.cac), note:'Window metric', raw:metrics.cac ? -metrics.cac : 0 },

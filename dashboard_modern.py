@@ -16,7 +16,7 @@ import pandas as pd
 
 METRIC_LABELS = {
     "revenue": {"en": "Revenue (net)", "sk": "Tržby (netto)"},
-    "profit": {"en": "Profit", "sk": "Zisk"},
+    "profit": {"en": "Post-ad profit (€)", "sk": "Post-ad zisk (€)"},
     "orders": {"en": "Orders", "sk": "Objednávky"},
     "aov": {"en": "AOV (net)", "sk": "Priemerná objednávka (netto)"},
     "cac": {"en": "CAC", "sk": "CAC"},
@@ -1755,7 +1755,7 @@ def generate_modern_dashboard(
         {"en": "Pre-ad contribution profit", "sk": "Pre-ad contribution profit", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_profit")), "kind": "currency", "tone": "positive"},
         {"en": "Pre-ad contribution margin", "sk": "Pre-ad contribution marza", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_margin_pct")), "kind": "percent", "tone": "positive"},
         {"en": "Pre-ad contribution / order", "sk": "Pre-ad contribution / objednavka", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_order")), "kind": "currency", "tone": "positive", "note_en": "Break-even order contribution", "note_sk": "Break-even contribution na objednavku"},
-        {"en": "Post-ad contribution profit", "sk": "Post-ad contribution profit", "value": _maybe_num((financial_metrics or {}).get("post_ad_contribution_profit")), "kind": "currency", "tone": "positive"},
+        {"en": "Post-ad profit (€)", "sk": "Post-ad zisk (€)", "value": _maybe_num((financial_metrics or {}).get("post_ad_contribution_profit")), "kind": "currency", "tone": "positive", "note_en": "Excludes fixed overhead", "note_sk": "Bez fixneho overheadu"},
         {"en": "Post-ad contribution margin", "sk": "Post-ad contribution marza", "value": _maybe_num((financial_metrics or {}).get("post_ad_contribution_margin_pct")), "kind": "percent", "tone": "positive"},
         {"en": "Post-ad contribution / order", "sk": "Post-ad contribution / objednavka", "value": _maybe_num((financial_metrics or {}).get("post_ad_contribution_profit_per_order")), "kind": "currency", "tone": "positive", "note_en": "Excludes fixed overhead", "note_sk": "Bez fixneho overheadu"},
         {"en": "Break-even CAC", "sk": "Break-even CAC", "value": break_even_cac, "kind": "currency", "tone": "positive"},
