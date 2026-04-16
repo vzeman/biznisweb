@@ -3945,7 +3945,11 @@ class BizniWebExporter:
         first_item_retention = self.analyze_retention_by_first_order_item(analytics_df)
         same_item_repurchase = self.analyze_same_item_repurchase(analytics_df)
         time_to_nth_by_first_item = self.analyze_time_to_nth_by_first_item(analytics_df)
-        sample_funnel_analysis = self.analyze_sample_funnel(analytics_df)
+        sample_funnel_analysis = (
+            self.analyze_sample_funnel(analytics_df)
+            if self.project_name != "roy"
+            else {"summary": {}, "window_conversion": pd.DataFrame(), "entry_product_conversion": pd.DataFrame()}
+        )
         refill_cohort_analysis = self.analyze_refill_cohorts(analytics_df)
 
         # Customer email segmentation analysis

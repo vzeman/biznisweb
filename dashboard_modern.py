@@ -613,6 +613,13 @@ def generate_modern_dashboard(
     embedded_period_reports: Optional[dict] = None,
 ) -> str:
     raw_title = (report_title or "BizniWeb reporting").strip()
+    project_key = str((source_health or {}).get("project") or "").strip().lower()
+    if not project_key:
+        lowered_title = raw_title.lower()
+        if "roy" in lowered_title:
+            project_key = "roy"
+        elif "vevo" in lowered_title:
+            project_key = "vevo"
     title = escape(raw_title)
     brand_mark = escape((raw_title[:1] or "B").upper())
     series = _series(date_agg)
@@ -1438,6 +1445,10 @@ def generate_modern_dashboard(
         ],
         limit=12,
     )
+    if project_key == "roy":
+        sample_funnel_summary = {}
+        sample_funnel_window_rows = []
+        sample_funnel_entry_rows = []
     refill_cohort_summary = (refill_cohort_analysis or {}).get("summary", {}) if refill_cohort_analysis else {}
     refill_cohort_bucket_rows = _frame_rows(
         (refill_cohort_analysis or {}).get("bucket_rows"),
@@ -2721,6 +2732,38 @@ def generate_modern_dashboard(
         f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('entry_customers'))))}</td><td>{_num(row.get('repeat_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_200_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_500_60d_pct')):.1f}%</td></tr>"
         for row in sample_funnel_entry_rows
     ) or '<tr><td colspan="7"><span class="lang-en">No sample funnel data available.</span><span class="lang-sk hidden">Sample funnel data nie su dostupne.</span></td></tr>'
+    show_sample_funnel = project_key != "roy" and bool(
+        sample_summary or sample_funnel_window_rows or sample_funnel_entry_rows
+    )
+    sample_funnel_section_html = ""
+    if show_sample_funnel:
+        sample_funnel_section_html = f"""
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Sample funnel</span><span class="lang-sk hidden">Sample funnel</span></h3><p><span class="lang-en">First-order sample customers tracked into repeat and full-size conversion windows.</span><span class="lang-sk hidden">Zakaznici vstupujuci cez sample v prvej objednavke sledovani do repeat a full-size konverznych okien.</span></p></div></div>
+                            <div class="mini-grid">
+                                <div class="mini-card"><small><span class="lang-en">Entry customers</span><span class="lang-sk hidden">Vstupni zakaznici</span></small><strong>{sample_entry_customers}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30 dni</span></small><strong>{_format_mini_value_html(sample_repeat_30d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_30d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_60d, kind="percent", decimals=1)}</strong></div>
+                            </div>
+                            <div class="mini-grid" style="margin-top:12px;">
+                                <div class="mini-card"><small><span class="lang-en">Median days to full-size</span><span class="lang-sk hidden">Median dni do full-size</span></small><strong>{(f"{sample_median_days_fullsize:.0f}" if sample_median_days_fullsize is not None else "N/A")}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Top entry product</span><span class="lang-sk hidden">Top vstupny produkt</span></small><strong>{sample_top_entry_product}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Entry revenue</span><span class="lang-sk hidden">Vstupne trzby</span></small><strong>{_format_mini_value_html(sample_summary.get("entry_revenue"), kind="currency")}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Sample first-order share</span><span class="lang-sk hidden">Podiel sample prvej objednavky</span></small><strong>{_format_mini_value_html(sample_summary.get("sample_first_order_share_pct"), kind="percent", decimals=1)}</strong></div>
+                            </div>
+                            <div class="chart-shell"><canvas id="sampleFunnelChart"></canvas></div>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Sample entry product quality</span><span class="lang-sk hidden">Kvalita sample vstupnych produktov</span></h3><p><span class="lang-en">Top sample entry products ranked by 30d and 60d conversion into repeat and full-size orders.</span><span class="lang-sk hidden">Top sample vstupne produkty podla 30d a 60d konverzie do repeat a full-size objednavok.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Sample</span><span class="lang-sk hidden">Sample</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30d</span></th><th><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30d</span></th><th><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60d</span></th><th>200ml 60d</th><th>500ml 60d</th></tr></thead>
+                                <tbody>{sample_entry_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+        """
     refill_summary = refill_cohort_summary or {}
     refill_entry_customers = int(round(_num(refill_summary.get("entry_customers"))))
     refill_sample_60d = _maybe_num(refill_summary.get("sample_refill_60d_pct"))
@@ -3346,31 +3389,7 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Top 10% revenue share</span><span class="lang-sk hidden">Podiel top 10% zakaznikov</span></small><strong>{top_10_share:.1f}%</strong></div>
                         </div>
                     </div>
-                    <div class="grid-2" style="margin-top:18px;">
-                        <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Sample funnel</span><span class="lang-sk hidden">Sample funnel</span></h3><p><span class="lang-en">First-order sample customers tracked into repeat and full-size conversion windows.</span><span class="lang-sk hidden">Zakaznici vstupujuci cez sample v prvej objednavke sledovani do repeat a full-size konverznych okien.</span></p></div></div>
-                            <div class="mini-grid">
-                                <div class="mini-card"><small><span class="lang-en">Entry customers</span><span class="lang-sk hidden">Vstupni zakaznici</span></small><strong>{sample_entry_customers}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30 dni</span></small><strong>{_format_mini_value_html(sample_repeat_30d, kind="percent", decimals=1)}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_30d, kind="percent", decimals=1)}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_60d, kind="percent", decimals=1)}</strong></div>
-                            </div>
-                            <div class="mini-grid" style="margin-top:12px;">
-                                <div class="mini-card"><small><span class="lang-en">Median days to full-size</span><span class="lang-sk hidden">Median dni do full-size</span></small><strong>{(f"{sample_median_days_fullsize:.0f}" if sample_median_days_fullsize is not None else "N/A")}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Top entry product</span><span class="lang-sk hidden">Top vstupny produkt</span></small><strong>{sample_top_entry_product}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Entry revenue</span><span class="lang-sk hidden">Vstupne trzby</span></small><strong>{_format_mini_value_html(sample_summary.get("entry_revenue"), kind="currency")}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Sample first-order share</span><span class="lang-sk hidden">Podiel sample prvej objednavky</span></small><strong>{_format_mini_value_html(sample_summary.get("sample_first_order_share_pct"), kind="percent", decimals=1)}</strong></div>
-                            </div>
-                            <div class="chart-shell"><canvas id="sampleFunnelChart"></canvas></div>
-                        </div>
-                        <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Sample entry product quality</span><span class="lang-sk hidden">Kvalita sample vstupnych produktov</span></h3><p><span class="lang-en">Top sample entry products ranked by 30d and 60d conversion into repeat and full-size orders.</span><span class="lang-sk hidden">Top sample vstupne produkty podla 30d a 60d konverzie do repeat a full-size objednavok.</span></p></div></div>
-                            <table>
-                                <thead><tr><th><span class="lang-en">Sample</span><span class="lang-sk hidden">Sample</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30d</span></th><th><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30d</span></th><th><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60d</span></th><th>200ml 60d</th><th>500ml 60d</th></tr></thead>
-                                <tbody>{sample_entry_rows_html}</tbody>
-                            </table>
-                        </div>
-                    </div>
+                    {sample_funnel_section_html}
                     <div class="grid-2">
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">Refill cohort timing</span><span class="lang-sk hidden">Casovanie refill kohort</span></h3><p><span class="lang-en">Second-order refill speed by first-order entry bucket so refill timing is measured by cohort, not only global repeat rate.</span><span class="lang-sk hidden">Rychlost druhej objednavky podla vstupneho bucketu prvej objednavky, aby sa refill meral kohortne a nie len globalnym repeat rate.</span></p></div></div>

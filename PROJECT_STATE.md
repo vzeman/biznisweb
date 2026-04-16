@@ -174,14 +174,13 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Merge and deploy the `codex/roy-inventory-metrics` branch so the new ROY stock alert section reaches the real scheduled daily email path.
-- After deploy, verify on the production ECS host/run that:
-  - the generated ROY HTML contains `Actionable inventory alerts`
-  - the sent daily email includes the `SKLADOVE ALERTY` block
-- Then implement inbound-stock modeling so reorder alerts stop being purely conservative:
+- Implement inbound-stock modeling so reorder alerts stop being purely conservative:
   - define the source of truth for goods on the way
   - map inbound quantities to product/SKU
   - fold inbound stock into `net_available_quantity` and reorder recommendations
+- After inbound stock exists, promote `Prepare PO` into a less conservative purchasing workflow that distinguishes:
+  - real stockout risk with inbound cover
+  - already-covered risk that only needs ETA monitoring
 
 ## 9) Change Log
 
@@ -207,6 +206,9 @@ Bootstrap entrypoints:
 - Wired the new inventory alert outputs into the active report surfaces:
   - `dashboard_modern.py` renders summary mini-cards plus the new actionable alert table
   - `daily_report_runner.py` reads `dashboard_payload.json` and appends `SKLADOVE ALERTY` into the outbound email text
+- Removed the ROY sample funnel from the active runtime and report surface:
+  - `export_orders.py` no longer computes sample-funnel analytics for the ROY project
+  - `dashboard_modern.py` now suppresses the sample-funnel block for ROY while keeping it available for VEVO
 - Verified locally on live ROY data with a one-pass export:
   - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py`
   - production-equivalent ROY export for `2025-09-24 -> 2026-04-15` using output tag `inventory_alerts_verify`
@@ -222,6 +224,17 @@ Bootstrap entrypoints:
     - `12` excluded noise rows
     - HTML contains `Actionable inventory alerts`
     - email summary text contains `SKLADOVE ALERTY`
+- Verified the ROY sample-funnel removal locally with:
+  - production-equivalent ROY export for `2025-09-24 -> 2026-04-15` using output tag `no_sample_verify`
+  - generated artifacts:
+    - `data/roy/report_20250924-20260415__no_sample_verify.html`
+    - `data/roy/dashboard_payload_20250924-20260415__no_sample_verify.json`
+  - verification outcome:
+    - `dashboard.sample_funnel.summary = {}`
+    - `dashboard.sample_funnel.windows = []`
+    - `dashboard.sample_funnel.entry_rows = []`
+    - ROY HTML no longer renders the sample-funnel section
+    - inventory alert section remains present and populated
 
 ### 2026-04-15
 - Added Roy inventory snapshot ingestion from Biznisweb GraphQL product data:
