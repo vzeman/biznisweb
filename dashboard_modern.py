@@ -613,6 +613,13 @@ def generate_modern_dashboard(
     embedded_period_reports: Optional[dict] = None,
 ) -> str:
     raw_title = (report_title or "BizniWeb reporting").strip()
+    project_key = str((source_health or {}).get("project") or "").strip().lower()
+    if not project_key:
+        lowered_title = raw_title.lower()
+        if "roy" in lowered_title:
+            project_key = "roy"
+        elif "vevo" in lowered_title:
+            project_key = "vevo"
     title = escape(raw_title)
     brand_mark = escape((raw_title[:1] or "B").upper())
     series = _series(date_agg)
@@ -1155,14 +1162,181 @@ def generate_modern_dashboard(
             "sku",
             "product",
             "recent_30d_revenue",
+            "recent_30d_units",
             "forecast_30d_revenue",
             "forecast_30d_units",
+            "available_quantity",
+            "days_of_cover",
+            "projected_stockout_date",
+            "stock_risk_level",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "cost_coverage_pct",
             "forecast_delta_pct",
             "confidence",
             "weeks_used",
             "days_since_last_sale",
         ],
         limit=10,
+    )
+    roy_inventory_rows = _frame_rows(
+        (roy_product_demand or {}).get("inventory_rows"),
+        [
+            "sku",
+            "product",
+            "active",
+            "available_quantity",
+            "mapped_available_quantity",
+            "cost_per_unit",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "cost_coverage_pct",
+            "days_since_last_sale",
+            "days_of_cover",
+            "stock_risk_level",
+        ],
+        limit=12,
+    )
+    roy_stock_risk_rows = _frame_rows(
+        (roy_product_demand or {}).get("stock_risk_rows"),
+        [
+            "sku",
+            "product",
+            "available_quantity",
+            "recent_30d_units",
+            "forecast_30d_units",
+            "alert_30d_units",
+            "days_of_cover",
+            "projected_stockout_date",
+            "stock_risk_level",
+            "forecast_confidence",
+            "inventory_cost_value",
+        ],
+        limit=12,
+    )
+    roy_dead_stock_rows = _frame_rows(
+        (roy_product_demand or {}).get("dead_stock_rows"),
+        [
+            "sku",
+            "product",
+            "active",
+            "available_quantity",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "days_since_last_sale",
+            "cost_coverage_pct",
+        ],
+        limit=12,
+    )
+    roy_alert_rows = _frame_rows(
+        (roy_product_demand or {}).get("alert_rows"),
+        [
+            "sku",
+            "product",
+            "strategic_stock_flag",
+            "stock_risk_level",
+            "available_quantity",
+            "alert_30d_units",
+            "days_of_cover",
+            "lead_time_working_days",
+            "reorder_by_date",
+            "suggested_reorder_units",
+            "reorder_action_label",
+            "alert_30d_revenue",
+            "projected_stockout_date",
+        ],
+        limit=12,
+    )
+    roy_restock_priority_rows = _frame_rows(
+        (roy_product_demand or {}).get("restock_priority_rows"),
+        [
+            "sku",
+            "product",
+            "restock_priority_score",
+            "restock_priority_bucket",
+            "stock_risk_level",
+            "available_quantity",
+            "alert_30d_units",
+            "days_of_cover",
+            "alert_30d_revenue",
+            "recent_margin_with_fixed_pct",
+            "projected_stockout_date",
+            "cost_coverage_pct",
+        ],
+        limit=12,
+    )
+    roy_revenue_at_risk_rows = _frame_rows(
+        (roy_product_demand or {}).get("revenue_at_risk_rows"),
+        [
+            "sku",
+            "product",
+            "stock_risk_level",
+            "available_quantity",
+            "alert_30d_units",
+            "alert_30d_revenue",
+            "alert_30d_profit_estimate",
+            "days_of_cover",
+            "projected_stockout_date",
+        ],
+        limit=12,
+    )
+    roy_brand_turn_rows = _frame_rows(
+        (roy_product_demand or {}).get("brand_turn_rows"),
+        [
+            "group_key",
+            "group_label",
+            "products",
+            "products_with_stock",
+            "available_quantity",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "recent_90d_revenue",
+            "inventory_turns_annualized",
+            "days_in_inventory_estimate",
+            "dead_stock_share_pct",
+            "risk_30d_count",
+            "critical_count",
+        ],
+        limit=12,
+    )
+    roy_family_turn_rows = _frame_rows(
+        (roy_product_demand or {}).get("family_turn_rows"),
+        [
+            "group_key",
+            "group_label",
+            "products",
+            "products_with_stock",
+            "available_quantity",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "recent_90d_revenue",
+            "inventory_turns_annualized",
+            "days_in_inventory_estimate",
+            "dead_stock_share_pct",
+            "risk_30d_count",
+            "critical_count",
+        ],
+        limit=12,
+    )
+    roy_forecast_accuracy_rows = _frame_rows(
+        (roy_product_demand or {}).get("forecast_accuracy_rows"),
+        [
+            "sku",
+            "product",
+            "backtest_window_start",
+            "backtest_window_end",
+            "actual_30d_revenue",
+            "forecast_30d_revenue",
+            "actual_30d_units",
+            "forecast_30d_units",
+            "revenue_error_abs_pct",
+            "units_error_abs_pct",
+            "revenue_accuracy_pct",
+            "bias_label",
+            "confidence",
+            "weeks_used",
+        ],
+        limit=12,
     )
     roy_brand_revenue_rows = _frame_rows(
         (roy_product_demand or {}).get("brand_revenue_rows"),
@@ -1271,6 +1445,10 @@ def generate_modern_dashboard(
         ],
         limit=12,
     )
+    if project_key == "roy":
+        sample_funnel_summary = {}
+        sample_funnel_window_rows = []
+        sample_funnel_entry_rows = []
     refill_cohort_summary = (refill_cohort_analysis or {}).get("summary", {}) if refill_cohort_analysis else {}
     refill_cohort_bucket_rows = _frame_rows(
         (refill_cohort_analysis or {}).get("bucket_rows"),
@@ -1689,6 +1867,15 @@ def generate_modern_dashboard(
             "declining_rows": roy_declining_rows,
             "seasonality_rows": roy_seasonality_rows,
             "forecast_rows": roy_forecast_rows,
+            "inventory_rows": roy_inventory_rows,
+            "stock_risk_rows": roy_stock_risk_rows,
+            "dead_stock_rows": roy_dead_stock_rows,
+            "alert_rows": roy_alert_rows,
+            "restock_priority_rows": roy_restock_priority_rows,
+            "revenue_at_risk_rows": roy_revenue_at_risk_rows,
+            "brand_turn_rows": roy_brand_turn_rows,
+            "family_turn_rows": roy_family_turn_rows,
+            "forecast_accuracy_rows": roy_forecast_accuracy_rows,
             "brand_revenue_rows": roy_brand_revenue_rows,
             "brand_profit_rows": roy_brand_profit_rows,
         },
@@ -1755,6 +1942,83 @@ def generate_modern_dashboard(
     payload_json = _json_script_content(payload)
     roy_trend_window_weeks = max(2, int(round(_num(roy_product_demand_summary.get("trend_window_weeks"))))) if roy_product_demand_summary else 4
     roy_forecast_horizon_days = max(1, int(round(_num(roy_product_demand_summary.get("forecast_horizon_days"))))) if roy_product_demand_summary else 30
+    roy_inventory_cost_value = _num(roy_product_demand_summary.get("inventory_cost_value"))
+    roy_inventory_retail_value = _num(roy_product_demand_summary.get("inventory_retail_value"))
+    roy_inventory_available_units = _num(roy_product_demand_summary.get("inventory_available_units"))
+    roy_inventory_primary_value_basis = escape(str(roy_product_demand_summary.get("inventory_primary_value_basis") or "cost").upper())
+    roy_inventory_secondary_value_basis = escape(str(roy_product_demand_summary.get("inventory_secondary_value_basis") or "retail").upper())
+    roy_inventory_cost_coverage_units_pct = _num(roy_product_demand_summary.get("inventory_cost_coverage_units_pct"))
+    roy_inventory_cost_coverage_retail_pct = _num(roy_product_demand_summary.get("inventory_cost_coverage_retail_pct"))
+    roy_stock_risk_critical_count = int(round(_num(roy_product_demand_summary.get("stock_risk_critical_count"))))
+    roy_stock_risk_30d_count = int(round(_num(roy_product_demand_summary.get("stock_risk_30d_count"))))
+    roy_stock_risk_45d_count = int(round(_num(roy_product_demand_summary.get("stock_risk_45d_count"))))
+    roy_negative_stock_count = int(round(_num(roy_product_demand_summary.get("negative_stock_count"))))
+    roy_negative_stock_units_gap = _num(roy_product_demand_summary.get("negative_stock_units_gap"))
+    roy_dead_stock_count = int(round(_num(roy_product_demand_summary.get("dead_stock_count"))))
+    roy_dead_stock_cost_value = _num(roy_product_demand_summary.get("dead_stock_cost_value"))
+    roy_dead_stock_cost_share_pct = _num(roy_product_demand_summary.get("dead_stock_cost_share_pct"))
+    roy_dead_stock_units_share_pct = _num(roy_product_demand_summary.get("dead_stock_units_share_pct"))
+    roy_out_of_stock_recent_demand_count = int(round(_num(roy_product_demand_summary.get("out_of_stock_recent_demand_count"))))
+    roy_revenue_at_risk_30d = _num(roy_product_demand_summary.get("revenue_at_risk_30d"))
+    roy_profit_at_risk_30d = _num(roy_product_demand_summary.get("profit_at_risk_30d"))
+    roy_revenue_at_risk_45d = _num(roy_product_demand_summary.get("revenue_at_risk_45d"))
+    roy_profit_at_risk_45d = _num(roy_product_demand_summary.get("profit_at_risk_45d"))
+    roy_restock_priority_urgent_count = int(round(_num(roy_product_demand_summary.get("restock_priority_urgent_count"))))
+    roy_restock_priority_high_count = int(round(_num(roy_product_demand_summary.get("restock_priority_high_count"))))
+    roy_alert_delivery_horizon_days = int(round(_num(roy_product_demand_summary.get("alert_delivery_horizon_days"))))
+    roy_alert_delivery_count = int(round(_num(roy_product_demand_summary.get("alert_delivery_count"))))
+    roy_alert_delivery_hero_count = int(round(_num(roy_product_demand_summary.get("alert_delivery_hero_count"))))
+    roy_alert_reorder_now_count = int(round(_num(roy_product_demand_summary.get("alert_reorder_now_count"))))
+    roy_alert_prepare_po_count = int(round(_num(roy_product_demand_summary.get("alert_prepare_po_count"))))
+    roy_alert_excluded_count = int(round(_num(roy_product_demand_summary.get("alert_excluded_count"))))
+    roy_lead_time_configured_alert_count = int(round(_num(roy_product_demand_summary.get("lead_time_configured_alert_count"))))
+    roy_bundle_component_rule_count = int(round(_num(roy_product_demand_summary.get("bundle_component_rule_count"))))
+    roy_bundle_component_adjustment_30d_units = _num(roy_product_demand_summary.get("bundle_component_adjustment_30d_units"))
+    roy_bundle_component_adjustment_90d_units = _num(roy_product_demand_summary.get("bundle_component_adjustment_90d_units"))
+    roy_inbound_stock_status = escape(str(roy_product_demand_summary.get("inbound_stock_status") or "not_modeled").replace("_", " "))
+    roy_inbound_stock_source = escape(str(roy_product_demand_summary.get("inbound_stock_source") or "not_modeled"))
+    roy_forecast_backtest_products = int(round(_num(roy_product_demand_summary.get("forecast_backtest_products"))))
+    roy_forecast_backtest_wape_pct = _num(roy_product_demand_summary.get("forecast_backtest_wape_pct"))
+    roy_forecast_backtest_median_accuracy_pct = _num(roy_product_demand_summary.get("forecast_backtest_median_accuracy_pct"))
+    roy_forecast_backtest_within_20_pct = _num(roy_product_demand_summary.get("forecast_backtest_within_20_pct"))
+    roy_inventory_snapshot_date = escape(str(roy_product_demand_summary.get("inventory_snapshot_date") or "-"))
+    roy_inventory_status = str(roy_product_demand_summary.get("inventory_status") or "unavailable").strip().lower()
+    roy_inventory_fetch_error = escape(str(roy_product_demand_summary.get("inventory_fetch_error") or ""))
+    if roy_inventory_status == "ok":
+        roy_inventory_status_note_html = (
+            f'<p class="muted-note"><span class="lang-en">Live Biznisweb inventory snapshot from {roy_inventory_snapshot_date}. '
+            f'Cost mapping covers {_format_mini_value_html(roy_inventory_cost_coverage_units_pct, kind="percent")} of on-hand units '
+            f'and {_format_mini_value_html(roy_inventory_cost_coverage_retail_pct, kind="percent")} of retail-value exposure. '
+            f'Primary valuation basis: {roy_inventory_primary_value_basis}; secondary: {roy_inventory_secondary_value_basis}. '
+            f'Inbound stock: {roy_inbound_stock_status} ({roy_inbound_stock_source}). '
+            f'Bundle-to-component rules matched: {roy_bundle_component_rule_count}.</span>'
+            f'<span class="lang-sk hidden">Live Biznisweb snapshot skladu z {roy_inventory_snapshot_date}. '
+            f'Coverage nakupnych cien pokryva {_format_mini_value_html(roy_inventory_cost_coverage_units_pct, kind="percent")} skladovych kusov '
+            f'a {_format_mini_value_html(roy_inventory_cost_coverage_retail_pct, kind="percent")} retail hodnoty skladu. '
+            f'Primarne ocenenie: {roy_inventory_primary_value_basis}; sekundarne: {roy_inventory_secondary_value_basis}. '
+            f'Inbound sklad: {roy_inbound_stock_status} ({roy_inbound_stock_source}). '
+            f'Bundle pravidla zhodene na komponenty: {roy_bundle_component_rule_count}.</span></p>'
+        )
+    elif roy_inventory_status == "empty":
+        roy_inventory_status_note_html = (
+            f'<p class="muted-note"><span class="lang-en">Biznisweb returned an empty inventory snapshot on {roy_inventory_snapshot_date}.</span>'
+            f'<span class="lang-sk hidden">Biznisweb vratil prazdny inventory snapshot k datumu {roy_inventory_snapshot_date}.</span></p>'
+        )
+    elif roy_inventory_status == "error":
+        roy_inventory_status_note_html = (
+            f'<p class="muted-note"><span class="lang-en">Inventory snapshot failed: {roy_inventory_fetch_error or "unknown error"}.</span>'
+            f'<span class="lang-sk hidden">Nacitanie inventory snapshotu zlyhalo: {roy_inventory_fetch_error or "neznamy problem"}.</span></p>'
+        )
+    elif roy_inventory_status == "disabled":
+        roy_inventory_status_note_html = (
+            '<p class="muted-note"><span class="lang-en">Inventory snapshot is disabled in the project settings.</span>'
+            '<span class="lang-sk hidden">Inventory snapshot je vypnuty v project settings.</span></p>'
+        )
+    else:
+        roy_inventory_status_note_html = (
+            '<p class="muted-note"><span class="lang-en">Inventory snapshot is not available for this render.</span>'
+            '<span class="lang-sk hidden">Inventory snapshot pre tento render nie je dostupny.</span></p>'
+        )
 
     product_rows_html = "".join(
         (
@@ -1821,12 +2085,145 @@ def generate_modern_dashboard(
             f"<td>&euro;{_num(row.get('recent_30d_revenue')):,.2f}</td>"
             f"<td>&euro;{_num(row.get('forecast_30d_revenue')):,.2f}</td>"
             f"<td>{_num(row.get('forecast_30d_units')):.1f}</td>"
+            f"<td>{_num(row.get('available_quantity')):.1f}</td>"
+            f"<td>{_num(row.get('days_of_cover')):.1f}</td>"
+            f"<td>{escape(str(row.get('projected_stockout_date') or '-'))}</td>"
+            f"<td>{escape(str(row.get('stock_risk_level') or '-'))}</td>"
             f"<td>{_num(row.get('forecast_delta_pct')):+.1f}%</td>"
             f"<td>{escape(str(row.get('confidence') or '-'))}</td>"
             "</tr>"
         )
         for row in roy_forecast_rows
-    ) or '<tr><td colspan="6"><span class="lang-en">Not enough stable product history for product-level sales forecasting yet.</span><span class="lang-sk hidden">Na forecast predaja na urovni produktu zatial nie je dost stabilnej historie.</span></td></tr>'
+    ) or '<tr><td colspan="10"><span class="lang-en">Not enough stable product history for product-level sales forecasting yet.</span><span class="lang-sk hidden">Na forecast predaja na urovni produktu zatial nie je dost stabilnej historie.</span></td></tr>'
+    roy_inventory_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{_num(row.get('available_quantity')):.1f}</td>"
+            f"<td>&euro;{_num(row.get('inventory_cost_value')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('inventory_retail_value')):,.2f}</td>"
+            f"<td>{_num(row.get('cost_coverage_pct')):.1f}%</td>"
+            f"<td>{_num(row.get('days_since_last_sale')):.0f}</td>"
+            "</tr>"
+        )
+        for row in roy_inventory_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No inventory valuation rows available.</span><span class="lang-sk hidden">Ocenenie skladu zatial nie je dostupne.</span></td></tr>'
+    roy_stock_risk_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{_num(row.get('available_quantity')):.1f}</td>"
+            f"<td>{_num(row.get('alert_30d_units')):.1f}</td>"
+            f"<td>{_num(row.get('days_of_cover')):.1f}</td>"
+            f"<td>{escape(str(row.get('projected_stockout_date') or '-'))}</td>"
+            f"<td>{escape(str(row.get('stock_risk_level') or '-'))}</td>"
+            "</tr>"
+        )
+        for row in roy_stock_risk_rows
+    ) or '<tr><td colspan="6"><span class="lang-en">No immediate stock-risk products detected from recent demand.</span><span class="lang-sk hidden">Na zaklade posledneho dopytu zatial nevidno bezprostredne rizikove skladove pozicie.</span></td></tr>'
+    roy_dead_stock_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{_num(row.get('available_quantity')):.1f}</td>"
+            f"<td>&euro;{_num(row.get('inventory_cost_value')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('inventory_retail_value')):,.2f}</td>"
+            f"<td>{_num(row.get('days_since_last_sale')):.0f}</td>"
+            "</tr>"
+        )
+        for row in roy_dead_stock_rows
+    ) or '<tr><td colspan="5"><span class="lang-en">No dead-stock products detected from the current cutoff.</span><span class="lang-sk hidden">Podla aktualneho cut-offu sa nenasiel dead stock.</span></td></tr>'
+    roy_alert_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{'Hero SKU' if bool(row.get('strategic_stock_flag')) else '-'}</td>"
+            f"<td>{escape(str(row.get('stock_risk_level') or '-'))}</td>"
+            f"<td>{_num(row.get('available_quantity')):.1f}</td>"
+            f"<td>{_num(row.get('alert_30d_units')):.1f}</td>"
+            f"<td>{_num(row.get('days_of_cover')):.1f}</td>"
+            f"<td>{int(round(_num(row.get('lead_time_working_days'))))}</td>"
+            f"<td>{escape(str(row.get('reorder_by_date') or '-'))}</td>"
+            f"<td>{_num(row.get('suggested_reorder_units')):.0f}</td>"
+            f"<td>{escape(str(row.get('reorder_action_label') or '-'))}</td>"
+            f"<td>&euro;{_num(row.get('alert_30d_revenue')):,.2f}</td>"
+            "</tr>"
+        )
+        for row in roy_alert_rows
+    ) or '<tr><td colspan="11"><span class="lang-en">No actionable 30-day stock alerts are active.</span><span class="lang-sk hidden">Momentlane nie su aktivne ziadne akcne 30-dnove skladove alerty.</span></td></tr>'
+    roy_restock_priority_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{_num(row.get('restock_priority_score')):.1f}</td>"
+            f"<td>{escape(str(row.get('restock_priority_bucket') or '-'))}</td>"
+            f"<td>{escape(str(row.get('stock_risk_level') or '-'))}</td>"
+            f"<td>{_num(row.get('available_quantity')):.1f}</td>"
+            f"<td>{_num(row.get('alert_30d_units')):.1f}</td>"
+            f"<td>{_num(row.get('days_of_cover')):.1f}</td>"
+            f"<td>&euro;{_num(row.get('alert_30d_revenue')):,.2f}</td>"
+            "</tr>"
+        )
+        for row in roy_restock_priority_rows
+    ) or '<tr><td colspan="8"><span class="lang-en">No restock-priority rows available yet.</span><span class="lang-sk hidden">Restock priority riadky zatial nie su dostupne.</span></td></tr>'
+    roy_revenue_at_risk_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{escape(str(row.get('stock_risk_level') or '-'))}</td>"
+            f"<td>{_num(row.get('available_quantity')):.1f}</td>"
+            f"<td>{_num(row.get('alert_30d_units')):.1f}</td>"
+            f"<td>&euro;{_num(row.get('alert_30d_revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('alert_30d_profit_estimate')):,.2f}</td>"
+            f"<td>{escape(str(row.get('projected_stockout_date') or '-'))}</td>"
+            "</tr>"
+        )
+        for row in roy_revenue_at_risk_rows
+    ) or '<tr><td colspan="7"><span class="lang-en">No revenue-at-risk rows available.</span><span class="lang-sk hidden">Riadky revenue at risk nie su dostupne.</span></td></tr>'
+    roy_brand_turn_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('group_label') or 'Unknown'))}</td>"
+            f"<td>{int(round(_num(row.get('products_with_stock'))))}</td>"
+            f"<td>&euro;{_num(row.get('inventory_cost_value')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('recent_90d_revenue')):,.2f}</td>"
+            f"<td>{_num(row.get('inventory_turns_annualized')):.2f}x</td>"
+            f"<td>{_num(row.get('days_in_inventory_estimate')):.0f}</td>"
+            f"<td>{_num(row.get('dead_stock_share_pct')):.1f}%</td>"
+            f"<td>{int(round(_num(row.get('risk_30d_count'))))}</td>"
+            "</tr>"
+        )
+        for row in roy_brand_turn_rows
+    ) or '<tr><td colspan="8"><span class="lang-en">No brand inventory-turn rows available.</span><span class="lang-sk hidden">Brand inventory turns zatial nie su dostupne.</span></td></tr>'
+    roy_family_turn_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('group_label') or 'Unknown'))}</td>"
+            f"<td>{int(round(_num(row.get('products_with_stock'))))}</td>"
+            f"<td>&euro;{_num(row.get('inventory_cost_value')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('recent_90d_revenue')):,.2f}</td>"
+            f"<td>{_num(row.get('inventory_turns_annualized')):.2f}x</td>"
+            f"<td>{_num(row.get('days_in_inventory_estimate')):.0f}</td>"
+            f"<td>{_num(row.get('dead_stock_share_pct')):.1f}%</td>"
+            f"<td>{int(round(_num(row.get('risk_30d_count'))))}</td>"
+            "</tr>"
+        )
+        for row in roy_family_turn_rows
+    ) or '<tr><td colspan="8"><span class="lang-en">No family inventory-turn rows available.</span><span class="lang-sk hidden">Family inventory turns zatial nie su dostupne.</span></td></tr>'
+    roy_forecast_accuracy_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('product') or 'Unknown'))}</td>"
+            f"<td>{escape(str(row.get('backtest_window_start') or '-'))} - {escape(str(row.get('backtest_window_end') or '-'))}</td>"
+            f"<td>&euro;{_num(row.get('actual_30d_revenue')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('forecast_30d_revenue')):,.2f}</td>"
+            f"<td>{_num(row.get('revenue_error_abs_pct')):.1f}%</td>"
+            f"<td>{_num(row.get('revenue_accuracy_pct')):.1f}%</td>"
+            f"<td>{escape(str(row.get('bias_label') or '-'))}</td>"
+            "</tr>"
+        )
+        for row in roy_forecast_accuracy_rows
+    ) or '<tr><td colspan="7"><span class="lang-en">Forecast backtest rows are not available yet.</span><span class="lang-sk hidden">Forecast backtest riadky zatial nie su dostupne.</span></td></tr>'
     roy_brand_revenue_rows_html = "".join(
         (
             "<tr>"
@@ -1854,7 +2251,23 @@ def generate_modern_dashboard(
         for row in roy_brand_profit_rows
     ) or '<tr><td colspan="6"><span class="lang-en">No brand profit data available.</span><span class="lang-sk hidden">Data o ziskovosti znaciek nie su dostupne.</span></td></tr>'
     roy_product_demand_section_html = ""
-    if any([roy_growing_rows, roy_declining_rows, roy_seasonality_rows, roy_forecast_rows, roy_brand_revenue_rows, roy_brand_profit_rows]):
+    if any([
+        roy_growing_rows,
+        roy_declining_rows,
+        roy_seasonality_rows,
+        roy_forecast_rows,
+        roy_inventory_rows,
+        roy_stock_risk_rows,
+        roy_dead_stock_rows,
+        roy_alert_rows,
+        roy_restock_priority_rows,
+        roy_revenue_at_risk_rows,
+        roy_brand_turn_rows,
+        roy_family_turn_rows,
+        roy_forecast_accuracy_rows,
+        roy_brand_revenue_rows,
+        roy_brand_profit_rows,
+    ]):
         roy_product_demand_section_html = f"""
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel chart-card">
@@ -1903,10 +2316,104 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Forecast table</span><span class="lang-sk hidden">Tabulka forecastu</span></h3></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Recent 30d revenue</span><span class="lang-sk hidden">Trzby poslednych 30 dni</span></th><th><span class="lang-en">Forecast {roy_forecast_horizon_days}d</span><span class="lang-sk hidden">Forecast {roy_forecast_horizon_days}d</span></th><th><span class="lang-en">Forecast units</span><span class="lang-sk hidden">Forecast kusov</span></th><th><span class="lang-en">Delta</span><span class="lang-sk hidden">Delta</span></th><th><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Recent 30d revenue</span><span class="lang-sk hidden">Trzby poslednych 30 dni</span></th><th><span class="lang-en">Forecast {roy_forecast_horizon_days}d</span><span class="lang-sk hidden">Forecast {roy_forecast_horizon_days}d</span></th><th><span class="lang-en">Forecast units</span><span class="lang-sk hidden">Forecast kusov</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">Days of cover</span><span class="lang-sk hidden">Dni pokrytia</span></th><th><span class="lang-en">Projected stockout</span><span class="lang-sk hidden">Odhad vypredania</span></th><th><span class="lang-en">Stock risk</span><span class="lang-sk hidden">Skladove riziko</span></th><th><span class="lang-en">Delta</span><span class="lang-sk hidden">Delta</span></th><th><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></th></tr></thead>
                                 <tbody>{roy_forecast_rows_html}</tbody>
                             </table>
                         </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Inventory snapshot</span><span class="lang-sk hidden">Skladovy snapshot</span></h3><p><span class="lang-en">Live Biznisweb stock position joined with Roy product demand and cost mapping.</span><span class="lang-sk hidden">Live Biznisweb stav skladu prepojeny s Roy product demand a cost mappingom.</span></p></div></div>
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Inventory cost value</span><span class="lang-sk hidden">Hodnota skladu v nakupnych cenach</span></small><strong>{_format_mini_value_html(roy_inventory_cost_value, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Inventory retail value</span><span class="lang-sk hidden">Retail hodnota skladu</span></small><strong>{_format_mini_value_html(roy_inventory_retail_value, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Available units</span><span class="lang-sk hidden">Dostupne kusy</span></small><strong>{_format_mini_value_html(roy_inventory_available_units, kind="number", decimals=0)}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Cost coverage units</span><span class="lang-sk hidden">Coverage nakupnych cien kusy</span></small><strong>{_format_mini_value_html(roy_inventory_cost_coverage_units_pct, kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Cost coverage retail</span><span class="lang-sk hidden">Coverage nakupnych cien retail</span></small><strong>{_format_mini_value_html(roy_inventory_cost_coverage_retail_pct, kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Critical / OOS</span><span class="lang-sk hidden">Kriticke / vypredane</span></small><strong>{roy_stock_risk_critical_count}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">30d risk count</span><span class="lang-sk hidden">Riziko do 30 dni</span></small><strong>{roy_stock_risk_30d_count}</strong><span class="delta neutral"><span class="lang-en">{roy_out_of_stock_recent_demand_count} already out</span><span class="lang-sk hidden">{roy_out_of_stock_recent_demand_count} uz vypredane</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">45d risk count</span><span class="lang-sk hidden">Riziko do 45 dni</span></small><strong>{roy_stock_risk_45d_count}</strong><span class="delta neutral"><span class="lang-en">{roy_negative_stock_count} negative stock</span><span class="lang-sk hidden">{roy_negative_stock_count} negativny sklad</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Actionable alerts</span><span class="lang-sk hidden">Akcne alerty</span></small><strong>{roy_alert_delivery_count}</strong><span class="delta neutral"><span class="lang-en">{roy_alert_delivery_hero_count} hero SKUs</span><span class="lang-sk hidden">{roy_alert_delivery_hero_count} hero SKU</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Order now / Prepare PO</span><span class="lang-sk hidden">Objednat teraz / pripravit PO</span></small><strong>{roy_alert_reorder_now_count} / {roy_alert_prepare_po_count}</strong><span class="delta neutral"><span class="lang-en">{roy_lead_time_configured_alert_count} with lead time</span><span class="lang-sk hidden">{roy_lead_time_configured_alert_count} s lead time</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Excluded alert noise</span><span class="lang-sk hidden">Vyluceny alert noise</span></small><strong>{roy_alert_excluded_count}</strong><span class="delta neutral"><span class="lang-en">{_format_mini_value_html(roy_bundle_component_adjustment_30d_units, kind="number", decimals=1)} bundle units shifted</span><span class="lang-sk hidden">{_format_mini_value_html(roy_bundle_component_adjustment_30d_units, kind="number", decimals=1)} bundle kusov presunutych</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Revenue at risk 30d</span><span class="lang-sk hidden">Trzby v riziku 30 dni</span></small><strong>{_format_mini_value_html(roy_revenue_at_risk_30d, kind="currency")}</strong><span class="delta neutral">{_format_mini_value_html(roy_profit_at_risk_30d, kind="currency")}</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Revenue at risk 45d</span><span class="lang-sk hidden">Trzby v riziku 45 dni</span></small><strong>{_format_mini_value_html(roy_revenue_at_risk_45d, kind="currency")}</strong><span class="delta neutral">{_format_mini_value_html(roy_profit_at_risk_45d, kind="currency")}</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Dead stock value</span><span class="lang-sk hidden">Hodnota dead stocku</span></small><strong>{_format_mini_value_html(roy_dead_stock_cost_value, kind="currency")}</strong><span class="delta neutral"><span class="lang-en">{roy_dead_stock_count} products</span><span class="lang-sk hidden">{roy_dead_stock_count} produktov</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Dead stock share</span><span class="lang-sk hidden">Podiel dead stocku</span></small><strong>{_format_mini_value_html(roy_dead_stock_cost_share_pct, kind="percent")}</strong><span class="delta neutral">{_format_mini_value_html(roy_dead_stock_units_share_pct, kind="percent")}</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Negative stock gap</span><span class="lang-sk hidden">Gap negativneho skladu</span></small><strong>{_format_mini_value_html(roy_negative_stock_units_gap, kind="number", decimals=1)}</strong><span class="delta neutral"><span class="lang-en">units below zero</span><span class="lang-sk hidden">kusov pod nulou</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Restock urgent / high</span><span class="lang-sk hidden">Restock urgent / high</span></small><strong>{roy_restock_priority_urgent_count} / {roy_restock_priority_high_count}</strong><span class="delta neutral"><span class="lang-en">scored watchlist</span><span class="lang-sk hidden">scored watchlist</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Forecast WAPE</span><span class="lang-sk hidden">Forecast WAPE</span></small><strong>{_format_mini_value_html(roy_forecast_backtest_wape_pct, kind="percent")}</strong><span class="delta neutral">{_format_mini_value_html(roy_forecast_backtest_within_20_pct, kind="percent")}</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Backtested SKUs</span><span class="lang-sk hidden">Backtestovane SKU</span></small><strong>{roy_forecast_backtest_products}</strong><span class="delta neutral">{_format_mini_value_html(roy_forecast_backtest_median_accuracy_pct, kind="percent")}</span></div>
+                        </div>
+                        {roy_inventory_status_note_html}
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Actionable inventory alerts</span><span class="lang-sk hidden">Akcne skladove alerty</span></h3><p><span class="lang-en">This is the operational {roy_alert_delivery_horizon_days}-day alert bucket that should drive daily replenishment decisions and morning email alerts.</span><span class="lang-sk hidden">Toto je operativny {roy_alert_delivery_horizon_days}-dnovy alert bucket, ktory ma riadit denny replenishment a ranne emailove upozornenia.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Hero</span><span class="lang-sk hidden">Hero</span></th><th><span class="lang-en">Risk</span><span class="lang-sk hidden">Riziko</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">Alert units</span><span class="lang-sk hidden">Alert kusy</span></th><th><span class="lang-en">Days of cover</span><span class="lang-sk hidden">Dni pokrytia</span></th><th><span class="lang-en">Lead time</span><span class="lang-sk hidden">Lead time</span></th><th><span class="lang-en">Reorder by</span><span class="lang-sk hidden">Objednat do</span></th><th><span class="lang-en">Suggested reorder</span><span class="lang-sk hidden">Odporucane doobjednanie</span></th><th><span class="lang-en">Action</span><span class="lang-sk hidden">Akcia</span></th><th><span class="lang-en">Revenue at risk</span><span class="lang-sk hidden">Trzby v riziku</span></th></tr></thead>
+                            <tbody>{roy_alert_rows_html}</tbody>
+                        </table>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Inventory valuation</span><span class="lang-sk hidden">Ocenenie skladu</span></h3><p><span class="lang-en">Largest on-hand positions ranked by mapped cost value.</span><span class="lang-sk hidden">Najvacsie skladove pozicie zoradene podla hodnoty v mapovanych nakupnych cenach.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Available qty</span><span class="lang-sk hidden">Dostupne kusy</span></th><th><span class="lang-en">Cost value</span><span class="lang-sk hidden">Hodnota v nakupnych cenach</span></th><th><span class="lang-en">Retail value</span><span class="lang-sk hidden">Retail hodnota</span></th><th><span class="lang-en">Coverage</span><span class="lang-sk hidden">Coverage</span></th><th><span class="lang-en">Days since sale</span><span class="lang-sk hidden">Dni od predaja</span></th></tr></thead>
+                                <tbody>{roy_inventory_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Stock risk watchlist</span><span class="lang-sk hidden">Watchlist skladoveho rizika</span></h3><p><span class="lang-en">Products likely to run out first based on recent demand and the current forecast.</span><span class="lang-sk hidden">Produkty, ktore sa maju sancu minut ako prve podla posledneho dopytu a aktualneho forecastu.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">30d alert units</span><span class="lang-sk hidden">Alert 30d kusy</span></th><th><span class="lang-en">Days of cover</span><span class="lang-sk hidden">Dni pokrytia</span></th><th><span class="lang-en">Projected stockout</span><span class="lang-sk hidden">Odhad vypredania</span></th><th><span class="lang-en">Risk</span><span class="lang-sk hidden">Riziko</span></th></tr></thead>
+                                <tbody>{roy_stock_risk_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Dead stock candidates</span><span class="lang-sk hidden">Kandidati na dead stock</span></h3><p><span class="lang-en">Products with stock still on hand but no recent demand signal inside the configured cutoff.</span><span class="lang-sk hidden">Produkty, ktore este maju sklad, ale v nastavenom cut-offe uz nemaju zmysluplny dopyt.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Available qty</span><span class="lang-sk hidden">Dostupne kusy</span></th><th><span class="lang-en">Cost value</span><span class="lang-sk hidden">Hodnota v nakupnych cenach</span></th><th><span class="lang-en">Retail value</span><span class="lang-sk hidden">Retail hodnota</span></th><th><span class="lang-en">Days since sale</span><span class="lang-sk hidden">Dni od predaja</span></th></tr></thead>
+                            <tbody>{roy_dead_stock_rows_html}</tbody>
+                        </table>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Revenue at risk</span><span class="lang-sk hidden">Trzby v riziku</span></h3><p><span class="lang-en">Expected next-30-day revenue and profit exposure on products already inside the 45-day stock-risk bucket.</span><span class="lang-sk hidden">Odhad dalsej 30-dnovej trzby a zisku na produktoch, ktore uz spadli do 45-dnoveho stock-risk bucketu.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Risk</span><span class="lang-sk hidden">Riziko</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">Alert units</span><span class="lang-sk hidden">Alert kusy</span></th><th><span class="lang-en">Revenue at risk</span><span class="lang-sk hidden">Trzby v riziku</span></th><th><span class="lang-en">Profit at risk</span><span class="lang-sk hidden">Zisk v riziku</span></th><th><span class="lang-en">Projected stockout</span><span class="lang-sk hidden">Odhad vypredania</span></th></tr></thead>
+                                <tbody>{roy_revenue_at_risk_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Restock priority</span><span class="lang-sk hidden">Restock priorita</span></h3><p><span class="lang-en">Priority score combines cover scarcity, expected demand and recent margin quality.</span><span class="lang-sk hidden">Prioritne score kombinuje nedostatok coveru, ocakavany dopyt a kvalitu nedavnej marze.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Score</span><span class="lang-sk hidden">Score</span></th><th><span class="lang-en">Bucket</span><span class="lang-sk hidden">Bucket</span></th><th><span class="lang-en">Risk</span><span class="lang-sk hidden">Riziko</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">Alert units</span><span class="lang-sk hidden">Alert kusy</span></th><th><span class="lang-en">Days of cover</span><span class="lang-sk hidden">Dni pokrytia</span></th><th><span class="lang-en">Revenue at risk</span><span class="lang-sk hidden">Trzby v riziku</span></th></tr></thead>
+                                <tbody>{roy_restock_priority_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Inventory turns by family</span><span class="lang-sk hidden">Inventory turns podla family</span></h3><p><span class="lang-en">Run-rate estimate from recent 90d sell-through against current inventory cost.</span><span class="lang-sk hidden">Run-rate odhad z posledneho 90d sell-through oproti aktualnej hodnote skladu v nakupnych cenach.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Family</span><span class="lang-sk hidden">Family</span></th><th><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></th><th><span class="lang-en">Inventory cost</span><span class="lang-sk hidden">Hodnota skladu</span></th><th><span class="lang-en">Recent 90d rev.</span><span class="lang-sk hidden">Poslednych 90d trzby</span></th><th><span class="lang-en">Turns</span><span class="lang-sk hidden">Turns</span></th><th><span class="lang-en">Days in inventory</span><span class="lang-sk hidden">Dni v sklade</span></th><th><span class="lang-en">Dead-stock share</span><span class="lang-sk hidden">Podiel dead stocku</span></th><th><span class="lang-en">30d risks</span><span class="lang-sk hidden">30d rizika</span></th></tr></thead>
+                                <tbody>{roy_family_turn_rows_html}</tbody>
+                            </table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Inventory turns by brand</span><span class="lang-sk hidden">Inventory turns podla znacky</span></h3><p><span class="lang-en">Shows where capital is sitting versus where the current run-rate is rotating fastest.</span><span class="lang-sk hidden">Ukazuje, kde stoji kapital oproti tomu, kde sa aktualny run-rate otaca najrychlejsie.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Brand</span><span class="lang-sk hidden">Znacka</span></th><th><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></th><th><span class="lang-en">Inventory cost</span><span class="lang-sk hidden">Hodnota skladu</span></th><th><span class="lang-en">Recent 90d rev.</span><span class="lang-sk hidden">Poslednych 90d trzby</span></th><th><span class="lang-en">Turns</span><span class="lang-sk hidden">Turns</span></th><th><span class="lang-en">Days in inventory</span><span class="lang-sk hidden">Dni v sklade</span></th><th><span class="lang-en">Dead-stock share</span><span class="lang-sk hidden">Podiel dead stocku</span></th><th><span class="lang-en">30d risks</span><span class="lang-sk hidden">30d rizika</span></th></tr></thead>
+                                <tbody>{roy_brand_turn_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Forecast backtest accuracy</span><span class="lang-sk hidden">Presnost forecast backtestu</span></h3><p><span class="lang-en">Recent holdout check: forecast the last 4 weeks from earlier history and compare with what actually happened.</span><span class="lang-sk hidden">Recent holdout check: forecast poslednych 4 tyzdnov z predchadzajucej historie a porovnanie s realitou.</span></p></div></div>
+                        <table>
+                            <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Backtest window</span><span class="lang-sk hidden">Backtest okno</span></th><th><span class="lang-en">Actual 30d</span><span class="lang-sk hidden">Realnych 30d</span></th><th><span class="lang-en">Forecast 30d</span><span class="lang-sk hidden">Forecast 30d</span></th><th><span class="lang-en">Abs error</span><span class="lang-sk hidden">Absolutna chyba</span></th><th><span class="lang-en">Accuracy</span><span class="lang-sk hidden">Presnost</span></th><th><span class="lang-en">Bias</span><span class="lang-sk hidden">Bias</span></th></tr></thead>
+                            <tbody>{roy_forecast_accuracy_rows_html}</tbody>
+                        </table>
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel table-card">
@@ -2225,6 +2732,38 @@ def generate_modern_dashboard(
         f"<tr><td>{escape(str(row.get('item_name') or '-'))}</td><td>{int(round(_num(row.get('entry_customers'))))}</td><td>{_num(row.get('repeat_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_30d_pct')):.1f}%</td><td>{_num(row.get('fullsize_any_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_200_60d_pct')):.1f}%</td><td>{_num(row.get('fullsize_500_60d_pct')):.1f}%</td></tr>"
         for row in sample_funnel_entry_rows
     ) or '<tr><td colspan="7"><span class="lang-en">No sample funnel data available.</span><span class="lang-sk hidden">Sample funnel data nie su dostupne.</span></td></tr>'
+    show_sample_funnel = project_key != "roy" and bool(
+        sample_summary or sample_funnel_window_rows or sample_funnel_entry_rows
+    )
+    sample_funnel_section_html = ""
+    if show_sample_funnel:
+        sample_funnel_section_html = f"""
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel chart-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Sample funnel</span><span class="lang-sk hidden">Sample funnel</span></h3><p><span class="lang-en">First-order sample customers tracked into repeat and full-size conversion windows.</span><span class="lang-sk hidden">Zakaznici vstupujuci cez sample v prvej objednavke sledovani do repeat a full-size konverznych okien.</span></p></div></div>
+                            <div class="mini-grid">
+                                <div class="mini-card"><small><span class="lang-en">Entry customers</span><span class="lang-sk hidden">Vstupni zakaznici</span></small><strong>{sample_entry_customers}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30 dni</span></small><strong>{_format_mini_value_html(sample_repeat_30d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_30d, kind="percent", decimals=1)}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_60d, kind="percent", decimals=1)}</strong></div>
+                            </div>
+                            <div class="mini-grid" style="margin-top:12px;">
+                                <div class="mini-card"><small><span class="lang-en">Median days to full-size</span><span class="lang-sk hidden">Median dni do full-size</span></small><strong>{(f"{sample_median_days_fullsize:.0f}" if sample_median_days_fullsize is not None else "N/A")}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Top entry product</span><span class="lang-sk hidden">Top vstupny produkt</span></small><strong>{sample_top_entry_product}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Entry revenue</span><span class="lang-sk hidden">Vstupne trzby</span></small><strong>{_format_mini_value_html(sample_summary.get("entry_revenue"), kind="currency")}</strong></div>
+                                <div class="mini-card"><small><span class="lang-en">Sample first-order share</span><span class="lang-sk hidden">Podiel sample prvej objednavky</span></small><strong>{_format_mini_value_html(sample_summary.get("sample_first_order_share_pct"), kind="percent", decimals=1)}</strong></div>
+                            </div>
+                            <div class="chart-shell"><canvas id="sampleFunnelChart"></canvas></div>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Sample entry product quality</span><span class="lang-sk hidden">Kvalita sample vstupnych produktov</span></h3><p><span class="lang-en">Top sample entry products ranked by 30d and 60d conversion into repeat and full-size orders.</span><span class="lang-sk hidden">Top sample vstupne produkty podla 30d a 60d konverzie do repeat a full-size objednavok.</span></p></div></div>
+                            <table>
+                                <thead><tr><th><span class="lang-en">Sample</span><span class="lang-sk hidden">Sample</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30d</span></th><th><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30d</span></th><th><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60d</span></th><th>200ml 60d</th><th>500ml 60d</th></tr></thead>
+                                <tbody>{sample_entry_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+        """
     refill_summary = refill_cohort_summary or {}
     refill_entry_customers = int(round(_num(refill_summary.get("entry_customers"))))
     refill_sample_60d = _maybe_num(refill_summary.get("sample_refill_60d_pct"))
@@ -2850,31 +3389,7 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Top 10% revenue share</span><span class="lang-sk hidden">Podiel top 10% zakaznikov</span></small><strong>{top_10_share:.1f}%</strong></div>
                         </div>
                     </div>
-                    <div class="grid-2" style="margin-top:18px;">
-                        <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Sample funnel</span><span class="lang-sk hidden">Sample funnel</span></h3><p><span class="lang-en">First-order sample customers tracked into repeat and full-size conversion windows.</span><span class="lang-sk hidden">Zakaznici vstupujuci cez sample v prvej objednavke sledovani do repeat a full-size konverznych okien.</span></p></div></div>
-                            <div class="mini-grid">
-                                <div class="mini-card"><small><span class="lang-en">Entry customers</span><span class="lang-sk hidden">Vstupni zakaznici</span></small><strong>{sample_entry_customers}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30 dni</span></small><strong>{_format_mini_value_html(sample_repeat_30d, kind="percent", decimals=1)}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_30d, kind="percent", decimals=1)}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60 dni</span></small><strong>{_format_mini_value_html(sample_fullsize_60d, kind="percent", decimals=1)}</strong></div>
-                            </div>
-                            <div class="mini-grid" style="margin-top:12px;">
-                                <div class="mini-card"><small><span class="lang-en">Median days to full-size</span><span class="lang-sk hidden">Median dni do full-size</span></small><strong>{(f"{sample_median_days_fullsize:.0f}" if sample_median_days_fullsize is not None else "N/A")}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Top entry product</span><span class="lang-sk hidden">Top vstupny produkt</span></small><strong>{sample_top_entry_product}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Entry revenue</span><span class="lang-sk hidden">Vstupne trzby</span></small><strong>{_format_mini_value_html(sample_summary.get("entry_revenue"), kind="currency")}</strong></div>
-                                <div class="mini-card"><small><span class="lang-en">Sample first-order share</span><span class="lang-sk hidden">Podiel sample prvej objednavky</span></small><strong>{_format_mini_value_html(sample_summary.get("sample_first_order_share_pct"), kind="percent", decimals=1)}</strong></div>
-                            </div>
-                            <div class="chart-shell"><canvas id="sampleFunnelChart"></canvas></div>
-                        </div>
-                        <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Sample entry product quality</span><span class="lang-sk hidden">Kvalita sample vstupnych produktov</span></h3><p><span class="lang-en">Top sample entry products ranked by 30d and 60d conversion into repeat and full-size orders.</span><span class="lang-sk hidden">Top sample vstupne produkty podla 30d a 60d konverzie do repeat a full-size objednavok.</span></p></div></div>
-                            <table>
-                                <thead><tr><th><span class="lang-en">Sample</span><span class="lang-sk hidden">Sample</span></th><th><span class="lang-en">Customers</span><span class="lang-sk hidden">Zakaznici</span></th><th><span class="lang-en">Repeat 30d</span><span class="lang-sk hidden">Repeat 30d</span></th><th><span class="lang-en">Full-size 30d</span><span class="lang-sk hidden">Full-size 30d</span></th><th><span class="lang-en">Full-size 60d</span><span class="lang-sk hidden">Full-size 60d</span></th><th>200ml 60d</th><th>500ml 60d</th></tr></thead>
-                                <tbody>{sample_entry_rows_html}</tbody>
-                            </table>
-                        </div>
-                    </div>
+                    {sample_funnel_section_html}
                     <div class="grid-2">
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">Refill cohort timing</span><span class="lang-sk hidden">Casovanie refill kohort</span></h3><p><span class="lang-en">Second-order refill speed by first-order entry bucket so refill timing is measured by cohort, not only global repeat rate.</span><span class="lang-sk hidden">Rychlost druhej objednavky podla vstupneho bucketu prvej objednavky, aby sa refill meral kohortne a nie len globalnym repeat rate.</span></p></div></div>

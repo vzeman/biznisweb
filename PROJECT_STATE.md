@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-15
+Last updated: 2026-04-16
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -143,6 +143,11 @@ Bootstrap entrypoints:
 - Product cost coverage QA is now active in source-health and the modern dashboard:
   - VEVO March 2026 export now passes with `0.00%` fallback revenue share after re-importing the April 2026 Excel costs and restoring title-first / alias-aware expense matching
   - ROY March 2026 export is `warning` because fallback coverage still touches 3.20% of item revenue and 6.26% of pre-ad item profit
+- ROY inventory valuation is now live, but cost-value accuracy still depends on explicit product-expense mapping coverage:
+  - live verification on `2026-04-15` reached `94.39%` of on-hand units and `87.81%` of retail-value exposure
+  - unmapped inventory still exists, so cost-value totals must keep surfacing coverage metadata
+- ROY full-history export now performs an extra live product-catalog pagination pass for inventory (`56` pages in the current catalog), so report runtime is materially higher than before the inventory layer
+- Biznisweb inventory can expose negative or zero available quantities on active products; the report now flags those rows explicitly instead of crashing, but replenishment response policy is still an open product decision
 - VEVO now resolves ambiguous shared-EAN fragrance SKUs by exact item label / compound key before identifier fallback, so Natural vs Premium 500ml/200ml lines no longer collapse onto the same cost.
 - ROY now supports project-configured excluded order statuses for realized revenue filtering, so non-revenue final states can be removed without hardcoded edits in `export_orders.py`.
 - ROY dashboard now exposes product-demand analytics in the active modern report:
@@ -152,14 +157,150 @@ Bootstrap entrypoints:
   - product sales forecast from historical data
   - top brands by revenue
   - top brands by profit
+- ROY dashboard now also exposes live Biznisweb inventory analytics in the active modern report:
+  - current on-hand units by product
+  - inventory value at mapped cost
+  - inventory retail value
+  - stock-risk watchlist with projected stockout dates
+  - dead-stock candidates
+  - inventory cost-coverage diagnostics
+  - restock-priority scoring
+  - revenue-at-risk rollups
+  - inventory turns by brand / family
+  - forecast backtest accuracy
+- ROY inventory alert workflow is now wired through the active render/output path on the task branch:
+  - `dashboard_payload.json` now carries actionable `alert_rows`
+  - the modern HTML dashboard now renders a dedicated `Actionable inventory alerts` table
+  - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Review the remaining active reporting branches (`codex/qa-geo-guardrails`, `codex/roy-meta-project-env`) and either open/merge PRs or close them intentionally.
-- Monitor the next production VEVO and ROY daily runner outputs to confirm the new Executive KPI `All-time` toggle is present in the emailed HTML attachments.
+- Implement inbound-stock modeling so reorder alerts stop being purely conservative:
+  - define the source of truth for goods on the way
+  - map inbound quantities to product/SKU
+  - fold inbound stock into `net_available_quantity` and reorder recommendations
+- After inbound stock exists, promote `Prepare PO` into a less conservative purchasing workflow that distinguishes:
+  - real stockout risk with inbound cover
+  - already-covered risk that only needs ETA monitoring
 
 ## 9) Change Log
 
+### 2026-04-16
+- Applied the agreed ROY inventory business rules in config:
+  - thresholds confirmed for `Critical <= 14d`, `Low <= 30d`, `Watch <= 45d`, `Dead stock >= 90d`
+  - alert delivery narrowed to the 30-day bucket, 45-day rows kept as watchlist only
+  - primary inventory basis = cost, secondary = retail
+  - restock prioritization switched to margin without fixed overhead
+  - lead times configured by brand:
+    - `maco_stop = 10 wd`
+    - `wachman = 20 wd`
+    - `roy = 50 wd`
+  - alert exclusions configured for service / reklamacie / gifts / spare parts / test / obvious noise
+  - initial bundle-to-component rule added for MACO STOP spray sets
+- Extended ROY inventory analytics runtime with:
+  - actionable `alert_rows`
+  - conservative alert-demand blend by forecast confidence
+  - reorder deadline / reorder quantity / `Order now` vs `Prepare PO`
+  - hero-brand handling for Wachman and MACO STOP
+  - bundle-demand shifting onto component SKUs
+  - explicit inbound-stock placeholder state (`not_modeled`)
+- Wired the new inventory alert outputs into the active report surfaces:
+  - `dashboard_modern.py` renders summary mini-cards plus the new actionable alert table
+  - `daily_report_runner.py` reads `dashboard_payload.json` and appends `SKLADOVE ALERTY` into the outbound email text
+- Removed the ROY sample funnel from the active runtime and report surface:
+  - `export_orders.py` no longer computes sample-funnel analytics for the ROY project
+  - `dashboard_modern.py` now suppresses the sample-funnel block for ROY while keeping it available for VEVO
+- Verified locally on live ROY data with a one-pass export:
+  - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py`
+  - production-equivalent ROY export for `2025-09-24 -> 2026-04-15` using output tag `inventory_alerts_verify`
+  - generated artifacts:
+    - `data/roy/report_20250924-20260415__inventory_alerts_verify.html`
+    - `data/roy/dashboard_payload_20250924-20260415__inventory_alerts_verify.json`
+  - verification outcome:
+    - `29` actionable 30d alerts
+    - `13` hero-SKU alerts
+    - `29` `Order now`, `0` `Prepare PO`
+    - `EUR 18,001.42` revenue at risk over 30d
+    - `EUR 50,795.03` inventory cost value
+    - `12` excluded noise rows
+    - HTML contains `Actionable inventory alerts`
+    - email summary text contains `SKLADOVE ALERTY`
+- Verified the ROY sample-funnel removal locally with:
+  - production-equivalent ROY export for `2025-09-24 -> 2026-04-15` using output tag `no_sample_verify`
+  - generated artifacts:
+    - `data/roy/report_20250924-20260415__no_sample_verify.html`
+    - `data/roy/dashboard_payload_20250924-20260415__no_sample_verify.json`
+  - verification outcome:
+    - `dashboard.sample_funnel.summary = {}`
+    - `dashboard.sample_funnel.windows = []`
+    - `dashboard.sample_funnel.entry_rows = []`
+    - ROY HTML no longer renders the sample-funnel section
+    - inventory alert section remains present and populated
+
 ### 2026-04-15
+- Added Roy inventory snapshot ingestion from Biznisweb GraphQL product data:
+  - live product inventory fetch with warehouse rows, quantities, available quantities, and retail pricing
+  - cost-value mapping reuses the existing product-expense source of truth instead of retail price
+- Extended Roy product-demand analytics with inventory outputs:
+  - inventory valuation rows
+  - stock-risk rows with projected stockout date / days of cover
+  - dead-stock rows
+  - inventory summary KPIs in the dashboard payload
+- Added Roy dashboard rendering for the new inventory layer:
+  - inventory snapshot summary cards
+  - forecast table enriched with on-hand qty, days of cover, projected stockout, and stock-risk level
+  - inventory valuation table
+  - stock-risk watchlist
+  - dead-stock table
+- Extended Roy inventory analytics with operational inventory metrics:
+  - restock-priority score and bucket (`Urgent`, `High`, `Plan`, `Monitor`)
+  - 30d / 45d revenue-at-risk and profit-at-risk rollups
+  - dead-stock share on total inventory value / units
+  - negative-stock unit-gap tracking
+  - inventory turns and estimated days-in-inventory by brand and product family
+  - forecast holdout backtest accuracy rows and summary KPIs
+- Added Roy dashboard rendering for the extra inventory operations layer:
+  - revenue-at-risk table
+  - restock-priority table
+  - inventory turns by family
+  - inventory turns by brand
+  - forecast backtest accuracy table
+- Added explicit `inventory_model` settings to:
+  - `projects/roy/settings.json`
+  - `templates/reporting-client/settings.template.json`
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-14 --output-tag inventory_probe`
+  - `python export_orders.py --project roy --from-date 2025-09-24 --to-date 2026-04-14 --output-tag inventory_ops`
+- Verification outcome on live Roy data:
+  - Biznisweb inventory snapshot fetch succeeded (`56` pages, `2370` warehouse rows)
+  - full-history Roy dashboard payload now reports:
+    - `1669` tracked products
+    - `410` products with stock
+    - `12347` available units
+    - `EUR 50910.11` inventory cost value
+    - `EUR 183338.35` inventory retail value
+    - `81.28%` unit coverage by mapped costs
+    - `78.48%` retail-value coverage by mapped costs
+    - `32` critical / negative-stock items
+    - `39` items at 30-day stock risk
+    - `43` items at 45-day stock risk
+    - `17` out-of-stock items with recent demand
+    - `10` negative-stock products with `115` units below zero
+    - `328` dead-stock candidates worth `EUR 1866.59` at mapped cost
+    - dead-stock share now surfaces as `3.67%` of mapped inventory cost and `17.08%` of on-hand units
+    - revenue at risk now surfaces as `EUR 18336.52` over the 30-day risk bucket and `EUR 20802.32` over the 45-day bucket
+    - current restock watchlist contains `31` urgent and `7` high-priority products
+    - forecast backtest currently covers `25` products, but the first live sample is still weak (`74.77%` WAPE, `12.00%` within 20% error)
+  - rendered HTML now contains the new sections:
+    - `Inventory snapshot`
+    - `Inventory valuation`
+    - `Stock risk watchlist`
+    - `Dead stock candidates`
+    - `Revenue at risk`
+    - `Restock priority`
+    - `Inventory turns by family`
+    - `Inventory turns by brand`
+    - `Forecast backtest accuracy`
 - Split Doklady into its own GitHub repository: `Terem21/doklady-saas`.
 - Reporting workflow now treats repositories as product boundaries and branches as short-lived task scopes only.
 - Prepared reporting repo branch cleanup by identifying merged/superseded remote branches versus the still-active reporting branches.
