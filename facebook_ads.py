@@ -31,6 +31,8 @@ class FacebookAdsClient:
         self.ad_account_id = os.getenv('FACEBOOK_AD_ACCOUNT_ID')
         self.app_id = os.getenv('FACEBOOK_APP_ID')
         self.app_secret = os.getenv('FACEBOOK_APP_SECRET')
+        self.account_name = None
+        self.account_currency = None
         self.request_timeout = resolve_timeout(os.getenv('FACEBOOK_API_TIMEOUT_SEC'))
         
         # API version - use latest stable version
@@ -747,6 +749,8 @@ class FacebookAdsClient:
             }
             
             data = self._get_json(url, params, "Failed to connect to Facebook Ads API")
+            self.account_name = str(data.get('name', '')).strip() or None
+            self.account_currency = str(data.get('currency', '')).strip().upper() or None
             logger.info(f"Successfully connected to Facebook Ads account: {data.get('name', 'Unknown')}")
             logger.info(f"Account currency: {data.get('currency', 'Unknown')}")
 

@@ -66,9 +66,9 @@ Bootstrap entrypoints:
 - CI validates env contract and blocks tracked secret env files
 - Repo-scoped `PROJECT_STATE.md` exists
 - Bootstrap scripts now exist for macOS/Linux and Windows PowerShell
-- VEVO ECS schedule `vevo-daily-report-email` is enabled for `01:00 Europe/Bratislava`
+- VEVO ECS schedule `vevo-daily-report-email` is enabled for `21:00 Europe/Bratislava`
 - VEVO production task definition `vevo-reporting-daily:4` uses full-history runtime range from `2025-05-03` to `yesterday`
-- ROY ECS schedule `roy-daily-report-email` is enabled for `01:00 Europe/Bratislava`
+- ROY ECS schedule `roy-daily-report-email` is enabled for `21:30 Europe/Bratislava`
 - ROY production task definition `roy-reporting-daily:2` now uses full-history runtime range from `2025-09-24` to `yesterday`
 - VEVO and ROY task-branch runtime now supports automatic daily invoice generation inside the existing daily runner:
   - `daily_report_runner.py` can trigger invoice generation after the report run
@@ -85,6 +85,14 @@ Bootstrap entrypoints:
   - HTML report saved as `data/roy/report_20250924-20260411.html`
   - SES delivery confirmed in CloudWatch logs
   - scheduler target updated to `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:2`
+- ROY production ads connectivity was re-verified on `2026-04-24`:
+  - Meta account `Roy` reports `EUR`
+  - Google Ads account `Roy.sk` reports `EUR`
+  - Google spend retrieval succeeds in the current production report run
+- VEVO production ads connectivity was re-verified on `2026-04-24`:
+  - Meta account `Wachman` reports `EUR`
+  - Google Ads account `Vevo.sk` reports `EUR`
+  - Google spend retrieval succeeds again after syncing the runtime Google Ads secret with the valid local VEVO project env
 - Fixed `html_report_generator.py` period-switcher syntax so `Env Check` / `reporting_qa_smoke.py` pass again on GitHub Actions and on local Python 3.11.
 - VEVO runtime now supports explicit `fixed_daily_cost`, and March 2026 verification confirms `CM3` now diverges from `CM2` once fixed overhead is applied (`fixed_daily_cost = 70 EUR`).
 - VEVO modern dashboard now surfaces practical marketing decision metrics:
@@ -156,6 +164,7 @@ Bootstrap entrypoints:
 - Biznisweb inventory can expose negative or zero available quantities on active products; the report now flags those rows explicitly instead of crashing, but replenishment response policy is still an open product decision
 - VEVO now resolves ambiguous shared-EAN fragrance SKUs by exact item label / compound key before identifier fallback, so Natural vs Premium 500ml/200ml lines no longer collapse onto the same cost.
 - ROY now supports project-configured excluded order statuses for realized revenue filtering, so non-revenue final states can be removed without hardcoded edits in `export_orders.py`.
+- Foreign-market ad spend was previously only correct when the ad platform account itself used `EUR`; project-scoped FX conversion is now implemented on branch `codex/ads-currency-by-project`, but it is not production-active until that branch is merged/deployed.
 - ROY dashboard now exposes product-demand analytics in the active modern report:
   - growing products
   - declining products
@@ -180,15 +189,56 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Merge the daily invoice automation branch through PR, wait for the guarded ECR build, then run manual production-equivalent VEVO and ROY tasks with the infra hard-gate:
-  - confirm scheduler/service name + marker path before deploy verification
-  - verify on host with `curl localhost` marker payload that the daily runner reached the invoice step
-  - confirm CloudWatch output shows invoice summary counts and zero-total skips
-- After production verification, let the next scheduled `vevo-daily-report-email` and `roy-daily-report-email` runs execute normally and compare the first automatic invoice day against BiznisWeb admin output
+- Merge/deploy the ad-currency branch so Meta/Google spend is converted into `EUR` per project settings for VEVO and ROY, then run production-equivalent report tasks with the infra hard-gate and verify the source-health payload/logs expose:
+  - detected account currency per source
+  - converted `total_eur`
+  - warning/error if a source currency mismatches project config or lacks a conversion rate
+- After deploy, rerun the first VEVO and ROY production-equivalent reports and confirm the foreign-market FX path from live source-health output, not only from unit tests
 
 ## 9) Change Log
 
 ### 2026-04-24
+- Added project-scoped ad currency guardrails on branch `codex/ads-currency-by-project` so foreign-market Google/Meta spend can be reported in `EUR` without silently breaking profitability math:
+  - `projects/vevo/settings.json` now declares expected ad-account currency for:
+    - `facebook_ads`
+    - `google_ads`
+  - `projects/roy/settings.json` now declares expected ad-account currency for:
+    - `facebook_ads`
+    - `google_ads`
+  - `facebook_ads.py` now stores the detected ad-account currency during connection test
+  - `google_ads.py` now stores the detected customer currency during connection test
+  - `export_orders.py` now converts daily Google/Meta spend to `EUR` through the project FX map before the spend enters report aggregates
+  - source-health entries now record:
+    - detected currency
+    - expected currency
+    - resolved currency used for conversion
+    - `total_original`
+    - `total_eur`
+  - if an ad source currency mismatches the project config, the run is degraded to `warning` instead of silently using the wrong assumption
+  - if a non-zero ad source currency has no FX rate in the project config, spend is ignored and surfaced as `error` instead of being treated as fake `EUR`
+- Verified locally with:
+  - `python -m py_compile export_orders.py facebook_ads.py google_ads.py tests/test_ads_currency_conversion.py`
+  - `python -m unittest tests.test_ads_currency_conversion tests.test_invoice_generation`
+- Verified live runtime state with AWS reads on `2026-04-24`:
+  - `vevo-daily-report-email` is enabled at `21:00 Europe/Bratislava`
+  - `roy-daily-report-email` is enabled at `21:30 Europe/Bratislava`
+  - VEVO Meta account `Wachman` reports `EUR`
+  - ROY Meta account `Roy` reports `EUR`
+  - ROY Google Ads account `Roy.sk` reports `EUR` and returns daily spend data
+- Remediated the live VEVO Google Ads runtime secret on `2026-04-24`:
+  - AWS `vevo/reporting/runtime-env` differed from the valid local VEVO project env in:
+    - `GOOGLE_ADS_REFRESH_TOKEN`
+    - `GOOGLE_ADS_LOGIN_CUSTOMER_ID`
+  - synced only the VEVO Google Ads keys in Secrets Manager, preserving the rest of the runtime secret
+  - production-equivalent ECS task `5629eb60c42f4c02bc5dc7fe2220cc8d` on private IP `172.31.9.2` then exited `0`
+  - CloudWatch verification for that task shows:
+    - `Successfully connected to Google Ads account: Vevo.sk`
+    - `Currency: EUR`
+    - `Retrieved Google Ads data for 7 days`
+    - `Retrieved Google Ads data for 11 days`
+    - `Retrieved Google Ads data for 32 days`
+    - `Retrieved Google Ads data for 188 days`
+    - `SES message sent`
 - Added automatic daily invoice-generation wiring for both active reporting clients on task branch `codex/daily-invoice-automation`:
   - `daily_report_runner.py` now supports an invoice step after the daily report flow
   - new runner controls:
