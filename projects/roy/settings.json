@@ -7,6 +7,11 @@
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 5500,
+  "invoice_generation": {
+    "enabled": true,
+    "lookback_days": 7,
+    "exclude_zero_total_orders": true
+  },
   "inventory_model": {
     "enabled": true,
     "lang_code": "SK",

@@ -11,6 +11,11 @@
   "shipping_net_per_order": 0.2,
   "fixed_monthly_cost": 0,
   "fixed_daily_cost": 70,
+  "invoice_generation": {
+    "enabled": true,
+    "lookback_days": 7,
+    "exclude_zero_total_orders": true
+  },
   "excluded_order_statuses": [
     "madfrog stara odoslana"
   ],

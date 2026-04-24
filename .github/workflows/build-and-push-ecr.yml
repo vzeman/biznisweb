@@ -9,6 +9,7 @@ on:
       - Dockerfile
       - requirements.txt
       - export_orders.py
+      - generate_invoices.py
       - html_report_generator.py
       - daily_report_runner.py
       - dashboard_modern.py
@@ -50,6 +51,10 @@ jobs:
       - name: Reporting regression smoke gate
         run: |
           python scripts/reporting_qa_smoke.py
+
+      - name: Invoice automation regression test
+        run: |
+          python -m unittest tests.test_invoice_generation
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
