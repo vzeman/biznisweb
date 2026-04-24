@@ -65,6 +65,7 @@ except ImportError:
     class FacebookAdsClient:
         def __init__(self):
             self.is_configured = False
+            self.account_currency = None
         def get_daily_spend(self, *args, **kwargs):
             return {}
 
@@ -76,6 +77,7 @@ except ImportError:
     class GoogleAdsClient:
         def __init__(self):
             self.is_configured = False
+            self.customer_currency = None
         def get_daily_spend(self, *args, **kwargs):
             return {}
 
@@ -746,6 +748,133 @@ class BizniWebExporter:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _normalize_currency_code(value: Any) -> str:
+        return str(value or "").strip().upper()
+
+    def _get_ads_currency_settings(self, source_key: str) -> Dict[str, Any]:
+        raw = (((self.project_settings or {}).get("ads_currency") or {}).get(source_key) or {})
+        expected_currency = self._normalize_currency_code(raw.get("expected_currency") or "EUR") or "EUR"
+        return {
+            "expected_currency": expected_currency,
+            "report_currency": "EUR",
+        }
+
+    def _convert_daily_spend_map(self, daily_spend: Dict[str, float], currency: str) -> Dict[str, float]:
+        normalized: Dict[str, float] = {}
+        for date_key, raw_amount in (daily_spend or {}).items():
+            normalized[str(date_key)] = self.convert_to_eur(self._safe_float(raw_amount) or 0.0, currency)
+        return normalized
+
+    def _apply_ads_currency_handling(
+        self,
+        *,
+        source_key: str,
+        label: str,
+        daily_spend: Dict[str, float],
+        detected_currency: Optional[str],
+        source_entry: Dict[str, Any],
+    ) -> Tuple[Dict[str, float], Dict[str, Any]]:
+        entry = dict(source_entry or {})
+        settings = self._get_ads_currency_settings(source_key)
+        expected_currency = settings["expected_currency"]
+        detected_currency_code = self._normalize_currency_code(detected_currency)
+        resolved_currency = detected_currency_code or expected_currency or "EUR"
+        total_original = round(sum(self._safe_float(value) or 0.0 for value in (daily_spend or {}).values()), 2)
+        has_nonzero_spend = any(abs(self._safe_float(value) or 0.0) > 1e-9 for value in (daily_spend or {}).values())
+
+        notes: List[str] = []
+        warnings: List[str] = []
+
+        if detected_currency_code:
+            notes.append(f"Account currency {detected_currency_code}.")
+        elif expected_currency:
+            warnings.append(
+                f"{label} API did not return account currency; using project-configured {expected_currency}."
+            )
+            notes.append(f"API did not return currency, using project-configured {expected_currency}.")
+        else:
+            warnings.append(f"{label} account currency is unknown; assuming EUR.")
+            notes.append("API did not return currency, assuming EUR.")
+            resolved_currency = "EUR"
+
+        if detected_currency_code and expected_currency and detected_currency_code != expected_currency:
+            warnings.append(
+                f"{label} API returned {detected_currency_code}, while project config expects {expected_currency}."
+            )
+            notes.append(
+                f"Project expects {expected_currency}, but EUR conversion uses detected {detected_currency_code}."
+            )
+
+        conversion_rate = CURRENCY_RATES_TO_EUR.get(resolved_currency)
+        if conversion_rate is None:
+            status = "error" if has_nonzero_spend else "warning"
+            warning_message = (
+                f"{label} spend currency {resolved_currency} has no EUR conversion rate in project settings. "
+                "Spend was ignored to avoid reporting wrong values."
+            )
+            warnings.append(warning_message)
+            logger.warning(warning_message)
+            print(f"Warning: {warning_message}")
+            entry.update(
+                {
+                    "status": status,
+                    "healthy": False,
+                    "account_currency": detected_currency_code or None,
+                    "expected_currency": expected_currency or None,
+                    "resolved_currency": resolved_currency or None,
+                    "report_currency": settings["report_currency"],
+                    "currency_conversion_applied": False,
+                    "conversion_rate_to_eur": None,
+                    "total_original": total_original,
+                    "total_eur": 0.0,
+                    "warnings": warnings,
+                }
+            )
+            base_message = str(entry.get("message", "")).strip()
+            entry["message"] = " ".join(part for part in [base_message, warning_message] if part).strip()
+            return {}, entry
+
+        converted_daily_spend = (
+            dict(daily_spend)
+            if resolved_currency == "EUR"
+            else self._convert_daily_spend_map(daily_spend, resolved_currency)
+        )
+        total_eur = round(sum(self._safe_float(value) or 0.0 for value in converted_daily_spend.values()), 2)
+
+        if resolved_currency == "EUR":
+            notes.append("Spend already denominated in EUR.")
+        else:
+            notes.append(f"Converted spend from {resolved_currency} to EUR using rate {conversion_rate:.6f}.")
+
+        if warnings and entry.get("status") == "ok":
+            entry["status"] = "warning"
+            entry["healthy"] = False
+
+        for warning in warnings:
+            logger.warning(warning)
+            print(f"Warning: {warning}")
+
+        entry.update(
+            {
+                "account_currency": detected_currency_code or None,
+                "expected_currency": expected_currency or None,
+                "resolved_currency": resolved_currency or None,
+                "report_currency": settings["report_currency"],
+                "currency_conversion_applied": bool(resolved_currency and resolved_currency != "EUR"),
+                "conversion_rate_to_eur": float(conversion_rate),
+                "total_original": total_original,
+                "total_eur": total_eur,
+            }
+        )
+        if warnings:
+            entry["warnings"] = warnings
+
+        base_message = str(entry.get("message", "")).strip()
+        detail_message = " ".join(notes).strip()
+        entry["message"] = " ".join(part for part in [base_message, detail_message] if part).strip()
+        return converted_daily_spend, entry
 
     @staticmethod
     def _count_missing_values(frame: pd.DataFrame, column: str) -> int:
@@ -3742,6 +3871,13 @@ class BizniWebExporter:
                     campaign_count=len(fb_campaigns),
                     hourly_rows=len(fb_hourly_stats),
                 )
+                fb_daily_spend, source_health["sources"]["facebook_ads"] = self._apply_ads_currency_handling(
+                    source_key="facebook_ads",
+                    label="Facebook Ads",
+                    daily_spend=fb_daily_spend,
+                    detected_currency=getattr(self.fb_client, "account_currency", None),
+                    source_entry=source_health["sources"]["facebook_ads"],
+                )
         elif MANUAL_FB_ADS_TOTAL is not None:
             source_health["sources"]["facebook_ads"] = self._build_source_entry(
                 key="facebook_ads",
@@ -3807,6 +3943,13 @@ class BizniWebExporter:
                     message=f"Google Ads API connected successfully. Daily spend loaded for {len(google_ads_daily_spend)} active days.",
                     healthy=True,
                     active_days=len(google_ads_daily_spend),
+                )
+                google_ads_daily_spend, source_health["sources"]["google_ads"] = self._apply_ads_currency_handling(
+                    source_key="google_ads",
+                    label="Google Ads",
+                    daily_spend=google_ads_daily_spend,
+                    detected_currency=getattr(self.google_ads_client, "customer_currency", None),
+                    source_entry=source_health["sources"]["google_ads"],
                 )
         elif MANUAL_GOOGLE_ADS_TOTAL is not None:
             source_health["sources"]["google_ads"] = self._build_source_entry(
