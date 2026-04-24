@@ -77,6 +77,15 @@ Bootstrap entrypoints:
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
 - Daily invoice automation is live in production on `main` for both active schedules:
+  - evening scheduler cadence updated on `2026-04-24` so invoice generation completes before midnight:
+    - VEVO schedule `vevo-daily-report-email`: `21:00 Europe/Bratislava`
+    - ROY schedule `roy-daily-report-email`: `21:30 Europe/Bratislava`
+    - current runtime evidence suggests the full jobs normally finish well before midnight:
+      - VEVO daily runner recent runtime: about `10-11 min`
+      - ROY daily runner recent runtime: about `14-19 min`
+      - invoice step on today's live verification:
+        - VEVO: about `45 s`
+        - ROY: about `38 s`
   - VEVO live host verification on `2026-04-24`:
     - schedule/service name: `vevo-daily-report-email`
     - Fargate task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/18d7786bb4fd4ef9ac44e810fa3a7861`
@@ -198,8 +207,10 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Let the next scheduled `vevo-daily-report-email` and `roy-daily-report-email` runs execute normally and compare the first fully automatic day against BiznisWeb admin output:
+- Let the first evening schedules on `2026-04-24` execute normally and compare the automatic result against BiznisWeb admin output:
   - confirm CloudWatch still shows the invoice summary line on the scheduled runs
+  - confirm VEVO starts at `2026-04-24 21:00 Europe/Bratislava`
+  - confirm ROY starts at `2026-04-24 21:30 Europe/Bratislava`
   - confirm VEVO continues to skip already-invoiced orders for the checked window
   - confirm ROY continues to skip the zero-total orders without creating invoices
 
@@ -271,6 +282,26 @@ Bootstrap entrypoints:
 - Operational conclusion:
   - both production schedules are now live on the invoice-enabled image
   - the post-live dry-runs confirm the same window is already clean, so the next scheduled runs should only create invoices for newly eligible non-zero orders
+- Adjusted the production scheduler times on `2026-04-24` so the automatic invoice flow no longer waits until after midnight:
+  - previous cadence:
+    - VEVO `01:00 Europe/Bratislava`
+    - ROY `01:00 Europe/Bratislava`
+  - new cadence:
+    - VEVO `21:00 Europe/Bratislava`
+    - ROY `21:30 Europe/Bratislava`
+  - hard-gate confirmation before scheduler update:
+    - service names: `vevo-daily-report-email`, `roy-daily-report-email`
+    - task targets unchanged: `vevo-reporting-daily:4`, `roy-reporting-daily:2`
+    - marker path unchanged: `http://127.0.0.1:8000/marker.json`
+    - instance-id/IP: `N/A` until the scheduled Fargate task is created at runtime
+  - runtime basis for the evening slot:
+    - VEVO recent full-run duration from CloudWatch: `10.18`, `10.56`, `11.09` minutes
+    - ROY recent full-run duration from CloudWatch: `14.17`, `19.15`, `19.26` minutes
+    - today's live invoice step duration:
+      - VEVO: about `45` seconds
+      - ROY: about `38` seconds
+  - operational note:
+    - because `daily_report_runner.py` resolves `to_date` as `yesterday` in `Europe/Bratislava`, the first evening runs on `2026-04-24` will still process the window ending `2026-04-23`, just earlier in the day than before
 
 ### 2026-04-16
 - Clarified the top KPI meaning for VEVO/modern reporting:
