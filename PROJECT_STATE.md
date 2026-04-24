@@ -70,12 +70,30 @@ Bootstrap entrypoints:
 - VEVO production task definition `vevo-reporting-daily:4` uses full-history runtime range from `2025-05-03` to `yesterday`
 - ROY ECS schedule `roy-daily-report-email` is enabled for `01:00 Europe/Bratislava`
 - ROY production task definition `roy-reporting-daily:2` now uses full-history runtime range from `2025-09-24` to `yesterday`
-- VEVO and ROY task-branch runtime now supports automatic daily invoice generation inside the existing daily runner:
+- VEVO and ROY production runtime now supports automatic daily invoice generation inside the existing daily runner:
   - `daily_report_runner.py` can trigger invoice generation after the report run
   - `projects/vevo/settings.json` and `projects/roy/settings.json` now enable `invoice_generation`
   - zero-total orders are excluded before invoice creation
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
+- Daily invoice automation is live in production on `main` for both active schedules:
+  - VEVO live host verification on `2026-04-24`:
+    - schedule/service name: `vevo-daily-report-email`
+    - Fargate task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/18d7786bb4fd4ef9ac44e810fa3a7861`
+    - private runtime IP: `172.31.31.80`
+    - marker path: `http://127.0.0.1:8000/marker.json`
+    - marker result: `LOCALHOST_MARKER_OK`
+    - invoice summary: `matched=32 created=32 failed=0 skipped_zero_total=0`
+  - ROY live host verification on `2026-04-24`:
+    - schedule/service name: `roy-daily-report-email`
+    - Fargate task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/f7c379534e644ea5a843de216cc8367d`
+    - private runtime IP: `172.31.28.238`
+    - marker path: `http://127.0.0.1:8000/marker.json`
+    - marker result: `LOCALHOST_MARKER_OK`
+    - invoice summary: `matched=28 created=28 failed=0 skipped_zero_total=4`
+  - post-live dry-run verification on the same production image confirms idempotent re-runs for the same date window:
+    - VEVO task `c991bf5811f046d48f9b6a5e0811b6cc` (`172.31.45.15`) -> `matched=0 skipped_zero_total=0`
+    - ROY task `a27914865f9f4c3ca1be8d2fe5cca587` (`172.31.6.106`) -> `matched=0 skipped_zero_total=4`
 - VEVO task role CloudWatch metric policy now allows the active namespace `BizniswebReporting` (and keeps backward-compatible `VevoReporting`)
 - Manual ECS production-equivalent run succeeded on `2026-04-03` with:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
@@ -180,11 +198,10 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Merge the daily invoice automation branch through PR, wait for the guarded ECR build, then run manual production-equivalent VEVO and ROY tasks with the infra hard-gate:
-  - confirm scheduler/service name + marker path before deploy verification
-  - verify on host with `curl localhost` marker payload that the daily runner reached the invoice step
-  - confirm CloudWatch output shows invoice summary counts and zero-total skips
-- After production verification, let the next scheduled `vevo-daily-report-email` and `roy-daily-report-email` runs execute normally and compare the first automatic invoice day against BiznisWeb admin output
+- Let the next scheduled `vevo-daily-report-email` and `roy-daily-report-email` runs execute normally and compare the first fully automatic day against BiznisWeb admin output:
+  - confirm CloudWatch still shows the invoice summary line on the scheduled runs
+  - confirm VEVO continues to skip already-invoiced orders for the checked window
+  - confirm ROY continues to skip the zero-total orders without creating invoices
 
 ## 9) Change Log
 
@@ -216,6 +233,44 @@ Bootstrap entrypoints:
   - VEVO live dry-run stopped after `4` pages, filtered `118` recent orders, matched `25` invoice candidates, skipped `0` zero-total orders
   - ROY live dry-run stopped after `3` pages, filtered `83` recent orders, matched `28` invoice candidates, skipped `4` zero-total orders
   - the descending pagination fix removed the previous blocker where the scan could fail before reaching the newest days
+- Made the invoice automation live in production on `main` after merging PR `#49`:
+  - merge commit on `main`: `0878a55`
+  - guarded GitHub Actions production image refresh:
+    - workflow: `Build and Push ECR`
+    - run: `24872617077`
+    - result: `success`
+    - refreshed ECR digest: `sha256:cbf83021c4121b41bb065ff333dcfe6a5080c5303b55ec524475f91b37006caa`
+- Production hard-gate verification on `2026-04-24`:
+  - instance-id: `N/A` (scheduled/manual ECS Fargate task, no fixed EC2 host)
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - VEVO host verification:
+    - schedule/service name: `vevo-daily-report-email`
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/18d7786bb4fd4ef9ac44e810fa3a7861`
+    - private runtime IP: `172.31.31.80`
+    - marker: `LOCALHOST_MARKER_OK`
+    - CloudWatch invoice summary: `matched=32 created=32 failed=0 skipped_zero_total=0`
+    - SES delivery confirmed in the same log stream
+  - ROY host verification:
+    - schedule/service name: `roy-daily-report-email`
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/f7c379534e644ea5a843de216cc8367d`
+    - private runtime IP: `172.31.28.238`
+    - marker: `LOCALHOST_MARKER_OK`
+    - CloudWatch invoice summary: `matched=28 created=28 failed=0 skipped_zero_total=4`
+    - SES delivery confirmed in the same log stream
+- Post-live runtime verification:
+  - VEVO invoice dry-run on the same production image:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/c991bf5811f046d48f9b6a5e0811b6cc`
+    - private runtime IP: `172.31.45.15`
+    - `Orders matching criteria: 0`
+    - `DRY RUN summary - matched=0 total_amount=0.00 skipped_zero_total=0`
+  - ROY invoice dry-run on the same production image:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/a27914865f9f4c3ca1be8d2fe5cca587`
+    - private runtime IP: `172.31.6.106`
+    - `Orders matching criteria: 0`
+    - `DRY RUN summary - matched=0 total_amount=0.00 skipped_zero_total=4`
+- Operational conclusion:
+  - both production schedules are now live on the invoice-enabled image
+  - the post-live dry-runs confirm the same window is already clean, so the next scheduled runs should only create invoices for newly eligible non-zero orders
 
 ### 2026-04-16
 - Clarified the top KPI meaning for VEVO/modern reporting:
