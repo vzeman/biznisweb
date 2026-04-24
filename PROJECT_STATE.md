@@ -103,6 +103,16 @@ Bootstrap entrypoints:
   - post-live dry-run verification on the same production image confirms idempotent re-runs for the same date window:
     - VEVO task `c991bf5811f046d48f9b6a5e0811b6cc` (`172.31.45.15`) -> `matched=0 skipped_zero_total=0`
     - ROY task `a27914865f9f4c3ca1be8d2fe5cca587` (`172.31.6.106`) -> `matched=0 skipped_zero_total=4`
+- Manual invoice backfill for `2026-04-01 .. 2026-04-23` completed in production on `2026-04-24`:
+  - VEVO backfill live task:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/017b8d5ebdb04d2ab4c1a1a08095a498`
+    - private runtime IP: `172.31.40.186`
+    - invoice summary: `matched=86 created=86 failed=0 skipped_zero_total=0 total_amount=2471.90`
+    - post-backfill dry-run task `1d35203182824a45818b9e16fba74e5d` confirmed `matched=0 skipped_zero_total=0`
+  - ROY backfill verification:
+    - dry-run task `bb9c3f2a48da42d48f2c613ebf72a52a` (`172.31.7.116`) showed `matched=0 skipped_zero_total=15`
+    - live confirmation task `57c57ab01b6649f3974de44592784030` (`172.31.19.203`) showed `matched=0 created=0 failed=0 skipped_zero_total=15`
+    - post-check dry-run task `fdee5ae5eec94ec2b9e78ca0bbcc432c` confirmed `matched=0 skipped_zero_total=15`
 - VEVO task role CloudWatch metric policy now allows the active namespace `BizniswebReporting` (and keeps backward-compatible `VevoReporting`)
 - Manual ECS production-equivalent run succeeded on `2026-04-03` with:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
@@ -207,11 +217,11 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Let the first evening schedules on `2026-04-24` execute normally and compare the automatic result against BiznisWeb admin output:
+- Let the first evening schedules on `2026-04-24` execute normally and compare the automatic result against BiznisWeb admin output after the manual April backfill:
   - confirm CloudWatch still shows the invoice summary line on the scheduled runs
   - confirm VEVO starts at `2026-04-24 21:00 Europe/Bratislava`
   - confirm ROY starts at `2026-04-24 21:30 Europe/Bratislava`
-  - confirm VEVO continues to skip already-invoiced orders for the checked window
+  - confirm VEVO continues to skip already-invoiced orders for the checked window after the April backfill
   - confirm ROY continues to skip the zero-total orders without creating invoices
 
 ## 9) Change Log
@@ -302,6 +312,36 @@ Bootstrap entrypoints:
       - ROY: about `38` seconds
   - operational note:
     - because `daily_report_runner.py` resolves `to_date` as `yesterday` in `Europe/Bratislava`, the first evening runs on `2026-04-24` will still process the window ending `2026-04-23`, just earlier in the day than before
+- Ran a manual production backfill for the requested April window `2026-04-01 .. 2026-04-23`:
+  - VEVO dry-run before create:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/39b0e2f10ec94ea198be9b8529aa92e9`
+    - private runtime IP: `172.31.24.37`
+    - `Orders matching criteria: 86`
+    - `DRY RUN summary - matched=86 total_amount=2471.90 skipped_zero_total=0`
+  - VEVO live create:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/017b8d5ebdb04d2ab4c1a1a08095a498`
+    - private runtime IP: `172.31.40.186`
+    - `Invoice run summary - project=vevo matched=86 created=86 failed=0 skipped_zero_total=0 total_amount=2471.90`
+  - VEVO post-check dry-run:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/1d35203182824a45818b9e16fba74e5d`
+    - `Orders matching criteria: 0`
+    - `DRY RUN summary - matched=0 total_amount=0.00 skipped_zero_total=0`
+  - ROY dry-run before create:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/bb9c3f2a48da42d48f2c613ebf72a52a`
+    - private runtime IP: `172.31.7.116`
+    - `Orders matching criteria: 0`
+    - `DRY RUN summary - matched=0 total_amount=0.00 skipped_zero_total=15`
+  - ROY live confirmation:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/57c57ab01b6649f3974de44592784030`
+    - private runtime IP: `172.31.19.203`
+    - `Invoice run summary - project=roy matched=0 created=0 failed=0 skipped_zero_total=15 total_amount=0.00`
+  - ROY post-check dry-run:
+    - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/fdee5ae5eec94ec2b9e78ca0bbcc432c`
+    - `Orders matching criteria: 0`
+    - `DRY RUN summary - matched=0 total_amount=0.00 skipped_zero_total=15`
+- Operational conclusion for the manual April request:
+  - VEVO April `2026-04-01 .. 2026-04-23` is now backfilled and closed from the invoice-automation perspective
+  - ROY had no remaining non-zero April candidates in that same window; only `15` zero-total orders remain intentionally skipped
 
 ### 2026-04-16
 - Clarified the top KPI meaning for VEVO/modern reporting:
