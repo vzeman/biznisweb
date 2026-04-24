@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-16
+Last updated: 2026-04-24
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -70,6 +70,12 @@ Bootstrap entrypoints:
 - VEVO production task definition `vevo-reporting-daily:4` uses full-history runtime range from `2025-05-03` to `yesterday`
 - ROY ECS schedule `roy-daily-report-email` is enabled for `01:00 Europe/Bratislava`
 - ROY production task definition `roy-reporting-daily:2` now uses full-history runtime range from `2025-09-24` to `yesterday`
+- VEVO and ROY task-branch runtime now supports automatic daily invoice generation inside the existing daily runner:
+  - `daily_report_runner.py` can trigger invoice generation after the report run
+  - `projects/vevo/settings.json` and `projects/roy/settings.json` now enable `invoice_generation`
+  - zero-total orders are excluded before invoice creation
+  - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
+  - invoice debug logging now redacts auth headers instead of printing API tokens
 - VEVO task role CloudWatch metric policy now allows the active namespace `BizniswebReporting` (and keeps backward-compatible `VevoReporting`)
 - Manual ECS production-equivalent run succeeded on `2026-04-03` with:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
@@ -174,15 +180,42 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Implement inbound-stock modeling so reorder alerts stop being purely conservative:
-  - define the source of truth for goods on the way
-  - map inbound quantities to product/SKU
-  - fold inbound stock into `net_available_quantity` and reorder recommendations
-- After inbound stock exists, promote `Prepare PO` into a less conservative purchasing workflow that distinguishes:
-  - real stockout risk with inbound cover
-  - already-covered risk that only needs ETA monitoring
+- Merge the daily invoice automation branch through PR, wait for the guarded ECR build, then run manual production-equivalent VEVO and ROY tasks with the infra hard-gate:
+  - confirm scheduler/service name + marker path before deploy verification
+  - verify on host with `curl localhost` marker payload that the daily runner reached the invoice step
+  - confirm CloudWatch output shows invoice summary counts and zero-total skips
+- After production verification, let the next scheduled `vevo-daily-report-email` and `roy-daily-report-email` runs execute normally and compare the first automatic invoice day against BiznisWeb admin output
 
 ## 9) Change Log
+
+### 2026-04-24
+- Added automatic daily invoice-generation wiring for both active reporting clients on task branch `codex/daily-invoice-automation`:
+  - `daily_report_runner.py` now supports an invoice step after the daily report flow
+  - new runner controls:
+    - `--skip-invoices`
+    - `--invoice-dry-run`
+  - project settings now explicitly enable invoice automation for:
+    - `vevo`
+    - `roy`
+  - client template now carries the shared `invoice_generation` settings block for future projects
+- Hardened `generate_invoices.py` for production-safe daily automation:
+  - added shared `run_invoice_generation(...)` helper for the daily runner hook
+  - changed pagination to `pur_date DESC` with an early stop once the fetch goes older than the requested invoice window
+  - kept the invoice scan bounded to the rolling configured lookback instead of walking the whole shop history
+  - excluded zero-total orders before invoice creation
+  - redacted auth headers from debug logging after live dry-run exposed that the old diagnostics would print the API header
+- Extended deployment protection:
+  - `.github/workflows/build-and-push-ecr.yml` now rebuilds the image when `generate_invoices.py` changes
+  - CI now runs `python -m unittest tests.test_invoice_generation`
+- Verified locally with:
+  - `python -m py_compile generate_invoices.py daily_report_runner.py tests/test_invoice_generation.py`
+  - `python -m unittest tests.test_invoice_generation`
+  - live dry-run VEVO invoice scan for `2026-04-18 .. 2026-04-24`
+  - live dry-run ROY invoice scan for `2026-04-18 .. 2026-04-24`
+- Verification outcome:
+  - VEVO live dry-run stopped after `4` pages, filtered `118` recent orders, matched `25` invoice candidates, skipped `0` zero-total orders
+  - ROY live dry-run stopped after `3` pages, filtered `83` recent orders, matched `28` invoice candidates, skipped `4` zero-total orders
+  - the descending pagination fix removed the previous blocker where the scan could fail before reaching the newest days
 
 ### 2026-04-16
 - Clarified the top KPI meaning for VEVO/modern reporting:

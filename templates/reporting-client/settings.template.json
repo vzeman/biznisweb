@@ -8,6 +8,11 @@
   "shipping_net_per_order": 0.0,
   "fixed_monthly_cost": 0,
   "fixed_daily_cost": 0,
+  "invoice_generation": {
+    "enabled": false,
+    "lookback_days": 7,
+    "exclude_zero_total_orders": true
+  },
   "inventory_model": {
     "enabled": false,
     "lang_code": "SK",

@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
+from generate_invoices import resolve_invoice_date_window, resolve_invoice_generation_settings, run_invoice_generation
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
     build_artifact_set,
@@ -106,6 +107,18 @@ def parse_args() -> argparse.Namespace:
         help="Skip email sending",
     )
     parser.add_argument(
+        "--skip-invoices",
+        action="store_true",
+        default=env_bool("REPORT_SKIP_INVOICES", False),
+        help="Skip automatic invoice generation for this run.",
+    )
+    parser.add_argument(
+        "--invoice-dry-run",
+        action="store_true",
+        default=env_bool("REPORT_INVOICE_DRY_RUN", False),
+        help="Preview invoice candidates without creating invoices.",
+    )
+    parser.add_argument(
         "--output-tag",
         default=os.getenv("REPORT_OUTPUT_TAG", ""),
         help="Optional output tag for side-by-side test artifacts (e.g. ui_test).",
@@ -130,6 +143,58 @@ def normalize_date(value: str) -> str:
         except ValueError:
             continue
     raise ValueError(f"Unsupported date format '{value}'. Use YYYY-MM-DD.")
+
+
+def maybe_run_invoice_automation(
+    project: str,
+    report_to_date: str,
+    reporting_defaults: Dict[str, Any],
+    dry_run: bool = False,
+) -> Optional[Dict[str, Any]]:
+    invoice_settings = resolve_invoice_generation_settings(load_project_settings(project))
+    if not invoice_settings["enabled"]:
+        print(f"Invoice automation disabled for project={project}")
+        return None
+
+    invoice_from_date, invoice_to_date = resolve_invoice_date_window(
+        report_to_date,
+        invoice_settings["lookback_days"],
+    )
+    print(
+        f"Running invoice automation for project={project} "
+        f"window={invoice_from_date}..{invoice_to_date} dry_run={dry_run}"
+    )
+    try:
+        summary = run_invoice_generation(
+            project_name=project,
+            date_from=invoice_from_date,
+            date_to=invoice_to_date,
+            dry_run=dry_run,
+        )
+    except Exception:
+        put_metric("InvoiceAutomationRunFailed", 1, project, reporting_defaults)
+        raise
+
+    put_metric("InvoiceAutomationMatchedOrders", summary.matched_orders, project, reporting_defaults)
+    put_metric("InvoiceAutomationSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
+    put_metric("InvoiceAutomationCreated", summary.created_invoices, project, reporting_defaults)
+    put_metric("InvoiceAutomationCreateFailures", summary.failed_invoices, project, reporting_defaults)
+    put_metric("InvoiceAutomationRunSucceeded", 1, project, reporting_defaults)
+
+    if not dry_run and summary.failed_invoices:
+        raise RuntimeError(
+            f"Invoice automation failed for {summary.failed_invoices} order(s) in project '{project}'"
+        )
+
+    return {
+        "from_date": summary.date_from,
+        "to_date": summary.date_to,
+        "matched_orders": summary.matched_orders,
+        "created_invoices": summary.created_invoices,
+        "failed_invoices": summary.failed_invoices,
+        "skipped_zero_total_orders": summary.skipped_zero_total_orders,
+        "dry_run": summary.dry_run,
+    }
 
 
 def run_export(
@@ -1114,20 +1179,38 @@ def main() -> None:
 
     if args.skip_email:
         print("Email sending skipped by flag.")
-        return
+    else:
+        subject = build_email_subject(reporting_defaults)
+        summary_text = build_report_summary(output_paths)
+        body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults, data_quality)
+        message_id = send_email_ses(
+            subject=subject,
+            body_text=body_text,
+            file_paths=output_paths,
+            reporting_defaults=reporting_defaults,
+        )
+        put_metric("ReportEmailSent", 1, project, reporting_defaults)
+        print(f"SES message sent. MessageId={message_id}")
 
-    subject = build_email_subject(reporting_defaults)
-    summary_text = build_report_summary(output_paths)
-    body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults, data_quality)
-    message_id = send_email_ses(
-        subject=subject,
-        body_text=body_text,
-        file_paths=output_paths,
-        reporting_defaults=reporting_defaults,
-    )
-    put_metric("ReportEmailSent", 1, project, reporting_defaults)
+    if args.skip_invoices:
+        print("Invoice generation skipped by flag.")
+    else:
+        invoice_summary = maybe_run_invoice_automation(
+            project=project,
+            report_to_date=to_date,
+            reporting_defaults=reporting_defaults,
+            dry_run=args.invoice_dry_run,
+        )
+        if invoice_summary:
+            print(
+                "Invoice automation summary: "
+                f"matched={invoice_summary['matched_orders']} "
+                f"created={invoice_summary['created_invoices']} "
+                f"failed={invoice_summary['failed_invoices']} "
+                f"skipped_zero_total={invoice_summary['skipped_zero_total_orders']}"
+            )
+
     put_metric("ReportRunSucceeded", 1, project, reporting_defaults)
-    print(f"SES message sent. MessageId={message_id}")
 
 
 if __name__ == "__main__":

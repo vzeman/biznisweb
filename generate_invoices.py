@@ -1,12 +1,13 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Generate invoices for orders with specific criteria in BizniWeb
 """
 
 import os
 import argparse
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple, Union
 import json
 import re
 
@@ -31,6 +32,8 @@ WEB_TIMEOUT = resolve_timeout(os.getenv('BIZNISWEB_WEB_TIMEOUT_SEC'))
 
 # Set up logging
 logger = get_logger('generate_invoices')
+
+DEFAULT_INVOICE_LOOKBACK_DAYS = 7
 
 # GraphQL query to fetch orders with specific criteria
 ORDER_QUERY = gql("""
@@ -112,6 +115,94 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 """)
 
 
+@dataclass
+class InvoiceRunSummary:
+    project: str
+    date_from: str
+    date_to: str
+    dry_run: bool = False
+    total_orders_fetched: int = 0
+    matched_orders: int = 0
+    created_invoices: int = 0
+    failed_invoices: int = 0
+    skipped_zero_total_orders: int = 0
+    total_amount: float = 0.0
+
+
+def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dict[str, Any]:
+    raw_settings = project_settings.get("invoice_generation") or {}
+    raw_lookback_days = raw_settings.get("lookback_days", DEFAULT_INVOICE_LOOKBACK_DAYS)
+    try:
+        lookback_days = int(raw_lookback_days)
+    except (TypeError, ValueError):
+        lookback_days = DEFAULT_INVOICE_LOOKBACK_DAYS
+
+    return {
+        "enabled": bool(raw_settings.get("enabled", False)),
+        "lookback_days": max(1, lookback_days),
+        "exclude_zero_total_orders": bool(raw_settings.get("exclude_zero_total_orders", True)),
+    }
+
+
+def resolve_invoice_date_window(reference_date: Union[str, datetime], lookback_days: int) -> Tuple[str, str]:
+    if isinstance(reference_date, datetime):
+        to_date = reference_date
+    else:
+        to_date = datetime.strptime(str(reference_date), "%Y-%m-%d")
+
+    safe_lookback_days = max(1, int(lookback_days))
+    from_date = to_date - timedelta(days=safe_lookback_days - 1)
+    return from_date.strftime("%Y-%m-%d"), to_date.strftime("%Y-%m-%d")
+
+
+def _coerce_order_total_value(order: Dict[str, Any]) -> float:
+    order_sum = order.get("sum", {}) or {}
+    raw_value = order_sum.get("value")
+    if raw_value not in (None, ""):
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            pass
+
+    formatted = str(order_sum.get("formatted") or "").strip()
+    if not formatted:
+        return 0.0
+
+    normalized = re.sub(r"[^0-9,.\-]", "", formatted)
+    if "," in normalized and "." in normalized:
+        if normalized.rfind(",") > normalized.rfind("."):
+            normalized = normalized.replace(".", "").replace(",", ".")
+        else:
+            normalized = normalized.replace(",", "")
+    else:
+        normalized = normalized.replace(",", ".")
+
+    try:
+        return float(normalized)
+    except ValueError:
+        return 0.0
+
+
+def _status_matches_invoice_generation(status_name: str) -> bool:
+    normalized = (status_name or "").strip().lower()
+    return "odoslan" in normalized or ("cak" in normalized and "vybaven" in normalized)
+
+
+def _order_purchase_date(order: Dict[str, Any]) -> str:
+    pur_date = str(order.get("pur_date") or "")
+    if " " in pur_date:
+        pur_date = pur_date.split(" ", 1)[0]
+    return pur_date
+
+
+def _redact_headers(headers: Dict[str, Any]) -> Dict[str, Any]:
+    sanitized = dict(headers)
+    for key in list(sanitized.keys()):
+        if key.lower() in {"bw-api-key", "authorization", "x-api-key"}:
+            sanitized[key] = "[redacted]"
+    return sanitized
+
+
 class InvoiceGenerator:
     def __init__(
         self,
@@ -120,6 +211,7 @@ class InvoiceGenerator:
         base_url: str,
         username: Optional[str] = None,
         password: Optional[str] = None,
+        exclude_zero_total_orders: bool = True,
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
@@ -138,19 +230,20 @@ class InvoiceGenerator:
         self.invoice_send_url = f"{self.base_url}/erp/orders/invoices/sendEmail/{{invoice_id}}"
         self.web_session = None
         self.arf_token = None
+        self.exclude_zero_total_orders = exclude_zero_total_orders
         
         # Initialize web session if credentials provided
         if username and password:
             self.web_session = build_retry_session(timeout=WEB_TIMEOUT)
             logger.info("Attempting to login to web interface...")
             if self.login_web_session(username, password):
-                logger.info("✓ Successfully logged in to web session")
+                logger.info("âś“ Successfully logged in to web session")
                 if self.arf_token:
-                    logger.info(f"✓ ARF token obtained: {self.arf_token[:8]}...")
+                    logger.info(f"âś“ ARF token obtained: {self.arf_token[:8]}...")
                 else:
-                    logger.info("⚠ No ARF token found yet, will try to obtain during invoice creation")
+                    logger.info("âš  No ARF token found yet, will try to obtain during invoice creation")
             else:
-                logger.error("✗ Failed to login to web session - invoice creation will not be available")
+                logger.error("âś— Failed to login to web session - invoice creation will not be available")
                 self.web_session = None
     
     def login_web_session(self, username: str, password: str) -> bool:
@@ -165,9 +258,9 @@ class InvoiceGenerator:
             # Check if we got a session cookie
             if 'SSID' in self.web_session.cookies:
                 session_id = self.web_session.cookies['SSID']
-                logger.info(f"✓ Session established: {session_id[:10]}...")
+                logger.info(f"âś“ Session established: {session_id[:10]}...")
             else:
-                logger.error("✗ No session cookie received from login page")
+                logger.error("âś— No session cookie received from login page")
                 return False
             
             # Extract any arf token from the login page
@@ -175,13 +268,13 @@ class InvoiceGenerator:
             arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', login_page_response.text)
             if arf_match:
                 arf_token = arf_match.group(1)
-                logger.info(f"✓ Found arf token in login page: {arf_token[:8]}...")
+                logger.info(f"âś“ Found arf token in login page: {arf_token[:8]}...")
             else:
                 # Try to find CsrfToken in the page
                 csrf_match = re.search(r"var\s+CsrfToken\s*=\s*function\s*\(\)\s*\{\s*var\s+\w+\s*=\s*'([a-zA-Z0-9]+)'", login_page_response.text)
                 if csrf_match:
                     arf_token = csrf_match.group(1)
-                    logger.info(f"✓ Found CsrfToken: {arf_token[:8]}...")
+                    logger.info(f"âś“ Found CsrfToken: {arf_token[:8]}...")
             
             # Step 2: POST credentials with session
             logger.info("Submitting login credentials...")
@@ -226,12 +319,12 @@ class InvoiceGenerator:
                 
                 # Check for success in JSON response
                 if response_json.get('success') or response_json.get('status') == 'ok':
-                    logger.info("✓ Login successful (JSON response)")
+                    logger.info("âś“ Login successful (JSON response)")
                     
                     # Extract arf from JSON if available
                     if 'arf' in response_json:
                         self.arf_token = response_json['arf']
-                        logger.info(f"✓ ARF token from JSON: {self.arf_token[:8]}...")
+                        logger.info(f"âś“ ARF token from JSON: {self.arf_token[:8]}...")
                     
                     # Extract redirect URL if available
                     if 'redirect' in response_json or 'url' in response_json:
@@ -246,7 +339,7 @@ class InvoiceGenerator:
                         arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', redirect_response.url)
                         if arf_match:
                             self.arf_token = arf_match.group(1)
-                            logger.info(f"✓ ARF token from redirect: {self.arf_token[:8]}...")
+                            logger.info(f"âś“ ARF token from redirect: {self.arf_token[:8]}...")
                     
                     # If login successful, navigate to dashboard to establish session properly
                     logger.info("Navigating to dashboard...")
@@ -260,13 +353,13 @@ class InvoiceGenerator:
                     arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', str(dashboard_response.url))
                     if arf_match:
                         self.arf_token = arf_match.group(1)
-                        logger.info(f"✓ ARF token from dashboard: {self.arf_token[:8]}...")
+                        logger.info(f"âś“ ARF token from dashboard: {self.arf_token[:8]}...")
                     else:
                         # Try to find in response
                         arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', dashboard_response.text)
                         if arf_match:
                             self.arf_token = arf_match.group(1)
-                            logger.info(f"✓ ARF token from dashboard HTML: {self.arf_token[:8]}...")
+                            logger.info(f"âś“ ARF token from dashboard HTML: {self.arf_token[:8]}...")
                         else:
                             # Save dashboard for debugging
                             if os.getenv('DEBUG'):
@@ -278,14 +371,14 @@ class InvoiceGenerator:
                             csrf_match = re.search(r"var\s+CsrfToken\s*=\s*function\s*\(\)\s*\{\s*var\s+\w+\s*=\s*'([a-zA-Z0-9]+)'", dashboard_response.text)
                             if csrf_match:
                                 self.arf_token = csrf_match.group(1)
-                                logger.info(f"✓ Found CsrfToken in dashboard: {self.arf_token[:8]}...")
+                                logger.info(f"âś“ Found CsrfToken in dashboard: {self.arf_token[:8]}...")
                             else:
                                 # Maybe the system doesn't use ARF tokens consistently
                                 logger.warning("No ARF token found - system might not require it for all operations")
                     
                     return True
                 else:
-                    logger.error(f"✗ Login failed: {response_json.get('message', 'Unknown error')}")
+                    logger.error(f"âś— Login failed: {response_json.get('message', 'Unknown error')}")
                     return False
                     
             except json.JSONDecodeError:
@@ -301,8 +394,8 @@ class InvoiceGenerator:
                     logger.debug("Saved response to login_response.html")
             
             # Check for login failure indicators
-            if 'error' in response_text.lower() or 'invalid' in response_text.lower() or 'nesprávne' in response_text.lower():
-                logger.error("✗ Login failed - invalid credentials")
+            if 'error' in response_text.lower() or 'invalid' in response_text.lower() or 'nesprĂˇvne' in response_text.lower():
+                logger.error("âś— Login failed - invalid credentials")
                 return False
             
             # Try to extract arf token from response
@@ -317,17 +410,17 @@ class InvoiceGenerator:
             
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"✓ Successfully logged in and extracted arf token: {self.arf_token[:8]}...")
+                logger.info(f"âś“ Successfully logged in and extracted arf token: {self.arf_token[:8]}...")
                 return True
             else:
                 # Even without arf, check if we're logged in
                 if 'logout' in response_text.lower() or '/erp/' in response_url:
-                    logger.info("✓ Successfully logged in (no arf token found yet)")
+                    logger.info("âś“ Successfully logged in (no arf token found yet)")
                     # Try to get arf from dashboard
                     self.get_arf_token()
                     return True
                 else:
-                    logger.error("✗ Login failed - could not verify successful login")
+                    logger.error("âś— Login failed - could not verify successful login")
                     logger.debug(f"Final URL: {response_url}")
                     return False
                 
@@ -352,28 +445,28 @@ class InvoiceGenerator:
             arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', str(response.url))
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"✓ Found arf token in URL: {self.arf_token}")
+                logger.info(f"âś“ Found arf token in URL: {self.arf_token}")
                 return self.arf_token
             
             # Search for arf in response text
             arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', response.text)
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"✓ Found arf token in HTML: {self.arf_token}")
+                logger.info(f"âś“ Found arf token in HTML: {self.arf_token}")
                 return self.arf_token
             
             # Try to find it in JavaScript or forms
             arf_match = re.search(r'arf["\']?\s*[:=]\s*["\']([a-zA-Z0-9]+)["\']', response.text)
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"✓ Found arf token in JavaScript: {self.arf_token}")
+                logger.info(f"âś“ Found arf token in JavaScript: {self.arf_token}")
                 return self.arf_token
             
             # Try to find CsrfToken
             csrf_match = re.search(r"var\s+CsrfToken\s*=\s*function\s*\(\)\s*\{\s*var\s+\w+\s*=\s*'([a-zA-Z0-9]+)'", response.text)
             if csrf_match:
                 self.arf_token = csrf_match.group(1)
-                logger.info(f"✓ Found CsrfToken as ARF: {self.arf_token}")
+                logger.info(f"âś“ Found CsrfToken as ARF: {self.arf_token}")
                 return self.arf_token
             
             logger.debug("No ARF token found in dashboard response")
@@ -404,17 +497,17 @@ class InvoiceGenerator:
             
             # If we get redirected to login page, session is invalid
             if 'login' in str(response.url).lower() and 'logout' not in response_text.lower():
-                logger.error("✗ Redirected to login page - session invalid")
+                logger.error("âś— Redirected to login page - session invalid")
                 return False
             
             # Accept 400 errors as they might just mean missing parameters
             if response.status_code == 400:
-                logger.info("✓ Web session is valid (got 400 - likely missing parameters)")
+                logger.info("âś“ Web session is valid (got 400 - likely missing parameters)")
                 return True
             
             # If we see logout link or are on a protected page, we're logged in
             if response.status_code == 200 and ('logout' in response_text.lower() or '/erp/' in str(response.url)):
-                logger.info("✓ Web session is valid")
+                logger.info("âś“ Web session is valid")
                 
                 # Try to extract ARF token if we don't have it
                 if not self.arf_token:
@@ -426,15 +519,15 @@ class InvoiceGenerator:
                     
                     if arf_match:
                         self.arf_token = arf_match.group(1)
-                        logger.info(f"✓ ARF token obtained from session validation: {self.arf_token[:8]}...")
+                        logger.info(f"âś“ ARF token obtained from session validation: {self.arf_token[:8]}...")
                 
                 return True
             else:
-                logger.error("✗ Web session validation failed")
+                logger.error("âś— Web session validation failed")
                 return False
                 
         except Exception as e:
-            logger.error(f"✗ Error validating web session: {e}")
+            logger.error(f"âś— Error validating web session: {e}")
             return False
     
     def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
@@ -442,9 +535,11 @@ class InvoiceGenerator:
         all_orders = []
         has_next_page = True
         cursor = None
+        date_from_str = date_from.strftime("%Y-%m-%d")
+        date_to_str = date_to.strftime("%Y-%m-%d")
 
-        logger.info("Note: Fetching all orders without date filter due to API limitations")
-        logger.info("Orders will be filtered client-side by date range")
+        logger.info("Note: Fetching orders in descending purchase-date order due to API filter limitations")
+        logger.info("Pagination will stop once the export reaches orders older than %s", date_from_str)
 
         while has_next_page:
             # Remove the filter param as it requires partner token
@@ -453,7 +548,7 @@ class InvoiceGenerator:
                 'params': {
                     'limit': 30,  # API max limit is 30
                     'order_by': 'pur_date',
-                    'sort': 'ASC'
+                    'sort': 'DESC'
                 }
             }
 
@@ -477,7 +572,20 @@ class InvoiceGenerator:
                 skipped = len(orders) - len(valid_orders)
                 if skipped > 0:
                     logger.warning(f"Skipped {skipped} orders with errors in this batch")
-                logger.info(f"Fetched {len(valid_orders)} orders (total: {len(all_orders)})")
+                batch_dates = [pur_date for pur_date in (_order_purchase_date(order) for order in valid_orders) if pur_date]
+                if batch_dates:
+                    logger.info(
+                        "Fetched %s orders (total: %s) covering %s..%s",
+                        len(valid_orders),
+                        len(all_orders),
+                        min(batch_dates),
+                        max(batch_dates),
+                    )
+                    if min(batch_dates) < date_from_str:
+                        logger.info("Reached orders older than requested from-date %s; stopping pagination", date_from_str)
+                        has_next_page = False
+                else:
+                    logger.info(f"Fetched {len(valid_orders)} orders (total: {len(all_orders)})")
 
             except Exception as e:
                 error_str = str(e)
@@ -506,6 +614,11 @@ class InvoiceGenerator:
                         skipped = len(orders) - len(valid_orders)
                         if skipped > 0:
                             logger.warning(f"Skipped {skipped} problematic orders in this batch")
+
+                        batch_dates = [pur_date for pur_date in (_order_purchase_date(order) for order in valid_orders) if pur_date]
+                        if batch_dates and min(batch_dates) < date_from_str:
+                            logger.info("Reached orders older than requested from-date %s; stopping pagination", date_from_str)
+                            has_next_page = False
 
                         # Continue to next page
                         continue
@@ -582,7 +695,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                         'variables': variables
                     }
                     logger.error(f"Making raw request to: {self.client.transport.url}")
-                    logger.error(f"With headers: {headers}")
+                    logger.error(f"With headers: {_redact_headers(headers)}")
                     raw_response = requests.post(
                         self.client.transport.url,
                         json=payload,
@@ -600,14 +713,9 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         # Filter orders by date client-side
         if all_orders:
             filtered_orders = []
-            date_from_str = date_from.strftime('%Y-%m-%d')
-            date_to_str = date_to.strftime('%Y-%m-%d')
 
             for order in all_orders:
-                pur_date = order.get('pur_date', '')
-                # Extract just the date part if it includes time
-                if ' ' in pur_date:
-                    pur_date = pur_date.split(' ')[0]
+                pur_date = _order_purchase_date(order)
 
                 if date_from_str <= pur_date <= date_to_str:
                     filtered_orders.append(order)
@@ -617,44 +725,46 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 
         return all_orders
     
-    def filter_orders_for_invoice(self, orders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def filter_orders_for_invoice(self, orders: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """Filter orders that need invoice generation"""
         filtered_orders = []
-        
+        stats = {
+            "skipped_zero_total_orders": 0,
+        }
+
         for order in orders:
-            status = order.get('status', {}) or {}
-            status_name = status.get('name', '').lower()
-            
-            # Check for payment method in price_elements (if available)
-            # Note: price_elements removed from query due to API errors,
-            # so we'll match orders by status only
-            price_elements = order.get('price_elements', []) or []
-            payment_name = ''
-            for element in price_elements:
-                if element.get('type') == 'payment':
-                    payment_name = element.get('title', '').lower()
-                    break
-
-            # Check if invoices list is empty
-            invoices = order.get('invoices', []) or []
+            status = order.get("status", {}) or {}
+            status_name = status.get("name", "").lower()
+            invoices = order.get("invoices", []) or []
             has_invoice = len(invoices) > 0
+            order_total_value = _coerce_order_total_value(order)
 
-            # Check criteria:
-            # 1. Status is "Odoslaná" (sent) OR "Čaká na vybavenie" (waiting for processing)
-            # 2. Payment method check removed (was causing API errors)
-            # 3. No invoices (empty list)
-            #
-            # Note: Since we removed price_elements from the query to avoid API crashes,
-            # we now match all "Odoslaná" orders without invoices.
-            # You may need to manually filter by payment method when processing.
-            if ((status_name == 'odoslaná' or 'čaká na vybavenie' in status_name) and
-                not has_invoice):
+            if self.exclude_zero_total_orders and order_total_value <= 0:
+                stats["skipped_zero_total_orders"] += 1
+                logger.info(
+                    "Order %s skipped - zero or negative total (%.2f)",
+                    order.get("order_num"),
+                    order_total_value,
+                )
+                continue
+
+            if _status_matches_invoice_generation(status_name) and not has_invoice:
                 filtered_orders.append(order)
-                logger.info(f"Order {order.get('order_num')} matches criteria for invoice generation - Status: {status_name}")
+                logger.info(
+                    "Order %s matches criteria for invoice generation - Status: %s - Total: %.2f",
+                    order.get("order_num"),
+                    status_name,
+                    order_total_value,
+                )
             else:
-                logger.debug(f"Order {order.get('order_num')} skipped - Status: {status_name}, Has Invoice: {has_invoice}")
-        
-        return filtered_orders
+                logger.debug(
+                    "Order %s skipped - Status: %s, Has Invoice: %s",
+                    order.get("order_num"),
+                    status_name,
+                    has_invoice,
+                )
+
+        return filtered_orders, stats
     
     def create_invoice(self, order: Dict[str, Any]) -> bool:
         """Create invoice for the order"""
@@ -754,45 +864,45 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                         if result.get('success'):
                             invoice_id = result.get('invoice_id') or result.get('id')
                             invoice_num = result.get('invoice_num')
-                            logger.info(f"  ✓ Invoice created: {invoice_num}")
+                            logger.info(f"  âś“ Invoice created: {invoice_num}")
                             
                             # Try to send email
                             if invoice_id:
                                 if self.send_invoice_email(invoice_id):
-                                    logger.info(f"  ✓ Invoice email notification sent successfully to customer")
+                                    logger.info(f"  âś“ Invoice email notification sent successfully to customer")
                                 else:
-                                    logger.warning(f"  ⚠ Failed to send invoice email notification")
+                                    logger.warning(f"  âš  Failed to send invoice email notification")
                             
                             return True
                         else:
                             error_msg = result.get('message') or result.get('errors', {}).get('reason', 'Unknown error')
-                            logger.error(f"  ✗ Invoice creation failed: {error_msg}")
+                            logger.error(f"  âś— Invoice creation failed: {error_msg}")
                             return False
                     except json.JSONDecodeError:
                         # Response might be HTML, check for success indicators
                         if 'success' in response.text.lower() or 'invoice' in response.text.lower():
-                            logger.info(f"  ✓ Invoice likely created (HTML response)")
+                            logger.info(f"  âś“ Invoice likely created (HTML response)")
                             return True
                         else:
-                            logger.error(f"  ✗ Invoice creation failed (HTML response)")
-                            logger.debug(f"  ✗ HTML response: {response.text[:500]}")
+                            logger.error(f"  âś— Invoice creation failed (HTML response)")
+                            logger.debug(f"  âś— HTML response: {response.text[:500]}")
                             return False
                 elif response.status_code == 400:
                     # Log the actual error response
-                    logger.error(f"  ✗ Bad request (400) - URL: {finalize_url}")
+                    logger.error(f"  âś— Bad request (400) - URL: {finalize_url}")
                     try:
                         error_detail = response.json()
-                        logger.error(f"  ✗ Error details: {error_detail}")
+                        logger.error(f"  âś— Error details: {error_detail}")
                     except:
-                        logger.error(f"  ✗ Error response: {response.text[:500]}")
+                        logger.error(f"  âś— Error response: {response.text[:500]}")
                     return False
                 else:
-                    logger.error(f"  ✗ Invoice creation failed with status {response.status_code}")
-                    logger.error(f"  ✗ Response: {response.text[:500]}")
+                    logger.error(f"  âś— Invoice creation failed with status {response.status_code}")
+                    logger.error(f"  âś— Response: {response.text[:500]}")
                     return False
                             
         except Exception as e:
-            logger.error(f"  ✗ Error creating invoice: {e}")
+            logger.error(f"  âś— Error creating invoice: {e}")
             return False
     
     def send_invoice_email(self, invoice_id: str) -> bool:
@@ -840,7 +950,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         # Check if we have web session for invoice creation
         if not self.web_session:
             logger.error("=" * 60)
-            logger.error("✗ No web session available - cannot create invoices")
+            logger.error("âś— No web session available - cannot create invoices")
             logger.error("=" * 60)
             logger.error("Invoice creation requires web login credentials.")
             logger.error("Please add your credentials to the .env file:")
@@ -857,7 +967,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         logger.info("Validating web session...")
         if not self.validate_session():
             logger.error("=" * 60)
-            logger.error("✗ Web session validation failed - cannot proceed")
+            logger.error("âś— Web session validation failed - cannot proceed")
             logger.error("=" * 60)
             logger.error("Please check your login credentials in .env file")
             logger.error("=" * 60)
@@ -869,7 +979,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         logger.info(f"Total orders fetched: {len(orders)}")
         
         # Filter orders that need invoices
-        orders_for_invoice = self.filter_orders_for_invoice(orders)
+        orders_for_invoice, filter_stats = self.filter_orders_for_invoice(orders)
         logger.info(f"Orders matching criteria: {len(orders_for_invoice)}")
         
         if dry_run:
@@ -885,8 +995,9 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             logger.info("=" * 60)
             logger.info(f"DRY RUN Summary:")
             logger.info(f"  Orders that would be processed: {len(orders_for_invoice)}")
-            total = sum(order.get('sum', {}).get('value', 0) for order in orders_for_invoice)
-            logger.info(f"  Total amount: €{total:.2f}")
+            total = sum(_coerce_order_total_value(order) for order in orders_for_invoice)
+            logger.info(f"  Total amount: â‚¬{total:.2f}")
+            logger.info(f"  Skipped zero-total orders: {filter_stats.get('skipped_zero_total_orders', 0)}")
             if self.web_session:
                 logger.info("  Web session: Available (invoices would be created)")
             else:
@@ -921,17 +1032,111 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         
         logger.info("=" * 60)
         logger.info(f"Invoice processing complete:")
-        logger.info(f"  ✓ Invoices created: {success_count}")
+        logger.info(f"  âś“ Invoices created: {success_count}")
         if failed_count > 0:
-            logger.info(f"  ✗ Failed: {failed_count}")
-        logger.info(f"  Total amount: €{total_amount:.2f}")
+            logger.info(f"  âś— Failed: {failed_count}")
+        logger.info(f"  Skipped zero-total orders: {filter_stats.get('skipped_zero_total_orders', 0)}")
+        logger.info(f"  Total amount: â‚¬{total_amount:.2f}")
         logger.info("=" * 60)
         
         if success_count > 0:
             logger.info("Email notifications sent to:")
             for order in processed_orders:
-                logger.info(f"  • Order {order['order_num']}: {order['email']} ({order['amount']})")
+                logger.info(f"  â€˘ Order {order['order_num']}: {order['email']} ({order['amount']})")
             logger.info("=" * 60)
+
+
+def run_invoice_generation(
+    project_name: str,
+    date_from: Union[str, datetime],
+    date_to: Union[str, datetime],
+    dry_run: bool = False,
+    no_web_login: bool = False,
+) -> InvoiceRunSummary:
+    project_name = (project_name or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    os.environ["REPORT_PROJECT"] = project_name
+    load_project_env(project_name, logger=logger)
+
+    project_settings = load_project_settings(project_name)
+    invoice_settings = resolve_invoice_generation_settings(project_settings)
+    api_url = resolve_biznisweb_api_url(project_name, project_settings)
+    api_token = os.getenv("BIZNISWEB_API_TOKEN")
+    base_url = derive_biznisweb_base_url(api_url)
+    web_username = os.getenv("BIZNISWEB_USERNAME")
+    web_password = os.getenv("BIZNISWEB_PASSWORD")
+
+    if not api_token:
+        raise RuntimeError(f"BIZNISWEB_API_TOKEN not found for project '{project_name}'")
+
+    from_dt = date_from if isinstance(date_from, datetime) else datetime.strptime(str(date_from), "%Y-%m-%d")
+    to_dt = date_to if isinstance(date_to, datetime) else datetime.strptime(str(date_to), "%Y-%m-%d")
+
+    if from_dt > to_dt:
+        raise ValueError(f"from_date ({from_dt:%Y-%m-%d}) cannot be after to_date ({to_dt:%Y-%m-%d})")
+
+    generator = InvoiceGenerator(
+        api_url,
+        api_token,
+        base_url,
+        None if no_web_login else web_username,
+        None if no_web_login else web_password,
+        exclude_zero_total_orders=invoice_settings["exclude_zero_total_orders"],
+    )
+
+    summary = InvoiceRunSummary(
+        project=project_name,
+        date_from=from_dt.strftime("%Y-%m-%d"),
+        date_to=to_dt.strftime("%Y-%m-%d"),
+        dry_run=dry_run,
+    )
+
+    if not generator.web_session and not dry_run:
+        raise RuntimeError(
+            f"Invoice generation for project '{project_name}' requires BIZNISWEB_USERNAME and BIZNISWEB_PASSWORD"
+        )
+
+    if generator.web_session and not dry_run:
+        logger.info("Validating web session...")
+        if not generator.validate_session():
+            raise RuntimeError(f"BiznisWeb web session validation failed for project '{project_name}'")
+
+    logger.info("Fetching orders from GraphQL API...")
+    orders = generator.fetch_orders(from_dt, to_dt)
+    summary.total_orders_fetched = len(orders)
+    logger.info("Total orders fetched: %s", summary.total_orders_fetched)
+
+    orders_for_invoice, filter_stats = generator.filter_orders_for_invoice(orders)
+    summary.matched_orders = len(orders_for_invoice)
+    summary.skipped_zero_total_orders = filter_stats.get("skipped_zero_total_orders", 0)
+    logger.info("Orders matching criteria: %s", summary.matched_orders)
+
+    if dry_run:
+        summary.total_amount = sum(_coerce_order_total_value(order) for order in orders_for_invoice)
+        logger.info(
+            "DRY RUN summary - matched=%s total_amount=%.2f skipped_zero_total=%s",
+            summary.matched_orders,
+            summary.total_amount,
+            summary.skipped_zero_total_orders,
+        )
+        return summary
+
+    for order in orders_for_invoice:
+        if generator.create_invoice(order):
+            summary.created_invoices += 1
+            summary.total_amount += _coerce_order_total_value(order)
+        else:
+            summary.failed_invoices += 1
+
+    logger.info(
+        "Invoice run summary - project=%s matched=%s created=%s failed=%s skipped_zero_total=%s total_amount=%.2f",
+        summary.project,
+        summary.matched_orders,
+        summary.created_invoices,
+        summary.failed_invoices,
+        summary.skipped_zero_total_orders,
+        summary.total_amount,
+    )
+    return summary
 
 
 def main():
@@ -965,20 +1170,8 @@ def main():
 
     args = parser.parse_args()
     project_name = (args.project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    os.environ['REPORT_PROJECT'] = project_name
-    load_project_env(project_name, logger=logger)
-
     project_settings = load_project_settings(project_name)
-    api_url = resolve_biznisweb_api_url(project_name, project_settings)
-    api_token = os.getenv('BIZNISWEB_API_TOKEN')
-    base_url = derive_biznisweb_base_url(api_url)
-    web_username = os.getenv('BIZNISWEB_USERNAME')
-    web_password = os.getenv('BIZNISWEB_PASSWORD')
-
-    if not api_token:
-        logger.error(f"? BIZNISWEB_API_TOKEN not found for project '{project_name}'")
-        logger.error('Please set it in projects/<project>/.env or environment variables')
-        return
+    invoice_settings = resolve_invoice_generation_settings(project_settings)
 
     if args.to_date:
         date_to = datetime.strptime(args.to_date, '%Y-%m-%d')
@@ -988,14 +1181,26 @@ def main():
     if args.from_date:
         date_from = datetime.strptime(args.from_date, '%Y-%m-%d')
     else:
-        date_from = datetime(2025, 5, 11)
+        default_from_str, _ = resolve_invoice_date_window(date_to, invoice_settings["lookback_days"])
+        date_from = datetime.strptime(default_from_str, "%Y-%m-%d")
 
-    if args.no_web_login:
-        generator = InvoiceGenerator(api_url, api_token, base_url)
-    else:
-        generator = InvoiceGenerator(api_url, api_token, base_url, web_username, web_password)
-
-    generator.process_orders(date_from, date_to, dry_run=args.dry_run)
+    summary = run_invoice_generation(
+        project_name=project_name,
+        date_from=date_from,
+        date_to=date_to,
+        dry_run=args.dry_run,
+        no_web_login=args.no_web_login,
+    )
+    logger.info(
+        "Invoice run summary - project=%s matched=%s created=%s failed=%s skipped_zero_total=%s",
+        summary.project,
+        summary.matched_orders,
+        summary.created_invoices,
+        summary.failed_invoices,
+        summary.skipped_zero_total_orders,
+    )
+    if not args.dry_run and summary.failed_invoices:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
