@@ -91,7 +91,8 @@ Bootstrap entrypoints:
   - Google spend retrieval succeeds in the current production report run
 - VEVO production ads connectivity was re-verified on `2026-04-24`:
   - Meta account `Wachman` reports `EUR`
-  - Google Ads initialization currently fails with `invalid_grant`, so VEVO Google spend is not reliable until the secret/auth issue is fixed
+  - Google Ads account `Vevo.sk` reports `EUR`
+  - Google spend retrieval succeeds again after syncing the runtime Google Ads secret with the valid local VEVO project env
 - Fixed `html_report_generator.py` period-switcher syntax so `Env Check` / `reporting_qa_smoke.py` pass again on GitHub Actions and on local Python 3.11.
 - VEVO runtime now supports explicit `fixed_daily_cost`, and March 2026 verification confirms `CM3` now diverges from `CM2` once fixed overhead is applied (`fixed_daily_cost = 70 EUR`).
 - VEVO modern dashboard now surfaces practical marketing decision metrics:
@@ -164,7 +165,6 @@ Bootstrap entrypoints:
 - VEVO now resolves ambiguous shared-EAN fragrance SKUs by exact item label / compound key before identifier fallback, so Natural vs Premium 500ml/200ml lines no longer collapse onto the same cost.
 - ROY now supports project-configured excluded order statuses for realized revenue filtering, so non-revenue final states can be removed without hardcoded edits in `export_orders.py`.
 - Foreign-market ad spend was previously only correct when the ad platform account itself used `EUR`; project-scoped FX conversion is now implemented on branch `codex/ads-currency-by-project`, but it is not production-active until that branch is merged/deployed.
-- VEVO Google Ads production auth is currently the remaining live blocker for complete ad reporting because the runtime hits `invalid_grant` during client initialization.
 - ROY dashboard now exposes product-demand analytics in the active modern report:
   - growing products
   - declining products
@@ -193,7 +193,7 @@ Bootstrap entrypoints:
   - detected account currency per source
   - converted `total_eur`
   - warning/error if a source currency mismatches project config or lacks a conversion rate
-- In parallel, rotate/fix the VEVO Google Ads refresh-token/auth secret, then rerun the VEVO production-equivalent report until Google Ads connects cleanly and daily spend loads again
+- After deploy, rerun the first VEVO and ROY production-equivalent reports and confirm the foreign-market FX path from live source-health output, not only from unit tests
 
 ## 9) Change Log
 
@@ -223,9 +223,22 @@ Bootstrap entrypoints:
   - `vevo-daily-report-email` is enabled at `21:00 Europe/Bratislava`
   - `roy-daily-report-email` is enabled at `21:30 Europe/Bratislava`
   - VEVO Meta account `Wachman` reports `EUR`
-  - VEVO Google Ads client still fails `invalid_grant`
   - ROY Meta account `Roy` reports `EUR`
   - ROY Google Ads account `Roy.sk` reports `EUR` and returns daily spend data
+- Remediated the live VEVO Google Ads runtime secret on `2026-04-24`:
+  - AWS `vevo/reporting/runtime-env` differed from the valid local VEVO project env in:
+    - `GOOGLE_ADS_REFRESH_TOKEN`
+    - `GOOGLE_ADS_LOGIN_CUSTOMER_ID`
+  - synced only the VEVO Google Ads keys in Secrets Manager, preserving the rest of the runtime secret
+  - production-equivalent ECS task `5629eb60c42f4c02bc5dc7fe2220cc8d` on private IP `172.31.9.2` then exited `0`
+  - CloudWatch verification for that task shows:
+    - `Successfully connected to Google Ads account: Vevo.sk`
+    - `Currency: EUR`
+    - `Retrieved Google Ads data for 7 days`
+    - `Retrieved Google Ads data for 11 days`
+    - `Retrieved Google Ads data for 32 days`
+    - `Retrieved Google Ads data for 188 days`
+    - `SES message sent`
 - Added automatic daily invoice-generation wiring for both active reporting clients on task branch `codex/daily-invoice-automation`:
   - `daily_report_runner.py` now supports an invoice step after the daily report flow
   - new runner controls:
