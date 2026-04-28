@@ -187,15 +187,12 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Deploy the reporting calculation fixes to the production ECR image and run production-equivalent Fargate smoke checks for VEVO and ROY report tasks:
-  - verify localhost marker on the running task
-  - verify CloudWatch logs show report-only mode and no calculation/runtime errors
-  - verify the next scheduled report cycle uses the refreshed image
 - Monitor the first split production cycle:
   - on `2026-04-28`, confirm `vevo-daily-invoice-generation` starts at `20:00 Europe/Bratislava` and `roy-daily-invoice-generation` starts at `20:30 Europe/Bratislava`
   - confirm CloudWatch invoice summaries show no unexpected create failures
   - on `2026-04-29`, confirm `vevo-daily-report-email` starts at `01:00 Europe/Bratislava` and `roy-daily-report-email` starts at `01:30 Europe/Bratislava`
   - confirm report logs say invoice generation was skipped, and report emails cover the completed previous day
+- Merge PR `#52` after final review so the deployed calculation fixes become the GitHub `main` source of truth, then confirm the guarded ECR build on `main` refreshes or retains the verified `latest` image.
 
 ## 9) Change Log
 
@@ -214,6 +211,19 @@ Bootstrap entrypoints:
   - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes`
   - `python scripts\reporting_qa_smoke.py`
   - `python scripts\security_ci.py`
+- Deployed the refreshed runtime image via manual GitHub Actions dispatch:
+  - workflow: `Build and Push ECR`
+  - run: `25035445695`
+  - result: `success`
+  - refreshed ECR `latest` digest: `sha256:fb4902aca189511b1f17711fe37751ad9c7a060329add3626a8c02829863adc1`
+- Verified production-equivalent report host smoke checks for both active projects:
+  - hard-gate context: scheduled ECS/Fargate tasks, instance-id `N/A` because there is no fixed EC2 host, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`, marker path `http://127.0.0.1:8000/marker.json`
+  - VEVO service/schedule `vevo-daily-report-email`, task definition `vevo-reporting-daily:5`, task ARN `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/ce0f3c43d7ed4a3a9a645f9f851a59d7`, private runtime IP `172.31.5.177`, exit code `0`, marker `LOCALHOST_MARKER_OK`, `REPORT_SKIP_INVOICES=true`
+  - ROY service/schedule `roy-daily-report-email`, task definition `roy-reporting-daily:3`, task ARN `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/7824cad369b04b6c88936e3fb5f666c6`, private runtime IP `172.31.2.70`, exit code `0`, marker `LOCALHOST_MARKER_OK`, `REPORT_SKIP_INVOICES=true`
+  - both host smoke tasks ran `tests.test_reporting_calculation_fixes` inside the deployed image and passed `Ran 5 tests ... OK`
+- Verified local UI smoke after host checks:
+  - `live_dashboard_server.py` served `/health`, `/dashboard/vevo`, `/dashboard/roy`, `/api/vevo/latest`, and `/api/roy/latest`
+  - both project dashboards exposed the `live-dashboard-app` marker and non-empty dashboard payloads
 
 - Split reporting and invoice generation into separate production schedules:
   - report schedules remain early morning so the prior day is complete:
