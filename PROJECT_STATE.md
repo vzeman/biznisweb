@@ -192,7 +192,6 @@ Bootstrap entrypoints:
   - confirm CloudWatch invoice summaries show no unexpected create failures
   - on `2026-04-29`, confirm `vevo-daily-report-email` starts at `01:00 Europe/Bratislava` and `roy-daily-report-email` starts at `01:30 Europe/Bratislava`
   - confirm report logs say invoice generation was skipped, and report emails cover the completed previous day
-- Merge PR `#52` after final review so the deployed calculation fixes become the GitHub `main` source of truth, then confirm the guarded ECR build on `main` refreshes or retains the verified `latest` image.
 
 ## 9) Change Log
 
@@ -224,6 +223,41 @@ Bootstrap entrypoints:
 - Verified local UI smoke after host checks:
   - `live_dashboard_server.py` served `/health`, `/dashboard/vevo`, `/dashboard/roy`, `/api/vevo/latest`, and `/api/roy/latest`
   - both project dashboards exposed the `live-dashboard-app` marker and non-empty dashboard payloads
+- Merged PR `#52` into `main` and confirmed the guarded ECR build from `main` succeeded:
+  - merge commit: `a3b11413658fd40389d151f5fffffb9023380eb8`
+  - build run: `25035803745`
+  - ECR `latest` digest after the `main` build: `sha256:645868fb78e8419db49165f5d3e76a4a2f95fafb895fa124a5c32748350930f8`
+- Manual VEVO report generation/send completed from production Fargate:
+  - service/schedule: `vevo-daily-report-email`
+  - task definition: `vevo-reporting-daily:5`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/c760e8377e78458bb66cb85640a34708`
+  - runtime private IP: `172.31.38.81`
+  - image digest in task: `sha256:645868fb78e8419db49165f5d3e76a4a2f95fafb895fa124a5c32748350930f8`
+  - exit code: `0`
+  - generated report: `data/vevo/report_20250503-20260427.html`
+  - SES message id: `0107019dd2a78c7d-f98a66f4-0bde-4e7f-8840-ace08e65375d-000000`
+  - invoice generation was skipped by flag
+- Initial manual ROY report generation correctly failed on the new unknown-currency guardrail:
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/68a4848b2d6d4212ad7252793174e54b`
+  - runtime private IP: `172.31.29.145`
+  - exit code: `1`
+  - failure: `Unknown currency RON; add an explicit EUR conversion rate to projects/roy/settings.json`
+- Added explicit ROY `RON` conversion rate and deployed it:
+  - PR `#53` merged into `main` as `ce634f0a6b3dda53cbed42c401df90ce847a4aa5`
+  - source rate: ECB euro reference rate for `27 April 2026`, `1 EUR = 5.0954 RON`
+  - configured rate: `1 RON = 0.19625545 EUR`
+  - build run: `25036265850`
+  - ECR `latest` digest after hotfix: `sha256:050350f9f8b9e76bec170935a8c9dbffbb1a9044b42b35f78435249a3c8bbe90`
+- Manual ROY report generation/send completed after the hotfix:
+  - service/schedule: `roy-daily-report-email`
+  - task definition: `roy-reporting-daily:3`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/092c24eec0f441f68285a9ef195e16c0`
+  - runtime private IP: `172.31.16.194`
+  - image digest in task: `sha256:050350f9f8b9e76bec170935a8c9dbffbb1a9044b42b35f78435249a3c8bbe90`
+  - exit code: `0`
+  - generated report: `data/roy/report_20250924-20260427.html`
+  - SES message id: `0107019dd2b5dbc1-cc224788-c3e2-42ce-a17e-8c175460fdb0-000000`
+  - invoice generation was skipped by flag
 
 - Split reporting and invoice generation into separate production schedules:
   - report schedules remain early morning so the prior day is complete:
