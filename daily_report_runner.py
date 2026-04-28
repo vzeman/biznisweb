@@ -32,6 +32,7 @@ from reporting_core import (
     build_artifact_set,
     load_project_env,
     load_project_settings,
+    put_metric,
     project_data_dir,
     resolve_reporting_defaults,
     sanitize_output_tag,
@@ -62,7 +63,7 @@ def env_bool(name: str, default: bool = False) -> bool:
     return value in {"1", "true", "yes", "y", "on"}
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and email daily report")
     parser.add_argument(
         "--project",
@@ -109,8 +110,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-invoices",
         action="store_true",
-        default=env_bool("REPORT_SKIP_INVOICES", False),
-        help="Skip automatic invoice generation for this run.",
+        default=env_bool("REPORT_SKIP_INVOICES", True),
+        help="Skip automatic invoice generation for this run. Default: true; use invoice_runner.py for scheduled invoices.",
     )
     parser.add_argument(
         "--invoice-dry-run",
@@ -123,7 +124,7 @@ def parse_args() -> argparse.Namespace:
         default=os.getenv("REPORT_OUTPUT_TAG", ""),
         help="Optional output tag for side-by-side test artifacts (e.g. ui_test).",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def resolve_to_date(to_date_arg: str, tz_name: str) -> str:
@@ -502,7 +503,14 @@ def _load_order_records(export_csv: Optional[Path]) -> List[Dict[str, Any]]:
             email = (row.get("customer_email") or "").strip().lower()
             if not email:
                 continue
-            orders_map[order_num] = {"date": d, "email": email}
+            first_date = None
+            first_date_raw = (row.get("customer_first_purchase_date") or "").split(" ")[0].strip()
+            if first_date_raw:
+                try:
+                    first_date = datetime.strptime(first_date_raw, "%Y-%m-%d").date()
+                except ValueError:
+                    first_date = None
+            orders_map[order_num] = {"date": d, "email": email, "first_date": first_date}
     return list(orders_map.values())
 
 
@@ -513,7 +521,7 @@ def _load_customer_dynamics(order_records: List[Dict[str, Any]]) -> Dict[date, D
     first_order_date: Dict[str, date] = {}
     for order in order_records:
         email = order["email"]
-        d = order["date"]
+        d = order.get("first_date") or order["date"]
         if email not in first_order_date or d < first_order_date[email]:
             first_order_date[email] = d
 
@@ -1013,33 +1021,6 @@ def build_email_body(
     )
 
     return "\n".join(lines)
-
-
-def put_metric(metric_name: str, value: float, project: str, reporting_defaults: Dict[str, Any], unit: str = "Count") -> None:
-    """Publish a custom CloudWatch metric for reporting job observability."""
-    region = os.getenv("AWS_REGION", "eu-central-1").strip()
-    try:
-        import boto3  # type: ignore
-        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
-    except ImportError:
-        print("WARN: boto3 not available, skipping CloudWatch metric publishing.")
-        return
-
-    try:
-        cloudwatch = boto3.client("cloudwatch", region_name=region)
-        cloudwatch.put_metric_data(
-            Namespace=reporting_defaults["cloudwatch_namespace"],
-            MetricData=[
-                {
-                    "MetricName": metric_name,
-                    "Dimensions": [{"Name": "Project", "Value": project}],
-                    "Value": float(value),
-                    "Unit": unit,
-                }
-            ],
-        )
-    except (ClientError, BotoCoreError) as exc:
-        print(f"WARN: failed to publish CloudWatch metric {metric_name}: {exc}")
 
 
 def send_email_ses(

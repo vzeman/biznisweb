@@ -4,6 +4,12 @@
   "reporting_system_name": "__CLIENT_DISPLAY_NAME__ reporting",
   "enable_email_strategy_report": false,
   "report_from_date": "2026-01-01",
+  "report_schedule": {
+    "schedule_name": "__CLIENT_SLUG__-daily-report-email",
+    "schedule_expression": "cron(0 1 * * ? *)",
+    "timezone": "Europe/Bratislava",
+    "task_family": "__CLIENT_SLUG__-reporting-daily"
+  },
   "packaging_cost_per_order": 0.3,
   "shipping_net_per_order": 0.0,
   "fixed_monthly_cost": 0,
@@ -11,7 +17,11 @@
   "invoice_generation": {
     "enabled": false,
     "lookback_days": 7,
-    "exclude_zero_total_orders": true
+    "exclude_zero_total_orders": true,
+    "schedule_name": "__CLIENT_SLUG__-daily-invoice-generation",
+    "schedule_expression": "cron(0 20 * * ? *)",
+    "timezone": "Europe/Bratislava",
+    "task_family": "__CLIENT_SLUG__-invoice-daily"
   },
   "inventory_model": {
     "enabled": false,

@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-24
+Last updated: 2026-04-28
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -66,16 +66,23 @@ Bootstrap entrypoints:
 - CI validates env contract and blocks tracked secret env files
 - Repo-scoped `PROJECT_STATE.md` exists
 - Bootstrap scripts now exist for macOS/Linux and Windows PowerShell
-- VEVO ECS schedule `vevo-daily-report-email` is enabled for `01:00 Europe/Bratislava`
-- VEVO production task definition `vevo-reporting-daily:4` uses full-history runtime range from `2025-05-03` to `yesterday`
-- ROY ECS schedule `roy-daily-report-email` is enabled for `01:00 Europe/Bratislava`
-- ROY production task definition `roy-reporting-daily:2` now uses full-history runtime range from `2025-09-24` to `yesterday`
-- VEVO and ROY task-branch runtime now supports automatic daily invoice generation inside the existing daily runner:
-  - `daily_report_runner.py` can trigger invoice generation after the report run
-  - `projects/vevo/settings.json` and `projects/roy/settings.json` now enable `invoice_generation`
+- VEVO report schedule `vevo-daily-report-email` is enabled for `01:00 Europe/Bratislava`
+- VEVO production report task definition `vevo-reporting-daily:5` uses full-history runtime range from `2025-05-03` to `yesterday` and sets `REPORT_SKIP_INVOICES=true`
+- ROY report schedule `roy-daily-report-email` is enabled for `01:30 Europe/Bratislava`
+- ROY production report task definition `roy-reporting-daily:3` uses full-history runtime range from `2025-09-24` to `yesterday` and sets `REPORT_SKIP_INVOICES=true`
+- Invoice generation is separated from reporting in production:
+  - VEVO invoice schedule `vevo-daily-invoice-generation` is enabled for `20:00 Europe/Bratislava` and targets `vevo-invoice-daily:1`
+  - ROY invoice schedule `roy-daily-invoice-generation` is enabled for `20:30 Europe/Bratislava` and targets `roy-invoice-daily:1`
+  - invoice task definitions run `python generate_invoices.py --project <project>` on the same production image
+  - `daily_report_runner.py` now defaults to report-only behavior; `invoice_runner.py` is the repo-local standalone invoice runner for the next production image
+  - `projects/vevo/settings.json` and `projects/roy/settings.json` keep separate project-owned `report_schedule` and `invoice_generation` schedule metadata
   - zero-total orders are excluded before invoice creation
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
+- Production schedule drift from the evening cadence was corrected on `2026-04-28`:
+  - VEVO `21:00 Europe/Bratislava` -> `01:00 Europe/Bratislava`
+  - ROY `21:30 Europe/Bratislava` -> `01:30 Europe/Bratislava`
+  - ROY order `2677002371` was confirmed as eligible and remediated by a one-off production Fargate invoice catch-up
 - VEVO task role CloudWatch metric policy now allows the active namespace `BizniswebReporting` (and keeps backward-compatible `VevoReporting`)
 - Manual ECS production-equivalent run succeeded on `2026-04-03` with:
   - HTML report saved as `data/vevo/report_20250503-20260402.html`
@@ -180,13 +187,91 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Merge the daily invoice automation branch through PR, wait for the guarded ECR build, then run manual production-equivalent VEVO and ROY tasks with the infra hard-gate:
-  - confirm scheduler/service name + marker path before deploy verification
-  - verify on host with `curl localhost` marker payload that the daily runner reached the invoice step
-  - confirm CloudWatch output shows invoice summary counts and zero-total skips
-- After production verification, let the next scheduled `vevo-daily-report-email` and `roy-daily-report-email` runs execute normally and compare the first automatic invoice day against BiznisWeb admin output
+- Monitor the first split production cycle:
+  - on `2026-04-28`, confirm `vevo-daily-invoice-generation` starts at `20:00 Europe/Bratislava` and `roy-daily-invoice-generation` starts at `20:30 Europe/Bratislava`
+  - confirm CloudWatch invoice summaries show no unexpected create failures
+  - on `2026-04-29`, confirm `vevo-daily-report-email` starts at `01:00 Europe/Bratislava` and `roy-daily-report-email` starts at `01:30 Europe/Bratislava`
+  - confirm report logs say invoice generation was skipped, and report emails cover the completed previous day
+- Merge PR `#52` after final review so the deployed calculation fixes become the GitHub `main` source of truth, then confirm the guarded ECR build on `main` refreshes or retains the verified `latest` image.
 
 ## 9) Change Log
+
+### 2026-04-28
+- Fixed reporting calculation issues found during VEVO/ROY audit:
+  - geo profitability now includes Google Ads allocation from order-level paid spend instead of subtracting only Facebook spend
+  - 7D/30D/90D period bundle reports now carry full-history customer first-purchase dates so returning customers are not counted as new just because the visible report window is shorter
+  - zero-revenue ROY orders now allocate item-level order overhead, paid spend, and fixed overhead by cost/quantity/equal-share fallback instead of dropping all item-level overhead
+  - unknown currencies now fail fast instead of being silently treated as EUR
+  - missing product costs now use a conservative zero-margin fallback instead of the previous default `1.00 EUR` cost
+  - product-cost QA/dashboard wording now reflects missing-cost fallback semantics
+- Added regression coverage in `tests/test_reporting_calculation_fixes.py`.
+- Updated the ECR build workflow to run the new calculation regression tests before publishing the image.
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py reporting_core\cfo_kpis.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+- Deployed the refreshed runtime image via manual GitHub Actions dispatch:
+  - workflow: `Build and Push ECR`
+  - run: `25035445695`
+  - result: `success`
+  - refreshed ECR `latest` digest: `sha256:fb4902aca189511b1f17711fe37751ad9c7a060329add3626a8c02829863adc1`
+- Verified production-equivalent report host smoke checks for both active projects:
+  - hard-gate context: scheduled ECS/Fargate tasks, instance-id `N/A` because there is no fixed EC2 host, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`, marker path `http://127.0.0.1:8000/marker.json`
+  - VEVO service/schedule `vevo-daily-report-email`, task definition `vevo-reporting-daily:5`, task ARN `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/ce0f3c43d7ed4a3a9a645f9f851a59d7`, private runtime IP `172.31.5.177`, exit code `0`, marker `LOCALHOST_MARKER_OK`, `REPORT_SKIP_INVOICES=true`
+  - ROY service/schedule `roy-daily-report-email`, task definition `roy-reporting-daily:3`, task ARN `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/7824cad369b04b6c88936e3fb5f666c6`, private runtime IP `172.31.2.70`, exit code `0`, marker `LOCALHOST_MARKER_OK`, `REPORT_SKIP_INVOICES=true`
+  - both host smoke tasks ran `tests.test_reporting_calculation_fixes` inside the deployed image and passed `Ran 5 tests ... OK`
+- Verified local UI smoke after host checks:
+  - `live_dashboard_server.py` served `/health`, `/dashboard/vevo`, `/dashboard/roy`, `/api/vevo/latest`, and `/api/roy/latest`
+  - both project dashboards exposed the `live-dashboard-app` marker and non-empty dashboard payloads
+
+- Split reporting and invoice generation into separate production schedules:
+  - report schedules remain early morning so the prior day is complete:
+    - VEVO `vevo-daily-report-email`: `cron(0 1 * * ? *)`, timezone `Europe/Bratislava`, target `vevo-reporting-daily:5`
+    - ROY `roy-daily-report-email`: `cron(30 1 * * ? *)`, timezone `Europe/Bratislava`, target `roy-reporting-daily:3`
+  - report task definitions set `REPORT_SKIP_INVOICES=true`
+  - invoice schedules run the same day in the evening:
+    - VEVO `vevo-daily-invoice-generation`: `cron(0 20 * * ? *)`, timezone `Europe/Bratislava`, target `vevo-invoice-daily:1`
+    - ROY `roy-daily-invoice-generation`: `cron(30 20 * * ? *)`, timezone `Europe/Bratislava`, target `roy-invoice-daily:1`
+  - created invoice log groups:
+    - `/ecs/vevo-invoice-daily`
+    - `/ecs/roy-invoice-daily`
+  - extended scheduler IAM policy to allow task families:
+    - `vevo-invoice-daily:*`
+    - `roy-invoice-daily:*`
+- Added repo-local standalone invoice runner support:
+  - new `invoice_runner.py` computes default invoice windows from today's date in `Europe/Bratislava`
+  - `daily_report_runner.py` now defaults to report-only behavior (`REPORT_SKIP_INVOICES=true`)
+  - shared CloudWatch metric publishing moved to `reporting_core.metrics`
+  - ECR build workflow now triggers on `invoice_runner.py`
+- Added explicit per-project schedule metadata:
+  - `projects/vevo/settings.json` declares `vevo-daily-report-email` and `vevo-daily-invoice-generation`
+  - `projects/roy/settings.json` declares `roy-daily-report-email` and `roy-daily-invoice-generation`
+  - `templates/reporting-client/settings.template.json` now includes separate report/invoice schedule blocks for future projects
+- Verified locally with:
+  - `python -m py_compile invoice_runner.py daily_report_runner.py generate_invoices.py reporting_core\metrics.py reporting_core\__init__.py`
+  - `python -m unittest tests.test_invoice_generation`
+  - `git diff --check`
+- Verified production host-level markers:
+  - VEVO report check task `eca78a00d2f142b2908088cf0ec4ce47`, private IP `172.31.34.23`, marker `LOCALHOST_MARKER_OK`, `report_skip_invoices=true`
+  - ROY report check task `c0e2b80e33ce40ff9b77ceef587c7b3f`, private IP `172.31.28.148`, marker `LOCALHOST_MARKER_OK`, `report_skip_invoices=true`
+  - VEVO invoice dry-run task `5783f35fcdb64408bc641e78bea70196`, private IP `172.31.45.190`, marker `LOCALHOST_MARKER_OK`, fetched `87`, matched `0`, failed `0`
+  - ROY invoice dry-run task `947a29d9c04740dd8abf548918573256`, private IP `172.31.38.58`, marker `LOCALHOST_MARKER_OK`, fetched `80`, matched `0`, failed `0`, skipped zero-total `3`
+
+- Investigated why ROY order `2677002371` did not get an invoice:
+  - live BizniWeb API showed the order was ROY, purchased `2026-04-27 10:17:28`, status `Odoslaná`, non-zero total, and had no invoice
+  - local invoice filter verification showed the order matched the configured invoice criteria for window `2026-04-21..2026-04-27`
+  - root cause was scheduler drift: AWS EventBridge had been moved to evening runs (`21:00/21:30 Europe/Bratislava`), so at `2026-04-28 06:34 Europe/Bratislava` the ROY `2026-04-27` invoice pass had not run yet
+- Corrected production AWS schedules back to early morning:
+  - `vevo-daily-report-email`: `cron(0 1 * * ? *)`, timezone `Europe/Bratislava`, target unchanged at `vevo-reporting-daily:4`
+  - `roy-daily-report-email`: `cron(30 1 * * ? *)`, timezone `Europe/Bratislava`, target unchanged at `roy-reporting-daily:2`
+- Ran a one-off ROY production Fargate invoice catch-up for `2026-04-27`:
+  - hard-gate context: scheduled ECS/Fargate, instance-id/IP not fixed until runtime, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`, marker path `http://127.0.0.1:8000/marker.json`
+  - task ARN `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/0b846a03229d496983987ca58a7c3bf8`
+  - runtime private IP `172.31.26.154`
+  - CloudWatch summary: matched `4`, created `4`, failed `0`, skipped zero-total `0`
+  - localhost marker returned `LOCALHOST_MARKER_OK`
+  - post-run API verification confirmed order `2677002371` now has invoice `2677002178`
 
 ### 2026-04-24
 - Added automatic daily invoice-generation wiring for both active reporting clients on task branch `codex/daily-invoice-automation`:

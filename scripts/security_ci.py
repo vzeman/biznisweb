@@ -182,7 +182,7 @@ def main() -> int:
         )
         require(
             dashboard_modern,
-            "Default-cost revenue share",
+            "Missing-cost revenue share",
             "Modern dashboard must expose fallback revenue share explicitly.",
         )
         require(

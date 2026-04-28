@@ -494,6 +494,7 @@ class BizniWebExporter:
             )
         self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
         self.customer_first_order_dates = {}  # Track first order date for each customer
+        self.unknown_currencies = set()
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
         self.excluded_status_orders = []  # Track all excluded status orders for lifecycle proxy reporting
         self.product_expenses_exact = dict(PRODUCT_EXPENSES)
@@ -546,6 +547,98 @@ class BizniWebExporter:
             if start_date <= purchase_dt.date() <= end_date:
                 filtered.append(order)
         return filtered
+
+    @staticmethod
+    def _order_customer_email(order: Dict[str, Any]) -> str:
+        customer = order.get("customer") or {}
+        return str(customer.get("email") or "").strip().lower()
+
+    def _build_customer_first_purchase_map(
+        self,
+        orders: Optional[List[Dict[str, Any]]],
+    ) -> Dict[str, datetime]:
+        first_purchase: Dict[str, datetime] = {}
+        for order in orders or []:
+            email = self._order_customer_email(order)
+            if not email or email == "nan":
+                continue
+            purchase_dt = self._order_purchase_datetime(order)
+            if purchase_dt is None:
+                continue
+            if email not in first_purchase or purchase_dt < first_purchase[email]:
+                first_purchase[email] = purchase_dt
+        return first_purchase
+
+    def _add_customer_history_columns(
+        self,
+        df: pd.DataFrame,
+        customer_first_purchase_map: Optional[Dict[str, datetime]],
+    ) -> pd.DataFrame:
+        if df.empty or "customer_email" not in df.columns or "purchase_date" not in df.columns:
+            return df
+
+        result = df.copy()
+        purchase_dt = pd.to_datetime(result["purchase_date"], errors="coerce")
+        emails = result["customer_email"].fillna("").astype(str).str.strip().str.lower()
+        first_dt = emails.map(customer_first_purchase_map or {})
+
+        if first_dt.isna().any():
+            local_orders = pd.DataFrame({"email": emails, "purchase_datetime": purchase_dt})
+            local_orders = local_orders[
+                local_orders["email"].ne("")
+                & local_orders["email"].ne("nan")
+                & local_orders["purchase_datetime"].notna()
+            ]
+            if not local_orders.empty:
+                local_first = local_orders.groupby("email")["purchase_datetime"].min().to_dict()
+                first_dt = first_dt.fillna(emails.map(local_first))
+
+        first_dt = pd.to_datetime(first_dt, errors="coerce")
+        result["customer_first_purchase_date"] = first_dt.dt.strftime("%Y-%m-%d %H:%M:%S")
+        result.loc[first_dt.isna(), "customer_first_purchase_date"] = ""
+        result["is_customer_first_order"] = (
+            purchase_dt.notna()
+            & first_dt.notna()
+            & purchase_dt.eq(first_dt)
+        )
+        result["is_returning_customer_order"] = (
+            purchase_dt.notna()
+            & first_dt.notna()
+            & purchase_dt.gt(first_dt)
+        )
+        return result
+
+    def _attach_customer_history_flags(self, orders_df: pd.DataFrame) -> pd.DataFrame:
+        if orders_df.empty:
+            return orders_df
+        if "purchase_datetime" not in orders_df.columns and "purchase_date" in orders_df.columns:
+            orders_df["purchase_datetime"] = pd.to_datetime(orders_df["purchase_date"], errors="coerce")
+        if "customer_email" not in orders_df.columns:
+            orders_df["customer_first_purchase_datetime"] = pd.NaT
+            orders_df["is_returning"] = False
+            orders_df["is_customer_first_order"] = False
+            return orders_df
+
+        emails = orders_df["customer_email"].fillna("").astype(str).str.strip().str.lower()
+        local_first = orders_df.assign(_email=emails).groupby("_email")["purchase_datetime"].min().to_dict()
+        if "customer_first_purchase_date" in orders_df.columns:
+            first_dt = pd.to_datetime(orders_df["customer_first_purchase_date"], errors="coerce")
+            first_dt = first_dt.fillna(emails.map(local_first))
+        else:
+            first_dt = pd.to_datetime(emails.map(local_first), errors="coerce")
+
+        orders_df["customer_first_purchase_datetime"] = first_dt
+        orders_df["is_returning"] = (
+            orders_df["purchase_datetime"].notna()
+            & first_dt.notna()
+            & orders_df["purchase_datetime"].gt(first_dt)
+        )
+        orders_df["is_customer_first_order"] = (
+            orders_df["purchase_datetime"].notna()
+            & first_dt.notna()
+            & orders_df["purchase_datetime"].eq(first_dt)
+        )
+        return orders_df
 
     @staticmethod
     def _format_period_range_en(date_from: datetime, date_to: datetime) -> str:
@@ -692,6 +785,7 @@ class BizniWebExporter:
                 spec['date_from'],
                 spec['date_to'],
                 period_switcher=switcher_payload,
+                customer_history_orders=orders,
             )
 
         payload = self._build_period_switcher_payload(
@@ -1035,12 +1129,18 @@ class BizniWebExporter:
                     f"{observe_count} country row(s) are in observe mode only. Treat margin/CPO reads as directional rather than decisive."
                 )
         if not date_df.empty and "google_ads_spend" in date_df.columns:
-            unallocated_google_spend = float(
+            total_google_spend = float(
                 pd.to_numeric(date_df["google_ads_spend"], errors="coerce").fillna(0).sum()
             )
+            allocated_google_spend = 0.0
+            if not geo_df.empty and "google_ads_spend" in geo_df.columns:
+                allocated_google_spend = float(
+                    pd.to_numeric(geo_df["google_ads_spend"], errors="coerce").fillna(0).sum()
+                )
+            unallocated_google_spend = max(total_google_spend - allocated_google_spend, 0.0)
             if not geo_df.empty and unallocated_google_spend > 0.05:
                 warnings.append(
-                    f"Geo profitability excludes Google Ads country allocation, so EUR {unallocated_google_spend:.2f} of Google spend is not reflected in the country contribution rows."
+                    f"Geo profitability could not map EUR {unallocated_google_spend:.2f} of Google spend into the supported country rows."
                 )
 
         unknown_country_rate = None
@@ -1345,7 +1445,8 @@ class BizniWebExporter:
         total_revenue = float(item_df["item_total_without_tax"].sum())
         total_profit = float(item_df["profit_before_ads"].sum())
 
-        fallback_df = item_df.loc[item_df["expense_source"] == "fallback_default"].copy()
+        fallback_sources = {"fallback_default", "missing_cost_zero_margin_fallback"}
+        fallback_df = item_df.loc[item_df["expense_source"].isin(fallback_sources)].copy()
         fallback_rows = int(len(fallback_df.index))
         fallback_units = float(fallback_df["item_quantity"].sum())
         fallback_revenue = float(fallback_df["item_total_without_tax"].sum())
@@ -1401,29 +1502,29 @@ class BizniWebExporter:
         failures: List[str] = []
         if fallback_rows > 0:
             warnings.append(
-                f"{fallback_rows} item row(s) ({fallback_row_share_pct:.2f}%) use the default 1.00 EUR product cost fallback."
+                f"{fallback_rows} item row(s) ({fallback_row_share_pct:.2f}%) use a missing-cost zero-margin fallback."
             )
             if fallback_revenue_share_pct >= 5 or fallback_profit_share_pct >= 5:
                 warnings.append(
-                    f"Fallback-default rows drive {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit."
+                    f"Missing-cost fallback rows represent {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit."
                 )
             if top_fallback_items:
                 preview = ", ".join(
                     f"{str(row.get('item_label') or 'Unknown')} ({row.get('product_sku') or '-'}, €{float(row.get('revenue') or 0.0):,.2f})"
                     for row in top_fallback_items[:3]
                 )
-                warnings.append(f"Top default-cost items by revenue: {preview}.")
+                warnings.append(f"Top missing-cost items by revenue: {preview}.")
 
         if unknown_source_rows > 0:
             warnings.append(f"{unknown_source_rows} item row(s) are missing expense_source metadata.")
 
         if fallback_revenue_share_pct >= 10 or fallback_profit_share_pct >= 10:
             failures.append(
-                f"Default-cost fallback affects {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit, so profit metrics are not decision-safe."
+                f"Missing-cost fallback affects {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit, so SKU-level profit metrics need product_expenses cleanup."
             )
         elif fallback_row_share_pct >= 10:
             warnings.append(
-                f"Default-cost fallback covers {fallback_row_share_pct:.2f}% of item rows; verify product_expenses coverage before using SKU-level profit decisions."
+                f"Missing-cost fallback covers {fallback_row_share_pct:.2f}% of item rows; verify product_expenses coverage before using SKU-level profit decisions."
             )
 
         source_mix_rows = []
@@ -1465,7 +1566,7 @@ class BizniWebExporter:
             "total_units": round(total_units, 2),
             "total_revenue": round(total_revenue, 2),
             "total_profit_before_ads": round(total_profit, 2),
-            "default_cost_eur": 1.0,
+            "fallback_policy": "missing costs are treated as zero-margin instead of default 1 EUR cost",
             "fallback_rows": fallback_rows,
             "fallback_units": round(fallback_units, 2),
             "fallback_revenue": round(fallback_revenue, 2),
@@ -1680,6 +1781,23 @@ class BizniWebExporter:
                 return float(self.product_expenses_normalized[candidate]), source
 
         return None, None
+
+    @staticmethod
+    def _allocate_item_order_share(row: pd.Series) -> float:
+        order_revenue = float(row.get("order_item_revenue") or 0.0)
+        if order_revenue > 0:
+            return float(row.get("item_total_without_tax") or 0.0) / order_revenue
+
+        order_cost = float(row.get("order_item_cost") or 0.0)
+        if order_cost > 0:
+            return float(row.get("total_expense") or 0.0) / order_cost
+
+        order_quantity = float(row.get("order_item_quantity") or 0.0)
+        if order_quantity > 0:
+            return float(row.get("item_quantity") or 0.0) / order_quantity
+
+        order_rows = float(row.get("order_item_rows") or 0.0)
+        return (1.0 / order_rows) if order_rows > 0 else 0.0
 
     @classmethod
     def _classify_lifecycle_bucket(cls, status_value: Any) -> Tuple[str, str, int]:
@@ -1950,9 +2068,10 @@ class BizniWebExporter:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
         resolved_revenue_col = revenue_col or ("order_revenue_net" if "order_revenue_net" in df.columns else "order_total")
 
-        orders_df = df[
-            ["order_num", "customer_email", "purchase_date", resolved_revenue_col, "total_items_in_order"]
-        ].drop_duplicates(subset=["order_num"]).copy()
+        order_columns = ["order_num", "customer_email", "purchase_date", resolved_revenue_col, "total_items_in_order"]
+        if "customer_first_purchase_date" in df.columns:
+            order_columns.append("customer_first_purchase_date")
+        orders_df = df[order_columns].drop_duplicates(subset=["order_num"]).copy()
         orders_df["purchase_datetime"] = pd.to_datetime(orders_df["purchase_date"], errors="coerce")
         orders_df = orders_df.dropna(subset=["purchase_datetime"]).copy()
         orders_df["customer_email"] = orders_df["customer_email"].astype(str).str.strip().str.lower()
@@ -1961,8 +2080,11 @@ class BizniWebExporter:
             & orders_df["customer_email"].ne("")
             & orders_df["customer_email"].ne("nan")
         ].copy()
+        orders_df = self._attach_customer_history_flags(orders_df)
         orders_df["purchase_date_only"] = orders_df["purchase_datetime"].dt.date
-        orders_df["cohort_month"] = orders_df["purchase_datetime"].dt.to_period("M").astype(str)
+        orders_df["cohort_month"] = orders_df["customer_first_purchase_datetime"].fillna(
+            orders_df["purchase_datetime"]
+        ).dt.to_period("M").astype(str)
 
         order_spend = (
             df.groupby("order_num")[["fb_ads_daily_spend", "google_ads_daily_spend"]]
@@ -2027,7 +2149,13 @@ class BizniWebExporter:
         ].copy()
 
         order_item_revenue = item_df.groupby("order_num")["item_total_without_tax"].sum().rename("order_item_revenue")
+        order_item_cost = item_df.groupby("order_num")["total_expense"].sum().rename("order_item_cost")
+        order_item_quantity = item_df.groupby("order_num")["item_quantity"].sum().rename("order_item_quantity")
+        order_item_rows = item_df.groupby("order_num")["item_label"].count().rename("order_item_rows")
         item_df = item_df.merge(order_item_revenue, on="order_num", how="left")
+        item_df = item_df.merge(order_item_cost, on="order_num", how="left")
+        item_df = item_df.merge(order_item_quantity, on="order_num", how="left")
+        item_df = item_df.merge(order_item_rows, on="order_num", how="left")
         item_df = item_df.merge(
             orders_df[
                 [
@@ -2041,10 +2169,7 @@ class BizniWebExporter:
             on="order_num",
             how="left",
         )
-        item_df["item_rev_share"] = item_df.apply(
-            lambda row: (row["item_total_without_tax"] / row["order_item_revenue"]) if row["order_item_revenue"] > 0 else 0.0,
-            axis=1,
-        )
+        item_df["item_rev_share"] = item_df.apply(self._allocate_item_order_share, axis=1)
         item_df["allocated_order_overhead"] = item_df["item_rev_share"] * (
             item_df["packaging_cost"].fillna(0.0) + item_df["shipping_net_cost"].fillna(0.0)
         )
@@ -2629,8 +2754,11 @@ class BizniWebExporter:
         
         currency = currency.upper()
         if currency not in CURRENCY_RATES_TO_EUR:
-            print(f"Warning: Unknown currency {currency}, treating as EUR")
-            return amount
+            self.unknown_currencies.add(currency)
+            raise ValueError(
+                f"Unknown currency {currency}; add an explicit EUR conversion rate "
+                f"to projects/{self.project_name}/settings.json before generating the report."
+            )
         
         return amount * CURRENCY_RATES_TO_EUR[currency]
     
@@ -3554,8 +3682,12 @@ class BizniWebExporter:
                         warehouse_number=item_warehouse_number,
                     )
                     if expense_per_item is None:
-                        expense_per_item = 1.0
-                        expense_source = "fallback_default"
+                        expense_per_item = (
+                            (item_total_without_tax / item_quantity)
+                            if item_quantity and item_total_without_tax > 0
+                            else 0.0
+                        )
+                        expense_source = "missing_cost_zero_margin_fallback"
                 total_expense = expense_per_item * item_quantity
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
@@ -3634,6 +3766,7 @@ class BizniWebExporter:
         date_from: datetime,
         date_to: datetime,
         period_switcher: Dict[str, Any] = None,
+        customer_history_orders: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Export orders to CSV file"""
         # Clean up old data files first
@@ -3866,6 +3999,8 @@ class BizniWebExporter:
         df = self.add_product_sku_column(df)
         # Add canonical order-level net revenue (unified revenue definition for report analytics)
         df = self.add_order_revenue_net_column(df)
+        customer_first_purchase_map = self._build_customer_first_purchase_map(customer_history_orders or orders)
+        df = self._add_customer_history_columns(df, customer_first_purchase_map)
 
         # Add Facebook Ads spend column
         if fb_daily_spend:
@@ -3893,6 +4028,7 @@ class BizniWebExporter:
             'item_total_without_tax', 'item_tax_rate', 'item_tax_amount', 'item_total_with_tax',
             'expense_per_item', 'expense_source', 'total_expense', 'fb_ads_daily_spend', 'google_ads_daily_spend', 'profit_before_ads', 'roi_before_ads',
             'customer_name', 'customer_email', 'customer_company_id', 'customer_vat_id',
+            'customer_first_purchase_date', 'is_customer_first_order', 'is_returning_customer_order',
             'order_currency', 'order_total_original', 'order_total', 'order_revenue_net',
             'invoice_street', 'invoice_city', 'invoice_zip', 'invoice_country',
             'delivery_street', 'delivery_city', 'delivery_zip', 'delivery_country'
@@ -4668,15 +4804,11 @@ class BizniWebExporter:
         df['year_week'] = df['purchase_datetime'].dt.to_period('W')
         
         # Get unique customers per order (one row per order)
-        orders_df = df[['order_num', 'customer_email', 'purchase_datetime', 'year_week', revenue_col]].drop_duplicates(subset=['order_num'])
-        
-        # Track first purchase date for each customer
-        customer_first_purchase = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
-        
-        # Determine if each order is from a returning customer
-        orders_df['is_returning'] = orders_df.apply(
-            lambda row: row['purchase_datetime'] > customer_first_purchase[row['customer_email']], axis=1
-        )
+        order_cols = ['order_num', 'customer_email', 'purchase_datetime', 'year_week', revenue_col]
+        if 'customer_first_purchase_date' in df.columns:
+            order_cols.append('customer_first_purchase_date')
+        orders_df = df[order_cols].drop_duplicates(subset=['order_num']).copy()
+        orders_df = self._attach_customer_history_flags(orders_df)
         
         # Calculate weekly statistics
         weekly_stats = orders_df.groupby('year_week').agg({
@@ -4712,15 +4844,13 @@ class BizniWebExporter:
         print("\nAnalyzing new vs returning revenue split...")
         revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'
 
-        orders_df = df[['order_num', 'customer_email', 'purchase_date', revenue_col]].drop_duplicates(subset=['order_num']).copy()
+        order_cols = ['order_num', 'customer_email', 'purchase_date', revenue_col]
+        if 'customer_first_purchase_date' in df.columns:
+            order_cols.append('customer_first_purchase_date')
+        orders_df = df[order_cols].drop_duplicates(subset=['order_num']).copy()
         orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
         orders_df['purchase_date_only'] = orders_df['purchase_datetime'].dt.date
-
-        first_purchase_map = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
-        orders_df['is_returning'] = orders_df.apply(
-            lambda row: row['purchase_datetime'] > first_purchase_map.get(row['customer_email'], row['purchase_datetime']),
-            axis=1
-        )
+        orders_df = self._attach_customer_history_flags(orders_df)
 
         daily = orders_df.groupby(['purchase_date_only', 'is_returning'])[revenue_col].sum().reset_index()
         daily_pivot = daily.pivot(index='purchase_date_only', columns='is_returning', values=revenue_col).fillna(0).reset_index()
@@ -6019,11 +6149,7 @@ class BizniWebExporter:
         order_discount = discount_frame.groupby("order_num")["detected_discount_net"].sum()
         orders_local = orders_df.copy()
         orders_local["detected_discount_net"] = orders_local["order_num"].map(order_discount).fillna(0.0)
-        first_order_date = orders_local.groupby("customer_email")["purchase_datetime"].min().to_dict()
-        orders_local["is_returning"] = orders_local.apply(
-            lambda row: row["purchase_datetime"] > first_order_date.get(row["customer_email"], row["purchase_datetime"]),
-            axis=1,
-        )
+        orders_local = self._attach_customer_history_flags(orders_local)
         orders_local["order_type"] = orders_local["is_returning"].map({False: "new_customer", True: "returning_customer"})
         orders_local["discount_status"] = np.where(orders_local["detected_discount_net"] > 0.01, "discounted", "no_detected_discount")
         orders_local["bucket"] = orders_local["order_type"] + " • " + orders_local["discount_status"]
@@ -6489,8 +6615,12 @@ class BizniWebExporter:
         weekly_fb_spend_map = daily_spend_df.groupby('year_week')['fb_ads_daily_spend'].sum().to_dict()
         
         # Get unique orders with customer info and FB ads spend
-        orders_df = df[['order_num', 'customer_email', 'purchase_datetime', 'year_week', revenue_col, 'fb_ads_daily_spend']].drop_duplicates(subset=['order_num'])
+        order_cols = ['order_num', 'customer_email', 'purchase_datetime', 'year_week', revenue_col, 'fb_ads_daily_spend']
+        if 'customer_first_purchase_date' in df.columns:
+            order_cols.append('customer_first_purchase_date')
+        orders_df = df[order_cols].drop_duplicates(subset=['order_num']).copy()
         orders_df = orders_df.sort_values(['customer_email', 'purchase_datetime'])
+        orders_df = self._attach_customer_history_flags(orders_df)
         
         # Calculate CLV per customer (total revenue from customer)
         customer_clv = orders_df.groupby('customer_email')[revenue_col].sum().to_dict()
@@ -6533,7 +6663,8 @@ class BizniWebExporter:
             for customer in week_customers:
                 # Check if this is the customer's first order
                 customer_first_order = orders_df[orders_df['customer_email'] == customer].iloc[0]
-                if customer_first_order['year_week'] == week:
+                first_purchase_dt = customer_first_order.get('customer_first_purchase_datetime')
+                if pd.notna(first_purchase_dt) and pd.Timestamp(first_purchase_dt).to_period('W') == week:
                     new_customers += 1
                 else:
                     returning_customers += 1
@@ -7311,12 +7442,8 @@ class BizniWebExporter:
         orders_df['pre_ad_contribution_with_fixed'] = orders_df['cm1_profit'] - orders_df['allocated_fixed_overhead']
         orders_df['pre_ad_contribution'] = orders_df['cm1_profit']
 
-        # Mark first vs repeat orders
-        first_order_date = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
-        orders_df['is_returning'] = orders_df.apply(
-            lambda row: row['purchase_datetime'] > first_order_date.get(row['customer_email'], row['purchase_datetime']),
-            axis=1
-        )
+        # Mark first vs repeat orders using full-history first purchase dates when period reports provide them.
+        orders_df = self._attach_customer_history_flags(orders_df)
         first_orders = orders_df[~orders_df['is_returning']].copy()
         repeat_orders = orders_df[orders_df['is_returning']].copy()
 
@@ -7367,8 +7494,8 @@ class BizniWebExporter:
         first_order_map = (
             orders_df.sort_values(['customer_email', 'purchase_datetime'])
             .groupby('customer_email')
-            .first()[['purchase_datetime', 'cohort_month']]
-            .rename(columns={'purchase_datetime': 'first_purchase_datetime'})
+            .first()[['customer_first_purchase_datetime', 'cohort_month']]
+            .rename(columns={'customer_first_purchase_datetime': 'first_purchase_datetime'})
         )
         customer_orders = orders_df.sort_values(['customer_email', 'purchase_datetime']).copy()
         customer_orders = customer_orders.merge(
@@ -7951,9 +8078,10 @@ class BizniWebExporter:
             'product_cost': 'sum',
             'packaging_cost': 'sum',
             'shipping_net_cost': 'sum',
+            'allocated_google_spend': 'sum',
             'allocated_fixed_overhead': 'sum'
         }).reset_index()
-        geo.columns = ['country', 'orders', 'revenue', 'product_cost', 'packaging_cost', 'shipping_net_cost', 'fixed_cost']
+        geo.columns = ['country', 'orders', 'revenue', 'product_cost', 'packaging_cost', 'shipping_net_cost', 'google_ads_spend', 'fixed_cost']
         geo['shipping_subsidy_cost'] = geo['shipping_net_cost']
 
         fb_spend_by_country = {'sk': 0.0, 'cz': 0.0, 'hu': 0.0}
@@ -7978,7 +8106,8 @@ class BizniWebExporter:
                 fb_spend_unattributed += spend
 
         geo['fb_ads_spend'] = geo['country'].map(fb_spend_by_country).fillna(0)
-        geo['contribution_cost_without_fixed'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['fb_ads_spend']
+        geo['paid_ads_spend'] = geo['fb_ads_spend'] + geo['google_ads_spend']
+        geo['contribution_cost_without_fixed'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['paid_ads_spend']
         geo['contribution_profit_without_fixed'] = geo['revenue'] - geo['contribution_cost_without_fixed']
         geo['contribution_margin_without_fixed_pct'] = geo.apply(
             lambda row: round((row['contribution_profit_without_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
@@ -7995,6 +8124,14 @@ class BizniWebExporter:
         geo['contribution_margin_pct'] = geo['contribution_margin_with_fixed_pct']
         geo['fb_cpo'] = geo.apply(
             lambda row: round((row['fb_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
+            axis=1
+        )
+        geo['google_cpo'] = geo.apply(
+            lambda row: round((row['google_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
+            axis=1
+        )
+        geo['paid_cpo'] = geo.apply(
+            lambda row: round((row['paid_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
             axis=1
         )
         geo['avg_order_value'] = geo.apply(
@@ -8034,7 +8171,8 @@ class BizniWebExporter:
 
         # Round financial values for display.
         for col in [
-            'revenue', 'product_cost', 'packaging_cost', 'shipping_subsidy_cost', 'fixed_cost', 'fb_ads_spend',
+            'revenue', 'product_cost', 'packaging_cost', 'shipping_subsidy_cost', 'fixed_cost',
+            'fb_ads_spend', 'google_ads_spend', 'paid_ads_spend',
             'contribution_cost_without_fixed', 'contribution_profit_without_fixed', 'contribution_profit_without_fixed_guarded',
             'contribution_cost_with_fixed', 'contribution_profit_with_fixed', 'contribution_profit_with_fixed_guarded',
             'contribution_cost', 'contribution_profit', 'contribution_profit_guarded'
@@ -9859,11 +9997,15 @@ class BizniWebExporter:
             np.nan,
         )
 
-        orders = df[["order_num", "customer_email", "purchase_date"]].drop_duplicates(subset=["order_num"]).copy()
+        order_cols = ["order_num", "customer_email", "purchase_date"]
+        if "customer_first_purchase_date" in df.columns:
+            order_cols.append("customer_first_purchase_date")
+        orders = df[order_cols].drop_duplicates(subset=["order_num"]).copy()
         orders["date"] = pd.to_datetime(orders["purchase_date"]).dt.date
+        orders["purchase_datetime"] = pd.to_datetime(orders["purchase_date"], errors="coerce")
         orders = orders.sort_values(["customer_email", "date", "order_num"])
-        orders["order_index_for_customer"] = orders.groupby("customer_email").cumcount() + 1
-        orders["is_new_customer_order"] = orders["order_index_for_customer"] == 1
+        orders = self._attach_customer_history_flags(orders)
+        orders["is_new_customer_order"] = ~orders["is_returning"]
         daily_customer = (
             orders.groupby("date")
             .agg(
@@ -10199,13 +10341,12 @@ class BizniWebExporter:
                 payback_weekly_orders.append(round(float(weekly_payback), 2))
 
         # New vs Returning revenue split (order-level, deduplicated)
-        orders_df = df[['order_num', 'customer_email', 'purchase_date', revenue_col]].drop_duplicates(subset=['order_num']).copy()
+        order_cols = ['order_num', 'customer_email', 'purchase_date', revenue_col]
+        if 'customer_first_purchase_date' in df.columns:
+            order_cols.append('customer_first_purchase_date')
+        orders_df = df[order_cols].drop_duplicates(subset=['order_num']).copy()
         orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
-        first_purchase_map = orders_df.groupby('customer_email')['purchase_datetime'].min().to_dict()
-        orders_df['is_returning'] = orders_df.apply(
-            lambda row: row['purchase_datetime'] > first_purchase_map.get(row['customer_email'], row['purchase_datetime']),
-            axis=1
-        )
+        orders_df = self._attach_customer_history_flags(orders_df)
         new_revenue = float(orders_df.loc[~orders_df['is_returning'], revenue_col].sum())
         returning_revenue = float(orders_df.loc[orders_df['is_returning'], revenue_col].sum())
         total_split_revenue = new_revenue + returning_revenue

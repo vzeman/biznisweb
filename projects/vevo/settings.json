@@ -5,6 +5,12 @@
   "ses_configuration_set": "vevo-reporting",
   "enable_email_strategy_report": true,
   "report_from_date": "2025-05-03",
+  "report_schedule": {
+    "schedule_name": "vevo-daily-report-email",
+    "schedule_expression": "cron(0 1 * * ? *)",
+    "timezone": "Europe/Bratislava",
+    "task_family": "vevo-reporting-daily"
+  },
   "expense_match_mode": "title_first",
   "product_name_aliases_file": "product_name_aliases.json",
   "packaging_cost_per_order": 0.3,
@@ -14,7 +20,11 @@
   "invoice_generation": {
     "enabled": true,
     "lookback_days": 7,
-    "exclude_zero_total_orders": true
+    "exclude_zero_total_orders": true,
+    "schedule_name": "vevo-daily-invoice-generation",
+    "schedule_expression": "cron(0 20 * * ? *)",
+    "timezone": "Europe/Bratislava",
+    "task_family": "vevo-invoice-daily"
   },
   "excluded_order_statuses": [
     "madfrog stara odoslana"
