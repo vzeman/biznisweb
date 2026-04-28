@@ -10,6 +10,7 @@ on:
       - requirements.txt
       - export_orders.py
       - generate_invoices.py
+      - invoice_runner.py
       - html_report_generator.py
       - daily_report_runner.py
       - dashboard_modern.py

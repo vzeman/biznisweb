@@ -19,6 +19,7 @@ from .config import (
 )
 from .contracts import ReportingArtifactSet, apply_output_tag, build_artifact_set, sanitize_output_tag
 from .cfo_kpis import build_cfo_kpi_payload, build_order_records_from_export_df
+from .metrics import put_metric
 from .runtime import ProjectRuntime, apply_project_runtime, load_project_runtime
 
 __all__ = [
@@ -38,6 +39,7 @@ __all__ = [
     "load_project_env",
     "load_project_runtime",
     "load_project_settings",
+    "put_metric",
     "project_data_dir",
     "project_dir",
     "resolve_biznisweb_api_url",
