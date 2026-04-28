@@ -503,7 +503,14 @@ def _load_order_records(export_csv: Optional[Path]) -> List[Dict[str, Any]]:
             email = (row.get("customer_email") or "").strip().lower()
             if not email:
                 continue
-            orders_map[order_num] = {"date": d, "email": email}
+            first_date = None
+            first_date_raw = (row.get("customer_first_purchase_date") or "").split(" ")[0].strip()
+            if first_date_raw:
+                try:
+                    first_date = datetime.strptime(first_date_raw, "%Y-%m-%d").date()
+                except ValueError:
+                    first_date = None
+            orders_map[order_num] = {"date": d, "email": email, "first_date": first_date}
     return list(orders_map.values())
 
 
@@ -514,7 +521,7 @@ def _load_customer_dynamics(order_records: List[Dict[str, Any]]) -> Dict[date, D
     first_order_date: Dict[str, date] = {}
     for order in order_records:
         email = order["email"]
-        d = order["date"]
+        d = order.get("first_date") or order["date"]
         if email not in first_order_date or d < first_order_date[email]:
             first_order_date[email] = d
 

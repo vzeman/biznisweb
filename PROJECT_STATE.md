@@ -187,6 +187,10 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
+- Deploy the reporting calculation fixes to the production ECR image and run production-equivalent Fargate smoke checks for VEVO and ROY report tasks:
+  - verify localhost marker on the running task
+  - verify CloudWatch logs show report-only mode and no calculation/runtime errors
+  - verify the next scheduled report cycle uses the refreshed image
 - Monitor the first split production cycle:
   - on `2026-04-28`, confirm `vevo-daily-invoice-generation` starts at `20:00 Europe/Bratislava` and `roy-daily-invoice-generation` starts at `20:30 Europe/Bratislava`
   - confirm CloudWatch invoice summaries show no unexpected create failures
@@ -196,6 +200,21 @@ Bootstrap entrypoints:
 ## 9) Change Log
 
 ### 2026-04-28
+- Fixed reporting calculation issues found during VEVO/ROY audit:
+  - geo profitability now includes Google Ads allocation from order-level paid spend instead of subtracting only Facebook spend
+  - 7D/30D/90D period bundle reports now carry full-history customer first-purchase dates so returning customers are not counted as new just because the visible report window is shorter
+  - zero-revenue ROY orders now allocate item-level order overhead, paid spend, and fixed overhead by cost/quantity/equal-share fallback instead of dropping all item-level overhead
+  - unknown currencies now fail fast instead of being silently treated as EUR
+  - missing product costs now use a conservative zero-margin fallback instead of the previous default `1.00 EUR` cost
+  - product-cost QA/dashboard wording now reflects missing-cost fallback semantics
+- Added regression coverage in `tests/test_reporting_calculation_fixes.py`.
+- Updated the ECR build workflow to run the new calculation regression tests before publishing the image.
+- Verified locally with:
+  - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py reporting_core\cfo_kpis.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+
 - Split reporting and invoice generation into separate production schedules:
   - report schedules remain early morning so the prior day is complete:
     - VEVO `vevo-daily-report-email`: `cron(0 1 * * ? *)`, timezone `Europe/Bratislava`, target `vevo-reporting-daily:5`

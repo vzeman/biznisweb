@@ -200,7 +200,7 @@ def assert_geo_google_spend_warning(exporter: BizniWebExporter) -> None:
     )
     assert qa["status"] == "warning", qa
     assert math.isclose(float(qa["unallocated_google_spend"]), 18.0, rel_tol=1e-9, abs_tol=1e-9), qa
-    assert any("Google Ads country allocation" in msg for msg in qa["warnings"]), qa
+    assert any("could not map" in msg and "Google spend" in msg for msg in qa["warnings"]), qa
 
 
 def assert_margin_stability(exporter: BizniWebExporter) -> None:
@@ -259,7 +259,11 @@ def assert_product_expense_coverage(exporter: BizniWebExporter) -> None:
                 "item_total_without_tax": [10.0, 8.0, 7.0],
                 "profit_before_ads": [4.0, 7.0, 6.0],
                 "expense_per_item": [6.0, 1.0, 1.0],
-                "expense_source": ["mapped_product_sku", "fallback_default", "fallback_default"],
+                "expense_source": [
+                    "mapped_product_sku",
+                    "missing_cost_zero_margin_fallback",
+                    "missing_cost_zero_margin_fallback",
+                ],
             }
         )
     )
