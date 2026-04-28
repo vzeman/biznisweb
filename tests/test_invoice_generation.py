@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from daily_report_runner import maybe_run_invoice_automation, parse_args as parse_daily_report_args
@@ -9,6 +11,9 @@ from generate_invoices import (
     resolve_invoice_generation_settings,
 )
 from invoice_runner import resolve_invoice_runner_window
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 class InvoiceGenerationTests(unittest.TestCase):
@@ -34,6 +39,19 @@ class InvoiceGenerationTests(unittest.TestCase):
     def test_daily_report_runner_skips_invoices_by_default(self) -> None:
         args = parse_daily_report_args([])
         self.assertTrue(args.skip_invoices)
+
+    def test_vevo_and_roy_have_separate_schedule_settings(self) -> None:
+        vevo = json.loads((ROOT_DIR / "projects" / "vevo" / "settings.json").read_text(encoding="utf-8"))
+        roy = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
+
+        self.assertEqual("vevo-daily-report-email", vevo["report_schedule"]["schedule_name"])
+        self.assertEqual("roy-daily-report-email", roy["report_schedule"]["schedule_name"])
+        self.assertEqual("vevo-daily-invoice-generation", vevo["invoice_generation"]["schedule_name"])
+        self.assertEqual("roy-daily-invoice-generation", roy["invoice_generation"]["schedule_name"])
+
+        self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
+        self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])
+        self.assertNotEqual(vevo["invoice_generation"]["schedule_name"], roy["invoice_generation"]["schedule_name"])
 
     def test_filter_excludes_zero_total_orders(self) -> None:
         generator = InvoiceGenerator(

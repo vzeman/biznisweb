@@ -75,7 +75,7 @@ Bootstrap entrypoints:
   - ROY invoice schedule `roy-daily-invoice-generation` is enabled for `20:30 Europe/Bratislava` and targets `roy-invoice-daily:1`
   - invoice task definitions run `python generate_invoices.py --project <project>` on the same production image
   - `daily_report_runner.py` now defaults to report-only behavior; `invoice_runner.py` is the repo-local standalone invoice runner for the next production image
-  - `projects/vevo/settings.json` and `projects/roy/settings.json` enable `invoice_generation`
+  - `projects/vevo/settings.json` and `projects/roy/settings.json` keep separate project-owned `report_schedule` and `invoice_generation` schedule metadata
   - zero-total orders are excluded before invoice creation
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
@@ -215,6 +215,10 @@ Bootstrap entrypoints:
   - `daily_report_runner.py` now defaults to report-only behavior (`REPORT_SKIP_INVOICES=true`)
   - shared CloudWatch metric publishing moved to `reporting_core.metrics`
   - ECR build workflow now triggers on `invoice_runner.py`
+- Added explicit per-project schedule metadata:
+  - `projects/vevo/settings.json` declares `vevo-daily-report-email` and `vevo-daily-invoice-generation`
+  - `projects/roy/settings.json` declares `roy-daily-report-email` and `roy-daily-invoice-generation`
+  - `templates/reporting-client/settings.template.json` now includes separate report/invoice schedule blocks for future projects
 - Verified locally with:
   - `python -m py_compile invoice_runner.py daily_report_runner.py generate_invoices.py reporting_core\metrics.py reporting_core\__init__.py`
   - `python -m unittest tests.test_invoice_generation`
