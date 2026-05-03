@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-28
+Last updated: 2026-05-03
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -187,13 +187,37 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Monitor the first split production cycle:
-  - on `2026-04-28`, confirm `vevo-daily-invoice-generation` starts at `20:00 Europe/Bratislava` and `roy-daily-invoice-generation` starts at `20:30 Europe/Bratislava`
-  - confirm CloudWatch invoice summaries show no unexpected create failures
-  - on `2026-04-29`, confirm `vevo-daily-report-email` starts at `01:00 Europe/Bratislava` and `roy-daily-report-email` starts at `01:30 Europe/Bratislava`
-  - confirm report logs say invoice generation was skipped, and report emails cover the completed previous day
+- Monitor ECR lifecycle cleanup after `2026-05-03`:
+  - confirm old `untagged` images in `vevo-reporting` are expired by AWS lifecycle processing
+  - confirm `latest` remains available at `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - confirm ECR stored size drops back near the current runtime image footprint plus recent rollback buffer
 
 ## 9) Change Log
+
+### 2026-05-03
+- Investigated AWS Free Tier alert for Amazon ECR storage on account `919341186960`.
+- Confirmed hard-gate context:
+  - instance-id/IP: `N/A` because this is ECR registry storage, not a fixed EC2 host
+  - service/runtime: `vevo-reporting` ECR image used by reporting and invoice-generation ECS scheduled tasks
+  - path: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+- Confirmed live ECR state in `eu-central-1` via AWS CLI profile `codex`:
+  - repository: `vevo-reporting`
+  - prior lifecycle policy: none
+  - total images before cleanup processing: `67`
+  - tagged images: `1`
+  - untagged images: `66`
+  - approximate stored image size: `9.497 GB`
+  - current `latest` digest: `sha256:050350f9f8b9e76bec170935a8c9dbffbb1a9044b42b35f78435249a3c8bbe90`
+- Added Git-backed ECR lifecycle policy at `infra/aws/ecr-lifecycle-policy.json`:
+  - expires only `untagged` images older than `7` days
+  - does not expire tagged `latest`
+- Applied the lifecycle policy directly to ECR with AWS CLI and verified `get-lifecycle-policy` returns the policy.
+- Ran ECR lifecycle preview:
+  - status: `COMPLETE`
+  - expiring images: `64`
+  - preview sample showed only old `untagged` image digests selected for `EXPIRE`
+- Updated `.github/workflows/build-and-push-ecr.yml` so future ECR builds re-apply the Git-backed lifecycle policy before publishing `latest`.
+- No ECS deployment or UI test was required because runtime code and scheduled tasks were not changed; this was an ECR registry cleanup policy change.
 
 ### 2026-04-28
 - Fixed reporting calculation issues found during VEVO/ROY audit:
