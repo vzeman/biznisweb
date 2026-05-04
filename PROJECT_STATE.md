@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-04-28
+Last updated: 2026-05-04
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -79,6 +79,7 @@ Bootstrap entrypoints:
   - zero-total orders are excluded before invoice creation
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
+  - `2026-05-04` production catch-up generated all currently eligible missing invoices for `2026-05-01..2026-05-04`: VEVO `16/16`, ROY `15/15`, with post-run API audit showing `eligible_missing_invoice=0` for both projects
 - Production schedule drift from the evening cadence was corrected on `2026-04-28`:
   - VEVO `21:00 Europe/Bratislava` -> `01:00 Europe/Bratislava`
   - ROY `21:30 Europe/Bratislava` -> `01:30 Europe/Bratislava`
@@ -187,13 +188,41 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Monitor the first split production cycle:
-  - on `2026-04-28`, confirm `vevo-daily-invoice-generation` starts at `20:00 Europe/Bratislava` and `roy-daily-invoice-generation` starts at `20:30 Europe/Bratislava`
-  - confirm CloudWatch invoice summaries show no unexpected create failures
-  - on `2026-04-29`, confirm `vevo-daily-report-email` starts at `01:00 Europe/Bratislava` and `roy-daily-report-email` starts at `01:30 Europe/Bratislava`
-  - confirm report logs say invoice generation was skipped, and report emails cover the completed previous day
+- After `2026-05-04 20:30 Europe/Bratislava`, verify the next scheduled invoice runs:
+  - confirm `vevo-daily-invoice-generation` and `roy-daily-invoice-generation` run on schedule
+  - confirm CloudWatch summaries show `failed=0`
+  - if a material backlog appears again after a successful scheduled run, move the invoice schedule later or add a second post-fulfillment catch-up run
 
 ## 9) Change Log
+
+### 2026-05-04
+- Investigated why VEVO and ROY invoices were not generated for recent eligible orders.
+- Confirmed hard-gate runtime context:
+  - instance-id/IP: `N/A` as invoice automation runs on scheduled ECS/Fargate tasks, not a fixed EC2 host
+  - service/schedule names: `vevo-daily-invoice-generation`, `roy-daily-invoice-generation`
+  - task definitions: `vevo-invoice-daily:1`, `roy-invoice-daily:1`
+  - image path: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - image digest verified on host tasks: `sha256:050350f9f8b9e76bec170935a8c9dbffbb1a9044b42b35f78435249a3c8bbe90`
+  - log paths: `/ecs/vevo-invoice-daily`, `/ecs/roy-invoice-daily`
+- Confirmed both EventBridge Scheduler jobs are `ENABLED`:
+  - VEVO `cron(0 20 * * ? *)` in `Europe/Bratislava`
+  - ROY `cron(30 20 * * ? *)` in `Europe/Bratislava`
+- Reviewed CloudWatch invoice logs from `2026-05-01..2026-05-03`:
+  - scheduled jobs started, logged in to BizniWeb successfully, fetched orders, and exited cleanly
+  - each scheduled run ended with `matched=0`, so no invoices were created during those runs
+- Ran production dry-run diagnostics with direct host marker verification:
+  - VEVO dry-run task `e3083d578c654911819584773a9ed533`, private IP `172.31.1.75`, marker `LOCALHOST_MARKER_OK:vevo:invoice-dry-run`, matched `16`, failed `0`
+  - ROY dry-run task `fcaea9db308c42578b46e4d0942bfb0f`, private IP `172.31.46.195`, marker `LOCALHOST_MARKER_OK:roy:invoice-dry-run`, matched `15`, failed `0`
+- Ran production Fargate invoice catch-up for `2026-05-01..2026-05-04`:
+  - VEVO catch-up task `3436093656e94dfbac9f8c329f2bdf93`, private IP `172.31.40.111`, marker `LOCALHOST_MARKER_OK:vevo:invoice-catchup`, created `16`, failed `0`
+  - ROY catch-up task `b312e817c0274cc7becd2f602a70bb1d`, private IP `172.31.38.114`, marker `LOCALHOST_MARKER_OK:roy:invoice-catchup`, created `15`, failed `0`
+- Verified live BizniWeb API after catch-up:
+  - VEVO `eligible_missing_invoice=0` for `2026-05-01..2026-05-04`
+  - ROY `eligible_missing_invoice=0` for `2026-05-01..2026-05-04`
+- Operational conclusion:
+  - automation was not down; the previous scheduled runs had no eligible `Odoslana`/no-invoice orders at the time they ran
+  - the missing invoices became eligible before the next scheduled evening run, so the one-off catch-up closed the backlog early
+  - if this repeats after normal fulfillment timing, adjust invoice run timing or add a second daily catch-up pass
 
 ### 2026-04-28
 - Fixed reporting calculation issues found during VEVO/ROY audit:
