@@ -18,7 +18,9 @@
     "lookback_days": 7,
     "exclude_zero_total_orders": true,
     "schedule_name": "roy-daily-invoice-generation",
-    "schedule_expression": "cron(30 23 * * ? *)",
+    "schedule_expression": "cron(5/15 6-23 * * ? *)",
+    "final_sweep_schedule_name": "roy-same-day-invoice-sweep",
+    "final_sweep_schedule_expression": "cron(59 23 * * ? *)",
     "timezone": "Europe/Bratislava",
     "task_family": "roy-invoice-daily"
   },
