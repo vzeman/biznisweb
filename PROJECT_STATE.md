@@ -80,7 +80,7 @@ Bootstrap entrypoints:
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
   - `2026-05-04` production catch-up generated all currently eligible missing invoices for `2026-05-01..2026-05-04`: VEVO `16/16`, ROY `15/15`, with post-run API audit showing `eligible_missing_invoice=0` for both projects
-  - `2026-05-07` production fix normalizes Slovak diacritics before status matching, so `Caka na vybavenie` / `Čaká na vybavenie` is eligible as intended; current ECR `latest` digest is `sha256:b44976b106aa1ca5f2e7daf849be3204c51869a1cc6f6fe935425f27fa781831`
+  - `2026-05-07` production fix normalizes Slovak diacritics before status matching, so `Caka na vybavenie` / `Čaká na vybavenie` is eligible as intended; current ECR `latest` digest after merge to `main` is `sha256:2d88f5e9089ad5bd8582d1cf7ffc2569098b6ed793704515b99c74a6980ec065`
 - Production schedule drift from the evening cadence was corrected on `2026-04-28`:
   - VEVO `21:00 Europe/Bratislava` -> `01:00 Europe/Bratislava`
   - ROY `21:30 Europe/Bratislava` -> `01:30 Europe/Bratislava`
@@ -227,6 +227,11 @@ Bootstrap entrypoints:
   - branch: `codex/invoice-catchup-state-20260504`
   - result: `success`
   - ECR `latest` digest: `sha256:b44976b106aa1ca5f2e7daf849be3204c51869a1cc6f6fe935425f27fa781831`
+- Merged PR `#56` into `main`:
+  - merge commit: `1d4001f5bed185616147b21b77ac08c53f9f6b31`
+  - guarded main build run: `25493503184`
+  - result: `success`
+  - ECR `latest` digest after main build: `sha256:2d88f5e9089ad5bd8582d1cf7ffc2569098b6ed793704515b99c74a6980ec065`
 - Ran production Fargate dry-run diagnostics on the refreshed image with direct host marker verification:
   - VEVO dry-run task `bf08ecb50f4443d793ae709818b177bd`, private IP `172.31.1.212`, marker `LOCALHOST_MARKER_OK:vevo:invoice-fix-dry-run`, matched `8`, failed `0`
   - ROY dry-run task `5457ec4f1c334af488dcec769d4aa958`, private IP `172.31.4.43`, marker `LOCALHOST_MARKER_OK:roy:invoice-fix-dry-run`, matched `9`, failed `0`
@@ -237,6 +242,9 @@ Bootstrap entrypoints:
   - VEVO `eligible_missing_invoice=0` for `2026-05-04..2026-05-07`
   - ROY `eligible_missing_invoice=0` for `2026-05-04..2026-05-07`
   - remaining missing invoices are only noneligible statuses: expired/declined online payments, `Storno`, `Čaká na úhradu`
+- Ran final production host checks on the merged `main` image:
+  - VEVO final check task `410cf5e1be9749f3902f3f2c7a5243b0`, private IP `172.31.36.180`, marker `LOCALHOST_MARKER_OK:vevo:main-image-final-check`, status matcher `STATUS_MATCH_OK`, dry-run `matched=0`
+  - ROY final check task `42fe785d126e4e80b25794215a382c21`, private IP `172.31.34.112`, marker `LOCALHOST_MARKER_OK:roy:main-image-final-check`, status matcher `STATUS_MATCH_OK`, dry-run `matched=0`
 
 ### 2026-05-04
 - Investigated why VEVO and ROY invoices were not generated for recent eligible orders.
