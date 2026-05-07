@@ -19,7 +19,7 @@
     "lookback_days": 7,
     "exclude_zero_total_orders": true,
     "schedule_name": "__CLIENT_SLUG__-daily-invoice-generation",
-    "schedule_expression": "cron(0 20 * * ? *)",
+    "schedule_expression": "cron(0 23 * * ? *)",
     "timezone": "Europe/Bratislava",
     "task_family": "__CLIENT_SLUG__-invoice-daily"
   },

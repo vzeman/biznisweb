@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple, Union
 import json
 import re
+import unicodedata
 
 from dotenv import load_dotenv
 from gql import gql, Client
@@ -183,8 +184,14 @@ def _coerce_order_total_value(order: Dict[str, Any]) -> float:
         return 0.0
 
 
+def _normalize_status_text(status_name: str) -> str:
+    normalized = unicodedata.normalize("NFKD", status_name or "")
+    without_marks = "".join(char for char in normalized if not unicodedata.combining(char))
+    return without_marks.strip().lower()
+
+
 def _status_matches_invoice_generation(status_name: str) -> bool:
-    normalized = (status_name or "").strip().lower()
+    normalized = _normalize_status_text(status_name)
     return "odoslan" in normalized or ("cak" in normalized and "vybaven" in normalized)
 
 
