@@ -82,7 +82,7 @@ Bootstrap entrypoints:
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
   - `2026-05-04` production catch-up generated all currently eligible missing invoices for `2026-05-01..2026-05-04`: VEVO `16/16`, ROY `15/15`, with post-run API audit showing `eligible_missing_invoice=0` for both projects
-  - `2026-05-07` production fix normalizes Slovak diacritics before status matching, so `Caka na vybavenie` / `Čaká na vybavenie` is eligible as intended; current verified ECR `latest` digest for the scheduled invoice tasks is `sha256:2d88f5e9089ad5bd8582d1cf7ffc2569098b6ed793704515b99c74a6980ec065`
+  - `2026-05-07` production fix normalizes Slovak diacritics before status matching, so `Caka na vybavenie` / `Čaká na vybavenie` is eligible as intended; current verified ECR `latest` digest for the scheduled invoice tasks is `sha256:78d9c0b56ec0cf5b0f1300062bf3b408967ff54c4ad5e3f28d0467e71e705e7a`
 - Production schedule drift from the evening cadence was corrected on `2026-04-28`:
   - VEVO `21:00 Europe/Bratislava` -> `01:00 Europe/Bratislava`
   - ROY `21:30 Europe/Bratislava` -> `01:30 Europe/Bratislava`
@@ -268,6 +268,14 @@ Bootstrap entrypoints:
     - `python scripts\reporting_qa_smoke.py`
     - `python scripts\security_ci.py`
     - `git diff --check`
+  - merged PR `#58` into `main`:
+    - merge commit: `58eb15d96c20922158e5d640971bd53df81ff805`
+    - guarded main build run: `25495027756`
+    - result: `success`
+    - ECR `latest` digest after main build: `sha256:78d9c0b56ec0cf5b0f1300062bf3b408967ff54c4ad5e3f28d0467e71e705e7a`
+  - ran final production host checks on the merged `main` image:
+    - VEVO final check task `ef7c31eecae34e1b8f80bac7dcf4d285`, private IP `172.31.16.232`, marker `LOCALHOST_MARKER_OK:vevo:main-image-same-day-schedule-check`, status matcher `STATUS_MATCH_OK`, dry-run `matched=0 created=0 failed=0 skipped_zero_total=0`
+    - ROY final check task `af718e7fe9af45d5beae2ff25b518728`, private IP `172.31.20.88`, marker `LOCALHOST_MARKER_OK:roy:main-image-same-day-schedule-check`, status matcher `STATUS_MATCH_OK`, dry-run `matched=0 created=0 failed=0 skipped_zero_total=0`
 
 ### 2026-05-04
 - Investigated why VEVO and ROY invoices were not generated for recent eligible orders.
