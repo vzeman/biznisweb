@@ -71,16 +71,18 @@ Bootstrap entrypoints:
 - ROY report schedule `roy-daily-report-email` is enabled for `01:30 Europe/Bratislava`
 - ROY production report task definition `roy-reporting-daily:3` uses full-history runtime range from `2025-09-24` to `yesterday` and sets `REPORT_SKIP_INVOICES=true`
 - Invoice generation is separated from reporting in production:
-  - VEVO invoice schedule `vevo-daily-invoice-generation` is enabled for `23:00 Europe/Bratislava` and targets `vevo-invoice-daily:1`
-  - ROY invoice schedule `roy-daily-invoice-generation` is enabled for `23:30 Europe/Bratislava` and targets `roy-invoice-daily:1`
-  - invoice task definitions run `python generate_invoices.py --project <project>` on the same production image
-  - `daily_report_runner.py` now defaults to report-only behavior; `invoice_runner.py` is the repo-local standalone invoice runner for the next production image
+  - VEVO invoice schedule `vevo-daily-invoice-generation` is enabled for `cron(0/15 6-23 * * ? *) Europe/Bratislava`; final same-day sweep `vevo-same-day-invoice-sweep` runs at `cron(58 23 * * ? *)`; both target `vevo-invoice-daily:2`
+  - ROY invoice schedule `roy-daily-invoice-generation` is enabled for `cron(5/15 6-23 * * ? *) Europe/Bratislava`; final same-day sweep `roy-same-day-invoice-sweep` runs at `cron(59 23 * * ? *)`; both target `roy-invoice-daily:2`
+  - invoice task definitions run `python invoice_runner.py --project <project>` on the production image, so runtime windows are computed in `Europe/Bratislava`
+  - first real interval scheduled runs on `2026-05-07` exited with `failed=0`: VEVO task `9abd3ced7d1e4a418150e023ab47307a` created `3` invoices; ROY task `7d97e245ef8343ad826e00e406ca6207` matched `0` and skipped one zero-total order
+  - strict same-day coverage is now polled through `23:58/23:59 Europe/Bratislava`; a status change after the final sweep would require a BizniWeb status-change webhook/event to be mathematically guaranteed on the same calendar day
+  - `daily_report_runner.py` now defaults to report-only behavior; `invoice_runner.py` is the repo-local standalone invoice runner for production invoice schedules
   - `projects/vevo/settings.json` and `projects/roy/settings.json` keep separate project-owned `report_schedule` and `invoice_generation` schedule metadata
   - zero-total orders are excluded before invoice creation
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
   - `2026-05-04` production catch-up generated all currently eligible missing invoices for `2026-05-01..2026-05-04`: VEVO `16/16`, ROY `15/15`, with post-run API audit showing `eligible_missing_invoice=0` for both projects
-  - `2026-05-07` production fix normalizes Slovak diacritics before status matching, so `Caka na vybavenie` / `Čaká na vybavenie` is eligible as intended; current ECR `latest` digest after merge to `main` is `sha256:2d88f5e9089ad5bd8582d1cf7ffc2569098b6ed793704515b99c74a6980ec065`
+  - `2026-05-07` production fix normalizes Slovak diacritics before status matching, so `Caka na vybavenie` / `Čaká na vybavenie` is eligible as intended; current verified ECR `latest` digest for the scheduled invoice tasks is `sha256:2d88f5e9089ad5bd8582d1cf7ffc2569098b6ed793704515b99c74a6980ec065`
 - Production schedule drift from the evening cadence was corrected on `2026-04-28`:
   - VEVO `21:00 Europe/Bratislava` -> `01:00 Europe/Bratislava`
   - ROY `21:30 Europe/Bratislava` -> `01:30 Europe/Bratislava`
@@ -189,10 +191,11 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- After `2026-05-07 23:30 Europe/Bratislava`, verify the next scheduled invoice runs:
-  - confirm `vevo-daily-invoice-generation` runs at `23:00 Europe/Bratislava` and `roy-daily-invoice-generation` runs at `23:30 Europe/Bratislava`
+- After `2026-05-07 23:59 Europe/Bratislava`, verify the final same-day sweeps:
+  - confirm `vevo-same-day-invoice-sweep` ran at `23:58 Europe/Bratislava` and `roy-same-day-invoice-sweep` ran at `23:59 Europe/Bratislava`
   - confirm CloudWatch summaries show `failed=0`
   - confirm a post-run API audit shows `eligible_missing_invoice=0` for both projects
+  - if any order becomes eligible after the final sweep, add a BizniWeb status-change webhook/event path instead of relying only on polling
 
 ## 9) Change Log
 
@@ -245,6 +248,26 @@ Bootstrap entrypoints:
 - Ran final production host checks on the merged `main` image:
   - VEVO final check task `410cf5e1be9749f3902f3f2c7a5243b0`, private IP `172.31.36.180`, marker `LOCALHOST_MARKER_OK:vevo:main-image-final-check`, status matcher `STATUS_MATCH_OK`, dry-run `matched=0`
   - ROY final check task `42fe785d126e4e80b25794215a382c21`, private IP `172.31.34.112`, marker `LOCALHOST_MARKER_OK:roy:main-image-final-check`, status matcher `STATUS_MATCH_OK`, dry-run `matched=0`
+- Hardened same-day invoice automation after the stricter requirement that all invoices must be created on the shipment day:
+  - updated Git-backed VEVO/ROY schedule metadata to interval polling plus final same-day sweeps
+  - registered `vevo-invoice-daily:2` and `roy-invoice-daily:2`, both running `python invoice_runner.py --project <project>`
+  - updated EventBridge Scheduler:
+    - `vevo-daily-invoice-generation`: `cron(0/15 6-23 * * ? *) Europe/Bratislava`
+    - `vevo-same-day-invoice-sweep`: `cron(58 23 * * ? *) Europe/Bratislava`
+    - `roy-daily-invoice-generation`: `cron(5/15 6-23 * * ? *) Europe/Bratislava`
+    - `roy-same-day-invoice-sweep`: `cron(59 23 * * ? *) Europe/Bratislava`
+  - verified schedule targets directly in AWS: VEVO schedules target `vevo-invoice-daily:2`; ROY schedules target `roy-invoice-daily:2`
+  - ran production Fargate dry-run host checks with direct localhost markers:
+    - VEVO task `d1a37ed83f3f4858854545fe121f44df`, private IP `172.31.44.249`, marker `LOCALHOST_MARKER_OK:vevo:invoice-runner-schedule-check`, `STATUS_MATCH_OK`, exit `0`
+    - ROY task `5f72fc0b5a7d48e68b4a96dfe5e9c30d`, private IP `172.31.20.69`, marker `LOCALHOST_MARKER_OK:roy:invoice-runner-schedule-check`, `STATUS_MATCH_OK`, exit `0`
+  - verified the first real interval scheduled runs after the change:
+    - VEVO task `9abd3ced7d1e4a418150e023ab47307a`, private IP `172.31.11.244`, task definition `vevo-invoice-daily:2`, exit `0`, summary `matched=3 created=3 failed=0 skipped_zero_total=0`
+    - ROY task `7d97e245ef8343ad826e00e406ca6207`, private IP `172.31.42.63`, task definition `roy-invoice-daily:2`, exit `0`, summary `matched=0 created=0 failed=0 skipped_zero_total=1`
+  - local verification before deploy/update passed:
+    - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes`
+    - `python scripts\reporting_qa_smoke.py`
+    - `python scripts\security_ci.py`
+    - `git diff --check`
 
 ### 2026-05-04
 - Investigated why VEVO and ROY invoices were not generated for recent eligible orders.
