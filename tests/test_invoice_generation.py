@@ -55,6 +55,12 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual("roy-daily-report-email", roy["report_schedule"]["schedule_name"])
         self.assertEqual("vevo-daily-invoice-generation", vevo["invoice_generation"]["schedule_name"])
         self.assertEqual("roy-daily-invoice-generation", roy["invoice_generation"]["schedule_name"])
+        self.assertEqual("cron(0/15 6-23 * * ? *)", vevo["invoice_generation"]["schedule_expression"])
+        self.assertEqual("cron(5/15 6-23 * * ? *)", roy["invoice_generation"]["schedule_expression"])
+        self.assertEqual("vevo-same-day-invoice-sweep", vevo["invoice_generation"]["final_sweep_schedule_name"])
+        self.assertEqual("roy-same-day-invoice-sweep", roy["invoice_generation"]["final_sweep_schedule_name"])
+        self.assertEqual("cron(58 23 * * ? *)", vevo["invoice_generation"]["final_sweep_schedule_expression"])
+        self.assertEqual("cron(59 23 * * ? *)", roy["invoice_generation"]["final_sweep_schedule_expression"])
 
         self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
         self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])

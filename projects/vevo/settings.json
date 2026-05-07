@@ -22,7 +22,9 @@
     "lookback_days": 7,
     "exclude_zero_total_orders": true,
     "schedule_name": "vevo-daily-invoice-generation",
-    "schedule_expression": "cron(0 23 * * ? *)",
+    "schedule_expression": "cron(0/15 6-23 * * ? *)",
+    "final_sweep_schedule_name": "vevo-same-day-invoice-sweep",
+    "final_sweep_schedule_expression": "cron(58 23 * * ? *)",
     "timezone": "Europe/Bratislava",
     "task_family": "vevo-invoice-daily"
   },
