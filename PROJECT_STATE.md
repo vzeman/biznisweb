@@ -83,7 +83,8 @@ Bootstrap entrypoints:
   - invoice debug logging now redacts auth headers instead of printing API tokens
   - `2026-05-04` production catch-up generated all currently eligible missing invoices for `2026-05-01..2026-05-04`: VEVO `16/16`, ROY `15/15`, with post-run API audit showing `eligible_missing_invoice=0` for both projects
   - `2026-05-09` incident fix restricts invoice eligibility to exact configured shipped statuses only: VEVO/ROY `eligible_statuses = ["Odoslaná"]`; `Čaká na vybavenie` is not eligible
-  - production invoice schedules were temporarily disabled on `2026-05-09` while the shipped-only fix is deployed and verified
+  - production invoice schedules are enabled again after the shipped-only fix was deployed and verified on ECR digest `sha256:b4bd1d16d0eb4ae14b7777761da93ce17c029507a0597c5d8cfff158751ecab6`
+  - first real scheduled runs after the fix on `2026-05-09` exited with `failed=0`: VEVO task `3b8b8b50649f4688b80622c701e5cb58` matched `0`; ROY task `b8b4dbefa7c44ce78ad1aeb69a64a9ee` matched `0`
 - Production schedule drift from the evening cadence was corrected on `2026-04-28`:
   - VEVO `21:00 Europe/Bratislava` -> `01:00 Europe/Bratislava`
   - ROY `21:30 Europe/Bratislava` -> `01:30 Europe/Bratislava`
@@ -192,11 +193,10 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Merge and deploy the shipped-only invoice eligibility fix:
-  - wait for guarded ECR build on `main`
-  - verify directly on Fargate with `curl localhost` marker and assertions that `Odoslaná` is eligible and `Čaká na vybavenie` is not
-  - run dry-run invoice audits for VEVO/ROY before re-enabling schedules
-  - re-enable the four invoice schedules only after the fixed production image is verified
+- Accounting remediation outside code:
+  - review invoices created for orders that were still `Čaká na vybavenie`
+  - decide whether to cancel/correct those invoices in BizniWeb/accounting
+  - keep the 00:10 daily audit monitor active and check the next report for `failed=0`
 
 ## 9) Change Log
 
@@ -223,6 +223,22 @@ Bootstrap entrypoints:
   - `python scripts\security_ci.py`
   - `git diff --check`
   - local live API dry-runs for `2026-05-07..2026-05-09` returned `matched=0` for both VEVO and ROY with the shipped-only rule
+- Merged PR `#60` into `main`:
+  - merge commit: `96a67ba8ffdab50c2a87f7ccfe3e3292c3c0f640`
+  - guarded main build run: `25590961380`
+  - result: `success`
+  - ECR `latest` digest after main build: `sha256:b4bd1d16d0eb4ae14b7777761da93ce17c029507a0597c5d8cfff158751ecab6`
+- Ran production Fargate dry-run host checks on the merged `main` image:
+  - VEVO task `6c68d0a148b74b6cab61c9614750ea30`, private IP `172.31.28.102`, marker `LOCALHOST_MARKER_OK:vevo:shipped-only-invoice-check`, `STATUS_ALLOWLIST_OK`, dry-run `matched=0 created=0 failed=0 skipped_zero_total=0`
+  - ROY task `372a7b7950b146fe815f76f38b879699`, private IP `172.31.14.217`, marker `LOCALHOST_MARKER_OK:roy:shipped-only-invoice-check`, `STATUS_ALLOWLIST_OK`, dry-run `matched=0 created=0 failed=0 skipped_zero_total=0`
+- Re-enabled all four production invoice schedules after verification:
+  - `vevo-daily-invoice-generation`: `ENABLED`, `cron(0/15 6-23 * * ? *)`, target `vevo-invoice-daily:2`
+  - `vevo-same-day-invoice-sweep`: `ENABLED`, `cron(58 23 * * ? *)`, target `vevo-invoice-daily:2`
+  - `roy-daily-invoice-generation`: `ENABLED`, `cron(5/15 6-23 * * ? *)`, target `roy-invoice-daily:2`
+  - `roy-same-day-invoice-sweep`: `ENABLED`, `cron(59 23 * * ? *)`, target `roy-invoice-daily:2`
+- Verified first real scheduled interval runs after re-enable:
+  - VEVO task `3b8b8b50649f4688b80622c701e5cb58`, private IP `172.31.37.70`, image digest `sha256:b4bd1d16d0eb4ae14b7777761da93ce17c029507a0597c5d8cfff158751ecab6`, exit `0`, summary `matched=0 created=0 failed=0 skipped_zero_total=0`
+  - ROY task `b8b4dbefa7c44ce78ad1aeb69a64a9ee`, private IP `172.31.40.89`, image digest `sha256:b4bd1d16d0eb4ae14b7777761da93ce17c029507a0597c5d8cfff158751ecab6`, exit `0`, summary `matched=0 created=0 failed=0 skipped_zero_total=1`
 
 ### 2026-05-07
 - Re-investigated VEVO/ROY invoice generation after another missing-invoice report.
