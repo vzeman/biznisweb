@@ -18,6 +18,9 @@
     "enabled": false,
     "lookback_days": 7,
     "exclude_zero_total_orders": true,
+    "eligible_statuses": [
+      "Odoslaná"
+    ],
     "schedule_name": "__CLIENT_SLUG__-daily-invoice-generation",
     "schedule_expression": "cron(0/15 6-23 * * ? *)",
     "final_sweep_schedule_name": "__CLIENT_SLUG__-same-day-invoice-sweep",

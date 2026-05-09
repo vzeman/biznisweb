@@ -7,7 +7,7 @@ import os
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Dict, List, Any, Iterable, Optional, Tuple, Union
 import json
 import re
 import unicodedata
@@ -35,6 +35,7 @@ WEB_TIMEOUT = resolve_timeout(os.getenv('BIZNISWEB_WEB_TIMEOUT_SEC'))
 logger = get_logger('generate_invoices')
 
 DEFAULT_INVOICE_LOOKBACK_DAYS = 7
+DEFAULT_INVOICE_ELIGIBLE_STATUSES = ("Odoslaná",)
 
 # GraphQL query to fetch orders with specific criteria
 ORDER_QUERY = gql("""
@@ -138,10 +139,22 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
     except (TypeError, ValueError):
         lookback_days = DEFAULT_INVOICE_LOOKBACK_DAYS
 
+    raw_statuses = raw_settings.get("eligible_statuses", DEFAULT_INVOICE_ELIGIBLE_STATUSES)
+    if isinstance(raw_statuses, str):
+        raw_statuses = [raw_statuses]
+    eligible_statuses = [
+        str(status).strip()
+        for status in raw_statuses
+        if str(status or "").strip()
+    ]
+    if not eligible_statuses:
+        eligible_statuses = list(DEFAULT_INVOICE_ELIGIBLE_STATUSES)
+
     return {
         "enabled": bool(raw_settings.get("enabled", False)),
         "lookback_days": max(1, lookback_days),
         "exclude_zero_total_orders": bool(raw_settings.get("exclude_zero_total_orders", True)),
+        "eligible_statuses": eligible_statuses,
     }
 
 
@@ -190,9 +203,18 @@ def _normalize_status_text(status_name: str) -> str:
     return without_marks.strip().lower()
 
 
-def _status_matches_invoice_generation(status_name: str) -> bool:
+def _normalized_invoice_statuses(status_names: Iterable[str]) -> set[str]:
+    return {
+        _normalize_status_text(status)
+        for status in status_names
+        if _normalize_status_text(status)
+    }
+
+
+def _status_matches_invoice_generation(status_name: str, eligible_statuses: Optional[Iterable[str]] = None) -> bool:
     normalized = _normalize_status_text(status_name)
-    return "odoslan" in normalized or ("cak" in normalized and "vybaven" in normalized)
+    allowed_statuses = _normalized_invoice_statuses(eligible_statuses or DEFAULT_INVOICE_ELIGIBLE_STATUSES)
+    return normalized in allowed_statuses
 
 
 def _order_purchase_date(order: Dict[str, Any]) -> str:
@@ -219,6 +241,7 @@ class InvoiceGenerator:
         username: Optional[str] = None,
         password: Optional[str] = None,
         exclude_zero_total_orders: bool = True,
+        eligible_statuses: Optional[Iterable[str]] = None,
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
@@ -238,6 +261,7 @@ class InvoiceGenerator:
         self.web_session = None
         self.arf_token = None
         self.exclude_zero_total_orders = exclude_zero_total_orders
+        self.eligible_statuses = tuple(eligible_statuses or DEFAULT_INVOICE_ELIGIBLE_STATUSES)
         
         # Initialize web session if credentials provided
         if username and password:
@@ -755,7 +779,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 )
                 continue
 
-            if _status_matches_invoice_generation(status_name) and not has_invoice:
+            if _status_matches_invoice_generation(status_name, self.eligible_statuses) and not has_invoice:
                 filtered_orders.append(order)
                 logger.info(
                     "Order %s matches criteria for invoice generation - Status: %s - Total: %.2f",
@@ -1088,6 +1112,7 @@ def run_invoice_generation(
         None if no_web_login else web_username,
         None if no_web_login else web_password,
         exclude_zero_total_orders=invoice_settings["exclude_zero_total_orders"],
+        eligible_statuses=invoice_settings["eligible_statuses"],
     )
 
     summary = InvoiceRunSummary(
