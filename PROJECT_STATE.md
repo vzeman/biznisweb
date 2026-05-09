@@ -82,7 +82,8 @@ Bootstrap entrypoints:
   - invoice pagination now fetches newest orders first and stops once it passes the configured invoice window
   - invoice debug logging now redacts auth headers instead of printing API tokens
   - `2026-05-04` production catch-up generated all currently eligible missing invoices for `2026-05-01..2026-05-04`: VEVO `16/16`, ROY `15/15`, with post-run API audit showing `eligible_missing_invoice=0` for both projects
-  - `2026-05-07` production fix normalizes Slovak diacritics before status matching, so `Caka na vybavenie` / `Čaká na vybavenie` is eligible as intended; current verified ECR `latest` digest for the scheduled invoice tasks is `sha256:78d9c0b56ec0cf5b0f1300062bf3b408967ff54c4ad5e3f28d0467e71e705e7a`
+  - `2026-05-09` incident fix restricts invoice eligibility to exact configured shipped statuses only: VEVO/ROY `eligible_statuses = ["Odoslaná"]`; `Čaká na vybavenie` is not eligible
+  - production invoice schedules were temporarily disabled on `2026-05-09` while the shipped-only fix is deployed and verified
 - Production schedule drift from the evening cadence was corrected on `2026-04-28`:
   - VEVO `21:00 Europe/Bratislava` -> `01:00 Europe/Bratislava`
   - ROY `21:30 Europe/Bratislava` -> `01:30 Europe/Bratislava`
@@ -191,13 +192,37 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- After `2026-05-07 23:59 Europe/Bratislava`, verify the final same-day sweeps:
-  - confirm `vevo-same-day-invoice-sweep` ran at `23:58 Europe/Bratislava` and `roy-same-day-invoice-sweep` ran at `23:59 Europe/Bratislava`
-  - confirm CloudWatch summaries show `failed=0`
-  - confirm a post-run API audit shows `eligible_missing_invoice=0` for both projects
-  - if any order becomes eligible after the final sweep, add a BizniWeb status-change webhook/event path instead of relying only on polling
+- Merge and deploy the shipped-only invoice eligibility fix:
+  - wait for guarded ECR build on `main`
+  - verify directly on Fargate with `curl localhost` marker and assertions that `Odoslaná` is eligible and `Čaká na vybavenie` is not
+  - run dry-run invoice audits for VEVO/ROY before re-enabling schedules
+  - re-enable the four invoice schedules only after the fixed production image is verified
 
 ## 9) Change Log
+
+### 2026-05-09
+- Investigated accidental invoice creation for orders that were not shipped yet.
+- Confirmed immediate hard-gate runtime context:
+  - instance-id/IP: `N/A` because invoice automation runs on scheduled ECS/Fargate tasks
+  - service/schedule names: `vevo-daily-invoice-generation`, `vevo-same-day-invoice-sweep`, `roy-daily-invoice-generation`, `roy-same-day-invoice-sweep`
+  - task definitions: `vevo-invoice-daily:2`, `roy-invoice-daily:2`
+  - image path: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - log paths: `/ecs/vevo-invoice-daily`, `/ecs/roy-invoice-daily`
+- Temporarily disabled all four production invoice schedules to stop further invoice creation during the fix.
+- Root cause:
+  - `_status_matches_invoice_generation(...)` used substring logic: `odoslan` OR (`cak` AND `vybaven`)
+  - that made `Čaká na vybavenie` invoice-eligible even though it is not a shipped status
+  - tests also incorrectly asserted `Čaká na vybavenie` as eligible
+- Corrected the source-of-truth rule:
+  - invoice generation now uses exact normalized allow-list matching
+  - VEVO and ROY project settings set `invoice_generation.eligible_statuses = ["Odoslaná"]`
+  - `Čaká na vybavenie`, `Čaká na úhradu`, expired online payments, and composite statuses like `madfrog stara odoslana` are not eligible
+- Local verification before deploy:
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+  - local live API dry-runs for `2026-05-07..2026-05-09` returned `matched=0` for both VEVO and ROY with the shipped-only rule
 
 ### 2026-05-07
 - Re-investigated VEVO/ROY invoice generation after another missing-invoice report.

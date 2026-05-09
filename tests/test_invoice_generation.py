@@ -23,6 +23,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertTrue(settings["enabled"])
         self.assertEqual(settings["lookback_days"], 7)
         self.assertTrue(settings["exclude_zero_total_orders"])
+        self.assertEqual(["Odoslan\u00e1"], settings["eligible_statuses"])
 
     def test_resolve_invoice_date_window_uses_rolling_lookback(self) -> None:
         from_date, to_date = resolve_invoice_date_window("2026-04-24", 7)
@@ -30,8 +31,10 @@ class InvoiceGenerationTests(unittest.TestCase):
 
     def test_invoice_status_matching_handles_slovak_diacritics(self) -> None:
         self.assertTrue(_status_matches_invoice_generation("Odoslan\u00e1"))
-        self.assertTrue(_status_matches_invoice_generation("\u010cak\u00e1 na vybavenie"))
+        self.assertTrue(_status_matches_invoice_generation("ODOSLANA"))
+        self.assertFalse(_status_matches_invoice_generation("\u010cak\u00e1 na vybavenie"))
         self.assertFalse(_status_matches_invoice_generation("\u010cak\u00e1 na \u00fahradu"))
+        self.assertFalse(_status_matches_invoice_generation("madfrog stara odoslana"))
         self.assertFalse(_status_matches_invoice_generation("Platba online - platnos\u0165 vypr\u0161ala"))
 
     def test_invoice_runner_uses_current_day_reference_window(self) -> None:
@@ -61,6 +64,8 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual("roy-same-day-invoice-sweep", roy["invoice_generation"]["final_sweep_schedule_name"])
         self.assertEqual("cron(58 23 * * ? *)", vevo["invoice_generation"]["final_sweep_schedule_expression"])
         self.assertEqual("cron(59 23 * * ? *)", roy["invoice_generation"]["final_sweep_schedule_expression"])
+        self.assertEqual(["Odoslan\u00e1"], vevo["invoice_generation"]["eligible_statuses"])
+        self.assertEqual(["Odoslan\u00e1"], roy["invoice_generation"]["eligible_statuses"])
 
         self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
         self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])
@@ -90,7 +95,7 @@ class InvoiceGenerationTests(unittest.TestCase):
                 {
                     "order_num": "A-3",
                     "status": {"name": "Čaká na vybavenie"},
-                    "invoices": [{"invoice_num": "INV-1"}],
+                    "invoices": [],
                     "sum": {"value": 19},
                 },
             ]
