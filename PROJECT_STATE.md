@@ -75,6 +75,7 @@ Bootstrap entrypoints:
   - orders `15..60` days old are refreshed when cache age reaches `7` days
   - orders `61..365` days old are refreshed when cache age reaches `30` days
   - older order days are refreshed when cache age reaches `90` days
+  - production image digest `sha256:b94f7ee02c01d4cb1782cea89f8f9769533d7299d4f43055d279f66e598c53a4` was verified on VEVO and ROY Fargate host checks
 - Invoice generation is separated from reporting in production:
   - VEVO invoice schedule `vevo-daily-invoice-generation` is enabled for `cron(0/15 6-23 * * ? *) Europe/Bratislava`; final same-day sweep `vevo-same-day-invoice-sweep` runs at `cron(58 23 * * ? *)`; both target `vevo-invoice-daily:2`
   - ROY invoice schedule `roy-daily-invoice-generation` is enabled for `cron(5/15 6-23 * * ? *) Europe/Bratislava`; final same-day sweep `roy-same-day-invoice-sweep` runs at `cron(59 23 * * ? *)`; both target `roy-invoice-daily:2`
@@ -198,10 +199,7 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Merge and deploy the reporting cache revalidation change:
-  - wait for guarded `Build and Push ECR` to publish `vevo-reporting:latest`
-  - run production-equivalent VEVO and ROY ECS host checks
-  - verify localhost marker/cache policy output before relying on the next scheduled reports
+- Monitor the next scheduled VEVO and ROY daily reports and confirm they finish with normal QA/source-health status after the cache revalidation deployment.
 
 ## 9) Change Log
 
@@ -223,6 +221,18 @@ Bootstrap entrypoints:
   - task definitions: `vevo-reporting-daily:5`, `roy-reporting-daily:3`
   - image path: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
   - marker path for host verification: `http://127.0.0.1:8000/marker.json`
+- Merged PR `#62` into `main`:
+  - merge commit: `bc297a91117dcef85f53d0e56a10fa9ba8d80a1f`
+  - guarded build run: `25650565685`
+  - result: `success`
+  - ECR `latest` digest: `sha256:b94f7ee02c01d4cb1782cea89f8f9769533d7299d4f43055d279f66e598c53a4`
+- Ran production-equivalent host checks on the merged image:
+  - VEVO task `ca5970a4389243c5a92ece3a39f68758`, private IP `172.31.8.131`, exit `0`, marker `LOCALHOST_MARKER_OK:vevo:cache-revalidation-check`, cache policy `fresh <= 14d; 7d TTL for 15-60d; 30d TTL for 61-365d; 90d TTL after 365d`
+  - ROY task `67de23deaa6b450fbbb0f71b73ac9a8b`, private IP `172.31.9.25`, exit `0`, marker `LOCALHOST_MARKER_OK:roy:cache-revalidation-check`, cache policy `fresh <= 14d; 7d TTL for 15-60d; 30d TTL for 61-365d; 90d TTL after 365d`
+- Ran post-host UI smoke on the same production image:
+  - task `fae91ab1d9a749eda4661803483ab028`, private IP `172.31.29.164`, exit `0`
+  - verified `/health`, `/dashboard/vevo?period=full`, and `/dashboard/roy?period=full` via localhost curl/grep
+  - marker `UI_SMOKE_OK:live-dashboard-shell`
 
 ### 2026-05-09
 - Investigated accidental invoice creation for orders that were not shipped yet.
