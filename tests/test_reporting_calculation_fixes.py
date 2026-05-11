@@ -1,5 +1,8 @@
 import unittest
-from datetime import datetime
+import json
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 
@@ -15,6 +18,21 @@ def make_exporter() -> BizniWebExporter:
         output_tag="unit",
         enable_period_bundle=False,
     )
+
+
+def write_order_cache(exporter: BizniWebExporter, order_date: datetime, cached_at: datetime, orders=None) -> Path:
+    cache_file = exporter.get_cache_filename(order_date)
+    cache_file.write_text(
+        json.dumps(
+            {
+                "date": order_date.strftime("%Y-%m-%d"),
+                "cached_at": cached_at.isoformat(),
+                "orders": list(orders or []),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return cache_file
 
 
 class ReportingCalculationFixTests(unittest.TestCase):
@@ -182,6 +200,53 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
         self.assertEqual(9.0, float(geo.loc[0, "google_ads_spend"]))
         self.assertEqual(9.0, float(geo.loc[0, "paid_ads_spend"]))
+
+    def test_cache_policy_refreshes_recent_orders_even_when_cache_exists(self) -> None:
+        exporter = make_exporter()
+        today = datetime(2026, 5, 20)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.cache_dir = Path(tmp_dir)
+            order_date = today - timedelta(days=11)
+            write_order_cache(
+                exporter,
+                order_date,
+                today,
+                [{"order_num": "A-1", "status": {"name": "Caka na uhradu"}}],
+            )
+
+            self.assertFalse(exporter.should_use_cache(order_date, today=today))
+
+    def test_cache_policy_revalidates_late_payment_windows(self) -> None:
+        exporter = make_exporter()
+        today = datetime(2026, 5, 20)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.cache_dir = Path(tmp_dir)
+            order_date = today - timedelta(days=30)
+            write_order_cache(exporter, order_date, today - timedelta(days=6))
+            self.assertTrue(exporter.should_use_cache(order_date, today=today))
+
+            write_order_cache(exporter, order_date, today - timedelta(days=7))
+            self.assertFalse(exporter.should_use_cache(order_date, today=today))
+
+    def test_cache_policy_revalidates_monthly_and_older_history(self) -> None:
+        exporter = make_exporter()
+        today = datetime(2026, 5, 20)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.cache_dir = Path(tmp_dir)
+
+            monthly_date = today - timedelta(days=180)
+            write_order_cache(exporter, monthly_date, today - timedelta(days=29))
+            self.assertTrue(exporter.should_use_cache(monthly_date, today=today))
+
+            write_order_cache(exporter, monthly_date, today - timedelta(days=30))
+            self.assertFalse(exporter.should_use_cache(monthly_date, today=today))
+
+            old_date = today - timedelta(days=500)
+            write_order_cache(exporter, old_date, today - timedelta(days=89))
+            self.assertTrue(exporter.should_use_cache(old_date, today=today))
+
+            write_order_cache(exporter, old_date, today - timedelta(days=90))
+            self.assertFalse(exporter.should_use_cache(old_date, today=today))
 
 
 if __name__ == "__main__":

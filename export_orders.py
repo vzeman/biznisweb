@@ -227,6 +227,19 @@ def parse_input_date(value: str) -> datetime:
             continue
     raise ValueError(f"Unsupported date format '{value}'. Use YYYY-MM-DD.")
 
+
+def env_int(name: str, default: int, min_value: int = 0) -> int:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {value!r}") from exc
+    if parsed < min_value:
+        raise ValueError(f"{name} must be >= {min_value}, got {parsed}")
+    return parsed
+
 # nove ceny nakladov
 # PRODUCT_EXPENSES = {
 #     'Sada vzoriek najpredĂˇvanejĹˇĂ­ch vĂ´nĂ­ Vevo 6 x 10ml': 1.38,
@@ -492,7 +505,19 @@ class BizniWebExporter:
                 cache_dir=self.weather_cache_dir,
                 timezone=self.weather_settings.get("timezone", "Europe/Bratislava"),
             )
-        self.cache_days_threshold = 7  # Days from today that should always be fetched fresh (changed from 3 to 7)
+        self.always_refresh_days = env_int("REPORT_ALWAYS_REFRESH_DAYS", 14)
+        self.weekly_refresh_days = max(
+            self.always_refresh_days,
+            env_int("REPORT_WEEKLY_REFRESH_DAYS", 60),
+        )
+        self.monthly_refresh_days = max(
+            self.weekly_refresh_days,
+            env_int("REPORT_MONTHLY_REFRESH_DAYS", 365),
+        )
+        self.old_cache_ttl_days = env_int("REPORT_OLD_CACHE_TTL_DAYS", 90, min_value=1)
+        self.weekly_cache_ttl_days = 7
+        self.monthly_cache_ttl_days = 30
+        self.cache_days_threshold = self.always_refresh_days  # Backward-compatible no-cache/save threshold.
         self.customer_first_order_dates = {}  # Track first order date for each customer
         self.unknown_currencies = set()
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
@@ -2892,20 +2917,64 @@ class BizniWebExporter:
         """Generate cache filename for a specific date"""
         date_str = date.strftime('%Y-%m-%d')
         return self.cache_dir / f"orders_{date_str}.json"
-    
-    def should_use_cache(self, date: datetime) -> bool:
-        """Determine if cache should be used for a given date"""
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def _cache_policy_summary(self) -> str:
+        return (
+            f"fresh <= {self.always_refresh_days}d; "
+            f"{self.weekly_cache_ttl_days}d TTL for {self.always_refresh_days + 1}-{self.weekly_refresh_days}d; "
+            f"{self.monthly_cache_ttl_days}d TTL for {self.weekly_refresh_days + 1}-{self.monthly_refresh_days}d; "
+            f"{self.old_cache_ttl_days}d TTL after {self.monthly_refresh_days}d"
+        )
+
+    def cache_ttl_days_for_order_date(self, date: datetime, today: Optional[datetime] = None) -> int:
+        today = (today or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
         date_normalized = date.replace(hour=0, minute=0, second=0, microsecond=0)
         days_ago = (today - date_normalized).days
-        
-        # Always fetch fresh data for recent days
-        if days_ago <= self.cache_days_threshold:
+
+        if days_ago <= self.always_refresh_days:
+            return 0
+        if days_ago <= self.weekly_refresh_days:
+            return self.weekly_cache_ttl_days
+        if days_ago <= self.monthly_refresh_days:
+            return self.monthly_cache_ttl_days
+        return self.old_cache_ttl_days
+
+    @staticmethod
+    def _cache_age_days(cache_file: Path, today: datetime) -> Optional[int]:
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            cached_at_raw = str(data.get('cached_at') or '').strip()
+            if cached_at_raw:
+                cached_at = datetime.fromisoformat(cached_at_raw.replace('Z', '+00:00'))
+            else:
+                cached_at = datetime.fromtimestamp(cache_file.stat().st_mtime)
+            if cached_at.tzinfo is not None:
+                cached_at = cached_at.astimezone().replace(tzinfo=None)
+            cached_day = cached_at.replace(hour=0, minute=0, second=0, microsecond=0)
+            return max(0, (today - cached_day).days)
+        except Exception as exc:
+            logger.warning(f"Could not read cache metadata from {cache_file}: {exc}")
+            return None
+
+    def should_use_cache(self, date: datetime, today: Optional[datetime] = None) -> bool:
+        """Determine if cache should be used for a given date."""
+        if self.cache_days_threshold == float('inf'):
             return False
-        
-        # Use cache for older data
+
+        today = (today or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+        ttl_days = self.cache_ttl_days_for_order_date(date, today)
+        if ttl_days <= 0:
+            return False
+
         cache_file = self.get_cache_filename(date)
-        return cache_file.exists()
+        if not cache_file.exists():
+            return False
+
+        cache_age_days = self._cache_age_days(cache_file, today)
+        if cache_age_days is None:
+            return False
+        return cache_age_days < ttl_days
     
     def load_from_cache(self, date: datetime) -> Optional[List[Dict[str, Any]]]:
         """Load orders from cache for a specific date"""
@@ -3064,7 +3133,7 @@ class BizniWebExporter:
         self.excluded_status_orders = []
 
         print(f"\nProcessing date range: {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
-        print(f"Cache policy: Using cache for data older than {self.cache_days_threshold} days")
+        print(f"Cache revalidation policy: {self._cache_policy_summary()}")
 
         # Check which dates need fetching (not in cache)
         dates_to_fetch = []
@@ -3092,9 +3161,9 @@ class BizniWebExporter:
             dates_to_fetch_set = {d.strftime('%Y-%m-%d') for d in dates_to_fetch}
 
             # Determine sort order based on what dates we're fetching
-            # If fetching recent dates (within last 7 days), use DESC to get newest first
+            # If fetching recent dates, use DESC to get newest first
             # If fetching older dates, use ASC to get oldest first (more efficient for historical data)
-            recent_dates = [d for d in dates_to_fetch if (today - d).days <= self.cache_days_threshold]
+            recent_dates = [d for d in dates_to_fetch if (today - d).days <= self.always_refresh_days]
             primary_sort_order = 'DESC' if recent_dates else 'ASC'
 
             logger.info(

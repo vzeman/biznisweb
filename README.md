@@ -113,6 +113,12 @@ Use `daily_report_runner.py` to:
 - optionally upload files to S3 and send email via AWS SES.
 - send email with empty body and only HTML report as attachment.
 
+Order cache revalidation keeps delayed payments from being stuck in old daily cache buckets:
+- orders from the last 14 days are always fetched fresh,
+- orders 15-60 days old are refreshed when their cache is 7+ days old,
+- orders 61-365 days old are refreshed when their cache is 30+ days old,
+- older orders are refreshed when their cache is 90+ days old.
+
 ### Quick run
 
 ```bash

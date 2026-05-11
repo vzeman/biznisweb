@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-05-07
+Last updated: 2026-05-11
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -70,6 +70,11 @@ Bootstrap entrypoints:
 - VEVO production report task definition `vevo-reporting-daily:5` uses full-history runtime range from `2025-05-03` to `yesterday` and sets `REPORT_SKIP_INVOICES=true`
 - ROY report schedule `roy-daily-report-email` is enabled for `01:30 Europe/Bratislava`
 - ROY production report task definition `roy-reporting-daily:3` uses full-history runtime range from `2025-09-24` to `yesterday` and sets `REPORT_SKIP_INVOICES=true`
+- Reporting order cache revalidation is implemented for delayed payment/status changes:
+  - orders from the last `14` days are always fetched fresh
+  - orders `15..60` days old are refreshed when cache age reaches `7` days
+  - orders `61..365` days old are refreshed when cache age reaches `30` days
+  - older order days are refreshed when cache age reaches `90` days
 - Invoice generation is separated from reporting in production:
   - VEVO invoice schedule `vevo-daily-invoice-generation` is enabled for `cron(0/15 6-23 * * ? *) Europe/Bratislava`; final same-day sweep `vevo-same-day-invoice-sweep` runs at `cron(58 23 * * ? *)`; both target `vevo-invoice-daily:2`
   - ROY invoice schedule `roy-daily-invoice-generation` is enabled for `cron(5/15 6-23 * * ? *) Europe/Bratislava`; final same-day sweep `roy-same-day-invoice-sweep` runs at `cron(59 23 * * ? *)`; both target `roy-invoice-daily:2`
@@ -193,12 +198,31 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Accounting remediation outside code:
-  - review invoices created for orders that were still `Čaká na vybavenie`
-  - decide whether to cancel/correct those invoices in BizniWeb/accounting
-  - keep the 00:10 daily audit monitor active and check the next report for `failed=0`
+- Merge and deploy the reporting cache revalidation change:
+  - wait for guarded `Build and Push ECR` to publish `vevo-reporting:latest`
+  - run production-equivalent VEVO and ROY ECS host checks
+  - verify localhost marker/cache policy output before relying on the next scheduled reports
 
 ## 9) Change Log
+
+### 2026-05-11
+- Implemented smart reporting cache revalidation so delayed payment/status changes are not stuck in older daily cache buckets:
+  - `REPORT_ALWAYS_REFRESH_DAYS=14`
+  - `REPORT_WEEKLY_REFRESH_DAYS=60`
+  - `REPORT_MONTHLY_REFRESH_DAYS=365`
+  - `REPORT_OLD_CACHE_TTL_DAYS=90`
+- Added regression coverage for always-fresh recent order days, weekly revalidation, monthly revalidation, and older-history revalidation.
+- Local verification:
+  - `python -m unittest tests.test_reporting_calculation_fixes tests.test_invoice_generation`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- Deployment hard-gate context before production rollout:
+  - instance-id/IP: `N/A` until ECS/Fargate runtime task is started
+  - service/schedule names: `vevo-daily-report-email`, `roy-daily-report-email`
+  - task definitions: `vevo-reporting-daily:5`, `roy-reporting-daily:3`
+  - image path: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - marker path for host verification: `http://127.0.0.1:8000/marker.json`
 
 ### 2026-05-09
 - Investigated accidental invoice creation for orders that were not shipped yet.
