@@ -2355,3 +2355,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - active Basic Auth credentials are now username `marek` and the password stored in `LIVE_DASHBOARD_AUTH_PASSWORD` / SSM
 - Next exact step:
   - share `https://zxtma5mxta.eu-central-1.awsapprunner.com/production/vevo` with username `marek`; optionally attach custom domain later
+
+### 2026-05-21 (VEVO production board mobile layout in progress)
+- Branch: `codex/mobile-production-board`
+- Change:
+  - production-board calculations and API payload are unchanged
+  - `/production/vevo` now renders mobile product cards below `680px` instead of forcing the desktop production table onto phone screens
+  - the desktop production table remains available on wider screens
+- Local verification:
+  - `python -m py_compile live_dashboard_server.py production_board.py`
+  - `python -m unittest tests.test_live_dashboard_auth tests.test_production_board tests.test_live_dashboard_mobile`
+  - `git diff --check`
+  - local server on `127.0.0.1:8788` returned the `vevo-production-board` marker and `productsCards` mobile layout marker
+  - local API returned `active_orders=26`, `manufacturing_products=21`, `units_to_make=48.0`, `orders_scanned=300`
+- Next exact step:
+  - merge the mobile layout branch into `main`, rebuild the App Runner image, redeploy `biznisweb-vevo-production-board`, then verify authenticated mobile HTML markers on the public URL
