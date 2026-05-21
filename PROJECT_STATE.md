@@ -2074,3 +2074,24 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - because the value lives in Git-backed project settings on `main` and the production image build is now gated plus triggered by `projects/**`, it should not silently flip back to `4900` without another explicit code/config change
 - Next exact step:
   - no immediate action required unless ROY fixed costs change again in source-of-truth
+
+### 2026-05-21 (VEVO/ROY daily profit-loss history UI)
+- Branch: `codex/daily-profit-loss-history`
+- Draft PR: `https://github.com/vzeman/biznisweb/pull/64`
+- Added a shared daily profit/loss history block to the modern reporting dashboard:
+  - daily final profit after fixed overhead is classified per day as plus/minus/break-even
+  - plus days render green and minus days render red in the summary cards, chart, and full daily ledger
+  - the block is in the shared renderer, so it applies to both VEVO and ROY reporting
+- Added smoke coverage in `scripts/reporting_qa_smoke.py` for both `Vevo reporting` and `Roy reporting`.
+- Verified locally with:
+  - `python -m py_compile dashboard_modern.py scripts\reporting_qa_smoke.py`
+  - `python scripts\reporting_qa_smoke.py`
+- GitHub PR checks passed:
+  - `env-check`
+  - `secret-scan`
+  - `security-baseline`
+  - `observability-baseline`
+- Verification note:
+  - smoke passed; local environment still logs the existing Google Ads credentials warning when credentials are not configured
+- Next exact step:
+  - review/merge PR `#64`, then let the guarded reporting smoke/build workflow run before any production deployment
