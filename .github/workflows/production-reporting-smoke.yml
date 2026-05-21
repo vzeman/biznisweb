@@ -100,7 +100,15 @@ jobs:
             python - <<'PY' > network.json
           import json
           schedule = json.load(open("schedule.json", encoding="utf-8"))
-          print(json.dumps(schedule["Target"]["EcsParameters"]["NetworkConfiguration"]))
+          raw = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
+          normalized = {
+              "awsvpcConfiguration": {
+                  "subnets": raw.get("Subnets") or raw.get("subnets") or [],
+                  "securityGroups": raw.get("SecurityGroups") or raw.get("securityGroups") or [],
+                  "assignPublicIp": raw.get("AssignPublicIp") or raw.get("assignPublicIp") or "DISABLED",
+              }
+          }
+          print(json.dumps(normalized))
           PY
 
             if [[ "$TASK_DEFINITION_ARN" != *":task-definition/${EXPECTED_TASK_FAMILY}:"* ]]; then
