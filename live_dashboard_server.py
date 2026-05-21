@@ -619,6 +619,17 @@ def build_production_board_html(project: str) -> str:
     .items { margin-top:8px; display:grid; gap:5px; }
     .item { display:flex; justify-content:space-between; gap:10px; font-size:13px; border-top:1px solid #eef1f4; padding-top:5px; }
     .product-orders { margin-top:8px; display:grid; gap:4px; color:var(--muted); font-size:12px; }
+    .products-cards { display:none; }
+    .product-card { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fff; }
+    .product-card-top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .product-title { font-weight:800; line-height:1.25; overflow-wrap:anywhere; }
+    .product-meta { margin-top:4px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+    .product-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+    .stat { border:1px solid #eef1f4; border-radius:6px; padding:7px; min-width:0; }
+    .stat-label { color:var(--muted); font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:.04em; }
+    .stat-value { margin-top:3px; font-size:14px; font-weight:800; line-height:1.2; overflow-wrap:anywhere; }
+    .order-chips { margin-top:9px; display:flex; flex-wrap:wrap; gap:5px; }
+    .order-chip { display:inline-flex; align-items:center; min-height:24px; max-width:100%; padding:0 7px; border-radius:999px; background:#f1f4f6; color:var(--text); font-size:11px; font-weight:700; overflow-wrap:anywhere; }
     .hidden { display:none !important; }
     .error { margin-bottom:12px; padding:10px 12px; border-radius:8px; color:var(--red); background:var(--red-bg); border:1px solid rgba(180,35,24,.25); }
     @media (max-width:1120px) {
@@ -626,11 +637,32 @@ def build_production_board_html(project: str) -> str:
       .layout { grid-template-columns:1fr; }
     }
     @media (max-width:680px) {
-      main { width:min(100vw - 14px,1440px); }
-      header { flex-direction:column; }
+      body { font-size:16px; }
+      main { width:100%; padding:10px 8px 28px; }
+      header { flex-direction:column; gap:10px; padding:10px 0; }
+      h1 { font-size:23px; }
+      h2 { font-size:17px; }
+      p { font-size:13px; }
+      button,a.button { min-height:44px; flex:1 1 auto; }
+      .actions { width:100%; }
       .summary { grid-template-columns:repeat(2,minmax(130px,1fr)); }
-      .metric .value { font-size:22px; }
-      table { min-width:760px; }
+      .metric { padding:10px; min-height:78px; }
+      .metric .label { font-size:10px; letter-spacing:.02em; }
+      .metric .value { font-size:21px; }
+      .metric .note { font-size:11px; }
+      .panel { border-radius:8px; }
+      .panel-head { align-items:flex-start; padding:10px; }
+      .desktop-products { display:none; }
+      .products-cards { display:grid; gap:8px; padding:10px; }
+      .product-card-top { display:grid; grid-template-columns:minmax(0,1fr) auto; }
+      .product-stats { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .orders-list { max-height:none; padding:10px; }
+      .order-top { align-items:flex-start; }
+      .item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; }
+    }
+    @media (max-width:420px) {
+      .summary { grid-template-columns:1fr; }
+      .product-stats { grid-template-columns:1fr; }
     }
   </style>
 </head>
@@ -657,7 +689,7 @@ def build_production_board_html(project: str) -> str:
           </div>
           <span id="cacheBadge" class="badge info">cache</span>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap desktop-products">
           <table>
             <thead>
               <tr>
@@ -672,6 +704,7 @@ def build_production_board_html(project: str) -> str:
             <tbody id="productsBody"></tbody>
           </table>
         </div>
+        <div class="products-cards" id="productsCards"></div>
       </article>
       <article class="panel">
         <div class="panel-head">
@@ -701,6 +734,10 @@ def build_production_board_html(project: str) -> str:
 
     function statusBadges(statuses) {
       return Object.entries(statuses || {}).map(([name, count]) => `<span class="badge info">${safe(name)}: ${fmtInt(count)}</span>`).join(' ');
+    }
+
+    function productOrderLabel(order) {
+      return `${safe(order.order_num)} · ${fmtQty(order.quantity)} ks · ${safe(order.status)}`;
     }
 
     function renderSummary(data) {
@@ -734,7 +771,7 @@ def build_production_board_html(project: str) -> str:
     function renderProducts(data) {
       const products = data.products || [];
       el('productsBody').innerHTML = products.length ? products.map((product) => {
-        const orderLines = (product.orders || []).slice(0, 8).map((order) => `${safe(order.order_num)} · ${fmtQty(order.quantity)} ks · ${safe(order.status)}`).join('<br>');
+        const orderLines = (product.orders || []).slice(0, 8).map(productOrderLabel).join('<br>');
         const more = (product.orders || []).length > 8 ? `<br><span class="muted">+${fmtInt((product.orders || []).length - 8)} ďalších</span>` : '';
         return `<tr>
           <td><strong>${safe(product.label)}</strong><div class="muted">${safe(product.identifier || product.key)}</div></td>
@@ -745,6 +782,26 @@ def build_production_board_html(project: str) -> str:
           <td><div class="product-orders">${orderLines}${more}</div></td>
         </tr>`;
       }).join('') : `<tr><td colspan="6" class="muted">Aktuálne nie sú žiadne VEVO produkty na výrobu.</td></tr>`;
+      el('productsCards').innerHTML = products.length ? products.map((product) => {
+        const orders = product.orders || [];
+        const chips = orders.slice(0, 4).map((order) => `<span class="order-chip">${productOrderLabel(order)}</span>`).join('');
+        const more = orders.length > 4 ? `<span class="order-chip">+${fmtInt(orders.length - 4)} ďalších</span>` : '';
+        return `<article class="product-card">
+          <div class="product-card-top">
+            <div>
+              <div class="product-title">${safe(product.label)}</div>
+              <div class="product-meta">${safe(product.identifier || product.key)}</div>
+            </div>
+            <span class="badge make">${fmtQty(product.quantity_required)} ks</span>
+          </div>
+          <div class="product-stats">
+            <div class="stat"><div class="stat-label">Obj.</div><div class="stat-value">${fmtInt(product.orders_count)}</div></div>
+            <div class="stat"><div class="stat-label">Najstaršia</div><div class="stat-value">${safe(product.oldest_order_at)}</div></div>
+            <div class="stat"><div class="stat-label">Statusy</div><div class="stat-value">${statusBadges(product.statuses)}</div></div>
+          </div>
+          <div class="order-chips">${chips}${more}</div>
+        </article>`;
+      }).join('') : '<div class="product-card muted">Aktuálne nie sú žiadne VEVO produkty na výrobu.</div>';
     }
 
     function renderOrders(data) {
