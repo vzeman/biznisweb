@@ -14,6 +14,8 @@ on:
       - html_report_generator.py
       - daily_report_runner.py
       - dashboard_modern.py
+      - live_dashboard_server.py
+      - production_board.py
       - project_config.py
       - weather_client.py
       - http_client.py
@@ -56,7 +58,7 @@ jobs:
 
       - name: Invoice automation regression test
         run: |
-          python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes
+          python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0

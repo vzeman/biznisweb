@@ -2152,3 +2152,36 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - ROY scheduled report on `2026-05-22 01:30 Europe/Bratislava` should include it
 - Next exact step:
   - after the `2026-05-22` scheduled emails run, check the scheduled run logs once and confirm they used image digest `sha256:57ae5b73c83bcb83c8a58bd7c1395ce69e328e8631d42ca75c009650f7c6a1ce`
+
+### 2026-05-21 (VEVO production board local implementation)
+- Branch: `codex/vevo-production-board`
+- Added a VEVO-only production board for active unshipped orders:
+  - live page: `/production/vevo`
+  - JSON endpoint: `/api/production/vevo/live`
+  - included statuses: `Čaká na vybavenie`, `Platba online - zaplatené`
+  - manufactured items are limited to product labels matching configured VEVO terms
+  - configured exception: `Vevo Ylang Absolute prací gél 1L`
+  - future outsourced VEVO products can be added to `production_board.excluded_product_labels`
+- Added scan controls because BiznisWeb rejects status filtering for this API token with HTTP 412:
+  - client-side status filtering over newest orders by purchase date
+  - minimum scan: `10` pages / `300` newest orders
+  - max scan: `30` pages
+  - stop after repeated pages without active orders
+- Updated the ECR build gate so future production-board/live-server edits rebuild the production image:
+  - added `live_dashboard_server.py` and `production_board.py` to `.github/workflows/build-and-push-ecr.yml` path triggers
+  - added `tests.test_production_board` to the image publication regression test step
+- Data privacy note:
+  - production board API/UI does not return customer names; it returns order numbers, dates, statuses, sums, product labels, quantities, and ignored-item reasons
+- Verified locally:
+  - `python -m py_compile production_board.py live_dashboard_server.py`
+  - `python -m unittest tests.test_production_board tests.test_invoice_generation tests.test_reporting_calculation_fixes`
+  - `git diff --check`
+  - local server `http://127.0.0.1:8788/production/vevo`
+  - HTML marker: `vevo-production-board`
+  - live API summary: `18` active orders, `18` manufacturing products, `36.0` units to make, `8.0` ignored units
+  - live scan: `300` orders / `10` pages, oldest scanned order `2026-05-06 21:38:00`, oldest active order `2026-05-12 12:34:27`, `limit_reached=false`
+  - verified API response contains `0` customer-name fields
+- Not deployed yet:
+  - production deployment still needs normal branch/PR review and the infra hard-gate verification before exposing it on the hosted runtime
+- Next exact step:
+  - push branch, open PR, then deploy after PR approval/merge with host marker and localhost verification
