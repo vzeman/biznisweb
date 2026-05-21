@@ -2249,3 +2249,39 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - future production-board/live-server changes now trigger ECR rebuilds and production smoke can verify the production-board route
 - Next exact step:
   - expose/use the hosted live dashboard entrypoint for production users; code/runtime verification is complete
+
+### 2026-05-21 (VEVO production board App Runner exposure in progress)
+- Branch: `codex/live-dashboard-apprunner`
+- Goal:
+  - expose the already-deployed VEVO production board as a persistent AWS-hosted HTTPS service for users outside this PC
+- Chosen hosting target:
+  - AWS App Runner from the existing private ECR image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - service name: `biznisweb-vevo-production-board`
+  - health path: `/health`
+  - user path: `/production/vevo`
+- Rationale:
+  - App Runner gives a stable public HTTPS service URL without maintaining a fixed EC2 host or ALB for this small internal tool
+  - the existing ECS/Fargate reporting image is reused, so Git/ECR remain the deployment source of truth
+- Security change:
+  - added optional Basic Auth to `live_dashboard_server.py`
+  - `/health` remains unauthenticated for managed health checks
+  - all other live dashboard routes require auth when `LIVE_DASHBOARD_AUTH_USER` and `LIVE_DASHBOARD_AUTH_PASSWORD` are configured
+  - App Runner deploy stores `LIVE_DASHBOARD_AUTH_PASSWORD` in SSM Parameter Store at `/biznisweb/live-dashboard/basic-auth-password`
+- Deployment automation:
+  - added `.github/workflows/deploy-live-dashboard-apprunner.yml`
+  - workflow creates/updates App Runner ECR access and runtime instance roles
+  - workflow reuses the existing `BIZNISWEB_API_TOKEN` secret reference from `vevo-reporting-daily`
+  - workflow creates or updates the App Runner service and verifies:
+    - public `/health`
+    - authenticated `/production/vevo`
+    - authenticated `/api/production/vevo/live?refresh=1`
+    - `vevo-production-board` marker
+    - configured active statuses and Ylang gel exclusion
+    - no customer fields in the payload
+- Verified locally:
+  - `python -m py_compile live_dashboard_server.py`
+  - `python -m unittest tests.test_live_dashboard_auth tests.test_production_board`
+  - YAML parse for all `.github/workflows/*.yml`
+  - `git diff --check`
+- Next exact step:
+  - merge this branch, wait for the guarded ECR rebuild, dispatch `Deploy Live Dashboard App Runner`, then record the App Runner service URL and smoke result

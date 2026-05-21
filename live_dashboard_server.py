@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hmac
 import json
+import os
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import parse_qs, quote, urlparse
 
 from production_board import get_cached_production_board_snapshot, resolve_production_board_settings
@@ -17,6 +20,35 @@ from reporting_core import load_project_settings
 
 ROOT_DIR = Path(__file__).resolve().parent
 PROJECTS_DIR = ROOT_DIR / "projects"
+
+
+def live_dashboard_auth_credentials() -> Optional[Tuple[str, str]]:
+    """Return Basic Auth credentials when protection is configured."""
+    user = os.getenv("LIVE_DASHBOARD_AUTH_USER", "").strip()
+    password = os.getenv("LIVE_DASHBOARD_AUTH_PASSWORD", "")
+    if not user and not password:
+        return None
+    if not user or not password:
+        return ("", "")
+    return (user, password)
+
+
+def is_authorized_basic_header(header: Optional[str], credentials: Optional[Tuple[str, str]]) -> bool:
+    if credentials is None:
+        return True
+    expected_user, expected_password = credentials
+    if not expected_user or not expected_password:
+        return False
+    if not header or not header.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(header[6:].strip(), validate=True).decode("utf-8")
+    except Exception:
+        return False
+    user, separator, password = decoded.partition(":")
+    if not separator:
+        return False
+    return hmac.compare_digest(user, expected_user) and hmac.compare_digest(password, expected_password)
 
 
 def available_projects() -> List[str]:
@@ -791,6 +823,16 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
     def _send_text(self, text: str, *, content_type: str, status: int = 200) -> None:
         self._send_bytes(text.encode("utf-8"), content_type=content_type, status=status)
 
+    def _send_auth_required(self) -> None:
+        body = b"Authentication required."
+        self.send_response(401)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("WWW-Authenticate", 'Basic realm="BiznisWeb reporting", charset="UTF-8"')
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, format: str, *args: object) -> None:
         return
 
@@ -798,6 +840,13 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
         path = parsed.path.rstrip("/") or "/"
+        if path != "/health" and not is_authorized_basic_header(
+            self.headers.get("Authorization"),
+            live_dashboard_auth_credentials(),
+        ):
+            self._send_auth_required()
+            return
+
         projects = available_projects()
         requested_period = _normalize_period_key(query.get("period", ["full"])[0] if query.get("period") else "full")
 
