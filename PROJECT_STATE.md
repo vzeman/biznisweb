@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-05-11
+Last updated: 2026-05-21
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -70,6 +70,11 @@ Bootstrap entrypoints:
 - VEVO production report task definition `vevo-reporting-daily:5` uses full-history runtime range from `2025-05-03` to `yesterday` and sets `REPORT_SKIP_INVOICES=true`
 - ROY report schedule `roy-daily-report-email` is enabled for `01:30 Europe/Bratislava`
 - ROY production report task definition `roy-reporting-daily:3` uses full-history runtime range from `2025-09-24` to `yesterday` and sets `REPORT_SKIP_INVOICES=true`
+- VEVO/ROY daily profit-loss history is deployed in the shared modern reporting dashboard:
+  - merged PR `#64` into `main` (`dad3f913e5bbe8789f2a214d19d822929f1e292e`)
+  - ECR `latest` refreshed by `Build and Push ECR` run `26210072736` with digest `sha256:57ae5b73c83bcb83c8a58bd7c1395ce69e328e8631d42ca75c009650f7c6a1ce`
+  - production-equivalent host smoke run `26211921297` verified both scheduled ECS/Fargate tasks with `curl localhost` marker and live UI smoke
+  - scheduled reports from `2026-05-22` should include the daily plus/minus history: VEVO at `01:00 Europe/Bratislava`, ROY at `01:30 Europe/Bratislava`
 - Reporting order cache revalidation is implemented for delayed payment/status changes:
   - orders from the last `14` days are always fetched fresh
   - orders `15..60` days old are refreshed when cache age reaches `7` days
@@ -2077,7 +2082,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-21 (VEVO/ROY daily profit-loss history UI)
 - Branch: `codex/daily-profit-loss-history`
-- Draft PR: `https://github.com/vzeman/biznisweb/pull/64`
+- PR: `https://github.com/vzeman/biznisweb/pull/64` (merged to `main` as `dad3f913e5bbe8789f2a214d19d822929f1e292e`)
 - Added a shared daily profit/loss history block to the modern reporting dashboard:
   - daily final profit after fixed overhead is classified per day as plus/minus/break-even
   - plus days render green and minus days render red in the summary cards, chart, and full daily ledger
@@ -2094,4 +2099,56 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Verification note:
   - smoke passed; local environment still logs the existing Google Ads credentials warning when credentials are not configured
 - Next exact step:
-  - review/merge PR `#64`, then let the guarded reporting smoke/build workflow run before any production deployment
+  - completed by the production verification entry below
+
+### 2026-05-21 (VEVO/ROY daily profit-loss production verified)
+- Merged daily profit-loss reporting UI into `main`:
+  - PR: `https://github.com/vzeman/biznisweb/pull/64`
+  - merge commit: `dad3f913e5bbe8789f2a214d19d822929f1e292e`
+- Guarded production image refresh completed:
+  - workflow: `Build and Push ECR`
+  - run: `26210072736`
+  - result: `success`
+  - image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - digest: `sha256:57ae5b73c83bcb83c8a58bd7c1395ce69e328e8631d42ca75c009650f7c6a1ce`
+  - reporting smoke gate and invoice automation regression test passed before image push
+- Calculation-safety verification:
+  - `python -m py_compile dashboard_modern.py scripts\reporting_qa_smoke.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_reporting_calculation_fixes tests.test_invoice_generation`
+  - deterministic dashboard payload matched `origin/main` exactly after removing only the newly added `daily_profit_loss` key
+  - conclusion: no existing reporting math/calculation output changed; the added data is a view over the existing daily final profit series
+- Production-equivalent host smoke completed from `main`:
+  - workflow: `Production Reporting Smoke`
+  - run: `26211921297`
+  - job: `77124653366`
+  - result: `success`
+  - workflow commit: `a5673fa1c2fb582456ef53261142400d237b2fc4`
+- VEVO hard-gate verification:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.38.243`
+  - service name: `vevo-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:5`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/3b96f7cddc0e47f98db7af47f7ac2a8b`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - UI path: `http://127.0.0.1:8787/dashboard/vevo`
+  - marker: `LOCALHOST_MARKER_OK`
+  - daily profit rows: `383`; plus days: `250`; minus days: `133`
+  - UI smoke: `UI_SMOKE_OK:vevo:daily-profit-loss`
+- ROY hard-gate verification:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.24.102`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:3`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/b80dc33704044c0eaa4cc1d6b29587d9`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - UI path: `http://127.0.0.1:8787/dashboard/roy`
+  - marker: `LOCALHOST_MARKER_OK`
+  - daily profit rows: `239`; plus days: `155`; minus days: `84`
+  - UI smoke: `UI_SMOKE_OK:roy:daily-profit-loss`
+- Operational conclusion:
+  - the new daily plus/minus historical section is live in the production image used by both report schedules
+  - VEVO scheduled report on `2026-05-22 01:00 Europe/Bratislava` should include it
+  - ROY scheduled report on `2026-05-22 01:30 Europe/Bratislava` should include it
+- Next exact step:
+  - after the `2026-05-22` scheduled emails run, check the scheduled run logs once and confirm they used image digest `sha256:57ae5b73c83bcb83c8a58bd7c1395ce69e328e8631d42ca75c009650f7c6a1ce`
