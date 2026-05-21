@@ -1,0 +1,353 @@
+name: Deploy Live Dashboard App Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: App Runner service name
+        required: true
+        default: biznisweb-vevo-production-board
+      auth_user:
+        description: Basic Auth username
+        required: true
+        default: vevo
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: vevo-reporting
+  IMAGE_TAG: latest
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy App Runner service
+        shell: bash
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          AUTH_USER: ${{ inputs.auth_user }}
+        run: |
+          set -euo pipefail
+
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          IMAGE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${IMAGE_TAG}" \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+
+          aws ecs describe-task-definition \
+            --task-definition vevo-reporting-daily \
+            --region "${AWS_REGION}" > task-definition.json
+
+          BIZNISWEB_TOKEN_REF="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          container = task_def["containerDefinitions"][0]
+          for secret in container.get("secrets", []):
+              if secret.get("name") == "BIZNISWEB_API_TOKEN":
+                  print(secret["valueFrom"])
+                  raise SystemExit(0)
+          raise SystemExit("BIZNISWEB_API_TOKEN secret not found in vevo-reporting-daily")
+          PY
+          )"
+          if [[ "${BIZNISWEB_TOKEN_REF}" != arn:* ]]; then
+            if aws ssm get-parameter --name "${BIZNISWEB_TOKEN_REF}" --region "${AWS_REGION}" >/tmp/token-parameter.json 2>/dev/null; then
+              BIZNISWEB_TOKEN_REF="$(python - <<'PY'
+          import json
+          print(json.load(open("/tmp/token-parameter.json", encoding="utf-8"))["Parameter"]["ARN"])
+          PY
+              )"
+            else
+              BIZNISWEB_TOKEN_REF="$(aws secretsmanager describe-secret \
+                --secret-id "${BIZNISWEB_TOKEN_REF}" \
+                --region "${AWS_REGION}" \
+                --query ARN \
+                --output text)"
+            fi
+          fi
+          BIZNISWEB_TOKEN_POLICY_REF="$(python - "${BIZNISWEB_TOKEN_REF}" <<'PY'
+          import sys
+          raw = sys.argv[1]
+          parts = raw.split(":")
+          if len(parts) > 7 and len(parts) >= 6 and parts[2] == "secretsmanager" and parts[5] == "secret":
+              print(":".join(parts[:7]))
+          else:
+              print(raw)
+          PY
+          )"
+
+          PASSWORD_PARAM="/biznisweb/live-dashboard/basic-auth-password"
+          if ! aws ssm get-parameter --name "${PASSWORD_PARAM}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            GENERATED_PASSWORD="$(openssl rand -base64 36)"
+            aws ssm put-parameter \
+              --name "${PASSWORD_PARAM}" \
+              --type SecureString \
+              --value "${GENERATED_PASSWORD}" \
+              --region "${AWS_REGION}" >/dev/null
+          fi
+          AUTH_PASSWORD="$(aws ssm get-parameter \
+            --name "${PASSWORD_PARAM}" \
+            --with-decryption \
+            --region "${AWS_REGION}" \
+            --query 'Parameter.Value' \
+            --output text)"
+          echo "::add-mask::${AUTH_PASSWORD}"
+          PASSWORD_PARAM_ARN="$(aws ssm get-parameter \
+            --name "${PASSWORD_PARAM}" \
+            --region "${AWS_REGION}" \
+            --query 'Parameter.ARN' \
+            --output text)"
+
+          ACCESS_ROLE_NAME="BiznisWebAppRunnerECRAccessRole"
+          INSTANCE_ROLE_NAME="BiznisWebLiveDashboardAppRunnerInstanceRole"
+
+          cat > ecr-access-trust.json <<'JSON'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {"Service": "build.apprunner.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+          JSON
+
+          if ! aws iam get-role --role-name "${ACCESS_ROLE_NAME}" >/dev/null 2>&1; then
+            aws iam create-role \
+              --role-name "${ACCESS_ROLE_NAME}" \
+              --assume-role-policy-document file://ecr-access-trust.json >/dev/null
+          else
+            aws iam update-assume-role-policy \
+              --role-name "${ACCESS_ROLE_NAME}" \
+              --policy-document file://ecr-access-trust.json
+          fi
+          aws iam attach-role-policy \
+            --role-name "${ACCESS_ROLE_NAME}" \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess || true
+          ACCESS_ROLE_ARN="$(aws iam get-role --role-name "${ACCESS_ROLE_NAME}" --query 'Role.Arn' --output text)"
+
+          cat > instance-trust.json <<'JSON'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {"Service": "tasks.apprunner.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+          JSON
+
+          if ! aws iam get-role --role-name "${INSTANCE_ROLE_NAME}" >/dev/null 2>&1; then
+            aws iam create-role \
+              --role-name "${INSTANCE_ROLE_NAME}" \
+              --assume-role-policy-document file://instance-trust.json >/dev/null
+          else
+            aws iam update-assume-role-policy \
+              --role-name "${INSTANCE_ROLE_NAME}" \
+              --policy-document file://instance-trust.json
+          fi
+
+          cat > instance-policy.json <<JSON
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "ssm:GetParameter",
+                  "ssm:GetParameters",
+                  "secretsmanager:GetSecretValue"
+                ],
+                "Resource": [
+                  "${BIZNISWEB_TOKEN_POLICY_REF}",
+                  "${PASSWORD_PARAM_ARN}"
+                ]
+              }
+            ]
+          }
+          JSON
+
+          aws iam put-role-policy \
+            --role-name "${INSTANCE_ROLE_NAME}" \
+            --policy-name LiveDashboardRuntimeSecrets \
+            --policy-document file://instance-policy.json
+          INSTANCE_ROLE_ARN="$(aws iam get-role --role-name "${INSTANCE_ROLE_NAME}" --query 'Role.Arn' --output text)"
+
+          cat > source-configuration.json <<JSON
+          {
+            "ImageRepository": {
+              "ImageIdentifier": "${IMAGE_URI}",
+              "ImageRepositoryType": "ECR",
+              "ImageConfiguration": {
+                "Port": "8080",
+                "StartCommand": "python live_dashboard_server.py --host 0.0.0.0 --port 8080",
+                "RuntimeEnvironmentVariables": {
+                  "REPORT_PROJECT": "vevo",
+                  "REPORT_SKIP_PROJECT_ENV": "true",
+                  "LIVE_DASHBOARD_AUTH_USER": "${AUTH_USER}",
+                  "BIZNISWEB_API_TIMEOUT_SEC": "30"
+                },
+                "RuntimeEnvironmentSecrets": {
+                  "BIZNISWEB_API_TOKEN": "${BIZNISWEB_TOKEN_REF}",
+                  "LIVE_DASHBOARD_AUTH_PASSWORD": "${PASSWORD_PARAM_ARN}"
+                }
+              }
+            },
+            "AutoDeploymentsEnabled": false,
+            "AuthenticationConfiguration": {
+              "AccessRoleArn": "${ACCESS_ROLE_ARN}"
+            }
+          }
+          JSON
+
+          cat > instance-configuration.json <<JSON
+          {
+            "Cpu": "0.25 vCPU",
+            "Memory": "0.5 GB",
+            "InstanceRoleArn": "${INSTANCE_ROLE_ARN}"
+          }
+          JSON
+
+          cat > health-check-configuration.json <<'JSON'
+          {
+            "Protocol": "HTTP",
+            "Path": "/health",
+            "Interval": 10,
+            "Timeout": 5,
+            "HealthyThreshold": 1,
+            "UnhealthyThreshold": 5
+          }
+          JSON
+
+          SERVICE_ARN="$(aws apprunner list-services \
+            --region "${AWS_REGION}" \
+            --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn | [0]" \
+            --output text)"
+
+          if [[ "${SERVICE_ARN}" == "None" || -z "${SERVICE_ARN}" ]]; then
+            cat > create-service.json <<JSON
+          {
+            "ServiceName": "${SERVICE_NAME}",
+            "SourceConfiguration": $(cat source-configuration.json),
+            "InstanceConfiguration": $(cat instance-configuration.json),
+            "HealthCheckConfiguration": $(cat health-check-configuration.json),
+            "Tags": [
+              {"Key": "Project", "Value": "biznisweb"},
+              {"Key": "Component", "Value": "vevo-production-board"}
+            ]
+          }
+          JSON
+            aws apprunner create-service \
+              --cli-input-json file://create-service.json \
+              --region "${AWS_REGION}" > service-operation.json
+            SERVICE_ARN="$(python - <<'PY'
+          import json
+          payload = json.load(open("service-operation.json", encoding="utf-8"))
+          print(payload["Service"]["ServiceArn"])
+          PY
+            )"
+          else
+            aws apprunner update-service \
+              --service-arn "${SERVICE_ARN}" \
+              --source-configuration file://source-configuration.json \
+              --instance-configuration file://instance-configuration.json \
+              --health-check-configuration file://health-check-configuration.json \
+              --region "${AWS_REGION}" > service-operation.json
+          fi
+
+          for _ in $(seq 1 90); do
+            aws apprunner describe-service \
+              --service-arn "${SERVICE_ARN}" \
+              --region "${AWS_REGION}" > service.json
+            STATUS="$(python - <<'PY'
+          import json
+          print(json.load(open("service.json", encoding="utf-8"))["Service"]["Status"])
+          PY
+            )"
+            if [[ "${STATUS}" == "RUNNING" ]]; then
+              break
+            fi
+            if [[ "${STATUS}" == "CREATE_FAILED" || "${STATUS}" == "UPDATE_FAILED" || "${STATUS}" == "DELETE_FAILED" ]]; then
+              cat service.json
+              exit 1
+            fi
+            echo "App Runner service ${SERVICE_NAME} status=${STATUS}; waiting..."
+            sleep 20
+          done
+
+          aws apprunner describe-service \
+            --service-arn "${SERVICE_ARN}" \
+            --region "${AWS_REGION}" > service.json
+          STATUS="$(python - <<'PY'
+          import json
+          print(json.load(open("service.json", encoding="utf-8"))["Service"]["Status"])
+          PY
+          )"
+          if [[ "${STATUS}" != "RUNNING" ]]; then
+            cat service.json
+            exit 1
+          fi
+          SERVICE_URL="$(python - <<'PY'
+          import json
+          service = json.load(open("service.json", encoding="utf-8"))["Service"]
+          print("https://" + service["ServiceUrl"])
+          PY
+          )"
+
+          echo "HARD_GATE_CONTEXT project=vevo"
+          echo "instance-id=N/A (AWS App Runner managed service)"
+          echo "private-ip=N/A (AWS App Runner managed service)"
+          echo "service-name=${SERVICE_NAME}"
+          echo "service-arn=${SERVICE_ARN}"
+          echo "image-path=${IMAGE_URI}"
+          echo "image-digest=${IMAGE_DIGEST}"
+          echo "health-path=${SERVICE_URL}/health"
+          echo "production-board-path=${SERVICE_URL}/production/vevo"
+
+          curl -fsS "${SERVICE_URL}/health" > /tmp/health.json
+          curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/production/vevo" -o /tmp/production-board.html
+          grep -q "vevo-production-board" /tmp/production-board.html
+          curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/production/vevo/live?refresh=1" -o /tmp/production-board-api.json
+          python - <<'PY'
+          import json
+          api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
+          assert api["project"] == "vevo"
+          assert "Čaká na vybavenie" in api["active_order_statuses"]
+          assert "Platba online - zaplatené" in api["active_order_statuses"]
+          assert "Vevo Ylang Absolute prací gél 1L" in api["excluded_product_labels"]
+          assert "summary" in api and "products" in api and "orders" in api
+          assert all("customer" not in order for order in api["orders"])
+          assert all(
+              "customer" not in order
+              for product in api["products"]
+              for order in product.get("orders", [])
+          )
+          print(
+              "APP_RUNNER_PRODUCTION_BOARD_OK:"
+              f"active_orders={api['summary'].get('active_orders')}:"
+              f"manufacturing_products={api['summary'].get('manufacturing_products')}:"
+              f"units_to_make={api['summary'].get('units_to_make')}:"
+              f"orders_scanned={api['scan'].get('orders_scanned')}"
+          )
+          PY
+          echo "APP_RUNNER_DEPLOY_OK:${SERVICE_NAME}:${SERVICE_URL}"
