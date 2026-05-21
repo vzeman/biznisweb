@@ -2329,6 +2329,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-21 (VEVO production board App Runner auth rotation in progress)
 - Branch: `codex/set-apprunner-auth-credentials`
+- PR: `https://github.com/vzeman/biznisweb/pull/75` (merged to `main` as `f95e496c9cd59916012fd13b3ae4f825a0eb3848`)
 - Requested credential change:
   - Basic Auth username: `marek`
   - Basic Auth password: managed via GitHub Actions secret `LIVE_DASHBOARD_AUTH_PASSWORD`
@@ -2337,5 +2338,20 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - if the secret is not configured, the workflow keeps the previous behavior and only generates a random password when the SSM parameter does not exist
 - Local setup:
   - updated GitHub Actions secret `LIVE_DASHBOARD_AUTH_PASSWORD` for repo `vzeman/biznisweb`
+- App Runner redeploy completed:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26224999626`
+  - result: `success`
+  - service name: `biznisweb-vevo-production-board`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-vevo-production-board/8c8a7a5d694b401baeccf0f1af19ca50`
+  - image digest: `sha256:88d1873db4ee893d0f9bc7ea65f66b444f95b8cbe4870ccab8f7579165b2d60c`
+  - health path: `https://zxtma5mxta.eu-central-1.awsapprunner.com/health`
+  - production board path: `https://zxtma5mxta.eu-central-1.awsapprunner.com/production/vevo`
+- Verification:
+  - unauthenticated `/production/vevo` returned HTTP `401`
+  - authenticated request with `marek` and the configured password returned HTTP `200`
+  - deploy smoke returned `APP_RUNNER_PRODUCTION_BOARD_OK:active_orders=24:manufacturing_products=21:units_to_make=45.0:orders_scanned=300`
+- Operational conclusion:
+  - active Basic Auth credentials are now username `marek` and the password stored in `LIVE_DASHBOARD_AUTH_PASSWORD` / SSM
 - Next exact step:
-  - merge workflow update, dispatch App Runner deploy with `auth_user=marek`, then verify old unauthenticated access still returns `401` and authenticated access works
+  - share `https://zxtma5mxta.eu-central-1.awsapprunner.com/production/vevo` with username `marek`; optionally attach custom domain later
