@@ -2370,3 +2370,14 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - local API returned `active_orders=26`, `manufacturing_products=21`, `units_to_make=48.0`, `orders_scanned=300`
 - Next exact step:
   - merge the mobile layout branch into `main`, rebuild the App Runner image, redeploy `biznisweb-vevo-production-board`, then verify authenticated mobile HTML markers on the public URL
+
+### 2026-05-21 (App Runner digest deploy fix in progress)
+- Branch: `codex/apprunner-digest-deploy`
+- Issue found:
+  - App Runner deploy workflow could succeed while keeping the same `latest` image identifier string, so the public service could continue serving the previous runtime image
+- Change:
+  - deploy workflow now resolves the current ECR `latest` digest and passes the digest-specific ECR image identifier to App Runner
+  - deploy smoke now checks the mobile production-board HTML markers `productsCards` and `@media (max-width:680px)`
+  - ECR build regression test list now includes `tests.test_live_dashboard_mobile`
+- Next exact step:
+  - merge the deploy fix, rebuild the ECR image, redeploy App Runner, and verify the public URL contains the mobile production-board markers
