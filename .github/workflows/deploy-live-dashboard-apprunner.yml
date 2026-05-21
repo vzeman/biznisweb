@@ -39,6 +39,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ inputs.service_name }}
           AUTH_USER: ${{ inputs.auth_user }}
+          REQUESTED_AUTH_PASSWORD: ${{ secrets.LIVE_DASHBOARD_AUTH_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -93,7 +94,15 @@ jobs:
           )"
 
           PASSWORD_PARAM="/biznisweb/live-dashboard/basic-auth-password"
-          if ! aws ssm get-parameter --name "${PASSWORD_PARAM}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+          if [[ -n "${REQUESTED_AUTH_PASSWORD:-}" ]]; then
+            echo "::add-mask::${REQUESTED_AUTH_PASSWORD}"
+            aws ssm put-parameter \
+              --name "${PASSWORD_PARAM}" \
+              --type SecureString \
+              --value "${REQUESTED_AUTH_PASSWORD}" \
+              --overwrite \
+              --region "${AWS_REGION}" >/dev/null
+          elif ! aws ssm get-parameter --name "${PASSWORD_PARAM}" --region "${AWS_REGION}" >/dev/null 2>&1; then
             GENERATED_PASSWORD="$(openssl rand -base64 36)"
             aws ssm put-parameter \
               --name "${PASSWORD_PARAM}" \
