@@ -2086,7 +2086,12 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Verified locally with:
   - `python -m py_compile dashboard_modern.py scripts\reporting_qa_smoke.py`
   - `python scripts\reporting_qa_smoke.py`
+- GitHub PR checks passed:
+  - `env-check`
+  - `secret-scan`
+  - `security-baseline`
+  - `observability-baseline`
 - Verification note:
   - smoke passed; local environment still logs the existing Google Ads credentials warning when credentials are not configured
 - Next exact step:
-  - wait for PR `#64` checks, merge after review, then let the guarded reporting smoke/build workflow run before any production deployment
+  - review/merge PR `#64`, then let the guarded reporting smoke/build workflow run before any production deployment
