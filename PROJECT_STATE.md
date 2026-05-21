@@ -2356,8 +2356,9 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Next exact step:
   - share `https://zxtma5mxta.eu-central-1.awsapprunner.com/production/vevo` with username `marek`; optionally attach custom domain later
 
-### 2026-05-21 (VEVO production board mobile layout in progress)
+### 2026-05-21 (VEVO production board mobile layout deployed)
 - Branch: `codex/mobile-production-board`
+- PR: `https://github.com/vzeman/biznisweb/pull/77` (merged to `main` as `ddaaf353d7f778dda91af1788703dd91c9c97165`)
 - Change:
   - production-board calculations and API payload are unchanged
   - `/production/vevo` now renders mobile product cards below `680px` instead of forcing the desktop production table onto phone screens
@@ -2369,15 +2370,27 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - local server on `127.0.0.1:8788` returned the `vevo-production-board` marker and `productsCards` mobile layout marker
   - local API returned `active_orders=26`, `manufacturing_products=21`, `units_to_make=48.0`, `orders_scanned=300`
 - Next exact step:
-  - merge the mobile layout branch into `main`, rebuild the App Runner image, redeploy `biznisweb-vevo-production-board`, then verify authenticated mobile HTML markers on the public URL
+  - completed by the App Runner digest deployment verification entry below
 
-### 2026-05-21 (App Runner digest deploy fix in progress)
+### 2026-05-21 (App Runner digest deploy fix deployed)
 - Branch: `codex/apprunner-digest-deploy`
+- PR: `https://github.com/vzeman/biznisweb/pull/78` (merged to `main` as `0fdca381e3040172e15ff3b17c1d569a97821c68`)
 - Issue found:
   - App Runner deploy workflow could succeed while keeping the same `latest` image identifier string, so the public service could continue serving the previous runtime image
 - Change:
   - deploy workflow now resolves the current ECR `latest` digest and passes the digest-specific ECR image identifier to App Runner
   - deploy smoke now checks the mobile production-board HTML markers `productsCards` and `@media (max-width:680px)`
   - ECR build regression test list now includes `tests.test_live_dashboard_mobile`
+- Build/deploy:
+  - ECR build run `26228096475` succeeded with digest `sha256:58df20cab335f7376331103676737c04acc17d23a1c43a5aa8c2aad719257bb1`
+  - App Runner deploy run `26228215320` succeeded for service `biznisweb-vevo-production-board`
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-vevo-production-board/8c8a7a5d694b401baeccf0f1af19ca50`
+  - production board path: `https://zxtma5mxta.eu-central-1.awsapprunner.com/production/vevo`
+- Verification:
+  - unauthenticated `/production/vevo` returned HTTP `401`
+  - authenticated HTML returned `vevo-production-board`, `productsCards`, `table-wrap desktop-products`, and `@media (max-width:680px)` markers
+  - authenticated API returned `active_orders=26`, `manufacturing_products=21`, `units_to_make=48.0`, `orders_scanned=300`
 - Next exact step:
-  - merge the deploy fix, rebuild the ECR image, redeploy App Runner, and verify the public URL contains the mobile production-board markers
+  - test the public URL on an actual phone; if a branded URL is wanted, attach a custom App Runner domain such as `vyroba.vevo.sk`
