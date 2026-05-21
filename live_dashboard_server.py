@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
+from production_board import get_cached_production_board_snapshot, resolve_production_board_settings
+from reporting_core import load_project_settings
+
 
 ROOT_DIR = Path(__file__).resolve().parent
 PROJECTS_DIR = ROOT_DIR / "projects"
@@ -165,13 +168,24 @@ def build_index_html(projects: List[str]) -> str:
     for project in projects:
         report_path = resolve_latest_report_path(project)
         payload_path = resolve_latest_payload_path(project)
+        production_enabled = False
+        try:
+            production_enabled = bool(resolve_production_board_settings(load_project_settings(project))["enabled"])
+        except Exception:
+            production_enabled = False
         project_q = quote(project)
+        production_link = (
+            f"<p><a href='/production/{project_q}'>Open production board</a></p>"
+            if production_enabled
+            else ""
+        )
         cards.append(
             "<article class='card'>"
             f"<h2>{escape(project)}</h2>"
             f"<p>Live dashboard: {'ready' if payload_path else 'missing'}</p>"
             f"<p>HTML report: {'ready' if report_path else 'missing'}</p>"
             f"<p>JSON payload: {'ready' if payload_path else 'missing'}</p>"
+            f"{production_link}"
             f"<p><a href='/dashboard/{project_q}'>Open live dashboard</a></p>"
             f"<p><a href='/report/{project_q}'>Open full HTML report</a></p>"
             f"<p><a href='/api/{project_q}/latest'>Open latest JSON</a></p>"
@@ -521,6 +535,241 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
     return html.replace("__BOOTSTRAP_JSON__", bootstrap_json)
 
 
+def build_production_board_html(project: str) -> str:
+    bootstrap_json = _json_script_content({"project": project})
+    html = """<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VEVO Production Board</title>
+  <style>
+    :root {
+      --bg:#f4f6f7; --panel:#ffffff; --line:#d8dee4; --text:#17202a; --muted:#64707d;
+      --green:#157347; --green-bg:#e8f5ee; --red:#b42318; --red-bg:#fdebea;
+      --amber:#9a6700; --amber-bg:#fff4d6; --blue:#1f5f99; --blue-bg:#eaf3fb;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Arial,Helvetica,sans-serif; }
+    main { width:min(1440px,calc(100vw - 24px)); margin:0 auto; padding:16px 0 36px; }
+    header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; padding:16px 0; }
+    h1 { margin:0; font-size:28px; line-height:1.15; letter-spacing:0; }
+    h2 { margin:0; font-size:18px; line-height:1.2; letter-spacing:0; }
+    p { margin:0; color:var(--muted); line-height:1.45; }
+    button,a.button { min-height:38px; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:6px; padding:0 12px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+    button.primary { background:#17202a; color:#fff; border-color:#17202a; }
+    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .statusline { color:var(--muted); font-size:13px; min-height:18px; }
+    .summary { display:grid; grid-template-columns:repeat(6,minmax(150px,1fr)); gap:10px; margin-bottom:12px; }
+    .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; min-height:86px; }
+    .metric .label { color:var(--muted); font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.04em; }
+    .metric .value { margin-top:8px; font-size:26px; font-weight:800; line-height:1; }
+    .metric .note { margin-top:8px; font-size:12px; color:var(--muted); }
+    .layout { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(360px,.65fr); gap:12px; align-items:start; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    .panel-head { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); background:#fafbfc; }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; min-width:900px; }
+    th,td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:13px; }
+    th { color:var(--muted); background:#fafbfc; text-transform:uppercase; font-size:11px; letter-spacing:.04em; }
+    tbody tr:hover { background:#f8fafc; }
+    .qty { font-size:20px; font-weight:800; }
+    .badge { display:inline-flex; align-items:center; min-height:24px; padding:0 8px; border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .badge.make { color:var(--green); background:var(--green-bg); }
+    .badge.skip { color:var(--amber); background:var(--amber-bg); }
+    .badge.warn { color:var(--red); background:var(--red-bg); }
+    .badge.info { color:var(--blue); background:var(--blue-bg); }
+    .muted { color:var(--muted); }
+    .orders-list { display:grid; gap:8px; padding:12px; max-height:760px; overflow:auto; }
+    .order { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fff; }
+    .order-top { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+    .order-num { font-size:16px; font-weight:800; }
+    .items { margin-top:8px; display:grid; gap:5px; }
+    .item { display:flex; justify-content:space-between; gap:10px; font-size:13px; border-top:1px solid #eef1f4; padding-top:5px; }
+    .product-orders { margin-top:8px; display:grid; gap:4px; color:var(--muted); font-size:12px; }
+    .hidden { display:none !important; }
+    .error { margin-bottom:12px; padding:10px 12px; border-radius:8px; color:var(--red); background:var(--red-bg); border:1px solid rgba(180,35,24,.25); }
+    @media (max-width:1120px) {
+      .summary { grid-template-columns:repeat(3,minmax(150px,1fr)); }
+      .layout { grid-template-columns:1fr; }
+    }
+    @media (max-width:680px) {
+      main { width:min(100vw - 14px,1440px); }
+      header { flex-direction:column; }
+      .summary { grid-template-columns:repeat(2,minmax(130px,1fr)); }
+      .metric .value { font-size:22px; }
+      table { min-width:760px; }
+    }
+  </style>
+</head>
+<body>
+  <main data-marker="vevo-production-board">
+    <header>
+      <div>
+        <h1>VEVO výrobný board</h1>
+        <p id="subtitle">Načítavam aktívne objednávky.</p>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn" class="primary" type="button">Refresh</button>
+        <a class="button" href="/">Dashboardy</a>
+      </div>
+    </header>
+    <div id="errorBox" class="error hidden"></div>
+    <section class="summary" id="summary"></section>
+    <section class="layout">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Produkty na výrobu</h2>
+            <p id="productMeta">-</p>
+          </div>
+          <span id="cacheBadge" class="badge info">cache</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Produkt</th>
+                <th>Vyrobiť</th>
+                <th>Obj.</th>
+                <th>Najstaršia</th>
+                <th>Statusy</th>
+                <th>Objednávky</th>
+              </tr>
+            </thead>
+            <tbody id="productsBody"></tbody>
+          </table>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Aktívne objednávky</h2>
+            <p id="ordersMeta">-</p>
+          </div>
+        </div>
+        <div class="orders-list" id="ordersList"></div>
+      </article>
+    </section>
+  </main>
+  <script id="production-bootstrap" type="application/json">__BOOTSTRAP_JSON__</script>
+  <script>
+    const BOOTSTRAP = JSON.parse(document.getElementById('production-bootstrap').textContent || '{}');
+    const project = BOOTSTRAP.project || 'vevo';
+    const el = (id) => document.getElementById(id);
+    const fmtInt = (value) => new Intl.NumberFormat('sk-SK', { maximumFractionDigits: 0 }).format(Number(value || 0));
+    const fmtQty = (value) => new Intl.NumberFormat('sk-SK', { maximumFractionDigits: 2 }).format(Number(value || 0));
+    const text = (value, fallback = '-') => value === null || value === undefined || value === '' ? fallback : String(value);
+    const safe = (value) => text(value, '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    let refreshTimer = null;
+
+    function metric(label, value, note) {
+      return `<article class="metric"><div class="label">${safe(label)}</div><div class="value">${safe(value)}</div><div class="note">${safe(note)}</div></article>`;
+    }
+
+    function statusBadges(statuses) {
+      return Object.entries(statuses || {}).map(([name, count]) => `<span class="badge info">${safe(name)}: ${fmtInt(count)}</span>`).join(' ');
+    }
+
+    function renderSummary(data) {
+      const summary = data.summary || {};
+      const scan = data.scan || {};
+      el('summary').innerHTML = [
+        metric('Aktívne objednávky', fmtInt(summary.active_orders), 'Čaká + online zaplatené'),
+        metric('Objednávky s výrobou', fmtInt(summary.manufacturing_orders), 'Obsahujú VEVO výrobok'),
+        metric('Produkty', fmtInt(summary.manufacturing_products), 'Zoskupené podľa EAN/kódu/názvu'),
+        metric('Kusy na výrobu', fmtQty(summary.units_to_make), 'Súčet VEVO položiek'),
+        metric('Ignorované kusy', fmtQty(summary.ignored_units), 'Iné značky + výnimky'),
+        metric('Skenované', fmtInt(scan.orders_scanned), `${fmtInt(scan.pages_scanned)} strán, najstaršia ${text(scan.oldest_order_at_scanned)}`),
+      ].join('');
+      const generated = text(data.generated_at);
+      const cache = data.cache || {};
+      el('subtitle').textContent = `Posledná aktualizácia ${generated}. Auto refresh ${fmtInt(data.auto_refresh_seconds || 90)}s.`;
+      el('cacheBadge').textContent = `${text(cache.status, 'live')} ${cache.age_seconds !== undefined ? `${cache.age_seconds}s` : ''}`;
+      const stopReason = text(scan.stop_reason, '');
+      let scanMessage = 'Scan prebehol bez dosiahnutia limitu.';
+      if (scan.limit_reached) {
+        scanMessage = 'Dosiahnutý scan limit, staršie aktívne objednávky môžu vyžadovať vyšší limit.';
+      } else if (stopReason === 'empty_active_pages') {
+        scanMessage = `Scan skončil po ${fmtInt(scan.empty_active_pages_at_stop)} stranách bez aktívnych objednávok.`;
+      } else if (stopReason === 'api_exhausted') {
+        scanMessage = 'BiznisWeb API vrátilo všetky dostupné strany.';
+      }
+      el('productMeta').textContent = scanMessage;
+      el('cacheBadge').className = `badge ${cache.status === 'stale_after_error' || scan.limit_reached ? 'warn' : 'info'}`;
+    }
+
+    function renderProducts(data) {
+      const products = data.products || [];
+      el('productsBody').innerHTML = products.length ? products.map((product) => {
+        const orderLines = (product.orders || []).slice(0, 8).map((order) => `${safe(order.order_num)} · ${fmtQty(order.quantity)} ks · ${safe(order.status)}`).join('<br>');
+        const more = (product.orders || []).length > 8 ? `<br><span class="muted">+${fmtInt((product.orders || []).length - 8)} ďalších</span>` : '';
+        return `<tr>
+          <td><strong>${safe(product.label)}</strong><div class="muted">${safe(product.identifier || product.key)}</div></td>
+          <td><span class="qty">${fmtQty(product.quantity_required)}</span></td>
+          <td>${fmtInt(product.orders_count)}</td>
+          <td>${safe(product.oldest_order_at)}</td>
+          <td>${statusBadges(product.statuses)}</td>
+          <td><div class="product-orders">${orderLines}${more}</div></td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="6" class="muted">Aktuálne nie sú žiadne VEVO produkty na výrobu.</td></tr>`;
+    }
+
+    function renderOrders(data) {
+      const orders = data.orders || [];
+      el('ordersMeta').textContent = `${fmtInt(orders.length)} aktívnych objednávok`;
+      el('ordersList').innerHTML = orders.length ? orders.map((order) => {
+        const items = (order.items || []).map((item) => `<div class="item"><span>${safe(item.label)} <span class="muted">(${safe(item.reason)})</span></span><strong>${fmtQty(item.quantity)} ks</strong></div>`).join('');
+        const badgeClass = Number(order.manufacturing_units || 0) > 0 ? 'make' : 'skip';
+        return `<article class="order">
+          <div class="order-top">
+            <div><div class="order-num">${safe(order.order_num)}</div><div class="muted">${safe(order.purchase_at)} · ${safe(order.sum)}</div></div>
+            <span class="badge ${badgeClass}">${fmtQty(order.manufacturing_units)} ks</span>
+          </div>
+          <div class="muted">${safe(order.status)}</div>
+          <div class="items">${items}</div>
+        </article>`;
+      }).join('') : '<p class="muted">Žiadne aktívne objednávky.</p>';
+    }
+
+    function showError(message) {
+      el('errorBox').textContent = message;
+      el('errorBox').classList.remove('hidden');
+    }
+
+    function clearError() {
+      el('errorBox').classList.add('hidden');
+      el('errorBox').textContent = '';
+    }
+
+    async function loadBoard(force = false) {
+      el('refreshBtn').disabled = true;
+      try {
+        const url = `/api/production/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`;
+        const response = await fetch(url, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        renderSummary(data);
+        renderProducts(data);
+        renderOrders(data);
+        clearError();
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(() => loadBoard(false), Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000);
+      } catch (error) {
+        showError(error instanceof Error ? error.message : String(error));
+      } finally {
+        el('refreshBtn').disabled = false;
+      }
+    }
+
+    el('refreshBtn').addEventListener('click', () => loadBoard(true));
+    loadBoard(false);
+  </script>
+</body>
+</html>"""
+    return html.replace("__BOOTSTRAP_JSON__", bootstrap_json)
+
+
 class LiveDashboardHandler(BaseHTTPRequestHandler):
     server_version = "BizniWebLiveDashboard/1.1"
 
@@ -564,6 +813,28 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
 
         parts = [part for part in path.split("/") if part]
 
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "production" and parts[3] == "live":
+            project = parts[2]
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+
+            try:
+                board_settings = resolve_production_board_settings(load_project_settings(project))
+            except Exception as exc:
+                self._send_json({"error": f"Failed to load production board settings: {exc}"}, status=500)
+                return
+            if not board_settings["enabled"]:
+                self._send_json({"error": f"Production board is not enabled for '{project}'."}, status=404)
+                return
+
+            force_refresh = (query.get("refresh", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
+            try:
+                self._send_json(get_cached_production_board_snapshot(project, force_refresh=force_refresh))
+            except Exception as exc:
+                self._send_json({"error": f"Failed to load production board data: {exc}"}, status=500)
+            return
+
         if len(parts) == 3 and parts[0] == "api" and parts[2] == "latest":
             project = parts[1]
             if project not in projects:
@@ -588,6 +859,30 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 build_live_dashboard_html(projects, project, requested_period),
                 content_type="text/html; charset=utf-8",
             )
+            return
+
+        if len(parts) == 2 and parts[0] == "production":
+            project = parts[1]
+            if project not in projects:
+                self._send_text(f"Unknown project '{escape(project)}'.", content_type="text/plain; charset=utf-8", status=404)
+                return
+            try:
+                board_settings = resolve_production_board_settings(load_project_settings(project))
+            except Exception as exc:
+                self._send_text(
+                    f"Failed to load production board settings: {escape(str(exc))}",
+                    content_type="text/plain; charset=utf-8",
+                    status=500,
+                )
+                return
+            if not board_settings["enabled"]:
+                self._send_text(
+                    f"Production board is not enabled for '{escape(project)}'.",
+                    content_type="text/plain; charset=utf-8",
+                    status=404,
+                )
+                return
+            self._send_text(build_production_board_html(project), content_type="text/html; charset=utf-8")
             return
 
         if len(parts) == 2 and parts[0] == "report":

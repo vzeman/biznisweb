@@ -13,6 +13,25 @@
   },
   "expense_match_mode": "title_first",
   "product_name_aliases_file": "product_name_aliases.json",
+  "production_board": {
+    "enabled": true,
+    "active_order_statuses": [
+      "Čaká na vybavenie",
+      "Platba online - zaplatené"
+    ],
+    "manufactured_product_terms": [
+      "vevo"
+    ],
+    "excluded_product_labels": [
+      "Vevo Ylang Absolute prací gél 1L"
+    ],
+    "excluded_product_label_patterns": [],
+    "scan_max_pages": 30,
+    "scan_min_pages": 10,
+    "stop_after_empty_active_pages": 2,
+    "cache_ttl_seconds": 60,
+    "auto_refresh_seconds": 90
+  },
   "packaging_cost_per_order": 0.3,
   "shipping_net_per_order": 0.2,
   "fixed_monthly_cost": 0,
