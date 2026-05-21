@@ -2326,3 +2326,16 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - next recommended exposure step is attaching a memorable domain such as `vyroba.vevo.sk` or `production.vevo.sk` to the App Runner service
 - Next exact step:
   - choose the public hostname and DNS owner, then attach it as an App Runner custom domain and distribute the Basic Auth credentials through a secure channel
+
+### 2026-05-21 (VEVO production board App Runner auth rotation in progress)
+- Branch: `codex/set-apprunner-auth-credentials`
+- Requested credential change:
+  - Basic Auth username: `marek`
+  - Basic Auth password: managed via GitHub Actions secret `LIVE_DASHBOARD_AUTH_PASSWORD`
+- Deployment workflow change:
+  - `.github/workflows/deploy-live-dashboard-apprunner.yml` now overwrites SSM SecureString `/biznisweb/live-dashboard/basic-auth-password` from `secrets.LIVE_DASHBOARD_AUTH_PASSWORD` when the secret is configured
+  - if the secret is not configured, the workflow keeps the previous behavior and only generates a random password when the SSM parameter does not exist
+- Local setup:
+  - updated GitHub Actions secret `LIVE_DASHBOARD_AUTH_PASSWORD` for repo `vzeman/biznisweb`
+- Next exact step:
+  - merge workflow update, dispatch App Runner deploy with `auth_user=marek`, then verify old unauthenticated access still returns `401` and authenticated access works
