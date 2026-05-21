@@ -2077,6 +2077,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-21 (VEVO/ROY daily profit-loss history UI)
 - Branch: `codex/daily-profit-loss-history`
+- Draft PR: `https://github.com/vzeman/biznisweb/pull/64`
 - Added a shared daily profit/loss history block to the modern reporting dashboard:
   - daily final profit after fixed overhead is classified per day as plus/minus/break-even
   - plus days render green and minus days render red in the summary cards, chart, and full daily ledger
@@ -2088,4 +2089,4 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Verification note:
   - smoke passed; local environment still logs the existing Google Ads credentials warning when credentials are not configured
 - Next exact step:
-  - open PR from `codex/daily-profit-loss-history` and let the guarded reporting smoke/build workflow run before any production deployment
+  - wait for PR `#64` checks, merge after review, then let the guarded reporting smoke/build workflow run before any production deployment
