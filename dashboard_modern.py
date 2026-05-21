@@ -228,6 +228,66 @@ def _series(date_agg: pd.DataFrame) -> Dict[str, List[Any]]:
     }
 
 
+def _daily_profit_loss(series: Dict[str, List[Any]]) -> Dict[str, Any]:
+    rows: List[Dict[str, Any]] = []
+    dates = list(series.get("dates") or [])
+
+    def value_at(key: str, idx: int) -> float:
+        values = series.get(key) or []
+        if idx >= len(values):
+            return 0.0
+        return _num(values[idx])
+
+    for idx, date_value in enumerate(dates):
+        profit_with_fixed = round(value_at("profit_with_fixed", idx), 2)
+        if profit_with_fixed > 0:
+            status = "positive"
+            label_en = "Profit"
+            label_sk = "Plus"
+        elif profit_with_fixed < 0:
+            status = "negative"
+            label_en = "Loss"
+            label_sk = "Minus"
+        else:
+            status = "neutral"
+            label_en = "Break-even"
+            label_sk = "Nula"
+        rows.append(
+            {
+                "date": str(date_value),
+                "revenue": round(value_at("revenue", idx), 2),
+                "profit_without_fixed": round(value_at("profit_without_fixed", idx), 2),
+                "profit_with_fixed": profit_with_fixed,
+                "orders": int(round(value_at("orders", idx))),
+                "status": status,
+                "label_en": label_en,
+                "label_sk": label_sk,
+            }
+        )
+
+    positive_days = sum(1 for row in rows if row["profit_with_fixed"] > 0)
+    negative_days = sum(1 for row in rows if row["profit_with_fixed"] < 0)
+    neutral_days = len(rows) - positive_days - negative_days
+    best_day = max(rows, key=lambda row: row["profit_with_fixed"]) if rows else None
+    worst_day = min(rows, key=lambda row: row["profit_with_fixed"]) if rows else None
+    total_profit = round(sum(float(row["profit_with_fixed"]) for row in rows), 2)
+    total_days = len(rows)
+    summary = {
+        "total_days": total_days,
+        "positive_days": positive_days,
+        "negative_days": negative_days,
+        "neutral_days": neutral_days,
+        "positive_share_pct": round((positive_days / total_days * 100) if total_days else 0.0, 1),
+        "negative_share_pct": round((negative_days / total_days * 100) if total_days else 0.0, 1),
+        "total_profit": total_profit,
+        "best_day": (best_day or {}).get("date"),
+        "best_day_profit": (best_day or {}).get("profit_with_fixed"),
+        "worst_day": (worst_day or {}).get("date"),
+        "worst_day_profit": (worst_day or {}).get("profit_with_fixed"),
+    }
+    return {"summary": summary, "rows": rows}
+
+
 def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
     payload = payload or {}
     metric_defs = []
@@ -565,6 +625,36 @@ def _geo_confidence_badge_html(status: Any) -> str:
     )
 
 
+def _daily_profit_row_html(row: Dict[str, Any]) -> str:
+    status = str(row.get("status") or "neutral").strip().lower()
+    if status not in {"positive", "negative", "neutral"}:
+        status = "neutral"
+    label_en = str(row.get("label_en") or "Break-even")
+    label_sk = str(row.get("label_sk") or "Nula")
+    return (
+        f'<tr class="daily-profit-row {escape(status)}">'
+        f'<td>{escape(str(row.get("date") or "-"))}</td>'
+        f'<td><span class="daily-profit-badge {escape(status)}">'
+        f'<span class="lang-en">{escape(label_en)}</span>'
+        f'<span class="lang-sk hidden">{escape(label_sk)}</span>'
+        '</span></td>'
+        f'<td class="number daily-profit-value {escape(status)}">&euro;{_num(row.get("profit_with_fixed")):,.2f}</td>'
+        f'<td class="number">&euro;{_num(row.get("profit_without_fixed")):,.2f}</td>'
+        f'<td class="number">&euro;{_num(row.get("revenue")):,.2f}</td>'
+        f'<td class="number">{int(round(_num(row.get("orders"))))}</td>'
+        '</tr>'
+    )
+
+
+def _profit_status_class(value: Any) -> str:
+    numeric = _num(value)
+    if numeric > 0:
+        return "positive"
+    if numeric < 0:
+        return "negative"
+    return "neutral"
+
+
 def generate_modern_dashboard(
     date_agg: pd.DataFrame,
     items_agg: pd.DataFrame,
@@ -623,6 +713,11 @@ def generate_modern_dashboard(
     title = escape(raw_title)
     brand_mark = escape((raw_title[:1] or "B").upper())
     series = _series(date_agg)
+    daily_profit_loss = _daily_profit_loss(series)
+    daily_profit_summary = daily_profit_loss["summary"]
+    daily_profit_rows = daily_profit_loss["rows"]
+    daily_profit_best_class = _profit_status_class(daily_profit_summary.get("best_day_profit"))
+    daily_profit_worst_class = _profit_status_class(daily_profit_summary.get("worst_day_profit"))
     kpi_payload = _kpis(cfo_kpi_payload)
     cost_mix = _cost_mix(date_agg)
     cities = _top_rows(
@@ -1796,6 +1891,7 @@ def generate_modern_dashboard(
 
     payload = {
         "series": series,
+        "daily_profit_loss": daily_profit_loss,
         "kpis": kpi_payload,
         "cost_mix": cost_mix,
         "cities": cities,
@@ -2019,6 +2115,11 @@ def generate_modern_dashboard(
             '<p class="muted-note"><span class="lang-en">Inventory snapshot is not available for this render.</span>'
             '<span class="lang-sk hidden">Inventory snapshot pre tento render nie je dostupny.</span></p>'
         )
+
+    daily_profit_rows_html = "".join(
+        _daily_profit_row_html(row)
+        for row in reversed(daily_profit_rows)
+    ) or '<tr><td colspan="6"><span class="lang-en">No daily profit/loss data available.</span><span class="lang-sk hidden">Denne data zisku/straty nie su dostupne.</span></td></tr>'
 
     product_rows_html = "".join(
         (
@@ -2967,6 +3068,24 @@ def generate_modern_dashboard(
         .chart-shell {{ height: 340px; position: relative; }}
         .chart-shell.tall {{ height: 420px; }}
         .chart-shell.compact {{ height: 300px; }}
+        .daily-profit-grid {{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 2px 0 16px; }}
+        .daily-profit-card.positive {{ background: rgba(31,157,102,.10); border-color: rgba(31,157,102,.20); }}
+        .daily-profit-card.negative {{ background: rgba(207,80,96,.10); border-color: rgba(207,80,96,.20); }}
+        .daily-profit-card.neutral {{ background: rgba(127,119,111,.09); border-color: rgba(127,119,111,.18); }}
+        .daily-profit-card.positive strong, .daily-profit-value.positive {{ color: var(--green); }}
+        .daily-profit-card.negative strong, .daily-profit-value.negative {{ color: var(--red); }}
+        .daily-profit-card.neutral strong, .daily-profit-value.neutral {{ color: var(--muted); }}
+        .daily-profit-ledger {{ max-height: 390px; overflow:auto; border:1px solid var(--line); border-radius: 18px; margin-top: 16px; background:#fff; }}
+        .daily-profit-ledger table {{ min-width: 760px; }}
+        .daily-profit-ledger thead th {{ position: sticky; top: 0; z-index: 1; background: #fffdfa; }}
+        .daily-profit-row.positive {{ background: rgba(31,157,102,.045); }}
+        .daily-profit-row.negative {{ background: rgba(207,80,96,.065); }}
+        .daily-profit-row.neutral {{ background: rgba(127,119,111,.035); }}
+        .daily-profit-badge {{ display:inline-flex; align-items:center; padding: 6px 10px; border-radius: 999px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }}
+        .daily-profit-badge.positive {{ color:#11633f; background: rgba(31,157,102,.13); }}
+        .daily-profit-badge.negative {{ color:#a22d40; background: rgba(207,80,96,.15); }}
+        .daily-profit-badge.neutral {{ color: var(--muted); background: rgba(127,119,111,.12); }}
+        .number {{ text-align:right; font-variant-numeric: tabular-nums; }}
         .mini-grid {{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }}
         .mini-card {{ padding: 14px 16px; border-radius: 16px; background: var(--accent-soft); border:1px solid rgba(255,138,31,.12); }}
         .mini-card small {{ display:block; color: var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }}
@@ -2998,7 +3117,7 @@ def generate_modern_dashboard(
         th {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .lang-en.hidden, .lang-sk.hidden {{ display:none !important; }}
         @media (max-width: 1280px) {{ .layout {{ grid-template-columns: 1fr; }} .sidebar {{ position: static; height:auto; }} }}
-        @media (max-width: 1080px) {{ .hero, .grid-2, .kpi-grid, .health-grid, .mini-grid, .hero-alert-metrics {{ grid-template-columns: 1fr; }} }}
+        @media (max-width: 1080px) {{ .hero, .grid-2, .kpi-grid, .health-grid, .mini-grid, .daily-profit-grid, .hero-alert-metrics {{ grid-template-columns: 1fr; }} }}
     </style>
 </head>
 <body>
@@ -3086,6 +3205,36 @@ def generate_modern_dashboard(
                             </div>
                         </div>
                         <div class="chart-shell tall"><canvas id="revenueProfitChart"></canvas></div>
+                    </div>
+                    <div class="panel chart-card" style="margin-top:18px;">
+                        <div class="card-head">
+                            <div>
+                                <h3><span class="lang-en">Daily profit / loss ledger</span><span class="lang-sk hidden">Denny prehlad zisku / straty</span></h3>
+                                <p><span class="lang-en">Every historical day is marked by final profit after fixed overhead: green means plus, red means minus.</span><span class="lang-sk hidden">Kazdy historicky den je oznaceny finalnym ziskom po fixnych nakladoch: zelena znamena plus, cervena minus.</span></p>
+                            </div>
+                        </div>
+                        <div class="daily-profit-grid">
+                            <div class="mini-card daily-profit-card positive"><small><span class="lang-en">Plus days</span><span class="lang-sk hidden">Plusove dni</span></small><strong>{int(daily_profit_summary.get("positive_days") or 0)}</strong><span class="muted-note">{_format_mini_value_html(daily_profit_summary.get("positive_share_pct"), kind="percent", decimals=1)}</span></div>
+                            <div class="mini-card daily-profit-card negative"><small><span class="lang-en">Minus days</span><span class="lang-sk hidden">Minusove dni</span></small><strong>{int(daily_profit_summary.get("negative_days") or 0)}</strong><span class="muted-note">{_format_mini_value_html(daily_profit_summary.get("negative_share_pct"), kind="percent", decimals=1)}</span></div>
+                            <div class="mini-card daily-profit-card {daily_profit_best_class}"><small><span class="lang-en">Best day</span><span class="lang-sk hidden">Najlepsi den</span></small><strong>{_format_mini_value_html(daily_profit_summary.get("best_day_profit"), kind="currency")}</strong><span class="muted-note">{escape(str(daily_profit_summary.get("best_day") or "-"))}</span></div>
+                            <div class="mini-card daily-profit-card {daily_profit_worst_class}"><small><span class="lang-en">Worst day</span><span class="lang-sk hidden">Najhorsi den</span></small><strong>{_format_mini_value_html(daily_profit_summary.get("worst_day_profit"), kind="currency")}</strong><span class="muted-note">{escape(str(daily_profit_summary.get("worst_day") or "-"))}</span></div>
+                        </div>
+                        <div class="chart-shell compact"><canvas id="dailyProfitLossChart"></canvas></div>
+                        <div class="daily-profit-ledger">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th><span class="lang-en">Date</span><span class="lang-sk hidden">Datum</span></th>
+                                        <th><span class="lang-en">State</span><span class="lang-sk hidden">Stav</span></th>
+                                        <th class="number"><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk po fixoch</span></th>
+                                        <th class="number"><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk pred fixom</span></th>
+                                        <th class="number"><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th>
+                                        <th class="number"><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>{daily_profit_rows_html}</tbody>
+                            </table>
+                        </div>
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel chart-card">
@@ -4191,6 +4340,25 @@ def generate_modern_dashboard(
                     ],
                 }},
                 options: baseOptions(),
+            }});
+            const dailyProfitValues = (s.profit_with_fixed || []).map(v => Number(v || 0));
+            const dailyProfitColors = dailyProfitValues.map(v => v < 0 ? 'rgba(207,80,96,.78)' : (v > 0 ? 'rgba(31,157,102,.76)' : 'rgba(127,119,111,.48)'));
+            const dailyProfitOpts = baseOptions();
+            dailyProfitOpts.plugins.tooltip.callbacks = {{
+                label: (ctx) => `${{ctx.dataset.label}}: ${{fmtCurrency(ctx.parsed.y)}}`,
+            }};
+            dailyProfitOpts.scales.y.suggestedMin = Math.min(0, ...dailyProfitValues);
+            dailyProfitOpts.scales.y.suggestedMax = Math.max(0, ...dailyProfitValues);
+            dailyProfitOpts.scales.y.grid.color = (ctx) => Number(ctx.tick.value) === 0 ? 'rgba(36,31,25,.30)' : 'rgba(140,122,99,.12)';
+            new Chart(document.getElementById('dailyProfitLossChart'), {{
+                type: 'bar',
+                data: {{
+                    labels: s.dates,
+                    datasets: [
+                        {{ label: 'Profit/loss incl. fixed', data: s.profit_with_fixed, backgroundColor: dailyProfitColors, borderColor: dailyProfitColors, borderWidth: 1, borderRadius: 7, barPercentage: .9, categoryPercentage: .9 }},
+                    ],
+                }},
+                options: dailyProfitOpts,
             }});
             const ordersOpts = baseOptions();
             ordersOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};

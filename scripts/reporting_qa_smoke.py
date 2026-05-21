@@ -363,6 +363,37 @@ def assert_dashboard_consistency_payload_mapping() -> None:
     assert profit_metric["label_en"] == "Post-ad profit (€)", profit_metric
 
 
+def assert_daily_profit_loss_payload_and_ui() -> None:
+    for report_title in ("Vevo reporting", "Roy reporting"):
+        date_agg = sample_date_agg()
+        date_agg.loc[2, "net_profit"] = -18.0
+        html = generate_html_report(
+            date_agg=date_agg,
+            date_product_agg=pd.DataFrame(),
+            items_agg=pd.DataFrame(),
+            date_from=datetime(2026, 3, 1),
+            date_to=datetime(2026, 3, 3),
+            report_title=report_title,
+        )
+        match = re.search(r'<script id="report-dashboard-json" type="application/json">(.*?)</script>', html, re.S)
+        assert match, "dashboard payload script missing"
+        payload = json.loads(match.group(1))
+        daily = payload["daily_profit_loss"]
+        summary = daily["summary"]
+        rows = daily["rows"]
+        assert summary["total_days"] == 3, summary
+        assert summary["positive_days"] == 2, summary
+        assert summary["negative_days"] == 1, summary
+        assert summary["best_day"] == "2026-03-02", summary
+        assert summary["worst_day"] == "2026-03-03", summary
+        assert rows[0]["status"] == "positive", rows
+        assert rows[2]["status"] == "negative", rows
+        assert math.isclose(float(rows[2]["profit_with_fixed"]), -18.0, rel_tol=1e-9, abs_tol=1e-9), rows[2]
+        assert 'id="dailyProfitLossChart"' in html, report_title
+        assert "daily-profit-row negative" in html, report_title
+        assert "daily-profit-badge negative" in html, report_title
+
+
 def assert_roy_fixed_cost_source_of_truth() -> None:
     settings = load_project_settings("roy")
     runtime = load_project_runtime(
@@ -430,6 +461,7 @@ def main() -> int:
     assert_product_expense_coverage(exporter)
     assert_cfo_kpi_layer_invariants()
     assert_dashboard_consistency_payload_mapping()
+    assert_daily_profit_loss_payload_and_ui()
     assert_roy_fixed_cost_source_of_truth()
     assert_daily_runner_fixed_overhead_not_double_subtracted()
     print("reporting_qa_smoke.py: OK")
