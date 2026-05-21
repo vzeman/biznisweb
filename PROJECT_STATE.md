@@ -2167,6 +2167,9 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - minimum scan: `10` pages / `300` newest orders
   - max scan: `30` pages
   - stop after repeated pages without active orders
+- Updated the ECR build gate so future production-board/live-server edits rebuild the production image:
+  - added `live_dashboard_server.py` and `production_board.py` to `.github/workflows/build-and-push-ecr.yml` path triggers
+  - added `tests.test_production_board` to the image publication regression test step
 - Data privacy note:
   - production board API/UI does not return customer names; it returns order numbers, dates, statuses, sums, product labels, quantities, and ignored-item reasons
 - Verified locally:
