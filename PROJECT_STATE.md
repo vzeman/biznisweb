@@ -2155,6 +2155,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-21 (VEVO production board local implementation)
 - Branch: `codex/vevo-production-board`
+- PR: `https://github.com/vzeman/biznisweb/pull/70` (merged to `main` as `30c6093ba0666676aa4982edac9f5022b7047df1`)
 - Added a VEVO-only production board for active unshipped orders:
   - live page: `/production/vevo`
   - JSON endpoint: `/api/production/vevo/live`
@@ -2182,6 +2183,23 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - live scan: `300` orders / `10` pages, oldest scanned order `2026-05-06 21:38:00`, oldest active order `2026-05-12 12:34:27`, `limit_reached=false`
   - verified API response contains `0` customer-name fields
 - Not deployed yet:
-  - production deployment still needs normal branch/PR review and the infra hard-gate verification before exposing it on the hosted runtime
+  - ECR `latest` refreshed after merge by `Build and Push ECR` run `26219915597`
+  - refreshed digest: `sha256:db4f16d55b38b317f43ac58760d760d56b1255ad015c42cd3ee65e7177abbd3b`
+  - production smoke still needs the new production-board host route check before closing deployment verification
 - Next exact step:
-  - push branch, open PR, then deploy after PR approval/merge with host marker and localhost verification
+  - merge the production smoke workflow enhancement, then run `Production Reporting Smoke` for `vevo` with a production-board marker and verify localhost marker + `/production/vevo`
+
+### 2026-05-21 (VEVO production board smoke workflow enhancement)
+- Branch: `codex/production-board-smoke`
+- Added host-level production board checks to `.github/workflows/production-reporting-smoke.yml`:
+  - when `production_board.enabled` is true, the ECS/Fargate smoke task curls `http://127.0.0.1:8787/production/<project>`
+  - verifies the `vevo-production-board` HTML marker
+  - curls `http://127.0.0.1:8787/api/production/<project>/live?refresh=1`
+  - verifies active statuses, configured Ylang gel exclusion, structured summary/products/orders, and no customer-name fields
+  - writes `PRODUCTION_BOARD_OK` into the localhost marker payload served from `http://127.0.0.1:8000/marker.json`
+  - prints `UI_SMOKE_OK:<project>:production-board`
+- Verified locally:
+  - YAML parse of `.github/workflows/production-reporting-smoke.yml`
+  - `git diff --check`
+- Next exact step:
+  - push branch, open/merge PR, dispatch production smoke for VEVO against refreshed ECR digest `sha256:db4f16d55b38b317f43ac58760d760d56b1255ad015c42cd3ee65e7177abbd3b`
