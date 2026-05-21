@@ -2191,6 +2191,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-21 (VEVO production board smoke workflow enhancement)
 - Branch: `codex/production-board-smoke`
+- PR: `https://github.com/vzeman/biznisweb/pull/71` (merged to `main` as `ff0e97cb394a1a47b4dfce3238062906a3793480`)
 - Added host-level production board checks to `.github/workflows/production-reporting-smoke.yml`:
   - when `production_board.enabled` is true, the ECS/Fargate smoke task curls `http://127.0.0.1:8787/production/<project>`
   - verifies the `vevo-production-board` HTML marker
@@ -2202,4 +2203,49 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - YAML parse of `.github/workflows/production-reporting-smoke.yml`
   - `git diff --check`
 - Next exact step:
-  - push branch, open/merge PR, dispatch production smoke for VEVO against refreshed ECR digest `sha256:db4f16d55b38b317f43ac58760d760d56b1255ad015c42cd3ee65e7177abbd3b`
+  - completed by the production verification entry below
+
+### 2026-05-21 (VEVO production board production verified)
+- Merged VEVO production board into `main`:
+  - PR: `https://github.com/vzeman/biznisweb/pull/70`
+  - merge commit: `30c6093ba0666676aa4982edac9f5022b7047df1`
+- Merged production-board host smoke enhancement into `main`:
+  - PR: `https://github.com/vzeman/biznisweb/pull/71`
+  - merge commit: `ff0e97cb394a1a47b4dfce3238062906a3793480`
+- Guarded production image refresh completed:
+  - workflow: `Build and Push ECR`
+  - run: `26219915597`
+  - result: `success`
+  - image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - digest: `sha256:db4f16d55b38b317f43ac58760d760d56b1255ad015c42cd3ee65e7177abbd3b`
+  - reporting smoke gate, invoice tests, reporting calculation tests, and production-board tests passed before image push
+- VEVO hard-gate verification:
+  - workflow: `Production Reporting Smoke`
+  - run: `26220199241`
+  - job: `77152916053`
+  - result: `success`
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.18.178`
+  - service name: `vevo-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:5`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/e686ab804e0647dd92183e03e45e9bec`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - dashboard UI path: `http://127.0.0.1:8787/dashboard/vevo`
+  - production board UI path: `http://127.0.0.1:8787/production/vevo`
+  - CloudWatch log stream: `/ecs/vevo-reporting-daily:ecs/reporting/e686ab804e0647dd92183e03e45e9bec`
+- Production-board host assertions executed inside the ECS task:
+  - `curl -fsS http://127.0.0.1:8787/production/vevo`
+  - verified HTML marker `vevo-production-board`
+  - `curl -fsS http://127.0.0.1:8787/api/production/vevo/live?refresh=1`
+  - verified active statuses `Čaká na vybavenie` and `Platba online - zaplatené`
+  - verified excluded product `Vevo Ylang Absolute prací gél 1L`
+  - verified structured `summary`, `products`, and `orders` payloads
+  - verified no `customer` fields are returned in order payloads
+  - wrote `PRODUCTION_BOARD_OK` into the localhost marker payload
+  - emitted `UI_SMOKE_OK:vevo:production-board`
+- Operational conclusion:
+  - the VEVO production board is included in the current production image used by the VEVO scheduled runtime
+  - the tool is available in the live dashboard server at `/production/vevo`
+  - future production-board/live-server changes now trigger ECR rebuilds and production smoke can verify the production-board route
+- Next exact step:
+  - expose/use the hosted live dashboard entrypoint for production users; code/runtime verification is complete
