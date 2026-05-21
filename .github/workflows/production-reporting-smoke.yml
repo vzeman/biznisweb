@@ -143,6 +143,13 @@ jobs:
           set -euo pipefail
           PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
           MARKER="${REPORT_OUTPUT_TAG:?REPORT_OUTPUT_TAG missing}"
+          PIDS=()
+          cleanup() {
+            for pid in "${PIDS[@]:-}"; do
+              kill "$pid" >/dev/null 2>&1 || true
+            done
+          }
+          trap cleanup EXIT
           echo "HOST_SMOKE_START project=${PROJECT} marker=${MARKER}"
           python daily_report_runner.py --project "${PROJECT}" --output-tag "${MARKER}" --skip-email --skip-invoices
           python - <<'PY'
@@ -180,13 +187,17 @@ jobs:
           }
           (marker_dir / "marker.json").write_text(json.dumps(marker_payload, sort_keys=True), encoding="utf-8")
           PY
-          (cd /tmp/marker && python -m http.server 8000 --bind 127.0.0.1 >/tmp/marker-http.log 2>&1 &)
+          pushd /tmp/marker >/dev/null
+          python -m http.server 8000 --bind 127.0.0.1 >/tmp/marker-http.log 2>&1 &
+          PIDS+=("$!")
+          popd >/dev/null
           sleep 1
           echo "LOCALHOST_MARKER_BEGIN"
           curl -fsS http://127.0.0.1:8000/marker.json
           echo
           echo "LOCALHOST_MARKER_END"
           python live_dashboard_server.py --host 127.0.0.1 --port 8787 >/tmp/live-dashboard.log 2>&1 &
+          PIDS+=("$!")
           sleep 2
           curl -fsS http://127.0.0.1:8787/health >/tmp/live-health.json
           curl -fsS "http://127.0.0.1:8787/dashboard/${PROJECT}" | grep -q "live-dashboard-app"
@@ -268,8 +279,45 @@ jobs:
             echo "marker-path=http://127.0.0.1:8000/marker.json"
             echo "ui-path=http://127.0.0.1:8787/dashboard/${PROJECT}"
 
-            aws ecs wait tasks-stopped --cluster "$CLUSTER_ARN" --tasks "$TASK_ARN" --region "$AWS_REGION"
-            aws ecs describe-tasks --cluster "$CLUSTER_ARN" --tasks "$TASK_ARN" --region "$AWS_REGION" > describe-stopped.json
+            TASK_STOPPED=false
+            for attempt in $(seq 1 240); do
+              aws ecs describe-tasks --cluster "$CLUSTER_ARN" --tasks "$TASK_ARN" --region "$AWS_REGION" > describe-stopped.json
+              LAST_STATUS="$(python - <<'PY'
+          import json
+          task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
+          print(task.get("lastStatus", ""))
+          PY
+              )"
+              if [[ "$LAST_STATUS" == "STOPPED" ]]; then
+                TASK_STOPPED=true
+                break
+              fi
+              if (( attempt % 4 == 0 )); then
+                echo "Task ${TASK_ID} still ${LAST_STATUS:-unknown} after $((attempt * 15))s"
+              fi
+              sleep 15
+            done
+
+            if [[ "$TASK_STOPPED" != "true" ]]; then
+              echo "Task ${TASK_ARN} did not stop within 60 minutes; stopping smoke task." >&2
+              if [[ -n "$LOG_GROUP" && -n "$LOG_PREFIX" ]]; then
+                LOG_STREAM="${LOG_PREFIX}/${CONTAINER_NAME}/${TASK_ID}"
+                echo "CloudWatch log stream: ${LOG_GROUP}:${LOG_STREAM}"
+                aws logs get-log-events \
+                  --log-group-name "$LOG_GROUP" \
+                  --log-stream-name "$LOG_STREAM" \
+                  --region "$AWS_REGION" \
+                  --query 'events[].message' \
+                  --output text || true
+              fi
+              aws ecs stop-task \
+                --cluster "$CLUSTER_ARN" \
+                --task "$TASK_ARN" \
+                --reason "Production reporting smoke timed out waiting for task stop" \
+                --region "$AWS_REGION" || true
+              exit 1
+            fi
+
             EXIT_CODE="$(python - <<'PY'
           import json
           task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
