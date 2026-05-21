@@ -200,9 +200,12 @@ jobs:
           PIDS+=("$!")
           sleep 2
           curl -fsS http://127.0.0.1:8787/health >/tmp/live-health.json
-          curl -fsS "http://127.0.0.1:8787/dashboard/${PROJECT}" | grep -q "live-dashboard-app"
-          curl -fsS "http://127.0.0.1:8787/api/${PROJECT}/latest?period=full" | grep -q "daily_profit_loss"
-          curl -fsS "http://127.0.0.1:8787/report/${PROJECT}?period=full" | grep -q "dailyProfitLossChart"
+          curl -fsS "http://127.0.0.1:8787/dashboard/${PROJECT}" -o /tmp/live-dashboard.html
+          grep -q "live-dashboard-app" /tmp/live-dashboard.html
+          curl -fsS "http://127.0.0.1:8787/api/${PROJECT}/latest?period=full" -o /tmp/live-dashboard-api.json
+          grep -q "daily_profit_loss" /tmp/live-dashboard-api.json
+          curl -fsS "http://127.0.0.1:8787/report/${PROJECT}?period=full" -o /tmp/live-report.html
+          grep -q "dailyProfitLossChart" /tmp/live-report.html
           echo "UI_SMOKE_OK:${PROJECT}:daily-profit-loss"
           SH
             )"
