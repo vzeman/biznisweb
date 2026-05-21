@@ -206,6 +206,55 @@ jobs:
           grep -q "daily_profit_loss" /tmp/live-dashboard-api.json
           curl -fsS "http://127.0.0.1:8787/report/${PROJECT}?period=full" -o /tmp/live-report.html
           grep -q "dailyProfitLossChart" /tmp/live-report.html
+          PRODUCTION_BOARD_ENABLED="$(python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          project = os.environ["REPORT_PROJECT"]
+          settings = json.loads((Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print("true" if settings.get("production_board", {}).get("enabled") else "false")
+          PY
+          )"
+          if [[ "$PRODUCTION_BOARD_ENABLED" == "true" ]]; then
+            curl -fsS "http://127.0.0.1:8787/production/${PROJECT}" -o /tmp/production-board.html
+            grep -q "vevo-production-board" /tmp/production-board.html
+            curl -fsS "http://127.0.0.1:8787/api/production/${PROJECT}/live?refresh=1" -o /tmp/production-board-api.json
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          api = json.loads(Path("/tmp/production-board-api.json").read_text(encoding="utf-8"))
+          assert api["project"] == "vevo", api.get("project")
+          assert "Čaká na vybavenie" in api["active_order_statuses"]
+          assert "Platba online - zaplatené" in api["active_order_statuses"]
+          assert "Vevo Ylang Absolute prací gél 1L" in api["excluded_product_labels"]
+          assert "summary" in api and "products" in api and "orders" in api
+          assert all("customer" not in order for order in api["orders"]), "customer leaked in orders"
+          assert all(
+              "customer" not in order
+              for product in api["products"]
+              for order in product.get("orders", [])
+          ), "customer leaked in product orders"
+          marker_path = Path("/tmp/marker/marker.json")
+          marker = json.loads(marker_path.read_text(encoding="utf-8"))
+          marker["production_board"] = {
+              "marker": "PRODUCTION_BOARD_OK",
+              "active_orders": api["summary"].get("active_orders"),
+              "manufacturing_products": api["summary"].get("manufacturing_products"),
+              "units_to_make": api["summary"].get("units_to_make"),
+              "ignored_units": api["summary"].get("ignored_units"),
+              "orders_scanned": api["scan"].get("orders_scanned"),
+              "pages_scanned": api["scan"].get("pages_scanned"),
+              "limit_reached": api["scan"].get("limit_reached"),
+              "customer_fields_returned": 0,
+          }
+          marker_path.write_text(json.dumps(marker, sort_keys=True), encoding="utf-8")
+          PY
+            echo "PRODUCTION_BOARD_MARKER_BEGIN"
+            curl -fsS http://127.0.0.1:8000/marker.json
+            echo
+            echo "PRODUCTION_BOARD_MARKER_END"
+            echo "UI_SMOKE_OK:${PROJECT}:production-board"
+          fi
           echo "UI_SMOKE_OK:${PROJECT}:daily-profit-loss"
           SH
             )"
@@ -281,6 +330,7 @@ jobs:
             echo "image-path=919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest"
             echo "marker-path=http://127.0.0.1:8000/marker.json"
             echo "ui-path=http://127.0.0.1:8787/dashboard/${PROJECT}"
+            echo "production-board-ui-path=http://127.0.0.1:8787/production/${PROJECT}"
 
             TASK_STOPPED=false
             for attempt in $(seq 1 240); do
