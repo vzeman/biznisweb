@@ -1,0 +1,289 @@
+name: Production Reporting Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Reporting project to verify
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - vevo
+          - roy
+      marker:
+        description: Marker suffix written into tagged smoke artifacts
+        required: true
+        default: daily-profit-loss-prodcheck
+
+env:
+  AWS_REGION: eu-central-1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run production-equivalent host smoke
+        shell: bash
+        env:
+          REQUESTED_PROJECT: ${{ inputs.project }}
+          MARKER_SUFFIX: ${{ inputs.marker }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$REQUESTED_PROJECT" == "all" ]]; then
+            PROJECTS="vevo roy"
+          else
+            PROJECTS="$REQUESTED_PROJECT"
+          fi
+
+          for PROJECT in $PROJECTS; do
+            echo "::group::Production smoke for ${PROJECT}"
+            SCHEDULE_NAME="$(python - "$PROJECT" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["report_schedule"]["schedule_name"])
+          PY
+            )"
+            EXPECTED_TASK_FAMILY="$(python - "$PROJECT" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["report_schedule"]["task_family"])
+          PY
+            )"
+
+            aws scheduler get-schedule --name "$SCHEDULE_NAME" --region "$AWS_REGION" > schedule.json
+            CLUSTER_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["Arn"])
+          PY
+            )"
+            TASK_DEFINITION_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])
+          PY
+            )"
+            LAUNCH_TYPE="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"].get("LaunchType") or "FARGATE")
+          PY
+            )"
+            PLATFORM_VERSION="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"].get("PlatformVersion") or "")
+          PY
+            )"
+            python - <<'PY' > network.json
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(json.dumps(schedule["Target"]["EcsParameters"]["NetworkConfiguration"]))
+          PY
+
+            if [[ "$TASK_DEFINITION_ARN" != *":task-definition/${EXPECTED_TASK_FAMILY}:"* ]]; then
+              echo "Schedule ${SCHEDULE_NAME} targets ${TASK_DEFINITION_ARN}, expected family ${EXPECTED_TASK_FAMILY}" >&2
+              exit 1
+            fi
+
+            aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_ARN" --region "$AWS_REGION" > task-definition.json
+            CONTAINER_NAME="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def["containerDefinitions"][0]["name"])
+          PY
+            )"
+            LOG_GROUP="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          options = task_def["containerDefinitions"][0].get("logConfiguration", {}).get("options", {})
+          print(options.get("awslogs-group", ""))
+          PY
+            )"
+            LOG_PREFIX="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          options = task_def["containerDefinitions"][0].get("logConfiguration", {}).get("options", {})
+          print(options.get("awslogs-stream-prefix", ""))
+          PY
+            )"
+
+            MARKER="${PROJECT}-${MARKER_SUFFIX}"
+            SMOKE_SCRIPT="$(cat <<'SH'
+          set -euo pipefail
+          PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
+          MARKER="${REPORT_OUTPUT_TAG:?REPORT_OUTPUT_TAG missing}"
+          echo "HOST_SMOKE_START project=${PROJECT} marker=${MARKER}"
+          python daily_report_runner.py --project "${PROJECT}" --output-tag "${MARKER}" --skip-email --skip-invoices
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          project = os.environ["REPORT_PROJECT"]
+          marker = os.environ["REPORT_OUTPUT_TAG"]
+          data_dir = Path("data") / project
+          html_path = data_dir / f"report_latest__{marker}.html"
+          payload_path = data_dir / f"dashboard_payload_latest__{marker}.json"
+          html = html_path.read_text(encoding="utf-8")
+          payload = json.loads(payload_path.read_text(encoding="utf-8"))
+          dashboard = payload["dashboard"]
+          daily = dashboard["daily_profit_loss"]
+          rows = daily["rows"]
+          summary = daily["summary"]
+          assert rows, "daily profit/loss rows missing"
+          assert "dailyProfitLossChart" in html, "daily profit/loss chart missing from HTML"
+          assert "daily-profit-row" in html, "daily profit/loss ledger rows missing from HTML"
+          marker_dir = Path("/tmp/marker")
+          marker_dir.mkdir(parents=True, exist_ok=True)
+          marker_payload = {
+              "marker": "LOCALHOST_MARKER_OK",
+              "project": project,
+              "output_tag": marker,
+              "report_path": str(html_path),
+              "payload_path": str(payload_path),
+              "daily_profit_rows": len(rows),
+              "positive_days": summary.get("positive_days"),
+              "negative_days": summary.get("negative_days"),
+              "has_daily_profit_loss_chart": True,
+              "has_daily_profit_loss_payload": True,
+              "report_skip_invoices": os.environ.get("REPORT_SKIP_INVOICES"),
+          }
+          (marker_dir / "marker.json").write_text(json.dumps(marker_payload, sort_keys=True), encoding="utf-8")
+          PY
+          (cd /tmp/marker && python -m http.server 8000 --bind 127.0.0.1 >/tmp/marker-http.log 2>&1 &)
+          sleep 1
+          echo "LOCALHOST_MARKER_BEGIN"
+          curl -fsS http://127.0.0.1:8000/marker.json
+          echo
+          echo "LOCALHOST_MARKER_END"
+          python live_dashboard_server.py --host 127.0.0.1 --port 8787 >/tmp/live-dashboard.log 2>&1 &
+          sleep 2
+          curl -fsS http://127.0.0.1:8787/health >/tmp/live-health.json
+          curl -fsS "http://127.0.0.1:8787/dashboard/${PROJECT}" | grep -q "live-dashboard-app"
+          curl -fsS "http://127.0.0.1:8787/api/${PROJECT}/latest?period=full" | grep -q "daily_profit_loss"
+          curl -fsS "http://127.0.0.1:8787/report/${PROJECT}?period=full" | grep -q "dailyProfitLossChart"
+          echo "UI_SMOKE_OK:${PROJECT}:daily-profit-loss"
+          SH
+            )"
+
+            export CONTAINER_NAME PROJECT MARKER SMOKE_SCRIPT
+            python - <<'PY' > overrides.json
+          import json
+          import os
+          print(json.dumps({
+              "containerOverrides": [
+                  {
+                      "name": os.environ["CONTAINER_NAME"],
+                      "command": ["/bin/bash", "-lc", os.environ["SMOKE_SCRIPT"]],
+                      "environment": [
+                          {"name": "REPORT_PROJECT", "value": os.environ["PROJECT"]},
+                          {"name": "REPORT_OUTPUT_TAG", "value": os.environ["MARKER"]},
+                          {"name": "REPORT_SKIP_INVOICES", "value": "true"},
+                      ],
+                  }
+              ]
+          }))
+          PY
+
+            RUN_ARGS=(
+              --cluster "$CLUSTER_ARN"
+              --task-definition "$TASK_DEFINITION_ARN"
+              --launch-type "$LAUNCH_TYPE"
+              --network-configuration "file://network.json"
+              --overrides "file://overrides.json"
+              --started-by "codex-${MARKER}"
+              --region "$AWS_REGION"
+            )
+            if [[ -n "$PLATFORM_VERSION" ]]; then
+              RUN_ARGS+=(--platform-version "$PLATFORM_VERSION")
+            fi
+
+            aws ecs run-task "${RUN_ARGS[@]}" > run-task.json
+            TASK_ARN="$(python - <<'PY'
+          import json
+          run = json.load(open("run-task.json", encoding="utf-8"))
+          failures = run.get("failures") or []
+          if failures:
+              raise SystemExit(f"run-task failures: {failures}")
+          print(run["tasks"][0]["taskArn"])
+          PY
+            )"
+            TASK_ID="${TASK_ARN##*/}"
+
+            PRIVATE_IP=""
+            for _ in $(seq 1 60); do
+              aws ecs describe-tasks --cluster "$CLUSTER_ARN" --tasks "$TASK_ARN" --region "$AWS_REGION" > describe-running.json
+              PRIVATE_IP="$(python - <<'PY'
+          import json
+          tasks = json.load(open("describe-running.json", encoding="utf-8")).get("tasks") or []
+          details = []
+          for attachment in (tasks[0].get("attachments") or []) if tasks else []:
+              details.extend(attachment.get("details") or [])
+          print(next((item.get("value") for item in details if item.get("name") == "privateIPv4Address"), ""))
+          PY
+              )"
+              if [[ -n "$PRIVATE_IP" ]]; then
+                break
+              fi
+              sleep 5
+            done
+
+            echo "HARD_GATE_CONTEXT project=${PROJECT}"
+            echo "instance-id=N/A (scheduled ECS/Fargate task)"
+            echo "private-ip=${PRIVATE_IP:-unavailable-before-stop}"
+            echo "service-name=${SCHEDULE_NAME}"
+            echo "task-definition=${TASK_DEFINITION_ARN}"
+            echo "task-arn=${TASK_ARN}"
+            echo "image-path=919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest"
+            echo "marker-path=http://127.0.0.1:8000/marker.json"
+            echo "ui-path=http://127.0.0.1:8787/dashboard/${PROJECT}"
+
+            aws ecs wait tasks-stopped --cluster "$CLUSTER_ARN" --tasks "$TASK_ARN" --region "$AWS_REGION"
+            aws ecs describe-tasks --cluster "$CLUSTER_ARN" --tasks "$TASK_ARN" --region "$AWS_REGION" > describe-stopped.json
+            EXIT_CODE="$(python - <<'PY'
+          import json
+          task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
+          print(task["containers"][0].get("exitCode", ""))
+          PY
+            )"
+
+            if [[ -n "$LOG_GROUP" && -n "$LOG_PREFIX" ]]; then
+              LOG_STREAM="${LOG_PREFIX}/${CONTAINER_NAME}/${TASK_ID}"
+              echo "CloudWatch log stream: ${LOG_GROUP}:${LOG_STREAM}"
+              aws logs get-log-events \
+                --log-group-name "$LOG_GROUP" \
+                --log-stream-name "$LOG_STREAM" \
+                --region "$AWS_REGION" \
+                --query 'events[].message' \
+                --output text || true
+            fi
+
+            if [[ "$EXIT_CODE" != "0" ]]; then
+              echo "Task ${TASK_ARN} failed with exit code ${EXIT_CODE}" >&2
+              exit 1
+            fi
+            echo "PRODUCTION_SMOKE_OK:${PROJECT}:${TASK_ID}:${PRIVATE_IP:-no-ip}"
+            echo "::endgroup::"
+          done
