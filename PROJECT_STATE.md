@@ -2252,6 +2252,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-21 (VEVO production board App Runner exposure in progress)
 - Branch: `codex/live-dashboard-apprunner`
+- PR: `https://github.com/vzeman/biznisweb/pull/73` (merged to `main` as `8e2f10c93cffb722f2c852ffa2019598bbdcdaa4`)
 - Goal:
   - expose the already-deployed VEVO production board as a persistent AWS-hosted HTTPS service for users outside this PC
 - Chosen hosting target:
@@ -2284,4 +2285,44 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - YAML parse for all `.github/workflows/*.yml`
   - `git diff --check`
 - Next exact step:
-  - merge this branch, wait for the guarded ECR rebuild, dispatch `Deploy Live Dashboard App Runner`, then record the App Runner service URL and smoke result
+  - completed by the App Runner deployment verification entry below
+
+### 2026-05-21 (VEVO production board App Runner deployed)
+- Merged App Runner deployment support into `main`:
+  - PR: `https://github.com/vzeman/biznisweb/pull/73`
+  - merge commit: `8e2f10c93cffb722f2c852ffa2019598bbdcdaa4`
+- Guarded production image refresh completed after merge:
+  - workflow: `Build and Push ECR`
+  - run: `26222226926`
+  - result: `success`
+  - image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - digest: `sha256:88d1873db4ee893d0f9bc7ea65f66b444f95b8cbe4870ccab8f7579165b2d60c`
+  - regression test step ran `23` tests including `tests.test_live_dashboard_auth`
+- App Runner deployment completed:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26222324018`
+  - result: `success`
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service name: `biznisweb-vevo-production-board`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-vevo-production-board/8c8a7a5d694b401baeccf0f1af19ca50`
+  - public URL: `https://zxtma5mxta.eu-central-1.awsapprunner.com`
+  - health path: `https://zxtma5mxta.eu-central-1.awsapprunner.com/health`
+  - production board path: `https://zxtma5mxta.eu-central-1.awsapprunner.com/production/vevo`
+  - Basic Auth username: `vevo`
+  - Basic Auth password source: SSM SecureString `/biznisweb/live-dashboard/basic-auth-password`
+- App Runner smoke verification:
+  - public `/health` returned successfully
+  - authenticated `/production/vevo` returned the `vevo-production-board` HTML marker
+  - authenticated `/api/production/vevo/live?refresh=1` returned:
+    - `active_orders=23`
+    - `manufacturing_products=21`
+    - `units_to_make=44.0`
+    - `orders_scanned=300`
+  - verified configured active statuses and `Vevo Ylang Absolute prací gél 1L` exclusion
+  - verified no `customer` fields in the production-board API payload
+- Operational conclusion:
+  - users outside this PC can now access the VEVO production board through the App Runner HTTPS URL with Basic Auth
+  - next recommended exposure step is attaching a memorable domain such as `vyroba.vevo.sk` or `production.vevo.sk` to the App Runner service
+- Next exact step:
+  - choose the public hostname and DNS owner, then attach it as an App Runner custom domain and distribute the Basic Auth credentials through a secure channel
