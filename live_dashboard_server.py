@@ -1293,6 +1293,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const summary = inv.summary || {};
       const alerts = inv.alert_rows || [];
       const inventoryRows = inv.inventory_rows || [];
+      const visibleInventoryLimit = 100;
       el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · snapshot ${text(summary.inventory_snapshot_date)}`;
       el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, 30).map(inventoryAlertRow).join('') : '<tr><td colspan="8" class="muted">Bez kritických skladových alertov.</td></tr>';
       el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)}`;
@@ -1303,7 +1304,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         metric('Dead stock', fmtMoney(summary.dead_stock_cost_value), `${fmtInt(summary.dead_stock_count)} položiek`),
         metric('Tržby v riziku', fmtMoney(summary.revenue_at_risk_30d), `zisk ${fmtMoney(summary.profit_at_risk_30d)}`),
       ].join('');
-      el('inventoryRowsBody').innerHTML = inventoryRows.length ? inventoryRows.slice(0, 80).map((row) => `<tr>
+      el('inventoryRowsBody').innerHTML = inventoryRows.length ? inventoryRows.slice(0, visibleInventoryLimit).map((row) => `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
         <td>${fmtQty(row.available_quantity)} ks</td>
         <td>${fmtMoney(row.inventory_cost_value)}</td>
