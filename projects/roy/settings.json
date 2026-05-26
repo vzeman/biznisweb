@@ -150,6 +150,14 @@
               "puzdro na spreje 300ml univerzal"
             ],
             "quantity": 1
+          },
+          {
+            "component_patterns": [
+              "zvonček na medvede, plašič medveďov",
+              "zvoncek na medvede",
+              "plasic medvedov"
+            ],
+            "quantity": 1
           }
         ]
       }

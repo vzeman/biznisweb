@@ -9396,6 +9396,9 @@ class BizniWebExporter:
             inventory_products_df["bundle_component_recent_30d_units"] = 0.0
             inventory_products_df["bundle_component_recent_90d_units"] = 0.0
             inventory_products_df["bundle_component_forecast_30d_units"] = 0.0
+            inventory_products_df["bundle_component_order_count"] = 0.0
+            inventory_products_df["bundle_component_total_units"] = 0.0
+            inventory_products_df["bundle_component_source_revenue"] = 0.0
 
             if bundle_component_rules:
                 for rule in bundle_component_rules:
@@ -9416,6 +9419,15 @@ class BizniWebExporter:
                     inventory_products_df.loc[bundle_mask, "bundle_sku_flag"] = True
                     if bool(rule.get("exclude_bundle_from_alerts", False)):
                         inventory_products_df.loc[bundle_mask, "exclude_bundle_from_alerts_flag"] = True
+                    bundle_orders = float(
+                        inventory_products_df.loc[bundle_mask, "orders"].sum()
+                    )
+                    bundle_units = float(
+                        inventory_products_df.loc[bundle_mask, "units"].sum()
+                    )
+                    bundle_revenue = float(
+                        inventory_products_df.loc[bundle_mask, "revenue"].sum()
+                    )
                     bundle_recent_30d_units = float(
                         inventory_products_df.loc[bundle_mask, "recent_30d_units"].sum()
                     )
@@ -9425,6 +9437,15 @@ class BizniWebExporter:
                     bundle_forecast_30d_units = float(
                         inventory_products_df.loc[bundle_mask, "forecast_30d_units"].sum()
                     )
+                    bundle_first_sale = pd.to_datetime(
+                        inventory_products_df.loc[bundle_mask, "first_sale"],
+                        errors="coerce",
+                    ).min()
+                    bundle_last_sale = pd.to_datetime(
+                        inventory_products_df.loc[bundle_mask, "last_sale"],
+                        errors="coerce",
+                    ).max()
+                    component_match_seen = False
                     for component_rule in component_rules:
                         component_patterns = [
                             str(pattern).strip()
@@ -9439,6 +9460,19 @@ class BizniWebExporter:
                         )
                         if not component_mask.any():
                             continue
+                        component_match_seen = True
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_order_count",
+                        ] += bundle_orders
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_total_units",
+                        ] += bundle_units * component_qty
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_source_revenue",
+                        ] += bundle_revenue
                         inventory_products_df.loc[
                             component_mask,
                             "bundle_component_recent_30d_units",
@@ -9451,6 +9485,59 @@ class BizniWebExporter:
                             component_mask,
                             "bundle_component_forecast_30d_units",
                         ] += bundle_forecast_30d_units * component_qty
+                        if pd.notna(bundle_first_sale):
+                            current_first_sale = pd.to_datetime(
+                                inventory_products_df.loc[component_mask, "first_sale"],
+                                errors="coerce",
+                            )
+                            inventory_products_df.loc[component_mask, "first_sale"] = current_first_sale.where(
+                                current_first_sale.notna() & (current_first_sale <= bundle_first_sale),
+                                bundle_first_sale,
+                            )
+                        if pd.notna(bundle_last_sale):
+                            current_last_sale = pd.to_datetime(
+                                inventory_products_df.loc[component_mask, "last_sale"],
+                                errors="coerce",
+                            )
+                            inventory_products_df.loc[component_mask, "last_sale"] = current_last_sale.where(
+                                current_last_sale.notna() & (current_last_sale >= bundle_last_sale),
+                                bundle_last_sale,
+                            )
+                    if component_match_seen and bool(rule.get("exclude_bundle_from_alerts", False)):
+                        inventory_products_df.loc[
+                            bundle_mask,
+                            [
+                                "orders",
+                                "units",
+                                "revenue",
+                                "profit_without_fixed",
+                                "profit_with_fixed",
+                                "recent_30d_units",
+                                "recent_30d_revenue",
+                                "recent_30d_profit_without_fixed",
+                                "recent_30d_profit_with_fixed",
+                                "recent_90d_units",
+                                "recent_90d_revenue",
+                                "recent_90d_profit_without_fixed",
+                                "recent_90d_profit_with_fixed",
+                                "forecast_30d_units",
+                                "forecast_30d_revenue",
+                            ],
+                        ] = 0.0
+                        inventory_products_df.loc[bundle_mask, ["first_sale", "last_sale"]] = pd.NaT
+
+            inventory_products_df["historical_restock_relevant_flag"] = (
+                (
+                    (inventory_products_df["orders"] >= historical_restock_min_orders)
+                    & (inventory_products_df["units"] >= historical_restock_min_units)
+                    & (inventory_products_df["revenue"] >= historical_restock_min_revenue)
+                )
+                | (
+                    (inventory_products_df["bundle_component_order_count"] >= historical_restock_min_orders)
+                    & (inventory_products_df["bundle_component_total_units"] >= historical_restock_min_units)
+                    & (inventory_products_df["bundle_component_source_revenue"] >= historical_restock_min_revenue)
+                )
+            )
 
             inventory_products_df["margin_without_fixed_pct"] = np.where(
                 inventory_products_df["revenue"] != 0,
