@@ -1290,7 +1290,7 @@ def generate_modern_dashboard(
             "days_of_cover",
             "stock_risk_level",
         ],
-        limit=12,
+        limit=160,
     )
     roy_stock_risk_rows = _frame_rows(
         (roy_product_demand or {}).get("stock_risk_rows"),
@@ -1340,7 +1340,7 @@ def generate_modern_dashboard(
             "alert_30d_revenue",
             "projected_stockout_date",
         ],
-        limit=12,
+        limit=120,
     )
     roy_restock_priority_rows = _frame_rows(
         (roy_product_demand or {}).get("restock_priority_rows"),
@@ -1358,7 +1358,7 @@ def generate_modern_dashboard(
             "projected_stockout_date",
             "cost_coverage_pct",
         ],
-        limit=12,
+        limit=120,
     )
     roy_revenue_at_risk_rows = _frame_rows(
         (roy_product_demand or {}).get("revenue_at_risk_rows"),

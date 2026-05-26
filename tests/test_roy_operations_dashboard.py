@@ -147,6 +147,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("/api/operations/", html)
         self.assertIn("Executive KPI deck", html)
         self.assertIn("Osobné odbery", html)
+        self.assertIn("visibleInventoryAlertLimit = 100", html)
         self.assertIn("visibleInventoryLimit = 100", html)
 
 

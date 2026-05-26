@@ -1293,9 +1293,10 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const summary = inv.summary || {};
       const alerts = inv.alert_rows || [];
       const inventoryRows = inv.inventory_rows || [];
+      const visibleInventoryAlertLimit = 100;
       const visibleInventoryLimit = 100;
       el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · snapshot ${text(summary.inventory_snapshot_date)}`;
-      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, 30).map(inventoryAlertRow).join('') : '<tr><td colspan="8" class="muted">Bez kritických skladových alertov.</td></tr>';
+      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, visibleInventoryAlertLimit).map(inventoryAlertRow).join('') : '<tr><td colspan="8" class="muted">Bez kritických skladových alertov.</td></tr>';
       el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)}`;
       el('inventorySummaryGrid').innerHTML = [
         metric('Nákupná hodnota bez DPH', fmtMoney(summary.inventory_cost_value), `${fmtQty(summary.inventory_available_units)} ks skladom`),

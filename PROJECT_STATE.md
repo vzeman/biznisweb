@@ -2544,3 +2544,16 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - open/merge PR, rebuild ECR, deploy ROY App Runner, verify deploy smoke and public `/production/roy`
+
+### 2026-05-26 (ROY live dashboard inventory row payload limits)
+- Branch: `codex/roy-dashboard-row-limits`
+- Change:
+  - modern ROY dashboard payload now serializes up to `160` inventory rows, `120` stock alert rows, and `120` restock priority rows
+  - live ROY dashboard UI now renders up to `100` stock alert rows and `100` inventory rows when enough rows exist
+  - App Runner API adapter now keeps up to `120` stock alert rows from the reporting payload
+- Local verification:
+  - `python -m py_compile dashboard_modern.py live_dashboard_server.py roy_operations_dashboard.py export_orders.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR, deploy ROY App Runner, verify public `/production/roy` API returns at least `100` inventory rows when the source snapshot has enough stocked products
