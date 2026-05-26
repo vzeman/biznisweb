@@ -204,12 +204,13 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Deploy the ROY operations dashboard after branch review/merge: build the refreshed ECR image, run App Runner deploy for service `biznisweb-roy-operations-dashboard`, verify `/production/roy` and `/api/operations/roy/live?refresh=1` with the hard-gate host/service/path context.
+- Review and merge draft PR `#80`, then build the refreshed ECR image and deploy App Runner service `biznisweb-roy-operations-dashboard`; verify `/production/roy` and `/api/operations/roy/live?refresh=1` with the hard-gate host/service/path context.
 
 ## 9) Change Log
 
 ### 2026-05-26 (ROY operations dashboard implementation)
 - Branch: `codex/roy-live-dashboard`
+- Draft PR: `https://github.com/vzeman/biznisweb/pull/80`
 - Added a dedicated ROY operations dashboard behind `/production/roy`:
   - Executive KPI deck is rendered from the existing ROY reporting payload.
   - Daily / Weekly / Monthly / All-time KPI windows remain available.
@@ -254,7 +255,7 @@ Bootstrap entrypoints:
   - production deploy is not done yet in this branch.
   - ROY App Runner deployment needs `ROY_LIVE_DASHBOARD_AUTH_PASSWORD` set to the intended password and an S3 bucket/prefix that exposes `dashboard_payload_latest.json` under `latest/`.
 - Next exact step:
-  - push the branch, create/merge PR, build the ECR image, then deploy App Runner service `biznisweb-roy-operations-dashboard` with path `/production/roy` and Basic Auth user `roy21`.
+  - review/merge PR `#80`, build the ECR image, then deploy App Runner service `biznisweb-roy-operations-dashboard` with path `/production/roy` and Basic Auth user `roy21`.
 
 ### 2026-05-11
 - Implemented smart reporting cache revalidation so delayed payment/status changes are not stuck in older daily cache buckets:
