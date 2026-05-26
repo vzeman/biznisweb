@@ -10,6 +10,9 @@
     "timezone": "Europe/Bratislava",
     "task_family": "roy-reporting-daily"
   },
+  "live_dashboard_artifacts": {
+    "s3_prefix": "daily-reports/roy-sk"
+  },
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 5500,
@@ -26,6 +29,43 @@
     "final_sweep_schedule_expression": "cron(59 23 * * ? *)",
     "timezone": "Europe/Bratislava",
     "task_family": "roy-invoice-daily"
+  },
+  "operations_dashboard": {
+    "enabled": true,
+    "paid_statuses": [
+      "Platba online - zaplatené"
+    ],
+    "cod_statuses": [
+      "Čaká na vybavenie"
+    ],
+    "cod_payment_patterns": [
+      "dobierka",
+      "dobierkou",
+      "dobírka",
+      "dobírkou"
+    ],
+    "cod_payment_ids": [
+      "7",
+      "10"
+    ],
+    "personal_pickup_shipping_names": [
+      "Osobný odber na sklade"
+    ],
+    "personal_pickup_shipping_ids": [
+      "11"
+    ],
+    "pickup_action_statuses": [
+      "Čaká na vybavenie",
+      "Platba online - zaplatené",
+      "Pripravené k odberu"
+    ],
+    "shipped_status_name": "Odoslaná",
+    "shipped_status_id": 4,
+    "scan_max_pages": 30,
+    "scan_min_pages": 8,
+    "stop_after_empty_fulfillable_pages": 3,
+    "cache_ttl_seconds": 60,
+    "auto_refresh_seconds": 90
   },
   "inventory_model": {
     "enabled": true,
@@ -46,12 +86,17 @@
     "hero_reorder_cover_days": 45,
     "hero_brand_keys": [
       "wachman",
-      "maco_stop"
+      "maco_stop",
+      "roy"
     ],
     "lead_time_working_days_by_brand": {
-      "maco_stop": 10,
-      "wachman": 20,
-      "roy": 50
+      "maco_stop": 12,
+      "wachman": 30,
+      "roy": 30,
+      "verbatim": 3
+    },
+    "lead_time_working_days_by_family": {
+      "memory_storage": 3
     },
     "alert_exclusion_label_patterns": [
       "reklamacia",

@@ -204,9 +204,57 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Monitor the next scheduled VEVO and ROY daily reports and confirm they finish with normal QA/source-health status after the cache revalidation deployment.
+- Deploy the ROY operations dashboard after branch review/merge: build the refreshed ECR image, run App Runner deploy for service `biznisweb-roy-operations-dashboard`, verify `/production/roy` and `/api/operations/roy/live?refresh=1` with the hard-gate host/service/path context.
 
 ## 9) Change Log
+
+### 2026-05-26 (ROY operations dashboard implementation)
+- Branch: `codex/roy-live-dashboard`
+- Added a dedicated ROY operations dashboard behind `/production/roy`:
+  - Executive KPI deck is rendered from the existing ROY reporting payload.
+  - Daily / Weekly / Monthly / All-time KPI windows remain available.
+  - calendar month switching is generated from the reporting time series.
+  - the page auto-refreshes from live data every `90` seconds.
+- Added live ROY fulfillment data:
+  - `/api/operations/roy/live` fetches open BiznisWeb orders directly.
+  - fulfillable orders include `Platba online - zaplatené` and `Čaká na vybavenie` only when the payment price element is dobierka/dobírka.
+  - the public payload excludes customer PII.
+- Added personal pickup handling:
+  - personal pickup is detected from shipping `Osobný odber na sklade` / shipping id `11`.
+  - pickup rows render a checkbox action.
+  - `POST /api/operations/roy/pickup/<order_num>/ship` validates that the order is a ROY personal pickup in an allowed status, then changes BiznisWeb status to `Odoslaná` (`status_id=4`).
+- Added ROY inventory dashboard surfaces:
+  - home alerts use existing reporting inventory alert rows.
+  - stock tab exposes inventory cost value without VAT, retail value without VAT, risk rows, projected stockout date, reorder date, suggested reorder units, and lead-time context.
+- Updated ROY inventory lead times:
+  - Wachman: `30` working days.
+  - ROY: `30` working days.
+  - MACO STOP: `12` working days.
+  - SD / memory storage family: `3` working days.
+  - added family-level lead-time fallback for memory storage products.
+- App Runner workflows:
+  - deploy workflow is now project-aware instead of VEVO-only.
+  - ROY can use project-specific Basic Auth secret `ROY_LIVE_DASHBOARD_AUTH_PASSWORD`.
+  - App Runner can read latest reporting artifacts from S3 for the KPI/inventory payload.
+  - ROY deploy smoke asserts `/production/roy`, `roy-operations-dashboard`, KPI windows/months, inventory summary, and live order payload.
+  - ECR build workflow now tracks `roy_operations_dashboard.py` and runs `tests.test_roy_operations_dashboard`.
+- Local verification:
+  - `python -m py_compile live_dashboard_server.py roy_operations_dashboard.py export_orders.py`
+  - `python -m unittest`
+  - `python scripts\security_ci.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `git diff --check`
+  - YAML parse for updated workflows
+  - extracted App Runner deploy Bash script passes `bash -n`
+  - local `/production/roy` returned the `roy-operations-dashboard` marker, `Executive KPI deck`, and `Osobné odbery`
+  - local `/api/operations/roy/live?refresh=1` returned live ROY data with `fulfillable_orders=55`, `personal_pickups=1`, `kpi_months=8`, and inventory alert data
+  - in-app browser smoke verified KPI month switching, inventory tab rendering, and no console errors
+- Known issues / notes:
+  - in-app browser screenshot capture timed out through CDP, but DOM/UI verification passed.
+  - production deploy is not done yet in this branch.
+  - ROY App Runner deployment needs `ROY_LIVE_DASHBOARD_AUTH_PASSWORD` set to the intended password and an S3 bucket/prefix that exposes `dashboard_payload_latest.json` under `latest/`.
+- Next exact step:
+  - push the branch, create/merge PR, build the ECR image, then deploy App Runner service `biznisweb-roy-operations-dashboard` with path `/production/roy` and Basic Auth user `roy21`.
 
 ### 2026-05-11
 - Implemented smart reporting cache revalidation so delayed payment/status changes are not stuck in older daily cache buckets:
