@@ -1669,21 +1669,53 @@ class BizniWebExporter:
         }
 
     @staticmethod
-    def get_product_sku(ean: str, title: str) -> str:
+    def _normalize_product_identifier(value: Any) -> str:
+        if value is None or pd.isna(value):
+            return ""
+        text = str(value).strip()
+        if not text or text.lower() in {"nan", "none", "null"}:
+            return ""
+        if re.fullmatch(r"\d+\.0+", text):
+            text = text.split(".", 1)[0]
+        return text.upper()
+
+    @staticmethod
+    def get_product_sku(
+        ean: Any,
+        title: Any,
+        import_code: Any = None,
+        prefer_import_code: bool = False,
+    ) -> str:
         """
         Get a consistent product SKU/identifier.
-        Uses EAN if available, otherwise creates a short hash from the title.
+        Uses project-configured import code first, then EAN, otherwise a short title hash.
         """
-        if pd.notna(ean) and str(ean).strip() and str(ean).strip() != '':
-            return str(ean).strip()
+        import_code_candidate = BizniWebExporter._normalize_product_identifier(import_code)
+        if prefer_import_code and import_code_candidate:
+            return import_code_candidate
+        ean_candidate = BizniWebExporter._normalize_product_identifier(ean)
+        if ean_candidate:
+            return ean_candidate
+        if import_code_candidate:
+            return import_code_candidate
         # Create a short hash from the title (8 characters)
         title_hash = hashlib.md5(str(title).encode()).hexdigest()[:8].upper()
         return f"H-{title_hash}"
 
+    def _prefer_import_code_product_identity(self) -> bool:
+        config = self.project_settings.get("product_identity") or {}
+        return bool(config.get("prefer_import_code", False))
+
     def add_product_sku_column(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add a consistent product_sku column to the dataframe."""
+        prefer_import_code = self._prefer_import_code_product_identity()
         df['product_sku'] = df.apply(
-            lambda row: self.get_product_sku(row.get('item_ean'), row.get('item_label', 'Unknown')),
+            lambda row: self.get_product_sku(
+                row.get('item_ean'),
+                row.get('item_label', 'Unknown'),
+                import_code=row.get('item_import_code'),
+                prefer_import_code=prefer_import_code,
+            ),
             axis=1
         )
         return df
@@ -1703,8 +1735,18 @@ class BizniWebExporter:
         """Prepare project-scoped canonical product keys for downstream reporting analyses."""
         df['raw_item_label'] = df.get('item_label', '')
         df['raw_product_sku'] = df.get('product_sku', '')
+        df['raw_item_import_code'] = df.get('item_import_code', '')
         df['item_label'] = df['item_label'].apply(self.canonicalize_reporting_product_label)
-        df['product_sku'] = df['item_label'].apply(lambda label: self.get_product_sku('', label or 'Unknown'))
+        prefer_import_code = self._prefer_import_code_product_identity()
+        df['product_sku'] = df.apply(
+            lambda row: self.get_product_sku(
+                row.get('item_ean'),
+                row.get('item_label', 'Unknown'),
+                import_code=row.get('item_import_code'),
+                prefer_import_code=prefer_import_code,
+            ),
+            axis=1,
+        )
         return df
 
     @staticmethod
@@ -1751,21 +1793,28 @@ class BizniWebExporter:
         item_label: str,
         import_code: Any = None,
         warehouse_number: Any = None,
+        ean: Any = None,
     ) -> Tuple[Optional[float], Optional[str]]:
         product_sku_candidate = str(product_sku or "").strip()
-        import_code_candidate = str(import_code or "").strip()
+        import_code_candidate = self._normalize_product_identifier(import_code)
+        ean_candidate = self._normalize_product_identifier(ean)
         warehouse_number_candidate = str(warehouse_number or "").strip()
         title_candidate = str(item_label or "").strip()
+        legacy_title_sku_candidate = self.get_product_sku("", title_candidate)
 
         exact_compound_candidates = [
             (self._compose_expense_key(title_candidate, warehouse_number_candidate), "mapped_compound_key"),
             (self._compose_expense_key(title_candidate, import_code_candidate), "mapped_compound_key"),
+            (self._compose_expense_key(title_candidate, ean_candidate), "mapped_compound_key"),
             (self._compose_expense_key(title_candidate, product_sku_candidate), "mapped_compound_key"),
+            (self._compose_expense_key(title_candidate, legacy_title_sku_candidate), "mapped_compound_key"),
         ]
         exact_identifier_candidates = [
             (warehouse_number_candidate, "mapped_product_identifier"),
             (import_code_candidate, "mapped_product_identifier"),
+            (ean_candidate, "mapped_product_identifier"),
             (product_sku_candidate, "mapped_product_sku"),
+            (legacy_title_sku_candidate, "mapped_legacy_title_hash"),
         ]
         exact_candidates = (
             [*exact_compound_candidates, (title_candidate, "mapped_item_label"), *exact_identifier_candidates]
@@ -1787,14 +1836,24 @@ class BizniWebExporter:
                 "mapped_compound_key_normalized",
             ),
             (
+                self._compose_expense_key(normalized_title_candidate, self._normalize_match_text(ean)),
+                "mapped_compound_key_normalized",
+            ),
+            (
                 self._compose_expense_key(normalized_title_candidate, self._normalize_match_text(product_sku)),
+                "mapped_compound_key_normalized",
+            ),
+            (
+                self._compose_expense_key(normalized_title_candidate, self._normalize_match_text(legacy_title_sku_candidate)),
                 "mapped_compound_key_normalized",
             ),
         ]
         normalized_identifier_candidates = [
             (self._normalize_match_text(warehouse_number), "mapped_product_identifier_normalized"),
             (self._normalize_match_text(import_code), "mapped_product_identifier_normalized"),
+            (self._normalize_match_text(ean), "mapped_product_identifier_normalized"),
             (self._normalize_match_text(product_sku), "mapped_product_sku_normalized"),
+            (self._normalize_match_text(legacy_title_sku_candidate), "mapped_legacy_title_hash_normalized"),
         ]
         normalized_candidates = (
             [*normalized_compound_candidates, (normalized_title_candidate, "mapped_item_label_normalized"), *normalized_identifier_candidates]
@@ -1943,6 +2002,7 @@ class BizniWebExporter:
         max_retries = 3
         page_count = 0
         rows: List[Dict[str, Any]] = []
+        prefer_import_code = self._prefer_import_code_product_identity()
 
         while has_next_page:
             variables = {
@@ -1981,9 +2041,19 @@ class BizniWebExporter:
                 active = bool(product.get("active", False))
                 ean = str(product.get("ean") or "").strip()
                 import_code = str(product.get("import_code") or "").strip()
-                raw_product_sku = self.get_product_sku(ean, title)
+                raw_product_sku = self.get_product_sku(
+                    ean,
+                    title,
+                    import_code=import_code,
+                    prefer_import_code=prefer_import_code,
+                )
                 reporting_product = self.canonicalize_reporting_product_label(title) or title
-                reporting_sku = self.get_product_sku("", reporting_product or "Unknown")
+                reporting_sku = self.get_product_sku(
+                    ean,
+                    reporting_product or "Unknown",
+                    import_code=import_code,
+                    prefer_import_code=prefer_import_code,
+                )
 
                 product_price = product.get("price") or {}
                 product_final_price = product.get("final_price") or {}
@@ -2032,6 +2102,7 @@ class BizniWebExporter:
                         title,
                         import_code=import_code,
                         warehouse_number=warehouse_number,
+                        ean=ean,
                     )
                     inventory_cost_value = (
                         round(float(cost_per_unit) * available_quantity, 2)
@@ -3705,12 +3776,17 @@ class BizniWebExporter:
                     item_total_with_tax = item_total_without_tax * tax_multiplier
                 item_tax_amount = item_total_with_tax - item_total_without_tax
                 
-                # Get expense per item from mapping (using product_sku - EAN or hash)
+                # Get expense per item from mapping (using project product identity - import code, EAN, or hash)
                 item_label = item.get('item_label', '')
                 item_ean = item.get('ean', '')
                 item_import_code = item.get('import_code')
                 item_warehouse_number = item.get('warehouse_number')
-                product_sku = self.get_product_sku(item_ean, item_label)
+                product_sku = self.get_product_sku(
+                    item_ean,
+                    item_label,
+                    import_code=item_import_code,
+                    prefer_import_code=self._prefer_import_code_product_identity(),
+                )
 
                 # Optional exclusion for zero-priced gift lines (e.g. free promo gifts).
                 if (
@@ -3749,6 +3825,7 @@ class BizniWebExporter:
                         item_label,
                         import_code=item_import_code,
                         warehouse_number=item_warehouse_number,
+                        ean=item_ean,
                     )
                     if expense_per_item is None:
                         expense_per_item = (
@@ -4064,7 +4141,7 @@ class BizniWebExporter:
                 logger.warning(f"Removed {removed_rows} duplicated flattened rows before analytics")
                 print(f"Deduplication: removed {removed_rows} duplicated item rows")
 
-        # Add consistent product SKU column (EAN if available, otherwise hash of title)
+        # Add consistent product SKU column (project import code if enabled, then EAN, otherwise title hash)
         df = self.add_product_sku_column(df)
         # Add canonical order-level net revenue (unified revenue definition for report analytics)
         df = self.add_order_revenue_net_column(df)

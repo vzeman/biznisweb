@@ -26,11 +26,15 @@ def item_row(
     purchase_datetime: str,
     quantity: float,
     revenue: float,
+    item_import_code: str = "",
+    item_ean: str = "",
 ) -> dict:
     return {
         "order_num": order_num,
         "product_sku": product_sku,
         "item_label": item_label,
+        "item_import_code": item_import_code,
+        "item_ean": item_ean,
         "purchase_datetime": purchase_datetime,
         "item_quantity": quantity,
         "item_total_without_tax": revenue,
@@ -40,6 +44,55 @@ def item_row(
 
 
 class RoyInventoryModelTests(unittest.TestCase):
+    def test_roy_reporting_product_identity_prefers_import_code_across_languages(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        item_df = pd.DataFrame(
+            [
+                item_row(
+                    "R-HU",
+                    "H-HU",
+                    "Micro SD CARD 32GB adapterrel",
+                    "2026-05-01",
+                    1,
+                    12,
+                    item_import_code="12474",
+                ),
+                item_row(
+                    "R-CZ",
+                    "H-CZ",
+                    "Micro SD CARD 32GB s adaptérem",
+                    "2026-05-02",
+                    1,
+                    12,
+                    item_import_code="12474",
+                ),
+            ]
+        )
+
+        canonical_df = exporter.add_reporting_product_identity_columns(item_df)
+
+        self.assertEqual(["12474"], canonical_df["product_sku"].drop_duplicates().tolist())
+        self.assertEqual(["H-HU", "H-CZ"], canonical_df["raw_product_sku"].tolist())
+        self.assertEqual(["12474", "12474"], canonical_df["raw_item_import_code"].tolist())
+
+    def test_product_expense_mapping_falls_back_to_legacy_title_hash(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        legacy_title_hash = exporter.get_product_sku("", "Micro SD CARD 32GB adapterrel")
+        exporter.product_expenses_exact = {legacy_title_hash: 4.5}
+        exporter.product_expenses_normalized = {
+            exporter._normalize_match_text(legacy_title_hash): 4.5,
+        }
+
+        cost, source = exporter._resolve_product_expense(
+            product_sku="12474",
+            item_label="Micro SD CARD 32GB adapterrel",
+            import_code="12474",
+            ean="8590000000000",
+        )
+
+        self.assertEqual(4.5, cost)
+        self.assertEqual("mapped_legacy_title_hash", source)
+
     def test_restock_alerts_include_relevant_historical_products_without_inventory_rows(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
         item_df = pd.DataFrame(
