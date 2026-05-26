@@ -215,6 +215,7 @@ Bootstrap entrypoints:
   - ECR build run `26453851082` succeeded after the merge.
   - App Runner deploy run `26453973092` created/updated service `biznisweb-roy-operations-dashboard`, but failed smoke because the runtime had no ROY latest KPI artifact: `Executive KPI windows missing`.
   - First retry run `26455029828` failed before ECS refresh because the existing ROY task definition had `REPORT_S3_BUCKET` as a container secret and the workflow also added it as an environment variable.
+  - Second retry run `26455259337` reached ECS/Fargate refresh and logged hard-gate context (`private-ip=172.31.35.172`, task definition `roy-reporting-daily:4`, S3 latest artifact path), but the refresh task exited `1` because the workflow marker assertion checked obsolete payload keys (`dashboard.executive_kpis` / `dashboard.inventory_model`) instead of the actual ROY dashboard contract.
   - Hard-gate context from the failed deploy:
     - instance-id: `N/A (AWS App Runner managed service)`
     - private IP: `N/A (AWS App Runner managed service)`
@@ -229,6 +230,7 @@ Bootstrap entrypoints:
   - workflow grants the ROY reporting task role `s3:GetObject` / `s3:PutObject` access under `daily-reports/roy-sk/*`.
   - workflow registers a new ROY reporting task definition revision with `REPORT_S3_BUCKET` and `REPORT_S3_PREFIX` when needed, then updates the daily schedule target to that revision.
   - task definition mutation removes conflicting `REPORT_S3_BUCKET` / `REPORT_S3_PREFIX` container secrets before writing explicit environment variables.
+  - artifact marker validation now checks the same payload keys used by the ROY operations runtime: `dashboard.kpis`, `dashboard.series`, and `dashboard.roy_product_demand`.
   - before App Runner smoke, workflow runs a one-off ECS/Fargate ROY report refresh, verifies a localhost marker in the task logs, verifies S3 `latest/dashboard_payload_latest.json`, and asserts KPI windows/months plus inventory summary.
 - Local verification:
   - YAML parse for `.github/workflows/deploy-live-dashboard-apprunner.yml`

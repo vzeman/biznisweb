@@ -442,10 +442,11 @@ jobs:
           payload_path = data_dir / "dashboard_payload_latest.json"
           payload = json.loads(payload_path.read_text(encoding="utf-8"))
           dashboard = payload.get("dashboard") or {}
-          kpis = dashboard.get("executive_kpis") or {}
-          inventory = dashboard.get("inventory_model") or {}
-          assert kpis.get("windows"), "Executive KPI windows missing in generated payload"
-          assert kpis.get("months"), "Executive KPI months missing in generated payload"
+          kpis = dashboard.get("kpis") or {}
+          series = dashboard.get("series") or {}
+          inventory = dashboard.get("roy_product_demand") or {}
+          assert kpis.get("windows"), "KPI windows missing in generated payload"
+          assert series.get("dates"), "KPI source series dates missing in generated payload"
           assert inventory.get("summary"), "Inventory summary missing in generated payload"
           marker_dir = Path("/tmp/live-dashboard-marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
@@ -453,7 +454,7 @@ jobs:
               "marker": "LIVE_ARTIFACT_MARKER_OK",
               "project": project,
               "payload_path": str(payload_path),
-              "kpi_months": len(kpis.get("months") or []),
+              "kpi_series_days": len(series.get("dates") or []),
               "inventory_alerts": (inventory.get("summary") or {}).get("alert_delivery_count"),
           }
           (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
@@ -608,14 +609,15 @@ jobs:
           import json
           payload = json.load(open("/tmp/roy-dashboard-payload-latest.json", encoding="utf-8"))
           dashboard = payload.get("dashboard") or {}
-          kpis = dashboard.get("executive_kpis") or {}
-          inventory = dashboard.get("inventory_model") or {}
-          assert kpis.get("windows"), "S3 Executive KPI windows missing"
-          assert kpis.get("months"), "S3 Executive KPI months missing"
+          kpis = dashboard.get("kpis") or {}
+          series = dashboard.get("series") or {}
+          inventory = dashboard.get("roy_product_demand") or {}
+          assert kpis.get("windows"), "S3 KPI windows missing"
+          assert series.get("dates"), "S3 KPI source series dates missing"
           assert inventory.get("summary"), "S3 inventory summary missing"
           print(
               "ROY_LIVE_ARTIFACTS_OK:"
-              f"kpi_months={len(kpis.get('months') or [])}:"
+              f"kpi_series_days={len(series.get('dates') or [])}:"
               f"inventory_alerts={(inventory.get('summary') or {}).get('alert_delivery_count')}"
           )
           PY
