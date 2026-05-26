@@ -2675,3 +2675,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner live dashboard, then verify `/production/roy`
+
+### 2026-05-26 (ROY MACO STOP large set hmla-specific component)
+- Branch: `codex/roy-maco-stop-set-hmla-specific`
+- Change:
+  - tightened the MACO STOP set spray component pattern to `300ml hmla`, so sold sets do not add demand to `MACO STOP Extreme 300ml gel`
+  - extended the regression test with a `300ml gel` inventory row and asserted it is not included in set-driven alert/restock rows
+- Local verification:
+  - `python -m py_compile export_orders.py`
+  - `python -m unittest tests.test_roy_inventory_model tests.test_roy_operations_dashboard`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner live dashboard, then verify `/production/roy` with the hmla-specific rule

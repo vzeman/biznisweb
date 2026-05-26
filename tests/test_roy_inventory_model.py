@@ -157,6 +157,10 @@ class RoyInventoryModelTests(unittest.TestCase):
                     "MACO-EXTREME-300",
                     "Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla",
                 ),
+                inventory_row(
+                    "MACO-EXTREME-300-GEL",
+                    "Najsilnejší sprej na medvede MACO STOP Extreme 300ml gel",
+                ),
                 inventory_row("MACO-HOLSTER-300", "Puzdro MACO STOP na sprej 300ml"),
                 inventory_row("BEAR-BELL", "Zvonček na medvede, plašič medveďov"),
             ]
@@ -184,6 +188,8 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertTrue(expected_component_skus.issubset(set(restock_rows["sku"])))
         self.assertNotIn("SET-MACO-LARGE", set(alert_rows["sku"]))
         self.assertNotIn("SET-MACO-LARGE", set(restock_rows["sku"]))
+        self.assertNotIn("MACO-EXTREME-300-GEL", set(alert_rows["sku"]))
+        self.assertNotIn("MACO-EXTREME-300-GEL", set(restock_rows["sku"]))
 
         for component_sku in expected_component_skus:
             row = alert_rows.loc[alert_rows["sku"] == component_sku].iloc[0]
