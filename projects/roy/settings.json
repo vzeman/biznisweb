@@ -84,6 +84,11 @@
     },
     "reorder_cover_days": 30,
     "hero_reorder_cover_days": 45,
+    "default_lead_time_working_days": 5,
+    "include_historical_restock_products": true,
+    "historical_restock_min_orders": 3,
+    "historical_restock_min_units": 3,
+    "historical_restock_min_revenue": 50,
     "hero_brand_keys": [
       "wachman",
       "maco_stop",

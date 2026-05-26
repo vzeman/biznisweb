@@ -8662,6 +8662,25 @@ class BizniWebExporter:
             reorder_cover_days,
             int(inventory_config.get("hero_reorder_cover_days", watch_days_of_cover) or watch_days_of_cover),
         )
+        default_lead_time_working_days = max(
+            0,
+            int(inventory_config.get("default_lead_time_working_days", 0) or 0),
+        )
+        include_historical_restock_products = bool(
+            inventory_config.get("include_historical_restock_products", True)
+        )
+        historical_restock_min_orders = max(
+            1,
+            int(inventory_config.get("historical_restock_min_orders", 3) or 3),
+        )
+        historical_restock_min_units = max(
+            1.0,
+            float(inventory_config.get("historical_restock_min_units", 3) or 3),
+        )
+        historical_restock_min_revenue = max(
+            0.0,
+            float(inventory_config.get("historical_restock_min_revenue", 0) or 0),
+        )
         forecast_uplift_weights_raw = inventory_config.get("forecast_uplift_weights") or {}
         forecast_uplift_weights = {
             "high": float(forecast_uplift_weights_raw.get("high", 0.5) or 0.5),
@@ -9039,58 +9058,128 @@ class BizniWebExporter:
                 inventory_fetch_error = str(exc)[:240]
                 logger.warning("Roy inventory snapshot unavailable: %s", inventory_fetch_error)
 
-        if not inventory_frame.empty:
-            inventory_frame["inventory_cost_value"] = pd.to_numeric(
-                inventory_frame["inventory_cost_value"],
-                errors="coerce",
-            ).fillna(0.0)
-            inventory_frame["inventory_retail_value"] = pd.to_numeric(
-                inventory_frame["inventory_retail_value"],
-                errors="coerce",
-            ).fillna(0.0)
-            inventory_frame["mapped_inventory_retail_value"] = pd.to_numeric(
-                inventory_frame["mapped_inventory_retail_value"],
-                errors="coerce",
-            ).fillna(0.0)
-            inventory_frame["available_quantity"] = pd.to_numeric(
-                inventory_frame["available_quantity"],
-                errors="coerce",
-            ).fillna(0.0)
-            inventory_frame["available_quantity_raw"] = pd.to_numeric(
-                inventory_frame["available_quantity_raw"],
-                errors="coerce",
-            ).fillna(0.0)
-            inventory_frame["quantity"] = pd.to_numeric(
-                inventory_frame["quantity"],
-                errors="coerce",
-            ).fillna(0.0)
-            inventory_frame["quantity_raw"] = pd.to_numeric(
-                inventory_frame["quantity_raw"],
-                errors="coerce",
-            ).fillna(0.0)
-            inventory_frame["mapped_available_quantity"] = pd.to_numeric(
-                inventory_frame["mapped_available_quantity"],
-                errors="coerce",
-            ).fillna(0.0)
+        inventory_base_columns = [
+            "sku",
+            "product",
+            "active",
+            "warehouse_rows",
+            "available_quantity",
+            "available_quantity_raw",
+            "quantity",
+            "quantity_raw",
+            "mapped_available_quantity",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "mapped_inventory_retail_value",
+            "history_only_inventory_flag",
+        ]
 
-            inventory_products_df = (
-                inventory_frame.groupby("reporting_sku")
-                .agg(
-                    product=("reporting_product", "first"),
-                    active=("active", "max"),
-                    warehouse_rows=("reporting_sku", "size"),
-                    available_quantity=("available_quantity", "sum"),
-                    available_quantity_raw=("available_quantity_raw", "sum"),
-                    quantity=("quantity", "sum"),
-                    quantity_raw=("quantity_raw", "sum"),
-                    mapped_available_quantity=("mapped_available_quantity", "sum"),
-                    inventory_cost_value=("inventory_cost_value", "sum"),
-                    inventory_retail_value=("inventory_retail_value", "sum"),
-                    mapped_inventory_retail_value=("mapped_inventory_retail_value", "sum"),
+        if inventory_enabled and inventory_status != "error":
+            if not inventory_frame.empty:
+                inventory_frame["inventory_cost_value"] = pd.to_numeric(
+                    inventory_frame["inventory_cost_value"],
+                    errors="coerce",
+                ).fillna(0.0)
+                inventory_frame["inventory_retail_value"] = pd.to_numeric(
+                    inventory_frame["inventory_retail_value"],
+                    errors="coerce",
+                ).fillna(0.0)
+                inventory_frame["mapped_inventory_retail_value"] = pd.to_numeric(
+                    inventory_frame["mapped_inventory_retail_value"],
+                    errors="coerce",
+                ).fillna(0.0)
+                inventory_frame["available_quantity"] = pd.to_numeric(
+                    inventory_frame["available_quantity"],
+                    errors="coerce",
+                ).fillna(0.0)
+                inventory_frame["available_quantity_raw"] = pd.to_numeric(
+                    inventory_frame["available_quantity_raw"],
+                    errors="coerce",
+                ).fillna(0.0)
+                inventory_frame["quantity"] = pd.to_numeric(
+                    inventory_frame["quantity"],
+                    errors="coerce",
+                ).fillna(0.0)
+                inventory_frame["quantity_raw"] = pd.to_numeric(
+                    inventory_frame["quantity_raw"],
+                    errors="coerce",
+                ).fillna(0.0)
+                inventory_frame["mapped_available_quantity"] = pd.to_numeric(
+                    inventory_frame["mapped_available_quantity"],
+                    errors="coerce",
+                ).fillna(0.0)
+
+                inventory_products_df = (
+                    inventory_frame.groupby("reporting_sku")
+                    .agg(
+                        product=("reporting_product", "first"),
+                        active=("active", "max"),
+                        warehouse_rows=("reporting_sku", "size"),
+                        available_quantity=("available_quantity", "sum"),
+                        available_quantity_raw=("available_quantity_raw", "sum"),
+                        quantity=("quantity", "sum"),
+                        quantity_raw=("quantity_raw", "sum"),
+                        mapped_available_quantity=("mapped_available_quantity", "sum"),
+                        inventory_cost_value=("inventory_cost_value", "sum"),
+                        inventory_retail_value=("inventory_retail_value", "sum"),
+                        mapped_inventory_retail_value=("mapped_inventory_retail_value", "sum"),
+                    )
+                    .reset_index()
+                    .rename(columns={"reporting_sku": "sku"})
                 )
-                .reset_index()
-                .rename(columns={"reporting_sku": "sku"})
-            )
+                inventory_products_df["history_only_inventory_flag"] = False
+            else:
+                inventory_products_df = pd.DataFrame(columns=inventory_base_columns)
+
+            if include_historical_restock_products and not product_summary.empty:
+                relevant_historical_products = product_summary.loc[
+                    (product_summary["orders"] >= historical_restock_min_orders)
+                    & (product_summary["units"] >= historical_restock_min_units)
+                    & (product_summary["revenue"] >= historical_restock_min_revenue)
+                ].copy()
+                if not relevant_historical_products.empty:
+                    existing_skus = set(inventory_products_df["sku"].fillna("").astype(str))
+                    missing_historical_products = relevant_historical_products.loc[
+                        ~relevant_historical_products["product_sku"].fillna("").astype(str).isin(existing_skus)
+                    ]
+                    if not missing_historical_products.empty:
+                        history_only_rows = pd.DataFrame(
+                            {
+                                "sku": missing_historical_products["product_sku"].astype(str),
+                                "product": missing_historical_products["product"].astype(str),
+                                "active": False,
+                                "warehouse_rows": 0,
+                                "available_quantity": 0.0,
+                                "available_quantity_raw": 0.0,
+                                "quantity": 0.0,
+                                "quantity_raw": 0.0,
+                                "mapped_available_quantity": 0.0,
+                                "inventory_cost_value": 0.0,
+                                "inventory_retail_value": 0.0,
+                                "mapped_inventory_retail_value": 0.0,
+                                "history_only_inventory_flag": True,
+                            }
+                        )
+                        inventory_products_df = pd.concat(
+                            [inventory_products_df, history_only_rows[inventory_base_columns]],
+                            ignore_index=True,
+                        )
+
+            for column in (
+                "warehouse_rows",
+                "available_quantity",
+                "available_quantity_raw",
+                "quantity",
+                "quantity_raw",
+                "mapped_available_quantity",
+                "inventory_cost_value",
+                "inventory_retail_value",
+                "mapped_inventory_retail_value",
+            ):
+                inventory_products_df[column] = pd.to_numeric(
+                    inventory_products_df[column],
+                    errors="coerce",
+                ).fillna(0.0)
 
             inventory_products_df["cost_per_unit"] = np.where(
                 inventory_products_df["mapped_available_quantity"] > 0,
@@ -9173,6 +9262,11 @@ class BizniWebExporter:
                     errors="coerce",
                 ).fillna(0.0)
 
+            inventory_products_df["historical_restock_relevant_flag"] = (
+                (inventory_products_df["orders"] >= historical_restock_min_orders)
+                & (inventory_products_df["units"] >= historical_restock_min_units)
+                & (inventory_products_df["revenue"] >= historical_restock_min_revenue)
+            )
             inventory_products_df["last_sale"] = pd.to_datetime(inventory_products_df["last_sale"], errors="coerce")
             inventory_products_df["first_sale"] = pd.to_datetime(inventory_products_df["first_sale"], errors="coerce")
             inventory_products_df["forecast_confidence"] = (
@@ -9208,7 +9302,7 @@ class BizniWebExporter:
             )
             inventory_products_df["lead_time_working_days"] = brand_lead_time.where(
                 brand_lead_time > 0,
-                family_lead_time,
+                family_lead_time.where(family_lead_time > 0, default_lead_time_working_days),
             )
             inventory_products_df["lead_time_calendar_days"] = np.ceil(
                 inventory_products_df["lead_time_working_days"] * (7.0 / 5.0)
@@ -9340,6 +9434,15 @@ class BizniWebExporter:
                 inventory_products_df.loc[no_recent_units_mask, "effective_forecast_30d_units"]
                 * inventory_products_df.loc[no_recent_units_mask, "forecast_uplift_weight"]
             )
+            historical_unit_fallback_mask = (
+                inventory_products_df["historical_restock_relevant_flag"]
+                & (inventory_products_df["alert_30d_units"] <= 0)
+                & (inventory_products_df["effective_recent_90d_units"] > 0)
+            )
+            inventory_products_df.loc[historical_unit_fallback_mask, "alert_30d_units"] = (
+                inventory_products_df.loc[historical_unit_fallback_mask, "effective_recent_90d_units"]
+                * (30.0 / 90.0)
+            )
             inventory_products_df["daily_units_for_alert"] = inventory_products_df["alert_30d_units"] / 30.0
             inventory_products_df["days_of_cover"] = np.where(
                 inventory_products_df["daily_units_for_alert"] > 0,
@@ -9358,6 +9461,15 @@ class BizniWebExporter:
             inventory_products_df.loc[no_recent_revenue_mask, "alert_30d_revenue"] = (
                 inventory_products_df.loc[no_recent_revenue_mask, "forecast_30d_revenue"]
                 * inventory_products_df.loc[no_recent_revenue_mask, "forecast_uplift_weight"]
+            )
+            historical_revenue_fallback_mask = (
+                inventory_products_df["historical_restock_relevant_flag"]
+                & (inventory_products_df["alert_30d_revenue"] <= 0)
+                & (inventory_products_df["recent_90d_revenue"] > 0)
+            )
+            inventory_products_df.loc[historical_revenue_fallback_mask, "alert_30d_revenue"] = (
+                inventory_products_df.loc[historical_revenue_fallback_mask, "recent_90d_revenue"]
+                * (30.0 / 90.0)
             )
             inventory_products_df["alert_30d_profit_estimate"] = (
                 inventory_products_df["alert_30d_revenue"] * inventory_products_df["recent_margin_with_fixed_pct"] / 100.0
@@ -9630,6 +9742,7 @@ class BizniWebExporter:
             alert_rows_df = (
                 inventory_products_df.loc[
                     inventory_products_df["risk_30d_flag"]
+                    & inventory_products_df["historical_restock_relevant_flag"]
                     & ~inventory_products_df["alert_excluded_flag"]
                     & (inventory_products_df["alert_30d_units"] > 0)
                 ]
@@ -9648,6 +9761,7 @@ class BizniWebExporter:
             revenue_at_risk_rows_df = (
                 inventory_products_df.loc[
                     inventory_products_df["risk_45d_flag"]
+                    & inventory_products_df["historical_restock_relevant_flag"]
                     & ~inventory_products_df["alert_excluded_flag"]
                     & (inventory_products_df["alert_30d_revenue"] > 0)
                 ]
@@ -9657,6 +9771,7 @@ class BizniWebExporter:
             restock_priority_rows_df = (
                 inventory_products_df.loc[
                     inventory_products_df["risk_45d_flag"]
+                    & inventory_products_df["historical_restock_relevant_flag"]
                     & ~inventory_products_df["alert_excluded_flag"]
                     & (inventory_products_df["alert_30d_units"] > 0)
                 ]
@@ -9746,6 +9861,9 @@ class BizniWebExporter:
                 "inventory_fetch_error": inventory_fetch_error,
                 "inventory_snapshot_date": snapshot_ts.strftime("%Y-%m-%d"),
                 "inventory_products_total": int(len(inventory_products_df)),
+                "history_only_inventory_products": int(inventory_products_df["history_only_inventory_flag"].sum()) if not inventory_products_df.empty else 0,
+                "historical_restock_relevant_products": int(inventory_products_df["historical_restock_relevant_flag"].sum()) if not inventory_products_df.empty else 0,
+                "default_lead_time_working_days": int(default_lead_time_working_days),
                 "inventory_products_with_stock": int((inventory_products_df["available_quantity"] > 0).sum()) if not inventory_products_df.empty else 0,
                 "inventory_active_products_with_stock": int(
                     ((inventory_products_df["active"] == True) & (inventory_products_df["available_quantity"] > 0)).sum()
