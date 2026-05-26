@@ -253,6 +253,7 @@ Bootstrap entrypoints:
 - Known issues / notes:
   - in-app browser screenshot capture timed out through CDP, but DOM/UI verification passed.
   - PR checks are green: `env-check`, `secret-scan`, `security-baseline`, `observability-baseline`.
+  - GitHub Actions secret `ROY_LIVE_DASHBOARD_AUTH_PASSWORD` was set on `2026-05-26`; the requested runtime username/password is `roy21` / secret-backed password value.
   - production deploy is not done yet in this branch.
   - ROY App Runner deployment needs `ROY_LIVE_DASHBOARD_AUTH_PASSWORD` set to the intended password and an S3 bucket/prefix that exposes `dashboard_payload_latest.json` under `latest/`.
 - Next exact step:
