@@ -2547,6 +2547,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-26 (ROY live dashboard inventory row payload limits)
 - Branch: `codex/roy-dashboard-row-limits`
+- PR: `https://github.com/vzeman/biznisweb/pull/87` (merged to `main` as `6a2175701d42d5ae6ddcb1a25df405c9f597d29a`)
 - Change:
   - modern ROY dashboard payload now serializes up to `160` inventory rows, `120` stock alert rows, and `120` restock priority rows
   - live ROY dashboard UI now renders up to `100` stock alert rows and `100` inventory rows when enough rows exist
@@ -2555,5 +2556,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `python -m py_compile dashboard_modern.py live_dashboard_server.py roy_operations_dashboard.py export_orders.py`
   - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
   - `git diff --check`
+- Build/deploy:
+  - ECR build run `26461410451` succeeded
+  - App Runner deploy run `26461516011` succeeded for service `biznisweb-roy-operations-dashboard`
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+- Public verification:
+  - authenticated HTML returned `roy-operations-dashboard`, `Executive KPI deck`, `visibleInventoryAlertLimit = 100`, and `visibleInventoryLimit = 100`
+  - authenticated API returned `marker=roy-operations-dashboard`, `fulfillable_orders=58`, `personal_pickups=1`, `auto_refresh_seconds=90`, `kpi_months=9`
+  - inventory API returned `inventory_products_with_stock=610`, `inventory_rows=160`, `inventory_alerts=23`, `alert_rows=23`, `history_only_inventory_products=15`, `historical_restock_relevant_products=79`, `default_lead_time_working_days=5`, `restock_rows=26`
+  - browser UI smoke verified overview `Skladové upozornenia` renders `23` alert rows and the `Sklad` tab renders `100` inventory rows with meta `610 produktov so skladom`
 - Next exact step:
-  - open/merge PR, rebuild ECR, deploy ROY App Runner, verify public `/production/roy` API returns at least `100` inventory rows when the source snapshot has enough stocked products
+  - review real alert quality in `/production/roy`; adjust `historical_restock_min_revenue` upward if low-value accessories create too much noise
