@@ -204,7 +204,7 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- ROY live dashboard is deployed. Next exact step: share `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy` with Basic Auth user `roy21`; if a branded URL is wanted, attach an App Runner custom domain.
+- VEVO and ROY reporting import-code product identity is merged and production-smoke verified. Next exact step: watch the next scheduled daily reports once and confirm the generated report artifacts still show expected product grouping.
 
 ## 9) Change Log
 
@@ -2613,4 +2613,46 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
   - `git diff --check`
 - Next exact step:
-  - open/merge PR, rebuild ECR, then run production reporting smoke for `all` to verify VEVO and ROY reporting tasks on the production-equivalent host
+  - completed by the production verification entry below
+
+### 2026-05-26 (VEVO and ROY reporting import-code identity production verified)
+- Branch: `codex/reporting-import-code-deploy-state`
+- Code PR merged:
+  - PR: `https://github.com/vzeman/biznisweb/pull/91`
+  - merge commit: `b86a4b37c2850a9488b9be359958cc4c2dd1884d`
+- Guarded production image refresh completed:
+  - workflow: `Build and Push ECR`
+  - run: `26465206487`
+  - ECR image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - pushed digest: `sha256:1a6b52ae53ba299b7b8b7e5cc606e44823a78e164869ae21e538bdc6dc19535e`
+- Production-equivalent host smoke completed:
+  - workflow: `Production Reporting Smoke`
+  - run: `26465310874`
+  - input: `project=all`, `marker=import-code-product-identity`
+- VEVO hard-gate context:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.24.109`
+  - service name: `vevo-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:5`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/00b135660f284ed78e4d9be4661e8395`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - UI path: `http://127.0.0.1:8787/dashboard/vevo`
+- VEVO verification:
+  - `curl localhost` marker returned `LOCALHOST_MARKER_OK` with `daily_profit_rows=388`, `positive_days=250`, `negative_days=138`
+  - production board marker returned `PRODUCTION_BOARD_OK` with `active_orders=23`, `manufacturing_products=22`, `units_to_make=46.0`, `customer_fields_returned=0`
+  - UI smoke returned `UI_SMOKE_OK:vevo:daily-profit-loss` and `UI_SMOKE_OK:vevo:production-board`
+  - final host marker: `PRODUCTION_SMOKE_OK:vevo:00b135660f284ed78e4d9be4661e8395:172.31.24.109`
+- ROY hard-gate context:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.18.226`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:4`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/7bae84d5e8364db3b0cd3f00d2c63639`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - UI path: `http://127.0.0.1:8787/dashboard/roy`
+- ROY verification:
+  - `curl localhost` marker returned `LOCALHOST_MARKER_OK` with `daily_profit_rows=244`, `positive_days=159`, `negative_days=85`
+  - UI smoke returned `UI_SMOKE_OK:roy:daily-profit-loss`
+  - final host marker: `PRODUCTION_SMOKE_OK:roy:7bae84d5e8364db3b0cd3f00d2c63639:172.31.18.226`
+- Next exact step:
+  - watch the next scheduled daily reports once and confirm the generated report artifacts still show expected product grouping
