@@ -2519,3 +2519,13 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - authenticated API returned `active_orders=26`, `manufacturing_products=21`, `units_to_make=48.0`, `orders_scanned=300`
 - Next exact step:
   - test the public URL on an actual phone; if a branded URL is wanted, attach a custom App Runner domain such as `vyroba.vevo.sk`
+
+### 2026-05-26 (ROY inventory tab 100 visible products)
+- Branch: `codex/roy-inventory-100`
+- Change:
+  - `/production/roy` inventory tab now renders the first `100` stock products in the browser instead of the previous `80`
+  - added a dashboard HTML regression assertion for the `visibleInventoryLimit = 100` marker
+- Local verification:
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
+- Next exact step:
+  - open PR, merge to `main`, deploy the live dashboard App Runner service, then verify the public ROY URL shows at least 100 inventory rows when enough rows exist
