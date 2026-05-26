@@ -2573,6 +2573,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-05-26 (ROY product identity uses BiznisWeb import code)
 - Branch: `codex/roy-import-code-product-identity`
+- PR: `https://github.com/vzeman/biznisweb/pull/89` (merged to `main` as `f78bb07824e1f50442f0679a39ffb600ea7b1f8a`)
 - Change:
   - ROY reporting now prefers BiznisWeb `import_code` as the canonical `product_sku` before EAN/title-hash fallback
   - same import code now groups translated product names together, e.g. HU/CZ/SK Micro SD variants become one product when the import code matches
@@ -2584,5 +2585,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `python scripts\reporting_qa_smoke.py`
   - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model`
   - `git diff --check`
+- Build/deploy:
+  - ECR build run `26463672888` succeeded
+  - App Runner deploy run `26463770481` succeeded for service `biznisweb-roy-operations-dashboard`
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+- Public verification:
+  - authenticated API returned `marker=roy-operations-dashboard`, `inventory_rows=160`, `alert_rows=18`, `restock_rows=21`, `inventory_products_with_stock=610`
+  - SKU identity check returned first inventory SKUs `WD0021,11001,11005,R99003,21003,R99002,12474,F_1472,21002,14832`
+  - confirmed SKU `12474` is present and maps to `Fotopasca Wachman Solar Pro`
+  - browser UI smoke verified overview `Skladové upozornenia` renders `18` alert rows and `Sklad` tab renders `100` rows with first visible SKU `WD0021`
 - Next exact step:
-  - open/merge PR, rebuild ECR, deploy ROY App Runner, then verify public API shows import-code SKU values for ROY inventory/restock rows
+  - review live restock grouping for Micro SD language variants and tune any remaining aliases only where BiznisWeb import code is missing
