@@ -248,7 +248,12 @@ jobs:
               item.get("name"): item.get("value")
               for item in task_def["containerDefinitions"][0].get("environment", [])
           }
-          print("true" if env.get("REPORT_S3_BUCKET") != bucket or env.get("REPORT_S3_PREFIX") != prefix else "false")
+          secret_names = {
+              item.get("name")
+              for item in task_def["containerDefinitions"][0].get("secrets", [])
+          }
+          has_conflicting_secret = bool({"REPORT_S3_BUCKET", "REPORT_S3_PREFIX"} & secret_names)
+          print("true" if has_conflicting_secret or env.get("REPORT_S3_BUCKET") != bucket or env.get("REPORT_S3_PREFIX") != prefix else "false")
           PY
             )"
             if [[ "${NEEDS_REPORT_TASK_UPDATE}" == "true" ]]; then
@@ -285,6 +290,11 @@ jobs:
               {"name": "REPORT_S3_PREFIX", "value": prefix},
           ])
           container["environment"] = env
+          container["secrets"] = [
+              item
+              for item in container.get("secrets", [])
+              if item.get("name") not in {"REPORT_S3_BUCKET", "REPORT_S3_PREFIX"}
+          ]
           json.dump(task, sys.stdout)
           PY
               REGISTERED_TASK_DEFINITION_ARN="$(aws ecs register-task-definition \
