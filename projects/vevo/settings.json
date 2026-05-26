@@ -11,6 +11,9 @@
     "timezone": "Europe/Bratislava",
     "task_family": "vevo-reporting-daily"
   },
+  "product_identity": {
+    "prefer_import_code": true
+  },
   "expense_match_mode": "title_first",
   "product_name_aliases_file": "product_name_aliases.json",
   "production_board": {
