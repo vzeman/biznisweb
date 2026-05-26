@@ -214,6 +214,7 @@ Bootstrap entrypoints:
   - PR `#80` was merged to `main` as `32ba4e05a86cb909253b42ca1e5f5f9157dd012c`.
   - ECR build run `26453851082` succeeded after the merge.
   - App Runner deploy run `26453973092` created/updated service `biznisweb-roy-operations-dashboard`, but failed smoke because the runtime had no ROY latest KPI artifact: `Executive KPI windows missing`.
+  - First retry run `26455029828` failed before ECS refresh because the existing ROY task definition had `REPORT_S3_BUCKET` as a container secret and the workflow also added it as an environment variable.
   - Hard-gate context from the failed deploy:
     - instance-id: `N/A (AWS App Runner managed service)`
     - private IP: `N/A (AWS App Runner managed service)`
@@ -227,6 +228,7 @@ Bootstrap entrypoints:
   - workflow ensures the bucket exists with public access blocked and AES256 server-side encryption enabled.
   - workflow grants the ROY reporting task role `s3:GetObject` / `s3:PutObject` access under `daily-reports/roy-sk/*`.
   - workflow registers a new ROY reporting task definition revision with `REPORT_S3_BUCKET` and `REPORT_S3_PREFIX` when needed, then updates the daily schedule target to that revision.
+  - task definition mutation removes conflicting `REPORT_S3_BUCKET` / `REPORT_S3_PREFIX` container secrets before writing explicit environment variables.
   - before App Runner smoke, workflow runs a one-off ECS/Fargate ROY report refresh, verifies a localhost marker in the task logs, verifies S3 `latest/dashboard_payload_latest.json`, and asserts KPI windows/months plus inventory summary.
 - Local verification:
   - YAML parse for `.github/workflows/deploy-live-dashboard-apprunner.yml`
