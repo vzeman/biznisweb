@@ -204,7 +204,7 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- VEVO and ROY reporting import-code product identity is merged and production-smoke verified. Next exact step: watch the next scheduled daily reports once and confirm the generated report artifacts still show expected product grouping.
+- ROY MACO STOP large set component demand is deployed to the live operations dashboard. Next exact step: monitor the next scheduled ROY report once and confirm the alert counts stay consistent with the live dashboard.
 
 ## 9) Change Log
 
@@ -2689,3 +2689,41 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner live dashboard, then verify `/production/roy` with the hmla-specific rule
+
+### 2026-05-26 (ROY MACO STOP large set component demand deployed)
+- Code merged:
+  - PR `#93`: `Map ROY MACO STOP set demand to components`, merge commit `c0c0f13`
+  - PR `#94`: `Limit ROY MACO STOP set spray match to hmla`, merge commit `08d79b4`
+- Final guarded ECR refresh:
+  - workflow: `Build and Push ECR`
+  - run: `26469696698`
+  - image digest: `sha256:519d464638a76bf0d39a4e04139592682deb881893207753f841e8583e5baf5b`
+  - note: PR `#94` did not trigger the ECR path workflow automatically, so the build was manually dispatched from `main`
+- Final ROY live dashboard deploy/refresh:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26469803008`
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.28.173`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:4`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/fef8c86b56284f73955f28b00748a107`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+  - localhost marker: `LIVE_ARTIFACT_MARKER_OK`, `kpi_series_days=244`, `inventory_alerts=19`
+- App Runner hard-gate:
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - image identifier: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:519d464638a76bf0d39a4e04139592682deb881893207753f841e8583e5baf5b`
+  - health path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - public smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=61:personal_pickups=1:inventory_alerts=19.0:kpi_months=9`
+- Public API verification on `/api/operations/roy/live?refresh=1`:
+  - `set_alert_or_restock_count=0`
+  - `hmla_alert_or_restock_count=2`
+  - `gel_alert_or_restock_count=0`
+  - `puzdro_alert_or_restock_count=2`
+  - `Zvonček na medvede, plašič medveďov` is present in inventory with `available_quantity=368`, so it is healthy and not an urgent alert
+- Next exact step:
+  - monitor the next scheduled ROY report once and confirm the alert counts stay consistent with the live dashboard
