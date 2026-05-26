@@ -204,9 +204,50 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Review and merge ROY App Runner S3 artifact fix branch, rebuild ECR, then redeploy App Runner service `biznisweb-roy-operations-dashboard`; verify the ECS/Fargate artifact refresh marker, S3 `dashboard_payload_latest.json`, `/production/roy`, and `/api/operations/roy/live?refresh=1` with the hard-gate host/service/path context.
+- ROY live dashboard is deployed. Next exact step: share `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy` with Basic Auth user `roy21`; if a branded URL is wanted, attach an App Runner custom domain.
 
 ## 9) Change Log
+
+### 2026-05-26 (ROY App Runner live dashboard deployed)
+- Merged deployment fix PRs into `main`:
+  - PR `#81`: S3 latest artifact provisioning / refresh workflow.
+  - PR `#82`: `REPORT_S3_BUCKET` / `REPORT_S3_PREFIX` ECS secret-vs-env conflict fix.
+  - PR `#83`: deploy-time artifact validation aligned to the actual ROY dashboard payload contract.
+- Successful deployment:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26456807209`
+  - result: `success`
+  - App Runner service name: `biznisweb-roy-operations-dashboard`
+  - App Runner service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - public URL: `https://qvfzvh82c3.eu-central-1.awsapprunner.com`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - API path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/api/operations/roy/live?refresh=1`
+  - image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+  - image digest: `sha256:47b5b883000827514df4173eb412224068c22b7f120f513806214db2c3cfe1a8`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+- ECS/Fargate hard-gate context from the successful artifact refresh:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.45.147`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:4`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/faab2d506f9e4bbcaef550cda3a68b47`
+  - localhost marker path: `http://127.0.0.1:8000/marker.json`
+  - S3 latest artifact verification passed inside the deploy workflow.
+- Public verification:
+  - `/health` returned OK.
+  - unauthenticated `/production/roy` returned HTTP `401`.
+  - authenticated `/production/roy` returned `roy-operations-dashboard`, `Executive KPI deck`, and `Osobné odbery` markers.
+  - authenticated `/api/operations/roy/live?refresh=1` returned:
+    - `fulfillable_orders=55`
+    - `personal_pickups=1`
+    - `auto_refresh_seconds=90`
+    - `kpi_months=9`
+    - `inventory_alerts=24`
+  - browser UI smoke verified clean Basic Auth URL loading, month switch to `2026-04`, and `Sklad` tab rendering with inventory cost and retail values.
+  - browser screenshot capture timed out through CDP twice, but DOM/UI and API verification passed.
+- Operational conclusion:
+  - ROY live operations dashboard is available through App Runner with Basic Auth.
+  - daily ROY reporting schedule now targets task definition revision `roy-reporting-daily:4`, which writes latest dashboard artifacts to S3 for the live dashboard.
 
 ### 2026-05-26 (ROY App Runner S3 artifact deploy fix)
 - Branch: `codex/roy-live-dashboard-s3-fix`
