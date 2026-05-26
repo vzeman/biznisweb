@@ -204,9 +204,38 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- Review and merge draft PR `#80`, then build the refreshed ECR image and deploy App Runner service `biznisweb-roy-operations-dashboard`; verify `/production/roy` and `/api/operations/roy/live?refresh=1` with the hard-gate host/service/path context.
+- Review and merge ROY App Runner S3 artifact fix branch, rebuild ECR, then redeploy App Runner service `biznisweb-roy-operations-dashboard`; verify the ECS/Fargate artifact refresh marker, S3 `dashboard_payload_latest.json`, `/production/roy`, and `/api/operations/roy/live?refresh=1` with the hard-gate host/service/path context.
 
 ## 9) Change Log
+
+### 2026-05-26 (ROY App Runner S3 artifact deploy fix)
+- Branch: `codex/roy-live-dashboard-s3-fix`
+- Context:
+  - PR `#80` was merged to `main` as `32ba4e05a86cb909253b42ca1e5f5f9157dd012c`.
+  - ECR build run `26453851082` succeeded after the merge.
+  - App Runner deploy run `26453973092` created/updated service `biznisweb-roy-operations-dashboard`, but failed smoke because the runtime had no ROY latest KPI artifact: `Executive KPI windows missing`.
+  - Hard-gate context from the failed deploy:
+    - instance-id: `N/A (AWS App Runner managed service)`
+    - private IP: `N/A (AWS App Runner managed service)`
+    - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+    - public URL: `https://qvfzvh82c3.eu-central-1.awsapprunner.com`
+    - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+    - artifact path was invalid: `s3:///daily-reports/roy-sk/latest/`
+- Fix in progress:
+  - deploy workflow now resolves the scheduled ROY reporting task definition from EventBridge Scheduler before deployment.
+  - if no S3 bucket is configured, ROY deploy defaults to `biznisweb-reporting-artifacts-919341186960-eu-central-1`.
+  - workflow ensures the bucket exists with public access blocked and AES256 server-side encryption enabled.
+  - workflow grants the ROY reporting task role `s3:GetObject` / `s3:PutObject` access under `daily-reports/roy-sk/*`.
+  - workflow registers a new ROY reporting task definition revision with `REPORT_S3_BUCKET` and `REPORT_S3_PREFIX` when needed, then updates the daily schedule target to that revision.
+  - before App Runner smoke, workflow runs a one-off ECS/Fargate ROY report refresh, verifies a localhost marker in the task logs, verifies S3 `latest/dashboard_payload_latest.json`, and asserts KPI windows/months plus inventory summary.
+- Local verification:
+  - YAML parse for `.github/workflows/deploy-live-dashboard-apprunner.yml`
+  - extracted deploy Bash script passes `bash -n`
+  - `python -m unittest`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- Next exact step:
+  - push the fix branch, open/merge PR, rebuild ECR if needed, rerun the ROY App Runner deploy workflow, then verify the live URL with Basic Auth `roy21`.
 
 ### 2026-05-26 (ROY operations dashboard implementation)
 - Branch: `codex/roy-live-dashboard`
