@@ -547,7 +547,7 @@ def build_inventory_snapshot(report_payload: Dict[str, Any]) -> Dict[str, Any]:
     summary = roy_inventory.get("summary") if isinstance(roy_inventory.get("summary"), dict) else {}
     return {
         "summary": summary or {},
-        "alert_rows": list(roy_inventory.get("alert_rows") or [])[:80],
+        "alert_rows": list(roy_inventory.get("alert_rows") or [])[:120],
         "stock_risk_rows": list(roy_inventory.get("stock_risk_rows") or [])[:120],
         "inventory_rows": list(roy_inventory.get("inventory_rows") or [])[:160],
         "restock_priority_rows": list(roy_inventory.get("restock_priority_rows") or [])[:120],
