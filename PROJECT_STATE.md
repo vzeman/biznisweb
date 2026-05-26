@@ -2570,3 +2570,19 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - browser UI smoke verified overview `Skladové upozornenia` renders `23` alert rows and the `Sklad` tab renders `100` inventory rows with meta `610 produktov so skladom`
 - Next exact step:
   - review real alert quality in `/production/roy`; adjust `historical_restock_min_revenue` upward if low-value accessories create too much noise
+
+### 2026-05-26 (ROY product identity uses BiznisWeb import code)
+- Branch: `codex/roy-import-code-product-identity`
+- Change:
+  - ROY reporting now prefers BiznisWeb `import_code` as the canonical `product_sku` before EAN/title-hash fallback
+  - same import code now groups translated product names together, e.g. HU/CZ/SK Micro SD variants become one product when the import code matches
+  - inventory snapshot grouping now uses the same import-code-first product identity as historical demand
+  - product expense lookup keeps compatibility with warehouse number, import code, EAN, current SKU, and legacy title-hash keys so existing ROY cost mappings still resolve
+  - added regression tests for import-code identity and legacy cost fallback
+- Local verification:
+  - `python -m py_compile export_orders.py live_dashboard_server.py roy_operations_dashboard.py dashboard_modern.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR, deploy ROY App Runner, then verify public API shows import-code SKU values for ROY inventory/restock rows
