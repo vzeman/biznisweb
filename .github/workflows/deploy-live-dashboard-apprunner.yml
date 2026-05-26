@@ -3,6 +3,10 @@ name: Deploy Live Dashboard App Runner
 on:
   workflow_dispatch:
     inputs:
+      project:
+        description: Reporting project slug
+        required: true
+        default: vevo
       service_name:
         description: App Runner service name
         required: true
@@ -11,6 +15,14 @@ on:
         description: Basic Auth username
         required: true
         default: vevo
+      s3_bucket:
+        description: Optional S3 bucket for latest report artifacts
+        required: false
+        default: ""
+      s3_prefix:
+        description: Optional S3 prefix for latest report artifacts
+        required: false
+        default: ""
 
 env:
   AWS_REGION: eu-central-1
@@ -37,11 +49,17 @@ jobs:
       - name: Deploy App Runner service
         shell: bash
         env:
+          PROJECT: ${{ inputs.project }}
           SERVICE_NAME: ${{ inputs.service_name }}
           AUTH_USER: ${{ inputs.auth_user }}
-          REQUESTED_AUTH_PASSWORD: ${{ secrets.LIVE_DASHBOARD_AUTH_PASSWORD }}
+          DEFAULT_AUTH_PASSWORD: ${{ secrets.LIVE_DASHBOARD_AUTH_PASSWORD }}
+          ROY_AUTH_PASSWORD: ${{ secrets.ROY_LIVE_DASHBOARD_AUTH_PASSWORD }}
+          INPUT_S3_BUCKET: ${{ inputs.s3_bucket }}
+          INPUT_S3_PREFIX: ${{ inputs.s3_prefix }}
         run: |
           set -euo pipefail
+          PROJECT="$(printf '%s' "${PROJECT}" | tr '[:upper:]' '[:lower:]')"
+          TASK_FAMILY="${PROJECT}-reporting-daily"
 
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
           IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
@@ -54,7 +72,7 @@ jobs:
           IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
 
           aws ecs describe-task-definition \
-            --task-definition vevo-reporting-daily \
+            --task-definition "${TASK_FAMILY}" \
             --region "${AWS_REGION}" > task-definition.json
 
           BIZNISWEB_TOKEN_REF="$(python - <<'PY'
@@ -65,7 +83,7 @@ jobs:
               if secret.get("name") == "BIZNISWEB_API_TOKEN":
                   print(secret["valueFrom"])
                   raise SystemExit(0)
-          raise SystemExit("BIZNISWEB_API_TOKEN secret not found in vevo-reporting-daily")
+          raise SystemExit("BIZNISWEB_API_TOKEN secret not found in task definition")
           PY
           )"
           if [[ "${BIZNISWEB_TOKEN_REF}" != arn:* ]]; then
@@ -94,7 +112,43 @@ jobs:
           PY
           )"
 
-          PASSWORD_PARAM="/biznisweb/live-dashboard/basic-auth-password"
+          REPORT_S3_BUCKET_VALUE="${INPUT_S3_BUCKET:-}"
+          REPORT_S3_PREFIX_VALUE="${INPUT_S3_PREFIX:-}"
+          if [[ -z "${REPORT_S3_BUCKET_VALUE}" || -z "${REPORT_S3_PREFIX_VALUE}" ]]; then
+            python - <<'PY' > /tmp/task-env.json
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          env = {item.get("name"): item.get("value") for item in task_def["containerDefinitions"][0].get("environment", [])}
+          print(json.dumps(env))
+          PY
+            if [[ -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
+              REPORT_S3_BUCKET_VALUE="$(python - <<'PY'
+          import json
+          env = json.load(open("/tmp/task-env.json", encoding="utf-8"))
+          print(env.get("REPORT_S3_BUCKET") or "")
+          PY
+              )"
+            fi
+            if [[ -z "${REPORT_S3_PREFIX_VALUE}" ]]; then
+              REPORT_S3_PREFIX_VALUE="$(python - "${PROJECT}" <<'PY'
+          import json, sys
+          project = sys.argv[1]
+          env = json.load(open("/tmp/task-env.json", encoding="utf-8"))
+          print(env.get("REPORT_S3_PREFIX") or ("daily-reports/roy-sk" if project == "roy" else f"daily-reports/{project}"))
+          PY
+              )"
+            fi
+          fi
+
+          REQUESTED_AUTH_PASSWORD="${DEFAULT_AUTH_PASSWORD:-}"
+          if [[ "${PROJECT}" == "roy" && -n "${ROY_AUTH_PASSWORD:-}" ]]; then
+            REQUESTED_AUTH_PASSWORD="${ROY_AUTH_PASSWORD}"
+          fi
+
+          PASSWORD_PARAM="/biznisweb/live-dashboard/${PROJECT}/basic-auth-password"
+          if [[ "${PROJECT}" == "vevo" ]]; then
+            PASSWORD_PARAM="/biznisweb/live-dashboard/basic-auth-password"
+          fi
           if [[ -n "${REQUESTED_AUTH_PASSWORD:-}" ]]; then
             echo "::add-mask::${REQUESTED_AUTH_PASSWORD}"
             aws ssm put-parameter \
@@ -196,6 +250,19 @@ jobs:
             ]
           }
           JSON
+          if [[ -n "${REPORT_S3_BUCKET_VALUE:-}" ]]; then
+            python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" <<'PY'
+          import json, sys
+          bucket, prefix = sys.argv[1], sys.argv[2].strip("/")
+          policy = json.load(open("instance-policy.json", encoding="utf-8"))
+          policy["Statement"].append({
+              "Effect": "Allow",
+              "Action": ["s3:GetObject"],
+              "Resource": [f"arn:aws:s3:::{bucket}/{prefix}/latest/*"],
+          })
+          json.dump(policy, open("instance-policy.json", "w", encoding="utf-8"), indent=2)
+          PY
+          fi
 
           aws iam put-role-policy \
             --role-name "${INSTANCE_ROLE_NAME}" \
@@ -212,10 +279,13 @@ jobs:
                 "Port": "8080",
                 "StartCommand": "python live_dashboard_server.py --host 0.0.0.0 --port 8080",
                 "RuntimeEnvironmentVariables": {
-                  "REPORT_PROJECT": "vevo",
+                  "REPORT_PROJECT": "${PROJECT}",
                   "REPORT_SKIP_PROJECT_ENV": "true",
                   "LIVE_DASHBOARD_AUTH_USER": "${AUTH_USER}",
-                  "BIZNISWEB_API_TIMEOUT_SEC": "30"
+                  "BIZNISWEB_API_TIMEOUT_SEC": "30",
+                  "AWS_REGION": "${AWS_REGION}",
+                  "LIVE_DASHBOARD_S3_BUCKET": "${REPORT_S3_BUCKET_VALUE}",
+                  "LIVE_DASHBOARD_S3_PREFIX": "${REPORT_S3_PREFIX_VALUE}"
                 },
                 "RuntimeEnvironmentSecrets": {
                   "BIZNISWEB_API_TOKEN": "${BIZNISWEB_TOKEN_REF}",
@@ -263,7 +333,7 @@ jobs:
             "HealthCheckConfiguration": $(cat health-check-configuration.json),
             "Tags": [
               {"Key": "Project", "Value": "biznisweb"},
-              {"Key": "Component", "Value": "vevo-production-board"}
+              {"Key": "Component", "Value": "${PROJECT}-live-dashboard"}
             ]
           }
           JSON
@@ -324,7 +394,7 @@ jobs:
           PY
           )"
 
-          echo "HARD_GATE_CONTEXT project=vevo"
+          echo "HARD_GATE_CONTEXT project=${PROJECT}"
           echo "instance-id=N/A (AWS App Runner managed service)"
           echo "private-ip=N/A (AWS App Runner managed service)"
           echo "service-name=${SERVICE_NAME}"
@@ -333,15 +403,40 @@ jobs:
           echo "image-digest=${IMAGE_DIGEST}"
           echo "image-identifier=${IMAGE_IDENTIFIER}"
           echo "health-path=${SERVICE_URL}/health"
-          echo "production-board-path=${SERVICE_URL}/production/vevo"
+          echo "production-board-path=${SERVICE_URL}/production/${PROJECT}"
+          echo "latest-artifacts-s3=s3://${REPORT_S3_BUCKET_VALUE}/${REPORT_S3_PREFIX_VALUE}/latest/"
 
           curl -fsS "${SERVICE_URL}/health" > /tmp/health.json
-          curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/production/vevo" -o /tmp/production-board.html
-          grep -q "vevo-production-board" /tmp/production-board.html
-          grep -q "productsCards" /tmp/production-board.html
-          grep -q "@media (max-width:680px)" /tmp/production-board.html
-          curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/production/vevo/live?refresh=1" -o /tmp/production-board-api.json
-          python - <<'PY'
+          curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/production/${PROJECT}" -o /tmp/production-board.html
+          if [[ "${PROJECT}" == "roy" ]]; then
+            grep -q "roy-operations-dashboard" /tmp/production-board.html
+            grep -q "Executive KPI deck" /tmp/production-board.html
+            curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/operations/roy/live?refresh=1" -o /tmp/production-board-api.json
+            python - <<'PY'
+          import json
+          api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
+          assert api["project"] == "roy"
+          assert api["marker"] == "roy-operations-dashboard"
+          assert "executive_kpis" in api and "orders" in api and "inventory" in api
+          assert api["orders"]["auto_refresh_seconds"] == 90
+          assert "personal_pickups" in api["orders"]
+          assert api["executive_kpis"].get("windows"), "Executive KPI windows missing"
+          assert len(api["executive_kpis"].get("months") or []) > 0, "Calendar KPI months missing"
+          assert api["inventory"].get("summary"), "Inventory summary missing"
+          print(
+              "APP_RUNNER_ROY_OPERATIONS_OK:"
+              f"fulfillable_orders={api['orders']['summary'].get('fulfillable_orders')}:"
+              f"personal_pickups={api['orders']['summary'].get('personal_pickups')}:"
+              f"inventory_alerts={api['inventory']['summary'].get('alert_delivery_count')}:"
+              f"kpi_months={len(api['executive_kpis'].get('months') or [])}"
+          )
+          PY
+          else
+            grep -q "vevo-production-board" /tmp/production-board.html
+            grep -q "productsCards" /tmp/production-board.html
+            grep -q "@media (max-width:680px)" /tmp/production-board.html
+            curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/production/vevo/live?refresh=1" -o /tmp/production-board-api.json
+            python - <<'PY'
           import json
           api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
           assert api["project"] == "vevo"
@@ -363,4 +458,5 @@ jobs:
               f"orders_scanned={api['scan'].get('orders_scanned')}"
           )
           PY
+          fi
           echo "APP_RUNNER_DEPLOY_OK:${SERVICE_NAME}:${SERVICE_URL}"

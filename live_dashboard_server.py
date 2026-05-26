@@ -12,9 +12,14 @@ from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from production_board import get_cached_production_board_snapshot, resolve_production_board_settings
+from roy_operations_dashboard import (
+    get_cached_roy_operations_snapshot,
+    mark_personal_pickup_shipped,
+    resolve_roy_operations_settings,
+)
 from reporting_core import load_project_settings
 
 
@@ -105,6 +110,64 @@ def _read_json_file(path: Path) -> Dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"JSON payload at '{path}' must decode to an object.")
+    return payload
+
+
+def _project_env_name(project: str) -> str:
+    return "".join(ch if ch.isalnum() else "_" for ch in str(project or "").upper())
+
+
+def _latest_s3_artifact_bytes(project: str, filename: str) -> Optional[bytes]:
+    settings = load_project_settings(project)
+    s3_settings = settings.get("live_dashboard_artifacts") or {}
+    env_project = _project_env_name(project)
+    bucket = (
+        os.getenv(f"LIVE_DASHBOARD_S3_BUCKET_{env_project}", "").strip()
+        or os.getenv("LIVE_DASHBOARD_S3_BUCKET", "").strip()
+        or os.getenv(f"REPORT_S3_BUCKET_{env_project}", "").strip()
+        or os.getenv("REPORT_S3_BUCKET", "").strip()
+        or str(s3_settings.get("s3_bucket") or "").strip()
+    )
+    prefix = (
+        os.getenv(f"LIVE_DASHBOARD_S3_PREFIX_{env_project}", "").strip()
+        or os.getenv("LIVE_DASHBOARD_S3_PREFIX", "").strip()
+        or os.getenv(f"REPORT_S3_PREFIX_{env_project}", "").strip()
+        or os.getenv("REPORT_S3_PREFIX", "").strip()
+        or str(s3_settings.get("s3_prefix") or "").strip()
+        or f"daily-reports/{project}"
+    ).strip("/")
+    if not bucket:
+        return None
+
+    try:
+        import boto3  # type: ignore
+    except ImportError:
+        return None
+
+    region = (
+        os.getenv(f"AWS_REGION_{env_project}", "").strip()
+        or os.getenv("AWS_REGION", "eu-central-1").strip()
+        or "eu-central-1"
+    )
+    key = f"{prefix}/latest/{filename}"
+    try:
+        response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
+        return response["Body"].read()
+    except Exception:
+        return None
+
+
+def read_latest_dashboard_payload(project: str) -> Dict[str, Any]:
+    payload_path = resolve_latest_payload_path(project)
+    if payload_path is not None and payload_path.exists():
+        return _read_json_file(payload_path)
+
+    raw = _latest_s3_artifact_bytes(project, "dashboard_payload_latest.json")
+    if raw is None:
+        return {}
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"S3 dashboard payload for '{project}' must decode to an object.")
     return payload
 
 
@@ -202,7 +265,10 @@ def build_index_html(projects: List[str]) -> str:
         payload_path = resolve_latest_payload_path(project)
         production_enabled = False
         try:
-            production_enabled = bool(resolve_production_board_settings(load_project_settings(project))["enabled"])
+            project_settings = load_project_settings(project)
+            production_enabled = bool(resolve_production_board_settings(project_settings)["enabled"])
+            if project == "roy":
+                production_enabled = production_enabled or bool(resolve_roy_operations_settings(project_settings)["enabled"])
         except Exception:
             production_enabled = False
         project_q = quote(project)
@@ -859,6 +925,459 @@ def build_production_board_html(project: str) -> str:
     return html.replace("__BOOTSTRAP_JSON__", bootstrap_json)
 
 
+def build_roy_operations_dashboard_html(project: str = "roy") -> str:
+    bootstrap_json = _json_script_content({"project": project})
+    html = """<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROY Operations Dashboard</title>
+  <style>
+    :root {
+      --bg:#f6f7f4; --panel:#ffffff; --line:#d9ded5; --text:#18211b; --muted:#657163;
+      --green:#11734b; --green-bg:#e6f3ec; --red:#aa2f2f; --red-bg:#fdeaea;
+      --amber:#8a5b00; --amber-bg:#fff2cc; --blue:#245f8f; --blue-bg:#e8f1f8;
+      --ink:#14211b;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Arial,Helvetica,sans-serif; }
+    main { width:min(1500px,calc(100vw - 24px)); margin:0 auto; padding:14px 0 34px; }
+    header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; padding:12px 0 14px; }
+    h1 { margin:0; font-size:29px; line-height:1.12; letter-spacing:0; }
+    h2 { margin:0; font-size:18px; line-height:1.2; letter-spacing:0; }
+    h3 { margin:0; font-size:15px; line-height:1.2; letter-spacing:0; }
+    p { margin:0; color:var(--muted); line-height:1.42; }
+    button,a.button,select { min-height:38px; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:6px; padding:0 11px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+    select { cursor:pointer; min-width:150px; }
+    button.primary { background:var(--ink); color:#fff; border-color:var(--ink); }
+    button.tab.active,button.chip.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .actions,.tabs,.chips { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .statusline { color:var(--muted); font-size:13px; min-height:18px; }
+    .alert-grid { display:grid; grid-template-columns:repeat(5,minmax(150px,1fr)); gap:10px; margin-bottom:12px; }
+    .metric,.kpi-card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; min-height:86px; }
+    .metric .label,.kpi-card .label { color:var(--muted); font-size:11px; text-transform:uppercase; font-weight:800; letter-spacing:.04em; }
+    .metric .value,.kpi-card .value { margin-top:7px; font-size:25px; font-weight:850; line-height:1.05; }
+    .metric .note,.kpi-card .note { margin-top:7px; font-size:12px; color:var(--muted); }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:12px; }
+    .panel-head { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); background:#fafbf8; }
+    .panel-body { padding:12px; }
+    .kpi-controls { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px; }
+    .kpi-card svg { width:100%; height:42px; margin-top:10px; display:block; }
+    .positive { color:var(--green); }
+    .negative { color:var(--red); }
+    .neutral { color:var(--muted); }
+    .badge { display:inline-flex; align-items:center; min-height:24px; padding:0 8px; border-radius:999px; font-size:12px; font-weight:800; white-space:nowrap; }
+    .badge.good { color:var(--green); background:var(--green-bg); }
+    .badge.warn { color:var(--amber); background:var(--amber-bg); }
+    .badge.bad { color:var(--red); background:var(--red-bg); }
+    .badge.info { color:var(--blue); background:var(--blue-bg); }
+    .table-wrap { overflow:auto; }
+    table { width:100%; min-width:980px; border-collapse:collapse; }
+    th,td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:13px; }
+    th { color:var(--muted); background:#fafbf8; text-transform:uppercase; font-size:11px; letter-spacing:.04em; }
+    tbody tr:hover { background:#f8faf7; }
+    .muted { color:var(--muted); }
+    .mono { font-family:Consolas,Monaco,monospace; }
+    .items { display:grid; gap:3px; max-width:560px; }
+    .item-line { display:flex; justify-content:space-between; gap:10px; border-top:1px solid #edf0eb; padding-top:3px; }
+    .layout-2 { display:grid; grid-template-columns:minmax(0,1fr) minmax(420px,.42fr); gap:12px; align-items:start; }
+    .pickup-list { display:grid; gap:8px; max-height:620px; overflow:auto; }
+    .pickup { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fff; }
+    .pickup-top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .pickup-title { font-weight:850; font-size:16px; }
+    .checkline { display:flex; gap:8px; align-items:center; margin-top:9px; font-weight:800; }
+    .checkline input { width:19px; height:19px; }
+    .hidden { display:none !important; }
+    .error,.ok { margin-bottom:12px; padding:10px 12px; border-radius:8px; border:1px solid rgba(170,47,47,.25); color:var(--red); background:var(--red-bg); }
+    .ok { color:var(--green); background:var(--green-bg); border-color:rgba(17,115,75,.25); }
+    @media (max-width:1180px) {
+      .alert-grid { grid-template-columns:repeat(3,minmax(150px,1fr)); }
+      .kpi-grid { grid-template-columns:repeat(2,minmax(220px,1fr)); }
+      .layout-2 { grid-template-columns:1fr; }
+    }
+    @media (max-width:720px) {
+      main { width:100%; padding:10px 8px 26px; }
+      header { flex-direction:column; gap:10px; padding-top:8px; }
+      h1 { font-size:23px; }
+      .actions { width:100%; }
+      .actions button,.actions a.button { flex:1 1 auto; min-height:44px; }
+      .alert-grid,.kpi-grid { grid-template-columns:1fr; }
+      .panel-head,.kpi-controls { align-items:flex-start; flex-direction:column; }
+      button,a.button,select { min-height:42px; }
+      table { min-width:860px; }
+    }
+  </style>
+</head>
+<body>
+  <main data-marker="roy-operations-dashboard">
+    <header>
+      <div>
+        <h1>ROY operations dashboard</h1>
+        <p id="subtitle">Načítavam live stav.</p>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn" class="primary" type="button">Refresh</button>
+        <a class="button" href="/">Dashboardy</a>
+      </div>
+    </header>
+    <div id="messageBox" class="hidden"></div>
+    <section class="alert-grid" id="alertGrid"></section>
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Executive KPI deck</h2>
+          <p id="kpiMeta">-</p>
+        </div>
+        <span id="cacheBadge" class="badge info">cache</span>
+      </div>
+      <div class="panel-body">
+        <div class="kpi-controls">
+          <div class="chips" id="kpiWindowNav"></div>
+          <select id="monthSelect" aria-label="Kalendárny mesiac"></select>
+        </div>
+        <div class="kpi-grid" id="kpiGrid"></div>
+      </div>
+    </section>
+    <nav class="tabs" style="margin-bottom:12px;">
+      <button class="tab active" type="button" data-view="overview">Prehľad</button>
+      <button class="tab" type="button" data-view="orders">Objednávky</button>
+      <button class="tab" type="button" data-view="inventory">Sklad</button>
+    </nav>
+    <section id="view-overview">
+      <div class="layout-2">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Objednávky na vybavenie</h2>
+              <p id="ordersMeta">-</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Objednávka</th><th>Status</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
+              <tbody id="ordersBody"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Osobné odbery</h2>
+              <p id="pickupMeta">-</p>
+            </div>
+          </div>
+          <div class="panel-body pickup-list" id="pickupList"></div>
+        </article>
+      </div>
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Skladové upozornenia</h2>
+            <p id="inventoryAlertMeta">-</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produkt</th><th>Riziko</th><th>Sklad</th><th>30d dopyt</th><th>Cover</th><th>Vypredanie</th><th>Objednať do</th><th>Návrh</th></tr></thead>
+            <tbody id="alertRowsBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+    <section id="view-orders" class="hidden">
+      <article class="panel">
+        <div class="panel-head"><h2>Všetky vybaviteľné objednávky</h2><p id="ordersScanMeta">-</p></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Objednávka</th><th>Dátum</th><th>Status</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
+            <tbody id="ordersFullBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+    <section id="view-inventory" class="hidden">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Skladové zásoby</h2>
+            <p id="inventoryMeta">-</p>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="alert-grid" id="inventorySummaryGrid"></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produkt</th><th>Sklad</th><th>Nákupná hodnota</th><th>Predajná hodnota</th><th>Cover</th><th>Vypredanie</th><th>Lead time</th><th>Reorder</th></tr></thead>
+            <tbody id="inventoryRowsBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+  <script id="roy-operations-bootstrap" type="application/json">__BOOTSTRAP_JSON__</script>
+  <script>
+    const BOOTSTRAP = JSON.parse(document.getElementById('roy-operations-bootstrap').textContent || '{}');
+    const project = BOOTSTRAP.project || 'roy';
+    const el = (id) => document.getElementById(id);
+    const fmtInt = (value) => new Intl.NumberFormat('sk-SK', { maximumFractionDigits:0 }).format(Math.round(Number(value || 0)));
+    const fmtQty = (value) => new Intl.NumberFormat('sk-SK', { maximumFractionDigits:1 }).format(Number(value || 0));
+    const fmtMoney = (value) => new Intl.NumberFormat('sk-SK', { style:'currency', currency:'EUR', maximumFractionDigits:2 }).format(Number(value || 0));
+    const fmtPct = (value) => value === null || value === undefined ? 'N/A' : `${new Intl.NumberFormat('sk-SK', { maximumFractionDigits:1 }).format(Number(value || 0))}%`;
+    const fmtRatio = (value) => value === null || value === undefined ? 'N/A' : `${new Intl.NumberFormat('sk-SK', { maximumFractionDigits:2 }).format(Number(value || 0))}x`;
+    const text = (value, fallback='-') => value === null || value === undefined || value === '' ? fallback : String(value);
+    const safe = (value) => text(value, '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    let latestData = null;
+    let refreshTimer = null;
+    let kpiScope = 'monthly';
+
+    const metricDefsFallback = [
+      { key:'revenue', label_en:'Revenue (net)' },
+      { key:'profit', label_en:'Post-ad profit (€)' },
+      { key:'orders', label_en:'Orders' },
+      { key:'aov', label_en:'AOV (net)' },
+      { key:'cac', label_en:'CAC' },
+      { key:'roas', label_en:'ROAS' },
+      { key:'pre_ad_contribution_margin', label_en:'Pre-ad contribution' },
+      { key:'post_ad_margin', label_en:'Post-ad margin' },
+      { key:'company_margin_with_fixed', label_en:'Company margin (incl. fixed)' },
+    ];
+
+    function metric(label, value, note, tone='info') {
+      return `<article class="metric"><div class="label">${safe(label)}</div><div class="value">${safe(value)}</div><div class="note">${safe(note)}</div></article>`;
+    }
+    function badgeClass(value) {
+      const v = String(value || '').toLowerCase();
+      if (v.includes('negative') || v.includes('out of stock') || v.includes('critical') || v.includes('urgent') || v.includes('order now')) return 'bad';
+      if (v.includes('low') || v.includes('watch') || v.includes('prepare') || v.includes('plan')) return 'warn';
+      if (v.includes('healthy') || v.includes('ok')) return 'good';
+      return 'info';
+    }
+    function formatKpiValue(key, value) {
+      if (['revenue','profit','aov','cac'].includes(key)) return value === null || value === undefined ? 'N/A' : fmtMoney(value);
+      if (key === 'orders') return fmtInt(value);
+      if (key === 'roas') return fmtRatio(value);
+      if (key.includes('margin') || key.includes('contribution')) return fmtPct(value);
+      return text(value, 'N/A');
+    }
+    function comparisonText(scope, metricKey, windowPayload) {
+      const kpis = latestData.executive_kpis || {};
+      if (scope.startsWith('month:')) {
+        const comparison = ((windowPayload.comparisons || {})[metricKey] || {}).vs_previous_month;
+        return comparison === null || comparison === undefined ? 'N/A vs previous month' : `${comparison >= 0 ? '+' : ''}${fmtPct(comparison)} vs previous month`;
+      }
+      const comparison = (((kpis.comparisons || {})[scope] || {})[metricKey]) || {};
+      const key = Object.keys(comparison).find((name) => name.startsWith('vs_') && comparison[name] !== null && comparison[name] !== undefined);
+      if (!key) return 'N/A vs comparable period';
+      return `${comparison[key] >= 0 ? '+' : ''}${fmtPct(comparison[key])} ${key.replaceAll('_', ' ')}`;
+    }
+    function sparkline(values, key) {
+      if (!Array.isArray(values) || values.length < 2) return '';
+      const nums = values.map((v) => Number(v || 0));
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      const spread = max - min || 1;
+      const points = nums.map((v, i) => {
+        const x = (i / Math.max(nums.length - 1, 1)) * 100;
+        const y = 38 - ((v - min) / spread) * 32;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+      const cls = ['cac'].includes(key) ? '#aa2f2f' : '#11734b';
+      return `<svg viewBox="0 0 100 42" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="${cls}" stroke-width="2.4" vector-effect="non-scaling-stroke"/><polygon points="0,40 ${points} 100,40" fill="${cls}" opacity=".10"/></svg>`;
+    }
+    function selectedKpiWindow() {
+      const kpis = latestData.executive_kpis || {};
+      if (kpiScope.startsWith('month:')) {
+        const monthKey = kpiScope.slice(6);
+        return (kpis.months || []).find((row) => row.key === monthKey) || null;
+      }
+      return (kpis.windows || {})[kpiScope] || null;
+    }
+    function renderKpiControls() {
+      const labels = { daily:'Daily', weekly:'Weekly', monthly:'Monthly', all_time:'All-time' };
+      el('kpiWindowNav').innerHTML = Object.keys(labels).map((key) => `<button class="chip ${kpiScope === key ? 'active' : ''}" type="button" data-kpi-window="${key}">${labels[key]}</button>`).join('');
+      el('kpiWindowNav').querySelectorAll('[data-kpi-window]').forEach((btn) => btn.addEventListener('click', () => { kpiScope = btn.dataset.kpiWindow; renderKpis(); }));
+      const months = ((latestData.executive_kpis || {}).months || []).slice().reverse();
+      el('monthSelect').innerHTML = '<option value="">Kalendárny mesiac</option>' + months.map((m) => `<option value="${safe(m.key)}">${safe(m.label_sk || m.key)}</option>`).join('');
+      el('monthSelect').value = kpiScope.startsWith('month:') ? kpiScope.slice(6) : '';
+      el('monthSelect').onchange = () => { if (el('monthSelect').value) { kpiScope = `month:${el('monthSelect').value}`; renderKpis(); } };
+    }
+    function renderKpis() {
+      if (!latestData) return;
+      renderKpiControls();
+      const kpis = latestData.executive_kpis || {};
+      const defs = (kpis.metric_defs || []).length ? kpis.metric_defs : metricDefsFallback;
+      const windowPayload = selectedKpiWindow() || {};
+      const metrics = windowPayload.metrics || {};
+      const trend = windowPayload.trend || {};
+      const trendMetrics = trend.metrics || {};
+      el('kpiMeta').textContent = `${text(windowPayload.label_sk || windowPayload.label_en || kpiScope)} · zdroj ${text(kpis.source_generated_at)}`;
+      el('kpiGrid').innerHTML = defs.map((def) => {
+        const key = def.key;
+        const value = metrics[key];
+        const compare = comparisonText(kpiScope, key, windowPayload);
+        const tone = compare.startsWith('-') && key !== 'cac' ? 'negative' : compare.startsWith('+') ? 'positive' : 'neutral';
+        const secondary = key === 'company_margin_with_fixed' && (windowPayload.secondary_metrics || {}).company_margin_with_fixed !== undefined
+          ? ` · ${fmtMoney((windowPayload.secondary_metrics || {}).company_margin_with_fixed)}` : '';
+        return `<article class="kpi-card"><div class="label">${safe(def.label_en || key)}</div><div class="value">${safe(formatKpiValue(key, value))}</div><div class="note ${tone}">${safe(compare)}${safe(secondary)}</div>${sparkline(trendMetrics[key], key)}</article>`;
+      }).join('');
+    }
+    function renderAlerts(data) {
+      const orders = (data.orders || {}).summary || {};
+      const inv = (data.inventory || {}).summary || {};
+      el('alertGrid').innerHTML = [
+        metric('Na vybavenie', fmtInt(orders.fulfillable_orders), `${fmtInt(orders.paid_online_orders)} online + ${fmtInt(orders.cod_waiting_orders)} dobierka`),
+        metric('Osobné odbery', fmtInt(orders.personal_pickups), `${fmtInt(orders.pickup_actions_available)} akcií dostupných`),
+        metric('Kritický sklad', fmtInt(inv.stock_risk_critical_count), `${fmtInt(inv.stock_risk_30d_count)} položiek v 30d riziku`),
+        metric('Objednať teraz', fmtInt(inv.alert_reorder_now_count), `${fmtInt(inv.alert_prepare_po_count)} pripraviť PO`),
+        metric('Hodnota skladu', fmtMoney(inv.inventory_cost_value), `predajná ${fmtMoney(inv.inventory_retail_value)}`),
+      ].join('');
+    }
+    function orderItemsHtml(order) {
+      const items = order.items || [];
+      if (!items.length) return '<span class="muted">bez položiek</span>';
+      return `<div class="items">${items.slice(0, 6).map((item) => `<div class="item-line"><span>${safe(item.label)}</span><strong>${fmtQty(item.quantity)} ks</strong></div>`).join('')}${items.length > 6 ? `<div class="muted">+${fmtInt(items.length - 6)} ďalších</div>` : ''}</div>`;
+    }
+    function orderRow(order, includeDate=false) {
+      return `<tr>
+        <td><strong class="mono">${safe(order.order_num)}</strong>${includeDate ? `<div class="muted">${safe(order.purchase_at)}</div>` : ''}</td>
+        <td><span class="badge ${order.fulfillment_reason === 'paid_online' ? 'good' : 'warn'}">${safe(order.status)}</span></td>
+        <td>${safe((order.payment || {}).title)}</td>
+        <td>${safe((order.shipping || {}).title)}</td>
+        <td>${safe(order.sum)}</td>
+        <td>${orderItemsHtml(order)}</td>
+      </tr>`;
+    }
+    function renderOrders(data) {
+      const ordersPayload = data.orders || {};
+      const orders = ordersPayload.orders || [];
+      const scan = ordersPayload.scan || {};
+      el('ordersMeta').textContent = `${fmtInt(orders.length)} objednávok · hodnota ${fmtMoney((ordersPayload.summary || {}).fulfillable_value)}`;
+      el('ordersScanMeta').textContent = `${fmtInt(scan.orders_scanned)} skenovaných objednávok, ${fmtInt(scan.pages_scanned)} strán, stop=${text(scan.stop_reason)}`;
+      const limited = orders.slice(0, 24);
+      el('ordersBody').innerHTML = limited.length ? limited.map((order) => orderRow(order)).join('') : '<tr><td colspan="6" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+      el('ordersFullBody').innerHTML = orders.length ? orders.map((order) => orderRow(order, true)).join('') : '<tr><td colspan="7" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+    }
+    function renderPickups(data) {
+      const pickups = ((data.orders || {}).personal_pickups) || [];
+      el('pickupMeta').textContent = `${fmtInt(pickups.length)} osobných odberov`;
+      el('pickupList').innerHTML = pickups.length ? pickups.map((order) => `
+        <article class="pickup">
+          <div class="pickup-top">
+            <div><div class="pickup-title mono">${safe(order.order_num)}</div><div class="muted">${safe(order.purchase_at)} · ${safe(order.sum)}</div></div>
+            <span class="badge ${badgeClass(order.status)}">${safe(order.status)}</span>
+          </div>
+          <div class="muted" style="margin-top:6px;">${safe((order.payment || {}).title)}</div>
+          <div style="margin-top:8px;">${orderItemsHtml(order)}</div>
+          <label class="checkline"><input type="checkbox" data-ship-pickup="${safe(order.order_num)}" ${order.pickup_action_allowed ? '' : 'disabled'}> Označiť ako odoslaná</label>
+        </article>`).join('') : '<p class="muted">Žiadne osobné odbery.</p>';
+      el('pickupList').querySelectorAll('[data-ship-pickup]').forEach((input) => input.addEventListener('change', () => markPickupShipped(input)));
+    }
+    function inventoryAlertRow(row) {
+      return `<tr>
+        <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
+        <td><span class="badge ${badgeClass(row.stock_risk_level || row.reorder_action_label)}">${safe(row.stock_risk_level || row.reorder_action_label)}</span></td>
+        <td>${fmtQty(row.available_quantity)} ks</td>
+        <td>${fmtQty(row.alert_30d_units)} ks</td>
+        <td>${row.days_of_cover === null || row.days_of_cover === undefined ? 'N/A' : `${fmtQty(row.days_of_cover)} dní`}</td>
+        <td>${safe(row.projected_stockout_date)}</td>
+        <td>${safe(row.reorder_by_date)}</td>
+        <td><strong>${safe(row.reorder_action_label)}</strong><div class="muted">${fmtQty(row.suggested_reorder_units)} ks · LT ${fmtInt(row.lead_time_working_days)}d</div></td>
+      </tr>`;
+    }
+    function renderInventory(data) {
+      const inv = data.inventory || {};
+      const summary = inv.summary || {};
+      const alerts = inv.alert_rows || [];
+      const inventoryRows = inv.inventory_rows || [];
+      el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · snapshot ${text(summary.inventory_snapshot_date)}`;
+      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, 30).map(inventoryAlertRow).join('') : '<tr><td colspan="8" class="muted">Bez kritických skladových alertov.</td></tr>';
+      el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)}`;
+      el('inventorySummaryGrid').innerHTML = [
+        metric('Nákupná hodnota bez DPH', fmtMoney(summary.inventory_cost_value), `${fmtQty(summary.inventory_available_units)} ks skladom`),
+        metric('Predajná hodnota bez DPH', fmtMoney(summary.inventory_retail_value), `coverage ${fmtPct(summary.inventory_cost_coverage_retail_pct)}`),
+        metric('45d watchlist', fmtInt(summary.stock_risk_45d_count), `${fmtInt(summary.out_of_stock_recent_demand_count)} vypredané s dopytom`),
+        metric('Dead stock', fmtMoney(summary.dead_stock_cost_value), `${fmtInt(summary.dead_stock_count)} položiek`),
+        metric('Tržby v riziku', fmtMoney(summary.revenue_at_risk_30d), `zisk ${fmtMoney(summary.profit_at_risk_30d)}`),
+      ].join('');
+      el('inventoryRowsBody').innerHTML = inventoryRows.length ? inventoryRows.slice(0, 80).map((row) => `<tr>
+        <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
+        <td>${fmtQty(row.available_quantity)} ks</td>
+        <td>${fmtMoney(row.inventory_cost_value)}</td>
+        <td>${fmtMoney(row.inventory_retail_value)}</td>
+        <td>${row.days_of_cover === null || row.days_of_cover === undefined ? 'N/A' : `${fmtQty(row.days_of_cover)} dní`}</td>
+        <td>${safe(row.projected_stockout_date)}</td>
+        <td>${fmtInt(row.lead_time_working_days)} pracovných dní</td>
+        <td>${safe(row.reorder_action_label)}<div class="muted">${safe(row.reorder_by_date)} · ${fmtQty(row.suggested_reorder_units)} ks</div></td>
+      </tr>`).join('') : '<tr><td colspan="8" class="muted">Skladový payload zatiaľ nie je dostupný.</td></tr>';
+    }
+    function showMessage(message, ok=false) {
+      el('messageBox').className = ok ? 'ok' : 'error';
+      el('messageBox').textContent = message;
+    }
+    function clearMessage() { el('messageBox').className = 'hidden'; el('messageBox').textContent = ''; }
+    function render(data) {
+      latestData = data;
+      const cache = data.cache || {};
+      el('subtitle').textContent = `Posledná aktualizácia ${text(data.generated_at)}. Auto refresh ${fmtInt(data.auto_refresh_seconds || 90)}s.`;
+      el('cacheBadge').textContent = `${text(cache.status, 'live')} ${cache.age_seconds !== undefined ? `${cache.age_seconds}s` : ''}`;
+      el('cacheBadge').className = `badge ${cache.status === 'stale_after_error' ? 'bad' : 'info'}`;
+      renderAlerts(data);
+      renderKpis();
+      renderOrders(data);
+      renderPickups(data);
+      renderInventory(data);
+    }
+    async function loadDashboard(force=false) {
+      el('refreshBtn').disabled = true;
+      try {
+        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`, { cache:'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        render(data);
+        clearMessage();
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(() => loadDashboard(false), Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000);
+      } catch (error) {
+        showMessage(error instanceof Error ? error.message : String(error));
+      } finally {
+        el('refreshBtn').disabled = false;
+      }
+    }
+    async function markPickupShipped(input) {
+      const orderNum = input.dataset.shipPickup;
+      if (!window.confirm(`Zmeniť objednávku ${orderNum} v eshope na Odoslaná?`)) {
+        input.checked = false;
+        return;
+      }
+      input.disabled = true;
+      try {
+        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ship`, { method:'POST', cache:'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        showMessage(`Objednávka ${orderNum} je zmenená na Odoslaná.`, true);
+        await loadDashboard(true);
+      } catch (error) {
+        input.checked = false;
+        input.disabled = false;
+        showMessage(error instanceof Error ? error.message : String(error));
+      }
+    }
+    el('refreshBtn').addEventListener('click', () => loadDashboard(true));
+    document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
+      document.querySelectorAll('[data-view]').forEach((btn) => btn.classList.toggle('active', btn === button));
+      ['overview','orders','inventory'].forEach((view) => el(`view-${view}`).classList.toggle('hidden', button.dataset.view !== view));
+    }));
+    loadDashboard(false);
+  </script>
+</body>
+</html>"""
+    return html.replace("__BOOTSTRAP_JSON__", bootstrap_json)
+
+
 class LiveDashboardHandler(BaseHTTPRequestHandler):
     server_version = "BizniWebLiveDashboard/1.1"
 
@@ -918,6 +1437,36 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             return
 
         parts = [part for part in path.split("/") if part]
+
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "operations" and parts[3] == "live":
+            project = parts[2]
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            if project != "roy":
+                self._send_json({"error": f"Operations dashboard is not enabled for '{project}'."}, status=404)
+                return
+            try:
+                operations_settings = resolve_roy_operations_settings(load_project_settings(project))
+            except Exception as exc:
+                self._send_json({"error": f"Failed to load ROY operations settings: {exc}"}, status=500)
+                return
+            if not operations_settings["enabled"]:
+                self._send_json({"error": f"Operations dashboard is not enabled for '{project}'."}, status=404)
+                return
+
+            force_refresh = (query.get("refresh", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
+            try:
+                self._send_json(
+                    get_cached_roy_operations_snapshot(
+                        project,
+                        report_payload=read_latest_dashboard_payload(project),
+                        force_refresh=force_refresh,
+                    )
+                )
+            except Exception as exc:
+                self._send_json({"error": f"Failed to load ROY operations data: {exc}"}, status=500)
+            return
 
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "production" and parts[3] == "live":
             project = parts[2]
@@ -982,6 +1531,19 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 )
                 return
             if not board_settings["enabled"]:
+                if project == "roy":
+                    try:
+                        operations_settings = resolve_roy_operations_settings(load_project_settings(project))
+                    except Exception as exc:
+                        self._send_text(
+                            f"Failed to load ROY operations settings: {escape(str(exc))}",
+                            content_type="text/plain; charset=utf-8",
+                            status=500,
+                        )
+                        return
+                    if operations_settings["enabled"]:
+                        self._send_text(build_roy_operations_dashboard_html(project), content_type="text/html; charset=utf-8")
+                        return
                 self._send_text(
                     f"Production board is not enabled for '{escape(project)}'.",
                     content_type="text/plain; charset=utf-8",
@@ -1008,6 +1570,38 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             return
 
         self._send_text("Not found.", content_type="text/plain; charset=utf-8", status=404)
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+        if not is_authorized_basic_header(
+            self.headers.get("Authorization"),
+            live_dashboard_auth_credentials(),
+        ):
+            self._send_auth_required()
+            return
+
+        projects = available_projects()
+        parts = [part for part in path.split("/") if part]
+        if (
+            len(parts) == 6
+            and parts[0] == "api"
+            and parts[1] == "operations"
+            and parts[3] == "pickup"
+            and parts[5] == "ship"
+        ):
+            project = parts[2]
+            order_num = unquote(parts[4])
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            try:
+                self._send_json(mark_personal_pickup_shipped(project, order_num))
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
+        self._send_json({"error": "Not found."}, status=404)
 
 
 def parse_args() -> argparse.Namespace:

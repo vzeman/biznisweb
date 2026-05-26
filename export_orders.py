@@ -8678,6 +8678,11 @@ class BizniWebExporter:
             for key, value in (inventory_config.get("lead_time_working_days_by_brand") or {}).items()
             if str(key).strip()
         }
+        lead_time_working_days_by_family = {
+            str(key).strip().lower(): max(0, int(value or 0))
+            for key, value in (inventory_config.get("lead_time_working_days_by_family") or {}).items()
+            if str(key).strip()
+        }
         alert_exclusion_patterns = [
             str(pattern).strip()
             for pattern in (inventory_config.get("alert_exclusion_label_patterns") or [])
@@ -9183,7 +9188,7 @@ class BizniWebExporter:
                 lambda value: pd.Series(self._extract_product_family(value))
             )
             inventory_products_df["strategic_stock_flag"] = inventory_products_df["brand_key"].isin(hero_brand_keys)
-            inventory_products_df["lead_time_working_days"] = (
+            brand_lead_time = (
                 inventory_products_df["brand_key"]
                 .astype(str)
                 .str.strip()
@@ -9191,6 +9196,19 @@ class BizniWebExporter:
                 .map(lead_time_working_days_by_brand)
                 .fillna(0)
                 .astype(int)
+            )
+            family_lead_time = (
+                inventory_products_df["family_key"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .map(lead_time_working_days_by_family)
+                .fillna(0)
+                .astype(int)
+            )
+            inventory_products_df["lead_time_working_days"] = brand_lead_time.where(
+                brand_lead_time > 0,
+                family_lead_time,
             )
             inventory_products_df["lead_time_calendar_days"] = np.ceil(
                 inventory_products_df["lead_time_working_days"] * (7.0 / 5.0)
