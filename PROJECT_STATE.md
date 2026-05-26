@@ -2599,3 +2599,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - browser UI smoke verified overview `Skladové upozornenia` renders `18` alert rows and `Sklad` tab renders `100` rows with first visible SKU `WD0021`
 - Next exact step:
   - review live restock grouping for Micro SD language variants and tune any remaining aliases only where BiznisWeb import code is missing
+
+### 2026-05-26 (VEVO and ROY reporting product identity uses import code)
+- Branch: `codex/reporting-import-code-product-identity`
+- Change:
+  - enabled `product_identity.prefer_import_code` for VEVO as well as ROY
+  - reporting aggregations already run through `add_reporting_product_identity_columns`, so `date_product_agg`, `items_agg`, product margins/trends, ROY demand analytics, and dashboard payloads now use import-code-first identity for both projects
+  - added a shared regression test proving VEVO and ROY reporting collapse translated names with the same import code into one `items_agg` product row
+  - ECR build workflow now runs `tests.test_reporting_product_identity`
+- Local verification:
+  - `python -m py_compile export_orders.py dashboard_modern.py live_dashboard_server.py roy_operations_dashboard.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR, then run production reporting smoke for `all` to verify VEVO and ROY reporting tasks on the production-equivalent host
