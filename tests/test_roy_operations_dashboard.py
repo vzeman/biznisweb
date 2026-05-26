@@ -86,6 +86,9 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(5, inventory["default_lead_time_working_days"])
         self.assertEqual(3, inventory["historical_restock_min_orders"])
         self.assertTrue(project_settings["product_identity"]["prefer_import_code"])
+        maco_bundle_rule = inventory["bundle_component_rules"][0]
+        self.assertEqual(3, len(maco_bundle_rule["components"]))
+        self.assertTrue(maco_bundle_rule["exclude_bundle_from_alerts"])
 
     def test_snapshot_includes_paid_and_cod_orders_only_for_fulfillment(self) -> None:
         settings = make_settings()

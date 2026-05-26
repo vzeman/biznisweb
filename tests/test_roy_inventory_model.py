@@ -43,6 +43,28 @@ def item_row(
     }
 
 
+def inventory_row(
+    sku: str,
+    product: str,
+    available_quantity: float = 0.0,
+    inventory_cost_value: float = 0.0,
+    inventory_retail_value: float = 0.0,
+) -> dict:
+    return {
+        "reporting_sku": sku,
+        "reporting_product": product,
+        "active": True,
+        "available_quantity": available_quantity,
+        "available_quantity_raw": available_quantity,
+        "quantity": available_quantity,
+        "quantity_raw": available_quantity,
+        "mapped_available_quantity": available_quantity if inventory_cost_value else 0.0,
+        "inventory_cost_value": inventory_cost_value,
+        "inventory_retail_value": inventory_retail_value,
+        "mapped_inventory_retail_value": inventory_retail_value if inventory_cost_value else 0.0,
+    }
+
+
 class RoyInventoryModelTests(unittest.TestCase):
     def test_roy_reporting_product_identity_prefers_import_code_across_languages(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
@@ -127,6 +149,53 @@ class RoyInventoryModelTests(unittest.TestCase):
         summary = result["summary"]
         self.assertEqual(1, summary["history_only_inventory_products"])
         self.assertEqual(1, summary["historical_restock_relevant_products"])
+
+    def test_maco_stop_large_set_demand_is_shifted_to_components(self) -> None:
+        inventory_snapshot = pd.DataFrame(
+            [
+                inventory_row(
+                    "MACO-EXTREME-300",
+                    "Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla",
+                ),
+                inventory_row("MACO-HOLSTER-300", "Puzdro MACO STOP na sprej 300ml"),
+                inventory_row("BEAR-BELL", "Zvonček na medvede, plašič medveďov"),
+            ]
+        )
+        exporter = RoyInventoryModelExporter(inventory_snapshot=inventory_snapshot)
+        item_df = pd.DataFrame(
+            [
+                item_row("R-1", "SET-MACO-LARGE", "Set MACO STOP VEĽKÝ", "2026-05-01", 1, 120),
+                item_row("R-2", "SET-MACO-LARGE", "Set MACO STOP VEĽKÝ", "2026-05-10", 1, 120),
+                item_row("R-3", "SET-MACO-LARGE", "Set MACO STOP VEĽKÝ", "2026-05-20", 1, 120),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+
+        alert_rows = result["alert_rows"]
+        restock_rows = result["restock_priority_rows"]
+        expected_component_skus = {"MACO-EXTREME-300", "MACO-HOLSTER-300", "BEAR-BELL"}
+
+        self.assertTrue(expected_component_skus.issubset(set(alert_rows["sku"])))
+        self.assertTrue(expected_component_skus.issubset(set(restock_rows["sku"])))
+        self.assertNotIn("SET-MACO-LARGE", set(alert_rows["sku"]))
+        self.assertNotIn("SET-MACO-LARGE", set(restock_rows["sku"]))
+
+        for component_sku in expected_component_skus:
+            row = alert_rows.loc[alert_rows["sku"] == component_sku].iloc[0]
+            self.assertEqual("Out of stock", row["stock_risk_level"])
+            self.assertEqual(3.0, float(row["bundle_component_recent_30d_units"]))
+            self.assertEqual(3.0, float(row["alert_30d_units"]))
+            self.assertTrue(bool(row["historical_restock_relevant_flag"]))
+
+        summary = result["summary"]
+        self.assertEqual(1, summary["bundle_component_rule_count"])
+        self.assertEqual(9.0, float(summary["bundle_component_adjustment_30d_units"]))
+        self.assertGreaterEqual(summary["historical_restock_relevant_products"], 3)
 
 
 if __name__ == "__main__":

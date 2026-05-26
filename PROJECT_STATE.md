@@ -2656,3 +2656,22 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - final host marker: `PRODUCTION_SMOKE_OK:roy:7bae84d5e8364db3b0cd3f00d2c63639:172.31.18.226`
 - Next exact step:
   - watch the next scheduled daily reports once and confirm the generated report artifacts still show expected product grouping
+
+### 2026-05-26 (ROY MACO STOP large set component demand)
+- Branch: `codex/roy-maco-stop-set-components`
+- Change:
+  - ROY inventory model now treats each sold `Set MACO STOP VELKY` as component demand for:
+    - `Najsilnejsi sprej na medvede MACO STOP Extreme 300ml hmla`
+    - `Puzdro MACO STOP na sprej 300ml`
+    - `Zvoncek na medvede, plasic medvedov`
+  - the configured bundle SKU remains excluded from operational restock/alert demand once the demand is shifted to components
+  - component rows inherit bundle order/unit/revenue relevance for the historical restock threshold, so components sold only through the set can still trigger ROY stock alerts
+  - added regression coverage proving three set sales produce three component alert/restock rows and no standalone set alert/restock row
+- Local verification:
+  - `python -m py_compile export_orders.py dashboard_modern.py live_dashboard_server.py roy_operations_dashboard.py`
+  - `python -m unittest tests.test_roy_inventory_model tests.test_roy_operations_dashboard`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner live dashboard, then verify `/production/roy`
