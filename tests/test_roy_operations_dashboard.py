@@ -83,6 +83,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["roy"])
         self.assertEqual(12, inventory["lead_time_working_days_by_brand"]["maco_stop"])
         self.assertEqual(3, inventory["lead_time_working_days_by_family"]["memory_storage"])
+        self.assertEqual(5, inventory["default_lead_time_working_days"])
+        self.assertEqual(3, inventory["historical_restock_min_orders"])
 
     def test_snapshot_includes_paid_and_cod_orders_only_for_fulfillment(self) -> None:
         settings = make_settings()

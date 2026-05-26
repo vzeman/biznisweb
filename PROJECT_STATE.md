@@ -2529,3 +2529,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
 - Next exact step:
   - open PR, merge to `main`, deploy the live dashboard App Runner service, then verify the public ROY URL shows at least 100 inventory rows when enough rows exist
+
+### 2026-05-26 (ROY restock alerts include relevant historical sellers)
+- Branch: `codex/roy-restock-relevant-products`
+- Change:
+  - ROY inventory model now adds historically relevant sold SKUs into restock analysis even when they are missing from the current BiznisWeb inventory snapshot
+  - historical restock relevance threshold is configurable and currently requires at least `3` orders, `3` units, and `50` EUR net revenue
+  - products without a brand/family lead-time override now use default `5` working days for reorder timing
+  - alert/restock/revenue-at-risk rows now require the historical relevance threshold, so one-off or two-off products are filtered out
+  - ECR build workflow now runs `tests.test_roy_inventory_model`
+- Local verification:
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR, deploy ROY App Runner, verify deploy smoke and public `/production/roy`
