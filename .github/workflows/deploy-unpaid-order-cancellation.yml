@@ -7,6 +7,14 @@ on:
         description: Reporting project slug
         required: true
         default: roy
+  push:
+    branches:
+      - main
+    paths:
+      - unpaid_order_cancellation.py
+      - unpaid_order_cancellation_runner.py
+      - projects/roy/settings.json
+      - .github/workflows/deploy-unpaid-order-cancellation.yml
 
 env:
   AWS_REGION: eu-central-1
@@ -33,7 +41,7 @@ jobs:
       - name: Deploy scheduler and run host smoke
         shell: bash
         env:
-          PROJECT: ${{ inputs.project }}
+          PROJECT: ${{ inputs.project || 'roy' }}
         run: |
           set -euo pipefail
 

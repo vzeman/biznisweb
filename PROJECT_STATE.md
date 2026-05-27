@@ -231,6 +231,8 @@ Bootstrap entrypoints:
   - payment refs `6`, `17`, `18`, `11`, `20`
   - daily schedule metadata `roy-unpaid-order-cancellation`, `cron(10 2 * * ? *) Europe/Bratislava`
 - Added GitHub Actions workflow `.github/workflows/deploy-unpaid-order-cancellation.yml` to register the ECS task definition, create/update the EventBridge Scheduler job, and verify a host dry-run marker at `http://127.0.0.1:8000/marker.json`.
+- Follow-up workflow registration note:
+  - the deploy workflow also has a `push` trigger scoped to `main` and only the unpaid-cancellation files so GitHub registers it and future automation-code changes refresh the scheduler through the same host-smoke path
 - Verified locally:
   - `python -m py_compile unpaid_order_cancellation.py unpaid_order_cancellation_runner.py`
   - `python -m unittest tests.test_unpaid_order_cancellation`
