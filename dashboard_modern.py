@@ -655,6 +655,45 @@ def _profit_status_class(value: Any) -> str:
     return "neutral"
 
 
+def _build_fb_daily_payload(
+    date_from: datetime,
+    date_to: datetime,
+    fb_detailed_metrics: Optional[dict],
+) -> Dict[str, List[Any]]:
+    payload: Dict[str, List[Any]] = {
+        "dates": [],
+        "spend": [],
+        "impressions": [],
+        "clicks": [],
+        "ctr": [],
+        "cpc": [],
+        "cpm": [],
+        "reach": [],
+    }
+    if not fb_detailed_metrics:
+        return payload
+
+    metrics_by_date = {str(key): value or {} for key, value in fb_detailed_metrics.items()}
+    date_keys = [
+        date.strftime("%Y-%m-%d")
+        for date in pd.date_range(start=date_from, end=date_to, freq="D")
+    ]
+    if not date_keys:
+        date_keys = sorted(metrics_by_date)
+
+    for date_key in date_keys:
+        row = metrics_by_date.get(date_key, {})
+        payload["dates"].append(date_key)
+        payload["spend"].append(round(_num(row.get("spend")), 2))
+        payload["impressions"].append(round(_num(row.get("impressions")), 2))
+        payload["clicks"].append(round(_num(row.get("clicks")), 2))
+        payload["ctr"].append(round(_num(row.get("ctr")), 2))
+        payload["cpc"].append(round(_num(row.get("cpc")), 2))
+        payload["cpm"].append(round(_num(row.get("cpm")), 2))
+        payload["reach"].append(round(_num(row.get("reach")), 2))
+    return payload
+
+
 def generate_modern_dashboard(
     date_agg: pd.DataFrame,
     items_agg: pd.DataFrame,
@@ -968,19 +1007,7 @@ def generate_modern_dashboard(
             "lifetime_orders": [round(_num(v), 2) for v in ltv_by_date.get("total_lifetime_orders", pd.Series([0] * len(ltv_by_date))).tolist()],
         }
 
-    fb_daily_payload = {"dates": [], "spend": [], "impressions": [], "clicks": [], "ctr": [], "cpc": [], "cpm": [], "reach": []}
-    if fb_detailed_metrics:
-        sorted_rows = sorted(fb_detailed_metrics.items(), key=lambda item: item[0])
-        fb_daily_payload = {
-            "dates": [str(k) for k, _ in sorted_rows],
-            "spend": [round(_num(v.get("spend")), 2) for _, v in sorted_rows],
-            "impressions": [round(_num(v.get("impressions")), 2) for _, v in sorted_rows],
-            "clicks": [round(_num(v.get("clicks")), 2) for _, v in sorted_rows],
-            "ctr": [round(_num(v.get("ctr")), 2) for _, v in sorted_rows],
-            "cpc": [round(_num(v.get("cpc")), 2) for _, v in sorted_rows],
-            "cpm": [round(_num(v.get("cpm")), 2) for _, v in sorted_rows],
-            "reach": [round(_num(v.get("reach")), 2) for _, v in sorted_rows],
-        }
+    fb_daily_payload = _build_fb_daily_payload(date_from, date_to, fb_detailed_metrics)
 
     fb_campaign_rows = []
     if fb_campaigns:

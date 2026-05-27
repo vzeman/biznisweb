@@ -204,9 +204,25 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- ROY MACO STOP large set component demand is deployed to the live operations dashboard. Next exact step: monitor the next scheduled ROY report once and confirm the alert counts stay consistent with the live dashboard.
+- ROY Facebook spend audit found that Meta reports zero spend for `2026-05-18..2026-05-23`, but campaign `SK-Sale-Fotopasce-ACQ` is active again with spend on `2026-05-25..2026-05-26`. Next exact step: merge/deploy the dashboard zero-fill fix, then verify the live ROY report shows zero-spend days instead of omitting them from the Facebook delivery chart.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY Facebook spend audit)
+- Checked ROY Facebook Ads source path:
+  - financial/reporting spend comes from Meta account-level daily insights via `FacebookAdsClient.get_daily_spend()`;
+  - the modern dashboard `Daily spend, clicks and impressions` chart uses `fb_detailed_metrics` from Meta account-level insights.
+- Live Meta API read-only check for account `act_1374274514249768`:
+  - `2026-05-18..2026-05-23`: Facebook spend `0.00 EUR`, no campaign rows.
+  - `2026-05-25`: Facebook spend `4.76 EUR`.
+  - `2026-05-26`: Facebook spend `14.12 EUR`.
+  - campaign/adset/ad source: `SK-Sale-Fotopasce-ACQ` / `SK-Interest` / `SK-Fotopasce-4G-Video-V1`, all reported `ACTIVE`.
+- Found a dashboard visualization issue: `fb_daily` payload only included dates returned by Meta, so zero-spend days were omitted from the Facebook delivery chart instead of plotted as `0`.
+- Added a code fix on branch `codex/roy-fb-spend-zero-fill` to zero-fill missing dates in `dashboard_modern.py`, with a unit test in `tests/test_dashboard_modern.py`.
+- Verified locally:
+  - `python -m unittest tests.test_dashboard_modern`
+  - `python -m py_compile dashboard_modern.py`
+  - `python -m unittest discover -s tests`
 
 ### 2026-05-26 (ROY App Runner live dashboard deployed)
 - Merged deployment fix PRs into `main`:
