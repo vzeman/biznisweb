@@ -112,6 +112,59 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(["R-2"], [row["order_num"] for row in snapshot["personal_pickups"]])
         self.assertTrue(snapshot["personal_pickups"][0]["pickup_action_allowed"])
 
+    def test_snapshot_expands_bundle_order_items_to_pickable_components(self) -> None:
+        project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
+        settings = resolve_roy_operations_settings(project_settings)
+        rules = {rule["key"]: rule for rule in project_settings["product_component_expansion_rules"]}
+        packeta_shipping = price_element("shipping", "Packeta - vĂ˝dajnĂ© miesto", "9")
+        paid_payment = price_element("payment", "OkamĹľitĂˇ platba online", "18")
+        maco_rule = rules["maco_stop_large_set"]
+        rio_rule = rules["wachman_rio_solar_4g"]
+        paid_status = settings["paid_statuses"][0]
+        maco_order = make_order("R-MACO", paid_status, paid_payment, packeta_shipping)
+        maco_order["items"] = [
+            {
+                "item_label": maco_rule["bundle_patterns"][0],
+                "ean": "",
+                "import_code": "",
+                "warehouse_number": "",
+                "quantity": 2,
+            }
+        ]
+        rio_order = make_order("R-RIO", paid_status, paid_payment, packeta_shipping)
+        rio_order["items"] = [
+            {
+                "item_label": rio_rule["bundle_patterns"][0],
+                "ean": "",
+                "import_code": "",
+                "warehouse_number": "",
+                "quantity": 1,
+            }
+        ]
+
+        snapshot = build_roy_orders_snapshot(project="roy", orders=[maco_order, rio_order], settings=settings)
+        rows = {row["order_num"]: row for row in snapshot["orders"]}
+        maco_items = rows["R-MACO"]["items"]
+        rio_items = rows["R-RIO"]["items"]
+
+        self.assertNotIn(maco_rule["bundle_patterns"][0], [item["label"] for item in maco_items])
+        self.assertEqual({component["item_label"] for component in maco_rule["components"]}, {item["label"] for item in maco_items})
+        self.assertEqual(
+            {component["item_import_code"] for component in maco_rule["components"]},
+            {item["import_code"] for item in maco_items},
+        )
+        self.assertEqual({2.0}, {item["quantity"] for item in maco_items})
+        self.assertTrue(all(item["bundle_component"] for item in maco_items))
+
+        self.assertNotIn(rio_rule["bundle_patterns"][0], [item["label"] for item in rio_items])
+        self.assertEqual({component["item_label"] for component in rio_rule["components"]}, {item["label"] for item in rio_items})
+        self.assertEqual(
+            {component["item_import_code"] for component in rio_rule["components"]},
+            {item["import_code"] for item in rio_items},
+        )
+        self.assertEqual({1.0}, {item["quantity"] for item in rio_items})
+        self.assertTrue(all(item["bundle_component"] for item in rio_items))
+
     def test_executive_kpis_build_calendar_months_from_series(self) -> None:
         payload = {
             "generated_at": "2026-05-26T10:00:00Z",

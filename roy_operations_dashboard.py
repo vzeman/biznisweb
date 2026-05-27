@@ -7,6 +7,7 @@ import copy
 import json
 import math
 import os
+import re
 import time
 import unicodedata
 from collections import defaultdict
@@ -332,6 +333,24 @@ def _normalize_text(value: Any) -> str:
     return " ".join(without_marks.split())
 
 
+def _normalize_match_text(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch)).lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _matches_patterns(label: Any, patterns: Iterable[Any]) -> bool:
+    normalized_label = _normalize_match_text(label)
+    if not normalized_label:
+        return False
+    for pattern in patterns:
+        normalized_pattern = _normalize_match_text(pattern)
+        if normalized_pattern and normalized_pattern in normalized_label:
+            return True
+    return False
+
+
 def _as_list(value: Any, default: Iterable[str]) -> List[str]:
     if value is None:
         return [str(item) for item in default]
@@ -374,6 +393,8 @@ def _pct_change(current: Optional[float], previous: Optional[float]) -> Optional
 
 def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[str, Any]:
     raw = project_settings.get("operations_dashboard") or {}
+    component_rules = project_settings.get("product_component_expansion_rules") or []
+    component_rules = component_rules if isinstance(component_rules, list) else []
     paid_statuses = _as_list(raw.get("paid_statuses"), DEFAULT_PAID_STATUSES)
     cod_statuses = _as_list(raw.get("cod_statuses"), DEFAULT_COD_STATUSES)
     cod_payment_patterns = _as_list(raw.get("cod_payment_patterns"), DEFAULT_COD_PAYMENT_PATTERNS)
@@ -409,6 +430,7 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
         ),
         "cache_ttl_seconds": _as_int(raw.get("cache_ttl_seconds"), DEFAULT_CACHE_TTL_SECONDS, minimum=1),
         "auto_refresh_seconds": _as_int(raw.get("auto_refresh_seconds"), DEFAULT_AUTO_REFRESH_SECONDS, minimum=30),
+        "product_component_expansion_rules": component_rules,
     }
 
 
@@ -479,22 +501,102 @@ def _is_personal_pickup(order: Dict[str, Any], settings: Dict[str, Any]) -> bool
     return any(name and name in shipping_title for name in settings["personal_pickup_shipping_names_normalized"])
 
 
-def _order_items(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _normalize_product_identifier(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def _component_rule_matches_order_item(item: Dict[str, Any], rule: Dict[str, Any]) -> bool:
+    patterns = rule.get("bundle_patterns") or []
+    if isinstance(patterns, list) and _matches_patterns(item.get("label"), patterns):
+        return True
+
+    item_identifiers = {
+        _normalize_product_identifier(item.get("import_code")),
+        _normalize_product_identifier(item.get("warehouse_number")),
+        _normalize_product_identifier(item.get("ean")),
+    }
+    configured_identifiers: List[Any] = []
+    for key in ("bundle_skus", "bundle_import_codes", "bundle_warehouse_numbers", "bundle_eans"):
+        values = rule.get(key) or []
+        if isinstance(values, list):
+            configured_identifiers.extend(values)
+    return any(_normalize_product_identifier(value) in item_identifiers for value in configured_identifiers)
+
+
+def _expand_order_item_components(item: Dict[str, Any], settings: Dict[str, Any]) -> List[Dict[str, Any]]:
+    for rule in settings.get("product_component_expansion_rules") or []:
+        if not isinstance(rule, dict) or not _component_rule_matches_order_item(item, rule):
+            continue
+        components = rule.get("components") or []
+        if not isinstance(components, list) or not components:
+            return [item]
+        expanded: List[Dict[str, Any]] = []
+        parent_quantity = _to_float(item.get("quantity"))
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            component_quantity = _to_float(component.get("quantity"))
+            component_label = str(component.get("item_label") or "").strip()
+            if parent_quantity <= 0 or component_quantity <= 0 or not component_label:
+                continue
+            expanded.append(
+                {
+                    "label": component_label,
+                    "quantity": round(parent_quantity * component_quantity, 2),
+                    "ean": str(component.get("item_ean") or "").strip(),
+                    "import_code": str(component.get("item_import_code") or "").strip(),
+                    "warehouse_number": str(component.get("item_warehouse_number") or "").strip(),
+                    "bundle_component": True,
+                    "bundle_parent_label": item.get("label", ""),
+                    "bundle_expansion_rule": str(rule.get("key") or "").strip(),
+                }
+            )
+        return expanded or [item]
+    return [item]
+
+
+def _merge_order_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    merged: Dict[Tuple[str, str, str, str], Dict[str, Any]] = {}
+    for item in items:
+        key = (
+            _normalize_product_identifier(item.get("import_code")),
+            _normalize_product_identifier(item.get("ean")),
+            _normalize_product_identifier(item.get("warehouse_number")),
+            _normalize_match_text(item.get("label")),
+        )
+        if key not in merged:
+            merged[key] = dict(item)
+            continue
+        merged[key]["quantity"] = round(_to_float(merged[key].get("quantity")) + _to_float(item.get("quantity")), 2)
+        if item.get("bundle_component"):
+            merged[key]["bundle_component"] = True
+            parent_labels = {
+                label
+                for label in str(merged[key].get("bundle_parent_label") or "").split(" | ")
+                if label
+            }
+            if item.get("bundle_parent_label"):
+                parent_labels.add(str(item["bundle_parent_label"]))
+            if parent_labels:
+                merged[key]["bundle_parent_label"] = " | ".join(sorted(parent_labels))
+    return list(merged.values())
+
+
+def _order_items(order: Dict[str, Any], settings: Dict[str, Any]) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
     for item in order.get("items") or []:
         quantity = _to_float(item.get("quantity"))
         if quantity <= 0:
             continue
-        items.append(
-            {
-                "label": str(item.get("item_label") or "").strip(),
-                "quantity": quantity,
-                "ean": str(item.get("ean") or "").strip(),
-                "import_code": str(item.get("import_code") or "").strip(),
-                "warehouse_number": str(item.get("warehouse_number") or "").strip(),
-            }
-        )
-    return items
+        base_item = {
+            "label": str(item.get("item_label") or "").strip(),
+            "quantity": quantity,
+            "ean": str(item.get("ean") or "").strip(),
+            "import_code": str(item.get("import_code") or "").strip(),
+            "warehouse_number": str(item.get("warehouse_number") or "").strip(),
+        }
+        items.extend(_expand_order_item_components(base_item, settings))
+    return _merge_order_items(items)
 
 
 def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -520,7 +622,7 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         "sum_value": _to_float((order.get("sum") or {}).get("value")),
         "payment": payment,
         "shipping": shipping,
-        "items": _order_items(order),
+        "items": _order_items(order, settings),
         "fulfillable": fulfillable,
         "fulfillment_reason": reason,
         "personal_pickup": is_pickup,
