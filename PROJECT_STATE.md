@@ -216,24 +216,32 @@ Bootstrap entrypoints:
   - production task definition `roy-unpaid-order-cancellation:3` uses ECR digest `sha256:be3e39f3184ef479d899fb97682792a998c72d30bc41cc7dcd8f2670629c8ac3`
   - production one-off execute run `26510343214` updated `11` stale unpaid orders and returned `failed_orders=0`
   - post-execute read-only dry-run on `2026-05-27` scanned `1500` ROY orders through `2026-01-29` and found `eligible_orders=0`
-- ROY operations picking-list PDF export is implemented on task branch:
+- ROY operations picking-list PDF export is live in production:
+  - merged PR `#121` into `main` (`de1dcaa2aaea75ef31f24ed266c96e4e4330d497`)
+  - deploy-smoke PR `#122` merged into `main` (`678a3a85d3e16980ba5bb4dc2d1ade620ec921c2`)
   - dashboard header now has one-click `Vysklad. PDF` download
   - endpoint `/api/operations/roy/picking-lists.pdf?refresh=1` generates one PDF with one picking list page per fulfillable order
   - PDF uses the same expanded order items as the operations dashboard, so configured bundle components are reflected in picking lists
   - local server smoke on `2026-05-27` returned `application/pdf`, download filename `roy-vyskladnovacie-listy-30-20260527-1429.pdf`, `%PDF-` header, and `167256` bytes
+  - production App Runner service `biznisweb-roy-operations-dashboard` serves `/production/roy`
+  - production deploy workflow run `26512874128` succeeded on `2026-05-27`
+  - hard-gate context: App Runner instance/IP `N/A`, service ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, image digest `sha256:50e1453696f58df747e174d0e0c5e4969f20fe0bdc8a72ebcadea7f289525397`
+  - host refresh verification: ECS/Fargate private IP `172.31.13.228`, service `roy-daily-report-email`, task definition `roy-reporting-daily:12`, localhost marker `LIVE_ARTIFACT_MARKER_OK`
+  - production UI/API smoke verified `Vysklad. PDF`, `/api/operations/roy/picking-lists.pdf?refresh=1`, `%PDF-`, `application/pdf`, `Content-Disposition`, and `143923` PDF bytes for `32` fulfillable orders
 
 ## 8) Next Exact Step
-- Deploy ROY operations picking-list PDF export to App Runner and verify `/api/operations/roy/picking-lists.pdf?refresh=1` on the production service.
+- No deployment is pending for the ROY picking-list PDF export. Optional next step: match the exact BizniWeb native picking-list layout if the sample PDF is provided in an accessible path.
 
 ## 9) Change Log
 
-### 2026-05-27 (ROY operations picking-list PDF export staged)
+### 2026-05-27 (ROY operations picking-list PDF export deployed)
 - Added one-click PDF picking-list export to the ROY operations dashboard:
   - new module `roy_picking_lists_pdf.py`
   - new endpoint `/api/operations/roy/picking-lists.pdf?refresh=1`
   - new header button `Vysklad. PDF`
   - dependency `reportlab>=4.2.0`
   - Docker image now installs `fonts-dejavu-core` for Slovak/Czech diacritics in generated PDFs
+  - App Runner deploy smoke now downloads and validates the combined PDF endpoint with production Basic Auth secrets
 - Verified locally:
   - `python -m py_compile live_dashboard_server.py roy_picking_lists_pdf.py`
   - `python -m unittest tests.test_roy_picking_lists_pdf tests.test_roy_operations_dashboard tests.test_live_dashboard_auth`
@@ -246,6 +254,14 @@ Bootstrap entrypoints:
   - HTTP `200`, content type `application/pdf`
   - file header `%PDF-`
   - generated `30` picking lists into one PDF
+- Production deploy and smoke:
+  - PR `#121` merged the feature; PR `#122` merged the deploy smoke guard
+  - ECR digest `sha256:50e1453696f58df747e174d0e0c5e4969f20fe0bdc8a72ebcadea7f289525397`
+  - deploy workflow run `26512874128`, conclusion `success`
+  - App Runner service `biznisweb-roy-operations-dashboard`
+  - service URL `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - production PDF smoke returned `143923` bytes and verified `%PDF-`, `application/pdf`, and `Content-Disposition`
+  - refresh task marker `LIVE_ARTIFACT_MARKER_OK`; S3 latest payload marker `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=245:inventory_alerts=22.0`
 
 ### 2026-05-27 (ROY unpaid-order cancellation automation staged)
 - Added standalone stale unpaid order cancellation code:
