@@ -218,6 +218,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("soundToggleBtn", html)
         self.assertIn("playNewOrderSound", html)
         self.assertIn("notifyAboutNewFulfillableOrders", html)
+        self.assertIn("Vysklad. PDF", html)
+        self.assertIn("/api/operations/roy/picking-lists.pdf", html)
         self.assertIn("seenFulfillableOrderKeys", html)
         self.assertIn("nová objednávka na odoslanie", html)
         self.assertIn("replace(/[\"\\\\]/g, '\\\\$&')", html)

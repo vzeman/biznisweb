@@ -216,11 +216,36 @@ Bootstrap entrypoints:
   - production task definition `roy-unpaid-order-cancellation:3` uses ECR digest `sha256:be3e39f3184ef479d899fb97682792a998c72d30bc41cc7dcd8f2670629c8ac3`
   - production one-off execute run `26510343214` updated `11` stale unpaid orders and returned `failed_orders=0`
   - post-execute read-only dry-run on `2026-05-27` scanned `1500` ROY orders through `2026-01-29` and found `eligible_orders=0`
+- ROY operations picking-list PDF export is implemented on task branch:
+  - dashboard header now has one-click `Vysklad. PDF` download
+  - endpoint `/api/operations/roy/picking-lists.pdf?refresh=1` generates one PDF with one picking list page per fulfillable order
+  - PDF uses the same expanded order items as the operations dashboard, so configured bundle components are reflected in picking lists
+  - local server smoke on `2026-05-27` returned `application/pdf`, download filename `roy-vyskladnovacie-listy-30-20260527-1429.pdf`, `%PDF-` header, and `167256` bytes
 
 ## 8) Next Exact Step
-- Monitor the first scheduled ROY unpaid-order cancellation run after `2026-05-28 02:10 Europe/Bratislava` and confirm it exits cleanly with no unexpected eligible backlog.
+- Deploy ROY operations picking-list PDF export to App Runner and verify `/api/operations/roy/picking-lists.pdf?refresh=1` on the production service.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY operations picking-list PDF export staged)
+- Added one-click PDF picking-list export to the ROY operations dashboard:
+  - new module `roy_picking_lists_pdf.py`
+  - new endpoint `/api/operations/roy/picking-lists.pdf?refresh=1`
+  - new header button `Vysklad. PDF`
+  - dependency `reportlab>=4.2.0`
+  - Docker image now installs `fonts-dejavu-core` for Slovak/Czech diacritics in generated PDFs
+- Verified locally:
+  - `python -m py_compile live_dashboard_server.py roy_picking_lists_pdf.py`
+  - `python -m unittest tests.test_roy_picking_lists_pdf tests.test_roy_operations_dashboard tests.test_live_dashboard_auth`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- Local endpoint smoke:
+  - `GET http://127.0.0.1:8790/api/operations/roy/picking-lists.pdf?refresh=1`
+  - HTTP `200`, content type `application/pdf`
+  - file header `%PDF-`
+  - generated `30` picking lists into one PDF
 
 ### 2026-05-27 (ROY unpaid-order cancellation automation staged)
 - Added standalone stale unpaid order cancellation code:

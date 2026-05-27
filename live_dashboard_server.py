@@ -23,6 +23,7 @@ from roy_operations_dashboard import (
     resolve_roy_operations_settings,
     set_inbound_stock_order,
 )
+from roy_picking_lists_pdf import build_roy_picking_lists_filename, build_roy_picking_lists_pdf
 from reporting_core import load_project_settings
 
 
@@ -1035,6 +1036,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       </div>
       <div class="actions">
         <button id="soundToggleBtn" class="sound" type="button" aria-pressed="false">Zvuk vyp.</button>
+        <a class="button" href="/api/operations/roy/picking-lists.pdf?refresh=1">Vysklad. PDF</a>
         <button id="refreshBtn" class="primary" type="button">Refresh</button>
         <a class="button" href="/">Dashboardy</a>
       </div>
@@ -1784,6 +1786,19 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_download(self, body: bytes, *, content_type: str, filename: str, status: int = 200) -> None:
+        ascii_filename = "".join(ch if ch.isalnum() or ch in ".-_" else "_" for ch in filename) or "download.pdf"
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header(
+            "Content-Disposition",
+            f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{quote(filename)}",
+        )
+        self.end_headers()
+        self.wfile.write(body)
+
     def _send_json(self, payload: Dict[str, object], status: int = 200) -> None:
         self._send_bytes(
             json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
@@ -1873,6 +1888,53 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 )
             except Exception as exc:
                 self._send_json({"error": f"Failed to load ROY operations data: {exc}"}, status=500)
+            return
+
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "operations" and parts[3] == "picking-lists.pdf":
+            project = parts[2]
+            if project not in projects:
+                self._send_text(f"Unknown project '{escape(project)}'.", content_type="text/plain; charset=utf-8", status=404)
+                return
+            if project != "roy":
+                self._send_text(
+                    f"Operations dashboard is not enabled for '{escape(project)}'.",
+                    content_type="text/plain; charset=utf-8",
+                    status=404,
+                )
+                return
+            try:
+                operations_settings = resolve_roy_operations_settings(load_project_settings(project))
+            except Exception as exc:
+                self._send_text(
+                    f"Failed to load ROY operations settings: {escape(str(exc))}",
+                    content_type="text/plain; charset=utf-8",
+                    status=500,
+                )
+                return
+            if not operations_settings["enabled"]:
+                self._send_text(
+                    f"Operations dashboard is not enabled for '{escape(project)}'.",
+                    content_type="text/plain; charset=utf-8",
+                    status=404,
+                )
+                return
+            force_refresh = (query.get("refresh", ["1"])[0] or "").strip().lower() not in {"0", "false", "no"}
+            try:
+                payload = get_cached_roy_operations_snapshot(
+                    project,
+                    report_payload=read_latest_dashboard_payload(project),
+                    force_refresh=force_refresh,
+                )
+                orders = ((payload.get("orders") or {}).get("orders") or [])
+                pdf = build_roy_picking_lists_pdf(orders)
+                filename = build_roy_picking_lists_filename(orders)
+                self._send_download(pdf, content_type="application/pdf", filename=filename)
+            except Exception as exc:
+                self._send_text(
+                    f"Failed to generate picking lists PDF: {escape(str(exc))}",
+                    content_type="text/plain; charset=utf-8",
+                    status=500,
+                )
             return
 
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "production" and parts[3] == "live":

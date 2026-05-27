@@ -216,6 +216,7 @@ def main() -> int:
             "generate_invoices.py",
             "unpaid_order_cancellation.py",
             "unpaid_order_cancellation_runner.py",
+            "roy_picking_lists_pdf.py",
             "scripts/observability_snapshot.py",
             "scripts/scaffold_client.py",
             "scripts/import_product_expenses_excel.py",
