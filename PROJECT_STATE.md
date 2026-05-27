@@ -204,8 +204,10 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 - ROY operations dashboard performance/inbound workflow is live in production:
   - merged PR `#97` into `main` (`4f6ddaa2e3fc94c426fcda5e68aca3c1b7c880af`)
+  - browser-smoke JS escape fix merged PR `#99` into `main` (`805d3c6bbf84e8eba1ff061550c7ad7edf1fbbe9`) and redeployed
   - App Runner service `biznisweb-roy-operations-dashboard` serves `/production/roy`
   - live API returns top brands/products, loss-product warnings, inbound-stock state, and `auto_refresh_seconds = 90`
+  - rendered production HTML now emits valid `cssEscape` JavaScript and renders inbound/loss-product controls from the live API payload
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
@@ -243,6 +245,16 @@ Bootstrap entrypoints:
   - live HTML smoke: `/health = 200`, `/production/roy = 200`, marker `roy-operations-dashboard`, `Executive KPI deck`, `Top znacky`, `Top produkty`, `Produkty v strate`, and inbound controls present
   - live API smoke: marker `roy-operations-dashboard`, brand revenue/profit rows `3/3`, product revenue/profit rows `10/10`, loss-product rows `58`, inbound order count `0`, actionable stock alerts `20`, refresh `90` seconds
   - live state smoke: inbound save returned `ok=true` with `storage=s3`; inbound clear returned `ok=true`, `removed=true`, `storage=s3`
+- Follow-up browser-smoke fix:
+  - browser smoke found rendered production JS syntax failure in the `CSS.escape` fallback; root cause was Python string escaping producing `replace(/["\]/g, ...)`
+  - fix PR `#99` merged into `main` at `805d3c6bbf84e8eba1ff061550c7ad7edf1fbbe9`
+  - local verification: `python -m py_compile live_dashboard_server.py roy_operations_dashboard.py`; `python -m unittest tests.test_roy_operations_dashboard`; `python -m unittest tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard`; `git diff --check`
+  - ECR build workflow: `Build and Push ECR` run `26490106355`, conclusion `success`, digest `sha256:fd36d882a103b7202af706a302f11464ef61cf132da1ec4fece8a3d119d40162`
+  - deploy workflow: `Deploy Live Dashboard App Runner` run `26490167572`, conclusion `success`, head SHA `805d3c6bbf84e8eba1ff061550c7ad7edf1fbbe9`
+  - scheduled ROY refresh task hard-gate from deploy run: `instance-id=N/A (scheduled ECS/Fargate task)`, private IP `172.31.23.94`, service `roy-daily-report-email`, marker path `http://127.0.0.1:8000/marker.json`
+  - final live smoke: `/health = 200`, `/production/roy = 200`, rendered HTML has valid `replace(/["\\]/g, '\\$&')` and no invalid regex; API marker `roy-operations-dashboard`
+  - final render smoke with production HTML + production API: inbound controls `20`, brand rows `3`, product rows `10`, loss rows `58`, loss acknowledgements `58`, auto refresh `90s`, no rendered message error
+  - final S3 state smoke: inbound save returned `ok=true` with `storage=s3`; inbound clear returned `ok=true`, `removed=true`, `storage=s3`
 - Next exact step:
   - monitor next scheduled ROY refresh and verify inbound auto-clear after the first real restock.
 
