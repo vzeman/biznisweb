@@ -31,10 +31,11 @@ def item_row(
     cm2_profit: float | None = None,
     cm3_profit: float | None = None,
     cm1_profit: float | None = None,
+    total_expense: float | None = None,
     allocated_paid_spend: float = 0.0,
     country: str = "SK",
 ) -> dict:
-    return {
+    row = {
         "order_num": order_num,
         "product_sku": product_sku,
         "item_label": item_label,
@@ -49,6 +50,9 @@ def item_row(
         "allocated_paid_spend": allocated_paid_spend,
         "geo_country": country,
     }
+    if total_expense is not None:
+        row["total_expense"] = total_expense
+    return row
 
 
 def inventory_row(
@@ -216,9 +220,9 @@ class RoyInventoryModelTests(unittest.TestCase):
         item_df = pd.DataFrame(
             [
                 item_row("R-1", "P-WIN", "Wachman Profit Product", "2026-05-01", 2, 300, cm2_profit=120, cm3_profit=90),
-                item_row("R-2", "P-LOSS", "Loss Product", "2026-05-02", 2, 120, cm1_profit=-10, cm2_profit=-15, cm3_profit=-25),
+                item_row("R-2", "P-LOSS", "Loss Product", "2026-05-02", 2, 120, cm1_profit=-10, cm2_profit=-15, cm3_profit=-25, total_expense=130),
                 item_row("R-3", "P-REV", "Revenue Product", "2026-05-03", 1, 500, cm2_profit=40, cm3_profit=30),
-                item_row("R-4", "P-FIXED-LOSS", "Fixed Loss Product", "2026-05-04", 1, 100, cm1_profit=50, cm2_profit=20, cm3_profit=-10),
+                item_row("R-4", "P-FIXED-LOSS", "Fixed Loss Product", "2026-05-04", 1, 100, cm1_profit=50, cm2_profit=20, cm3_profit=-10, total_expense=50),
             ]
         )
 
@@ -231,6 +235,7 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual("P-REV", result["product_revenue_rows"].iloc[0]["sku"])
         self.assertEqual("P-WIN", result["product_profit_rows"].iloc[0]["sku"])
         self.assertEqual(["P-LOSS"], result["loss_product_rows"]["sku"].tolist())
+        self.assertEqual(-10, float(result["loss_product_rows"].iloc[0]["gross_profit"]))
         self.assertLess(float(result["loss_product_rows"].iloc[0]["gross_profit"]), 0)
         self.assertNotIn("P-FIXED-LOSS", result["loss_product_rows"]["sku"].tolist())
 
