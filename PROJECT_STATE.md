@@ -209,6 +209,11 @@ Bootstrap entrypoints:
   - live API returns top brands/products, loss-product warnings, inbound-stock state, and `auto_refresh_seconds = 90`
   - rendered production HTML now emits valid `cssEscape` JavaScript and renders inbound/loss-product controls from the live API payload
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
+- ROY HC800 product-loss diagnosis/fix is staged on task branch:
+  - `Wachman HC800` has import code `16689` and confirmed purchase cost `13.70 EUR` ex VAT
+  - historical local dashboard payload showed HC800 with positive gross profit (`5991.95 EUR`, `44.1%`) but negative post-fixed profit (`-3599.06 EUR`), so it looked loss-making where the UI labelled post-fixed profit as generic `Zisk`
+  - `projects/roy/product_expenses.json` now maps import code `16689` directly to `13.7`, instead of relying only on legacy title hashes
+  - ROY operations top brand/product tables now rank and display `gross_profit`/`gross_margin_pct`; `loss_product_rows` remains gross-loss only
 - ROY unpaid-order cancellation automation is live in production:
   - standalone runner `unpaid_order_cancellation_runner.py` changes stale unpaid bank-transfer/card orders to `Nezaplatená - zrušená objednávka`
   - ROY target status was verified through BizniWeb API as ID `74`
@@ -230,9 +235,28 @@ Bootstrap entrypoints:
   - production UI/API smoke verified `Vysklad. PDF`, `/api/operations/roy/picking-lists.pdf?refresh=1`, `%PDF-`, `application/pdf`, `Content-Disposition`, and `143923` PDF bytes for `32` fulfillable orders
 
 ## 8) Next Exact Step
-- No deployment is pending for the ROY picking-list PDF export. Optional next step: match the exact BizniWeb native picking-list layout if the sample PDF is provided in an accessible path.
+- Open/merge PR for the ROY HC800 gross-profit dashboard fix, wait for ECR build, deploy `biznisweb-roy-operations-dashboard`, and verify live `/production/roy` no longer presents HC800 as product loss.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY HC800 gross-profit dashboard fix staged)
+- Investigated `Wachman HC800` in ROY operations dashboard:
+  - import code `16689`
+  - configured purchase cost should be `13.70 EUR` ex VAT
+  - local payload had `gross_profit = 5991.95`, `gross_margin_pct = 44.1`, and `profit_with_fixed = -3599.06`
+  - root cause of the confusing loss signal was post-fixed profit being displayed under generic `Zisk` in top product/brand widgets, while true product-loss logic is gross-profit based
+- Changed implementation:
+  - added exact import-code cost mapping `"16689": 13.7`
+  - product/brand profit rankings now sort by `gross_profit`
+  - ROY operations UI labels top product/brand profit columns as `Hrubý zisk` / `Hrubá marža`
+  - live commercial snapshot enriches older product-profit rows with gross fields from revenue rows and sorts by gross profit defensively
+- Verified locally:
+  - `python -m py_compile export_orders.py dashboard_modern.py live_dashboard_server.py roy_operations_dashboard.py`
+  - `python -m unittest tests.test_roy_inventory_model tests.test_roy_operations_dashboard tests.test_reporting_product_identity`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
 
 ### 2026-05-27 (ROY operations picking-list PDF export deployed)
 - Added one-click PDF picking-list export to the ROY operations dashboard:

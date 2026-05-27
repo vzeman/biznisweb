@@ -877,6 +877,51 @@ def build_commercial_snapshot(report_payload: Dict[str, Any], state: Optional[Di
     product_profit_rows = list(roy_demand.get("product_profit_rows") or [])
     if not product_profit_rows:
         product_profit_rows = list(dashboard.get("products") or [])
+    product_revenue_by_sku = {
+        str(row.get("sku") or "").strip(): row
+        for row in product_revenue_rows
+        if isinstance(row, dict) and str(row.get("sku") or "").strip()
+    }
+    if product_revenue_by_sku:
+        enriched_product_profit_rows = []
+        for raw_row in product_profit_rows:
+            if not isinstance(raw_row, dict):
+                enriched_product_profit_rows.append(raw_row)
+                continue
+            row = dict(raw_row)
+            source_row = product_revenue_by_sku.get(str(row.get("sku") or "").strip())
+            if isinstance(source_row, dict):
+                for key in ("gross_profit", "cm1_profit", "gross_margin_pct"):
+                    if row.get(key) in (None, "") and source_row.get(key) not in (None, ""):
+                        row[key] = source_row.get(key)
+            enriched_product_profit_rows.append(row)
+        product_profit_rows = enriched_product_profit_rows
+
+    def row_gross_profit(row: Dict[str, Any]) -> float:
+        for key in ("gross_profit", "cm1_profit", "profit_without_fixed", "profit_with_fixed"):
+            value = _optional_float(row.get(key))
+            if value is not None:
+                return value
+        return 0.0
+
+    def sort_by_revenue_then_gross(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return sorted(
+            [row for row in rows if isinstance(row, dict)],
+            key=lambda row: (_to_float(row.get("revenue")), row_gross_profit(row)),
+            reverse=True,
+        )
+
+    def sort_by_gross_then_revenue(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return sorted(
+            [row for row in rows if isinstance(row, dict)],
+            key=lambda row: (row_gross_profit(row), _to_float(row.get("revenue"))),
+            reverse=True,
+        )
+
+    product_revenue_rows = sort_by_revenue_then_gross(product_revenue_rows)
+    product_profit_rows = sort_by_gross_then_revenue(product_profit_rows)
+    brand_revenue_rows = sort_by_revenue_then_gross(list(roy_demand.get("brand_revenue_rows") or []))
+    brand_profit_rows = sort_by_gross_then_revenue(list(roy_demand.get("brand_profit_rows") or []))
     country_rows = list(roy_demand.get("country_rows") or [])
     geo_rows = list(dashboard.get("geo_rows") or [])
     geo_by_country = {
@@ -934,8 +979,8 @@ def build_commercial_snapshot(report_payload: Dict[str, Any], state: Optional[Di
         loss_rows.append(row)
 
     return {
-        "brand_revenue_rows": list(roy_demand.get("brand_revenue_rows") or [])[:3],
-        "brand_profit_rows": list(roy_demand.get("brand_profit_rows") or [])[:3],
+        "brand_revenue_rows": brand_revenue_rows[:3],
+        "brand_profit_rows": brand_profit_rows[:3],
         "product_revenue_rows": product_revenue_rows[:10],
         "product_profit_rows": product_profit_rows[:10],
         "country_rows": country_rows[:12],

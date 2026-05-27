@@ -387,6 +387,46 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(["LOSS-2"], [row["sku"] for row in snapshot["loss_product_rows"]])
         self.assertEqual(1, snapshot["acknowledged_loss_product_count"])
 
+    def test_commercial_snapshot_uses_gross_profit_for_product_rankings(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "product_revenue_rows": [
+                        {
+                            "sku": "16689",
+                            "product": "Wachman HC800",
+                            "revenue": 1000,
+                            "gross_profit": 440,
+                            "profit_with_fixed": -120,
+                            "gross_margin_pct": 44,
+                        },
+                        {
+                            "sku": "P-GROSS-WIN",
+                            "product": "Gross winner",
+                            "revenue": 900,
+                            "gross_profit": 500,
+                            "profit_with_fixed": 50,
+                            "gross_margin_pct": 55.6,
+                        },
+                    ],
+                    "product_profit_rows": [
+                        {"sku": "P-GROSS-WIN", "product": "Gross winner", "revenue": 900, "profit_with_fixed": 50},
+                        {"sku": "16689", "product": "Wachman HC800", "revenue": 1000, "profit_with_fixed": -120},
+                    ],
+                    "loss_product_rows": [
+                        {"sku": "16689", "product": "Wachman HC800", "revenue": 1000, "gross_profit": 440, "profit_with_fixed": -120},
+                    ],
+                },
+            },
+        }
+
+        snapshot = build_commercial_snapshot(payload, {})
+
+        self.assertEqual("16689", snapshot["product_revenue_rows"][0]["sku"])
+        self.assertEqual("P-GROSS-WIN", snapshot["product_profit_rows"][0]["sku"])
+        self.assertEqual(440, snapshot["product_profit_rows"][1]["gross_profit"])
+        self.assertEqual([], snapshot["loss_product_rows"])
+
     def test_commercial_snapshot_uses_only_gross_loss_products(self) -> None:
         payload = {
             "dashboard": {
