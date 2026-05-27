@@ -3447,3 +3447,24 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard` and `auto_refresh_seconds=90`
 - Next exact step:
   - have the browser tab sound toggle enabled during warehouse use and confirm the new alert volume is sufficient on the next real fulfillable order
+
+### 2026-05-27 (ROY paid-only personal pickup list)
+- Branch: `codex/roy-paid-only-personal-pickups`
+- Change:
+  - ROY operations dashboard personal-pickup list now includes only paid personal pickup orders that are not already shipped
+  - COD personal pickups can still appear in the fulfillable order table when they match the COD fulfillment rule, but they no longer appear in the dedicated `Osobné odbery` panel
+  - pickup ship checkbox/action is allowed only for paid personal pickup rows, so unpaid/cancelled pickup orders cannot be marked shipped through the dashboard action
+  - scan metadata now counts only paid personal pickups for `personal_pickups_seen_during_scan`
+- Pre-change live observation:
+  - `/api/operations/roy/live?refresh=1` returned `2` personal pickup rows
+  - order `2677002554` was present with status `Nezaplatená - zrušená objednávka`, payment `Bankovým prevodom`, shipping `Osobný odber na sklade`
+  - order `2677002764` was present with status `Platba online - zaplatené`, payment `Okamžitá platba online`, shipping `Osobný odber na sklade`
+- Local verification:
+  - `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_production_board`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard with `skip_artifact_refresh=true`, then verify live personal pickup list excludes `2677002554`

@@ -103,16 +103,22 @@ class RoyOperationsDashboardTests(unittest.TestCase):
             make_order("R-2", "Čaká na vybavenie", price_element("payment", "Dobierkou", "7"), pickup_shipping),
             make_order("R-3", "Čaká na vybavenie", price_element("payment", "Bankovým prevodom", "6"), packeta_shipping),
             make_order("R-4", "Odoslaná", price_element("payment", "Dobierkou", "7"), pickup_shipping),
+            make_order("R-5", "Platba online - zaplatené", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
+            make_order("R-6", "Nezaplatená - zrušená objednávka", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
         ]
 
         snapshot = build_roy_orders_snapshot(project="roy", orders=orders, settings=settings)
 
-        self.assertEqual(2, snapshot["summary"]["fulfillable_orders"])
-        self.assertEqual(1, snapshot["summary"]["paid_online_orders"])
+        self.assertEqual(3, snapshot["summary"]["fulfillable_orders"])
+        self.assertEqual(2, snapshot["summary"]["paid_online_orders"])
         self.assertEqual(1, snapshot["summary"]["cod_waiting_orders"])
-        self.assertEqual(["R-1", "R-2"], [row["order_num"] for row in snapshot["orders"]])
-        self.assertEqual(["R-2"], [row["order_num"] for row in snapshot["personal_pickups"]])
+        self.assertEqual(["R-1", "R-2", "R-5"], [row["order_num"] for row in snapshot["orders"]])
+        self.assertEqual(["R-5"], [row["order_num"] for row in snapshot["personal_pickups"]])
+        cod_pickup = next(row for row in snapshot["orders"] if row["order_num"] == "R-2")
+        self.assertFalse(cod_pickup["paid_personal_pickup"])
+        self.assertFalse(cod_pickup["pickup_action_allowed"])
         self.assertTrue(snapshot["personal_pickups"][0]["pickup_action_allowed"])
+        self.assertTrue(snapshot["personal_pickups"][0]["paid_personal_pickup"])
 
     def test_snapshot_exposes_notes_addresses_and_wholesale_signal_for_pdf(self) -> None:
         settings = make_settings()
