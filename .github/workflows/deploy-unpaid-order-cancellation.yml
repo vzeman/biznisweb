@@ -7,6 +7,11 @@ on:
         description: Reporting project slug
         required: true
         default: roy
+      execute_now:
+        description: Run the cancellation job for real after registering the schedule
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -42,6 +47,7 @@ jobs:
         shell: bash
         env:
           PROJECT: ${{ inputs.project || 'roy' }}
+          EXECUTE_NOW: ${{ inputs.execute_now || 'false' }}
         run: |
           set -euo pipefail
 
@@ -304,11 +310,17 @@ jobs:
           PY
           )"
 
+          EXPECTED_MARKER="UNPAID_CANCELLATION_MARKER_OK"
+          if [[ "${EXECUTE_NOW}" == "true" ]]; then
+            EXPECTED_MARKER="UNPAID_CANCELLATION_EXECUTE_MARKER_OK"
+          fi
+
           SMOKE_SCRIPT="$(cat <<'SH'
           set -euo pipefail
           PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
           TARGET_STATUS_NAME="${TARGET_STATUS_NAME:?TARGET_STATUS_NAME missing}"
           TARGET_STATUS_ID="${TARGET_STATUS_ID:-}"
+          EXECUTE_NOW="${EXECUTE_NOW:-false}"
           PIDS=()
           cleanup() {
             for pid in "${PIDS[@]:-}"; do
@@ -316,7 +328,11 @@ jobs:
             done
           }
           trap cleanup EXIT
-          python unpaid_order_cancellation_runner.py --project "${PROJECT}" --dry-run | tee /tmp/unpaid-cancellation.log
+          RUN_ARGS=(--project "${PROJECT}")
+          if [[ "${EXECUTE_NOW}" != "true" ]]; then
+            RUN_ARGS+=(--dry-run)
+          fi
+          python unpaid_order_cancellation_runner.py "${RUN_ARGS[@]}" | tee /tmp/unpaid-cancellation.log
           python - <<'PY'
           import json
           import os
@@ -328,20 +344,25 @@ jobs:
                   summary_line = line.split(" ", 1)[1]
           assert summary_line, "missing unpaid cancellation summary"
           summary = json.loads(summary_line)
+          execute_now = os.environ.get("EXECUTE_NOW", "").lower() == "true"
           assert summary["enabled"] is True
-          assert summary["dry_run"] is True
+          assert summary["dry_run"] is (not execute_now)
           assert summary["target_status_name"] == os.environ["TARGET_STATUS_NAME"]
+          if execute_now:
+              assert int(summary["failed_orders"]) == 0
           expected_id = os.environ.get("TARGET_STATUS_ID") or ""
           if expected_id:
               assert int(summary["target_status_id"]) == int(expected_id)
+          marker_name = "UNPAID_CANCELLATION_EXECUTE_MARKER_OK" if execute_now else "UNPAID_CANCELLATION_MARKER_OK"
           marker_dir = Path("/tmp/unpaid-cancellation-marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
           marker = {
-              "marker": "UNPAID_CANCELLATION_MARKER_OK",
+              "marker": marker_name,
               "project": summary["project"],
               "cutoff_date": summary["cutoff_date"],
               "orders_scanned": summary["total_orders_scanned"],
               "eligible_orders": summary["eligible_orders"],
+              "updated_orders": summary["updated_orders"],
               "target_status_id": summary["target_status_id"],
               "dry_run": summary["dry_run"],
           }
@@ -356,7 +377,7 @@ jobs:
           echo "UNPAID_CANCELLATION_MARKER_END"
           SH
           )"
-          export CONTAINER_NAME PROJECT SMOKE_SCRIPT TARGET_STATUS_NAME TARGET_STATUS_ID
+          export CONTAINER_NAME PROJECT SMOKE_SCRIPT TARGET_STATUS_NAME TARGET_STATUS_ID EXECUTE_NOW
           python - <<'PY' > smoke-overrides.json
           import json
           import os
@@ -369,6 +390,7 @@ jobs:
                           {"name": "REPORT_PROJECT", "value": os.environ["PROJECT"]},
                           {"name": "TARGET_STATUS_NAME", "value": os.environ["TARGET_STATUS_NAME"]},
                           {"name": "TARGET_STATUS_ID", "value": os.environ.get("TARGET_STATUS_ID", "")},
+                          {"name": "EXECUTE_NOW", "value": os.environ.get("EXECUTE_NOW", "false")},
                       ],
                   }
               ]
@@ -426,7 +448,11 @@ jobs:
           echo "image-path=${IMAGE_URI}"
           echo "image-identifier=${IMAGE_IDENTIFIER}"
           echo "marker-path=http://127.0.0.1:8000/marker.json"
-          echo "automation-command=python unpaid_order_cancellation_runner.py --project ${PROJECT}"
+          if [[ "${EXECUTE_NOW}" == "true" ]]; then
+            echo "automation-command=python unpaid_order_cancellation_runner.py --project ${PROJECT}"
+          else
+            echo "automation-command=python unpaid_order_cancellation_runner.py --project ${PROJECT} --dry-run"
+          fi
 
           SMOKE_STOPPED=false
           for attempt in $(seq 1 160); do
@@ -470,7 +496,7 @@ jobs:
               --region "${AWS_REGION}" \
               --query 'events[].message' \
               --output text > smoke-task.log || true
-            if grep -q "UNPAID_CANCELLATION_MARKER_OK" smoke-task.log; then
+            if grep -q "${EXPECTED_MARKER}" smoke-task.log; then
               break
             fi
             sleep 5
@@ -480,9 +506,10 @@ jobs:
             echo "Unpaid cancellation smoke task ${SMOKE_TASK_ARN} failed with exit code ${EXIT_CODE}" >&2
             exit 1
           fi
-          grep -q "UNPAID_CANCELLATION_MARKER_OK" smoke-task.log
+          grep -q "${EXPECTED_MARKER}" smoke-task.log
 
           python - <<'PY'
+          import os
           import json
           schedule = json.load(open("deployed-schedule.json", encoding="utf-8"))
           target = schedule["Target"]
@@ -491,6 +518,7 @@ jobs:
           print(
               "DEPLOY_UNPAID_CANCELLATION_OK "
               f"schedule={schedule['Name']} "
-              f"task_definition={target['EcsParameters']['TaskDefinitionArn']}"
+              f"task_definition={target['EcsParameters']['TaskDefinitionArn']} "
+              f"execute_now={os.environ.get('EXECUTE_NOW', 'false')}"
           )
           PY
