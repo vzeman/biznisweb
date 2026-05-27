@@ -215,6 +215,11 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Hrubý zisk/strata", html)
         self.assertNotIn("Zisk s fixom", html)
         self.assertIn("data-save-inbound", html)
+        self.assertIn("soundToggleBtn", html)
+        self.assertIn("playNewOrderSound", html)
+        self.assertIn("notifyAboutNewFulfillableOrders", html)
+        self.assertIn("seenFulfillableOrderKeys", html)
+        self.assertIn("nová objednávka na odoslanie", html)
         self.assertIn("replace(/[\"\\\\]/g, '\\\\$&')", html)
         self.assertNotIn('replace(/["\\]/g', html)
 
