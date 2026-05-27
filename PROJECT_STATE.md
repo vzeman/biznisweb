@@ -211,9 +211,26 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Monitor the next scheduled ROY report refresh and verify country rows remain populated after the automatic run. No open live dashboard deploy blocker.
+- Open/merge the ROY gross-loss-products PR, refresh ECR, deploy ROY App Runner, and verify live `Produkty v strate` uses only gross profit/loss.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY loss products use gross profit only)
+- Branch: `codex/roy-loss-products-gross-profit`
+- Change:
+  - ROY `loss_product_rows` are now selected only when product `gross_profit` / `cm1_profit` is negative.
+  - Products that are profitable on gross margin but negative only after ads/fixed overhead are no longer included in `Produkty v strate`.
+  - The live dashboard loss-products table now shows only `Hrubý zisk/strata` and `Hrubá marža`, not post-fixed profit.
+  - Dashboard payload serialization now includes `gross_profit` and `gross_margin_pct` for loss-product rows.
+- Local verification:
+  - `python -m unittest tests.test_roy_inventory_model tests.test_roy_operations_dashboard tests.test_dashboard_modern`
+  - `python -m py_compile export_orders.py dashboard_modern.py roy_operations_dashboard.py live_dashboard_server.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_dashboard_modern tests.test_reporting_product_identity tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_inventory_model tests.test_roy_operations_dashboard`
+  - rendered ROY operations dashboard script extracted from `build_roy_operations_dashboard_html("roy")` and checked with `node --check`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, rerun guarded ROY App Runner deploy, then verify live `/production/roy`.
 
 ### 2026-05-27 (ROY country performance renderer fix)
 - Branch: `codex/roy-country-json-safe`
