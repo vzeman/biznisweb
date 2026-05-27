@@ -743,6 +743,11 @@ jobs:
               "Action": ["s3:GetObject"],
               "Resource": [f"arn:aws:s3:::{bucket}/{prefix}/latest/*"],
           })
+          policy["Statement"].append({
+              "Effect": "Allow",
+              "Action": ["s3:GetObject", "s3:PutObject"],
+              "Resource": [f"arn:aws:s3:::{bucket}/{prefix}/operations/*"],
+          })
           json.dump(policy, open("instance-policy.json", "w", encoding="utf-8"), indent=2)
           PY
           fi

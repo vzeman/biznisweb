@@ -16,9 +16,12 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from production_board import get_cached_production_board_snapshot, resolve_production_board_settings
 from roy_operations_dashboard import (
+    acknowledge_loss_product,
+    clear_inbound_stock_order,
     get_cached_roy_operations_snapshot,
     mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
+    set_inbound_stock_order,
 )
 from reporting_core import load_project_settings
 
@@ -984,12 +987,17 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     .items { display:grid; gap:3px; max-width:560px; }
     .item-line { display:flex; justify-content:space-between; gap:10px; border-top:1px solid #edf0eb; padding-top:3px; }
     .layout-2 { display:grid; grid-template-columns:minmax(0,1fr) minmax(420px,.42fr); gap:12px; align-items:start; }
+    .performance-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:start; }
     .pickup-list { display:grid; gap:8px; max-height:620px; overflow:auto; }
     .pickup { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fff; }
     .pickup-top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
     .pickup-title { font-weight:850; font-size:16px; }
     .checkline { display:flex; gap:8px; align-items:center; margin-top:9px; font-weight:800; }
     .checkline input { width:19px; height:19px; }
+    .stock-action { display:grid; grid-template-columns:82px 138px auto; gap:6px; align-items:center; min-width:290px; }
+    .stock-action input { min-height:34px; border:1px solid var(--line); border-radius:6px; padding:0 8px; font-weight:700; width:100%; }
+    .stock-action button { min-height:34px; padding:0 9px; }
+    .inbound-note { margin-top:5px; color:var(--green); font-size:12px; font-weight:800; }
     .hidden { display:none !important; }
     .error,.ok { margin-bottom:12px; padding:10px 12px; border-radius:8px; border:1px solid rgba(170,47,47,.25); color:var(--red); background:var(--red-bg); }
     .ok { color:var(--green); background:var(--green-bg); border-color:rgba(17,115,75,.25); }
@@ -997,6 +1005,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       .alert-grid { grid-template-columns:repeat(3,minmax(150px,1fr)); }
       .kpi-grid { grid-template-columns:repeat(2,minmax(220px,1fr)); }
       .layout-2 { grid-template-columns:1fr; }
+      .performance-grid { grid-template-columns:1fr; }
     }
     @media (max-width:720px) {
       main { width:100%; padding:10px 8px 26px; }
@@ -1007,6 +1016,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       .alert-grid,.kpi-grid { grid-template-columns:1fr; }
       .panel-head,.kpi-controls { align-items:flex-start; flex-direction:column; }
       button,a.button,select { min-height:42px; }
+      .stock-action { grid-template-columns:1fr; min-width:220px; }
       table { min-width:860px; }
     }
   </style>
@@ -1081,8 +1091,66 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Produkt</th><th>Riziko</th><th>Sklad</th><th>30d dopyt</th><th>Cover</th><th>Vypredanie</th><th>Objednať do</th><th>Návrh</th></tr></thead>
+            <thead><tr><th>Produkt</th><th>Riziko</th><th>Sklad</th><th>Objednané</th><th>30d dopyt</th><th>Cover</th><th>Vypredanie</th><th>Objednať do</th><th>Návrh</th></tr></thead>
             <tbody id="alertRowsBody"></tbody>
+          </table>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Top značky</h2>
+            <p id="brandPerformanceMeta">-</p>
+          </div>
+        </div>
+        <div class="performance-grid panel-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Značka podľa obratu</th><th>Obrat</th><th>Zisk</th><th>Marža</th></tr></thead>
+              <tbody id="brandRevenueBody"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Značka podľa zisku</th><th>Zisk</th><th>Obrat</th><th>Marža</th></tr></thead>
+              <tbody id="brandProfitBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Top produkty</h2>
+            <p id="productPerformanceMeta">-</p>
+          </div>
+        </div>
+        <div class="performance-grid panel-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Produkt podľa obratu</th><th>Obrat</th><th>Zisk</th><th>Kusy</th></tr></thead>
+              <tbody id="productRevenueBody"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Produkt podľa zisku</th><th>Zisk</th><th>Obrat</th><th>Kusy</th></tr></thead>
+              <tbody id="productProfitBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Produkty v strate</h2>
+            <p id="lossProductMeta">-</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produkt</th><th>Obrat</th><th>Zisk bez fixu</th><th>Zisk s fixom</th><th>Marža</th><th>Potvrdené</th></tr></thead>
+            <tbody id="lossProductBody"></tbody>
           </table>
         </div>
       </article>
@@ -1108,10 +1176,16 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         </div>
         <div class="panel-body">
           <div class="alert-grid" id="inventorySummaryGrid"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Objednaný produkt</th><th>Objednané kusy</th><th>ETA</th><th>Sklad pri zadaní</th><th>Aktuálny sklad</th><th>Akcia</th></tr></thead>
+              <tbody id="inboundRowsBody"></tbody>
+            </table>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Produkt</th><th>Sklad</th><th>Nákupná hodnota</th><th>Predajná hodnota</th><th>Cover</th><th>Vypredanie</th><th>Lead time</th><th>Reorder</th></tr></thead>
+            <thead><tr><th>Produkt</th><th>Sklad</th><th>Nákupná hodnota</th><th>Predajná hodnota</th><th>Cover</th><th>Vypredanie</th><th>Lead time</th><th>Objednané</th><th>Reorder</th></tr></thead>
             <tbody id="inventoryRowsBody"></tbody>
           </table>
         </div>
@@ -1130,6 +1204,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     const fmtRatio = (value) => value === null || value === undefined ? 'N/A' : `${new Intl.NumberFormat('sk-SK', { maximumFractionDigits:2 }).format(Number(value || 0))}x`;
     const text = (value, fallback='-') => value === null || value === undefined || value === '' ? fallback : String(value);
     const safe = (value) => text(value, '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const cssEscape = (value) => window.CSS && CSS.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, '\\$&');
     let latestData = null;
     let refreshTimer = null;
     let kpiScope = 'monthly';
@@ -1149,11 +1224,36 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     function metric(label, value, note, tone='info') {
       return `<article class="metric"><div class="label">${safe(label)}</div><div class="value">${safe(value)}</div><div class="note">${safe(note)}</div></article>`;
     }
+    function compactProductCell(row) {
+      return `<strong>${safe(row.product || row.brand_label || row.group_label || '-')}</strong><div class="muted mono">${safe(row.sku || row.brand_key || row.group_key || '')}</div>`;
+    }
+    function inboundStatus(row) {
+      const units = Number(row.inbound_ordered_units || 0);
+      if (!units) return '<span class="muted">-</span>';
+      return `<div><span class="badge good">${fmtQty(units)} ks</span><div class="inbound-note">ETA ${safe(row.inbound_expected_arrival_date || '-')}</div></div>`;
+    }
+    function inboundControls(row) {
+      const sku = safe(row.sku);
+      const product = safe(row.product);
+      const available = Number(row.available_quantity || 0);
+      const units = Number(row.inbound_ordered_units || 0);
+      const eta = safe(row.inbound_expected_arrival_date || '');
+      const clear = units > 0 ? `<button type="button" data-clear-inbound="${sku}">Zrušiť</button>` : '';
+      return `<div>
+        ${inboundStatus(row)}
+        <div class="stock-action" style="margin-top:6px;">
+          <input type="number" min="0.1" step="1" value="${units || ''}" placeholder="ks" data-inbound-units="${sku}">
+          <input type="date" value="${eta}" data-inbound-eta="${sku}">
+          <button type="button" data-save-inbound="${sku}" data-product="${product}" data-baseline="${available}">Uložiť</button>
+        </div>
+        ${clear}
+      </div>`;
+    }
     function badgeClass(value) {
       const v = String(value || '').toLowerCase();
       if (v.includes('negative') || v.includes('out of stock') || v.includes('critical') || v.includes('urgent') || v.includes('order now')) return 'bad';
-      if (v.includes('low') || v.includes('watch') || v.includes('prepare') || v.includes('plan')) return 'warn';
-      if (v.includes('healthy') || v.includes('ok')) return 'good';
+      if (v.includes('partially') || v.includes('low') || v.includes('watch') || v.includes('prepare') || v.includes('plan')) return 'warn';
+      if (v.includes('inbound') || v.includes('healthy') || v.includes('ok')) return 'good';
       return 'info';
     }
     function formatKpiValue(key, value) {
@@ -1233,6 +1333,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         metric('Osobné odbery', fmtInt(orders.personal_pickups), `${fmtInt(orders.pickup_actions_available)} akcií dostupných`),
         metric('Kritický sklad', fmtInt(inv.stock_risk_critical_count), `${fmtInt(inv.stock_risk_30d_count)} položiek v 30d riziku`),
         metric('Objednať teraz', fmtInt(inv.alert_reorder_now_count), `${fmtInt(inv.alert_prepare_po_count)} pripraviť PO`),
+        metric('Objednané na ceste', fmtQty(inv.inbound_ordered_units), `${fmtInt(inv.inbound_order_count)} položiek · ETA ${text(inv.inbound_next_arrival_date)}`),
         metric('Hodnota skladu', fmtMoney(inv.inventory_cost_value), `predajná ${fmtMoney(inv.inventory_retail_value)}`),
       ].join('');
     }
@@ -1276,11 +1377,52 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         </article>`).join('') : '<p class="muted">Žiadne osobné odbery.</p>';
       el('pickupList').querySelectorAll('[data-ship-pickup]').forEach((input) => input.addEventListener('change', () => markPickupShipped(input)));
     }
+    function brandRevenueRow(row) {
+      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtPct(row.margin_with_fixed_pct)}</td></tr>`;
+    }
+    function brandProfitRow(row) {
+      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtPct(row.margin_with_fixed_pct)}</td></tr>`;
+    }
+    function productRevenueRow(row) {
+      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtQty(row.units)} ks</td></tr>`;
+    }
+    function productProfitRow(row) {
+      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtQty(row.units)} ks</td></tr>`;
+    }
+    function lossProductRow(row) {
+      return `<tr>
+        <td>${compactProductCell(row)}</td>
+        <td>${fmtMoney(row.revenue)}</td>
+        <td><span class="${Number(row.profit_without_fixed || 0) < 0 ? 'negative' : 'neutral'}">${fmtMoney(row.profit_without_fixed)}</span></td>
+        <td><span class="${Number(row.profit_with_fixed || 0) < 0 ? 'negative' : 'neutral'}">${fmtMoney(row.profit_with_fixed)}</span></td>
+        <td>${fmtPct(row.margin_with_fixed_pct)}</td>
+        <td><label class="checkline" style="margin-top:0;"><input type="checkbox" data-ack-loss="${safe(row.sku)}" data-product="${safe(row.product)}"> viem</label></td>
+      </tr>`;
+    }
+    function renderPerformance(data) {
+      const perf = data.performance || {};
+      const brandRevenue = perf.brand_revenue_rows || [];
+      const brandProfit = perf.brand_profit_rows || [];
+      const productRevenue = perf.product_revenue_rows || [];
+      const productProfit = perf.product_profit_rows || [];
+      const losses = perf.loss_product_rows || [];
+      el('brandPerformanceMeta').textContent = `${fmtInt(brandRevenue.length)} podľa obratu · ${fmtInt(brandProfit.length)} podľa zisku`;
+      el('brandRevenueBody').innerHTML = brandRevenue.length ? brandRevenue.map(brandRevenueRow).join('') : '<tr><td colspan="4" class="muted">Značky zatiaľ nie sú dostupné.</td></tr>';
+      el('brandProfitBody').innerHTML = brandProfit.length ? brandProfit.map(brandProfitRow).join('') : '<tr><td colspan="4" class="muted">Značky zatiaľ nie sú dostupné.</td></tr>';
+      el('productPerformanceMeta').textContent = `${fmtInt(productRevenue.length)} podľa obratu · ${fmtInt(productProfit.length)} podľa zisku`;
+      el('productRevenueBody').innerHTML = productRevenue.length ? productRevenue.map(productRevenueRow).join('') : '<tr><td colspan="4" class="muted">Produkty zatiaľ nie sú dostupné.</td></tr>';
+      el('productProfitBody').innerHTML = productProfit.length ? productProfit.map(productProfitRow).join('') : '<tr><td colspan="4" class="muted">Produkty zatiaľ nie sú dostupné.</td></tr>';
+      const hidden = Number(perf.acknowledged_loss_product_count || 0);
+      el('lossProductMeta').textContent = losses.length ? `${fmtInt(losses.length)} nepotvrdených · ${fmtInt(hidden)} potvrdených skrytých` : `${fmtInt(hidden)} potvrdených skrytých`;
+      el('lossProductBody').innerHTML = losses.length ? losses.map(lossProductRow).join('') : '<tr><td colspan="6" class="muted">Bez nepotvrdených stratových produktov.</td></tr>';
+      el('lossProductBody').querySelectorAll('[data-ack-loss]').forEach((input) => input.addEventListener('change', () => acknowledgeLossProduct(input)));
+    }
     function inventoryAlertRow(row) {
       return `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
         <td><span class="badge ${badgeClass(row.stock_risk_level || row.reorder_action_label)}">${safe(row.stock_risk_level || row.reorder_action_label)}</span></td>
         <td>${fmtQty(row.available_quantity)} ks</td>
+        <td>${inboundControls(row)}</td>
         <td>${fmtQty(row.alert_30d_units)} ks</td>
         <td>${row.days_of_cover === null || row.days_of_cover === undefined ? 'N/A' : `${fmtQty(row.days_of_cover)} dní`}</td>
         <td>${safe(row.projected_stockout_date)}</td>
@@ -1293,10 +1435,11 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const summary = inv.summary || {};
       const alerts = inv.alert_rows || [];
       const inventoryRows = inv.inventory_rows || [];
+      const inboundRows = inv.inbound_order_rows || [];
       const visibleInventoryAlertLimit = 100;
       const visibleInventoryLimit = 100;
       el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · snapshot ${text(summary.inventory_snapshot_date)}`;
-      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, visibleInventoryAlertLimit).map(inventoryAlertRow).join('') : '<tr><td colspan="8" class="muted">Bez kritických skladových alertov.</td></tr>';
+      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, visibleInventoryAlertLimit).map(inventoryAlertRow).join('') : '<tr><td colspan="9" class="muted">Bez kritických skladových alertov.</td></tr>';
       el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)}`;
       el('inventorySummaryGrid').innerHTML = [
         metric('Nákupná hodnota bez DPH', fmtMoney(summary.inventory_cost_value), `${fmtQty(summary.inventory_available_units)} ks skladom`),
@@ -1304,7 +1447,16 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         metric('45d watchlist', fmtInt(summary.stock_risk_45d_count), `${fmtInt(summary.out_of_stock_recent_demand_count)} vypredané s dopytom`),
         metric('Dead stock', fmtMoney(summary.dead_stock_cost_value), `${fmtInt(summary.dead_stock_count)} položiek`),
         metric('Tržby v riziku', fmtMoney(summary.revenue_at_risk_30d), `zisk ${fmtMoney(summary.profit_at_risk_30d)}`),
+        metric('Inbound objednávky', fmtQty(summary.inbound_ordered_units), `${fmtInt(summary.inbound_order_count)} položiek · ETA ${text(summary.inbound_next_arrival_date)}`),
       ].join('');
+      el('inboundRowsBody').innerHTML = inboundRows.length ? inboundRows.map((row) => `<tr>
+        <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
+        <td>${fmtQty(row.ordered_units)} ks</td>
+        <td>${safe(row.expected_arrival_date)}</td>
+        <td>${fmtQty(row.baseline_available_quantity)} ks</td>
+        <td>${fmtQty(row.current_available_quantity)} ks</td>
+        <td><button type="button" data-clear-inbound="${safe(row.sku)}">Zrušiť</button></td>
+      </tr>`).join('') : '<tr><td colspan="6" class="muted">Žiadne ručne zadané inbound objednávky.</td></tr>';
       el('inventoryRowsBody').innerHTML = inventoryRows.length ? inventoryRows.slice(0, visibleInventoryLimit).map((row) => `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
         <td>${fmtQty(row.available_quantity)} ks</td>
@@ -1313,8 +1465,11 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         <td>${row.days_of_cover === null || row.days_of_cover === undefined ? 'N/A' : `${fmtQty(row.days_of_cover)} dní`}</td>
         <td>${safe(row.projected_stockout_date)}</td>
         <td>${fmtInt(row.lead_time_working_days)} pracovných dní</td>
+        <td>${inboundStatus(row)}</td>
         <td>${safe(row.reorder_action_label)}<div class="muted">${safe(row.reorder_by_date)} · ${fmtQty(row.suggested_reorder_units)} ks</div></td>
-      </tr>`).join('') : '<tr><td colspan="8" class="muted">Skladový payload zatiaľ nie je dostupný.</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="9" class="muted">Skladový payload zatiaľ nie je dostupný.</td></tr>';
+      document.querySelectorAll('[data-save-inbound]').forEach((button) => button.addEventListener('click', () => saveInboundOrder(button)));
+      document.querySelectorAll('[data-clear-inbound]').forEach((button) => button.addEventListener('click', () => clearInboundOrder(button)));
     }
     function showMessage(message, ok=false) {
       el('messageBox').className = ok ? 'ok' : 'error';
@@ -1332,6 +1487,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       renderOrders(data);
       renderPickups(data);
       renderInventory(data);
+      renderPerformance(data);
     }
     async function loadDashboard(force=false) {
       el('refreshBtn').disabled = true;
@@ -1361,6 +1517,74 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Objednávka ${orderNum} je zmenená na Odoslaná.`, true);
+        await loadDashboard(true);
+      } catch (error) {
+        input.checked = false;
+        input.disabled = false;
+        showMessage(error instanceof Error ? error.message : String(error));
+      }
+    }
+    async function saveInboundOrder(button) {
+      const sku = button.dataset.saveInbound;
+      const unitsInput = document.querySelector(`[data-inbound-units="${cssEscape(sku)}"]`);
+      const etaInput = document.querySelector(`[data-inbound-eta="${cssEscape(sku)}"]`);
+      const units = Number(unitsInput ? unitsInput.value : 0);
+      const eta = etaInput ? etaInput.value : '';
+      if (!units || units <= 0 || !eta) {
+        showMessage('Zadaj počet objednaných kusov aj očakávaný dátum príchodu.');
+        return;
+      }
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}`, {
+          method:'POST',
+          cache:'no-store',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            product: button.dataset.product || '',
+            ordered_units: units,
+            expected_arrival_date: eta,
+            baseline_available_quantity: Number(button.dataset.baseline || 0),
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        showMessage(`Inbound objednávka pre ${sku} je uložená.`, true);
+        await loadDashboard(true);
+      } catch (error) {
+        showMessage(error instanceof Error ? error.message : String(error));
+      } finally {
+        button.disabled = false;
+      }
+    }
+    async function clearInboundOrder(button) {
+      const sku = button.dataset.clearInbound;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}/clear`, { method:'POST', cache:'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        showMessage(`Inbound objednávka pre ${sku} je zrušená.`, true);
+        await loadDashboard(true);
+      } catch (error) {
+        showMessage(error instanceof Error ? error.message : String(error));
+      } finally {
+        button.disabled = false;
+      }
+    }
+    async function acknowledgeLossProduct(input) {
+      const sku = input.dataset.ackLoss;
+      input.disabled = true;
+      try {
+        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/loss-product/${encodeURIComponent(sku)}/ack`, {
+          method:'POST',
+          cache:'no-store',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ product: input.dataset.product || '' }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        showMessage(`Produkt ${sku} je potvrdený a skrytý zo stratových upozornení.`, true);
         await loadDashboard(true);
       } catch (error) {
         input.checked = false;
@@ -1400,6 +1624,18 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
 
     def _send_text(self, text: str, *, content_type: str, status: int = 200) -> None:
         self._send_bytes(text.encode("utf-8"), content_type=content_type, status=status)
+
+    def _read_json_body(self) -> Dict[str, Any]:
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0:
+            return {}
+        if length > 32_768:
+            raise ValueError("Request body is too large.")
+        raw = self.rfile.read(length)
+        payload = json.loads(raw.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("JSON request body must be an object.")
+        return payload
 
     def _send_auth_required(self) -> None:
         body = b"Authentication required."
@@ -1599,6 +1835,70 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 return
             try:
                 self._send_json(mark_personal_pickup_shipped(project, order_num))
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
+        if (
+            len(parts) == 5
+            and parts[0] == "api"
+            and parts[1] == "operations"
+            and parts[3] == "inbound"
+        ):
+            project = parts[2]
+            sku = unquote(parts[4])
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            try:
+                body = self._read_json_body()
+                self._send_json(
+                    set_inbound_stock_order(
+                        project,
+                        sku,
+                        product=str(body.get("product") or ""),
+                        ordered_units=body.get("ordered_units"),
+                        expected_arrival_date=body.get("expected_arrival_date"),
+                        baseline_available_quantity=body.get("baseline_available_quantity", 0),
+                    )
+                )
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
+        if (
+            len(parts) == 6
+            and parts[0] == "api"
+            and parts[1] == "operations"
+            and parts[3] == "inbound"
+            and parts[5] == "clear"
+        ):
+            project = parts[2]
+            sku = unquote(parts[4])
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            try:
+                self._send_json(clear_inbound_stock_order(project, sku))
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
+        if (
+            len(parts) == 6
+            and parts[0] == "api"
+            and parts[1] == "operations"
+            and parts[3] == "loss-product"
+            and parts[5] == "ack"
+        ):
+            project = parts[2]
+            sku = unquote(parts[4])
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            try:
+                body = self._read_json_body()
+                self._send_json(acknowledge_loss_product(project, sku, product=str(body.get("product") or "")))
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
             return

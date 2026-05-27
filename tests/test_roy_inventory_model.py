@@ -28,6 +28,8 @@ def item_row(
     revenue: float,
     item_import_code: str = "",
     item_ean: str = "",
+    cm2_profit: float | None = None,
+    cm3_profit: float | None = None,
 ) -> dict:
     return {
         "order_num": order_num,
@@ -38,8 +40,8 @@ def item_row(
         "purchase_datetime": purchase_datetime,
         "item_quantity": quantity,
         "item_total_without_tax": revenue,
-        "cm2_profit": revenue * 0.4,
-        "cm3_profit": revenue * 0.3,
+        "cm2_profit": revenue * 0.4 if cm2_profit is None else cm2_profit,
+        "cm3_profit": revenue * 0.3 if cm3_profit is None else cm3_profit,
     }
 
 
@@ -202,6 +204,27 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual(1, summary["bundle_component_rule_count"])
         self.assertEqual(9.0, float(summary["bundle_component_adjustment_30d_units"]))
         self.assertGreaterEqual(summary["historical_restock_relevant_products"], 3)
+
+    def test_roy_demand_outputs_top_products_and_loss_products(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        item_df = pd.DataFrame(
+            [
+                item_row("R-1", "P-WIN", "Wachman Profit Product", "2026-05-01", 2, 300, cm2_profit=120, cm3_profit=90),
+                item_row("R-2", "P-LOSS", "Loss Product", "2026-05-02", 2, 120, cm2_profit=-15, cm3_profit=-25),
+                item_row("R-3", "P-REV", "Revenue Product", "2026-05-03", 1, 500, cm2_profit=40, cm3_profit=30),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+
+        self.assertEqual("P-REV", result["product_revenue_rows"].iloc[0]["sku"])
+        self.assertEqual("P-WIN", result["product_profit_rows"].iloc[0]["sku"])
+        self.assertEqual(["P-LOSS"], result["loss_product_rows"]["sku"].tolist())
+        self.assertLess(float(result["loss_product_rows"].iloc[0]["profit_without_fixed"]), 0)
 
 
 if __name__ == "__main__":

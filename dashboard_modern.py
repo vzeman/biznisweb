@@ -1314,8 +1314,14 @@ def generate_modern_dashboard(
             "inventory_retail_value",
             "cost_coverage_pct",
             "days_since_last_sale",
+            "alert_30d_units",
+            "lead_time_working_days",
             "days_of_cover",
+            "projected_stockout_date",
             "stock_risk_level",
+            "reorder_by_date",
+            "suggested_reorder_units",
+            "reorder_action_label",
         ],
         limit=160,
     )
@@ -1366,6 +1372,8 @@ def generate_modern_dashboard(
             "reorder_action_label",
             "alert_30d_revenue",
             "projected_stockout_date",
+            "reorder_now_flag",
+            "prepare_po_flag",
         ],
         limit=120,
     )
@@ -1384,6 +1392,10 @@ def generate_modern_dashboard(
             "recent_margin_with_fixed_pct",
             "projected_stockout_date",
             "cost_coverage_pct",
+            "lead_time_working_days",
+            "reorder_by_date",
+            "suggested_reorder_units",
+            "reorder_action_label",
         ],
         limit=120,
     )
@@ -1491,6 +1503,57 @@ def generate_modern_dashboard(
             "margin_without_fixed_pct",
         ],
         limit=12,
+    )
+    roy_product_revenue_rows = _frame_rows(
+        (roy_product_demand or {}).get("product_revenue_rows"),
+        [
+            "sku",
+            "product",
+            "orders",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_without_fixed_pct",
+            "margin_with_fixed_pct",
+            "first_sale",
+            "last_sale",
+        ],
+        limit=20,
+    )
+    roy_product_profit_rows = _frame_rows(
+        (roy_product_demand or {}).get("product_profit_rows"),
+        [
+            "sku",
+            "product",
+            "orders",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_without_fixed_pct",
+            "margin_with_fixed_pct",
+            "first_sale",
+            "last_sale",
+        ],
+        limit=20,
+    )
+    roy_loss_product_rows = _frame_rows(
+        (roy_product_demand or {}).get("loss_product_rows"),
+        [
+            "sku",
+            "product",
+            "orders",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_without_fixed_pct",
+            "margin_with_fixed_pct",
+            "first_sale",
+            "last_sale",
+        ],
+        limit=80,
     )
 
     heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
@@ -2001,6 +2064,9 @@ def generate_modern_dashboard(
             "forecast_accuracy_rows": roy_forecast_accuracy_rows,
             "brand_revenue_rows": roy_brand_revenue_rows,
             "brand_profit_rows": roy_brand_profit_rows,
+            "product_revenue_rows": roy_product_revenue_rows,
+            "product_profit_rows": roy_product_profit_rows,
+            "loss_product_rows": roy_loss_product_rows,
         },
         "daily_margin_rows": daily_margin_rows,
         "payday_window_rows": payday_window_rows,

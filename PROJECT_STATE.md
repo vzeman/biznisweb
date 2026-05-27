@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-05-21
+Last updated: 2026-05-27
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -204,9 +204,27 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- ROY Facebook spend audit found that Meta reports zero spend for `2026-05-18..2026-05-23`, but campaign `SK-Sale-Fotopasce-ACQ` is active again with spend on `2026-05-25..2026-05-26`. Next exact step: merge/deploy the dashboard zero-fill fix, then verify the live ROY report shows zero-spend days instead of omitting them from the Facebook delivery chart.
+- ROY operations dashboard performance/inbound workflow is implemented on branch `codex/roy-dashboard-top-margin-workflow`. Next exact step: open/merge PR, run ECR build, deploy App Runner, then verify `/production/roy` with live API/UI smoke.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY operations performance and inbound workflow)
+- Branch: `codex/roy-dashboard-top-margin-workflow`
+- Change:
+  - ROY reporting payload now emits top product rows by revenue, top product rows by profit, and loss-product rows.
+  - ROY live operations API now exposes top 3 brands by revenue/profit, top 10 products by revenue/profit, and loss-product warnings.
+  - loss-product warnings can be acknowledged from the live dashboard and are persisted in ROY operations state.
+  - low-stock products can be marked as ordered by entering ordered units and expected arrival date.
+  - inbound ordered units are counted in the live dashboard stock-risk calculation, so sufficiently covered products are removed from reorder alerts.
+  - inbound markers auto-clear after the next BiznisWeb stock increase for the SKU.
+  - App Runner instance policy now grants state persistence access to `operations/*` under the live dashboard S3 artifact prefix.
+- Local verification:
+  - `python -m py_compile export_orders.py dashboard_modern.py roy_operations_dashboard.py live_dashboard_server.py daily_report_runner.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, run ECR build, deploy App Runner, then verify production API/UI and record deploy run IDs.
 
 ### 2026-05-27 (ROY Facebook spend audit)
 - Checked ROY Facebook Ads source path:
