@@ -183,7 +183,12 @@
     "scan_min_pages": 8,
     "stop_after_empty_fulfillable_pages": 3,
     "cache_ttl_seconds": 60,
-    "auto_refresh_seconds": 90
+    "auto_refresh_seconds": 90,
+    "wholesale_detection": {
+      "enabled": true,
+      "discount_threshold_pct": 10,
+      "require_company_customer": true
+    }
   },
   "inventory_model": {
     "enabled": true,

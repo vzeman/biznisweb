@@ -101,6 +101,144 @@ def _draw_meta_row(
     canvas.drawString(x + label_width, y, _text(value))
 
 
+def _draw_badge(canvas: Any, label: str, x: float, y: float, fonts: Dict[str, str], colors: Any) -> float:
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+
+    text_width = pdfmetrics.stringWidth(label, fonts["bold"], 8)
+    badge_width = text_width + 8 * mm
+    badge_height = 7 * mm
+    canvas.setFillColor(colors.HexColor("#f97316"))
+    canvas.roundRect(x, y - badge_height + 1.5 * mm, badge_width, badge_height, 2 * mm, fill=1, stroke=0)
+    canvas.setFillColor(colors.white)
+    canvas.setFont(fonts["bold"], 8)
+    canvas.drawString(x + 4 * mm, y - 3.2 * mm, label)
+    canvas.setFillColor(colors.black)
+    return badge_width
+
+
+def _draw_order_barcode(canvas: Any, order_num: Any, x_right: float, y_top: float, fonts: Dict[str, str]) -> None:
+    from reportlab.graphics.barcode.code128 import Code128
+    from reportlab.lib.units import mm
+
+    order_text = _text(order_num, "")
+    if not order_text:
+        return
+
+    max_width = 58 * mm
+    bar_width = 0.32 * mm
+    barcode = Code128(order_text, barWidth=bar_width, barHeight=12 * mm, humanReadable=False)
+    if barcode.width > max_width:
+        barcode = Code128(
+            order_text,
+            barWidth=bar_width * (max_width / barcode.width),
+            barHeight=12 * mm,
+            humanReadable=False,
+        )
+
+    x = x_right - barcode.width
+    y = y_top - barcode.height
+    barcode.drawOn(canvas, x, y)
+    canvas.setFont(fonts["bold"], 8)
+    canvas.drawCentredString(x + barcode.width / 2, y - 3.4 * mm, order_text)
+
+
+def _draw_labeled_box(
+    canvas: Any,
+    title: str,
+    value: Any,
+    x: float,
+    y_top: float,
+    width: float,
+    fonts: Dict[str, str],
+    colors: Any,
+    *,
+    fill: str = "#fff7ed",
+    stroke: str = "#fed7aa",
+    max_lines: int = 4,
+) -> float:
+    from reportlab.lib.units import mm
+
+    text = _text(value, "Bez poznámky")
+    lines = _wrap_text(text, width - 8 * mm, fonts["regular"], 9)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = lines[-1].rstrip(".") + "..."
+    height = 10 * mm + max(1, len(lines)) * 4.5 * mm
+    bottom = y_top - height
+
+    canvas.setFillColor(colors.HexColor(fill))
+    canvas.setStrokeColor(colors.HexColor(stroke))
+    canvas.roundRect(x, bottom, width, height, 2.5 * mm, fill=1, stroke=1)
+    canvas.setFillColor(colors.HexColor("#7c2d12"))
+    canvas.setFont(fonts["bold"], 8)
+    canvas.drawString(x + 4 * mm, y_top - 5 * mm, title)
+    canvas.setFillColor(colors.black)
+    canvas.setFont(fonts["regular"], 9)
+    text_y = y_top - 10 * mm
+    for line in lines:
+        canvas.drawString(x + 4 * mm, text_y, line)
+        text_y -= 4.5 * mm
+    return bottom - 4 * mm
+
+
+def _address_lines(address: Any) -> List[str]:
+    if not isinstance(address, dict):
+        return []
+    lines = address.get("lines")
+    if isinstance(lines, list):
+        return [str(line).strip() for line in lines if str(line or "").strip()]
+
+    fallback_lines = [
+        address.get("display_name"),
+        address.get("street"),
+        " ".join(str(part or "").strip() for part in (address.get("city"), address.get("country")) if str(part or "").strip()),
+        address.get("phone"),
+        address.get("email"),
+    ]
+    return [str(line).strip() for line in fallback_lines if str(line or "").strip()]
+
+
+def _draw_address_block(
+    canvas: Any,
+    title: str,
+    lines: List[str],
+    x: float,
+    y_top: float,
+    width: float,
+    height: float,
+    fonts: Dict[str, str],
+    colors: Any,
+) -> None:
+    from reportlab.lib.units import mm
+
+    canvas.setFillColor(colors.HexColor("#f8fafc"))
+    canvas.setStrokeColor(colors.HexColor("#d8e0d4"))
+    canvas.roundRect(x, y_top - height, width, height, 2 * mm, fill=1, stroke=1)
+    canvas.setFillColor(colors.HexColor("#334155"))
+    canvas.setFont(fonts["bold"], 8)
+    canvas.drawString(x + 3 * mm, y_top - 4.5 * mm, title)
+    canvas.setFillColor(colors.black)
+    y = y_top - 9 * mm
+    for line in (lines or ["-"])[:5]:
+        y = _draw_wrapped(canvas, line, x + 3 * mm, y, width - 6 * mm, fonts["regular"], 8, leading=3.8 * mm, max_lines=1)
+
+
+def _address_block_height(lines: List[str]) -> float:
+    from reportlab.lib.units import mm
+
+    return 10 * mm + max(2, min(len(lines), 5)) * 3.8 * mm
+
+
+def _wholesale_info(order: Dict[str, Any]) -> Dict[str, Any]:
+    info = order.get("wholesale_pricing") if isinstance(order.get("wholesale_pricing"), dict) else {}
+    return {
+        "is_wholesale": bool(info.get("is_wholesale")),
+        "max_discount_pct": info.get("max_discount_pct"),
+        "reason": str(info.get("reason") or "").strip(),
+    }
+
+
 def _draw_footer(canvas: Any, width: float, page_no: int, fonts: Dict[str, str]) -> None:
     from reportlab.lib.units import mm
 
@@ -154,12 +292,17 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
     for index, order in enumerate(order_rows, start=1):
         new_page()
         y = top_y
+        wholesale = _wholesale_info(order)
 
         canvas.setFont(fonts["bold"], 18)
         canvas.drawString(margin_x, y, "Vyskladňovací list")
-        canvas.setFont(fonts["regular"], 10)
-        canvas.drawRightString(width - margin_x, y + 1, f"{index}/{len(order_rows)}")
-        y -= 10 * mm
+        title_width = canvas.stringWidth("Vyskladňovací list", fonts["bold"], 18)
+        if wholesale["is_wholesale"]:
+            _draw_badge(canvas, "VEĽKOOBCHOD / VO CENY", margin_x + title_width + 8 * mm, y + 1 * mm, fonts, colors)
+        _draw_order_barcode(canvas, order.get("order_num"), width - margin_x, y + 4 * mm, fonts)
+        canvas.setFont(fonts["regular"], 8)
+        canvas.drawRightString(width - margin_x, y - 16 * mm, f"strana objednávok {index}/{len(order_rows)}")
+        y -= 20 * mm
 
         canvas.setStrokeColor(colors.HexColor("#18211b"))
         canvas.setLineWidth(1.1)
@@ -168,7 +311,9 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
 
         left_x = margin_x
         right_x = width / 2 + 8 * mm
-        label_width = 26 * mm
+        label_width = 27 * mm
+        customer = order.get("customer") if isinstance(order.get("customer"), dict) else {}
+        customer_name = customer.get("display_name") or customer.get("company_name")
         _draw_meta_row(canvas, "Objednávka", order.get("order_num"), left_x, y, label_width, fonts)
         _draw_meta_row(canvas, "Suma", order.get("sum"), right_x, y, label_width, fonts)
         y -= 6 * mm
@@ -177,7 +322,61 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
         y -= 6 * mm
         _draw_meta_row(canvas, "Platba", (order.get("payment") or {}).get("title"), left_x, y, label_width, fonts)
         _draw_meta_row(canvas, "Doprava", (order.get("shipping") or {}).get("title"), right_x, y, label_width, fonts)
+        y -= 6 * mm
+        _draw_meta_row(canvas, "Zákazník", customer_name, left_x, y, label_width, fonts)
+        if wholesale["is_wholesale"]:
+            wholesale_label = "áno"
+            if wholesale.get("max_discount_pct"):
+                wholesale_label = f"áno, zľava do {wholesale['max_discount_pct']}%"
+            _draw_meta_row(canvas, "VO ceny", wholesale_label, right_x, y, label_width, fonts)
+        else:
+            _draw_meta_row(canvas, "VO ceny", "nie", right_x, y, label_width, fonts)
         y -= 10 * mm
+
+        y = _draw_labeled_box(
+            canvas,
+            "Poznámka klienta",
+            order.get("customer_note") or "Bez poznámky",
+            margin_x,
+            y,
+            width - 2 * margin_x,
+            fonts,
+            colors,
+        )
+        if order.get("internal_note"):
+            y = _draw_labeled_box(
+                canvas,
+                "Interná poznámka",
+                order.get("internal_note"),
+                margin_x,
+                y,
+                width - 2 * margin_x,
+                fonts,
+                colors,
+                fill="#f8fafc",
+                stroke="#cbd5e1",
+                max_lines=3,
+            )
+
+        invoice_lines = _address_lines(order.get("invoice_address"))
+        delivery_lines = _address_lines(order.get("delivery_address")) or invoice_lines
+        if invoice_lines or delivery_lines:
+            gap = 6 * mm
+            block_width = (width - 2 * margin_x - gap) / 2
+            block_height = max(_address_block_height(invoice_lines), _address_block_height(delivery_lines))
+            _draw_address_block(canvas, "Fakturačná adresa", invoice_lines, margin_x, y, block_width, block_height, fonts, colors)
+            _draw_address_block(
+                canvas,
+                "Doručovacia adresa",
+                delivery_lines,
+                margin_x + block_width + gap,
+                y,
+                block_width,
+                block_height,
+                fonts,
+                colors,
+            )
+            y -= block_height + 7 * mm
 
         table_x = margin_x
         col_qty = 16 * mm
@@ -208,7 +407,8 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
                 y = top_y
                 canvas.setFont(fonts["bold"], 14)
                 canvas.drawString(margin_x, y, f"Vyskladňovací list · {_text(order.get('order_num'))}")
-                y -= 10 * mm
+                _draw_order_barcode(canvas, order.get("order_num"), width - margin_x, y + 3 * mm, fonts)
+                y -= 16 * mm
                 draw_header()
 
             product_lines = _wrap_text(item.get("label"), col_product - 4 * mm, fonts["regular"], 8)
@@ -216,7 +416,16 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
             canvas.line(table_x, y + 2 * mm, table_x + table_width, y + 2 * mm)
             canvas.setFont(fonts["bold"], 9)
             canvas.drawString(table_x + 2 * mm, y - 2 * mm, _text(item.get("quantity"), "0"))
-            _draw_wrapped(canvas, item.get("label"), table_x + col_qty + 2 * mm, y - 1.5 * mm, col_product - 4 * mm, fonts["regular"], 8, leading=4.2 * mm)
+            _draw_wrapped(
+                canvas,
+                item.get("label"),
+                table_x + col_qty + 2 * mm,
+                y - 1.5 * mm,
+                col_product - 4 * mm,
+                fonts["regular"],
+                8,
+                leading=4.2 * mm,
+            )
             canvas.setFont(fonts["regular"], 8)
             canvas.drawString(table_x + col_qty + col_product + 2 * mm, y - 2 * mm, _text(item.get("import_code")))
             canvas.drawString(table_x + col_qty + col_product + col_code + 2 * mm, y - 2 * mm, _text(item.get("ean")))

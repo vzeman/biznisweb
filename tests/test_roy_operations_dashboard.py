@@ -80,6 +80,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertTrue(operations["enabled"])
         self.assertEqual(90, operations["auto_refresh_seconds"])
         self.assertEqual(4, operations["shipped_status_id"])
+        self.assertEqual(10, operations["wholesale_detection"]["discount_threshold_pct"])
+        self.assertTrue(operations["wholesale_detection"]["require_company_customer"])
         self.assertIn("Čaká na vybavenie", operations["cod_statuses"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["wachman"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["roy"])
@@ -111,6 +113,61 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(["R-1", "R-2"], [row["order_num"] for row in snapshot["orders"]])
         self.assertEqual(["R-2"], [row["order_num"] for row in snapshot["personal_pickups"]])
         self.assertTrue(snapshot["personal_pickups"][0]["pickup_action_allowed"])
+
+    def test_snapshot_exposes_notes_addresses_and_wholesale_signal_for_pdf(self) -> None:
+        settings = make_settings()
+        paid_payment = price_element("payment", "Okamžitá platba online", "18")
+        packeta_shipping = price_element("shipping", "Packeta - výdajné miesto", "9")
+        order = make_order("R-VO", settings["paid_statuses"][0], paid_payment, packeta_shipping)
+        order["note"] = "Prosime pribalit darcek."
+        order["customer"] = {
+            "__typename": "Company",
+            "company_name": "B2B Partner s.r.o.",
+            "company_id": "12345678",
+            "vat_id": "SK1234567890",
+            "phone": "+421900000000",
+            "email": "b2b@example.com",
+        }
+        order["invoice_address"] = {
+            "company_name": "B2B Partner s.r.o.",
+            "street": "Hlavna",
+            "descriptive_number": "12",
+            "city": "Bratislava",
+            "zip": "81101",
+            "country": "Slovensko",
+        }
+        order["delivery_address"] = {
+            "company_name": "Sklad B2B",
+            "street": "Skladova",
+            "descriptive_number": "5",
+            "city": "Trnava",
+            "zip": "91701",
+            "country": "Slovensko",
+        }
+        order["items"][0].update(
+            {
+                "tax_rate": 23,
+                "price": {"raw_value": 80.0, "value": 80.0, "formatted": "80,00 €", "is_net_price": True},
+                "product": {
+                    "final_price": {
+                        "raw_value": 123.0,
+                        "value": 123.0,
+                        "formatted": "123,00 €",
+                        "is_net_price": False,
+                    }
+                },
+            }
+        )
+
+        snapshot = build_roy_orders_snapshot(project="roy", orders=[order], settings=settings)
+        row = snapshot["orders"][0]
+
+        self.assertEqual("Prosime pribalit darcek.", row["customer_note"])
+        self.assertEqual("B2B Partner s.r.o.", row["customer"]["display_name"])
+        self.assertIn("B2B Partner s.r.o.", row["invoice_address"]["lines"])
+        self.assertIn("Sklad B2B", row["delivery_address"]["lines"])
+        self.assertTrue(row["wholesale_pricing"]["is_wholesale"])
+        self.assertEqual(20.0, row["wholesale_pricing"]["max_discount_pct"])
 
     def test_snapshot_expands_bundle_order_items_to_pickable_components(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
