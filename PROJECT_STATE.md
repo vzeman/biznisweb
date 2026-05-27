@@ -211,7 +211,7 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Open and merge the ROY country JSON-safe renderer fix, wait for ECR refresh, rerun guarded App Runner deploy for `/production/roy`, then verify the live country table/API payload.
+- Monitor the next scheduled ROY report refresh and verify country rows remain populated after the automatic run. No open live dashboard deploy blocker.
 
 ## 9) Change Log
 
@@ -232,7 +232,38 @@ Bootstrap entrypoints:
   - `git diff --check`
   - rendered ROY operations dashboard script extracted from `build_roy_operations_dashboard_html("roy")` and checked with `node --check`
 - Next exact step:
-  - open/merge PR, wait for ECR build, rerun guarded ROY App Runner deploy, then verify live `/production/roy` and `/api/operations/roy/live?refresh=1` include `country_rows`.
+  - completed by the production verification entry below.
+
+### 2026-05-27 (ROY country performance live verified)
+- Code merged:
+  - PR `#101`: country performance metrics, merge commit `febe9d5203cbb72b2a1fdefedc83f65c082522a7`.
+  - PR `#102`: JSON-safe renderer fix, merge commit `44430c2f208aa10a7794b236f311c487d1b74749`.
+- ECR build:
+  - workflow: `Build and Push ECR`
+  - run: `26492066552`
+  - head SHA: `44430c2f208aa10a7794b236f311c487d1b74749`
+  - image id: `sha256:9ec40973e9ad0ab436d43165caf99a8e50eb8548a0f64c12b761888408e0fdb1`
+  - pushed `latest` digest: `sha256:80e903bc22d5e416b6f06d05523cbdeff12ab3198df7056cd58fc51324f931d1`
+- Guarded ROY App Runner deploy:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26492135298`
+  - conclusion: `success`
+  - refresh hard-gate: `instance-id=N/A (scheduled ECS/Fargate task)`, private IP `172.31.2.221`, service `roy-daily-report-email`, task definition `roy-reporting-daily:4`, task ARN `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/b345f871f31547c1849b4df64c37d3f5`, marker path `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+  - localhost marker gate passed through the workflow (`LIVE_ARTIFACT_MARKER_OK`)
+  - App Runner service: `biznisweb-roy-operations-dashboard`
+  - App Runner service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production URL: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - API URL: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/api/operations/roy/live?refresh=1`
+- Live verification:
+  - `/health`, `/production/roy`, and `/api/operations/roy/live?refresh=1` returned HTTP `200`
+  - rendered HTML contains `Executive KPI deck`, `Krajiny`, and `countryPerformanceBody`
+  - API marker is `roy-operations-dashboard`, project is `roy`, refresh remains `90` seconds
+  - `performance.country_rows` contains `8` countries
+  - first country row `SK`: revenue `182660.75`, gross profit `86051.18`, spend `19279.69`, net profit `25510.49`
+  - first SK top products include `WD0021` Wachman Discovery 4G, `F_1472` Fotopasca Wachman Rio 4G, and import code `12474` Fotopasca Wachman Solar Pro
+- Next exact step:
+  - monitor the next automatic ROY scheduled report refresh and verify `country_rows` stay populated without manual refresh.
 
 ### 2026-05-27 (ROY operations performance and inbound workflow)
 - Branch: `codex/roy-dashboard-top-margin-workflow`
