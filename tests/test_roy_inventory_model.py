@@ -185,6 +185,35 @@ class RoyInventoryModelTests(unittest.TestCase):
                 self.assertEqual(expected_cost, cost)
                 self.assertEqual(expected_source, source)
 
+    def test_wachman_hc800_import_code_resolves_to_configured_cost(self) -> None:
+        expense_path = Path(__file__).resolve().parents[1] / "projects" / "roy" / "product_expenses.json"
+        cost_map = json.loads(expense_path.read_text(encoding="utf-8"))
+        expected_cost = 13.7
+
+        self.assertEqual(expected_cost, cost_map["16689"])
+        self.assertEqual(expected_cost, cost_map["H-F15A179C"])
+        self.assertEqual(expected_cost, cost_map["H-799006D2"])
+        self.assertEqual(expected_cost, cost_map["H-8865AA6B"])
+
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        exporter.product_expenses_exact = cost_map
+        exporter.product_expenses_normalized = {
+            exporter._normalize_match_text(key): float(value)
+            for key, value in cost_map.items()
+            if exporter._normalize_match_text(key)
+        }
+
+        cost, source = exporter._resolve_product_expense(
+            product_sku="16689",
+            item_label="Wachman HC800",
+            import_code="16689",
+            warehouse_number="",
+            ean="",
+        )
+
+        self.assertEqual(expected_cost, cost)
+        self.assertEqual("mapped_product_identifier", source)
+
     def test_restock_alerts_include_relevant_historical_products_without_inventory_rows(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
         item_df = pd.DataFrame(
@@ -277,7 +306,7 @@ class RoyInventoryModelTests(unittest.TestCase):
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
         item_df = pd.DataFrame(
             [
-                item_row("R-1", "P-WIN", "Wachman Profit Product", "2026-05-01", 2, 300, cm2_profit=120, cm3_profit=90),
+                item_row("R-1", "P-WIN", "Wachman Profit Product", "2026-05-01", 2, 300, cm1_profit=260, cm2_profit=120, cm3_profit=90, total_expense=40),
                 item_row("R-2", "P-LOSS", "Loss Product", "2026-05-02", 2, 120, cm1_profit=-10, cm2_profit=-15, cm3_profit=-25, total_expense=130),
                 item_row("R-3", "P-REV", "Revenue Product", "2026-05-03", 1, 500, cm2_profit=40, cm3_profit=30),
                 item_row("R-4", "P-FIXED-LOSS", "Fixed Loss Product", "2026-05-04", 1, 100, cm1_profit=50, cm2_profit=20, cm3_profit=-10, total_expense=50),
@@ -296,6 +325,39 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual(-10, float(result["loss_product_rows"].iloc[0]["gross_profit"]))
         self.assertLess(float(result["loss_product_rows"].iloc[0]["gross_profit"]), 0)
         self.assertNotIn("P-FIXED-LOSS", result["loss_product_rows"]["sku"].tolist())
+
+    def test_wachman_hc800_fixed_loss_is_not_product_loss(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        item_df = pd.DataFrame(
+            [
+                item_row(
+                    "R-HC800",
+                    "16689",
+                    "Wachman HC800",
+                    "2026-05-01",
+                    3,
+                    73.14,
+                    item_import_code="16689",
+                    cm1_profit=32.04,
+                    cm2_profit=24.00,
+                    cm3_profit=-6.00,
+                    total_expense=41.10,
+                ),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+
+        revenue_row = result["product_revenue_rows"].iloc[0]
+        self.assertEqual("16689", revenue_row["sku"])
+        self.assertEqual("Wachman HC800", revenue_row["product"])
+        self.assertEqual(32.04, float(revenue_row["gross_profit"]))
+        self.assertEqual(-6.00, float(revenue_row["profit_with_fixed"]))
+        self.assertTrue(result["loss_product_rows"].empty)
 
     def test_roy_demand_outputs_country_performance_with_top_products(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())

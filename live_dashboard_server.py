@@ -1114,13 +1114,13 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         <div class="performance-grid panel-body">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Značka podľa obratu</th><th>Obrat</th><th>Zisk</th><th>Marža</th></tr></thead>
+              <thead><tr><th>Značka podľa obratu</th><th>Obrat</th><th>Hrubý zisk</th><th>Hrubá marža</th></tr></thead>
               <tbody id="brandRevenueBody"></tbody>
             </table>
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Značka podľa zisku</th><th>Zisk</th><th>Obrat</th><th>Marža</th></tr></thead>
+              <thead><tr><th>Značka podľa hrubého zisku</th><th>Hrubý zisk</th><th>Obrat</th><th>Hrubá marža</th></tr></thead>
               <tbody id="brandProfitBody"></tbody>
             </table>
           </div>
@@ -1136,13 +1136,13 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         <div class="performance-grid panel-body">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Produkt podľa obratu</th><th>Obrat</th><th>Zisk</th><th>Kusy</th></tr></thead>
+              <thead><tr><th>Produkt podľa obratu</th><th>Obrat</th><th>Hrubý zisk</th><th>Kusy</th></tr></thead>
               <tbody id="productRevenueBody"></tbody>
             </table>
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Produkt podľa zisku</th><th>Zisk</th><th>Obrat</th><th>Kusy</th></tr></thead>
+              <thead><tr><th>Produkt podľa hrubého zisku</th><th>Hrubý zisk</th><th>Obrat</th><th>Kusy</th></tr></thead>
               <tbody id="productProfitBody"></tbody>
             </table>
           </div>
@@ -1516,17 +1516,30 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         </article>`).join('') : '<p class="muted">Žiadne osobné odbery.</p>';
       el('pickupList').querySelectorAll('[data-ship-pickup]').forEach((input) => input.addEventListener('change', () => markPickupShipped(input)));
     }
+    function rowGrossProfit(row) {
+      return Number(row.gross_profit ?? row.cm1_profit ?? row.profit_without_fixed ?? row.profit_with_fixed ?? 0);
+    }
+    function rowGrossMargin(row) {
+      const revenue = Number(row.revenue || 0);
+      return row.gross_margin_pct ?? (revenue ? (rowGrossProfit(row) / revenue * 100) : 0);
+    }
+    function profitSpan(value) {
+      const numeric = Number(value || 0);
+      return `<span class="${numeric < 0 ? 'negative' : 'positive'}">${fmtMoney(numeric)}</span>`;
+    }
     function brandRevenueRow(row) {
-      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtPct(row.margin_with_fixed_pct)}</td></tr>`;
+      const grossProfit = rowGrossProfit(row);
+      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.revenue)}</td><td>${profitSpan(grossProfit)}</td><td>${fmtPct(rowGrossMargin(row))}</td></tr>`;
     }
     function brandProfitRow(row) {
-      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtPct(row.margin_with_fixed_pct)}</td></tr>`;
+      const grossProfit = rowGrossProfit(row);
+      return `<tr><td>${compactProductCell(row)}</td><td>${profitSpan(grossProfit)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtPct(rowGrossMargin(row))}</td></tr>`;
     }
     function productRevenueRow(row) {
-      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtQty(row.units)} ks</td></tr>`;
+      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.revenue)}</td><td>${profitSpan(rowGrossProfit(row))}</td><td>${fmtQty(row.units)} ks</td></tr>`;
     }
     function productProfitRow(row) {
-      return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtQty(row.units)} ks</td></tr>`;
+      return `<tr><td>${compactProductCell(row)}</td><td>${profitSpan(rowGrossProfit(row))}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtQty(row.units)} ks</td></tr>`;
     }
     function countryTopProducts(row) {
       const products = row.top_products || [];
@@ -1535,7 +1548,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         <div class="country-product">
           <div><strong>${safe(product.product || '-')}</strong><div class="muted mono">${safe(product.sku || '')}</div></div>
           <span>${fmtMoney(product.revenue)}</span>
-          <span class="${Number(product.profit_with_fixed || 0) < 0 ? 'negative' : 'positive'}">${fmtMoney(product.profit_with_fixed)}</span>
+          ${profitSpan(rowGrossProfit(product))}
         </div>`).join('')}</div>`;
     }
     function countryPerformanceRow(row) {

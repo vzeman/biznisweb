@@ -9027,11 +9027,11 @@ class BizniWebExporter:
                 )
 
         product_revenue_rows_df = (
-            product_display_summary.sort_values(["revenue", "profit_with_fixed"], ascending=[False, False]).reset_index(drop=True)
+            product_display_summary.sort_values(["revenue", "gross_profit"], ascending=[False, False]).reset_index(drop=True)
             if not product_display_summary.empty else pd.DataFrame()
         )
         product_profit_rows_df = (
-            product_display_summary.sort_values(["profit_with_fixed", "revenue"], ascending=[False, False]).reset_index(drop=True)
+            product_display_summary.sort_values(["gross_profit", "revenue"], ascending=[False, False]).reset_index(drop=True)
             if not product_display_summary.empty else pd.DataFrame()
         )
         loss_product_rows_df = (
@@ -9556,12 +9556,18 @@ class BizniWebExporter:
                 products=("product_sku", "nunique"),
                 units=("item_quantity", "sum"),
                 revenue=("item_total_without_tax", "sum"),
+                gross_profit=("gross_profit", "sum"),
                 profit_without_fixed=("cm2_profit", "sum"),
                 profit_with_fixed=("cm3_profit", "sum"),
             )
             .reset_index()
         )
         if not brand_summary.empty:
+            brand_summary["gross_margin_pct"] = np.where(
+                brand_summary["revenue"] != 0,
+                (brand_summary["gross_profit"] / brand_summary["revenue"]) * 100.0,
+                0.0,
+            )
             brand_summary["margin_with_fixed_pct"] = np.where(
                 brand_summary["revenue"] != 0,
                 (brand_summary["profit_with_fixed"] / brand_summary["revenue"]) * 100.0,
@@ -9572,7 +9578,7 @@ class BizniWebExporter:
                 (brand_summary["profit_without_fixed"] / brand_summary["revenue"]) * 100.0,
                 0.0,
             )
-            brand_summary = brand_summary.sort_values(["revenue", "profit_with_fixed"], ascending=[False, False]).reset_index(drop=True)
+            brand_summary = brand_summary.sort_values(["revenue", "gross_profit"], ascending=[False, False]).reset_index(drop=True)
 
         brand_display_summary = brand_summary.copy()
         if not brand_display_summary.empty:
@@ -9581,11 +9587,11 @@ class BizniWebExporter:
             ].reset_index(drop=True)
 
         brand_revenue_rows_df = (
-            brand_display_summary.sort_values(["revenue", "profit_with_fixed"], ascending=[False, False]).reset_index(drop=True)
+            brand_display_summary.sort_values(["revenue", "gross_profit"], ascending=[False, False]).reset_index(drop=True)
             if not brand_display_summary.empty else pd.DataFrame()
         )
         brand_profit_rows_df = (
-            brand_display_summary.sort_values(["profit_with_fixed", "revenue"], ascending=[False, False]).reset_index(drop=True)
+            brand_display_summary.sort_values(["gross_profit", "revenue"], ascending=[False, False]).reset_index(drop=True)
             if not brand_display_summary.empty else pd.DataFrame()
         )
 
