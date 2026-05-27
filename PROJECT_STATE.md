@@ -211,9 +211,26 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Monitor the next scheduled ROY report and the next real bundle order; confirm bundle parent products stay absent from reporting/product rows and order-picking rows while component units remain present.
+- Open/merge the ROY new-order sound alert PR, refresh ECR, deploy ROY App Runner, then verify `/production/roy` exposes the sound toggle and still loads live order data.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY live dashboard new-order sound alert)
+- Branch: `codex/roy-new-order-sound-alert`
+- Change:
+  - added a ROY dashboard sound toggle for new fulfillable orders
+  - generated the alert tone in-browser with Web Audio API, so no extra static asset is required
+  - the dashboard stores the sound preference in browser `localStorage`
+  - the first live payload only seeds the known fulfillable order numbers; sound is played only when a later refresh contains a new fulfillable `order_num`
+  - because browsers require user activation for audio, the toggle arms sound on click and shows a waiting state until the browser allows playback
+- Local verification:
+  - `python -m py_compile live_dashboard_server.py roy_operations_dashboard.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_production_board`
+  - rendered ROY operations dashboard inline script extracted from `build_roy_operations_dashboard_html("roy")` and checked with `node --check`
+  - `python scripts\reporting_qa_smoke.py`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner, then verify `/production/roy`
 
 ### 2026-05-27 (ROY dashboard order bundle components deployed)
 - Code merged:

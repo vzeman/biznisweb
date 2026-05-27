@@ -955,6 +955,8 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     select { cursor:pointer; min-width:150px; }
     button.primary { background:var(--ink); color:#fff; border-color:var(--ink); }
     button.tab.active,button.chip.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+    button.sound.active { background:var(--green-bg); color:var(--green); border-color:rgba(17,115,75,.35); }
+    button.sound.needs-arm { background:var(--amber-bg); color:var(--amber); border-color:rgba(138,91,0,.35); }
     button:disabled { opacity:.55; cursor:not-allowed; }
     .actions,.tabs,.chips { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .statusline { color:var(--muted); font-size:13px; min-height:18px; }
@@ -1032,6 +1034,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         <p id="subtitle">Načítavam live stav.</p>
       </div>
       <div class="actions">
+        <button id="soundToggleBtn" class="sound" type="button" aria-pressed="false">Zvuk vyp.</button>
         <button id="refreshBtn" class="primary" type="button">Refresh</button>
         <a class="button" href="/">Dashboardy</a>
       </div>
@@ -1225,6 +1228,12 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     let latestData = null;
     let refreshTimer = null;
     let kpiScope = 'monthly';
+    let orderSoundEnabled = false;
+    let orderSoundArmed = false;
+    let orderAudioContext = null;
+    let orderSoundInitialized = false;
+    let seenFulfillableOrderKeys = new Set();
+    const orderSoundStorageKey = `roy:${project}:new-order-sound`;
 
     const metricDefsFallback = [
       { key:'revenue', label_en:'Revenue (net)' },
@@ -1243,6 +1252,117 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     }
     function compactProductCell(row) {
       return `<strong>${safe(row.product || row.brand_label || row.group_label || '-')}</strong><div class="muted mono">${safe(row.sku || row.brand_key || row.group_key || '')}</div>`;
+    }
+    function soundButtonLabel() {
+      if (!orderSoundEnabled) return 'Zvuk vyp.';
+      return orderSoundArmed ? 'Zvuk zap.' : 'Zvuk čaká';
+    }
+    function updateSoundButton() {
+      const button = el('soundToggleBtn');
+      if (!button) return;
+      button.textContent = soundButtonLabel();
+      button.setAttribute('aria-pressed', orderSoundEnabled ? 'true' : 'false');
+      button.classList.toggle('active', orderSoundEnabled && orderSoundArmed);
+      button.classList.toggle('needs-arm', orderSoundEnabled && !orderSoundArmed);
+    }
+    function audioContext() {
+      if (!('AudioContext' in window) && !('webkitAudioContext' in window)) return null;
+      if (!orderAudioContext) {
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        orderAudioContext = new AudioCtor();
+      }
+      return orderAudioContext;
+    }
+    async function armOrderSound(playTest=false) {
+      if (!orderSoundEnabled) {
+        updateSoundButton();
+        return false;
+      }
+      const ctx = audioContext();
+      if (!ctx) {
+        orderSoundArmed = false;
+        updateSoundButton();
+        return false;
+      }
+      try {
+        if (ctx.state === 'suspended') await ctx.resume();
+        orderSoundArmed = ctx.state === 'running';
+        updateSoundButton();
+        if (orderSoundArmed && playTest) playNewOrderSound(1, 0.35);
+        return orderSoundArmed;
+      } catch (error) {
+        orderSoundArmed = false;
+        updateSoundButton();
+        return false;
+      }
+    }
+    function playTone(ctx, frequency, start, duration, gainValue) {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(gainValue, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.02);
+    }
+    function playNewOrderSound(count=1, volume=0.7) {
+      if (!orderSoundEnabled || !orderSoundArmed) return;
+      const ctx = audioContext();
+      if (!ctx || ctx.state !== 'running') return;
+      const now = ctx.currentTime + 0.02;
+      const repeats = Math.min(Math.max(Number(count || 1), 1), 3);
+      for (let i = 0; i < repeats; i += 1) {
+        const offset = now + (i * 0.18);
+        playTone(ctx, 880, offset, 0.12, 0.12 * volume);
+        playTone(ctx, 1175, offset + 0.08, 0.14, 0.10 * volume);
+      }
+    }
+    function fulfillableOrderKeys(data) {
+      return (((data.orders || {}).orders) || [])
+        .map((order) => String(order.order_num || order.id || '').trim())
+        .filter(Boolean);
+    }
+    function notifyAboutNewFulfillableOrders(data) {
+      const keys = fulfillableOrderKeys(data);
+      if (!orderSoundInitialized) {
+        seenFulfillableOrderKeys = new Set(keys);
+        orderSoundInitialized = true;
+        return;
+      }
+      const newKeys = keys.filter((key) => !seenFulfillableOrderKeys.has(key));
+      seenFulfillableOrderKeys = new Set(keys);
+      if (!newKeys.length) return;
+      showMessage(`${fmtInt(newKeys.length)} nová objednávka na odoslanie.`, true);
+      if (orderSoundEnabled) {
+        armOrderSound(false).then((armed) => {
+          if (armed) playNewOrderSound(newKeys.length);
+        });
+      }
+    }
+    function initializeOrderSound() {
+      orderSoundEnabled = localStorage.getItem(orderSoundStorageKey) === '1';
+      updateSoundButton();
+      el('soundToggleBtn').addEventListener('click', async () => {
+        orderSoundEnabled = !orderSoundEnabled;
+        localStorage.setItem(orderSoundStorageKey, orderSoundEnabled ? '1' : '0');
+        if (!orderSoundEnabled) {
+          orderSoundArmed = false;
+          updateSoundButton();
+          return;
+        }
+        await armOrderSound(true);
+      });
+      const armAfterUserAction = () => {
+        if (orderSoundEnabled && !orderSoundArmed) {
+          armOrderSound(false);
+        }
+      };
+      window.addEventListener('pointerdown', armAfterUserAction, { passive:true });
+      window.addEventListener('keydown', armAfterUserAction);
     }
     function inboundStatus(row) {
       const units = Number(row.inbound_ordered_units || 0);
@@ -1535,6 +1655,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       renderPickups(data);
       renderInventory(data);
       renderPerformance(data);
+      notifyAboutNewFulfillableOrders(data);
     }
     async function loadDashboard(force=false) {
       el('refreshBtn').disabled = true;
@@ -1542,8 +1663,8 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         const response = await fetch(`/api/operations/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`, { cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-        render(data);
         clearMessage();
+        render(data);
         if (refreshTimer) clearInterval(refreshTimer);
         refreshTimer = setInterval(() => loadDashboard(false), Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000);
       } catch (error) {
@@ -1640,6 +1761,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       }
     }
     el('refreshBtn').addEventListener('click', () => loadDashboard(true));
+    initializeOrderSound();
     document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
       document.querySelectorAll('[data-view]').forEach((btn) => btn.classList.toggle('active', btn === button));
       ['overview','orders','inventory'].forEach((view) => el(`view-${view}`).classList.toggle('hidden', button.dataset.view !== view));
