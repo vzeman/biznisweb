@@ -211,9 +211,26 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Open/merge the live dashboard refresh image-pin fix, refresh ECR, deploy ROY App Runner again, and verify live `Produkty v strate` rows contain negative `gross_profit`.
+- Open/merge the ROY MACO STOP large-set cost alias fix, refresh ECR, deploy ROY App Runner, and verify the live payload no longer treats `H-226DA29F` as a zero-margin/fallback-cost set.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY MACO STOP large-set cost aliases)
+- Branch: `codex/roy-maco-stop-set-cost`
+- Change:
+  - added ROY cost aliases `H-226DA29F` and `133652` at `26.58 EUR` net purchase cost for the large MACO STOP set
+  - added resolver regression coverage so the set resolves at the same cost across hash SKU and import/warehouse-code variants
+- Investigation:
+  - cached ROY export showed `H-226DA29F` sold 41 units with `missing_cost_zero_margin_fallback`, causing zero gross margin in product reporting
+  - at `26.58 EUR` per unit, the same cached rows reconcile to `1089.78 EUR` product cost and `988.47 EUR` gross profit on `2078.25 EUR` net revenue
+- Local verification:
+  - `python -m unittest tests.test_roy_inventory_model`
+  - `python -m py_compile export_orders.py dashboard_modern.py roy_operations_dashboard.py live_dashboard_server.py`
+  - `python -m unittest tests.test_reporting_product_identity tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard`
+  - `python scripts\reporting_qa_smoke.py`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner live dashboard, then verify `/api/operations/roy/live?refresh=1`
 
 ### 2026-05-27 (Live dashboard refresh task pins current image)
 - Branch: `codex/live-dashboard-refresh-image-pin`
