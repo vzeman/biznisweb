@@ -23,6 +23,10 @@ on:
         description: Optional S3 prefix for latest report artifacts
         required: false
         default: ""
+      skip_artifact_refresh:
+        description: Skip ROY report artifact regeneration and run only a lightweight host marker check
+        required: false
+        default: "false"
 
 env:
   AWS_REGION: eu-central-1
@@ -56,6 +60,7 @@ jobs:
           ROY_AUTH_PASSWORD: ${{ secrets.ROY_LIVE_DASHBOARD_AUTH_PASSWORD }}
           INPUT_S3_BUCKET: ${{ inputs.s3_bucket }}
           INPUT_S3_PREFIX: ${{ inputs.s3_prefix }}
+          SKIP_ARTIFACT_REFRESH: ${{ inputs.skip_artifact_refresh }}
         run: |
           set -euo pipefail
           PROJECT="$(printf '%s' "${PROJECT}" | tr '[:upper:]' '[:lower:]')"
@@ -436,9 +441,43 @@ jobs:
               echo "ROY reporting task definition needs CloudWatch logs for localhost marker verification." >&2
               exit 1
             fi
-            REFRESH_SCRIPT="$(cat <<'SH'
+          REFRESH_SCRIPT="$(cat <<'SH'
           set -euo pipefail
           PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
+          if [[ "${SKIP_ARTIFACT_REFRESH:-false}" == "true" ]]; then
+            echo "LIVE_ARTIFACT_REFRESH_SKIPPED project=${PROJECT}"
+            python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          project = os.environ["REPORT_PROJECT"]
+          marker_dir = Path("/tmp/live-dashboard-marker")
+          marker_dir.mkdir(parents=True, exist_ok=True)
+          marker = {
+              "marker": "LIVE_ARTIFACT_MARKER_OK",
+              "project": project,
+              "mode": "skip_artifact_refresh",
+          }
+          (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
+          PY
+            python -m http.server 8000 --bind 127.0.0.1 --directory /tmp/live-dashboard-marker >/tmp/live-dashboard-marker/http.log 2>&1 &
+            MARKER_PID="$!"
+            trap 'kill "${MARKER_PID}" >/dev/null 2>&1 || true' EXIT
+            echo "LIVE_ARTIFACT_MARKER_BEGIN"
+            for marker_attempt in $(seq 1 10); do
+              if curl -fsS http://127.0.0.1:8000/marker.json; then
+                break
+              fi
+              if [[ "${marker_attempt}" == "10" ]]; then
+                exit 1
+              fi
+              sleep 1
+            done
+            echo
+            echo "LIVE_ARTIFACT_MARKER_END"
+            exit 0
+          fi
           echo "LIVE_ARTIFACT_REFRESH_START project=${PROJECT}"
           python daily_report_runner.py --project "${PROJECT}" --skip-email --skip-invoices
           python - <<'PY'
@@ -515,6 +554,7 @@ jobs:
                           {"name": "REPORT_S3_BUCKET", "value": os.environ["REPORT_S3_BUCKET_VALUE"]},
                           {"name": "REPORT_S3_PREFIX", "value": os.environ["REPORT_S3_PREFIX_VALUE"]},
                           {"name": "REPORT_SKIP_INVOICES", "value": "true"},
+                          {"name": "SKIP_ARTIFACT_REFRESH", "value": os.environ.get("SKIP_ARTIFACT_REFRESH", "false")},
                       ],
                   }
               ]
