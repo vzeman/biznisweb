@@ -211,9 +211,24 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Open/merge the ROY gross-loss-products PR, refresh ECR, deploy ROY App Runner, and verify live `Produkty v strate` uses only gross profit/loss.
+- Open/merge the live dashboard refresh image-pin fix, refresh ECR, deploy ROY App Runner again, and verify live `Produkty v strate` rows contain negative `gross_profit`.
 
 ## 9) Change Log
+
+### 2026-05-27 (Live dashboard refresh task pins current image)
+- Branch: `codex/live-dashboard-refresh-image-pin`
+- Context:
+  - PR `#104` updated ROY loss-product logic and App Runner served the updated HTML, but the live API payload still showed a loss row without `gross_profit`.
+  - The deploy workflow refreshed the S3 report artifact using the existing scheduled ECS task definition and only re-registered it when S3 env values changed, so the refresh task could run an older reporting image than App Runner.
+- Change:
+  - `Deploy Live Dashboard App Runner` now compares the scheduled ECS refresh task image with the current ECR image digest.
+  - When the image differs, the workflow registers a new ROY reporting task definition pinned to the current image digest before running the refresh.
+  - The refresh hard-gate log now prints the refresh task `image-identifier`.
+- Local verification:
+  - parsed `.github/workflows/deploy-live-dashboard-apprunner.yml` with `yaml.safe_load`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, rerun guarded ROY App Runner deploy, then verify loss rows have `gross_profit < 0`.
 
 ### 2026-05-27 (ROY loss products use gross profit only)
 - Branch: `codex/roy-loss-products-gross-profit`

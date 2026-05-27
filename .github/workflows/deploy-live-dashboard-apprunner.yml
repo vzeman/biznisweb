@@ -239,30 +239,38 @@ jobs:
               --policy-name ReportingLiveDashboardArtifacts \
               --policy-document file://reporting-artifacts-policy.json
 
-            NEEDS_REPORT_TASK_UPDATE="$(python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" <<'PY'
+            NEEDS_REPORT_TASK_UPDATE="$(python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" "${IMAGE_IDENTIFIER}" <<'PY'
           import json
           import sys
-          bucket, prefix = sys.argv[1], sys.argv[2]
+          bucket, prefix, image_identifier = sys.argv[1], sys.argv[2], sys.argv[3]
           task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          container = task_def["containerDefinitions"][0]
           env = {
               item.get("name"): item.get("value")
-              for item in task_def["containerDefinitions"][0].get("environment", [])
+              for item in container.get("environment", [])
           }
           secret_names = {
               item.get("name")
-              for item in task_def["containerDefinitions"][0].get("secrets", [])
+              for item in container.get("secrets", [])
           }
           has_conflicting_secret = bool({"REPORT_S3_BUCKET", "REPORT_S3_PREFIX"} & secret_names)
-          print("true" if has_conflicting_secret or env.get("REPORT_S3_BUCKET") != bucket or env.get("REPORT_S3_PREFIX") != prefix else "false")
+          image_mismatch = container.get("image") != image_identifier
+          needs_update = (
+              has_conflicting_secret
+              or env.get("REPORT_S3_BUCKET") != bucket
+              or env.get("REPORT_S3_PREFIX") != prefix
+              or image_mismatch
+          )
+          print("true" if needs_update else "false")
           PY
             )"
             if [[ "${NEEDS_REPORT_TASK_UPDATE}" == "true" ]]; then
-              python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" <<'PY' > task-definition-s3.json
+              python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" "${IMAGE_IDENTIFIER}" <<'PY' > task-definition-s3.json
           import copy
           import json
           import sys
 
-          bucket, prefix = sys.argv[1], sys.argv[2]
+          bucket, prefix, image_identifier = sys.argv[1], sys.argv[2], sys.argv[3]
           source = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
           allowed = {
               "family",
@@ -284,6 +292,7 @@ jobs:
           }
           task = {key: copy.deepcopy(value) for key, value in source.items() if key in allowed and value not in (None, [], {})}
           container = task["containerDefinitions"][0]
+          container["image"] = image_identifier
           env = [item for item in container.get("environment", []) if item.get("name") not in {"REPORT_S3_BUCKET", "REPORT_S3_PREFIX"}]
           env.extend([
               {"name": "REPORT_S3_BUCKET", "value": bucket},
@@ -542,6 +551,7 @@ jobs:
             echo "task-definition=${TASK_DEFINITION_ARN}"
             echo "task-arn=${REFRESH_TASK_ARN}"
             echo "image-path=${IMAGE_URI}"
+            echo "image-identifier=${IMAGE_IDENTIFIER}"
             echo "marker-path=http://127.0.0.1:8000/marker.json"
             echo "latest-artifact-path=s3://${REPORT_S3_BUCKET_VALUE}/${REPORT_S3_PREFIX_VALUE}/latest/dashboard_payload_latest.json"
 
