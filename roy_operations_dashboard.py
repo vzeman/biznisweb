@@ -355,6 +355,17 @@ def _to_float(value: Any) -> float:
         return 0.0
 
 
+def _optional_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _pct_change(current: Optional[float], previous: Optional[float]) -> Optional[float]:
     if current is None or previous in (None, 0):
         return None
@@ -801,7 +812,19 @@ def build_commercial_snapshot(report_payload: Dict[str, Any], state: Optional[Di
 
     loss_rows = []
     hidden_loss_count = 0
-    for row in list(roy_demand.get("loss_product_rows") or []):
+    for raw_row in list(roy_demand.get("loss_product_rows") or []):
+        if not isinstance(raw_row, dict):
+            continue
+        row = dict(raw_row)
+        gross_profit = _optional_float(row.get("gross_profit"))
+        if gross_profit is None:
+            gross_profit = _optional_float(row.get("cm1_profit"))
+        if gross_profit is None or gross_profit >= 0:
+            continue
+        row["gross_profit"] = gross_profit
+        if _optional_float(row.get("gross_margin_pct")) is None:
+            revenue = _to_float(row.get("revenue"))
+            row["gross_margin_pct"] = round((gross_profit / revenue * 100.0) if revenue > 0 else 0.0, 1)
         sku = str(row.get("sku") or "").strip()
         if sku and sku in acknowledged:
             hidden_loss_count += 1
