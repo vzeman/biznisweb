@@ -206,6 +206,7 @@ Bootstrap entrypoints:
   - merged PR `#97` into `main` (`4f6ddaa2e3fc94c426fcda5e68aca3c1b7c880af`)
   - browser-smoke JS escape fix merged PR `#99` into `main` (`805d3c6bbf84e8eba1ff061550c7ad7edf1fbbe9`) and redeployed
   - App Runner service `biznisweb-roy-operations-dashboard` serves `/production/roy`
+  - ROY operations dashboard Basic Auth username is `roy21`; password is held in the production secret, not git
   - live API returns top brands/products, loss-product warnings, inbound-stock state, and `auto_refresh_seconds = 90`
   - rendered production HTML now emits valid `cssEscape` JavaScript and renders inbound/loss-product controls from the live API payload
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
@@ -219,6 +220,12 @@ Bootstrap entrypoints:
   - hard-gate context: App Runner instance/IP `N/A`, service `biznisweb-roy-operations-dashboard`, service ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, path `/production/roy`, image digest `sha256:9392f103055338f87ed004d75bc3695eab32a1139911c91d94a6387adca91d9e`
   - host refresh verification: ECS/Fargate private IP `172.31.32.42`, service `roy-daily-report-email`, localhost marker `LIVE_ARTIFACT_MARKER_OK`, `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=245:inventory_alerts=22.0`
   - production API/UI smoke verified HC800 `sku=16689` with `gross_profit=5887.36`, `gross_margin_pct=43.3`, `hc800_in_loss_rows=0`, one remaining gross-loss row `Roy powerbanka 10000mAh`, and HTML labels `Hruby zisk` / `Hruba marza`
+- ROY operations App Runner auth username was repaired after an incorrect manual deploy input:
+  - `2026-05-27` regression source: ROY App Runner was redeployed with `auth_user=roy`, while the agreed ROY login is `roy21`
+  - VEVO dashboard/service was not changed
+  - redeploy workflow run `26516980643` reset `biznisweb-roy-operations-dashboard` to `auth_user=roy21`
+  - production smoke verified `https://qvfzvh82c3.eu-central-1.awsapprunner.com/` returns `200` with `roy21:roy21`, includes `/production/roy`, and returns `401` for the old wrong `roy:roy21`
+  - production smoke verified `/production/roy` returns `200` with `roy21:roy21` and contains marker `roy-operations-dashboard`
 - ROY unpaid-order cancellation automation is live in production:
   - standalone runner `unpaid_order_cancellation_runner.py` changes stale unpaid bank-transfer/card orders to `Nezaplatená - zrušená objednávka`
   - ROY target status was verified through BizniWeb API as ID `74`
@@ -271,6 +278,33 @@ Bootstrap entrypoints:
   - deploy smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=33:personal_pickups=2:inventory_alerts=22.0:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=147175`
   - live API smoke: `Wachman HC800` (`sku=16689`) has `gross_profit=5887.36`, `gross_margin_pct=43.3`, `profit_with_fixed=-3669.53`, and `hc800_in_loss_rows=0`
   - live HTML smoke returned `200`, marker `roy-operations-dashboard`, gross-profit labels present, and old post-fixed loss label absent
+
+### 2026-05-27 (ROY App Runner auth username repaired)
+- Fixed a ROY-only production access regression:
+  - cause: manual App Runner deploy input used `auth_user=roy` instead of the agreed `roy21`
+  - service: `biznisweb-roy-operations-dashboard`
+  - public base URL: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/`
+  - ROY dashboard path: `/production/roy`
+  - VEVO dashboard/service was not touched
+- Verified before redeploy:
+  - `/health` without auth returned `200`
+  - `/` with `roy21:roy21` returned `401`
+  - `/production/roy` with `roy21:roy21` returned `401`
+  - `/production/roy` with the unintended `roy:roy21` returned `200`
+- Redeployed production:
+  - workflow run `26516980643`
+  - project input `roy`
+  - service input `biznisweb-roy-operations-dashboard`
+  - auth user input `roy21`
+  - image digest `sha256:9392f103055338f87ed004d75bc3695eab32a1139911c91d94a6387adca91d9e`
+- Verified after redeploy:
+  - App Runner hard-gate: instance/IP `N/A`, service ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, health path `/health`, dashboard path `/production/roy`
+  - host refresh marker: private IP `172.31.39.71`, service `roy-daily-report-email`, marker `LIVE_ARTIFACT_MARKER_OK`, `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=245:inventory_alerts=22.0`
+  - deploy smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=33:personal_pickups=2:inventory_alerts=22.0:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=147175`
+  - live public smoke: `/` with `roy21:roy21` returned `200` and contains `/production/roy`
+  - live public smoke: `/production/roy` with `roy21:roy21` returned `200` and contains marker `roy-operations-dashboard`
+  - live public smoke: `/api/operations/roy/live` with `roy21:roy21` returned `200`
+  - live public smoke: `/` and `/production/roy` with old wrong `roy:roy21` now return `401`
 
 ### 2026-05-27 (ROY operations picking-list PDF export deployed)
 - Added one-click PDF picking-list export to the ROY operations dashboard:
