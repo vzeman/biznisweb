@@ -3346,3 +3346,19 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `/api/operations/roy/picking-lists.pdf?refresh=1` returned a valid PDF with `34` pages and `275096` bytes; extracted first page contains order `2677002576`, `Poznámka klienta`, customer note text, and address blocks
 - Next exact step:
   - watch one real downloaded picking-list PDF during warehouse use and adjust spacing only if long notes or long addresses crowd the product table
+
+### 2026-05-27 (ROY picking-list large handling flags)
+- Branch: `codex/roy-picking-list-big-flags`
+- Change:
+  - ROY picking-list PDF now prints a large red `OSOBNÝ ODBER - NEBALIŤ` banner when the order is a personal pickup
+  - ROY picking-list PDF now prints a large orange `VEĽKOOBCHODNÁ OBJEDNÁVKA` banner when wholesale pricing is detected
+  - personal pickup detection in the PDF renderer accepts both the snapshot `personal_pickup` flag and shipping title fallback containing `osobný odber`
+- Local verification:
+  - `python -m py_compile roy_picking_lists_pdf.py`
+  - `python -m unittest tests.test_roy_picking_lists_pdf`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- Next exact step:
+  - merge PR, rebuild ECR image, deploy ROY App Runner dashboard, and verify live `/api/operations/roy/picking-lists.pdf?refresh=1`
