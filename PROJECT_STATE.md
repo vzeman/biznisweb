@@ -202,9 +202,14 @@ Bootstrap entrypoints:
   - `dashboard_payload.json` now carries actionable `alert_rows`
   - the modern HTML dashboard now renders a dedicated `Actionable inventory alerts` table
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
+- ROY operations dashboard performance/inbound workflow is live in production:
+  - merged PR `#97` into `main` (`4f6ddaa2e3fc94c426fcda5e68aca3c1b7c880af`)
+  - App Runner service `biznisweb-roy-operations-dashboard` serves `/production/roy`
+  - live API returns top brands/products, loss-product warnings, inbound-stock state, and `auto_refresh_seconds = 90`
+  - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- ROY operations dashboard performance/inbound workflow is implemented on branch `codex/roy-dashboard-top-margin-workflow`. Next exact step: open/merge PR, run ECR build, deploy App Runner, then verify `/production/roy` with live API/UI smoke.
+- Monitor the next scheduled ROY report refresh and verify inbound auto-clear on the first real restock event. No open code/deploy blocker for the ROY operations dashboard performance/inbound workflow.
 
 ## 9) Change Log
 
@@ -223,8 +228,23 @@ Bootstrap entrypoints:
   - `python scripts\reporting_qa_smoke.py`
   - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
   - `git diff --check`
+- Production deploy:
+  - PR: `#97` merged into `main` at `4f6ddaa2e3fc94c426fcda5e68aca3c1b7c880af`
+  - ECR build workflow: `Build and Push ECR` run `26488950760`, conclusion `success`, digest `sha256:4d7f5f83c4bbe2046f170c5adec346fffc9b6eac64ddf09f0ba4eed1cb08d9b8`
+  - deploy workflow: `Deploy Live Dashboard App Runner` run `26489012030`, conclusion `success`
+  - App Runner service: `biznisweb-roy-operations-dashboard`
+  - App Runner service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - public URL: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - API path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/api/operations/roy/live?refresh=1`
+  - App Runner instance/IP: `N/A (AWS App Runner managed service)`
+  - image path: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest`
+- Production hard-gate / smoke:
+  - scheduled ROY refresh task hard-gate from deploy run: `instance-id=N/A (scheduled ECS/Fargate task)`, private IP `172.31.39.8`, service `roy-daily-report-email`, task definition `roy-reporting-daily:4`, marker path `http://127.0.0.1:8000/marker.json`
+  - live HTML smoke: `/health = 200`, `/production/roy = 200`, marker `roy-operations-dashboard`, `Executive KPI deck`, `Top znacky`, `Top produkty`, `Produkty v strate`, and inbound controls present
+  - live API smoke: marker `roy-operations-dashboard`, brand revenue/profit rows `3/3`, product revenue/profit rows `10/10`, loss-product rows `58`, inbound order count `0`, actionable stock alerts `20`, refresh `90` seconds
+  - live state smoke: inbound save returned `ok=true` with `storage=s3`; inbound clear returned `ok=true`, `removed=true`, `storage=s3`
 - Next exact step:
-  - open/merge PR, run ECR build, deploy App Runner, then verify production API/UI and record deploy run IDs.
+  - monitor next scheduled ROY refresh and verify inbound auto-clear after the first real restock.
 
 ### 2026-05-27 (ROY Facebook spend audit)
 - Checked ROY Facebook Ads source path:
