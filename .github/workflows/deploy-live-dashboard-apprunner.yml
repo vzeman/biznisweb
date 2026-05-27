@@ -941,11 +941,19 @@ jobs:
           if [[ "${PROJECT}" == "roy" ]]; then
             grep -q "roy-operations-dashboard" /tmp/production-board.html
             grep -q "Executive KPI deck" /tmp/production-board.html
+            grep -q "Vysklad. PDF" /tmp/production-board.html
             curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/operations/roy/live?refresh=1" -o /tmp/production-board-api.json
+            curl -fsS --max-time 180 -D /tmp/roy-picking-lists.headers \
+              -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+              "${SERVICE_URL}/api/operations/roy/picking-lists.pdf?refresh=1" \
+              -o /tmp/roy-picking-lists.pdf
             python - <<'PY'
           import json
+          import os
           html = open("/tmp/production-board.html", encoding="utf-8").read()
           api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
+          pdf = open("/tmp/roy-picking-lists.pdf", "rb").read()
+          headers = open("/tmp/roy-picking-lists.headers", encoding="utf-8").read()
           assert api["project"] == "roy"
           assert api["marker"] == "roy-operations-dashboard"
           assert "executive_kpis" in api and "orders" in api and "inventory" in api
@@ -954,6 +962,11 @@ jobs:
           assert api["executive_kpis"].get("windows"), "Executive KPI windows missing"
           assert len(api["executive_kpis"].get("months") or []) > 0, "Calendar KPI months missing"
           assert api["inventory"].get("summary"), "Inventory summary missing"
+          assert "/api/operations/roy/picking-lists.pdf" in html, "Picking-list PDF link missing"
+          assert pdf.startswith(b"%PDF-"), "Picking-list download is not a PDF"
+          assert len(pdf) > 1000, "Picking-list PDF is unexpectedly small"
+          assert "application/pdf" in headers.lower(), "Picking-list content type missing"
+          assert "content-disposition:" in headers.lower(), "Picking-list filename header missing"
           assert "Hrubý zisk/strata" in html, "Gross-loss table header missing"
           assert "Zisk s fixom" not in html, "Loss products must not show post-fixed profit"
           invalid_loss_rows = []
@@ -978,7 +991,8 @@ jobs:
               f"personal_pickups={api['orders']['summary'].get('personal_pickups')}:"
               f"inventory_alerts={api['inventory']['summary'].get('alert_delivery_count')}:"
               f"kpi_months={len(api['executive_kpis'].get('months') or [])}:"
-              f"gross_loss_products={len((api.get('performance') or {}).get('loss_product_rows') or [])}"
+              f"gross_loss_products={len((api.get('performance') or {}).get('loss_product_rows') or [])}:"
+              f"picking_pdf_bytes={os.path.getsize('/tmp/roy-picking-lists.pdf')}"
           )
           PY
           else
