@@ -211,9 +211,28 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Monitor the next scheduled ROY report refresh and verify inbound auto-clear on the first real restock event. No open code/deploy blocker for the ROY operations dashboard performance/inbound workflow.
+- Open and merge the ROY country JSON-safe renderer fix, wait for ECR refresh, rerun guarded App Runner deploy for `/production/roy`, then verify the live country table/API payload.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY country performance renderer fix)
+- Branch: `codex/roy-country-json-safe`
+- Context:
+  - PR `#101` added ROY country performance metrics to the live operations dashboard.
+  - The first guarded deploy refresh run `26491693543` failed during production report generation because `dashboard_modern._json_safe()` called `pd.isna()` on nested `top_products` lists in `country_rows`.
+- Change:
+  - `dashboard_modern._json_safe()` now recursively serializes dictionaries, lists, tuples, sets, and array-like values before scalar missing-value handling.
+  - `pd.NaT` and other missing scalar values remain serialized as JSON `null`.
+  - Added regression coverage for nested country `top_products` rows.
+- Local verification:
+  - `python -m unittest tests.test_dashboard_modern tests.test_roy_inventory_model tests.test_roy_operations_dashboard`
+  - `python -m py_compile dashboard_modern.py export_orders.py roy_operations_dashboard.py live_dashboard_server.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_dashboard_modern tests.test_reporting_product_identity tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_inventory_model tests.test_roy_operations_dashboard`
+  - `git diff --check`
+  - rendered ROY operations dashboard script extracted from `build_roy_operations_dashboard_html("roy")` and checked with `node --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, rerun guarded ROY App Runner deploy, then verify live `/production/roy` and `/api/operations/roy/live?refresh=1` include `country_rows`.
 
 ### 2026-05-27 (ROY operations performance and inbound workflow)
 - Branch: `codex/roy-dashboard-top-margin-workflow`
