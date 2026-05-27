@@ -216,8 +216,9 @@ class RoyInventoryModelTests(unittest.TestCase):
         item_df = pd.DataFrame(
             [
                 item_row("R-1", "P-WIN", "Wachman Profit Product", "2026-05-01", 2, 300, cm2_profit=120, cm3_profit=90),
-                item_row("R-2", "P-LOSS", "Loss Product", "2026-05-02", 2, 120, cm2_profit=-15, cm3_profit=-25),
+                item_row("R-2", "P-LOSS", "Loss Product", "2026-05-02", 2, 120, cm1_profit=-10, cm2_profit=-15, cm3_profit=-25),
                 item_row("R-3", "P-REV", "Revenue Product", "2026-05-03", 1, 500, cm2_profit=40, cm3_profit=30),
+                item_row("R-4", "P-FIXED-LOSS", "Fixed Loss Product", "2026-05-04", 1, 100, cm1_profit=50, cm2_profit=20, cm3_profit=-10),
             ]
         )
 
@@ -230,7 +231,8 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual("P-REV", result["product_revenue_rows"].iloc[0]["sku"])
         self.assertEqual("P-WIN", result["product_profit_rows"].iloc[0]["sku"])
         self.assertEqual(["P-LOSS"], result["loss_product_rows"]["sku"].tolist())
-        self.assertLess(float(result["loss_product_rows"].iloc[0]["profit_without_fixed"]), 0)
+        self.assertLess(float(result["loss_product_rows"].iloc[0]["gross_profit"]), 0)
+        self.assertNotIn("P-FIXED-LOSS", result["loss_product_rows"]["sku"].tolist())
 
     def test_roy_demand_outputs_country_performance_with_top_products(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())

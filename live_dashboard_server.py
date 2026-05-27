@@ -1166,7 +1166,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Produkt</th><th>Obrat</th><th>Zisk bez fixu</th><th>Zisk s fixom</th><th>Marža</th><th>Potvrdené</th></tr></thead>
+            <thead><tr><th>Produkt</th><th>Obrat</th><th>Hrubý zisk/strata</th><th>Hrubá marža</th><th>Potvrdené</th></tr></thead>
             <tbody id="lossProductBody"></tbody>
           </table>
         </div>
@@ -1433,12 +1433,13 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       </tr>`;
     }
     function lossProductRow(row) {
+      const grossProfit = Number(row.gross_profit ?? row.cm1_profit ?? 0);
+      const grossMargin = row.gross_margin_pct ?? (Number(row.revenue || 0) ? (grossProfit / Number(row.revenue || 0) * 100) : 0);
       return `<tr>
         <td>${compactProductCell(row)}</td>
         <td>${fmtMoney(row.revenue)}</td>
-        <td><span class="${Number(row.profit_without_fixed || 0) < 0 ? 'negative' : 'neutral'}">${fmtMoney(row.profit_without_fixed)}</span></td>
-        <td><span class="${Number(row.profit_with_fixed || 0) < 0 ? 'negative' : 'neutral'}">${fmtMoney(row.profit_with_fixed)}</span></td>
-        <td>${fmtPct(row.margin_with_fixed_pct)}</td>
+        <td><span class="${grossProfit < 0 ? 'negative' : 'neutral'}">${fmtMoney(grossProfit)}</span></td>
+        <td>${fmtPct(grossMargin)}</td>
         <td><label class="checkline" style="margin-top:0;"><input type="checkbox" data-ack-loss="${safe(row.sku)}" data-product="${safe(row.product)}"> viem</label></td>
       </tr>`;
     }
@@ -1460,7 +1461,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       el('countryPerformanceBody').innerHTML = countries.length ? countries.map(countryPerformanceRow).join('') : '<tr><td colspan="8" class="muted">Krajiny zatiaľ nie sú dostupné.</td></tr>';
       const hidden = Number(perf.acknowledged_loss_product_count || 0);
       el('lossProductMeta').textContent = losses.length ? `${fmtInt(losses.length)} nepotvrdených · ${fmtInt(hidden)} potvrdených skrytých` : `${fmtInt(hidden)} potvrdených skrytých`;
-      el('lossProductBody').innerHTML = losses.length ? losses.map(lossProductRow).join('') : '<tr><td colspan="6" class="muted">Bez nepotvrdených stratových produktov.</td></tr>';
+      el('lossProductBody').innerHTML = losses.length ? losses.map(lossProductRow).join('') : '<tr><td colspan="5" class="muted">Bez nepotvrdených stratových produktov.</td></tr>';
       el('lossProductBody').querySelectorAll('[data-ack-loss]').forEach((input) => input.addEventListener('change', () => acknowledgeLossProduct(input)));
     }
     function inventoryAlertRow(row) {

@@ -8678,7 +8678,29 @@ class BizniWebExporter:
 
         numeric_columns = ["item_quantity", "item_total_without_tax", "cm2_profit", "cm3_profit"]
         for column in numeric_columns:
+            if column not in demand_df.columns:
+                demand_df[column] = 0.0
             demand_df[column] = pd.to_numeric(demand_df[column], errors="coerce").fillna(0.0)
+
+        has_cm1_profit = "cm1_profit" in demand_df.columns
+        has_allocated_paid_spend = "allocated_paid_spend" in demand_df.columns
+        if has_cm1_profit:
+            demand_df["cm1_profit"] = pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0)
+        elif "total_expense" in demand_df.columns:
+            demand_df["cm1_profit"] = demand_df["item_total_without_tax"].fillna(0.0) - pd.to_numeric(
+                demand_df["total_expense"], errors="coerce"
+            ).fillna(0.0)
+        else:
+            demand_df["cm1_profit"] = pd.to_numeric(demand_df["cm2_profit"], errors="coerce").fillna(0.0)
+        if has_allocated_paid_spend:
+            demand_df["allocated_paid_spend"] = pd.to_numeric(
+                demand_df["allocated_paid_spend"], errors="coerce"
+            ).fillna(0.0)
+        else:
+            demand_df["allocated_paid_spend"] = (
+                pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0)
+                - pd.to_numeric(demand_df["cm2_profit"], errors="coerce").fillna(0.0)
+            ).clip(lower=0.0)
 
         demand_df["week_start"] = demand_df["purchase_datetime"].dt.to_period("W").dt.start_time
         demand_df["month_start"] = demand_df["purchase_datetime"].dt.to_period("M").dt.to_timestamp()
@@ -8690,6 +8712,7 @@ class BizniWebExporter:
                 orders=("order_num", "nunique"),
                 units=("item_quantity", "sum"),
                 revenue=("item_total_without_tax", "sum"),
+                gross_profit=("cm1_profit", "sum"),
                 profit_without_fixed=("cm2_profit", "sum"),
                 profit_with_fixed=("cm3_profit", "sum"),
                 first_sale=("purchase_datetime", "min"),
@@ -8705,6 +8728,11 @@ class BizniWebExporter:
         product_summary["margin_without_fixed_pct"] = np.where(
             product_summary["revenue"] != 0,
             (product_summary["profit_without_fixed"] / product_summary["revenue"]) * 100.0,
+            0.0,
+        )
+        product_summary["gross_margin_pct"] = np.where(
+            product_summary["revenue"] != 0,
+            (product_summary["gross_profit"] / product_summary["revenue"]) * 100.0,
             0.0,
         )
         product_display_summary = product_summary.loc[
@@ -8727,8 +8755,10 @@ class BizniWebExporter:
                     "orders",
                     "units",
                     "revenue",
+                    "gross_profit",
                     "profit_without_fixed",
                     "profit_with_fixed",
+                    "gross_margin_pct",
                     "margin_without_fixed_pct",
                     "margin_with_fixed_pct",
                     "first_sale",
@@ -8738,13 +8768,15 @@ class BizniWebExporter:
             for column in [
                 "units",
                 "revenue",
+                "gross_profit",
                 "profit_without_fixed",
                 "profit_with_fixed",
+                "gross_margin_pct",
                 "margin_without_fixed_pct",
                 "margin_with_fixed_pct",
             ]:
                 product_display_summary[column] = product_display_summary[column].round(
-                    1 if column in {"units", "margin_without_fixed_pct", "margin_with_fixed_pct"} else 2
+                    1 if column in {"units", "gross_margin_pct", "margin_without_fixed_pct", "margin_with_fixed_pct"} else 2
                 )
 
         product_revenue_rows_df = (
@@ -8756,32 +8788,11 @@ class BizniWebExporter:
             if not product_display_summary.empty else pd.DataFrame()
         )
         loss_product_rows_df = (
-            product_display_summary.loc[
-                (product_display_summary["profit_without_fixed"] < 0)
-                | (product_display_summary["profit_with_fixed"] < 0)
-            ]
-            .sort_values(["profit_without_fixed", "profit_with_fixed", "revenue"], ascending=[True, True, False])
+            product_display_summary.loc[product_display_summary["gross_profit"] < 0]
+            .sort_values(["gross_profit", "revenue"], ascending=[True, False])
             .reset_index(drop=True)
             if not product_display_summary.empty else pd.DataFrame()
         )
-
-        has_cm1_profit = "cm1_profit" in demand_df.columns
-        has_allocated_paid_spend = "allocated_paid_spend" in demand_df.columns
-        for column in ["cm1_profit", "allocated_paid_spend"]:
-            if column not in demand_df.columns:
-                demand_df[column] = 0.0
-        if not has_cm1_profit:
-            if "total_expense" in demand_df.columns:
-                demand_df["cm1_profit"] = demand_df["item_total_without_tax"].fillna(0.0) - pd.to_numeric(
-                    demand_df["total_expense"], errors="coerce"
-                ).fillna(0.0)
-            else:
-                demand_df["cm1_profit"] = pd.to_numeric(demand_df["cm2_profit"], errors="coerce").fillna(0.0)
-        if not has_allocated_paid_spend:
-            demand_df["allocated_paid_spend"] = (
-                pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0)
-                - pd.to_numeric(demand_df["cm2_profit"], errors="coerce").fillna(0.0)
-            ).clip(lower=0.0)
 
         country_source = pd.DataFrame()
         if df is not None and not df.empty and orders_df is not None and not orders_df.empty:

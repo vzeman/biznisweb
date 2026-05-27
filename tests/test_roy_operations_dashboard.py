@@ -159,6 +159,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Krajiny", html)
         self.assertIn("countryPerformanceBody", html)
         self.assertIn("Produkty v strate", html)
+        self.assertIn("Hrubý zisk/strata", html)
+        self.assertNotIn("Zisk s fixom", html)
         self.assertIn("data-save-inbound", html)
         self.assertIn("replace(/[\"\\\\]/g, '\\\\$&')", html)
         self.assertNotIn('replace(/["\\]/g', html)
