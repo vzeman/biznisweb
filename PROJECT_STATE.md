@@ -3318,3 +3318,31 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard, then verify `/api/operations/roy/picking-lists.pdf?refresh=1` on production
+
+### 2026-05-27 (ROY picking-list PDF note/barcode deployed)
+- Code merged:
+  - PR `#127`: `Add ROY picking-list notes and barcode`, merge commit `04c3e6c`
+- ECR refresh:
+  - workflow: `Build and Push ECR`
+  - run: `26522837890`
+  - image digest: `sha256:1b2973102ef6cd523aa87ffe3d1bdb4a5b2a18f94e317f70c910f9afc072c9f8`
+- ROY live dashboard deploy:
+  - first deploy run `26522968512` failed before App Runner update while waiting for the ROY artifact refresh task
+  - second deploy run `26524447820` completed successfully
+- Fargate hard-gate context from the successful deploy run:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.45.181`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:14`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/d8d2ae604c5a4c3fbc89788ece4470a5`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+- App Runner / public verification:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - `/health` returned `{"ok": true}`
+  - `/production/roy` returned the `roy-operations-dashboard` marker and the picking-list PDF link
+  - `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard`, `auto_refresh_seconds=90`, and order rows now include `customer_note`, `wholesale_pricing`, and `invoice_address`
+  - `/api/operations/roy/picking-lists.pdf?refresh=1` returned a valid PDF with `34` pages and `275096` bytes; extracted first page contains order `2677002576`, `Poznámka klienta`, customer note text, and address blocks
+- Next exact step:
+  - watch one real downloaded picking-list PDF during warehouse use and adjust spacing only if long notes or long addresses crowd the product table
