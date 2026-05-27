@@ -790,6 +790,10 @@ def generate_modern_dashboard(
             "country",
             "orders",
             "revenue",
+            "gross_profit",
+            "fb_ads_spend",
+            "google_ads_spend",
+            "paid_ads_spend",
             "contribution_profit_without_fixed",
             "contribution_profit_without_fixed_guarded",
             "contribution_profit_with_fixed",
@@ -1555,6 +1559,27 @@ def generate_modern_dashboard(
         ],
         limit=80,
     )
+    roy_country_rows = _frame_rows(
+        (roy_product_demand or {}).get("country_rows"),
+        [
+            "country",
+            "country_label",
+            "orders",
+            "products",
+            "units",
+            "revenue",
+            "gross_profit",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "spend",
+            "paid_ads_spend",
+            "gross_margin_pct",
+            "net_margin_pct",
+            "spend_share_pct",
+            "top_products",
+        ],
+        limit=12,
+    )
 
     heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
     b2b_rows = _frame_rows(
@@ -2067,6 +2092,7 @@ def generate_modern_dashboard(
             "product_revenue_rows": roy_product_revenue_rows,
             "product_profit_rows": roy_product_profit_rows,
             "loss_product_rows": roy_loss_product_rows,
+            "country_rows": roy_country_rows,
         },
         "daily_margin_rows": daily_margin_rows,
         "payday_window_rows": payday_window_rows,

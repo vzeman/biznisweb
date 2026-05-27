@@ -2302,6 +2302,40 @@ class BizniWebExporter:
         geo_source = geo_source.drop_duplicates(subset=["order_num"]).copy()
         return orders_df.merge(geo_source, on="order_num", how="left")
 
+    def _normalize_country_key_label(self, value: Any) -> Tuple[str, str]:
+        raw = str(value or "").strip()
+        normalized = self._normalize_match_text(raw)
+        alias_map = {
+            "sk": "sk",
+            "svk": "sk",
+            "slovakia": "sk",
+            "slovensko": "sk",
+            "slovenska republika": "sk",
+            "cz": "cz",
+            "cze": "cz",
+            "cesko": "cz",
+            "ceska republika": "cz",
+            "czechia": "cz",
+            "czech republic": "cz",
+            "hu": "hu",
+            "hun": "hu",
+            "hungary": "hu",
+            "madarsko": "hu",
+            "magyarorszag": "hu",
+            "unknown": "unknown",
+            "nan": "unknown",
+            "none": "unknown",
+            "": "unknown",
+        }
+        key = alias_map.get(normalized)
+        if key is None:
+            key = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-") or "unknown"
+        label_map = {"sk": "SK", "cz": "CZ", "hu": "HU", "unknown": "Unknown"}
+        label = label_map.get(key)
+        if label is None:
+            label = raw.upper() if raw and len(raw) <= 3 else (raw or "Unknown")
+        return key, label
+
     def _match_named_group(self, label: Any, groups: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
         for group in groups or []:
             if self._matches_patterns(str(label or ""), group.get("patterns") or []):
@@ -8253,6 +8287,7 @@ class BizniWebExporter:
 
         geo['fb_ads_spend'] = geo['country'].map(fb_spend_by_country).fillna(0)
         geo['paid_ads_spend'] = geo['fb_ads_spend'] + geo['google_ads_spend']
+        geo['gross_profit'] = geo['revenue'] - geo['product_cost']
         geo['contribution_cost_without_fixed'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['paid_ads_spend']
         geo['contribution_profit_without_fixed'] = geo['revenue'] - geo['contribution_cost_without_fixed']
         geo['contribution_margin_without_fixed_pct'] = geo.apply(
@@ -8318,7 +8353,7 @@ class BizniWebExporter:
         # Round financial values for display.
         for col in [
             'revenue', 'product_cost', 'packaging_cost', 'shipping_subsidy_cost', 'fixed_cost',
-            'fb_ads_spend', 'google_ads_spend', 'paid_ads_spend',
+            'fb_ads_spend', 'google_ads_spend', 'paid_ads_spend', 'gross_profit',
             'contribution_cost_without_fixed', 'contribution_profit_without_fixed', 'contribution_profit_without_fixed_guarded',
             'contribution_cost_with_fixed', 'contribution_profit_with_fixed', 'contribution_profit_with_fixed_guarded',
             'contribution_cost', 'contribution_profit', 'contribution_profit_guarded'
@@ -8582,6 +8617,7 @@ class BizniWebExporter:
                 "product_revenue_rows": pd.DataFrame(),
                 "product_profit_rows": pd.DataFrame(),
                 "loss_product_rows": pd.DataFrame(),
+                "country_rows": pd.DataFrame(),
             }
 
         print("\nAnalyzing Roy product demand analytics...")
@@ -8610,6 +8646,7 @@ class BizniWebExporter:
                 "product_revenue_rows": pd.DataFrame(),
                 "product_profit_rows": pd.DataFrame(),
                 "loss_product_rows": pd.DataFrame(),
+                "country_rows": pd.DataFrame(),
             }
 
         demand_df = item_df.copy()
@@ -8636,6 +8673,7 @@ class BizniWebExporter:
                 "product_revenue_rows": pd.DataFrame(),
                 "product_profit_rows": pd.DataFrame(),
                 "loss_product_rows": pd.DataFrame(),
+                "country_rows": pd.DataFrame(),
             }
 
         numeric_columns = ["item_quantity", "item_total_without_tax", "cm2_profit", "cm3_profit"]
@@ -8726,6 +8764,112 @@ class BizniWebExporter:
             .reset_index(drop=True)
             if not product_display_summary.empty else pd.DataFrame()
         )
+
+        has_cm1_profit = "cm1_profit" in demand_df.columns
+        has_allocated_paid_spend = "allocated_paid_spend" in demand_df.columns
+        for column in ["cm1_profit", "allocated_paid_spend"]:
+            if column not in demand_df.columns:
+                demand_df[column] = 0.0
+        if not has_cm1_profit:
+            if "total_expense" in demand_df.columns:
+                demand_df["cm1_profit"] = demand_df["item_total_without_tax"].fillna(0.0) - pd.to_numeric(
+                    demand_df["total_expense"], errors="coerce"
+                ).fillna(0.0)
+            else:
+                demand_df["cm1_profit"] = pd.to_numeric(demand_df["cm2_profit"], errors="coerce").fillna(0.0)
+        if not has_allocated_paid_spend:
+            demand_df["allocated_paid_spend"] = (
+                pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0)
+                - pd.to_numeric(demand_df["cm2_profit"], errors="coerce").fillna(0.0)
+            ).clip(lower=0.0)
+
+        country_source = pd.DataFrame()
+        if df is not None and not df.empty and orders_df is not None and not orders_df.empty:
+            try:
+                country_source = self._build_order_geo_frame(df, orders_df)[["order_num", "geo_country"]]
+            except Exception:
+                country_source = pd.DataFrame()
+        if country_source.empty and orders_df is not None and not orders_df.empty:
+            if "geo_country" in orders_df.columns:
+                country_source = orders_df[["order_num", "geo_country"]].copy()
+            elif "country" in orders_df.columns:
+                country_source = orders_df[["order_num", "country"]].rename(columns={"country": "geo_country"}).copy()
+        if country_source.empty:
+            if "geo_country" in demand_df.columns:
+                country_source = demand_df[["order_num", "geo_country"]].copy()
+            elif "country" in demand_df.columns:
+                country_source = demand_df[["order_num", "country"]].rename(columns={"country": "geo_country"}).copy()
+        if not country_source.empty:
+            country_source = country_source.drop_duplicates(subset=["order_num"]).copy()
+            demand_df = demand_df.drop(columns=["geo_country"], errors="ignore").merge(
+                country_source,
+                on="order_num",
+                how="left",
+            )
+        if "geo_country" not in demand_df.columns:
+            demand_df["geo_country"] = "Unknown"
+        demand_df["geo_country"] = demand_df["geo_country"].fillna("Unknown")
+        country_pairs = demand_df["geo_country"].apply(self._normalize_country_key_label)
+        demand_df["country"] = country_pairs.apply(lambda pair: pair[0])
+        demand_df["country_label"] = country_pairs.apply(lambda pair: pair[1])
+
+        country_product_summary = (
+            demand_df.groupby(["country", "country_label", "product_sku"], dropna=False)
+            .agg(
+                product=("item_label", "first"),
+                orders=("order_num", "nunique"),
+                units=("item_quantity", "sum"),
+                revenue=("item_total_without_tax", "sum"),
+                gross_profit=("cm1_profit", "sum"),
+                profit_without_fixed=("cm2_profit", "sum"),
+                profit_with_fixed=("cm3_profit", "sum"),
+                spend=("allocated_paid_spend", "sum"),
+            )
+            .reset_index()
+        )
+        country_rows: List[Dict[str, Any]] = []
+        for (country_key, country_label), group in country_product_summary.groupby(["country", "country_label"], dropna=False):
+            top_products = group.sort_values(["revenue", "profit_with_fixed"], ascending=[False, False]).head(5).copy()
+            country_revenue = float(group["revenue"].sum())
+            country_profit_with_fixed = float(group["profit_with_fixed"].sum())
+            country_gross_profit = float(group["gross_profit"].sum())
+            country_spend = float(group["spend"].sum())
+            country_rows.append(
+                {
+                    "country": country_key,
+                    "country_label": country_label,
+                    "orders": int(
+                        demand_df.loc[demand_df["country"].eq(country_key), "order_num"].nunique()
+                    ),
+                    "products": int(group["product_sku"].nunique()),
+                    "units": round(float(group["units"].sum()), 1),
+                    "revenue": round(country_revenue, 2),
+                    "gross_profit": round(country_gross_profit, 2),
+                    "profit_without_fixed": round(float(group["profit_without_fixed"].sum()), 2),
+                    "profit_with_fixed": round(country_profit_with_fixed, 2),
+                    "spend": round(country_spend, 2),
+                    "paid_ads_spend": round(country_spend, 2),
+                    "gross_margin_pct": round((country_gross_profit / country_revenue * 100.0) if country_revenue > 0 else 0.0, 1),
+                    "net_margin_pct": round((country_profit_with_fixed / country_revenue * 100.0) if country_revenue > 0 else 0.0, 1),
+                    "spend_share_pct": round((country_spend / country_revenue * 100.0) if country_revenue > 0 else 0.0, 1),
+                    "top_products": [
+                        {
+                            "sku": str(row.get("product_sku") or ""),
+                            "product": str(row.get("product") or ""),
+                            "orders": int(row.get("orders") or 0),
+                            "units": round(float(row.get("units") or 0.0), 1),
+                            "revenue": round(float(row.get("revenue") or 0.0), 2),
+                            "gross_profit": round(float(row.get("gross_profit") or 0.0), 2),
+                            "profit_with_fixed": round(float(row.get("profit_with_fixed") or 0.0), 2),
+                            "spend": round(float(row.get("spend") or 0.0), 2),
+                        }
+                        for _, row in top_products.iterrows()
+                    ],
+                }
+            )
+        country_rows_df = pd.DataFrame(country_rows).sort_values(
+            ["revenue", "profit_with_fixed"], ascending=[False, False]
+        ).reset_index(drop=True) if country_rows else pd.DataFrame()
 
         weekly = (
             demand_df.groupby(["product_sku", "week_start"])
@@ -10231,6 +10375,7 @@ class BizniWebExporter:
             "product_revenue_rows": product_revenue_rows_df,
             "product_profit_rows": product_profit_rows_df,
             "loss_product_rows": loss_product_rows_df,
+            "country_rows": country_rows_df,
         }
         print(
             f"Roy product demand analytics complete: growing={len(growing_rows_df)}, "
@@ -10238,7 +10383,7 @@ class BizniWebExporter:
             f"inventory_rows={len(inventory_rows_df)}, alert_rows={len(alert_rows_df)}, "
             f"restock_rows={len(restock_priority_rows_df)}, "
             f"forecast_backtests={len(forecast_accuracy_rows_df)}, brands={len(brand_summary)}, "
-            f"loss_products={len(loss_product_rows_df)}"
+            f"loss_products={len(loss_product_rows_df)}, countries={len(country_rows_df)}"
         )
         return result
 
