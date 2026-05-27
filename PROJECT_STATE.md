@@ -3362,3 +3362,14 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - merge PR, rebuild ECR image, deploy ROY App Runner dashboard, and verify live `/api/operations/roy/picking-lists.pdf?refresh=1`
+
+### 2026-05-27 (ROY App Runner deploy skip refresh mode)
+- Branch: `codex/deploy-skip-roy-artifact-refresh`
+- Change:
+  - `deploy-live-dashboard-apprunner.yml` now accepts `skip_artifact_refresh`
+  - when enabled, the ROY Fargate pre-deploy task skips the expensive daily report regeneration but still starts a local marker server and verifies it with `curl http://127.0.0.1:8000/marker.json`
+  - existing S3 latest artifact validation and App Runner public smoke remain in place
+- Reason:
+  - the PDF-only deploy for the large handling flags was blocked before App Runner update because the ROY artifact refresh task kept running beyond the practical deploy window
+- Next exact step:
+  - merge PR, rerun ROY App Runner deploy with `skip_artifact_refresh=true`, then verify live PDF text contains both large banners
