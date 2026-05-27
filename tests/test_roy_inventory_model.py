@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 
 import pandas as pd
 
@@ -126,6 +128,62 @@ class RoyInventoryModelTests(unittest.TestCase):
 
         self.assertEqual(4.5, cost)
         self.assertEqual("mapped_legacy_title_hash", source)
+
+    def test_maco_stop_large_set_cost_aliases_resolve_to_configured_cost(self) -> None:
+        expense_path = Path(__file__).resolve().parents[1] / "projects" / "roy" / "product_expenses.json"
+        cost_map = json.loads(expense_path.read_text(encoding="utf-8"))
+        expected_cost = 26.58
+
+        self.assertEqual(expected_cost, cost_map["133652"])
+        self.assertEqual(expected_cost, cost_map["H-226DA29F"])
+        self.assertEqual(expected_cost, cost_map["H-CF33B34C"])
+
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        exporter.product_expenses_exact = cost_map
+        exporter.product_expenses_normalized = {
+            exporter._normalize_match_text(key): float(value)
+            for key, value in cost_map.items()
+            if exporter._normalize_match_text(key)
+        }
+
+        scenarios = [
+            (
+                {
+                    "product_sku": "H-226DA29F",
+                    "item_label": "Set MACO STOP VEĽKÝ",
+                    "import_code": "",
+                    "warehouse_number": "",
+                    "ean": "",
+                },
+                "mapped_product_sku",
+            ),
+            (
+                {
+                    "product_sku": "H-CF33B34C",
+                    "item_label": "Set proti medveďom VEĽKÝ",
+                    "import_code": "133652",
+                    "warehouse_number": "",
+                    "ean": "",
+                },
+                "mapped_product_identifier",
+            ),
+            (
+                {
+                    "product_sku": "",
+                    "item_label": "Set proti medveďom VEĽKÝ",
+                    "import_code": "",
+                    "warehouse_number": "133652",
+                    "ean": "",
+                },
+                "mapped_product_identifier",
+            ),
+        ]
+
+        for kwargs, expected_source in scenarios:
+            with self.subTest(kwargs=kwargs):
+                cost, source = exporter._resolve_product_expense(**kwargs)
+                self.assertEqual(expected_cost, cost)
+                self.assertEqual(expected_source, source)
 
     def test_restock_alerts_include_relevant_historical_products_without_inventory_rows(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
