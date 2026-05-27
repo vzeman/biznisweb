@@ -209,11 +209,41 @@ Bootstrap entrypoints:
   - live API returns top brands/products, loss-product warnings, inbound-stock state, and `auto_refresh_seconds = 90`
   - rendered production HTML now emits valid `cssEscape` JavaScript and renders inbound/loss-product controls from the live API payload
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
+- ROY unpaid-order cancellation automation is implemented on task branch:
+  - standalone runner `unpaid_order_cancellation_runner.py` changes stale unpaid bank-transfer/card orders to `Nezaplatená - zrušená objednávka`
+  - ROY target status was verified through BizniWeb API as ID `74`
+  - local read-only dry-run on `2026-05-27` scanned `1500` ROY orders through `2026-01-29` and found `11` eligible orders with cutoff `2026-05-13`
+  - deploy workflow `Deploy Unpaid Order Cancellation` will create/update `roy-unpaid-order-cancellation` and run an ECS/Fargate dry-run marker check before production schedule use
 
 ## 8) Next Exact Step
-- Monitor the next real newly fulfillable ROY order after sound is enabled in the browser and confirm the audible alert fires on the following dashboard refresh.
+- Merge and deploy the ROY unpaid-order cancellation scheduler, then verify the ECS/Fargate dry-run marker and schedule target in AWS.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY unpaid-order cancellation automation staged)
+- Added standalone stale unpaid order cancellation code:
+  - `unpaid_order_cancellation.py`
+  - `unpaid_order_cancellation_runner.py`
+  - `tests/test_unpaid_order_cancellation.py`
+- Added ROY config for bank-transfer/card unpaid orders older than `14` days:
+  - target status `Nezaplatená - zrušená objednávka`
+  - target status ID `74`
+  - payment refs `6`, `17`, `18`, `11`, `20`
+  - daily schedule metadata `roy-unpaid-order-cancellation`, `cron(10 2 * * ? *) Europe/Bratislava`
+- Added GitHub Actions workflow `.github/workflows/deploy-unpaid-order-cancellation.yml` to register the ECS task definition, create/update the EventBridge Scheduler job, and verify a host dry-run marker at `http://127.0.0.1:8000/marker.json`.
+- Verified locally:
+  - `python -m py_compile unpaid_order_cancellation.py unpaid_order_cancellation_runner.py`
+  - `python -m unittest tests.test_unpaid_order_cancellation`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- ROY local dry-run:
+  - reference date `2026-05-27`
+  - cutoff `2026-05-13`
+  - scanned `1500` orders / `50` pages
+  - oldest scanned order date `2026-01-29`
+  - eligible orders `11`
 
 ### 2026-05-27 (ROY live dashboard new-order sound alert deployed)
 - Code merged:

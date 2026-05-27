@@ -214,6 +214,8 @@ def main() -> int:
             "export_orders.py",
             "daily_report_runner.py",
             "generate_invoices.py",
+            "unpaid_order_cancellation.py",
+            "unpaid_order_cancellation_runner.py",
             "scripts/observability_snapshot.py",
             "scripts/scaffold_client.py",
             "scripts/import_product_expenses_excel.py",
