@@ -3373,3 +3373,34 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - the PDF-only deploy for the large handling flags was blocked before App Runner update because the ROY artifact refresh task kept running beyond the practical deploy window
 - Next exact step:
   - merge PR, rerun ROY App Runner deploy with `skip_artifact_refresh=true`, then verify live PDF text contains both large banners
+
+### 2026-05-27 (ROY picking-list large handling flags deployed)
+- Code merged:
+  - PR `#129`: `Add large ROY picking list flags`, merge commit `cf926e1`
+  - PR `#130`: `Allow ROY deploy without artifact refresh`, merge commit `2a48306`
+- ECR refresh:
+  - workflow run: `26525813154`
+  - image digest: `sha256:99dd978c6fd8eb7b2a7d0d3ede5b8fc670d667488b335f1f6fd9f628ba743c3e`
+- ROY live dashboard deploy:
+  - normal deploy run `26525928747` failed before App Runner update because the ROY artifact refresh task ran too long
+  - deploy run `26527680459` completed successfully with `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run `26527680459`:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.16.201`
+  - service name: `roy-daily-report-email`
+  - image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:99dd978c6fd8eb7b2a7d0d3ede5b8fc670d667488b335f1f6fd9f628ba743c3e`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+  - latest S3 artifact validation: `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=245:inventory_alerts=22.0`
+- App Runner / public verification:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - health path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`
+  - `/health` returned OK
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=34:personal_pickups=2:inventory_alerts=22.0:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=276911`
+  - `/api/operations/roy/picking-lists.pdf?refresh=1` returned a valid PDF with `34` pages and `276911` bytes
+  - live PDF page for order `2677002764` contains large `OSOBNÝ ODBER - NEBALIŤ`
+  - live PDF pages for orders `2677002708` and `2677002747` contain large `VEĽKOOBCHODNÁ OBJEDNÁVKA`
+- Next exact step:
+  - watch the next real warehouse download from the ROY dashboard and only adjust spacing if operators report long notes crowding the product rows
