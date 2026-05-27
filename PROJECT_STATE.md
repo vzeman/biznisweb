@@ -3468,3 +3468,32 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard with `skip_artifact_refresh=true`, then verify live personal pickup list excludes `2677002554`
+
+### 2026-05-27 (ROY paid-only personal pickup list deployed)
+- Code merged:
+  - PR `#134`: `Show only paid ROY personal pickups`, merge commit `c1b532d`
+- ECR refresh:
+  - workflow run: `26529256498`
+  - image digest: `sha256:43aaf4036e8ebd7a7622d921a6dd02ef1e1d4e13dd6464a66f55438454b5cb6b`
+- ROY live dashboard deploy:
+  - workflow run: `26529371749`
+  - deploy mode: `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run `26529371749`:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.43.81`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+  - latest S3 artifact validation: `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=245:inventory_alerts=22.0`
+- App Runner / public verification:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - health path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=36:personal_pickups=1:inventory_alerts=22.0:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=290171`
+  - `/health` returned OK
+  - `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard`, summary `personal_pickups=1`, and `1` pickup row
+  - live pickup list includes `2677002764` with status `Platba online - zaplatené`, `paid_personal_pickup=true`, `pickup_action_allowed=true`
+  - live pickup list excludes cancelled unpaid pickup order `2677002554`
+- Next exact step:
+  - keep the paid-only pickup rule unless warehouse process explicitly needs a separate unpaid pickup queue
