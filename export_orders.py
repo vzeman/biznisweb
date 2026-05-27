@@ -8676,22 +8676,37 @@ class BizniWebExporter:
                 "country_rows": pd.DataFrame(),
             }
 
+        has_total_expense = "total_expense" in demand_df.columns
         numeric_columns = ["item_quantity", "item_total_without_tax", "cm2_profit", "cm3_profit"]
         for column in numeric_columns:
             if column not in demand_df.columns:
                 demand_df[column] = 0.0
             demand_df[column] = pd.to_numeric(demand_df[column], errors="coerce").fillna(0.0)
+        if has_total_expense:
+            demand_df["total_expense"] = pd.to_numeric(demand_df["total_expense"], errors="coerce")
 
         has_cm1_profit = "cm1_profit" in demand_df.columns
         has_allocated_paid_spend = "allocated_paid_spend" in demand_df.columns
         if has_cm1_profit:
             demand_df["cm1_profit"] = pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0)
-        elif "total_expense" in demand_df.columns:
+        elif has_total_expense:
             demand_df["cm1_profit"] = demand_df["item_total_without_tax"].fillna(0.0) - pd.to_numeric(
                 demand_df["total_expense"], errors="coerce"
             ).fillna(0.0)
         else:
             demand_df["cm1_profit"] = pd.to_numeric(demand_df["cm2_profit"], errors="coerce").fillna(0.0)
+        if has_total_expense:
+            product_expense = pd.to_numeric(demand_df["total_expense"], errors="coerce")
+            demand_df["gross_profit"] = (
+                demand_df["item_total_without_tax"].fillna(0.0)
+                - product_expense.fillna(0.0)
+            )
+            demand_df["gross_profit"] = demand_df["gross_profit"].where(
+                product_expense.notna(),
+                pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0),
+            )
+        else:
+            demand_df["gross_profit"] = pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0)
         if has_allocated_paid_spend:
             demand_df["allocated_paid_spend"] = pd.to_numeric(
                 demand_df["allocated_paid_spend"], errors="coerce"
@@ -8712,7 +8727,7 @@ class BizniWebExporter:
                 orders=("order_num", "nunique"),
                 units=("item_quantity", "sum"),
                 revenue=("item_total_without_tax", "sum"),
-                gross_profit=("cm1_profit", "sum"),
+                gross_profit=("gross_profit", "sum"),
                 profit_without_fixed=("cm2_profit", "sum"),
                 profit_with_fixed=("cm3_profit", "sum"),
                 first_sale=("purchase_datetime", "min"),
@@ -8831,7 +8846,7 @@ class BizniWebExporter:
                 orders=("order_num", "nunique"),
                 units=("item_quantity", "sum"),
                 revenue=("item_total_without_tax", "sum"),
-                gross_profit=("cm1_profit", "sum"),
+                gross_profit=("gross_profit", "sum"),
                 profit_without_fixed=("cm2_profit", "sum"),
                 profit_with_fixed=("cm3_profit", "sum"),
                 spend=("allocated_paid_spend", "sum"),

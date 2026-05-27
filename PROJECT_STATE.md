@@ -2890,3 +2890,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - run local tests, open/merge PR, wait for ECR build, deploy ROY App Runner, and verify `/production/roy` live API
+
+### 2026-05-27 (ROY loss products gross fields in payload)
+- Branch: `codex/roy-loss-products-payload-gross-fields`
+- Change:
+  - ROY modern dashboard payload now preserves `gross_profit` and `gross_margin_pct` in `roy_product_demand.loss_product_rows`
+  - this fixes the deploy validation failure where the reporting filter selected gross-loss rows but the serialized live payload no longer carried the gross-loss values
+- Local verification:
+  - `python -m unittest tests.test_dashboard_modern tests.test_roy_inventory_model tests.test_roy_operations_dashboard`
+  - `python -m py_compile export_orders.py dashboard_modern.py roy_operations_dashboard.py live_dashboard_server.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - workflow YAML parse check for `.github/workflows/deploy-live-dashboard-apprunner.yml`
+  - `git diff --check`
+- Next exact step:
+  - run focused tests, open/merge PR, rebuild ECR image, rerun ROY App Runner deploy, and verify live `/production/roy`
