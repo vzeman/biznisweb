@@ -211,9 +211,25 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Monitor the next scheduled ROY report and confirm bundle parent products stay absent from product performance rows while component units remain present.
+- Open/merge the ROY order-item bundle component PR, refresh ECR, deploy ROY App Runner, and verify live order rows plus product tables no longer expose bundle parent products as standalone dashboard items.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY dashboard order items expand bundle products to components)
+- Branch: `codex/roy-dashboard-order-bundle-components`
+- Change:
+  - ROY operations order rows now reuse `product_component_expansion_rules` to display configured bundle products as pickable component items.
+  - `Set MACO STOP VEĽKÝ` / `Set proti medveďom VEĽKÝ` display as MACO STOP 300ml hmla, 300ml pouch, and bear bell components.
+  - `Wachman Rio Solar 4G` displays as `Fotopasca Wachman Rio 4G` plus `Univerzálne solárne napájanie BL8000 pre fotopascu`.
+  - If a component is also present separately in the same order, order item quantities are merged by import code / EAN / warehouse number / label.
+- Local verification:
+  - `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py export_orders.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_reporting_product_identity`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner, then verify `/production/roy` order rows and product tables
 
 ### 2026-05-27 (ROY bundle products expand to reporting components deployed)
 - Code merged:
