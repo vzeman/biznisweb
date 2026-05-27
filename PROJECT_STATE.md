@@ -211,9 +211,43 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Open/merge the ROY order-item bundle component PR, refresh ECR, deploy ROY App Runner, and verify live order rows plus product tables no longer expose bundle parent products as standalone dashboard items.
+- Monitor the next scheduled ROY report and the next real bundle order; confirm bundle parent products stay absent from reporting/product rows and order-picking rows while component units remain present.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY dashboard order bundle components deployed)
+- Code merged:
+  - PR `#113`: `Expand ROY dashboard bundle order items`, merge commit `6ff8427`
+- ECR refresh:
+  - workflow: `Build and Push ECR`
+  - run: `26504547879`
+  - image digest: `sha256:7cc4b8aa5c891acab2b641dec2c1f3e777e31147c463da6e4b21691a0aee5e34`
+- Final ROY live dashboard deploy/refresh:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26504675800`
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.27.253`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:10`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/3353c3a7d6d940ff959eefc50ef36c5e`
+  - image identifier: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:7cc4b8aa5c891acab2b641dec2c1f3e777e31147c463da6e4b21691a0aee5e34`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+- Public App Runner verification:
+  - `/health`, `/production/roy`, and `/api/operations/roy/live?refresh=1` returned HTTP `200`
+  - API marker: `roy-operations-dashboard`
+  - auto-refresh: `90` seconds
+  - live order payload had `31` fulfillment orders, `1` personal pickup order, and `70` rendered order item rows
+  - live order item rows had zero parent hits for `Set MACO STOP VEĽKÝ`, `Set proti medveďom VEĽKÝ`, and `Wachman Rio Solar 4G`
+  - live order item rows included component hits such as `Puzdro MACO STOP na sprej 300ml`
+  - live performance rows still had zero parent hits for the same bundle names and component hits including `Fotopasca Wachman Rio 4G`
+- Browser UI verification:
+  - `/production/roy` loaded as `ROY Operations Dashboard`
+  - visible header showed `Posledná aktualizácia 2026-05-27T10:35:14Z. Auto refresh 90s.`
+  - rendered order sections had `orderParentHits=[]` and component hits for MACO STOP spray, pouch, and bear bell
+  - rendered performance/country sections had `performanceParentHits=[]` and component hits for `Fotopasca Wachman Rio 4G` and `Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla`
+- Next exact step:
+  - monitor the next scheduled ROY report and the next real bundle order; confirm bundle parent products stay absent while component units remain present
 
 ### 2026-05-27 (ROY dashboard order items expand bundle products to components)
 - Branch: `codex/roy-dashboard-order-bundle-components`
