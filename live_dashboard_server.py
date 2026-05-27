@@ -1204,7 +1204,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     const fmtRatio = (value) => value === null || value === undefined ? 'N/A' : `${new Intl.NumberFormat('sk-SK', { maximumFractionDigits:2 }).format(Number(value || 0))}x`;
     const text = (value, fallback='-') => value === null || value === undefined || value === '' ? fallback : String(value);
     const safe = (value) => text(value, '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-    const cssEscape = (value) => window.CSS && CSS.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, '\\$&');
+    const cssEscape = (value) => window.CSS && CSS.escape ? CSS.escape(String(value)) : String(value).replace(/["\\\\]/g, '\\\\$&');
     let latestData = null;
     let refreshTimer = null;
     let kpiScope = 'monthly';

@@ -158,6 +158,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Top zna", html)
         self.assertIn("Produkty v strate", html)
         self.assertIn("data-save-inbound", html)
+        self.assertIn("replace(/[\"\\\\]/g, '\\\\$&')", html)
+        self.assertNotIn('replace(/["\\]/g', html)
 
     def test_inbound_order_units_suppress_covered_stock_alert_until_restock(self) -> None:
         payload = {
