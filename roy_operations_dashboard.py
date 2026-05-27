@@ -621,6 +621,14 @@ def _is_personal_pickup(order: Dict[str, Any], settings: Dict[str, Any]) -> bool
     return any(name and name in shipping_title for name in settings["personal_pickup_shipping_names_normalized"])
 
 
+def _is_paid_personal_pickup(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    return (
+        _is_personal_pickup(order, settings)
+        and _is_paid_online(order, settings)
+        and _normalize_text(_status_name(order)) != settings["shipped_status_name_normalized"]
+    )
+
+
 def _normalize_product_identifier(value: Any) -> str:
     return str(value or "").strip().upper()
 
@@ -863,9 +871,13 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
     is_pickup = _is_personal_pickup(order, settings)
     status_name = _status_name(order)
     status_norm = _normalize_text(status_name)
-    pickup_action_allowed = (
+    paid_pickup_ready = (
         is_pickup
+        and reason == "paid_online"
         and status_norm != settings["shipped_status_name_normalized"]
+    )
+    pickup_action_allowed = (
+        paid_pickup_ready
         and status_norm in settings["pickup_action_statuses_normalized"]
     )
     return {
@@ -890,6 +902,7 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         "fulfillable": fulfillable,
         "fulfillment_reason": reason,
         "personal_pickup": is_pickup,
+        "paid_personal_pickup": paid_pickup_ready,
         "pickup_action_allowed": pickup_action_allowed,
     }
 
@@ -907,7 +920,7 @@ def build_roy_orders_snapshot(
 
     rows = [_public_order_row(order, settings) for order in orders]
     fulfillable_orders = [row for row in rows if row["fulfillable"]]
-    pickup_orders = [row for row in rows if row["personal_pickup"] and row["status"] != settings["shipped_status_name"]]
+    pickup_orders = [row for row in rows if row["paid_personal_pickup"]]
     paid_orders = [row for row in fulfillable_orders if row["fulfillment_reason"] == "paid_online"]
     cod_orders = [row for row in fulfillable_orders if row["fulfillment_reason"] == "cod_waiting"]
 
@@ -984,7 +997,7 @@ def fetch_open_orders_for_roy_operations(project: str, settings: Dict[str, Any])
         page_count += 1
 
         page_fulfillable = sum(1 for order in page_orders if _is_fulfillable_order(order, settings)[0])
-        page_pickups = sum(1 for order in page_orders if _is_personal_pickup(order, settings))
+        page_pickups = sum(1 for order in page_orders if _is_paid_personal_pickup(order, settings))
         fulfillable_seen += page_fulfillable
         pickup_seen += page_pickups
         if page_fulfillable or page_pickups:
