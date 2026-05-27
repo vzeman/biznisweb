@@ -406,13 +406,22 @@ def _to_frame(value: Any) -> pd.DataFrame:
 
 
 def _json_safe(value: Any) -> Any:
-    if isinstance(value, (datetime, date, pd.Timestamp)):
-        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if not isinstance(value, (str, bytes, bytearray)) and hasattr(value, "tolist"):
+        try:
+            return _json_safe(value.tolist())
+        except Exception:
+            pass
     try:
         if pd.isna(value):
             return None
-    except TypeError:
+    except (TypeError, ValueError):
         pass
+    if isinstance(value, (datetime, date, pd.Timestamp)):
+        return value.isoformat()
     if hasattr(value, "item"):
         try:
             return value.item()
