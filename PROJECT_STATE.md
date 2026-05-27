@@ -209,11 +209,16 @@ Bootstrap entrypoints:
   - live API returns top brands/products, loss-product warnings, inbound-stock state, and `auto_refresh_seconds = 90`
   - rendered production HTML now emits valid `cssEscape` JavaScript and renders inbound/loss-product controls from the live API payload
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
-- ROY HC800 product-loss diagnosis/fix is staged on task branch:
+- ROY HC800 product-loss diagnosis/fix is live in production:
+  - merged PR `#124` into `main` (`81bfa92`)
   - `Wachman HC800` has import code `16689` and confirmed purchase cost `13.70 EUR` ex VAT
   - historical local dashboard payload showed HC800 with positive gross profit (`5991.95 EUR`, `44.1%`) but negative post-fixed profit (`-3599.06 EUR`), so it looked loss-making where the UI labelled post-fixed profit as generic `Zisk`
   - `projects/roy/product_expenses.json` now maps import code `16689` directly to `13.7`, instead of relying only on legacy title hashes
   - ROY operations top brand/product tables now rank and display `gross_profit`/`gross_margin_pct`; `loss_product_rows` remains gross-loss only
+  - production deploy workflow run `26515291098` succeeded on `2026-05-27`
+  - hard-gate context: App Runner instance/IP `N/A`, service `biznisweb-roy-operations-dashboard`, service ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, path `/production/roy`, image digest `sha256:9392f103055338f87ed004d75bc3695eab32a1139911c91d94a6387adca91d9e`
+  - host refresh verification: ECS/Fargate private IP `172.31.32.42`, service `roy-daily-report-email`, localhost marker `LIVE_ARTIFACT_MARKER_OK`, `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=245:inventory_alerts=22.0`
+  - production API/UI smoke verified HC800 `sku=16689` with `gross_profit=5887.36`, `gross_margin_pct=43.3`, `hc800_in_loss_rows=0`, one remaining gross-loss row `Roy powerbanka 10000mAh`, and HTML labels `Hruby zisk` / `Hruba marza`
 - ROY unpaid-order cancellation automation is live in production:
   - standalone runner `unpaid_order_cancellation_runner.py` changes stale unpaid bank-transfer/card orders to `Nezaplatená - zrušená objednávka`
   - ROY target status was verified through BizniWeb API as ID `74`
@@ -235,11 +240,11 @@ Bootstrap entrypoints:
   - production UI/API smoke verified `Vysklad. PDF`, `/api/operations/roy/picking-lists.pdf?refresh=1`, `%PDF-`, `application/pdf`, `Content-Disposition`, and `143923` PDF bytes for `32` fulfillable orders
 
 ## 8) Next Exact Step
-- Open/merge PR for the ROY HC800 gross-profit dashboard fix, wait for ECR build, deploy `biznisweb-roy-operations-dashboard`, and verify live `/production/roy` no longer presents HC800 as product loss.
+- Review whether the remaining ROY gross-loss product `Roy powerbanka 10000mAh` (`sku=IS-Q6L`, `gross_profit=-51.30 EUR`) is intentional or needs a product-cost/price correction.
 
 ## 9) Change Log
 
-### 2026-05-27 (ROY HC800 gross-profit dashboard fix staged)
+### 2026-05-27 (ROY HC800 gross-profit dashboard fix deployed)
 - Investigated `Wachman HC800` in ROY operations dashboard:
   - import code `16689`
   - configured purchase cost should be `13.70 EUR` ex VAT
@@ -257,6 +262,15 @@ Bootstrap entrypoints:
   - `python scripts\reporting_qa_smoke.py`
   - `python scripts\security_ci.py`
   - `git diff --check`
+- Verified production:
+  - PR `#124` merged to `main` (`81bfa92`)
+  - ECR build run `26515037022` pushed digest `sha256:9392f103055338f87ed004d75bc3695eab32a1139911c91d94a6387adca91d9e`
+  - App Runner deploy run `26515291098` succeeded for `biznisweb-roy-operations-dashboard`
+  - App Runner hard-gate: instance/IP `N/A`, service ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, path `/production/roy`, image digest `sha256:9392f103055338f87ed004d75bc3695eab32a1139911c91d94a6387adca91d9e`
+  - host refresh marker: private IP `172.31.32.42`, service `roy-daily-report-email`, localhost marker `LIVE_ARTIFACT_MARKER_OK`
+  - deploy smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=33:personal_pickups=2:inventory_alerts=22.0:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=147175`
+  - live API smoke: `Wachman HC800` (`sku=16689`) has `gross_profit=5887.36`, `gross_margin_pct=43.3`, `profit_with_fixed=-3669.53`, and `hc800_in_loss_rows=0`
+  - live HTML smoke returned `200`, marker `roy-operations-dashboard`, gross-profit labels present, and old post-fixed loss label absent
 
 ### 2026-05-27 (ROY operations picking-list PDF export deployed)
 - Added one-click PDF picking-list export to the ROY operations dashboard:
