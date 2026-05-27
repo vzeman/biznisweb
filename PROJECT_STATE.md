@@ -211,9 +211,38 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Open/merge the ROY MACO STOP large-set cost alias fix, refresh ECR, deploy ROY App Runner, and verify the live payload no longer treats `H-226DA29F` as a zero-margin/fallback-cost set.
+- Monitor the next scheduled ROY report once and confirm `H-226DA29F` remains mapped to `26.58 EUR` without returning to `missing_cost_zero_margin_fallback`.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY MACO STOP large-set cost aliases deployed)
+- Code merged:
+  - PR `#109`: `Fix ROY MACO STOP set cost aliases`, merge commit `75ff552`
+- ECR refresh:
+  - workflow: `Build and Push ECR`
+  - run: `26500162403`
+  - image digest: `sha256:088d31ba6f53a23e2ea0272a58ba131c8a2576aa7c52ff02b914a47c630af24f`
+- Final ROY live dashboard deploy/refresh:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26500262307`
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.45.188`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:8`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/2fd79569a3c546e4b56c1327fb66228e`
+  - image identifier: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:088d31ba6f53a23e2ea0272a58ba131c8a2576aa7c52ff02b914a47c630af24f`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+- Public App Runner verification:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - `/health`, `/production/roy`, and `/api/operations/roy/live?refresh=1` returned HTTP 200
+  - API marker: `roy-operations-dashboard`
+  - auto-refresh: `90` seconds
+  - current live loss table has `1` row, `Roy powerbanka 10000mAh`, and no MACO STOP set row
+  - browser UI smoke confirmed the loaded dashboard shows `Produkty v strate` with `HRUBY ZISK/STRATA`, no `Zisk s fixom`, and no MACO STOP set in the loss section
+- Next exact step:
+  - monitor the next automatic scheduled ROY refresh and confirm the cost alias remains active in generated export source attribution
 
 ### 2026-05-27 (ROY MACO STOP large-set cost aliases)
 - Branch: `codex/roy-maco-stop-set-cost`
