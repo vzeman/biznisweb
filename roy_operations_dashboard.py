@@ -764,6 +764,40 @@ def build_commercial_snapshot(report_payload: Dict[str, Any], state: Optional[Di
     product_profit_rows = list(roy_demand.get("product_profit_rows") or [])
     if not product_profit_rows:
         product_profit_rows = list(dashboard.get("products") or [])
+    country_rows = list(roy_demand.get("country_rows") or [])
+    geo_rows = list(dashboard.get("geo_rows") or [])
+    geo_by_country = {
+        str(row.get("country") or "").strip().lower(): row
+        for row in geo_rows
+        if isinstance(row, dict) and str(row.get("country") or "").strip()
+    }
+    if country_rows and geo_by_country:
+        merged_country_rows: List[Dict[str, Any]] = []
+        for row in country_rows:
+            merged = dict(row)
+            geo = geo_by_country.get(str(row.get("country") or "").strip().lower())
+            if geo:
+                merged["fb_ads_spend"] = geo.get("fb_ads_spend", merged.get("fb_ads_spend"))
+                merged["google_ads_spend"] = geo.get("google_ads_spend", merged.get("google_ads_spend"))
+                merged["paid_ads_spend"] = geo.get("paid_ads_spend", merged.get("paid_ads_spend"))
+                merged["spend"] = geo.get("paid_ads_spend", merged.get("spend"))
+                merged["gross_profit"] = geo.get("gross_profit", merged.get("gross_profit"))
+                merged["profit_without_fixed"] = geo.get(
+                    "contribution_profit_without_fixed",
+                    merged.get("profit_without_fixed"),
+                )
+                merged["profit_with_fixed"] = geo.get(
+                    "contribution_profit_with_fixed",
+                    merged.get("profit_with_fixed"),
+                )
+                merged["net_margin_pct"] = geo.get(
+                    "contribution_margin_with_fixed_pct",
+                    merged.get("net_margin_pct"),
+                )
+            merged_country_rows.append(merged)
+        country_rows = merged_country_rows
+    if not country_rows:
+        country_rows = geo_rows
 
     loss_rows = []
     hidden_loss_count = 0
@@ -779,6 +813,7 @@ def build_commercial_snapshot(report_payload: Dict[str, Any], state: Optional[Di
         "brand_profit_rows": list(roy_demand.get("brand_profit_rows") or [])[:3],
         "product_revenue_rows": product_revenue_rows[:10],
         "product_profit_rows": product_profit_rows[:10],
+        "country_rows": country_rows[:12],
         "loss_product_rows": loss_rows[:80],
         "acknowledged_loss_product_count": hidden_loss_count,
     }

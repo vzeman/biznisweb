@@ -156,6 +156,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("visibleInventoryAlertLimit = 100", html)
         self.assertIn("visibleInventoryLimit = 100", html)
         self.assertIn("Top zna", html)
+        self.assertIn("Krajiny", html)
+        self.assertIn("countryPerformanceBody", html)
         self.assertIn("Produkty v strate", html)
         self.assertIn("data-save-inbound", html)
         self.assertIn("replace(/[\"\\\\]/g, '\\\\$&')", html)
@@ -300,8 +302,10 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                     "brand_profit_rows": [{"brand_key": "p1"}, {"brand_key": "p2"}, {"brand_key": "p3"}, {"brand_key": "p4"}],
                     "product_revenue_rows": [{"sku": f"R-{index}"} for index in range(12)],
                     "product_profit_rows": [{"sku": f"P-{index}"} for index in range(12)],
+                    "country_rows": [{"country": "sk"}, {"country": "cz"}],
                     "loss_product_rows": [{"sku": "LOSS-1"}, {"sku": "LOSS-2"}],
-                }
+                },
+                "geo_rows": [{"country": "sk", "paid_ads_spend": 25, "contribution_profit_with_fixed": 75}],
             }
         }
 
@@ -312,6 +316,9 @@ class RoyOperationsDashboardTests(unittest.TestCase):
 
         self.assertEqual(3, len(snapshot["brand_revenue_rows"]))
         self.assertEqual(10, len(snapshot["product_revenue_rows"]))
+        self.assertEqual(["sk", "cz"], [row["country"] for row in snapshot["country_rows"]])
+        self.assertEqual(25, snapshot["country_rows"][0]["spend"])
+        self.assertEqual(75, snapshot["country_rows"][0]["profit_with_fixed"])
         self.assertEqual(["LOSS-2"], [row["sku"] for row in snapshot["loss_product_rows"]])
         self.assertEqual(1, snapshot["acknowledged_loss_product_count"])
 

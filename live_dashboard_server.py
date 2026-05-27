@@ -998,6 +998,9 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     .stock-action input { min-height:34px; border:1px solid var(--line); border-radius:6px; padding:0 8px; font-weight:700; width:100%; }
     .stock-action button { min-height:34px; padding:0 9px; }
     .inbound-note { margin-top:5px; color:var(--green); font-size:12px; font-weight:800; }
+    .country-products { display:grid; gap:5px; min-width:340px; }
+    .country-product { display:grid; grid-template-columns:minmax(160px,1fr) auto auto; gap:8px; align-items:center; border-top:1px solid #edf0eb; padding-top:4px; }
+    .country-product:first-child { border-top:0; padding-top:0; }
     .hidden { display:none !important; }
     .error,.ok { margin-bottom:12px; padding:10px 12px; border-radius:8px; border:1px solid rgba(170,47,47,.25); color:var(--red); background:var(--red-bg); }
     .ok { color:var(--green); background:var(--green-bg); border-color:rgba(17,115,75,.25); }
@@ -1138,6 +1141,20 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
               <tbody id="productProfitBody"></tbody>
             </table>
           </div>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Krajiny</h2>
+            <p id="countryPerformanceMeta">-</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Krajina</th><th>Obj.</th><th>Obrat</th><th>Hrubý zisk</th><th>Spend</th><th>Čistý zisk</th><th>Marža</th><th>Top produkty v krajine</th></tr></thead>
+            <tbody id="countryPerformanceBody"></tbody>
+          </table>
         </div>
       </article>
       <article class="panel">
@@ -1389,6 +1406,32 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     function productProfitRow(row) {
       return `<tr><td>${compactProductCell(row)}</td><td>${fmtMoney(row.profit_with_fixed)}</td><td>${fmtMoney(row.revenue)}</td><td>${fmtQty(row.units)} ks</td></tr>`;
     }
+    function countryTopProducts(row) {
+      const products = row.top_products || [];
+      if (!products.length) return '<span class="muted">Top produkty zatiaľ nie sú dostupné.</span>';
+      return `<div class="country-products">${products.slice(0, 5).map((product) => `
+        <div class="country-product">
+          <div><strong>${safe(product.product || '-')}</strong><div class="muted mono">${safe(product.sku || '')}</div></div>
+          <span>${fmtMoney(product.revenue)}</span>
+          <span class="${Number(product.profit_with_fixed || 0) < 0 ? 'negative' : 'positive'}">${fmtMoney(product.profit_with_fixed)}</span>
+        </div>`).join('')}</div>`;
+    }
+    function countryPerformanceRow(row) {
+      const spend = Number(row.spend ?? row.paid_ads_spend ?? 0);
+      const netProfit = Number(row.profit_with_fixed ?? row.contribution_profit_with_fixed ?? row.contribution_profit ?? 0);
+      const grossProfit = Number(row.gross_profit ?? row.profit_without_fixed ?? row.contribution_profit_without_fixed ?? 0);
+      const margin = row.net_margin_pct ?? row.contribution_margin_with_fixed_pct ?? row.contribution_margin_pct;
+      return `<tr>
+        <td><strong>${safe(row.country_label || row.country || 'Unknown')}</strong><div class="muted mono">${safe(row.country || '')}</div></td>
+        <td>${fmtInt(row.orders)}</td>
+        <td>${fmtMoney(row.revenue)}</td>
+        <td><span class="${grossProfit < 0 ? 'negative' : 'positive'}">${fmtMoney(grossProfit)}</span></td>
+        <td>${fmtMoney(spend)}</td>
+        <td><span class="${netProfit < 0 ? 'negative' : 'positive'}">${fmtMoney(netProfit)}</span></td>
+        <td>${fmtPct(margin)}</td>
+        <td>${countryTopProducts(row)}</td>
+      </tr>`;
+    }
     function lossProductRow(row) {
       return `<tr>
         <td>${compactProductCell(row)}</td>
@@ -1405,6 +1448,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const brandProfit = perf.brand_profit_rows || [];
       const productRevenue = perf.product_revenue_rows || [];
       const productProfit = perf.product_profit_rows || [];
+      const countries = perf.country_rows || [];
       const losses = perf.loss_product_rows || [];
       el('brandPerformanceMeta').textContent = `${fmtInt(brandRevenue.length)} podľa obratu · ${fmtInt(brandProfit.length)} podľa zisku`;
       el('brandRevenueBody').innerHTML = brandRevenue.length ? brandRevenue.map(brandRevenueRow).join('') : '<tr><td colspan="4" class="muted">Značky zatiaľ nie sú dostupné.</td></tr>';
@@ -1412,6 +1456,8 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       el('productPerformanceMeta').textContent = `${fmtInt(productRevenue.length)} podľa obratu · ${fmtInt(productProfit.length)} podľa zisku`;
       el('productRevenueBody').innerHTML = productRevenue.length ? productRevenue.map(productRevenueRow).join('') : '<tr><td colspan="4" class="muted">Produkty zatiaľ nie sú dostupné.</td></tr>';
       el('productProfitBody').innerHTML = productProfit.length ? productProfit.map(productProfitRow).join('') : '<tr><td colspan="4" class="muted">Produkty zatiaľ nie sú dostupné.</td></tr>';
+      el('countryPerformanceMeta').textContent = countries.length ? `${fmtInt(countries.length)} krajín podľa obratu` : 'Krajiny zatiaľ nie sú dostupné';
+      el('countryPerformanceBody').innerHTML = countries.length ? countries.map(countryPerformanceRow).join('') : '<tr><td colspan="8" class="muted">Krajiny zatiaľ nie sú dostupné.</td></tr>';
       const hidden = Number(perf.acknowledged_loss_product_count || 0);
       el('lossProductMeta').textContent = losses.length ? `${fmtInt(losses.length)} nepotvrdených · ${fmtInt(hidden)} potvrdených skrytých` : `${fmtInt(hidden)} potvrdených skrytých`;
       el('lossProductBody').innerHTML = losses.length ? losses.map(lossProductRow).join('') : '<tr><td colspan="6" class="muted">Bez nepotvrdených stratových produktov.</td></tr>';
