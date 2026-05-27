@@ -2904,3 +2904,35 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - run focused tests, open/merge PR, rebuild ECR image, rerun ROY App Runner deploy, and verify live `/production/roy`
+
+### 2026-05-27 (ROY loss products gross-only deployed)
+- Code merged:
+  - PR `#106`: runtime guard for ROY live `loss_product_rows`, merge commit `8c61efc`
+  - PR `#107`: payload carries `gross_profit` / `gross_margin_pct` and ROY product gross loss uses product cost before allocated costs, merge commit `9f6723a`
+- ECR refresh:
+  - workflow: `Build and Push ECR`
+  - run: `26498162375`
+  - image digest: `sha256:94e3eaa3686e25bc2a09a32430ce79670290d94c5098a0914ab2420a489b7b02`
+- Final ROY live dashboard deploy/refresh:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26498273361`
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.10.177`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:7`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/5ade2058c01346408f1fa46c3b551eee`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+- App Runner hard-gate:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - image identifier: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:94e3eaa3686e25bc2a09a32430ce79670290d94c5098a0914ab2420a489b7b02`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+- Public API verification:
+  - `/health`, `/production/roy`, and `/api/operations/roy/live?refresh=1` returned HTTP 200
+  - API marker: `roy-operations-dashboard`
+  - auto-refresh: `90` seconds
+  - live `loss_product_rows` all have negative `gross_profit`
+  - current live loss table has `1` row: `Roy powerbanka 10000mAh`, `gross_profit=-51.30`, `gross_margin_pct=-45.1`
+  - HTML table header is `Hrubý zisk/strata` and no longer contains `Zisk s fixom`
+- Next exact step:
+  - monitor the next scheduled ROY report once and confirm the loss-product row count remains gross-profit-only
