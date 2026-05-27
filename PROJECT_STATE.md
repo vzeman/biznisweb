@@ -209,14 +209,16 @@ Bootstrap entrypoints:
   - live API returns top brands/products, loss-product warnings, inbound-stock state, and `auto_refresh_seconds = 90`
   - rendered production HTML now emits valid `cssEscape` JavaScript and renders inbound/loss-product controls from the live API payload
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
-- ROY unpaid-order cancellation automation is implemented on task branch:
+- ROY unpaid-order cancellation automation is live in production:
   - standalone runner `unpaid_order_cancellation_runner.py` changes stale unpaid bank-transfer/card orders to `Nezaplatená - zrušená objednávka`
   - ROY target status was verified through BizniWeb API as ID `74`
-  - local read-only dry-run on `2026-05-27` scanned `1500` ROY orders through `2026-01-29` and found `11` eligible orders with cutoff `2026-05-13`
-  - deploy workflow `Deploy Unpaid Order Cancellation` will create/update `roy-unpaid-order-cancellation` and run an ECS/Fargate dry-run marker check before production schedule use
+  - EventBridge Scheduler job `roy-unpaid-order-cancellation` is enabled for `cron(10 2 * * ? *) Europe/Bratislava`
+  - production task definition `roy-unpaid-order-cancellation:3` uses ECR digest `sha256:be3e39f3184ef479d899fb97682792a998c72d30bc41cc7dcd8f2670629c8ac3`
+  - production one-off execute run `26510343214` updated `11` stale unpaid orders and returned `failed_orders=0`
+  - post-execute read-only dry-run on `2026-05-27` scanned `1500` ROY orders through `2026-01-29` and found `eligible_orders=0`
 
 ## 8) Next Exact Step
-- Merge and deploy the ROY unpaid-order cancellation scheduler, then verify the ECS/Fargate dry-run marker and schedule target in AWS.
+- Monitor the first scheduled ROY unpaid-order cancellation run after `2026-05-28 02:10 Europe/Bratislava` and confirm it exits cleanly with no unexpected eligible backlog.
 
 ## 9) Change Log
 
@@ -247,6 +249,18 @@ Bootstrap entrypoints:
   - scanned `1500` orders / `50` pages
   - oldest scanned order date `2026-01-29`
   - eligible orders `11`
+- Code/deploy merged:
+  - PR `#117`: core runner/config/deploy workflow, merge commit `5e00db0`
+  - PR `#118`: workflow registration push trigger, merge commit `f2751c1`
+  - PR `#119`: manual `execute_now` mode, merge commit `51a6de7`
+  - main ECR build run `26510209844` succeeded
+  - deployed image digest `sha256:be3e39f3184ef479d899fb97682792a998c72d30bc41cc7dcd8f2670629c8ac3`
+- Production hard-gate / host verification:
+  - dry-run deploy run `26509838383`: private IP `172.31.21.96`, service `roy-unpaid-order-cancellation`, task definition `roy-unpaid-order-cancellation:1`, marker `UNPAID_CANCELLATION_MARKER_OK`
+  - post-update dry-run deploy run `26510209876` succeeded from `main`
+  - execute run `26510343214`: private IP `172.31.17.70`, service `roy-unpaid-order-cancellation`, task definition `roy-unpaid-order-cancellation:3`, marker `UNPAID_CANCELLATION_EXECUTE_MARKER_OK`
+  - execute summary: scanned `1500`, eligible `11`, updated `11`, failed `0`, cutoff `2026-05-13`
+  - follow-up local read-only dry-run after execute: scanned `1500`, eligible `0`, target status ID `74`
 
 ### 2026-05-27 (ROY live dashboard new-order sound alert deployed)
 - Code merged:
