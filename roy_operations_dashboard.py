@@ -34,6 +34,8 @@ DEFAULT_SCAN_MIN_PAGES = 8
 DEFAULT_STOP_AFTER_EMPTY_FULFILLABLE_PAGES = 3
 DEFAULT_CACHE_TTL_SECONDS = 60
 DEFAULT_AUTO_REFRESH_SECONDS = 90
+DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT = 10.0
+DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY = True
 
 
 ROY_OPERATIONS_ORDER_QUERY = gql(
@@ -45,10 +47,68 @@ query GetRoyOperationsOrders($params: OrderParams) {
       order_num
       pur_date
       last_change
+      note
+      internal_note
+      source
       status {
         id
         name
         color
+      }
+      customer {
+        ... on Company {
+          __typename
+          company_name
+          company_id
+          vat_id
+          vat_id2
+          name
+          surname
+          phone
+          email
+        }
+        ... on Person {
+          __typename
+          name
+          surname
+          phone
+          email
+        }
+        ... on UnauthenticatedEmail {
+          __typename
+          name
+          surname
+          phone
+          email
+        }
+      }
+      invoice_address {
+        company_name
+        name
+        surname
+        street
+        descriptive_number
+        orientation_number
+        city
+        zip
+        state
+        country
+        email
+        phone
+      }
+      delivery_address {
+        company_name
+        name
+        surname
+        street
+        descriptive_number
+        orientation_number
+        city
+        zip
+        state
+        country
+        email
+        phone
       }
       price_elements {
         type
@@ -57,7 +117,9 @@ query GetRoyOperationsOrders($params: OrderParams) {
         reference_id
         price {
           value
+          raw_value
           formatted
+          is_net_price
         }
       }
       items {
@@ -66,6 +128,29 @@ query GetRoyOperationsOrders($params: OrderParams) {
         import_code
         warehouse_number
         quantity
+        tax_rate
+        price {
+          value
+          raw_value
+          formatted
+          is_net_price
+        }
+        sum {
+          value
+          raw_value
+          formatted
+          is_net_price
+        }
+        product {
+          title
+          import_code
+          final_price {
+            value
+            raw_value
+            formatted
+            is_net_price
+          }
+        }
       }
       sum {
         value
@@ -367,6 +452,28 @@ def _as_int(value: Any, default: int, *, minimum: int = 0) -> int:
     return max(minimum, parsed)
 
 
+def _as_float(value: Any, default: float, *, minimum: float = 0.0) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, parsed)
+
+
+def _as_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "ano"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "nie"}:
+            return False
+    return bool(value)
+
+
 def _to_float(value: Any) -> float:
     try:
         return float(value or 0.0)
@@ -395,6 +502,7 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
     raw = project_settings.get("operations_dashboard") or {}
     component_rules = project_settings.get("product_component_expansion_rules") or []
     component_rules = component_rules if isinstance(component_rules, list) else []
+    wholesale_raw = raw.get("wholesale_detection") if isinstance(raw.get("wholesale_detection"), dict) else {}
     paid_statuses = _as_list(raw.get("paid_statuses"), DEFAULT_PAID_STATUSES)
     cod_statuses = _as_list(raw.get("cod_statuses"), DEFAULT_COD_STATUSES)
     cod_payment_patterns = _as_list(raw.get("cod_payment_patterns"), DEFAULT_COD_PAYMENT_PATTERNS)
@@ -431,6 +539,18 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
         "cache_ttl_seconds": _as_int(raw.get("cache_ttl_seconds"), DEFAULT_CACHE_TTL_SECONDS, minimum=1),
         "auto_refresh_seconds": _as_int(raw.get("auto_refresh_seconds"), DEFAULT_AUTO_REFRESH_SECONDS, minimum=30),
         "product_component_expansion_rules": component_rules,
+        "wholesale_detection": {
+            "enabled": _as_bool(wholesale_raw.get("enabled"), True),
+            "discount_threshold_pct": _as_float(
+                wholesale_raw.get("discount_threshold_pct"),
+                DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT,
+                minimum=0.0,
+            ),
+            "require_company_customer": _as_bool(
+                wholesale_raw.get("require_company_customer"),
+                DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY,
+            ),
+        },
     }
 
 
@@ -599,9 +719,146 @@ def _order_items(order: Dict[str, Any], settings: Dict[str, Any]) -> List[Dict[s
     return _merge_order_items(items)
 
 
+def _join_name(*values: Any) -> str:
+    return " ".join(str(value or "").strip() for value in values if str(value or "").strip()).strip()
+
+
+def _customer_info(order: Dict[str, Any]) -> Dict[str, Any]:
+    customer = order.get("customer") if isinstance(order.get("customer"), dict) else {}
+    customer_type = str(customer.get("__typename") or "").strip()
+    company_name = str(customer.get("company_name") or "").strip()
+    person_name = _join_name(customer.get("name"), customer.get("surname"))
+    display_name = company_name or person_name
+    return {
+        "type": customer_type,
+        "company_name": company_name,
+        "company_id": str(customer.get("company_id") or "").strip(),
+        "vat_id": str(customer.get("vat_id") or customer.get("vat_id2") or "").strip(),
+        "display_name": display_name,
+        "phone": str(customer.get("phone") or "").strip(),
+        "email": str(customer.get("email") or "").strip(),
+        "is_company": customer_type == "Company" or bool(company_name),
+    }
+
+
+def _address_info(address: Any, fallback_customer: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    address = address if isinstance(address, dict) else {}
+    fallback_customer = fallback_customer or {}
+    company_name = str(address.get("company_name") or "").strip()
+    person_name = _join_name(address.get("name"), address.get("surname"))
+    display_name = company_name or person_name or str(fallback_customer.get("display_name") or "").strip()
+    street_number = _join_name(address.get("descriptive_number"), address.get("orientation_number"))
+    street = _join_name(address.get("street"), street_number)
+    city = _join_name(address.get("zip"), address.get("city"))
+    region = _join_name(city, address.get("state"))
+    country = str(address.get("country") or "").strip()
+    phone = str(address.get("phone") or fallback_customer.get("phone") or "").strip()
+    email = str(address.get("email") or fallback_customer.get("email") or "").strip()
+    lines = [line for line in (display_name, street, _join_name(region, country), phone, email) if line]
+    return {
+        "display_name": display_name,
+        "street": street,
+        "city": city,
+        "state": str(address.get("state") or "").strip(),
+        "country": country,
+        "phone": phone,
+        "email": email,
+        "lines": lines,
+    }
+
+
+def _price_number(price: Any) -> Optional[float]:
+    if not isinstance(price, dict):
+        return None
+    for key in ("raw_value", "value"):
+        parsed = _optional_float(price.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _item_tax_rate(item: Dict[str, Any]) -> float:
+    return _to_float(item.get("tax_rate"))
+
+
+def _price_as_net(price: Any, tax_rate: float) -> Optional[float]:
+    value = _price_number(price)
+    if value is None:
+        return None
+    if isinstance(price, dict) and bool(price.get("is_net_price")):
+        return value
+    return value / (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else value
+
+
+def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
+    detection = settings.get("wholesale_detection") if isinstance(settings.get("wholesale_detection"), dict) else {}
+    if not detection.get("enabled", True):
+        return {"is_wholesale": False, "reason": "disabled"}
+
+    require_company = bool(detection.get("require_company_customer", DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY))
+    threshold_pct = _to_float(detection.get("discount_threshold_pct"))
+    if threshold_pct <= 0:
+        threshold_pct = DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT
+    threshold_ratio = max(0.0, 1.0 - (threshold_pct / 100.0))
+
+    priced_lines = 0
+    discounted_lines = 0
+    max_discount_pct = 0.0
+    examples: List[Dict[str, Any]] = []
+    for item in order.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        item_price = _price_as_net(item.get("price"), _item_tax_rate(item))
+        product = item.get("product") if isinstance(item.get("product"), dict) else {}
+        retail_price = _price_as_net(product.get("final_price"), _item_tax_rate(item))
+        if item_price is None or retail_price is None or item_price <= 0 or retail_price <= 0:
+            continue
+        priced_lines += 1
+        ratio = item_price / retail_price
+        if ratio <= threshold_ratio:
+            discounted_lines += 1
+            discount_pct = (1.0 - ratio) * 100.0
+            max_discount_pct = max(max_discount_pct, discount_pct)
+            if len(examples) < 3:
+                examples.append(
+                    {
+                        "import_code": str(item.get("import_code") or "").strip(),
+                        "label": str(item.get("item_label") or "").strip(),
+                        "order_unit_net": round(item_price, 2),
+                        "retail_unit_net": round(retail_price, 2),
+                        "discount_pct": round(discount_pct, 1),
+                    }
+                )
+
+    is_company = bool(customer.get("is_company"))
+    is_wholesale = discounted_lines > 0 and (is_company or not require_company)
+    reason = ""
+    if is_wholesale:
+        reason = f"company customer + {discounted_lines}/{priced_lines} discounted line(s) vs current retail final price"
+    elif discounted_lines > 0:
+        reason = f"{discounted_lines}/{priced_lines} discounted line(s), but customer is not Company"
+    elif is_company:
+        reason = "company customer, no wholesale price discount detected"
+    else:
+        reason = "no wholesale price signal"
+
+    return {
+        "is_wholesale": bool(is_wholesale),
+        "customer_is_company": is_company,
+        "discounted_lines": discounted_lines,
+        "priced_lines": priced_lines,
+        "max_discount_pct": round(max_discount_pct, 1),
+        "threshold_pct": round(threshold_pct, 1),
+        "reason": reason,
+        "examples": examples,
+    }
+
+
 def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
     payment = _price_element_info(order, "payment")
     shipping = _price_element_info(order, "shipping")
+    customer = _customer_info(order)
+    wholesale_pricing = _detect_wholesale_pricing(order, customer, settings)
     fulfillable, reason = _is_fulfillable_order(order, settings)
     is_pickup = _is_personal_pickup(order, settings)
     status_name = _status_name(order)
@@ -616,6 +873,13 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         "order_num": order.get("order_num"),
         "purchase_at": order.get("pur_date"),
         "last_change": order.get("last_change"),
+        "source": str(order.get("source") or "").strip(),
+        "customer": customer,
+        "invoice_address": _address_info(order.get("invoice_address"), customer),
+        "delivery_address": _address_info(order.get("delivery_address"), customer),
+        "customer_note": str(order.get("note") or "").strip(),
+        "internal_note": str(order.get("internal_note") or "").strip(),
+        "wholesale_pricing": wholesale_pricing,
         "status": status_name,
         "status_id": _status_id(order),
         "sum": (order.get("sum") or {}).get("formatted"),

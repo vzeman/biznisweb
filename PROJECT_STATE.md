@@ -3298,3 +3298,23 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - HTML table header is `Hrubý zisk/strata` and no longer contains `Zisk s fixom`
 - Next exact step:
   - monitor the next scheduled ROY report once and confirm the loss-product row count remains gross-profit-only
+
+### 2026-05-27 (ROY picking-list PDF note, barcode, VO signal)
+- Branch: `codex/roy-picking-list-barcode-notes`
+- Change:
+  - ROY operations order query now fetches customer note, internal note, customer contact, invoice/delivery address, item unit prices, product final prices, and tax rate for picking-list PDF output
+  - picking-list PDF now renders an order-number Code128 barcode in the top-right, prints the customer note prominently, prints invoice/delivery address blocks, and marks likely wholesale orders with `VEĽKOOBCHOD / VO CENY`
+  - wholesale order marking is configured for ROY as: company customer plus at least one order item priced at least 10% below the current product final retail net price
+- Local verification:
+  - `python -m py_compile roy_operations_dashboard.py roy_picking_lists_pdf.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_picking_lists_pdf tests.test_roy_operations_dashboard`
+  - `python -m json.tool projects\roy\settings.json`
+  - direct BiznisWeb GraphQL smoke for ROY operations query: scanned `30`, fulfillable `10`, note/address/wholesale fields present
+  - full ROY scan smoke: scanned `330`, pages `11`, fulfillable `27`, current wholesale-marked fulfillable orders `0`
+  - generated local sample: `data/roy-picking-list-layout-smoke.pdf`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard, then verify `/api/operations/roy/picking-lists.pdf?refresh=1` on production
