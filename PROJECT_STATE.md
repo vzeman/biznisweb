@@ -3419,3 +3419,31 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard with `skip_artifact_refresh=true`, then verify live `/production/roy` contains `loud-two-tone-v2`
+
+### 2026-05-27 (ROY louder new-order sound alert deployed)
+- Code merged:
+  - PR `#132`: `Make ROY new order sound louder`, merge commit `ae95089`
+- ECR refresh:
+  - workflow run: `26528371271`
+  - image digest: `sha256:137206c12c5c44b97d929064ec1bb60d32a3d52e07d4a3d87ce33d64cc237f2e`
+- ROY live dashboard deploy:
+  - workflow run: `26528505778`
+  - deploy mode: `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run `26528505778`:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.46.127`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+  - latest S3 artifact validation: `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=245:inventory_alerts=22.0`
+- App Runner / public verification:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - health path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=36:personal_pickups=2:inventory_alerts=22.0:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=290171`
+  - `/health` returned OK
+  - `/production/roy` contains `roy-operations-dashboard`, `soundToggleBtn`, `loud-two-tone-v2`, `playOrderAlertBurst`, `playNewOrderSound(1, 0.75)`, and `function playNewOrderSound(count=1, volume=1)`
+  - `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard` and `auto_refresh_seconds=90`
+- Next exact step:
+  - have the browser tab sound toggle enabled during warehouse use and confirm the new alert volume is sufficient on the next real fulfillable order
