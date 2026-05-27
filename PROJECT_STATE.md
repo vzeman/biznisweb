@@ -211,9 +211,41 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Open/merge the ROY bundle-to-component reporting PR, refresh ECR, deploy ROY App Runner, and verify live product tables no longer expose `Set MACO STOP VEĽKÝ` or `Wachman Rio Solar 4G` as standalone products.
+- Monitor the next scheduled ROY report and confirm bundle parent products stay absent from product performance rows while component units remain present.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY bundle products expand to reporting components deployed)
+- Code merged:
+  - PR `#111`: `Expand ROY bundle products into reporting components`, merge commit `6ad2166`
+- ECR refresh:
+  - workflow: `Build and Push ECR`
+  - run: `26502412537`
+  - image digest: `sha256:a3c9dcf6eae41249bfe169c0f060d80430ce5b835d0fd8a2e49b6aa142895eae`
+- Final ROY live dashboard deploy/refresh:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26502538905`
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.35.80`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:9`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/0d06237522fc468f943fcd5219273e1e`
+  - image identifier: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:a3c9dcf6eae41249bfe169c0f060d80430ce5b835d0fd8a2e49b6aa142895eae`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+- Public App Runner verification:
+  - `/health`, `/production/roy`, and `/api/operations/roy/live?refresh=1` returned HTTP `200`
+  - API marker: `roy-operations-dashboard`
+  - auto-refresh: `90` seconds
+  - live product performance and country top-product payloads contain zero parent bundle rows for `Set MACO STOP VEĽKÝ`, `Set proti medveďom VEĽKÝ`, and `Wachman Rio Solar 4G`
+  - component rows now appear in top-product and country rows, including `Fotopasca Wachman Rio 4G` and `Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla`
+- Browser UI verification:
+  - `/production/roy` loaded as `ROY Operations Dashboard`
+  - visible header showed `Posledná aktualizácia 2026-05-27T09:52:23Z. Auto refresh 90s.`
+  - rendered performance/country tables had no parent bundle hits and included component hits for `Fotopasca Wachman Rio 4G` and `Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla`
+  - browser screenshot capture timed out in the in-app browser, but DOM/API verification passed
+- Next exact step:
+  - monitor the next scheduled ROY report and confirm bundle parent products stay absent from product performance rows while component units remain present
 
 ### 2026-05-27 (ROY bundle products expand to reporting components)
 - Branch: `codex/roy-bundle-component-reporting`
