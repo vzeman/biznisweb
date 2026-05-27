@@ -1236,6 +1236,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     let orderSoundInitialized = false;
     let seenFulfillableOrderKeys = new Set();
     const orderSoundStorageKey = `roy:${project}:new-order-sound`;
+    const ORDER_ALERT_SOUND_VERSION = 'loud-two-tone-v2';
 
     const metricDefsFallback = [
       { key:'revenue', label_en:'Revenue (net)' },
@@ -1290,7 +1291,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         if (ctx.state === 'suspended') await ctx.resume();
         orderSoundArmed = ctx.state === 'running';
         updateSoundButton();
-        if (orderSoundArmed && playTest) playNewOrderSound(1, 0.35);
+        if (orderSoundArmed && playTest) playNewOrderSound(1, 0.75);
         return orderSoundArmed;
       } catch (error) {
         orderSoundArmed = false;
@@ -1298,29 +1299,37 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         return false;
       }
     }
-    function playTone(ctx, frequency, start, duration, gainValue) {
+    function playTone(ctx, frequency, start, duration, gainValue, type='square') {
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
-      oscillator.type = 'sine';
+      const peakGain = Math.max(0.0001, Math.min(Number(gainValue || 0.0001), 0.35));
+      oscillator.type = type;
       oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.985, start + duration);
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(gainValue, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.015);
+      gain.gain.setValueAtTime(peakGain, start + (duration * 0.58));
       gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
       oscillator.connect(gain);
       gain.connect(ctx.destination);
       oscillator.start(start);
       oscillator.stop(start + duration + 0.02);
     }
-    function playNewOrderSound(count=1, volume=0.7) {
+    function playOrderAlertBurst(ctx, start, volume) {
+      playTone(ctx, 740, start, 0.24, 0.24 * volume, 'square');
+      playTone(ctx, 1480, start + 0.025, 0.16, 0.10 * volume, 'triangle');
+      playTone(ctx, 988, start + 0.22, 0.22, 0.22 * volume, 'square');
+      playTone(ctx, 1976, start + 0.245, 0.14, 0.08 * volume, 'triangle');
+    }
+    function playNewOrderSound(count=1, volume=1) {
       if (!orderSoundEnabled || !orderSoundArmed) return;
       const ctx = audioContext();
       if (!ctx || ctx.state !== 'running') return;
       const now = ctx.currentTime + 0.02;
-      const repeats = Math.min(Math.max(Number(count || 1), 1), 3);
+      const repeats = Math.min(Math.max(Number(count || 1), 1), 4);
+      const alertVolume = Math.min(Math.max(Number(volume || 1), 0.25), 1.25);
       for (let i = 0; i < repeats; i += 1) {
-        const offset = now + (i * 0.18);
-        playTone(ctx, 880, offset, 0.12, 0.12 * volume);
-        playTone(ctx, 1175, offset + 0.08, 0.14, 0.10 * volume);
+        playOrderAlertBurst(ctx, now + (i * 0.48), alertVolume);
       }
     }
     function fulfillableOrderKeys(data) {
