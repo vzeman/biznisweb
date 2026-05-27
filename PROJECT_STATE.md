@@ -211,9 +211,41 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Open/merge the ROY new-order sound alert PR, refresh ECR, deploy ROY App Runner, then verify `/production/roy` exposes the sound toggle and still loads live order data.
+- Monitor the next real newly fulfillable ROY order after sound is enabled in the browser and confirm the audible alert fires on the following dashboard refresh.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY live dashboard new-order sound alert deployed)
+- Code merged:
+  - PR `#115`: `Add ROY new order sound alert`, merge commit `4c12249`
+- ECR refresh:
+  - workflow: `Build and Push ECR`
+  - run: `26506485497`
+  - image digest: `sha256:48e0e07ae5e30a180cd4461e3be50ffe8ca686adcdfa02b42bce6887d9275b63`
+- Final ROY live dashboard deploy/refresh:
+  - workflow: `Deploy Live Dashboard App Runner`
+  - run: `26506589260`
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.6.213`
+  - service name: `roy-daily-report-email`
+  - task definition: `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:11`
+  - task ARN: `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/2e3a6091bb264dadb0085f25c3b54dc0`
+  - image identifier: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:48e0e07ae5e30a180cd4461e3be50ffe8ca686adcdfa02b42bce6887d9275b63`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - latest artifact path: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+- Public App Runner verification:
+  - `/health`, `/production/roy`, and `/api/operations/roy/live?refresh=1` returned HTTP `200`
+  - `/production/roy` contains `soundToggleBtn`, `playNewOrderSound`, and `notifyAboutNewFulfillableOrders`
+  - API marker: `roy-operations-dashboard`
+  - auto-refresh: `90` seconds
+  - current live summary showed `32` fulfillable orders
+- Browser UI verification:
+  - `/production/roy` loaded as `ROY Operations Dashboard`
+  - visible header showed `Posledná aktualizácia 2026-05-27T11:13:22Z. Auto refresh 90s.`
+  - sound toggle changed from `Zvuk vyp.` to `Zvuk zap.` after click, with `aria-pressed=true`
+  - order table rendered `24` rows in the overview table
+- Next exact step:
+  - monitor the next real newly fulfillable ROY order after sound is enabled in the browser and confirm the audible alert fires on the following dashboard refresh
 
 ### 2026-05-27 (ROY live dashboard new-order sound alert)
 - Branch: `codex/roy-new-order-sound-alert`
