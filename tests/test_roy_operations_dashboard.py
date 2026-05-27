@@ -5,6 +5,8 @@ from pathlib import Path
 from live_dashboard_server import build_roy_operations_dashboard_html
 from roy_operations_dashboard import (
     build_executive_kpi_snapshot,
+    build_commercial_snapshot,
+    build_inventory_snapshot,
     build_roy_orders_snapshot,
     resolve_roy_operations_settings,
 )
@@ -153,6 +155,163 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Osobné odbery", html)
         self.assertIn("visibleInventoryAlertLimit = 100", html)
         self.assertIn("visibleInventoryLimit = 100", html)
+        self.assertIn("Top zna", html)
+        self.assertIn("Produkty v strate", html)
+        self.assertIn("data-save-inbound", html)
+
+    def test_inbound_order_units_suppress_covered_stock_alert_until_restock(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {
+                        "alert_delivery_count": 1,
+                        "stock_risk_30d_count": 1,
+                    },
+                    "alert_rows": [
+                        {
+                            "sku": "LOW-1",
+                            "product": "Low stock product",
+                            "available_quantity": 0,
+                            "available_quantity_raw": 0,
+                            "alert_30d_units": 3,
+                            "lead_time_working_days": 5,
+                            "suggested_reorder_units": 8,
+                            "stock_risk_level": "Out of stock",
+                            "reorder_action_label": "Order now",
+                            "alert_30d_revenue": 90,
+                            "alert_30d_profit_estimate": 30,
+                        }
+                    ],
+                    "stock_risk_rows": [
+                        {
+                            "sku": "LOW-1",
+                            "product": "Low stock product",
+                            "available_quantity": 0,
+                            "available_quantity_raw": 0,
+                            "alert_30d_units": 3,
+                            "lead_time_working_days": 5,
+                            "suggested_reorder_units": 8,
+                            "stock_risk_level": "Out of stock",
+                            "reorder_action_label": "Order now",
+                        }
+                    ],
+                    "restock_priority_rows": [
+                        {
+                            "sku": "LOW-1",
+                            "product": "Low stock product",
+                            "available_quantity": 0,
+                            "available_quantity_raw": 0,
+                            "alert_30d_units": 3,
+                            "lead_time_working_days": 5,
+                            "suggested_reorder_units": 8,
+                            "stock_risk_level": "Out of stock",
+                            "reorder_action_label": "Order now",
+                            "restock_priority_score": 90,
+                        }
+                    ],
+                    "inventory_rows": [
+                        {
+                            "sku": "LOW-1",
+                            "product": "Low stock product",
+                            "available_quantity": 0,
+                            "available_quantity_raw": 0,
+                            "alert_30d_units": 3,
+                            "lead_time_working_days": 5,
+                            "suggested_reorder_units": 8,
+                            "stock_risk_level": "Out of stock",
+                            "reorder_action_label": "Order now",
+                        }
+                    ],
+                }
+            }
+        }
+        state = {
+            "version": 1,
+            "loss_acknowledgements": {},
+            "inbound_orders": {
+                "LOW-1": {
+                    "sku": "LOW-1",
+                    "product": "Low stock product",
+                    "ordered_units": 20,
+                    "expected_arrival_date": "2026-06-05",
+                    "baseline_available_quantity": 0,
+                    "created_at": "2026-05-27T10:00:00Z",
+                    "updated_at": "2026-05-27T10:00:00Z",
+                }
+            },
+            "auto_cleared_inbound_orders": [],
+        }
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={"inventory_model": {"critical_days_of_cover": 14, "warning_days_of_cover": 30, "watch_days_of_cover": 45, "reorder_cover_days": 30}},
+        )
+
+        self.assertFalse(state_changed)
+        self.assertEqual([], inventory["alert_rows"])
+        self.assertEqual([], inventory["restock_priority_rows"])
+        self.assertEqual(1, inventory["summary"]["inbound_order_count"])
+        self.assertEqual(20, inventory["inbound_order_rows"][0]["ordered_units"])
+        self.assertEqual("Inbound ordered", inventory["inventory_rows"][0]["reorder_action_label"])
+
+    def test_inbound_order_marker_auto_clears_after_stock_increase(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {},
+                    "inventory_rows": [{"sku": "LOW-1", "product": "Low stock product", "available_quantity": 5}],
+                }
+            }
+        }
+        state = {
+            "version": 1,
+            "loss_acknowledgements": {},
+            "inbound_orders": {
+                "LOW-1": {
+                    "sku": "LOW-1",
+                    "product": "Low stock product",
+                    "ordered_units": 5,
+                    "expected_arrival_date": "2026-06-05",
+                    "baseline_available_quantity": 0,
+                }
+            },
+            "auto_cleared_inbound_orders": [],
+        }
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={"inventory_model": {}},
+        )
+
+        self.assertTrue(state_changed)
+        self.assertEqual({}, state["inbound_orders"])
+        self.assertEqual([], inventory["inbound_order_rows"])
+        self.assertEqual(1, len(state["auto_cleared_inbound_orders"]))
+
+    def test_commercial_snapshot_filters_acknowledged_loss_products(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "brand_revenue_rows": [{"brand_key": "a"}, {"brand_key": "b"}, {"brand_key": "c"}, {"brand_key": "d"}],
+                    "brand_profit_rows": [{"brand_key": "p1"}, {"brand_key": "p2"}, {"brand_key": "p3"}, {"brand_key": "p4"}],
+                    "product_revenue_rows": [{"sku": f"R-{index}"} for index in range(12)],
+                    "product_profit_rows": [{"sku": f"P-{index}"} for index in range(12)],
+                    "loss_product_rows": [{"sku": "LOSS-1"}, {"sku": "LOSS-2"}],
+                }
+            }
+        }
+
+        snapshot = build_commercial_snapshot(
+            payload,
+            {"loss_acknowledgements": {"LOSS-1": {"sku": "LOSS-1"}}},
+        )
+
+        self.assertEqual(3, len(snapshot["brand_revenue_rows"]))
+        self.assertEqual(10, len(snapshot["product_revenue_rows"]))
+        self.assertEqual(["LOSS-2"], [row["sku"] for row in snapshot["loss_product_rows"]])
+        self.assertEqual(1, snapshot["acknowledged_loss_product_count"])
 
 
 if __name__ == "__main__":

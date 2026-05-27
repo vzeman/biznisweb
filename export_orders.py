@@ -8579,6 +8579,9 @@ class BizniWebExporter:
                 "forecast_accuracy_rows": pd.DataFrame(),
                 "brand_revenue_rows": pd.DataFrame(),
                 "brand_profit_rows": pd.DataFrame(),
+                "product_revenue_rows": pd.DataFrame(),
+                "product_profit_rows": pd.DataFrame(),
+                "loss_product_rows": pd.DataFrame(),
             }
 
         print("\nAnalyzing Roy product demand analytics...")
@@ -8604,6 +8607,9 @@ class BizniWebExporter:
                 "forecast_accuracy_rows": pd.DataFrame(),
                 "brand_revenue_rows": pd.DataFrame(),
                 "brand_profit_rows": pd.DataFrame(),
+                "product_revenue_rows": pd.DataFrame(),
+                "product_profit_rows": pd.DataFrame(),
+                "loss_product_rows": pd.DataFrame(),
             }
 
         demand_df = item_df.copy()
@@ -8627,6 +8633,9 @@ class BizniWebExporter:
                 "forecast_accuracy_rows": pd.DataFrame(),
                 "brand_revenue_rows": pd.DataFrame(),
                 "brand_profit_rows": pd.DataFrame(),
+                "product_revenue_rows": pd.DataFrame(),
+                "product_profit_rows": pd.DataFrame(),
+                "loss_product_rows": pd.DataFrame(),
             }
 
         numeric_columns = ["item_quantity", "item_total_without_tax", "cm2_profit", "cm3_profit"]
@@ -8649,6 +8658,73 @@ class BizniWebExporter:
                 last_sale=("purchase_datetime", "max"),
             )
             .reset_index()
+        )
+        product_summary["margin_with_fixed_pct"] = np.where(
+            product_summary["revenue"] != 0,
+            (product_summary["profit_with_fixed"] / product_summary["revenue"]) * 100.0,
+            0.0,
+        )
+        product_summary["margin_without_fixed_pct"] = np.where(
+            product_summary["revenue"] != 0,
+            (product_summary["profit_without_fixed"] / product_summary["revenue"]) * 100.0,
+            0.0,
+        )
+        product_display_summary = product_summary.loc[
+            (product_summary["revenue"] >= 50.0) | (product_summary["orders"] >= 3)
+        ].copy()
+        if not product_display_summary.empty:
+            product_display_summary = product_display_summary.rename(columns={"product_sku": "sku"})
+            product_display_summary["first_sale"] = pd.to_datetime(
+                product_display_summary["first_sale"],
+                errors="coerce",
+            ).dt.strftime("%Y-%m-%d")
+            product_display_summary["last_sale"] = pd.to_datetime(
+                product_display_summary["last_sale"],
+                errors="coerce",
+            ).dt.strftime("%Y-%m-%d")
+            product_display_summary = product_display_summary[
+                [
+                    "sku",
+                    "product",
+                    "orders",
+                    "units",
+                    "revenue",
+                    "profit_without_fixed",
+                    "profit_with_fixed",
+                    "margin_without_fixed_pct",
+                    "margin_with_fixed_pct",
+                    "first_sale",
+                    "last_sale",
+                ]
+            ]
+            for column in [
+                "units",
+                "revenue",
+                "profit_without_fixed",
+                "profit_with_fixed",
+                "margin_without_fixed_pct",
+                "margin_with_fixed_pct",
+            ]:
+                product_display_summary[column] = product_display_summary[column].round(
+                    1 if column in {"units", "margin_without_fixed_pct", "margin_with_fixed_pct"} else 2
+                )
+
+        product_revenue_rows_df = (
+            product_display_summary.sort_values(["revenue", "profit_with_fixed"], ascending=[False, False]).reset_index(drop=True)
+            if not product_display_summary.empty else pd.DataFrame()
+        )
+        product_profit_rows_df = (
+            product_display_summary.sort_values(["profit_with_fixed", "revenue"], ascending=[False, False]).reset_index(drop=True)
+            if not product_display_summary.empty else pd.DataFrame()
+        )
+        loss_product_rows_df = (
+            product_display_summary.loc[
+                (product_display_summary["profit_without_fixed"] < 0)
+                | (product_display_summary["profit_with_fixed"] < 0)
+            ]
+            .sort_values(["profit_without_fixed", "profit_with_fixed", "revenue"], ascending=[True, True, False])
+            .reset_index(drop=True)
+            if not product_display_summary.empty else pd.DataFrame()
         )
 
         weekly = (
@@ -9352,12 +9428,18 @@ class BizniWebExporter:
                 .astype(str)
                 .replace({"nan": "Low", "": "Low"})
             )
-            inventory_products_df[["brand_key", "brand_label"]] = inventory_products_df["product"].apply(
-                lambda value: pd.Series(self._extract_product_brand(value))
-            )
-            inventory_products_df[["family_key", "family_label"]] = inventory_products_df["product"].apply(
-                lambda value: pd.Series(self._extract_product_family(value))
-            )
+            if inventory_products_df.empty:
+                inventory_products_df["brand_key"] = pd.Series(dtype="object")
+                inventory_products_df["brand_label"] = pd.Series(dtype="object")
+                inventory_products_df["family_key"] = pd.Series(dtype="object")
+                inventory_products_df["family_label"] = pd.Series(dtype="object")
+            else:
+                inventory_products_df[["brand_key", "brand_label"]] = inventory_products_df["product"].apply(
+                    lambda value: pd.Series(self._extract_product_brand(value))
+                )
+                inventory_products_df[["family_key", "family_label"]] = inventory_products_df["product"].apply(
+                    lambda value: pd.Series(self._extract_product_family(value))
+                )
             inventory_products_df["strategic_stock_flag"] = inventory_products_df["brand_key"].isin(hero_brand_keys)
             brand_lead_time = (
                 inventory_products_df["brand_key"]
@@ -10146,13 +10228,17 @@ class BizniWebExporter:
             "forecast_accuracy_rows": forecast_accuracy_rows_df,
             "brand_revenue_rows": brand_revenue_rows_df,
             "brand_profit_rows": brand_profit_rows_df,
+            "product_revenue_rows": product_revenue_rows_df,
+            "product_profit_rows": product_profit_rows_df,
+            "loss_product_rows": loss_product_rows_df,
         }
         print(
             f"Roy product demand analytics complete: growing={len(growing_rows_df)}, "
             f"declining={len(declining_rows_df)}, forecasted={len(forecast_rows_df)}, "
             f"inventory_rows={len(inventory_rows_df)}, alert_rows={len(alert_rows_df)}, "
             f"restock_rows={len(restock_priority_rows_df)}, "
-            f"forecast_backtests={len(forecast_accuracy_rows_df)}, brands={len(brand_summary)}"
+            f"forecast_backtests={len(forecast_accuracy_rows_df)}, brands={len(brand_summary)}, "
+            f"loss_products={len(loss_product_rows_df)}"
         )
         return result
 

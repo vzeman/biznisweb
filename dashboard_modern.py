@@ -655,6 +655,45 @@ def _profit_status_class(value: Any) -> str:
     return "neutral"
 
 
+def _build_fb_daily_payload(
+    date_from: datetime,
+    date_to: datetime,
+    fb_detailed_metrics: Optional[dict],
+) -> Dict[str, List[Any]]:
+    payload: Dict[str, List[Any]] = {
+        "dates": [],
+        "spend": [],
+        "impressions": [],
+        "clicks": [],
+        "ctr": [],
+        "cpc": [],
+        "cpm": [],
+        "reach": [],
+    }
+    if not fb_detailed_metrics:
+        return payload
+
+    metrics_by_date = {str(key): value or {} for key, value in fb_detailed_metrics.items()}
+    date_keys = [
+        date.strftime("%Y-%m-%d")
+        for date in pd.date_range(start=date_from, end=date_to, freq="D")
+    ]
+    if not date_keys:
+        date_keys = sorted(metrics_by_date)
+
+    for date_key in date_keys:
+        row = metrics_by_date.get(date_key, {})
+        payload["dates"].append(date_key)
+        payload["spend"].append(round(_num(row.get("spend")), 2))
+        payload["impressions"].append(round(_num(row.get("impressions")), 2))
+        payload["clicks"].append(round(_num(row.get("clicks")), 2))
+        payload["ctr"].append(round(_num(row.get("ctr")), 2))
+        payload["cpc"].append(round(_num(row.get("cpc")), 2))
+        payload["cpm"].append(round(_num(row.get("cpm")), 2))
+        payload["reach"].append(round(_num(row.get("reach")), 2))
+    return payload
+
+
 def generate_modern_dashboard(
     date_agg: pd.DataFrame,
     items_agg: pd.DataFrame,
@@ -968,19 +1007,7 @@ def generate_modern_dashboard(
             "lifetime_orders": [round(_num(v), 2) for v in ltv_by_date.get("total_lifetime_orders", pd.Series([0] * len(ltv_by_date))).tolist()],
         }
 
-    fb_daily_payload = {"dates": [], "spend": [], "impressions": [], "clicks": [], "ctr": [], "cpc": [], "cpm": [], "reach": []}
-    if fb_detailed_metrics:
-        sorted_rows = sorted(fb_detailed_metrics.items(), key=lambda item: item[0])
-        fb_daily_payload = {
-            "dates": [str(k) for k, _ in sorted_rows],
-            "spend": [round(_num(v.get("spend")), 2) for _, v in sorted_rows],
-            "impressions": [round(_num(v.get("impressions")), 2) for _, v in sorted_rows],
-            "clicks": [round(_num(v.get("clicks")), 2) for _, v in sorted_rows],
-            "ctr": [round(_num(v.get("ctr")), 2) for _, v in sorted_rows],
-            "cpc": [round(_num(v.get("cpc")), 2) for _, v in sorted_rows],
-            "cpm": [round(_num(v.get("cpm")), 2) for _, v in sorted_rows],
-            "reach": [round(_num(v.get("reach")), 2) for _, v in sorted_rows],
-        }
+    fb_daily_payload = _build_fb_daily_payload(date_from, date_to, fb_detailed_metrics)
 
     fb_campaign_rows = []
     if fb_campaigns:
@@ -1287,8 +1314,14 @@ def generate_modern_dashboard(
             "inventory_retail_value",
             "cost_coverage_pct",
             "days_since_last_sale",
+            "alert_30d_units",
+            "lead_time_working_days",
             "days_of_cover",
+            "projected_stockout_date",
             "stock_risk_level",
+            "reorder_by_date",
+            "suggested_reorder_units",
+            "reorder_action_label",
         ],
         limit=160,
     )
@@ -1339,6 +1372,8 @@ def generate_modern_dashboard(
             "reorder_action_label",
             "alert_30d_revenue",
             "projected_stockout_date",
+            "reorder_now_flag",
+            "prepare_po_flag",
         ],
         limit=120,
     )
@@ -1357,6 +1392,10 @@ def generate_modern_dashboard(
             "recent_margin_with_fixed_pct",
             "projected_stockout_date",
             "cost_coverage_pct",
+            "lead_time_working_days",
+            "reorder_by_date",
+            "suggested_reorder_units",
+            "reorder_action_label",
         ],
         limit=120,
     )
@@ -1464,6 +1503,57 @@ def generate_modern_dashboard(
             "margin_without_fixed_pct",
         ],
         limit=12,
+    )
+    roy_product_revenue_rows = _frame_rows(
+        (roy_product_demand or {}).get("product_revenue_rows"),
+        [
+            "sku",
+            "product",
+            "orders",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_without_fixed_pct",
+            "margin_with_fixed_pct",
+            "first_sale",
+            "last_sale",
+        ],
+        limit=20,
+    )
+    roy_product_profit_rows = _frame_rows(
+        (roy_product_demand or {}).get("product_profit_rows"),
+        [
+            "sku",
+            "product",
+            "orders",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_without_fixed_pct",
+            "margin_with_fixed_pct",
+            "first_sale",
+            "last_sale",
+        ],
+        limit=20,
+    )
+    roy_loss_product_rows = _frame_rows(
+        (roy_product_demand or {}).get("loss_product_rows"),
+        [
+            "sku",
+            "product",
+            "orders",
+            "units",
+            "revenue",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "margin_without_fixed_pct",
+            "margin_with_fixed_pct",
+            "first_sale",
+            "last_sale",
+        ],
+        limit=80,
     )
 
     heatmap_rows = _frame_rows(day_hour_heatmap, ["day_name", "hour", "orders"], limit=None)
@@ -1974,6 +2064,9 @@ def generate_modern_dashboard(
             "forecast_accuracy_rows": roy_forecast_accuracy_rows,
             "brand_revenue_rows": roy_brand_revenue_rows,
             "brand_profit_rows": roy_brand_profit_rows,
+            "product_revenue_rows": roy_product_revenue_rows,
+            "product_profit_rows": roy_product_profit_rows,
+            "loss_product_rows": roy_loss_product_rows,
         },
         "daily_margin_rows": daily_margin_rows,
         "payday_window_rows": payday_window_rows,

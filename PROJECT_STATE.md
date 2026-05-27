@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-05-21
+Last updated: 2026-05-27
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -204,9 +204,43 @@ Bootstrap entrypoints:
   - the daily email summary builder now reads the dashboard payload and appends a `SKLADOVE ALERTY` section with top reorder actions
 
 ## 8) Next Exact Step
-- ROY MACO STOP large set component demand is deployed to the live operations dashboard. Next exact step: monitor the next scheduled ROY report once and confirm the alert counts stay consistent with the live dashboard.
+- ROY operations dashboard performance/inbound workflow is implemented on branch `codex/roy-dashboard-top-margin-workflow`. Next exact step: open/merge PR, run ECR build, deploy App Runner, then verify `/production/roy` with live API/UI smoke.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY operations performance and inbound workflow)
+- Branch: `codex/roy-dashboard-top-margin-workflow`
+- Change:
+  - ROY reporting payload now emits top product rows by revenue, top product rows by profit, and loss-product rows.
+  - ROY live operations API now exposes top 3 brands by revenue/profit, top 10 products by revenue/profit, and loss-product warnings.
+  - loss-product warnings can be acknowledged from the live dashboard and are persisted in ROY operations state.
+  - low-stock products can be marked as ordered by entering ordered units and expected arrival date.
+  - inbound ordered units are counted in the live dashboard stock-risk calculation, so sufficiently covered products are removed from reorder alerts.
+  - inbound markers auto-clear after the next BiznisWeb stock increase for the SKU.
+  - App Runner instance policy now grants state persistence access to `operations/*` under the live dashboard S3 artifact prefix.
+- Local verification:
+  - `python -m py_compile export_orders.py dashboard_modern.py roy_operations_dashboard.py live_dashboard_server.py daily_report_runner.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, run ECR build, deploy App Runner, then verify production API/UI and record deploy run IDs.
+
+### 2026-05-27 (ROY Facebook spend audit)
+- Checked ROY Facebook Ads source path:
+  - financial/reporting spend comes from Meta account-level daily insights via `FacebookAdsClient.get_daily_spend()`;
+  - the modern dashboard `Daily spend, clicks and impressions` chart uses `fb_detailed_metrics` from Meta account-level insights.
+- Live Meta API read-only check for account `act_1374274514249768`:
+  - `2026-05-18..2026-05-23`: Facebook spend `0.00 EUR`, no campaign rows.
+  - `2026-05-25`: Facebook spend `4.76 EUR`.
+  - `2026-05-26`: Facebook spend `14.12 EUR`.
+  - campaign/adset/ad source: `SK-Sale-Fotopasce-ACQ` / `SK-Interest` / `SK-Fotopasce-4G-Video-V1`, all reported `ACTIVE`.
+- Found a dashboard visualization issue: `fb_daily` payload only included dates returned by Meta, so zero-spend days were omitted from the Facebook delivery chart instead of plotted as `0`.
+- Added a code fix on branch `codex/roy-fb-spend-zero-fill` to zero-fill missing dates in `dashboard_modern.py`, with a unit test in `tests/test_dashboard_modern.py`.
+- Verified locally:
+  - `python -m unittest tests.test_dashboard_modern`
+  - `python -m py_compile dashboard_modern.py`
+  - `python -m unittest discover -s tests`
 
 ### 2026-05-26 (ROY App Runner live dashboard deployed)
 - Merged deployment fix PRs into `main`:
