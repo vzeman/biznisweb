@@ -11,6 +11,8 @@ on:
       - export_orders.py
       - generate_invoices.py
       - invoice_runner.py
+      - unpaid_order_cancellation.py
+      - unpaid_order_cancellation_runner.py
       - html_report_generator.py
       - daily_report_runner.py
       - dashboard_modern.py
@@ -59,7 +61,7 @@ jobs:
 
       - name: Invoice automation regression test
         run: |
-          python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
+          python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
