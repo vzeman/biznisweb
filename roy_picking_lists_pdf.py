@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
@@ -115,6 +116,41 @@ def _draw_badge(canvas: Any, label: str, x: float, y: float, fonts: Dict[str, st
     canvas.drawString(x + 4 * mm, y - 3.2 * mm, label)
     canvas.setFillColor(colors.black)
     return badge_width
+
+
+def _fit_font_size(canvas: Any, label: str, font_name: str, max_width: float, start_size: int, min_size: int = 11) -> int:
+    size = start_size
+    while size > min_size and canvas.stringWidth(label, font_name, size) > max_width:
+        size -= 1
+    return size
+
+
+def _draw_attention_banner(
+    canvas: Any,
+    label: str,
+    x: float,
+    y_top: float,
+    width: float,
+    fonts: Dict[str, str],
+    colors: Any,
+    *,
+    fill: str,
+    stroke: str,
+    text_color: str,
+) -> float:
+    from reportlab.lib.units import mm
+
+    height = 14 * mm
+    canvas.setFillColor(colors.HexColor(fill))
+    canvas.setStrokeColor(colors.HexColor(stroke))
+    canvas.setLineWidth(1.3)
+    canvas.roundRect(x, y_top - height, width, height, 2.5 * mm, fill=1, stroke=1)
+    canvas.setFillColor(colors.HexColor(text_color))
+    font_size = _fit_font_size(canvas, label, fonts["bold"], width - 10 * mm, 18, min_size=12)
+    canvas.setFont(fonts["bold"], font_size)
+    canvas.drawCentredString(x + width / 2, y_top - 9 * mm, label)
+    canvas.setFillColor(colors.black)
+    return y_top - height - 4 * mm
 
 
 def _draw_order_barcode(canvas: Any, order_num: Any, x_right: float, y_top: float, fonts: Dict[str, str]) -> None:
@@ -239,6 +275,19 @@ def _wholesale_info(order: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _normalize_flag_text(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return "".join(ch for ch in text if not unicodedata.combining(ch)).strip()
+
+
+def _is_personal_pickup_order(order: Dict[str, Any]) -> bool:
+    if bool(order.get("personal_pickup")):
+        return True
+    shipping = order.get("shipping") if isinstance(order.get("shipping"), dict) else {}
+    shipping_title = _normalize_flag_text(shipping.get("title"))
+    return "osobny odber" in shipping_title
+
+
 def _draw_footer(canvas: Any, width: float, page_no: int, fonts: Dict[str, str]) -> None:
     from reportlab.lib.units import mm
 
@@ -293,6 +342,7 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
         new_page()
         y = top_y
         wholesale = _wholesale_info(order)
+        is_personal_pickup = _is_personal_pickup_order(order)
 
         canvas.setFont(fonts["bold"], 18)
         canvas.drawString(margin_x, y, "Vyskladňovací list")
@@ -308,6 +358,33 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
         canvas.setLineWidth(1.1)
         canvas.line(margin_x, y, width - margin_x, y)
         y -= 8 * mm
+
+        if is_personal_pickup:
+            y = _draw_attention_banner(
+                canvas,
+                "OSOBNÝ ODBER - NEBALIŤ",
+                margin_x,
+                y,
+                width - 2 * margin_x,
+                fonts,
+                colors,
+                fill="#fee2e2",
+                stroke="#dc2626",
+                text_color="#991b1b",
+            )
+        if wholesale["is_wholesale"]:
+            y = _draw_attention_banner(
+                canvas,
+                "VEĽKOOBCHODNÁ OBJEDNÁVKA",
+                margin_x,
+                y,
+                width - 2 * margin_x,
+                fonts,
+                colors,
+                fill="#ffedd5",
+                stroke="#f97316",
+                text_color="#9a3412",
+            )
 
         left_x = margin_x
         right_x = width / 2 + 8 * mm

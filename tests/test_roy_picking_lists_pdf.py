@@ -75,6 +75,8 @@ class RoyPickingListsPdfTests(unittest.TestCase):
         self.assertIn("Pozn\u00e1mka klienta", text)
         self.assertIn("Objednavku pripravit v piatok doobeda.", text)
         self.assertIn("VE\u013dKOOBCHOD / VO CENY", text)
+        self.assertIn("OSOBN\u00dd ODBER - NEBALI\u0164", text)
+        self.assertIn("VE\u013dKOOBCHODN\u00c1 OBJEDN\u00c1VKA", text)
         self.assertIn("B2B Partner s.r.o.", text)
 
     def test_empty_pdf_is_still_downloadable(self) -> None:
