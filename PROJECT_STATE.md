@@ -211,9 +211,34 @@ Bootstrap entrypoints:
   - production S3 state write/read was smoke-tested through inbound save + clear on `/api/operations/roy/inbound/__codex_smoke__`
 
 ## 8) Next Exact Step
-- Monitor the next scheduled ROY report once and confirm `H-226DA29F` remains mapped to `26.58 EUR` without returning to `missing_cost_zero_margin_fallback`.
+- Open/merge the ROY bundle-to-component reporting PR, refresh ECR, deploy ROY App Runner, and verify live product tables no longer expose `Set MACO STOP VEĽKÝ` or `Wachman Rio Solar 4G` as standalone products.
 
 ## 9) Change Log
+
+### 2026-05-27 (ROY bundle products expand to reporting components)
+- Branch: `codex/roy-bundle-component-reporting`
+- Change:
+  - added ROY reporting product component expansion rules for `Set MACO STOP VEĽKÝ` / `Set proti medveďom VEĽKÝ`
+  - added ROY reporting product component expansion rules for `Wachman Rio Solar 4G`
+  - the canonical reporting item frame now replaces configured bundle rows with component rows while preserving total item revenue
+  - component revenue is allocated by component cost weight, and component product expense is resolved through the normal ROY product-expense map
+  - added import-code cost aliases for component SKUs `14832`, `12840`, `F_482`, `F_1472`, and `F_486`
+  - added regression tests proving bundle parent SKUs are absent from product aggregations and component quantities/revenue remain correct
+- Local cached-export verification:
+  - `data/roy/export_20250922-20260526.csv` keeps total reporting revenue unchanged at `198681.13 EUR`
+  - canonical reporting rows increase from `4659` to `4752` because bundle lines are expanded to components
+  - bundle component parent labels matched: `Set MACO STOP VEĽKÝ`, `Set proti medveďom VEĽKÝ`, and `Wachman Rio Solar 4G`
+- Local verification:
+  - `python -m unittest tests.test_reporting_product_identity tests.test_roy_inventory_model`
+  - `python -m py_compile export_orders.py dashboard_modern.py roy_operations_dashboard.py live_dashboard_server.py`
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m json.tool projects\roy\product_expenses.json`
+  - `python -m unittest tests.test_reporting_product_identity tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_dashboard_modern`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, wait for ECR build, deploy/refresh ROY App Runner live dashboard, then verify `/api/operations/roy/live?refresh=1`
 
 ### 2026-05-27 (ROY MACO STOP large-set cost aliases deployed)
 - Code merged:

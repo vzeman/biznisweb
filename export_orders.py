@@ -1747,7 +1747,239 @@ class BizniWebExporter:
             ),
             axis=1,
         )
-        return df
+        return self.expand_reporting_product_component_rows(df)
+
+    def _product_component_expansion_rules(self) -> List[Dict[str, Any]]:
+        rules = self.project_settings.get("product_component_expansion_rules") or []
+        return rules if isinstance(rules, list) else []
+
+    @staticmethod
+    def _to_float(value: Any, default: float = 0.0) -> float:
+        if value is None:
+            return default
+        try:
+            if pd.isna(value):
+                return default
+        except (TypeError, ValueError):
+            pass
+        if isinstance(value, str) and not value.strip():
+            return default
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return default
+        if pd.isna(parsed):
+            return default
+        return parsed
+
+    @staticmethod
+    def _allocate_amount_preserving_total(total: float, shares: List[float]) -> List[float]:
+        if not shares:
+            return []
+        if len(shares) == 1:
+            return [round(float(total or 0.0), 2)]
+        allocated: List[float] = []
+        running = 0.0
+        for share in shares[:-1]:
+            amount = round(float(total or 0.0) * float(share or 0.0), 2)
+            allocated.append(amount)
+            running += amount
+        allocated.append(round(float(total or 0.0) - running, 2))
+        return allocated
+
+    def _component_rule_matches_row(self, row: pd.Series, rule: Dict[str, Any]) -> bool:
+        patterns = rule.get("bundle_patterns") or []
+        if isinstance(patterns, list) and patterns:
+            labels = [
+                row.get("raw_item_label"),
+                row.get("item_label"),
+            ]
+            if any(self._matches_patterns(str(label or ""), patterns) for label in labels):
+                return True
+
+        identifier_values = {
+            self._normalize_product_identifier(row.get("raw_product_sku")),
+            self._normalize_product_identifier(row.get("product_sku")),
+            self._normalize_product_identifier(row.get("raw_item_import_code")),
+            self._normalize_product_identifier(row.get("item_import_code")),
+            self._normalize_product_identifier(row.get("item_warehouse_number")),
+            self._normalize_product_identifier(row.get("item_ean")),
+        }
+        configured_identifiers: List[Any] = []
+        for key in ("bundle_skus", "bundle_import_codes", "bundle_warehouse_numbers", "bundle_eans"):
+            values = rule.get(key) or []
+            if isinstance(values, list):
+                configured_identifiers.extend(values)
+        for configured in configured_identifiers:
+            if self._normalize_product_identifier(configured) in identifier_values:
+                return True
+        return False
+
+    def _resolve_component_expense(
+        self,
+        component: Dict[str, Any],
+        component_sku: str,
+        component_label: str,
+    ) -> Tuple[Optional[float], Optional[str]]:
+        configured_cost = component.get("expense_per_item")
+        if configured_cost not in (None, ""):
+            return self._to_float(configured_cost), "bundle_component_configured_cost"
+        return self._resolve_product_expense(
+            component_sku,
+            component_label,
+            import_code=component.get("item_import_code"),
+            warehouse_number=component.get("item_warehouse_number"),
+            ean=component.get("item_ean"),
+        )
+
+    def expand_reporting_product_component_rows(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Replace configured bundle SKU rows with component rows for reporting analytics."""
+        rules = self._product_component_expansion_rules()
+        if df.empty or not rules:
+            if "bundle_component_flag" not in df.columns:
+                df["bundle_component_flag"] = False
+            return df
+
+        expanded_rows: List[Dict[str, Any]] = []
+        prefer_import_code = self._prefer_import_code_product_identity()
+
+        for _, row in df.iterrows():
+            matching_rule = None
+            for rule in rules:
+                if isinstance(rule, dict) and self._component_rule_matches_row(row, rule):
+                    matching_rule = rule
+                    break
+            if not matching_rule:
+                row_dict = row.to_dict()
+                row_dict["bundle_component_flag"] = False
+                expanded_rows.append(row_dict)
+                continue
+
+            components = matching_rule.get("components") or []
+            if not isinstance(components, list) or not components:
+                row_dict = row.to_dict()
+                row_dict["bundle_component_flag"] = False
+                expanded_rows.append(row_dict)
+                continue
+
+            parent_quantity = self._to_float(row.get("item_quantity"), 1.0)
+            parent_label = str(row.get("raw_item_label") or row.get("item_label") or "")
+            parent_sku = str(row.get("raw_product_sku") or row.get("product_sku") or "")
+            component_specs: List[Dict[str, Any]] = []
+            for component in components:
+                if not isinstance(component, dict):
+                    continue
+                component_label = self.canonicalize_reporting_product_label(component.get("item_label") or "")
+                component_qty = self._to_float(component.get("quantity"), 1.0)
+                if not component_label or component_qty <= 0:
+                    continue
+                component_import_code = component.get("item_import_code")
+                component_ean = component.get("item_ean")
+                component_sku = str(component.get("product_sku") or "").strip() or self.get_product_sku(
+                    component_ean,
+                    component_label,
+                    import_code=component_import_code,
+                    prefer_import_code=prefer_import_code,
+                )
+                expense_per_item, expense_source = self._resolve_component_expense(
+                    component,
+                    component_sku,
+                    component_label,
+                )
+                component_units = parent_quantity * component_qty
+                weight = self._to_float(component.get("revenue_weight"), 0.0)
+                if weight <= 0 and expense_per_item is not None:
+                    weight = float(expense_per_item) * component_qty
+                if weight <= 0:
+                    weight = component_qty
+                component_specs.append(
+                    {
+                        "raw": component,
+                        "label": component_label,
+                        "sku": component_sku,
+                        "quantity_per_bundle": component_qty,
+                        "units": component_units,
+                        "expense_per_item": expense_per_item,
+                        "expense_source": expense_source,
+                        "weight": weight,
+                    }
+                )
+
+            if not component_specs:
+                row_dict = row.to_dict()
+                row_dict["bundle_component_flag"] = False
+                expanded_rows.append(row_dict)
+                continue
+
+            total_weight = sum(float(spec["weight"] or 0.0) for spec in component_specs)
+            if total_weight <= 0:
+                total_weight = float(len(component_specs))
+                for spec in component_specs:
+                    spec["weight"] = 1.0
+            shares = [float(spec["weight"] or 0.0) / total_weight for spec in component_specs]
+
+            amount_columns = [
+                "item_total_without_tax",
+                "item_total_with_tax",
+                "item_tax_amount",
+                "item_line_sum_original",
+                "item_line_sum_with_tax_original",
+                "item_recycle_fee",
+            ]
+            allocated_amounts = {
+                column: self._allocate_amount_preserving_total(self._to_float(row.get(column)), shares)
+                for column in amount_columns
+                if column in df.columns
+            }
+
+            for idx, spec in enumerate(component_specs):
+                component = spec["raw"]
+                component_units = float(spec["units"] or 0.0)
+                component_revenue = allocated_amounts.get("item_total_without_tax", [0.0] * len(component_specs))[idx]
+                expense_per_item = spec["expense_per_item"]
+                expense_source = spec["expense_source"]
+                if expense_per_item is None:
+                    expense_per_item = (component_revenue / component_units) if component_units else 0.0
+                    expense_source = "bundle_component_missing_cost_zero_margin_fallback"
+                component_total_expense = round(float(expense_per_item or 0.0) * component_units, 2)
+                component_profit = round(component_revenue - component_total_expense, 2)
+                component_roi = (
+                    round(component_profit / component_total_expense * 100, 2)
+                    if component_total_expense > 0
+                    else 0.0
+                )
+
+                row_dict = row.to_dict()
+                row_dict.update(
+                    {
+                        "product_sku": spec["sku"],
+                        "item_label": spec["label"],
+                        "item_import_code": component.get("item_import_code", ""),
+                        "item_warehouse_number": component.get("item_warehouse_number", ""),
+                        "item_ean": component.get("item_ean", ""),
+                        "item_quantity": component_units,
+                        "expense_per_item": float(expense_per_item or 0.0),
+                        "expense_source": f"bundle_component:{expense_source or 'unknown'}",
+                        "total_expense": component_total_expense,
+                        "profit_before_ads": component_profit,
+                        "roi_before_ads": component_roi,
+                        "bundle_component_flag": True,
+                        "bundle_parent_product_sku": parent_sku,
+                        "bundle_parent_item_label": parent_label,
+                        "bundle_parent_item_quantity": parent_quantity,
+                        "bundle_component_quantity_per_unit": spec["quantity_per_bundle"],
+                        "bundle_expansion_rule": matching_rule.get("key", ""),
+                    }
+                )
+                for column, amounts in allocated_amounts.items():
+                    row_dict[column] = amounts[idx]
+                if component_units > 0:
+                    row_dict["item_unit_price"] = round(component_revenue / component_units, 4)
+                    if "item_unit_price_original" in df.columns:
+                        row_dict["item_unit_price_original"] = round(component_revenue / component_units, 4)
+                expanded_rows.append(row_dict)
+
+        return pd.DataFrame(expanded_rows).reset_index(drop=True)
 
     @staticmethod
     def _is_sample_item_label(label: Any) -> bool:

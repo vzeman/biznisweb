@@ -16,6 +16,52 @@
   "product_identity": {
     "prefer_import_code": true
   },
+  "product_component_expansion_rules": [
+    {
+      "key": "maco_stop_large_set",
+      "bundle_patterns": [
+        "Set MACO STOP VEĽKÝ",
+        "Set proti medveďom VEĽKÝ",
+        "Set proti medveďom veľký (miesto malého)"
+      ],
+      "components": [
+        {
+          "item_label": "Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla",
+          "item_import_code": "14832",
+          "item_ean": "8586024430150",
+          "quantity": 1
+        },
+        {
+          "item_label": "Puzdro MACO STOP na sprej 300ml",
+          "item_import_code": "12840",
+          "quantity": 1
+        },
+        {
+          "item_label": "Zvonček na medvede, plašič medveďov",
+          "item_import_code": "F_482",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "wachman_rio_solar_4g",
+      "bundle_patterns": [
+        "Wachman Rio Solar 4G"
+      ],
+      "components": [
+        {
+          "item_label": "Fotopasca Wachman Rio 4G",
+          "item_import_code": "F_1472",
+          "quantity": 1
+        },
+        {
+          "item_label": "Univerzálne solárne napájanie BL8000 pre fotopascu",
+          "item_import_code": "F_486",
+          "quantity": 1
+        }
+      ]
+    }
+  ],
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 5500,
