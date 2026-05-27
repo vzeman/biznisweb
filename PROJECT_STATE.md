@@ -2875,3 +2875,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `Zvonček na medvede, plašič medveďov` is present in inventory with `available_quantity=368`, so it is healthy and not an urgent alert
 - Next exact step:
   - monitor the next scheduled ROY report once and confirm the alert counts stay consistent with the live dashboard
+
+### 2026-05-27 (ROY loss products gross-profit runtime guard)
+- Branch: `codex/roy-loss-products-runtime-gross-guard`
+- Change:
+  - ROY operations dashboard now shows `Produkty v strate` only when the product row has negative gross profit (`gross_profit` or `cm1_profit`)
+  - rows that are negative only after fixed costs are ignored by the live operations snapshot, including stale payload rows without gross-profit data
+  - ROY App Runner deploy smoke now validates generated payload, S3 latest artifact, live HTML, and live API for gross-profit-only loss products
+- Local verification:
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_dashboard_modern`
+  - `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py dashboard_modern.py export_orders.py`
+  - `python scripts\reporting_qa_smoke.py`
+  - workflow YAML parse check for `.github/workflows/deploy-live-dashboard-apprunner.yml`
+  - `git diff --check`
+- Next exact step:
+  - run local tests, open/merge PR, wait for ECR build, deploy ROY App Runner, and verify `/production/roy` live API

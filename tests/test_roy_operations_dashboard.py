@@ -305,7 +305,10 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                     "product_revenue_rows": [{"sku": f"R-{index}"} for index in range(12)],
                     "product_profit_rows": [{"sku": f"P-{index}"} for index in range(12)],
                     "country_rows": [{"country": "sk"}, {"country": "cz"}],
-                    "loss_product_rows": [{"sku": "LOSS-1"}, {"sku": "LOSS-2"}],
+                    "loss_product_rows": [
+                        {"sku": "LOSS-1", "gross_profit": -7, "revenue": 50},
+                        {"sku": "LOSS-2", "gross_profit": -5, "revenue": 40},
+                    ],
                 },
                 "geo_rows": [{"country": "sk", "paid_ads_spend": 25, "contribution_profit_with_fixed": 75}],
             }
@@ -323,6 +326,26 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(75, snapshot["country_rows"][0]["profit_with_fixed"])
         self.assertEqual(["LOSS-2"], [row["sku"] for row in snapshot["loss_product_rows"]])
         self.assertEqual(1, snapshot["acknowledged_loss_product_count"])
+
+    def test_commercial_snapshot_uses_only_gross_loss_products(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "loss_product_rows": [
+                        {"sku": "GROSS-LOSS", "gross_profit": -3, "profit_with_fixed": 10, "revenue": 30},
+                        {"sku": "CM1-LOSS", "cm1_profit": -2, "profit_with_fixed": -12, "revenue": 20},
+                        {"sku": "FIXED-ONLY-LOSS", "profit_with_fixed": -25, "revenue": 100},
+                        {"sku": "GROSS-PROFIT", "gross_profit": 5, "profit_with_fixed": -10, "revenue": 20},
+                    ],
+                },
+            },
+        }
+
+        snapshot = build_commercial_snapshot(payload, {})
+
+        self.assertEqual(["GROSS-LOSS", "CM1-LOSS"], [row["sku"] for row in snapshot["loss_product_rows"]])
+        self.assertEqual(-3, snapshot["loss_product_rows"][0]["gross_profit"])
+        self.assertEqual(-10.0, snapshot["loss_product_rows"][0]["gross_margin_pct"])
 
 
 if __name__ == "__main__":

@@ -457,6 +457,22 @@ jobs:
           assert kpis.get("windows"), "KPI windows missing in generated payload"
           assert series.get("dates"), "KPI source series dates missing in generated payload"
           assert inventory.get("summary"), "Inventory summary missing in generated payload"
+          invalid_loss_rows = []
+          for row in inventory.get("loss_product_rows") or []:
+              if not isinstance(row, dict):
+                  invalid_loss_rows.append(row)
+                  continue
+              raw_gross = row.get("gross_profit")
+              if raw_gross is None:
+                  raw_gross = row.get("cm1_profit")
+              try:
+                  gross_profit = float(raw_gross)
+              except (TypeError, ValueError):
+                  invalid_loss_rows.append(row)
+                  continue
+              if gross_profit >= 0:
+                  invalid_loss_rows.append(row)
+          assert not invalid_loss_rows, "Loss products must be based on negative gross profit only"
           marker_dir = Path("/tmp/live-dashboard-marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
           marker = {
@@ -625,6 +641,22 @@ jobs:
           assert kpis.get("windows"), "S3 KPI windows missing"
           assert series.get("dates"), "S3 KPI source series dates missing"
           assert inventory.get("summary"), "S3 inventory summary missing"
+          invalid_loss_rows = []
+          for row in inventory.get("loss_product_rows") or []:
+              if not isinstance(row, dict):
+                  invalid_loss_rows.append(row)
+                  continue
+              raw_gross = row.get("gross_profit")
+              if raw_gross is None:
+                  raw_gross = row.get("cm1_profit")
+              try:
+                  gross_profit = float(raw_gross)
+              except (TypeError, ValueError):
+                  invalid_loss_rows.append(row)
+                  continue
+              if gross_profit >= 0:
+                  invalid_loss_rows.append(row)
+          assert not invalid_loss_rows, "S3 loss products must be based on negative gross profit only"
           print(
               "ROY_LIVE_ARTIFACTS_OK:"
               f"kpi_series_days={len(series.get('dates') or [])}:"
@@ -912,6 +944,7 @@ jobs:
             curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/operations/roy/live?refresh=1" -o /tmp/production-board-api.json
             python - <<'PY'
           import json
+          html = open("/tmp/production-board.html", encoding="utf-8").read()
           api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
           assert api["project"] == "roy"
           assert api["marker"] == "roy-operations-dashboard"
@@ -921,12 +954,31 @@ jobs:
           assert api["executive_kpis"].get("windows"), "Executive KPI windows missing"
           assert len(api["executive_kpis"].get("months") or []) > 0, "Calendar KPI months missing"
           assert api["inventory"].get("summary"), "Inventory summary missing"
+          assert "Hrubý zisk/strata" in html, "Gross-loss table header missing"
+          assert "Zisk s fixom" not in html, "Loss products must not show post-fixed profit"
+          invalid_loss_rows = []
+          for row in (api.get("performance") or {}).get("loss_product_rows") or []:
+              if not isinstance(row, dict):
+                  invalid_loss_rows.append(row)
+                  continue
+              raw_gross = row.get("gross_profit")
+              if raw_gross is None:
+                  raw_gross = row.get("cm1_profit")
+              try:
+                  gross_profit = float(raw_gross)
+              except (TypeError, ValueError):
+                  invalid_loss_rows.append(row)
+                  continue
+              if gross_profit >= 0:
+                  invalid_loss_rows.append(row)
+          assert not invalid_loss_rows, "Live loss products must be based on negative gross profit only"
           print(
               "APP_RUNNER_ROY_OPERATIONS_OK:"
               f"fulfillable_orders={api['orders']['summary'].get('fulfillable_orders')}:"
               f"personal_pickups={api['orders']['summary'].get('personal_pickups')}:"
               f"inventory_alerts={api['inventory']['summary'].get('alert_delivery_count')}:"
-              f"kpi_months={len(api['executive_kpis'].get('months') or [])}"
+              f"kpi_months={len(api['executive_kpis'].get('months') or [])}:"
+              f"gross_loss_products={len((api.get('performance') or {}).get('loss_product_rows') or [])}"
           )
           PY
           else
