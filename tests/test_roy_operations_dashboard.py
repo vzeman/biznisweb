@@ -274,6 +274,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("data-save-inbound", html)
         self.assertIn("soundToggleBtn", html)
         self.assertIn("playNewOrderSound", html)
+        self.assertIn("loud-two-tone-v2", html)
+        self.assertIn("playOrderAlertBurst", html)
         self.assertIn("notifyAboutNewFulfillableOrders", html)
         self.assertIn("Vysklad. PDF", html)
         self.assertIn("/api/operations/roy/picking-lists.pdf", html)

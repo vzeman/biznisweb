@@ -3404,3 +3404,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - live PDF pages for orders `2677002708` and `2677002747` contain large `VEĽKOOBCHODNÁ OBJEDNÁVKA`
 - Next exact step:
   - watch the next real warehouse download from the ROY dashboard and only adjust spacing if operators report long notes crowding the product rows
+
+### 2026-05-27 (ROY louder new-order sound alert)
+- Branch: `codex/roy-louder-new-order-sound`
+- Change:
+  - ROY operations dashboard new-order alert sound changed from a soft sine beep to a louder two-tone generated Web Audio alarm
+  - the sound test played when enabling the toggle is louder, so the operator can confirm browser audio is armed
+  - added the `loud-two-tone-v2` marker to the rendered dashboard HTML for deployment verification
+- Local verification:
+  - `python -m py_compile live_dashboard_server.py roy_operations_dashboard.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_production_board`
+  - rendered ROY operations dashboard inline script extracted from `build_roy_operations_dashboard_html("roy")` and checked with `node --check`
+  - `python scripts\security_ci.py`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard with `skip_artifact_refresh=true`, then verify live `/production/roy` contains `loud-two-tone-v2`
