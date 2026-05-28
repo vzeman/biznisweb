@@ -2168,20 +2168,29 @@ def get_cached_roy_operations_snapshot(
             }
             return result
 
-    try:
-        payload = generate_roy_operations_snapshot(project, report_payload=report_payload)
-    except Exception as exc:
+    generate_attempts = 3 if cached is None else 1
+    last_error: Optional[Exception] = None
+    payload = None
+    for attempt in range(generate_attempts):
+        try:
+            payload = generate_roy_operations_snapshot(project, report_payload=report_payload)
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt + 1 < generate_attempts:
+                time.sleep(2.0 * (attempt + 1))
+    if payload is None:
         if cached:
-            cached_at, payload = cached
-            result = copy.deepcopy(payload)
+            cached_at, cached_payload = cached
+            result = copy.deepcopy(cached_payload)
             result["cache"] = {
                 "status": "stale_after_error",
                 "age_seconds": round(now - cached_at, 1),
                 "ttl_seconds": settings["cache_ttl_seconds"],
-                "error": str(exc),
+                "error": str(last_error),
             }
             return result
-        raise
+        raise last_error or RuntimeError("Failed to generate ROY operations snapshot")
 
     _CACHE[cache_key] = (now, copy.deepcopy(payload))
     payload["cache"] = {
