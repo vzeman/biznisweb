@@ -3546,3 +3546,24 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - normal non-preview PDF download was intentionally not executed during verification because it would mark the current `32` fulfillable orders as printed
 - Next exact step:
   - first real warehouse click on `Vysklad. PDF` will mark that batch in `printed_picking_orders`; verify after that click that repeated PDF download returns only newly arrived orders
+
+### 2026-05-28 (ROY live stock overlay for critical inventory alerts)
+- Branch: `codex/roy-live-stock-refresh-fix`
+- Investigation:
+  - direct BizniWeb product search confirmed current stock:
+    - `Micro SD KARTA 64GB s adaptérom`: `available_quantity=20`
+    - `Držiak na fotopascu 1` / `F_375`: `available_quantity=20`
+  - live dashboard inventory still showed both as `Out of stock` because the operations dashboard used the latest reporting artifact inventory snapshot (`inventory_snapshot_date=2026-05-27`) without a live stock overlay
+  - Micro SD 64GB also exposed a product identity edge case: historical SKU/EAN `23942440833` currently searches to Micro SD 32GB, so stock matching must prefer the alert product title when SKU/EAN points at a different product title
+- Change:
+  - ROY operations dashboard now refreshes current BizniWeb stock for severe inventory alerts (`Negative stock`, `Out of stock`, `Critical`) before returning `/api/operations/roy/live`
+  - current stock lookup uses batched `getProductList(search=...)` with retry and single-term fallback when BizniWeb returns transient non-JSON errors
+  - refreshed availability recalculates risk level, days of cover, suggested reorder units, and removes products from alert/restock/revenue-at-risk rows when stock is no longer critical
+  - title-vs-identifier scoring prevents a stale historical EAN/SKU from applying the stock of a different product
+- Local verification:
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python -m unittest tests.test_dashboard_modern tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - local integration against latest ROY dashboard payload + live BizniWeb stock search returned `target_count=23`, `matched_count=23`, `error_count=0`
+  - after overlay, alert/restock/revenue-at-risk/stock-risk rows no longer contain `23942440833` / Micro SD 64GB or `F_375` / Držiak na fotopascu 1
+- Next exact step:
+  - commit/push branch, open PR, merge, rebuild ECR image, deploy ROY App Runner dashboard with `skip_artifact_refresh=true`, then verify `/api/operations/roy/live?refresh=1` no longer reports Micro SD 64GB or `F_375` as out of stock

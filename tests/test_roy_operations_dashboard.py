@@ -4,6 +4,7 @@ from pathlib import Path
 
 from live_dashboard_server import build_roy_operations_dashboard_html
 from roy_operations_dashboard import (
+    _select_current_stock_for_target,
     build_executive_kpi_snapshot,
     build_commercial_snapshot,
     build_inventory_snapshot,
@@ -456,6 +457,113 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual({}, state["inbound_orders"])
         self.assertEqual([], inventory["inbound_order_rows"])
         self.assertEqual(1, len(state["auto_cleared_inbound_orders"]))
+
+    def test_current_stock_overlay_clears_stale_out_of_stock_alert(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {"alert_delivery_count": 1},
+                    "alert_rows": [
+                        {
+                            "sku": "MICRO64",
+                            "product": "Micro SD KARTA 64GB s adapterom",
+                            "available_quantity": 0,
+                            "available_quantity_raw": 0,
+                            "alert_30d_units": 6,
+                            "lead_time_working_days": 3,
+                            "suggested_reorder_units": 7,
+                            "stock_risk_level": "Out of stock",
+                            "reorder_action_label": "Order now",
+                        }
+                    ],
+                    "restock_priority_rows": [
+                        {
+                            "sku": "MICRO64",
+                            "product": "Micro SD KARTA 64GB s adapterom",
+                            "available_quantity": 0,
+                            "available_quantity_raw": 0,
+                            "alert_30d_units": 6,
+                            "lead_time_working_days": 3,
+                            "suggested_reorder_units": 7,
+                            "stock_risk_level": "Out of stock",
+                            "reorder_action_label": "Order now",
+                            "restock_priority_score": 100,
+                        }
+                    ],
+                    "inventory_rows": [
+                        {
+                            "sku": "MICRO64",
+                            "product": "Micro SD KARTA 64GB s adapterom",
+                            "available_quantity": 0,
+                            "available_quantity_raw": 0,
+                            "alert_30d_units": 6,
+                            "lead_time_working_days": 3,
+                            "suggested_reorder_units": 7,
+                            "stock_risk_level": "Out of stock",
+                            "reorder_action_label": "Order now",
+                        }
+                    ],
+                }
+            }
+        }
+        state = {"version": 1, "loss_acknowledgements": {}, "inbound_orders": {}, "auto_cleared_inbound_orders": []}
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={"inventory_model": {"critical_days_of_cover": 14, "warning_days_of_cover": 30, "watch_days_of_cover": 45, "reorder_cover_days": 30}},
+            current_stock_by_sku={
+                "MICRO64": {
+                    "available_quantity": 20,
+                    "available_quantity_raw": 20,
+                    "quantity": 20,
+                    "quantity_raw": 20,
+                    "active": True,
+                    "matched_product_id": "4808",
+                    "matched_product_title": "Micro SD KARTA 64GB s adapterom",
+                }
+            },
+            live_stock_diagnostics={"matched_count": 1, "error_count": 0},
+        )
+
+        self.assertFalse(state_changed)
+        self.assertEqual([], inventory["alert_rows"])
+        self.assertEqual([], inventory["restock_priority_rows"])
+        self.assertEqual(0, inventory["summary"]["alert_delivery_count"])
+        self.assertEqual(1, inventory["summary"]["live_stock_overlay_matched_products"])
+        self.assertEqual(20, inventory["inventory_rows"][0]["available_quantity"])
+        self.assertEqual("Healthy", inventory["inventory_rows"][0]["stock_risk_level"])
+
+    def test_current_stock_match_prefers_title_when_historical_ean_points_elsewhere(self) -> None:
+        target = {"sku": "23942440833", "product": "Micro SD KARTA 64GB s adapterom"}
+        search_results = {
+            "micro sd karta 64gb s adapterom": [
+                {
+                    "id": "4808",
+                    "title": "Micro SD KARTA 64GB s adapterom",
+                    "active": True,
+                    "ean": None,
+                    "import_code": None,
+                    "warehouse_items": [{"quantity": 20, "available_quantity": 20}],
+                }
+            ],
+            "23942440833": [
+                {
+                    "id": "2873",
+                    "title": "Micro SD KARTA 32GB s adapterom",
+                    "active": True,
+                    "ean": "23942440833",
+                    "import_code": "F_206",
+                    "warehouse_items": [{"quantity": 34, "available_quantity": 31}],
+                }
+            ],
+        }
+
+        stock = _select_current_stock_for_target(target, search_results)
+
+        self.assertIsNotNone(stock)
+        self.assertEqual("4808", stock["matched_product_id"])
+        self.assertEqual(20, stock["available_quantity"])
 
     def test_commercial_snapshot_filters_acknowledged_loss_products(self) -> None:
         payload = {
