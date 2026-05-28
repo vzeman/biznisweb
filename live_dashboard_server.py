@@ -18,9 +18,13 @@ from production_board import get_cached_production_board_snapshot, resolve_produ
 from roy_operations_dashboard import (
     acknowledge_loss_product,
     clear_inbound_stock_order,
+    filter_unprinted_picking_orders,
     get_cached_roy_operations_snapshot,
+    load_roy_operations_state,
+    mark_picking_orders_printed,
     mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
+    save_roy_operations_state,
     set_inbound_stock_order,
 )
 from roy_picking_lists_pdf import build_roy_picking_lists_filename, build_roy_picking_lists_pdf
@@ -1925,7 +1929,8 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 )
                 return
             try:
-                operations_settings = resolve_roy_operations_settings(load_project_settings(project))
+                project_settings = load_project_settings(project)
+                operations_settings = resolve_roy_operations_settings(project_settings)
             except Exception as exc:
                 self._send_text(
                     f"Failed to load ROY operations settings: {escape(str(exc))}",
@@ -1941,15 +1946,25 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 )
                 return
             force_refresh = (query.get("refresh", ["1"])[0] or "").strip().lower() not in {"0", "false", "no"}
+            preview_only = (query.get("preview", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
             try:
                 payload = get_cached_roy_operations_snapshot(
                     project,
                     report_payload=read_latest_dashboard_payload(project),
                     force_refresh=force_refresh,
                 )
-                orders = ((payload.get("orders") or {}).get("orders") or [])
+                all_orders = ((payload.get("orders") or {}).get("orders") or [])
+                operations_state = load_roy_operations_state(
+                    project,
+                    project_settings,
+                    require_configured_remote=not preview_only,
+                )
+                orders = list(all_orders) if preview_only else filter_unprinted_picking_orders(all_orders, operations_state)
                 pdf = build_roy_picking_lists_pdf(orders)
                 filename = build_roy_picking_lists_filename(orders)
+                if orders and not preview_only:
+                    mark_picking_orders_printed(operations_state, orders)
+                    save_roy_operations_state(project, operations_state, project_settings)
                 self._send_download(pdf, content_type="application/pdf", filename=filename)
             except Exception as exc:
                 self._send_text(

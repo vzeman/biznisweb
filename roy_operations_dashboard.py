@@ -207,6 +207,8 @@ def _empty_operations_state() -> Dict[str, Any]:
         "loss_acknowledgements": {},
         "inbound_orders": {},
         "auto_cleared_inbound_orders": [],
+        "printed_picking_orders": {},
+        "picking_print_batches": [],
     }
 
 
@@ -262,20 +264,35 @@ def _normalize_operations_state(raw: Any) -> Dict[str, Any]:
     if not isinstance(raw, dict):
         return state
     state["version"] = int(raw.get("version") or STATE_VERSION)
-    for section in ("loss_acknowledgements", "inbound_orders"):
+    for section in ("loss_acknowledgements", "inbound_orders", "printed_picking_orders"):
         values = raw.get(section) if isinstance(raw.get(section), dict) else {}
         state[section] = {
             str(key).strip(): value
             for key, value in values.items()
             if str(key).strip() and isinstance(value, dict)
         }
-    cleared = raw.get("auto_cleared_inbound_orders")
-    if isinstance(cleared, list):
-        state["auto_cleared_inbound_orders"] = [row for row in cleared[-50:] if isinstance(row, dict)]
+    for section in ("auto_cleared_inbound_orders", "picking_print_batches"):
+        rows = raw.get(section)
+        if isinstance(rows, list):
+            state[section] = [row for row in rows[-50:] if isinstance(row, dict)]
     return state
 
 
-def load_roy_operations_state(project: str, project_settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _s3_error_code(exc: Exception) -> str:
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        error = response.get("Error")
+        if isinstance(error, dict):
+            return str(error.get("Code") or "").strip()
+    return ""
+
+
+def load_roy_operations_state(
+    project: str,
+    project_settings: Optional[Dict[str, Any]] = None,
+    *,
+    require_configured_remote: bool = False,
+) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
     project_settings = project_settings or load_project_settings(project)
     location = _state_s3_location(project, project_settings)
@@ -286,7 +303,9 @@ def load_roy_operations_state(project: str, project_settings: Optional[Dict[str,
 
             response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
             return _normalize_operations_state(json.loads(response["Body"].read().decode("utf-8")))
-        except Exception:
+        except Exception as exc:
+            if require_configured_remote and _s3_error_code(exc) not in {"NoSuchKey", "404"}:
+                raise RuntimeError(f"Failed to load configured ROY operations state from s3://{bucket}/{key}: {exc}")
             pass
 
     path = _local_state_path(project)
@@ -327,6 +346,73 @@ def save_roy_operations_state(
     tmp_path.write_bytes(body)
     tmp_path.replace(path)
     return {"storage": "local", "path": str(path)}
+
+
+def _picking_order_key(order: Dict[str, Any]) -> str:
+    return str(order.get("order_num") or order.get("id") or "").strip()
+
+
+def filter_unprinted_picking_orders(
+    orders: Iterable[Dict[str, Any]],
+    state: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    printed = (state or {}).get("printed_picking_orders")
+    printed_keys = {str(key).strip() for key in printed} if isinstance(printed, dict) else set()
+    result: List[Dict[str, Any]] = []
+    for order in orders:
+        key = _picking_order_key(order)
+        if key and key in printed_keys:
+            continue
+        result.append(order)
+    return result
+
+
+def mark_picking_orders_printed(
+    state: Dict[str, Any],
+    orders: Iterable[Dict[str, Any]],
+    *,
+    printed_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    printed_at = printed_at or _state_now_iso()
+    batch_id = "picking-" + "".join(ch for ch in printed_at if ch.isdigit())[:14]
+    printed = state.setdefault("printed_picking_orders", {})
+    if not isinstance(printed, dict):
+        printed = {}
+        state["printed_picking_orders"] = printed
+
+    marked_order_nums: List[str] = []
+    for order in orders:
+        key = _picking_order_key(order)
+        if not key or key in printed:
+            continue
+        record = {
+            "order_num": key,
+            "printed_at": printed_at,
+            "batch_id": batch_id,
+            "status": str(order.get("status") or "").strip(),
+            "purchase_at": str(order.get("purchase_at") or "").strip(),
+            "sum": str(order.get("sum") or "").strip(),
+        }
+        customer = order.get("customer") if isinstance(order.get("customer"), dict) else {}
+        customer_name = str(customer.get("name") or customer.get("company_name") or "").strip()
+        if customer_name:
+            record["customer"] = customer_name
+        printed[key] = record
+        marked_order_nums.append(key)
+
+    batch = {
+        "batch_id": batch_id,
+        "printed_at": printed_at,
+        "order_count": len(marked_order_nums),
+        "order_nums": marked_order_nums,
+    }
+    batches = state.setdefault("picking_print_batches", [])
+    if not isinstance(batches, list):
+        batches = []
+    if marked_order_nums:
+        batches.append(batch)
+    state["picking_print_batches"] = [row for row in batches[-50:] if isinstance(row, dict)]
+    return batch
 
 
 def _validate_eta_date(value: Any) -> str:
@@ -1545,6 +1631,8 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
             "inbound_order_count": len(operations_state.get("inbound_orders") or {}),
             "acknowledged_loss_product_count": len(operations_state.get("loss_acknowledgements") or {}),
             "auto_cleared_inbound_order_count": len(operations_state.get("auto_cleared_inbound_orders") or []),
+            "printed_picking_order_count": len(operations_state.get("printed_picking_orders") or {}),
+            "last_picking_print_batch": (operations_state.get("picking_print_batches") or [None])[-1],
         },
     }
 

@@ -8,6 +8,8 @@ from roy_operations_dashboard import (
     build_commercial_snapshot,
     build_inventory_snapshot,
     build_roy_orders_snapshot,
+    filter_unprinted_picking_orders,
+    mark_picking_orders_printed,
     resolve_roy_operations_settings,
 )
 
@@ -174,6 +176,40 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Sklad B2B", row["delivery_address"]["lines"])
         self.assertTrue(row["wholesale_pricing"]["is_wholesale"])
         self.assertEqual(20.0, row["wholesale_pricing"]["max_discount_pct"])
+
+    def test_picking_pdf_orders_are_marked_printed_once(self) -> None:
+        orders = [
+            {"order_num": "R-1", "status": "Platba online - zaplatené", "purchase_at": "2026-05-28 09:00:00", "sum": "10,00 €"},
+            {"order_num": "R-2", "status": "Čaká na vybavenie", "purchase_at": "2026-05-28 09:05:00", "sum": "20,00 €"},
+        ]
+        state = {"version": 1, "printed_picking_orders": {}}
+
+        first_batch = filter_unprinted_picking_orders(orders, state)
+        first_mark = mark_picking_orders_printed(state, first_batch, printed_at="2026-05-28T10:00:00Z")
+        second_batch = filter_unprinted_picking_orders(orders, state)
+        second_mark = mark_picking_orders_printed(state, second_batch, printed_at="2026-05-28T10:05:00Z")
+
+        self.assertEqual(["R-1", "R-2"], [row["order_num"] for row in first_batch])
+        self.assertEqual(["R-1", "R-2"], first_mark["order_nums"])
+        self.assertEqual([], second_batch)
+        self.assertEqual([], second_mark["order_nums"])
+        self.assertEqual({"R-1", "R-2"}, set(state["printed_picking_orders"]))
+        self.assertEqual("2026-05-28T10:00:00Z", state["printed_picking_orders"]["R-1"]["printed_at"])
+        self.assertEqual(1, len(state["picking_print_batches"]))
+
+    def test_picking_pdf_filter_keeps_new_orders_after_previous_print(self) -> None:
+        orders = [{"order_num": "R-1"}, {"order_num": "R-2"}, {"order_num": "R-3"}]
+        state = {
+            "version": 1,
+            "printed_picking_orders": {
+                "R-1": {"order_num": "R-1", "printed_at": "2026-05-28T10:00:00Z"},
+                "R-2": {"order_num": "R-2", "printed_at": "2026-05-28T10:00:00Z"},
+            },
+        }
+
+        unprinted = filter_unprinted_picking_orders(orders, state)
+
+        self.assertEqual(["R-3"], [row["order_num"] for row in unprinted])
 
     def test_snapshot_expands_bundle_order_items_to_pickable_components(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))

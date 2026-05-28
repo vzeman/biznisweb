@@ -3497,3 +3497,22 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - live pickup list excludes cancelled unpaid pickup order `2677002554`
 - Next exact step:
   - keep the paid-only pickup rule unless warehouse process explicitly needs a separate unpaid pickup queue
+
+### 2026-05-28 (ROY picking lists print-once state)
+- Branch: `codex/roy-print-picking-once`
+- Change:
+  - ROY picking-list PDF endpoint now filters out orders already recorded in operations state under `printed_picking_orders`
+  - when the normal dashboard PDF link generates a non-empty PDF, included order numbers are recorded with `printed_at`, `batch_id`, status, purchase date, and sum
+  - repeated clicks only include newly fulfillable orders that have not been printed before; previously printed but still unshipped orders are skipped
+  - deploy smoke now calls `/api/operations/roy/picking-lists.pdf?refresh=1&preview=1`, so production verification does not mark real orders as printed
+  - PDF print state load is fail-closed for configured S3 state, to avoid falling back to an empty local state and reprinting already printed orders
+- Local verification:
+  - `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py roy_picking_lists_pdf.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_production_board`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `python scripts\reporting_qa_smoke.py`
+  - `python scripts\security_ci.py`
+  - workflow YAML parse for `.github/workflows/deploy-live-dashboard-apprunner.yml`
+  - `git diff --check`
+- Next exact step:
+  - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard, then verify preview PDF is side-effect-free and one real PDF download records the printed order batch
