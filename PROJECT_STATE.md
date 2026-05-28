@@ -3583,3 +3583,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
 - Next exact step:
   - commit/push retry branch, PR/merge, rebuild ECR image, rerun ROY App Runner deploy with `skip_artifact_refresh=true`, and verify public live API stock alert rows
+
+### 2026-05-28 (ROY live API cold-start generation retry)
+- Branch: `codex/roy-live-cold-start-retry`
+- Context:
+  - PR `#139` was merged and ECR build run `26572693527` pushed digest `sha256:5f3b0f3c4f3915823cd8ff1e77777e106d4bff39b3e3fedc3a9d848491396ad9`
+  - deploy run `26572809832` again updated App Runner and passed host marker checks, but the first public `/api/operations/roy/live?refresh=1` call after cold start returned HTTP `500`
+  - direct repeated verification showed the first live call failed with a transient BizniWeb non-JSON GraphQL response, while the next calls returned `200`
+- Change:
+  - `get_cached_roy_operations_snapshot` now retries full snapshot generation up to `3` times when no cache exists yet, which specifically covers App Runner cold-start deploy smoke
+- Local verification:
+  - `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
+- Next exact step:
+  - run local py_compile/unit tests, commit/push/PR/merge, rebuild ECR, rerun ROY App Runner deploy, verify public live API stock alerts
