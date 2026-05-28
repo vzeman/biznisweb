@@ -3516,3 +3516,33 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - open/merge PR, rebuild ECR image, deploy ROY App Runner dashboard, then verify preview PDF is side-effect-free and one real PDF download records the printed order batch
+
+### 2026-05-28 (ROY picking lists print-once state deployed)
+- Code merged:
+  - PR `#136`: `Print ROY picking lists only once`, merge commit `413bd0b`
+- ECR refresh:
+  - workflow run: `26570433424`
+  - image digest: `sha256:2e67e7dcb7a4f8ed0374f63d021d01792900974cacbfc773b613387e4724fe92`
+- ROY live dashboard deploy:
+  - first deploy run `26570534424` updated App Runner to the new digest but failed during immediate public smoke with a transient HTTP 500 after the update
+  - second deploy run `26570904754` completed successfully with `skip_artifact_refresh=true`
+- Fargate hard-gate context from successful deploy run `26570904754`:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.18.184`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+  - latest S3 artifact validation: `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=246:inventory_alerts=22.0`
+- App Runner / public verification:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - health path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=32:personal_pickups=1:inventory_alerts=22.0:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=262483`
+  - `/health` returned OK
+  - `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard`
+  - preview PDF `/api/operations/roy/picking-lists.pdf?refresh=1&preview=1` returned `262483` bytes
+  - `printed_picking_order_count` stayed `0` before and after the preview PDF, confirming deploy smoke and preview mode are side-effect-free
+  - normal non-preview PDF download was intentionally not executed during verification because it would mark the current `32` fulfillable orders as printed
+- Next exact step:
+  - first real warehouse click on `Vysklad. PDF` will mark that batch in `printed_picking_orders`; verify after that click that repeated PDF download returns only newly arrived orders
