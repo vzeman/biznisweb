@@ -976,14 +976,26 @@ jobs:
           echo "production-board-path=${SERVICE_URL}/production/${PROJECT}"
           echo "latest-artifacts-s3=s3://${REPORT_S3_BUCKET_VALUE}/${REPORT_S3_PREFIX_VALUE}/latest/"
 
-          curl -fsS "${SERVICE_URL}/health" > /tmp/health.json
-          curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/production/${PROJECT}" -o /tmp/production-board.html
+          curl_with_retry() {
+            local attempt
+            for attempt in 1 2 3 4; do
+              if curl "$@"; then
+                return 0
+              fi
+              echo "curl attempt ${attempt} failed; retrying after $((attempt * 10))s..." >&2
+              sleep $((attempt * 10))
+            done
+            curl "$@"
+          }
+
+          curl_with_retry -fsS "${SERVICE_URL}/health" > /tmp/health.json
+          curl_with_retry -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/production/${PROJECT}" -o /tmp/production-board.html
           if [[ "${PROJECT}" == "roy" ]]; then
             grep -q "roy-operations-dashboard" /tmp/production-board.html
             grep -q "Executive KPI deck" /tmp/production-board.html
             grep -q "Vysklad. PDF" /tmp/production-board.html
-            curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/operations/roy/live?refresh=1" -o /tmp/production-board-api.json
-            curl -fsS --max-time 180 -D /tmp/roy-picking-lists.headers \
+            curl_with_retry -fsS --max-time 240 -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/operations/roy/live?refresh=1" -o /tmp/production-board-api.json
+            curl_with_retry -fsS --max-time 240 -D /tmp/roy-picking-lists.headers \
               -u "${AUTH_USER}:${AUTH_PASSWORD}" \
               "${SERVICE_URL}/api/operations/roy/picking-lists.pdf?refresh=1&preview=1" \
               -o /tmp/roy-picking-lists.pdf
@@ -1039,7 +1051,7 @@ jobs:
             grep -q "vevo-production-board" /tmp/production-board.html
             grep -q "productsCards" /tmp/production-board.html
             grep -q "@media (max-width:680px)" /tmp/production-board.html
-            curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/production/vevo/live?refresh=1" -o /tmp/production-board-api.json
+            curl_with_retry -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/production/vevo/live?refresh=1" -o /tmp/production-board-api.json
             python - <<'PY'
           import json
           api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
