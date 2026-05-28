@@ -3597,3 +3597,16 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
 - Next exact step:
   - run local py_compile/unit tests, commit/push/PR/merge, rebuild ECR, rerun ROY App Runner deploy, verify public live API stock alerts
+
+### 2026-05-28 (App Runner deploy public smoke curl retry)
+- Branch: `codex/deploy-smoke-curl-retry`
+- Context:
+  - PR `#140` was merged and ECR build run `26573358606` pushed digest `sha256:7260ca4d47cad0953208e556a1914ea91dfd90a0bb698b5848f4b690350eb7e7`
+  - deploy run `26573465453` updated App Runner and passed host marker checks, but public smoke still failed on one transient HTTP `500`
+  - direct manual verification after the run showed the same endpoints recover on retry: `/api/operations/roy/live?refresh=1` returned `200` and preview picking-list PDF returned `200`
+- Change:
+  - deploy workflow public smoke now wraps health, dashboard HTML, live API, and preview PDF curls with retry/backoff and raises ROY live/PDF max-time to `240s`
+- Local verification:
+  - workflow YAML parse for `.github/workflows/deploy-live-dashboard-apprunner.yml`
+- Next exact step:
+  - parse workflow YAML, commit/push/PR/merge workflow retry, rerun ROY App Runner deploy and verify live alert rows
