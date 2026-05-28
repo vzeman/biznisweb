@@ -197,6 +197,27 @@ query ListOrderStatuses($lang_code: CountryCodeAlpha2!) {
 )
 
 
+ROY_PRODUCT_STOCK_SEARCH_FIELDS = """
+    data {
+      id
+      title
+      active
+      ean
+      import_code
+      warehouse_items {
+        id
+        warehouse_number
+        quantity
+        available_quantity
+        status {
+          id
+          name
+        }
+      }
+    }
+"""
+
+
 _CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 STATE_VERSION = 1
 
@@ -1379,6 +1400,447 @@ def _current_availability_by_sku(inventory: Dict[str, Any]) -> Dict[str, float]:
     return availability
 
 
+def _stock_risk_sets() -> Tuple[set[str], set[str]]:
+    risk_30d = {"Negative stock", "Out of stock", "Critical", "Low"}
+    risk_45d = {"Negative stock", "Out of stock", "Critical", "Low", "Watch"}
+    return risk_30d, risk_45d
+
+
+def _stock_model_thresholds(project_settings: Dict[str, Any]) -> Dict[str, int]:
+    model = project_settings.get("inventory_model") or {}
+    critical_days = max(1, int(model.get("critical_days_of_cover", 14) or 14))
+    warning_days = max(critical_days, int(model.get("warning_days_of_cover", 30) or 30))
+    watch_days = max(warning_days, int(model.get("watch_days_of_cover", 45) or 45))
+    reorder_cover_days = max(1, int(model.get("reorder_cover_days", warning_days) or warning_days))
+    hero_cover_days = max(reorder_cover_days, int(model.get("hero_reorder_cover_days", watch_days) or watch_days))
+    return {
+        "critical_days": critical_days,
+        "warning_days": warning_days,
+        "watch_days": watch_days,
+        "reorder_cover_days": reorder_cover_days,
+        "hero_cover_days": hero_cover_days,
+    }
+
+
+def _clean_stock_search_term(value: Any) -> str:
+    normalized = _normalize_match_text(value)
+    return normalized if len(normalized) >= 3 else ""
+
+
+def _normalize_identifier(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"\d+\.0+", text):
+        text = text.split(".", 1)[0]
+    return text.upper()
+
+
+def _stock_lookup_targets(inventory: Dict[str, Any], state: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
+    severe_risk_levels = {"Negative stock", "Out of stock", "Critical"}
+    target_by_sku: Dict[str, Dict[str, str]] = {}
+    source_keys = ("alert_rows", "restock_priority_rows", "revenue_at_risk_rows", "stock_risk_rows")
+
+    for key, rows in _inventory_row_collections(inventory):
+        if key not in source_keys:
+            continue
+        for row in rows:
+            sku = str(row.get("sku") or "").strip()
+            product = str(row.get("product") or "").strip()
+            if not sku or not product:
+                continue
+            risk = str(row.get("stock_risk_level") or "")
+            if risk not in severe_risk_levels and _to_float(row.get("available_quantity")) > 0:
+                continue
+            target = target_by_sku.setdefault(sku, {"sku": sku, "product": product, "sources": ""})
+            if key not in target["sources"].split(","):
+                target["sources"] = ",".join(part for part in (target["sources"], key) if part)
+
+    inbound = (state or {}).get("inbound_orders") if isinstance((state or {}).get("inbound_orders"), dict) else {}
+    if inbound:
+        for sku, record in inbound.items():
+            normalized_sku = str(record.get("sku") or sku or "").strip()
+            if not normalized_sku:
+                continue
+            product = str(record.get("product") or "").strip()
+            target_by_sku.setdefault(normalized_sku, {"sku": normalized_sku, "product": product, "sources": "inbound_orders"})
+
+    return list(target_by_sku.values())
+
+
+def _stock_search_terms_for_target(target: Dict[str, str]) -> List[str]:
+    terms: List[str] = []
+    product = str(target.get("product") or "").strip()
+    cleaned_product = _clean_stock_search_term(product)
+    if cleaned_product:
+        terms.append(cleaned_product)
+    elif product:
+        terms.append(product)
+    sku = _normalize_identifier(target.get("sku"))
+    if sku and not sku.startswith("H-"):
+        terms.append(sku)
+
+    deduped: List[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        cleaned = str(term or "").strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(cleaned[:120])
+    return deduped[:3]
+
+
+def _execute_product_stock_searches(
+    client: Client,
+    *,
+    lang_code: str,
+    search_terms: List[str],
+    page_limit: int = 8,
+    batch_size: int = 5,
+) -> Tuple[Dict[str, List[Dict[str, Any]]], List[str]]:
+    results: Dict[str, List[Dict[str, Any]]] = {}
+    errors: List[str] = []
+    terms = [term for term in search_terms if str(term or "").strip()]
+
+    def execute_batch(batch: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+        variable_defs = ["$lang_code: CountryCodeAlpha2!"]
+        field_blocks: List[str] = []
+        variables: Dict[str, Any] = {"lang_code": lang_code}
+        for index, term in enumerate(batch):
+            param_name = f"params{index}"
+            alias = f"p{index}"
+            variable_defs.append(f"${param_name}: ProductParams")
+            variables[param_name] = {"limit": max(1, min(int(page_limit), 30)), "search": term}
+            field_blocks.append(
+                f"""
+  {alias}: getProductList(lang_code: $lang_code, params: ${param_name}) {{
+{ROY_PRODUCT_STOCK_SEARCH_FIELDS}
+  }}
+"""
+            )
+        query = gql(
+            "query SearchRoyProductStock("
+            + ", ".join(variable_defs)
+            + ") {\n"
+            + "\n".join(field_blocks)
+            + "\n}"
+        )
+        payload = client.execute(query, variable_values=variables)
+        batch_results: Dict[str, List[Dict[str, Any]]] = {}
+        for index, term in enumerate(batch):
+            block = (payload or {}).get(f"p{index}") or {}
+            batch_results[term] = [row for row in (block.get("data") or []) if isinstance(row, dict)]
+        return batch_results
+
+    def execute_batch_with_retry(batch: List[str], attempts: int = 2) -> Dict[str, List[Dict[str, Any]]]:
+        last_error: Optional[Exception] = None
+        for attempt in range(max(1, attempts)):
+            try:
+                return execute_batch(batch)
+            except Exception as exc:
+                last_error = exc
+                if attempt + 1 < max(1, attempts):
+                    time.sleep(0.4 * (attempt + 1))
+        if last_error is not None:
+            raise last_error
+        return {}
+
+    for start in range(0, len(terms), max(1, batch_size)):
+        batch = terms[start : start + max(1, batch_size)]
+        try:
+            results.update(execute_batch_with_retry(batch))
+        except Exception as exc:
+            if len(batch) <= 1:
+                errors.append(str(exc)[:240])
+                continue
+            for term in batch:
+                try:
+                    results.update(execute_batch_with_retry([term]))
+                except Exception as single_exc:
+                    errors.append(str(single_exc)[:240])
+    return results, errors
+
+
+def _warehouse_stock_totals(product: Dict[str, Any]) -> Dict[str, Any]:
+    quantity_raw = 0.0
+    available_raw = 0.0
+    warehouses: List[Dict[str, Any]] = []
+    for warehouse_item in product.get("warehouse_items") or []:
+        raw_quantity = _to_float((warehouse_item or {}).get("quantity"))
+        raw_available = _to_float(
+            (warehouse_item or {}).get("available_quantity")
+            if (warehouse_item or {}).get("available_quantity") is not None
+            else raw_quantity
+        )
+        quantity_raw += raw_quantity
+        available_raw += raw_available
+        warehouses.append(
+            {
+                "warehouse_number": str((warehouse_item or {}).get("warehouse_number") or "").strip(),
+                "quantity": raw_quantity,
+                "available_quantity": raw_available,
+                "status": str(((warehouse_item or {}).get("status") or {}).get("name") or "").strip(),
+            }
+        )
+    return {
+        "quantity_raw": quantity_raw,
+        "available_quantity_raw": available_raw,
+        "quantity": max(quantity_raw, 0.0),
+        "available_quantity": max(available_raw, 0.0),
+        "warehouses": warehouses,
+    }
+
+
+def _score_stock_candidate(target: Dict[str, str], product: Dict[str, Any]) -> int:
+    target_sku = _normalize_identifier(target.get("sku"))
+    target_title = _normalize_match_text(target.get("product"))
+    product_title = _normalize_match_text(product.get("title"))
+    import_code = _normalize_identifier(product.get("import_code"))
+    ean = _normalize_identifier(product.get("ean"))
+    score = 0
+    title_matches = False
+    if target_title and product_title:
+        if target_title == product_title:
+            score += 100
+            title_matches = True
+        elif target_title in product_title or product_title in target_title:
+            score += 80
+            title_matches = True
+    if target_sku and import_code and target_sku == import_code:
+        score += 65
+    if target_sku and ean and target_sku == ean:
+        score += 45 if title_matches else 20
+    return score
+
+
+def _select_current_stock_for_target(
+    target: Dict[str, str],
+    search_results: Dict[str, List[Dict[str, Any]]],
+) -> Optional[Dict[str, Any]]:
+    best: Optional[Tuple[int, Dict[str, Any]]] = None
+    for term in _stock_search_terms_for_target(target):
+        for product in search_results.get(term) or []:
+            score = _score_stock_candidate(target, product)
+            if score < 60:
+                continue
+            if best is None or score > best[0]:
+                best = (score, product)
+    if best is None:
+        return None
+    product = best[1]
+    stock = _warehouse_stock_totals(product)
+    return {
+        "sku": str(target.get("sku") or "").strip(),
+        "product": str(target.get("product") or "").strip(),
+        "matched_product_id": str(product.get("id") or "").strip(),
+        "matched_product_title": str(product.get("title") or "").strip(),
+        "matched_import_code": str(product.get("import_code") or "").strip(),
+        "matched_ean": str(product.get("ean") or "").strip(),
+        "active": bool(product.get("active", False)),
+        **stock,
+    }
+
+
+def fetch_current_stock_for_inventory_alerts(
+    project: str,
+    project_settings: Dict[str, Any],
+    inventory: Dict[str, Any],
+    state: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
+    model = project_settings.get("inventory_model") or {}
+    lang_code = str(model.get("lang_code", "SK") or "SK").strip().upper() or "SK"
+    targets = _stock_lookup_targets(inventory, state=state)
+    diagnostics: Dict[str, Any] = {
+        "enabled": True,
+        "source": "biznisweb_product_search",
+        "target_count": len(targets),
+        "matched_count": 0,
+        "error_count": 0,
+        "checked_at": _state_now_iso(),
+    }
+    if not targets:
+        return {}, diagnostics
+
+    client = _build_client(project, project_settings)
+    terms: List[str] = []
+    seen_terms: set[str] = set()
+    for target in targets:
+        target_terms = _stock_search_terms_for_target(target)
+        for term in target_terms:
+            key = term.lower()
+            if key in seen_terms:
+                continue
+            seen_terms.add(key)
+            terms.append(term)
+
+    search_results, errors = _execute_product_stock_searches(client, lang_code=lang_code, search_terms=terms)
+    current_stock: Dict[str, Dict[str, Any]] = {}
+    for target in targets:
+        stock = _select_current_stock_for_target(target, search_results)
+        if not stock:
+            continue
+        current_stock[str(target.get("sku") or "").strip()] = stock
+
+    diagnostics.update(
+        {
+            "search_term_count": len(terms),
+            "matched_count": len(current_stock),
+            "unmatched_count": max(len(targets) - len(current_stock), 0),
+            "error_count": len(errors),
+            "errors": errors[:3],
+        }
+    )
+    return current_stock, diagnostics
+
+
+def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_settings: Dict[str, Any]) -> None:
+    thresholds = _stock_model_thresholds(project_settings)
+    available = _to_float(row.get("available_quantity"))
+    available_raw = _to_float(row.get("available_quantity_raw", available))
+    alert_30d_units = _to_float(row.get("alert_30d_units"))
+    if alert_30d_units <= 0:
+        alert_30d_units = _to_float(row.get("recent_30d_units")) or _to_float(row.get("forecast_30d_units"))
+    daily_units = alert_30d_units / 30.0 if alert_30d_units > 0 else 0.0
+    days_of_cover: Optional[float] = None
+    current_risk = str(row.get("stock_risk_level") or "")
+    if daily_units > 0:
+        days_of_cover = available / daily_units
+        if available_raw < 0:
+            current_risk = "Negative stock"
+        elif available <= 0:
+            current_risk = "Out of stock"
+        elif days_of_cover <= thresholds["critical_days"]:
+            current_risk = "Critical"
+        elif days_of_cover <= thresholds["warning_days"]:
+            current_risk = "Low"
+        elif days_of_cover <= thresholds["watch_days"]:
+            current_risk = "Watch"
+        else:
+            current_risk = "Healthy"
+    elif available > 0:
+        current_risk = "Healthy"
+
+    lead_time_working = int(round(_to_float(row.get("lead_time_working_days"))))
+    lead_time_calendar = int(math.ceil(max(0, lead_time_working) * (7.0 / 5.0)))
+    target_cover = lead_time_calendar + (
+        thresholds["hero_cover_days"] if bool(row.get("strategic_stock_flag")) else thresholds["reorder_cover_days"]
+    )
+    if daily_units > 0:
+        suggested = max(math.ceil((daily_units * target_cover) - available), 0.0)
+    else:
+        suggested = 0.0 if available > 0 else _to_float(row.get("suggested_reorder_units"))
+
+    projected_stockout_date = row.get("projected_stockout_date")
+    if days_of_cover is not None and days_of_cover > 0 and days_of_cover < 3650:
+        projected_stockout_date = (datetime.now(timezone.utc).date() + timedelta(days=int(math.ceil(days_of_cover)))).isoformat()
+    elif available <= 0:
+        projected_stockout_date = None
+
+    row.update(
+        {
+            "stock_risk_level": current_risk,
+            "days_of_cover": round(days_of_cover, 1) if days_of_cover is not None else row.get("days_of_cover"),
+            "projected_stockout_date": projected_stockout_date,
+            "suggested_reorder_units": round(suggested, 1),
+            "reorder_now_flag": current_risk in {"Negative stock", "Out of stock", "Critical"},
+            "prepare_po_flag": current_risk == "Watch",
+        }
+    )
+    if current_risk in {"Negative stock", "Out of stock", "Critical"}:
+        row["reorder_action_label"] = "Order now"
+    elif current_risk == "Low":
+        row["reorder_action_label"] = "30d alert"
+    elif current_risk == "Watch":
+        row["reorder_action_label"] = "Prepare PO"
+    elif str(row.get("reorder_action_label") or "") in {"Order now", "30d alert", "Prepare PO"}:
+        row["reorder_action_label"] = "OK"
+
+
+def _apply_current_stock_to_inventory(
+    inventory: Dict[str, Any],
+    current_stock_by_sku: Dict[str, Dict[str, Any]],
+    project_settings: Dict[str, Any],
+) -> None:
+    if not current_stock_by_sku:
+        return
+    checked_at = _state_now_iso()
+    touched = 0
+    for _, rows in _inventory_row_collections(inventory):
+        for row in rows:
+            sku = str(row.get("sku") or "").strip()
+            stock = current_stock_by_sku.get(sku)
+            if not stock:
+                continue
+            touched += 1
+            row.update(
+                {
+                    "available_quantity": stock.get("available_quantity", row.get("available_quantity")),
+                    "available_quantity_raw": stock.get("available_quantity_raw", row.get("available_quantity_raw")),
+                    "quantity": stock.get("quantity", row.get("quantity")),
+                    "quantity_raw": stock.get("quantity_raw", row.get("quantity_raw")),
+                    "active": stock.get("active", row.get("active")),
+                    "live_stock_checked_at": checked_at,
+                    "live_stock_source": "biznisweb_product_search",
+                    "live_stock_product_id": stock.get("matched_product_id"),
+                    "live_stock_product_title": stock.get("matched_product_title"),
+                    "live_stock_import_code": stock.get("matched_import_code"),
+                    "live_stock_ean": stock.get("matched_ean"),
+                }
+            )
+            _recalculate_inventory_row_after_stock_update(row, project_settings)
+    summary = inventory.setdefault("summary", {})
+    summary["live_stock_overlay_touched_rows"] = touched
+    summary["live_stock_overlay_matched_products"] = len(current_stock_by_sku)
+    summary["live_stock_overlay_checked_at"] = checked_at
+
+
+def _finalize_inventory_alert_rows(inventory: Dict[str, Any]) -> None:
+    risk_30d, risk_45d = _stock_risk_sets()
+
+    def keep_30d(row: Dict[str, Any]) -> bool:
+        if bool(row.get("inbound_covers_reorder_flag")):
+            return False
+        return str(row.get("stock_risk_level") or "") in risk_30d
+
+    def keep_45d(row: Dict[str, Any]) -> bool:
+        if bool(row.get("inbound_covers_reorder_flag")):
+            return False
+        return str(row.get("stock_risk_level") or "") in risk_45d
+
+    inventory["alert_rows"] = [row for row in inventory.get("alert_rows", []) if keep_30d(row)]
+    inventory["restock_priority_rows"] = [row for row in inventory.get("restock_priority_rows", []) if keep_45d(row)]
+    inventory["revenue_at_risk_rows"] = [row for row in inventory.get("revenue_at_risk_rows", []) if keep_45d(row)]
+    inventory["stock_risk_rows"] = [row for row in inventory.get("stock_risk_rows", []) if keep_45d(row)]
+
+    summary = inventory.setdefault("summary", {})
+    alert_rows = inventory.get("alert_rows", [])
+    restock_rows = inventory.get("restock_priority_rows", [])
+    revenue_risk_rows = inventory.get("revenue_at_risk_rows", [])
+    stock_risk_rows = inventory.get("stock_risk_rows", [])
+    summary.update(
+        {
+            "alert_delivery_count": len(alert_rows),
+            "alert_reorder_now_count": sum(1 for row in alert_rows if str(row.get("reorder_action_label") or "") == "Order now"),
+            "alert_prepare_po_count": sum(1 for row in alert_rows if str(row.get("reorder_action_label") or "") == "Prepare PO"),
+            "stock_risk_critical_count": sum(1 for row in stock_risk_rows if str(row.get("stock_risk_level") or "") in {"Negative stock", "Out of stock", "Critical"}),
+            "stock_risk_30d_count": sum(1 for row in stock_risk_rows if str(row.get("stock_risk_level") or "") in risk_30d),
+            "stock_risk_45d_count": sum(1 for row in stock_risk_rows if str(row.get("stock_risk_level") or "") in risk_45d),
+            "revenue_at_risk_30d": round(sum(_to_float(row.get("alert_30d_revenue")) for row in alert_rows), 2),
+            "profit_at_risk_30d": round(sum(_to_float(row.get("alert_30d_profit_estimate")) for row in alert_rows), 2),
+            "revenue_at_risk_45d": round(sum(_to_float(row.get("alert_30d_revenue")) for row in revenue_risk_rows), 2),
+            "profit_at_risk_45d": round(sum(_to_float(row.get("alert_30d_profit_estimate")) for row in revenue_risk_rows), 2),
+            "restock_priority_urgent_count": sum(1 for row in restock_rows if _to_float(row.get("restock_priority_score")) >= 80),
+            "restock_priority_high_count": sum(
+                1 for row in restock_rows if 60 <= _to_float(row.get("restock_priority_score")) < 80
+            ),
+        }
+    )
+
+
 def _auto_clear_restocked_inbound_orders(state: Dict[str, Any], inventory: Dict[str, Any]) -> bool:
     inbound = state.get("inbound_orders") if isinstance(state.get("inbound_orders"), dict) else {}
     if not inbound:
@@ -1418,18 +1880,19 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
     if not inbound:
         inventory.setdefault("summary", {})["inbound_order_count"] = 0
         inventory.setdefault("summary", {})["inbound_ordered_units"] = 0.0
+        inventory["inbound_order_rows"] = []
+        _finalize_inventory_alert_rows(inventory)
         return
 
-    model = project_settings.get("inventory_model") or {}
-    critical_days = max(1, int(model.get("critical_days_of_cover", 14) or 14))
-    warning_days = max(critical_days, int(model.get("warning_days_of_cover", 30) or 30))
-    watch_days = max(warning_days, int(model.get("watch_days_of_cover", 45) or 45))
-    reorder_cover_days = max(1, int(model.get("reorder_cover_days", warning_days) or warning_days))
-    hero_cover_days = max(reorder_cover_days, int(model.get("hero_reorder_cover_days", watch_days) or watch_days))
+    thresholds = _stock_model_thresholds(project_settings)
+    critical_days = thresholds["critical_days"]
+    warning_days = thresholds["warning_days"]
+    watch_days = thresholds["watch_days"]
+    reorder_cover_days = thresholds["reorder_cover_days"]
+    hero_cover_days = thresholds["hero_cover_days"]
 
     today = datetime.now(timezone.utc).date()
-    risk_30d = {"Negative stock", "Out of stock", "Critical", "Low"}
-    risk_45d = {"Negative stock", "Out of stock", "Critical", "Low", "Watch"}
+    risk_30d, risk_45d = _stock_risk_sets()
 
     def apply_to_row(row: Dict[str, Any]) -> None:
         sku = str(row.get("sku") or "").strip()
@@ -1577,6 +2040,8 @@ def build_inventory_snapshot(
     *,
     state: Optional[Dict[str, Any]] = None,
     project_settings: Optional[Dict[str, Any]] = None,
+    current_stock_by_sku: Optional[Dict[str, Dict[str, Any]]] = None,
+    live_stock_diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], bool]:
     dashboard = report_payload.get("dashboard") if isinstance(report_payload.get("dashboard"), dict) else {}
     roy_inventory = dashboard.get("roy_product_demand") if isinstance(dashboard.get("roy_product_demand"), dict) else {}
@@ -1591,11 +2056,17 @@ def build_inventory_snapshot(
         "forecast_rows": list(roy_inventory.get("forecast_rows") or [])[:80],
         "inbound_order_rows": [],
     }
+    if live_stock_diagnostics:
+        inventory.setdefault("summary", {})["live_stock_overlay"] = live_stock_diagnostics
+    if project_settings is not None and current_stock_by_sku:
+        _apply_current_stock_to_inventory(inventory, current_stock_by_sku, project_settings)
     state_changed = False
     if state is not None:
         state_changed = _auto_clear_restocked_inbound_orders(state, inventory)
         if project_settings is not None:
             _apply_inbound_to_inventory(inventory, state, project_settings)
+    elif project_settings is not None:
+        _finalize_inventory_alert_rows(inventory)
     return inventory, state_changed
 
 
@@ -1611,10 +2082,31 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
     order_snapshot = build_roy_orders_snapshot(project=project, orders=orders, settings=settings, scan=scan)
     payload = report_payload or {}
     operations_state = load_roy_operations_state(project, project_settings)
+    base_inventory, _ = build_inventory_snapshot(payload, project_settings=project_settings)
+    try:
+        current_stock_by_sku, live_stock_diagnostics = fetch_current_stock_for_inventory_alerts(
+            project,
+            project_settings,
+            base_inventory,
+            state=operations_state,
+        )
+    except Exception as exc:
+        current_stock_by_sku = {}
+        live_stock_diagnostics = {
+            "enabled": True,
+            "source": "biznisweb_product_search",
+            "target_count": 0,
+            "matched_count": 0,
+            "error_count": 1,
+            "errors": [str(exc)[:240]],
+            "checked_at": _state_now_iso(),
+        }
     inventory_snapshot, state_changed = build_inventory_snapshot(
         payload,
         state=operations_state,
         project_settings=project_settings,
+        current_stock_by_sku=current_stock_by_sku,
+        live_stock_diagnostics=live_stock_diagnostics,
     )
     if state_changed:
         save_roy_operations_state(project, operations_state, project_settings)
