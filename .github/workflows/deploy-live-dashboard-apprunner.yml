@@ -985,7 +985,7 @@ jobs:
             curl -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/operations/roy/live?refresh=1" -o /tmp/production-board-api.json
             curl -fsS --max-time 180 -D /tmp/roy-picking-lists.headers \
               -u "${AUTH_USER}:${AUTH_PASSWORD}" \
-              "${SERVICE_URL}/api/operations/roy/picking-lists.pdf?refresh=1" \
+              "${SERVICE_URL}/api/operations/roy/picking-lists.pdf?refresh=1&preview=1" \
               -o /tmp/roy-picking-lists.pdf
             python - <<'PY'
           import json
