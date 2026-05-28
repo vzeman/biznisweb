@@ -3610,3 +3610,33 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - workflow YAML parse for `.github/workflows/deploy-live-dashboard-apprunner.yml`
 - Next exact step:
   - parse workflow YAML, commit/push/PR/merge workflow retry, rerun ROY App Runner deploy and verify live alert rows
+
+### 2026-05-28 (ROY live stock overlay deployed)
+- Code merged:
+  - PR `#138`: `Fix ROY live stock alert refresh`, merge commit `7607420`
+  - PR `#139`: `Harden ROY live API order fetch retries`, merge commit `70f87ec`
+  - PR `#140`: `Retry ROY live snapshot on cold start`, merge commit `fc25137`
+  - PR `#141`: `Retry App Runner public smoke curls`, merge commit `bb43d05`
+- ECR refresh:
+  - final workflow run: `26573358606`
+  - image digest: `sha256:7260ca4d47cad0953208e556a1914ea91dfd90a0bb698b5848f4b690350eb7e7`
+- ROY live dashboard deploy:
+  - workflow run `26574120208` completed successfully with `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run `26574120208`:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.31.206`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+  - latest S3 artifact validation: `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=246:inventory_alerts=22.0`
+- App Runner / public verification:
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - health path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=35:personal_pickups=1:inventory_alerts=22:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=282435`
+  - final direct `/api/operations/roy/live?refresh=1` check confirmed stock overlay `target_count=23`, `matched_count=23`, `error_count=0`
+  - Micro SD 64GB / `23942440833` and Držiak na fotopascu 1 / `F_375` are absent from `alert_rows`, `restock_priority_rows`, `revenue_at_risk_rows`, and `stock_risk_rows`
+  - BizniWeb GraphQL was intermittently returning non-JSON responses during verification; live dashboard now returns the last valid cached payload on those refresh errors
+- Next exact step:
+  - monitor whether BizniWeb GraphQL instability continues; if yes, consider reducing live stock lookup scope further or adding a short background refresh queue instead of request-time lookups
