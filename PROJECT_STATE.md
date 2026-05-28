@@ -3567,3 +3567,19 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - after overlay, alert/restock/revenue-at-risk/stock-risk rows no longer contain `23942440833` / Micro SD 64GB or `F_375` / Držiak na fotopascu 1
 - Next exact step:
   - commit/push branch, open PR, merge, rebuild ECR image, deploy ROY App Runner dashboard with `skip_artifact_refresh=true`, then verify `/api/operations/roy/live?refresh=1` no longer reports Micro SD 64GB or `F_375` as out of stock
+
+### 2026-05-28 (ROY live API first-call retry hardening)
+- Branch: `codex/roy-live-api-retry`
+- Context:
+  - PR `#138` was merged and ECR build run `26572098571` pushed digest `sha256:48de2624fe600cdb4166aadd340b4a8ce3bd9449e7b3cd2f0ecafd0d850a90b6`
+  - deploy run `26572189877` updated App Runner to that digest and passed host marker checks, but failed public smoke with a transient HTTP `500`
+  - direct post-run verification then showed `/health`, `/production/roy`, `/api/operations/roy/live?refresh=1`, and preview picking-list PDF all returned `200`
+  - live API confirmed the stock overlay works: Micro SD 64GB / `23942440833` and Držiak / `F_375` were absent from alert/restock/revenue-at-risk/stock-risk rows
+  - the live API response had `cache.status=stale_after_error` after a later forced refresh because BizniWeb returned a transient non-JSON GraphQL response during live order fetch
+- Change:
+  - added per-page retry with backoff to `fetch_open_orders_for_roy_operations` so a one-off BizniWeb GraphQL non-JSON response does not fail the first cold `/api/operations/roy/live` call after App Runner restart
+- Local verification:
+  - `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`
+- Next exact step:
+  - commit/push retry branch, PR/merge, rebuild ECR image, rerun ROY App Runner deploy with `skip_artifact_refresh=true`, and verify public live API stock alert rows

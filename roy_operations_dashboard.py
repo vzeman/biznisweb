@@ -1087,6 +1087,8 @@ def fetch_open_orders_for_roy_operations(project: str, settings: Dict[str, Any])
     fulfillable_seen = 0
     pickup_seen = 0
     stop_reason = "api_exhausted"
+    max_page_retries = 3
+    retry_delay_seconds = 2.0
 
     while has_next_page and page_count < settings["scan_max_pages"]:
         params: Dict[str, Any] = {
@@ -1097,7 +1099,18 @@ def fetch_open_orders_for_roy_operations(project: str, settings: Dict[str, Any])
         if cursor is not None:
             params["cursor"] = cursor
 
-        result = client.execute(ROY_OPERATIONS_ORDER_QUERY, variable_values={"params": params})
+        last_error: Optional[Exception] = None
+        for attempt in range(max_page_retries):
+            try:
+                result = client.execute(ROY_OPERATIONS_ORDER_QUERY, variable_values={"params": params})
+                break
+            except Exception as exc:
+                last_error = exc
+                if attempt + 1 >= max_page_retries:
+                    raise
+                time.sleep(retry_delay_seconds * (attempt + 1))
+        else:
+            raise RuntimeError(f"Failed to fetch ROY operations orders page: {last_error}")
         payload = result.get("getOrderList") or {}
         page_orders = [order for order in (payload.get("data") or []) if order]
         orders.extend(page_orders)
