@@ -3781,3 +3781,34 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - commit/push branch, open PR, merge, rebuild ECR, deploy ROY App Runner, then verify live wholesale count and preview PDF banners
+
+### 2026-05-30 (ROY wholesale gross price and coupon guard deployed)
+- Code merged:
+  - PR `#149`: `Fix ROY wholesale gross price trigger`, merge commit `142fead`
+- ECR refresh:
+  - workflow run: `26675578725`
+  - image digest: `sha256:f46baf4d1132b067ff8fa3c4177556b316e348e868d10b5b001c5e657c855bf9`
+- ROY live dashboard deploy:
+  - workflow run: `26675624303`
+  - deploy mode: `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.38.25`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+- App Runner / public verification:
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=6:personal_pickups=0:inventory_alerts=20:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=130112`
+  - direct `/health` returned `200`
+  - direct `/production/roy` returned `200` and contains marker `roy-operations-dashboard`
+  - direct `/api/operations/roy/live?refresh=1` returned `200`, marker `roy-operations-dashboard`, `orders=6`, `wholesale_orders=2`
+  - live wholesale order numbers are `2677002789` and `2677002792`
+  - full-price person orders now show `max_discount=0.0`; order `2677002795` shows `discount_code_used=True` and is not wholesale
+  - preview picking-list PDF returned `200`, `130112` bytes, starts with `%PDF-`, and first page contains `VEĽKOOBCHOD / VO CENY`, `VEĽKOOBCHODNÁ OBJEDNÁVKA`, and `VO ceny: áno, zľava do 37.4%`
+- Next exact step:
+  - use newly generated picking-list PDFs for future VO checks; the older already-downloaded PDFs do not recalculate banners
