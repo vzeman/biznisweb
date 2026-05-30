@@ -3757,3 +3757,27 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - preview picking-list PDF returned `200`, `130112` bytes, starts with `%PDF-`, and the first wholesale page contains `VEĽKOOBCHOD / VO CENY`, `VEĽKOOBCHODNÁ OBJEDNÁVKA`, and `VO ceny: áno, zľava do 49.1%`
 - Next exact step:
   - if order `2677002772` was printed from an older already-downloaded PDF, use a newly generated PDF for corrected VO banners; future discounted person orders should no longer be flagged as wholesale
+
+### 2026-05-30 (ROY wholesale gross price and coupon guard)
+- Branch: `codex/roy-wholesale-gross-price-trigger`
+- Finding:
+  - BiznisWeb ROY item `price` / `sum` values behave as net values even when `is_net_price=false`, while `product.final_price` behaves as a gross regular price
+  - previous wholesale comparison divided item net prices by VAT again, creating a false `18.7%` discount on full-price person orders
+  - `sum_with_tax / quantity` is the reliable gross item unit price for the live order payload
+  - order `2677002772` satisfies the intended rule: IČO `51983095`, no discount code, HC800 `25.50` vs `29.99` gross, Discovery `59.99` vs `95.90` gross
+- Change:
+  - ROY operations query now fetches item `sum_with_tax`
+  - wholesale detection now treats company signal as present only when `company_id` / IČO exists
+  - wholesale discount comparison now uses gross item unit price vs gross product final price
+  - discount-code price elements (`percent_discount`, coupon/voucher/gift/kód signals) prevent the wholesale flag
+  - wholesale examples now expose `order_unit_gross` and `retail_unit_gross`
+- Local verification:
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m py_compile roy_operations_dashboard.py roy_picking_lists_pdf.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf`
+  - direct current BiznisWeb check with local code returned `fulfillable=6`, `wholesale=2`, wholesale order numbers `2677002789` and `2677002792`; full-price person orders had `max_discount=0.0`, and the discount-code order had `discount_code_used=True`
+  - direct order `2677002772` check returned `wholesale=True`, `discount_code_used=False`, `max_discount_pct=37.4`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - commit/push branch, open PR, merge, rebuild ECR, deploy ROY App Runner, then verify live wholesale count and preview PDF banners
