@@ -141,6 +141,12 @@ query GetRoyOperationsOrders($params: OrderParams) {
           formatted
           is_net_price
         }
+        sum_with_tax {
+          value
+          raw_value
+          formatted
+          is_net_price
+        }
         product {
           title
           import_code
@@ -867,17 +873,18 @@ def _customer_info(order: Dict[str, Any]) -> Dict[str, Any]:
     customer = order.get("customer") if isinstance(order.get("customer"), dict) else {}
     customer_type = str(customer.get("__typename") or "").strip()
     company_name = str(customer.get("company_name") or "").strip()
+    company_id = str(customer.get("company_id") or "").strip()
     person_name = _join_name(customer.get("name"), customer.get("surname"))
     display_name = company_name or person_name
     return {
         "type": customer_type,
         "company_name": company_name,
-        "company_id": str(customer.get("company_id") or "").strip(),
+        "company_id": company_id,
         "vat_id": str(customer.get("vat_id") or customer.get("vat_id2") or "").strip(),
         "display_name": display_name,
         "phone": str(customer.get("phone") or "").strip(),
         "email": str(customer.get("email") or "").strip(),
-        "is_company": customer_type == "Company" or bool(company_name),
+        "is_company": bool(company_id),
     }
 
 
@@ -930,6 +937,59 @@ def _price_as_net(price: Any, tax_rate: float) -> Optional[float]:
     return value / (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else value
 
 
+def _price_as_gross(price: Any, tax_rate: float) -> Optional[float]:
+    value = _price_number(price)
+    if value is None:
+        return None
+    if isinstance(price, dict) and bool(price.get("is_net_price")):
+        return value * (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else value
+    return value
+
+
+def _item_unit_gross_price(item: Dict[str, Any]) -> Optional[float]:
+    quantity = _to_float(item.get("quantity"))
+    if quantity <= 0:
+        return None
+    tax_rate = _item_tax_rate(item)
+    gross_total = _price_number(item.get("sum_with_tax"))
+    if gross_total is not None:
+        return gross_total / quantity
+    net_total = _price_number(item.get("sum"))
+    if net_total is not None:
+        return (net_total * (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else net_total) / quantity
+    unit_price = _price_number(item.get("price"))
+    if unit_price is None:
+        return None
+    # BizniWeb ROY item unit prices behave as net values even when is_net_price is false.
+    return unit_price * (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else unit_price
+
+
+def _product_retail_gross_price(item: Dict[str, Any]) -> Optional[float]:
+    product = item.get("product") if isinstance(item.get("product"), dict) else {}
+    return _price_as_gross(product.get("final_price"), _item_tax_rate(item))
+
+
+def _normalize_discount_signal(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return "".join(ch for ch in text if not unicodedata.combining(ch)).strip()
+
+
+def _has_discount_code_price_element(order: Dict[str, Any]) -> bool:
+    discount_type_patterns = ("discount", "coupon", "voucher", "gift")
+    discount_text_patterns = ("zlav", "zlava", "kod", "kupon", "coupon", "voucher")
+    for element in order.get("price_elements") or []:
+        if not isinstance(element, dict):
+            continue
+        element_type = _normalize_discount_signal(element.get("type"))
+        title = _normalize_discount_signal(element.get("title"))
+        value = _normalize_discount_signal(element.get("value"))
+        if any(pattern in element_type for pattern in discount_type_patterns):
+            return True
+        if any(pattern in title or pattern in value for pattern in discount_text_patterns):
+            return True
+    return False
+
+
 def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
     detection = settings.get("wholesale_detection") if isinstance(settings.get("wholesale_detection"), dict) else {}
     if not detection.get("enabled", True):
@@ -944,13 +1004,13 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
     priced_lines = 0
     discounted_lines = 0
     max_discount_pct = 0.0
+    discount_code_used = _has_discount_code_price_element(order)
     examples: List[Dict[str, Any]] = []
     for item in order.get("items") or []:
         if not isinstance(item, dict):
             continue
-        item_price = _price_as_net(item.get("price"), _item_tax_rate(item))
-        product = item.get("product") if isinstance(item.get("product"), dict) else {}
-        retail_price = _price_as_net(product.get("final_price"), _item_tax_rate(item))
+        item_price = _item_unit_gross_price(item)
+        retail_price = _product_retail_gross_price(item)
         if item_price is None or retail_price is None or item_price <= 0 or retail_price <= 0:
             continue
         priced_lines += 1
@@ -964,20 +1024,22 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
                     {
                         "import_code": str(item.get("import_code") or "").strip(),
                         "label": str(item.get("item_label") or "").strip(),
-                        "order_unit_net": round(item_price, 2),
-                        "retail_unit_net": round(retail_price, 2),
+                        "order_unit_gross": round(item_price, 2),
+                        "retail_unit_gross": round(retail_price, 2),
                         "discount_pct": round(discount_pct, 1),
                     }
                 )
 
     is_company = bool(customer.get("is_company"))
-    is_wholesale = discounted_lines > 0 and (is_company or not require_company)
+    is_wholesale = discounted_lines > 0 and not discount_code_used and (is_company or not require_company)
     reason = ""
     if is_wholesale:
         if is_company:
             reason = f"company customer + {discounted_lines}/{priced_lines} discounted line(s) vs current retail final price"
         else:
             reason = f"{discounted_lines}/{priced_lines} discounted line(s) vs current retail final price"
+    elif discount_code_used:
+        reason = "discount code used"
     elif discounted_lines > 0:
         reason = f"{discounted_lines}/{priced_lines} discounted line(s), but customer is not Company"
     elif is_company:
@@ -990,6 +1052,7 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
         "customer_is_company": is_company,
         "discounted_lines": discounted_lines,
         "priced_lines": priced_lines,
+        "discount_code_used": discount_code_used,
         "max_discount_pct": round(max_discount_pct, 1),
         "threshold_pct": round(threshold_pct, 1),
         "reason": reason,

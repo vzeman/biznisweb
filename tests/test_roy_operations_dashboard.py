@@ -214,6 +214,85 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(20.0, wholesale["max_discount_pct"])
         self.assertEqual("1/1 discounted line(s), but customer is not Company", wholesale["reason"])
 
+    def test_full_price_company_order_is_not_wholesale_from_vat_mismatch(self) -> None:
+        settings = make_settings()
+        paid_payment = price_element("payment", "Okamžitá platba online", "18")
+        packeta_shipping = price_element("shipping", "Packeta - výdajné miesto", "9")
+        order = make_order("R-FULL", settings["paid_statuses"][0], paid_payment, packeta_shipping)
+        order["customer"] = {
+            "__typename": "Company",
+            "company_name": "Company Buyer s.r.o.",
+            "company_id": "12345678",
+        }
+        order["items"][0].update(
+            {
+                "tax_rate": 23,
+                "quantity": 1,
+                "price": {"raw_value": 40.642276422764, "value": 40.64, "formatted": "40,64 €", "is_net_price": False},
+                "sum": {"raw_value": 40.642276422764, "value": 40.64, "formatted": "40,64 €", "is_net_price": False},
+                "sum_with_tax": {"raw_value": 49.99, "value": 49.99, "formatted": "49,99 €", "is_net_price": True},
+                "product": {
+                    "final_price": {
+                        "raw_value": 49.99,
+                        "value": 49.99,
+                        "formatted": "49,99 €",
+                        "is_net_price": False,
+                    }
+                },
+            }
+        )
+
+        snapshot = build_roy_orders_snapshot(project="roy", orders=[order], settings=settings)
+        wholesale = snapshot["orders"][0]["wholesale_pricing"]
+
+        self.assertFalse(wholesale["is_wholesale"])
+        self.assertTrue(wholesale["customer_is_company"])
+        self.assertEqual(0.0, wholesale["max_discount_pct"])
+        self.assertEqual("company customer, no wholesale price discount detected", wholesale["reason"])
+
+    def test_discount_code_prevents_wholesale_flag(self) -> None:
+        settings = make_settings()
+        paid_payment = price_element("payment", "Okamžitá platba online", "18")
+        packeta_shipping = price_element("shipping", "Packeta - výdajné miesto", "9")
+        discount = {
+            "type": "percent_discount",
+            "title": "5% kod (5%)",
+            "value": "5",
+            "reference_id": "5",
+            "price": {"value": -5, "formatted": "-5,00 €"},
+        }
+        order = make_order("R-CODE", settings["paid_statuses"][0], paid_payment, packeta_shipping)
+        order["price_elements"].append(discount)
+        order["customer"] = {
+            "__typename": "Company",
+            "company_name": "Code Buyer s.r.o.",
+            "company_id": "12345678",
+        }
+        order["items"][0].update(
+            {
+                "tax_rate": 23,
+                "quantity": 1,
+                "sum_with_tax": {"raw_value": 80.0, "value": 80.0, "formatted": "80,00 €", "is_net_price": True},
+                "product": {
+                    "final_price": {
+                        "raw_value": 100.0,
+                        "value": 100.0,
+                        "formatted": "100,00 €",
+                        "is_net_price": False,
+                    }
+                },
+            }
+        )
+
+        snapshot = build_roy_orders_snapshot(project="roy", orders=[order], settings=settings)
+        wholesale = snapshot["orders"][0]["wholesale_pricing"]
+
+        self.assertFalse(wholesale["is_wholesale"])
+        self.assertTrue(wholesale["customer_is_company"])
+        self.assertTrue(wholesale["discount_code_used"])
+        self.assertEqual(20.0, wholesale["max_discount_pct"])
+        self.assertEqual("discount code used", wholesale["reason"])
+
     def test_picking_pdf_orders_are_marked_printed_once(self) -> None:
         orders = [
             {"order_num": "R-1", "status": "Platba online - zaplatené", "purchase_at": "2026-05-28 09:00:00", "sum": "10,00 €"},
