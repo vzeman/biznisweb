@@ -18,6 +18,38 @@ def _text(value: Any, fallback: str = "-") -> str:
     return text if text else fallback
 
 
+def _format_quantity(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return _text(value, "0")
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
+def _item_unit_price_text(item: Dict[str, Any]) -> str:
+    for key in ("unit_price_formatted", "unit_price"):
+        value = item.get(key)
+        if isinstance(value, (int, float)):
+            return f"{value:.2f} EUR"
+        text = str(value or "").strip()
+        if text:
+            return text
+
+    price = item.get("price") if isinstance(item.get("price"), dict) else {}
+    formatted = str(price.get("formatted") or "").strip()
+    if formatted:
+        return formatted
+    for key in ("raw_value", "value"):
+        try:
+            value = float(price.get(key))
+        except (TypeError, ValueError):
+            continue
+        return f"{value:.2f} EUR"
+    return ""
+
+
 def _font_candidates() -> Sequence[Path]:
     return (
         ROOT_DIR / "assets" / "fonts" / "DejaVuSans.ttf",
@@ -25,6 +57,17 @@ def _font_candidates() -> Sequence[Path]:
         Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
         Path("C:/Windows/Fonts/arial.ttf"),
         Path("C:/Windows/Fonts/DejaVuSans.ttf"),
+    )
+
+
+def _bold_font_candidates(regular_path: Path) -> Sequence[Path]:
+    return (
+        regular_path.with_name("DejaVuSans-Bold.ttf"),
+        regular_path.with_name("arialbd.ttf"),
+        ROOT_DIR / "assets" / "fonts" / "DejaVuSans-Bold.ttf",
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        Path("/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"),
+        Path("C:/Windows/Fonts/arialbd.ttf"),
     )
 
 
@@ -38,7 +81,13 @@ def _register_fonts() -> Dict[str, str]:
     for path in _font_candidates():
         if path.exists():
             pdfmetrics.registerFont(TTFont("BizniswebSans", str(path)))
-            return {"regular": "BizniswebSans", "bold": "BizniswebSans"}
+            bold_font = "BizniswebSans"
+            for bold_path in _bold_font_candidates(path):
+                if bold_path.exists():
+                    pdfmetrics.registerFont(TTFont("BizniswebSans-Bold", str(bold_path)))
+                    bold_font = "BizniswebSans-Bold"
+                    break
+            return {"regular": "BizniswebSans", "bold": bold_font}
     return {"regular": "Helvetica", "bold": "Helvetica-Bold"}
 
 
@@ -177,6 +226,36 @@ def _draw_order_barcode(canvas: Any, order_num: Any, x_right: float, y_top: floa
     barcode.drawOn(canvas, x, y)
     canvas.setFont(fonts["bold"], 8)
     canvas.drawCentredString(x + barcode.width / 2, y - 3.4 * mm, order_text)
+
+
+def _draw_item_ean_barcode(
+    canvas: Any,
+    ean: Any,
+    x: float,
+    y_top: float,
+    max_width: float,
+    fonts: Dict[str, str],
+) -> None:
+    from reportlab.graphics.barcode.code128 import Code128
+    from reportlab.lib.units import mm
+
+    ean_text = _text(ean, "")
+    if not ean_text:
+        return
+
+    bar_width = 0.26 * mm
+    barcode = Code128(ean_text, barWidth=bar_width, barHeight=7 * mm, humanReadable=False)
+    if barcode.width > max_width:
+        barcode = Code128(
+            ean_text,
+            barWidth=bar_width * (max_width / barcode.width),
+            barHeight=7 * mm,
+            humanReadable=False,
+        )
+
+    barcode.drawOn(canvas, x, y_top - barcode.height)
+    canvas.setFont(fonts["regular"], 5)
+    canvas.drawCentredString(x + barcode.width / 2, y_top - barcode.height - 2.3 * mm, ean_text)
 
 
 def _draw_labeled_box(
@@ -456,11 +535,12 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
             y -= block_height + 7 * mm
 
         table_x = margin_x
-        col_qty = 16 * mm
-        col_product = 92 * mm
-        col_code = 30 * mm
-        col_ean = 32 * mm
-        table_width = col_qty + col_product + col_code + col_ean
+        col_qty = 15 * mm
+        col_product = 72 * mm
+        col_unit_price = 23 * mm
+        col_code = 24 * mm
+        col_ean = 44 * mm
+        table_width = col_qty + col_product + col_unit_price + col_code + col_ean
 
         def draw_header() -> None:
             nonlocal y
@@ -470,14 +550,17 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
             canvas.setFont(fonts["bold"], 8)
             canvas.drawString(table_x + 2 * mm, y - 2 * mm, "Ks")
             canvas.drawString(table_x + col_qty + 2 * mm, y - 2 * mm, "Produkt")
-            canvas.drawString(table_x + col_qty + col_product + 2 * mm, y - 2 * mm, "Import kód")
-            canvas.drawString(table_x + col_qty + col_product + col_code + 2 * mm, y - 2 * mm, "EAN")
+            canvas.drawString(table_x + col_qty + col_product + 2 * mm, y - 2 * mm, "Cena/ks")
+            canvas.drawString(table_x + col_qty + col_product + col_unit_price + 2 * mm, y - 2 * mm, "Import kód")
+            canvas.drawString(table_x + col_qty + col_product + col_unit_price + col_code + 2 * mm, y - 2 * mm, "EAN")
             y -= 9 * mm
 
         draw_header()
         canvas.setStrokeColor(colors.HexColor("#d9ded5"))
         for item in _order_items(order):
-            if y < 34 * mm:
+            product_lines = _wrap_text(item.get("label"), col_product - 4 * mm, fonts["regular"], 8)
+            row_height = max(14 * mm, (len(product_lines[:3]) * 4.2 * mm) + 5 * mm)
+            if y - row_height < 22 * mm:
                 _draw_footer(canvas, width, page_no, fonts)
                 canvas.showPage()
                 page_no += 1
@@ -488,11 +571,11 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
                 y -= 16 * mm
                 draw_header()
 
-            product_lines = _wrap_text(item.get("label"), col_product - 4 * mm, fonts["regular"], 8)
-            row_height = max(8 * mm, (len(product_lines[:3]) * 4.2 * mm) + 4 * mm)
             canvas.line(table_x, y + 2 * mm, table_x + table_width, y + 2 * mm)
-            canvas.setFont(fonts["bold"], 9)
-            canvas.drawString(table_x + 2 * mm, y - 2 * mm, _text(item.get("quantity"), "0"))
+            qty_text = _format_quantity(item.get("quantity"))
+            qty_font_size = _fit_font_size(canvas, qty_text, fonts["bold"], col_qty - 4 * mm, 18, min_size=11)
+            canvas.setFont(fonts["bold"], qty_font_size)
+            canvas.drawCentredString(table_x + col_qty / 2, y - 6 * mm, qty_text)
             _draw_wrapped(
                 canvas,
                 item.get("label"),
@@ -504,8 +587,16 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
                 leading=4.2 * mm,
             )
             canvas.setFont(fonts["regular"], 8)
-            canvas.drawString(table_x + col_qty + col_product + 2 * mm, y - 2 * mm, _text(item.get("import_code")))
-            canvas.drawString(table_x + col_qty + col_product + col_code + 2 * mm, y - 2 * mm, _text(item.get("ean")))
+            canvas.drawString(table_x + col_qty + col_product + 2 * mm, y - 2 * mm, _item_unit_price_text(item))
+            canvas.drawString(table_x + col_qty + col_product + col_unit_price + 2 * mm, y - 2 * mm, _text(item.get("import_code")))
+            _draw_item_ean_barcode(
+                canvas,
+                item.get("ean"),
+                table_x + col_qty + col_product + col_unit_price + col_code + 2 * mm,
+                y + 0.5 * mm,
+                col_ean - 4 * mm,
+                fonts,
+            )
             y -= row_height
 
         y = max(y - 8 * mm, 24 * mm)

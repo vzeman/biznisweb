@@ -3640,3 +3640,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - BizniWeb GraphQL was intermittently returning non-JSON responses during verification; live dashboard now returns the last valid cached payload on those refresh errors
 - Next exact step:
   - monitor whether BizniWeb GraphQL instability continues; if yes, consider reducing live stock lookup scope further or adding a short background refresh queue instead of request-time lookups
+
+### 2026-05-30 (ROY picking-list product row formatting)
+- Branch: `codex/roy-picking-list-product-format`
+- Change:
+  - ROY picking-list PDF product rows now show a larger bold quantity value, a new `Cena/ks` column, and EAN as a barcode with small EAN text below it
+  - ROY operations order snapshots now carry BizniWeb item unit price into dashboard/PDF data
+  - PDF font registration now uses a real bold font when available, so quantity emphasis renders as actual bold text
+- Local verification:
+  - `python -m py_compile roy_picking_lists_pdf.py roy_operations_dashboard.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_picking_lists_pdf tests.test_roy_operations_dashboard`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - commit/push branch, open PR, merge to `main`, rebuild/deploy ROY App Runner dashboard, then verify live preview picking-list PDF returns a valid PDF

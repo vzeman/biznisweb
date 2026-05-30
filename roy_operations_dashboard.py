@@ -781,6 +781,8 @@ def _expand_order_item_components(item: Dict[str, Any], settings: Dict[str, Any]
                     "ean": str(component.get("item_ean") or "").strip(),
                     "import_code": str(component.get("item_import_code") or "").strip(),
                     "warehouse_number": str(component.get("item_warehouse_number") or "").strip(),
+                    "unit_price": None,
+                    "unit_price_formatted": "",
                     "bundle_component": True,
                     "bundle_parent_label": item.get("label", ""),
                     "bundle_expansion_rule": str(rule.get("key") or "").strip(),
@@ -803,6 +805,14 @@ def _merge_order_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             merged[key] = dict(item)
             continue
         merged[key]["quantity"] = round(_to_float(merged[key].get("quantity")) + _to_float(item.get("quantity")), 2)
+        existing_price = str(merged[key].get("unit_price_formatted") or "").strip()
+        incoming_price = str(item.get("unit_price_formatted") or "").strip()
+        if not existing_price and incoming_price:
+            merged[key]["unit_price_formatted"] = incoming_price
+            merged[key]["unit_price"] = item.get("unit_price")
+        elif existing_price and incoming_price and existing_price != incoming_price:
+            merged[key]["unit_price_formatted"] = ""
+            merged[key]["unit_price"] = None
         if item.get("bundle_component"):
             merged[key]["bundle_component"] = True
             parent_labels = {
@@ -817,18 +827,33 @@ def _merge_order_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return list(merged.values())
 
 
+def _order_item_unit_price_info(item: Dict[str, Any]) -> Dict[str, Any]:
+    price = item.get("price") if isinstance(item.get("price"), dict) else {}
+    formatted = str(price.get("formatted") or "").strip()
+    value = _optional_float(price.get("raw_value"))
+    if value is None:
+        value = _optional_float(price.get("value"))
+    return {
+        "unit_price": value,
+        "unit_price_formatted": formatted,
+    }
+
+
 def _order_items(order: Dict[str, Any], settings: Dict[str, Any]) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
     for item in order.get("items") or []:
         quantity = _to_float(item.get("quantity"))
         if quantity <= 0:
             continue
+        price_info = _order_item_unit_price_info(item)
         base_item = {
             "label": str(item.get("item_label") or "").strip(),
             "quantity": quantity,
             "ean": str(item.get("ean") or "").strip(),
             "import_code": str(item.get("import_code") or "").strip(),
             "warehouse_number": str(item.get("warehouse_number") or "").strip(),
+            "unit_price": price_info["unit_price"],
+            "unit_price_formatted": price_info["unit_price_formatted"],
         }
         items.extend(_expand_order_item_components(base_item, settings))
     return _merge_order_items(items)

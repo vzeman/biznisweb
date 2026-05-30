@@ -64,7 +64,15 @@ class RoyPickingListsPdfTests(unittest.TestCase):
                     "invoice_address": {"lines": ["B2B Partner s.r.o.", "Hlavna 12", "81101 Bratislava Slovensko"]},
                     "delivery_address": {"lines": ["B2B Partner s.r.o.", "Hlavna 12", "81101 Bratislava Slovensko"]},
                     "wholesale_pricing": {"is_wholesale": True, "max_discount_pct": 20.0},
-                    "items": [{"label": "Fotopasca Wachman Solar Pro", "quantity": 1, "import_code": "12474", "ean": "8586024430013"}],
+                    "items": [
+                        {
+                            "label": "Fotopasca Wachman Solar Pro",
+                            "quantity": 1,
+                            "import_code": "12474",
+                            "ean": "8586024430013",
+                            "unit_price_formatted": "39,90 EUR",
+                        }
+                    ],
                 }
             ]
         )
@@ -77,6 +85,9 @@ class RoyPickingListsPdfTests(unittest.TestCase):
         self.assertIn("VE\u013dKOOBCHOD / VO CENY", text)
         self.assertIn("OSOBN\u00dd ODBER - NEBALI\u0164", text)
         self.assertIn("VE\u013dKOOBCHODN\u00c1 OBJEDN\u00c1VKA", text)
+        self.assertIn("Cena/ks", text)
+        self.assertIn("39,90 EUR", text)
+        self.assertIn("8586024430013", text)
         self.assertIn("B2B Partner s.r.o.", text)
 
     def test_empty_pdf_is_still_downloadable(self) -> None:
