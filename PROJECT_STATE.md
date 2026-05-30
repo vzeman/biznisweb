@@ -3696,6 +3696,8 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Change:
   - ROY wholesale detection no longer requires `Company` customer classification; any order line discounted at least `10%` vs current retail final price triggers the wholesale flag
   - wholesale detection reason text now distinguishes company and non-company discounted orders
+- Correction:
+  - this discount-only trigger was too broad in production because normal discounted person orders also matched it; see the follow-up correction below
 - Local verification:
   - `python -m json.tool projects\roy\settings.json`
   - `python -m py_compile roy_operations_dashboard.py roy_picking_lists_pdf.py live_dashboard_server.py`
@@ -3703,4 +3705,25 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
   - `git diff --check`
 - Next exact step:
-  - commit/push branch, open PR, merge, rebuild ECR image, deploy ROY App Runner, then verify live preview PDF still returns a valid PDF and live orders expose wholesale flags for discounted lines
+  - superseded by the stricter company-signal correction below
+
+### 2026-05-30 (ROY wholesale trigger company-signal correction)
+- Branch: `codex/roy-wholesale-company-signal`
+- Finding:
+  - after deploying the discount-only trigger, the current live API marked `6/6` fulfillable orders as wholesale
+  - four of those orders were `Person` customers with ordinary discounts around `18.7%`; they should not be VO just because the product is discounted
+  - the intended safe trigger is `Company` customer signal plus at least one priced line discounted by `10%` or more vs current product final retail price
+  - order `2677002772` still qualifies under this stricter rule because BiznisWeb currently returns `Blackmarket s.r.o.` as `Company`
+- Change:
+  - restored ROY `wholesale_detection.require_company_customer=true`
+  - kept the `10%` discount threshold and clearer reason text
+  - added a regression test proving a discounted `Person` order is not flagged as wholesale when the company signal is required
+- Local verification:
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m py_compile roy_operations_dashboard.py roy_picking_lists_pdf.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - direct current BiznisWeb check with local code returned `fulfillable=6`, `wholesale=2`, wholesale order numbers `2677002789` and `2677002792`; the four `Person` customer orders with ordinary `18.7%` discounts were not wholesale
+  - `git diff --check`
+- Next exact step:
+  - commit/push branch, open PR, merge, rebuild ECR, deploy ROY App Runner, then verify current live wholesale count is no longer `6/6`
