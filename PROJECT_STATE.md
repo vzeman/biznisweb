@@ -3654,3 +3654,34 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - commit/push branch, open PR, merge to `main`, rebuild/deploy ROY App Runner dashboard, then verify live preview picking-list PDF returns a valid PDF
+
+### 2026-05-30 (ROY picking-list PDF row formatting deployed)
+- Code merged:
+  - PR `#143`: `Format ROY picking list product rows`, merge commit `00608a4`
+- ECR refresh:
+  - workflow run: `26674047515`
+  - image digest: `sha256:fe3650d29ed635d3bd0c556a6d2c19a5771eb163a58c91fc6b0984a42f14c860`
+- ROY live dashboard deploy:
+  - workflow run: `26674086236`
+  - deploy mode: `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.40.100`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+- App Runner hard-gate / public verification:
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - health path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=6:personal_pickups=0:inventory_alerts=20:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=130112`
+  - direct `/health` returned `200`
+  - direct `/production/roy` returned `200` and contains marker `roy-operations-dashboard`
+  - preview picking-list PDF `/api/operations/roy/picking-lists.pdf?refresh=1&preview=1` returned `200`, `130112` bytes, and starts with `%PDF-`
+  - extracted preview PDF text contains `Ks`, `Cena/ks`, `Import kód`, and `EAN`
+  - live API returned marker `roy-operations-dashboard`; current fulfillable order items had unit prices on `9/9` rows
+- Next exact step:
+  - visually review one newly downloaded picking-list PDF from the dashboard before using it operationally for all orders
