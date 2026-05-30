@@ -3704,3 +3704,32 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - commit/push branch, open PR, merge, rebuild ECR image, deploy ROY App Runner, then verify live preview PDF still returns a valid PDF and live orders expose wholesale flags for discounted lines
+
+### 2026-05-30 (ROY discount-only wholesale trigger deployed)
+- Code merged:
+  - PR `#145`: `Relax ROY wholesale discount trigger`, merge commit `4c3bcfb`
+- ECR refresh:
+  - workflow run: `26674505796`
+  - image digest: `sha256:f99da6f1df4d75acdf41c1ab795fb34bf0c3d75e06c22fed490c2ef6b7af1582`
+- ROY live dashboard deploy:
+  - workflow run: `26674553079`
+  - deploy mode: `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.2.110`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+- App Runner / public verification:
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=6:personal_pickups=0:inventory_alerts=20:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=134086`
+  - direct `/health` returned `200`
+  - direct `/production/roy` returned `200` and contains marker `roy-operations-dashboard`
+  - direct `/api/operations/roy/live?refresh=1` returned `200`, marker `roy-operations-dashboard`, and `6/6` current fulfillable orders had `wholesale_pricing.is_wholesale=true`
+  - preview picking-list PDF returned `200`, `134086` bytes, starts with `%PDF-`, and extracted first page contains `VEĽKOOBCHOD / VO CENY`, `VEĽKOOBCHODNÁ OBJEDNÁVKA`, and `VO ceny: áno, zľava do 49.1%`
+- Next exact step:
+  - watch the next operational picking-list download and confirm discounted VO orders are visually flagged before packing
