@@ -69,6 +69,7 @@ def make_order(
                 "import_code": "WA-HC800",
                 "warehouse_number": "W1",
                 "quantity": 2,
+                "price": {"raw_value": 13.7, "value": 13.7, "formatted": "13,70 EUR", "is_net_price": True},
             }
         ],
     }
@@ -116,6 +117,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(2, snapshot["summary"]["paid_online_orders"])
         self.assertEqual(1, snapshot["summary"]["cod_waiting_orders"])
         self.assertEqual(["R-1", "R-2", "R-5"], [row["order_num"] for row in snapshot["orders"]])
+        self.assertEqual("13,70 EUR", snapshot["orders"][0]["items"][0]["unit_price_formatted"])
         self.assertEqual(["R-5"], [row["order_num"] for row in snapshot["personal_pickups"]])
         cod_pickup = next(row for row in snapshot["orders"] if row["order_num"] == "R-2")
         self.assertFalse(cod_pickup["paid_personal_pickup"])
