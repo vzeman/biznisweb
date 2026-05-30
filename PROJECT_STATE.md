@@ -3685,3 +3685,22 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - live API returned marker `roy-operations-dashboard`; current fulfillable order items had unit prices on `9/9` rows
 - Next exact step:
   - visually review one newly downloaded picking-list PDF from the dashboard before using it operationally for all orders
+
+### 2026-05-30 (ROY wholesale trigger diagnosis)
+- Branch: `codex/roy-wholesale-discount-trigger`
+- Finding:
+  - direct BiznisWeb check for order `2677002772` now returns customer `Blackmarket s.r.o.` as `Company`
+  - current ROY wholesale logic evaluates order `2677002772` as wholesale: `2/2` priced lines discounted, max discount `49.1%`
+  - local PDF generated from the current code for order `2677002772` contains `VEĽKOOBCHOD / VO CENY`, `VEĽKOOBCHODNÁ OBJEDNÁVKA`, and `VO ceny: áno, zľava do 49.1%`
+  - root risk: ROY config still required BiznisWeb to classify the customer as `Company`; if the customer was not classified that way at print time, discount-only wholesale orders could miss the flag
+- Change:
+  - ROY wholesale detection no longer requires `Company` customer classification; any order line discounted at least `10%` vs current retail final price triggers the wholesale flag
+  - wholesale detection reason text now distinguishes company and non-company discounted orders
+- Local verification:
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m py_compile roy_operations_dashboard.py roy_picking_lists_pdf.py live_dashboard_server.py`
+  - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`
+  - `git diff --check`
+- Next exact step:
+  - commit/push branch, open PR, merge, rebuild ECR image, deploy ROY App Runner, then verify live preview PDF still returns a valid PDF and live orders expose wholesale flags for discounted lines

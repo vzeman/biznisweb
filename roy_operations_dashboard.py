@@ -35,7 +35,7 @@ DEFAULT_STOP_AFTER_EMPTY_FULFILLABLE_PAGES = 3
 DEFAULT_CACHE_TTL_SECONDS = 60
 DEFAULT_AUTO_REFRESH_SECONDS = 90
 DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT = 10.0
-DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY = True
+DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY = False
 
 
 ROY_OPERATIONS_ORDER_QUERY = gql(
@@ -974,7 +974,10 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
     is_wholesale = discounted_lines > 0 and (is_company or not require_company)
     reason = ""
     if is_wholesale:
-        reason = f"company customer + {discounted_lines}/{priced_lines} discounted line(s) vs current retail final price"
+        if is_company:
+            reason = f"company customer + {discounted_lines}/{priced_lines} discounted line(s) vs current retail final price"
+        else:
+            reason = f"{discounted_lines}/{priced_lines} discounted line(s) vs current retail final price"
     elif discounted_lines > 0:
         reason = f"{discounted_lines}/{priced_lines} discounted line(s), but customer is not Company"
     elif is_company:
