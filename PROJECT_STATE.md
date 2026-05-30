@@ -3727,3 +3727,33 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - commit/push branch, open PR, merge, rebuild ECR, deploy ROY App Runner, then verify current live wholesale count is no longer `6/6`
+
+### 2026-05-30 (ROY wholesale company-signal correction deployed)
+- Code merged:
+  - PR `#147`: `Restore ROY wholesale company signal`, merge commit `0fde4f3`
+- ECR refresh:
+  - workflow run: `26674841497`
+  - image digest: `sha256:6da688ffb7f96bde0ab412f5bf5f99a13afa19c8309237d64e2a412c7d3b3107`
+- ROY live dashboard deploy:
+  - workflow run: `26674889679`
+  - deploy mode: `skip_artifact_refresh=true`
+- Fargate hard-gate context from deploy run:
+  - instance-id: `N/A (scheduled ECS/Fargate task)`
+  - private IP: `172.31.34.58`
+  - service name: `roy-daily-report-email`
+  - marker path: `http://127.0.0.1:8000/marker.json`
+  - marker response: `{"marker": "LIVE_ARTIFACT_MARKER_OK", "project": "roy", "mode": "skip_artifact_refresh"}`
+- App Runner / public verification:
+  - instance-id: `N/A (AWS App Runner managed service)`
+  - private IP: `N/A (AWS App Runner managed service)`
+  - service name: `biznisweb-roy-operations-dashboard`
+  - service ARN: `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+  - production path: `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - App Runner smoke returned `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=6:personal_pickups=0:inventory_alerts=20:kpi_months=9:gross_loss_products=1:picking_pdf_bytes=130112`
+  - direct `/health` returned `200`
+  - direct `/production/roy` returned `200` and contains marker `roy-operations-dashboard`
+  - direct `/api/operations/roy/live?refresh=1` returned `200`, marker `roy-operations-dashboard`, `orders=6`, `wholesale_orders=2`
+  - live wholesale order numbers are `2677002789` and `2677002792`; four `Person` customer orders with ordinary `18.7%` discounts are not wholesale
+  - preview picking-list PDF returned `200`, `130112` bytes, starts with `%PDF-`, and the first wholesale page contains `VEĽKOOBCHOD / VO CENY`, `VEĽKOOBCHODNÁ OBJEDNÁVKA`, and `VO ceny: áno, zľava do 49.1%`
+- Next exact step:
+  - if order `2677002772` was printed from an older already-downloaded PDF, use a newly generated PDF for corrected VO banners; future discounted person orders should no longer be flagged as wholesale
