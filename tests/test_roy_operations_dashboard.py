@@ -85,7 +85,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(90, operations["auto_refresh_seconds"])
         self.assertEqual(4, operations["shipped_status_id"])
         self.assertEqual(10, operations["wholesale_detection"]["discount_threshold_pct"])
-        self.assertFalse(operations["wholesale_detection"]["require_company_customer"])
+        self.assertTrue(operations["wholesale_detection"]["require_company_customer"])
         self.assertIn("Čaká na vybavenie", operations["cod_statuses"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["wachman"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["roy"])
@@ -180,9 +180,9 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertTrue(row["wholesale_pricing"]["is_wholesale"])
         self.assertEqual(20.0, row["wholesale_pricing"]["max_discount_pct"])
 
-    def test_discounted_order_is_wholesale_even_without_company_customer(self) -> None:
+    def test_discounted_person_order_is_not_wholesale_when_company_signal_is_required(self) -> None:
         settings = make_settings()
-        settings["wholesale_detection"]["require_company_customer"] = False
+        settings["wholesale_detection"]["require_company_customer"] = True
         paid_payment = price_element("payment", "Okamžitá platba online", "18")
         packeta_shipping = price_element("shipping", "Packeta - výdajné miesto", "9")
         order = make_order("R-DISCOUNT", settings["paid_statuses"][0], paid_payment, packeta_shipping)
@@ -209,10 +209,10 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         snapshot = build_roy_orders_snapshot(project="roy", orders=[order], settings=settings)
         wholesale = snapshot["orders"][0]["wholesale_pricing"]
 
-        self.assertTrue(wholesale["is_wholesale"])
+        self.assertFalse(wholesale["is_wholesale"])
         self.assertFalse(wholesale["customer_is_company"])
         self.assertEqual(20.0, wholesale["max_discount_pct"])
-        self.assertEqual("1/1 discounted line(s) vs current retail final price", wholesale["reason"])
+        self.assertEqual("1/1 discounted line(s), but customer is not Company", wholesale["reason"])
 
     def test_picking_pdf_orders_are_marked_printed_once(self) -> None:
         orders = [
