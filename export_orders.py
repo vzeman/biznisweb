@@ -117,7 +117,7 @@ MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
 MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15% product margin
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 EXCLUDED_ORDER_STATUSES: List[str] = []  # Legacy status-only exclude list retained for compatibility
-ORDER_CACHE_SCHEMA_VERSION = 2
+ORDER_CACHE_SCHEMA_VERSION = 3
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
 PREFER_MANUAL_ADS_TOTALS = False
@@ -224,6 +224,28 @@ DEFAULT_REALIZED_REVENUE_COD_PAYMENT_PATTERNS = [
 DEFAULT_REALIZED_REVENUE_COD_PAYMENT_IDS = [
     '7',
     '10',
+]
+DEFAULT_REALIZED_REVENUE_PREPAID_FULFILLED_STATUSES = [
+    'Odoslana',
+]
+DEFAULT_REALIZED_REVENUE_PREPAID_PAYMENT_PATTERNS = [
+    'bankovym prevodom',
+    'bankovni prevod',
+    'okamzita platba online',
+    'platba online',
+    'kartou',
+    'card',
+    'gopay',
+    'besteron',
+    'stripe',
+    '24 pay',
+]
+DEFAULT_REALIZED_REVENUE_PREPAID_PAYMENT_IDS = [
+    '6',
+    '11',
+    '17',
+    '18',
+    '20',
 ]
 
 
@@ -2243,6 +2265,18 @@ class BizniWebExporter:
             raw.get("cod_payment_ids"),
             DEFAULT_REALIZED_REVENUE_COD_PAYMENT_IDS,
         )
+        prepaid_fulfilled_statuses = self._as_config_list(
+            raw.get("prepaid_fulfilled_statuses"),
+            DEFAULT_REALIZED_REVENUE_PREPAID_FULFILLED_STATUSES,
+        )
+        prepaid_payment_patterns = self._as_config_list(
+            raw.get("prepaid_payment_patterns"),
+            DEFAULT_REALIZED_REVENUE_PREPAID_PAYMENT_PATTERNS,
+        )
+        prepaid_payment_ids = self._as_config_list(
+            raw.get("prepaid_payment_ids"),
+            DEFAULT_REALIZED_REVENUE_PREPAID_PAYMENT_IDS,
+        )
         return {
             "paid_statuses": paid_statuses,
             "paid_statuses_normalized": {self._normalize_match_text(status) for status in paid_statuses},
@@ -2255,6 +2289,19 @@ class BizniWebExporter:
                 if self._normalize_match_text(pattern)
             },
             "cod_payment_ids": {str(value).strip() for value in cod_payment_ids if str(value).strip()},
+            "prepaid_fulfilled_statuses": prepaid_fulfilled_statuses,
+            "prepaid_fulfilled_statuses_normalized": {
+                self._normalize_match_text(status)
+                for status in prepaid_fulfilled_statuses
+                if self._normalize_match_text(status)
+            },
+            "prepaid_payment_patterns": prepaid_payment_patterns,
+            "prepaid_payment_patterns_normalized": {
+                self._normalize_match_text(pattern)
+                for pattern in prepaid_payment_patterns
+                if self._normalize_match_text(pattern)
+            },
+            "prepaid_payment_ids": {str(value).strip() for value in prepaid_payment_ids if str(value).strip()},
         }
 
     def _is_cod_payment(self, order: Dict[str, Any]) -> bool:
@@ -2268,12 +2315,29 @@ class BizniWebExporter:
             for pattern in self.realized_revenue_settings["cod_payment_patterns_normalized"]
         )
 
+    def _is_prepaid_payment(self, order: Dict[str, Any]) -> bool:
+        payment = self._price_element_info(order, "payment")
+        reference_id = str(payment.get("reference_id") or "").strip()
+        if reference_id and reference_id in self.realized_revenue_settings["prepaid_payment_ids"]:
+            return True
+        payment_title = self._normalize_match_text(payment.get("title"))
+        return any(
+            pattern and pattern in payment_title
+            for pattern in self.realized_revenue_settings["prepaid_payment_patterns_normalized"]
+        )
+
     def _realized_revenue_decision(self, order: Dict[str, Any]) -> Tuple[bool, str]:
         status_norm = self._status_norm(order)
         settings = self.realized_revenue_settings
 
         if status_norm in settings["paid_statuses_normalized"]:
             return True, "paid_status"
+
+        if status_norm in settings["prepaid_fulfilled_statuses_normalized"]:
+            if not self._has_loaded_price_elements(order):
+                return False, "fulfilled_status_missing_payment_metadata"
+            if self._is_prepaid_payment(order):
+                return True, "prepaid_fulfilled_status"
 
         if status_norm in settings["cod_statuses_normalized"]:
             if not self._has_loaded_price_elements(order):
@@ -2290,7 +2354,10 @@ class BizniWebExporter:
         if self._has_loaded_price_elements(order):
             return False
         status_norm = self._status_norm(order)
-        return status_norm in self.realized_revenue_settings["cod_statuses_normalized"]
+        return (
+            status_norm in self.realized_revenue_settings["cod_statuses_normalized"]
+            or status_norm in self.realized_revenue_settings["prepaid_fulfilled_statuses_normalized"]
+        )
 
     def _fetch_order_payment_metadata(self, order: Dict[str, Any]) -> bool:
         order_num = str((order or {}).get("order_num") or "").strip()

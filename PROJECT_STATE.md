@@ -61,6 +61,12 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY/VEVO realized revenue filtering was corrected on `2026-06-02` so shipped prepaid orders are not lost after the current BizniWeb status changes from `Platba online - zaplatené` to `Odoslaná`:
+  - COD still counts only when payment is COD and status is `Čaká na vybavenie` or `Odoslaná`
+  - prepaid/card/bank-transfer orders still count immediately in status `Platba online - zaplatené`
+  - prepaid/card/bank-transfer orders now also count when current status is fulfilled (`Odoslaná`), because BizniWeb exposes only current status and older paid orders otherwise disappeared from rolling windows
+  - order cache schema was bumped to `3` because cached order files contain already-filtered order lists and must be revalidated after this filter change
+  - local no-cache ROY recompute for `2026-05-03..2026-06-01` verified `385` orders and `25 712.62 EUR` net revenue versus the stale production KPI `181` orders / `12 879.48 EUR`
 - Env governance added for multi-PC workflow
 - Pre-commit hook install script exists for Bash and PowerShell
 - CI validates env contract and blocks tracked secret env files
