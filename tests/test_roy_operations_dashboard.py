@@ -1,7 +1,10 @@
 import json
+import shutil
 import unittest
 from pathlib import Path
 
+from dashboard_modern import DASHBOARD_PAYLOAD_SCRIPT_ID
+from export_orders import BizniWebExporter
 from live_dashboard_server import build_roy_operations_dashboard_html
 from roy_operations_dashboard import (
     _select_current_stock_for_target,
@@ -537,6 +540,127 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(1, inventory["summary"]["inbound_order_count"])
         self.assertEqual(20, inventory["inbound_order_rows"][0]["ordered_units"])
         self.assertEqual("Inbound ordered", inventory["inventory_rows"][0]["reorder_action_label"])
+
+    def test_inventory_snapshot_prefers_operations_inventory_payload(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {
+                        "alert_delivery_count": 0,
+                        "inventory_products_total": 0,
+                    },
+                    "alert_rows": [],
+                    "inventory_rows": [],
+                },
+                "roy_operations_inventory": {
+                    "summary": {
+                        "alert_delivery_count": 1,
+                        "inventory_products_total": 1,
+                        "operations_inventory_source_period": "monthly",
+                    },
+                    "alert_rows": [
+                        {
+                            "sku": "F_206",
+                            "product": "Micro SD KARTA 32GB s adapterom",
+                            "available_quantity": 21,
+                            "available_quantity_raw": 21,
+                            "alert_30d_units": 26,
+                            "lead_time_working_days": 3,
+                            "suggested_reorder_units": 10,
+                            "stock_risk_level": "Low",
+                            "reorder_action_label": "30d alert",
+                            "alert_30d_revenue": 260,
+                            "alert_30d_profit_estimate": 80,
+                        }
+                    ],
+                    "inventory_rows": [
+                        {
+                            "sku": "F_206",
+                            "product": "Micro SD KARTA 32GB s adapterom",
+                            "available_quantity": 21,
+                            "available_quantity_raw": 21,
+                            "alert_30d_units": 26,
+                            "lead_time_working_days": 3,
+                            "suggested_reorder_units": 10,
+                            "stock_risk_level": "Low",
+                            "reorder_action_label": "30d alert",
+                        }
+                    ],
+                },
+            }
+        }
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            project_settings={
+                "inventory_model": {
+                    "critical_days_of_cover": 14,
+                    "warning_days_of_cover": 30,
+                    "watch_days_of_cover": 45,
+                    "reorder_cover_days": 30,
+                }
+            },
+        )
+
+        self.assertFalse(state_changed)
+        self.assertEqual(["F_206"], [row["sku"] for row in inventory["inventory_rows"]])
+        self.assertEqual(["F_206"], [row["sku"] for row in inventory["alert_rows"]])
+        self.assertEqual("monthly", inventory["summary"]["operations_inventory_source_period"])
+        self.assertEqual(1, inventory["summary"]["alert_delivery_count"])
+
+    def test_export_sidecar_embeds_monthly_operations_inventory_payload(self) -> None:
+        exporter = BizniWebExporter(
+            "https://example.invalid/graphql",
+            "test-token",
+            project_name="roy",
+            artifact_subdir="_unit_operations_inventory",
+            enable_period_bundle=False,
+        )
+        try:
+            monthly_inventory = {
+                "summary": {
+                    "alert_delivery_count": 1,
+                    "inventory_products_total": 1,
+                },
+                "alert_rows": [{"sku": "12468", "stock_risk_level": "Out of stock"}],
+                "inventory_rows": [{"sku": "12468", "available_quantity": 0}],
+            }
+            monthly_report_path = exporter.output_path("monthly_report.html")
+            monthly_report_path.write_text(
+                (
+                    f'<script id="{DASHBOARD_PAYLOAD_SCRIPT_ID}" type="application/json">'
+                    + json.dumps({"roy_product_demand": monthly_inventory})
+                    + "</script>"
+                ),
+                encoding="utf-8",
+            )
+            dashboard_payload = {
+                "roy_product_demand": {
+                    "summary": {
+                        "alert_delivery_count": 0,
+                        "inventory_products_total": 0,
+                    },
+                    "alert_rows": [],
+                    "inventory_rows": [],
+                }
+            }
+
+            exporter._enrich_roy_operations_inventory_payload(
+                dashboard_payload,
+                {
+                    "current_key": "full",
+                    "_embedded_specs": [
+                        {"key": "monthly", "report_path": str(monthly_report_path)},
+                    ],
+                },
+            )
+
+            operations_inventory = dashboard_payload["roy_operations_inventory"]
+            self.assertEqual(["12468"], [row["sku"] for row in operations_inventory["inventory_rows"]])
+            self.assertEqual("monthly", operations_inventory["summary"]["operations_inventory_source_period"])
+            self.assertEqual(1, operations_inventory["summary"]["alert_delivery_count"])
+        finally:
+            shutil.rmtree(exporter.data_dir, ignore_errors=True)
 
     def test_inbound_order_marker_auto_clears_after_stock_increase(self) -> None:
         payload = {

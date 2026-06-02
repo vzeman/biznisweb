@@ -492,12 +492,15 @@ jobs:
           dashboard = payload.get("dashboard") or {}
           kpis = dashboard.get("kpis") or {}
           series = dashboard.get("series") or {}
-          inventory = dashboard.get("roy_product_demand") or {}
+          commercial = dashboard.get("roy_product_demand") or {}
+          inventory = dashboard.get("roy_operations_inventory") or commercial
           assert kpis.get("windows"), "KPI windows missing in generated payload"
           assert series.get("dates"), "KPI source series dates missing in generated payload"
-          assert inventory.get("summary"), "Inventory summary missing in generated payload"
+          if project == "roy":
+              assert inventory.get("summary"), "Operations inventory summary missing in generated payload"
+              assert inventory.get("inventory_rows"), "Operations inventory rows missing in generated payload"
           invalid_loss_rows = []
-          for row in inventory.get("loss_product_rows") or []:
+          for row in commercial.get("loss_product_rows") or []:
               if not isinstance(row, dict):
                   invalid_loss_rows.append(row)
                   continue
@@ -520,6 +523,7 @@ jobs:
               "payload_path": str(payload_path),
               "kpi_series_days": len(series.get("dates") or []),
               "inventory_alerts": (inventory.get("summary") or {}).get("alert_delivery_count"),
+              "inventory_rows": len(inventory.get("inventory_rows") or []),
           }
           (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
           PY
@@ -677,12 +681,14 @@ jobs:
           dashboard = payload.get("dashboard") or {}
           kpis = dashboard.get("kpis") or {}
           series = dashboard.get("series") or {}
-          inventory = dashboard.get("roy_product_demand") or {}
+          commercial = dashboard.get("roy_product_demand") or {}
+          inventory = dashboard.get("roy_operations_inventory") or commercial
           assert kpis.get("windows"), "S3 KPI windows missing"
           assert series.get("dates"), "S3 KPI source series dates missing"
-          assert inventory.get("summary"), "S3 inventory summary missing"
+          assert inventory.get("summary"), "S3 operations inventory summary missing"
+          assert inventory.get("inventory_rows"), "S3 operations inventory rows missing"
           invalid_loss_rows = []
-          for row in inventory.get("loss_product_rows") or []:
+          for row in commercial.get("loss_product_rows") or []:
               if not isinstance(row, dict):
                   invalid_loss_rows.append(row)
                   continue
@@ -700,7 +706,8 @@ jobs:
           print(
               "ROY_LIVE_ARTIFACTS_OK:"
               f"kpi_series_days={len(series.get('dates') or [])}:"
-              f"inventory_alerts={(inventory.get('summary') or {}).get('alert_delivery_count')}"
+              f"inventory_alerts={(inventory.get('summary') or {}).get('alert_delivery_count')}:"
+              f"inventory_rows={len(inventory.get('inventory_rows') or [])}"
           )
           PY
           fi
@@ -1014,6 +1021,7 @@ jobs:
           assert api["executive_kpis"].get("windows"), "Executive KPI windows missing"
           assert len(api["executive_kpis"].get("months") or []) > 0, "Calendar KPI months missing"
           assert api["inventory"].get("summary"), "Inventory summary missing"
+          assert api["inventory"].get("inventory_rows"), "Inventory rows missing"
           assert "/api/operations/roy/picking-lists.pdf" in html, "Picking-list PDF link missing"
           assert pdf.startswith(b"%PDF-"), "Picking-list download is not a PDF"
           assert len(pdf) > 1000, "Picking-list PDF is unexpectedly small"
@@ -1042,6 +1050,7 @@ jobs:
               f"fulfillable_orders={api['orders']['summary'].get('fulfillable_orders')}:"
               f"personal_pickups={api['orders']['summary'].get('personal_pickups')}:"
               f"inventory_alerts={api['inventory']['summary'].get('alert_delivery_count')}:"
+              f"inventory_rows={len(api['inventory'].get('inventory_rows') or [])}:"
               f"kpi_months={len(api['executive_kpis'].get('months') or [])}:"
               f"gross_loss_products={len((api.get('performance') or {}).get('loss_product_rows') or [])}:"
               f"picking_pdf_bytes={os.path.getsize('/tmp/roy-picking-lists.pdf')}"

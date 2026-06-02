@@ -61,6 +61,14 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY live operations dashboard inventory regression is being fixed on branch `codex/restore-roy-inventory-alerts` on `2026-06-02`:
+  - root cause: `dashboard_payload_latest.json` is the full/all-time sidecar, and the all-time `roy_product_demand` payload can have `inventory_rows=0` / `alert_rows=0`; the live operations dashboard was using that payload for the stock tables
+  - code now embeds a separate `dashboard.roy_operations_inventory` block into the main sidecar from the preferred rolling period report (`monthly`, then `weekly`, then `daily`) when that period has inventory rows
+  - ROY operations inventory rendering now prefers `roy_operations_inventory` and falls back to `roy_product_demand`
+  - workflow smoke now fails if ROY production operations inventory has no `inventory_rows`
+  - verified locally: `python -m unittest tests.test_reporting_calculation_fixes tests.test_unpaid_order_cancellation tests.test_roy_inventory_model tests.test_roy_operations_dashboard tests.test_dashboard_modern`; simulated live inventory payload returned `inventory_rows=160` and `alert_rows=9`
+  - Next exact step: push the branch, open/merge PR, rebuild ECR/App Runner, refresh ROY artifacts, and verify host marker plus live UI/API smoke
+
 - ROY/VEVO realized revenue filtering was corrected on `2026-06-02` so shipped prepaid orders are not lost after the current BizniWeb status changes from `Platba online - zaplatené` to `Odoslaná`:
   - COD still counts only when payment is COD and status is `Čaká na vybavenie` or `Odoslaná`
   - prepaid/card/bank-transfer orders still count immediately in status `Platba online - zaplatené`

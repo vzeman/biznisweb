@@ -1477,6 +1477,14 @@ def build_commercial_snapshot(report_payload: Dict[str, Any], state: Optional[Di
     }
 
 
+def _select_roy_operations_inventory_payload(dashboard: Dict[str, Any]) -> Dict[str, Any]:
+    operations_inventory = dashboard.get("roy_operations_inventory")
+    if isinstance(operations_inventory, dict):
+        return operations_inventory
+    roy_inventory = dashboard.get("roy_product_demand")
+    return roy_inventory if isinstance(roy_inventory, dict) else {}
+
+
 def _inventory_row_collections(inventory: Dict[str, Any]) -> Iterable[Tuple[str, List[Dict[str, Any]]]]:
     for key in (
         "alert_rows",
@@ -2148,7 +2156,7 @@ def build_inventory_snapshot(
     live_stock_diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], bool]:
     dashboard = report_payload.get("dashboard") if isinstance(report_payload.get("dashboard"), dict) else {}
-    roy_inventory = dashboard.get("roy_product_demand") if isinstance(dashboard.get("roy_product_demand"), dict) else {}
+    roy_inventory = _select_roy_operations_inventory_payload(dashboard)
     summary = roy_inventory.get("summary") if isinstance(roy_inventory.get("summary"), dict) else {}
     inventory = {
         "summary": summary or {},
