@@ -61,12 +61,18 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY personal pickup ready checkbox is implemented locally on `2026-06-02`:
+- ROY personal pickup ready checkbox was implemented and deployed on `2026-06-02`:
   - change: ROY live dashboard personal pickup cards now have a separate `Pripravené k odberu` checkbox before the existing customer pickup/`Odoslaná` action
   - backend: new `POST /api/operations/roy/pickup/<order_num>/ready` action validates the order as a paid ROY personal pickup, then changes BiznisWeb status to `Pripravené k odberu` (`status_id=23`)
   - ship action: the existing `POST /api/operations/roy/pickup/<order_num>/ship` remains, but is now enabled only when the pickup is already in `Pripravené k odberu`; it changes the status to `Odoslaná` (`status_id=4`)
   - verified locally: `python -m json.tool projects/roy/settings.json`; `python -m unittest tests.test_roy_operations_dashboard tests.test_reporting_calculation_fixes tests.test_unpaid_order_cancellation`
-  - Next exact step: open/merge PR, rebuild ECR image, deploy ROY App Runner with `skip_artifact_refresh=true`, then verify the live dashboard smoke still returns ROY inventory and pickup data
+  - merged PR `#161` into `main` (`ea4c4fd`); ECR `latest` refreshed by run `26818947940` with digest `sha256:ee3c11c129eb3febf8fc4fc58c990a3ae73e6e3d7bf35d5e6f36c5e1270af709`
+  - ROY App Runner deploy run `26819093966` succeeded with `skip_artifact_refresh=true`:
+    - Fargate hard-gate: IP `172.31.12.146`, service `roy-daily-report-email`, task def `roy-reporting-daily:30`, task `dc1a5e3042854360a97e49ab08bffc8b`, marker `LIVE_ARTIFACT_MARKER_OK`
+    - App Runner hard-gate: service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, image digest `sha256:ee3c11c129eb3febf8fc4fc58c990a3ae73e6e3d7bf35d5e6f36c5e1270af709`
+    - App Runner smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=3:personal_pickups=1:inventory_alerts=19:inventory_rows=160:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=104818`
+  - local post-deploy curl with SSM password was not possible from this Windows shell because local AWS credentials were unavailable; GitHub deploy smoke verified the production host with the configured credentials
+  - Next exact step: use the live dashboard to mark a real paid personal pickup as `Pripravené k odberu`, then confirm BiznisWeb shows status `Pripravené k odberu` and the dashboard keeps the order available for the final `Odoslaná` pickup action
 
 - ROY App Runner Basic Auth username was restored to the correct user-facing login `roy21` on `2026-06-02`:
   - symptom: browser Basic Auth prompt accepted/stored a wrong username while `/api/operations/roy/live` returned a plain auth challenge/error; the frontend then showed `Unexpected token 'A' ... is not valid JSON`
