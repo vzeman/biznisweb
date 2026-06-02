@@ -268,7 +268,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
             write_order_cache(exporter, old_date, today - timedelta(days=90))
             self.assertFalse(exporter.should_use_cache(old_date, today=today))
 
-    def test_realized_revenue_filter_counts_only_paid_or_cod_orders(self) -> None:
+    def test_realized_revenue_filter_counts_paid_cod_and_shipped_prepaid_orders(self) -> None:
         exporter = make_exporter()
         orders = [
             reporting_order("COD-WAIT", "Čaká na vybavenie", "Dobierkou", "7"),
@@ -284,8 +284,17 @@ class ReportingCalculationFixTests(unittest.TestCase):
         filtered = exporter._filter_by_status(orders, track_excluded=False)
 
         self.assertEqual(
-            ["COD-WAIT", "COD-SHIPPED", "PAID-CARD", "PAID-BANK"],
+            ["COD-WAIT", "COD-SHIPPED", "PAID-CARD", "PAID-BANK", "BANK-SHIPPED"],
             [order["order_num"] for order in filtered],
+        )
+
+    def test_shipped_online_card_counts_as_prepaid_fulfilled_revenue(self) -> None:
+        exporter = make_exporter()
+        order = reporting_order("CARD-SHIPPED", "Odoslana", "Okamzita platba online", "18")
+
+        self.assertEqual(
+            (True, "prepaid_fulfilled_status"),
+            exporter._realized_revenue_decision(order),
         )
 
     def test_cod_status_without_payment_metadata_is_not_counted(self) -> None:
@@ -301,7 +310,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         }
 
         self.assertEqual(
-            (False, "cod_status_missing_payment_metadata"),
+            (False, "fulfilled_status_missing_payment_metadata"),
             exporter._realized_revenue_decision(missing_metadata),
         )
         self.assertEqual(

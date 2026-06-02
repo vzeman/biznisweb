@@ -71,6 +71,28 @@
     "cod_payment_ids": [
       "7",
       "10"
+    ],
+    "prepaid_fulfilled_statuses": [
+      "Odoslana"
+    ],
+    "prepaid_payment_patterns": [
+      "bankovym prevodom",
+      "bankovni prevod",
+      "okamzita platba online",
+      "platba online",
+      "kartou",
+      "card",
+      "gopay",
+      "besteron",
+      "stripe",
+      "24 pay"
+    ],
+    "prepaid_payment_ids": [
+      "6",
+      "11",
+      "17",
+      "18",
+      "20"
     ]
   },
   "excluded_order_statuses": [
