@@ -951,6 +951,113 @@ class BizniWebExporter:
             embedded_reports[key] = base64.b64encode(report_html.encode("utf-8")).decode("ascii")
         return embedded_reports
 
+    @staticmethod
+    def _dashboard_inventory_has_rows(inventory_payload: Any) -> bool:
+        if not isinstance(inventory_payload, dict):
+            return False
+        for key in ("inventory_rows", "stock_risk_rows", "alert_rows", "restock_priority_rows"):
+            rows = inventory_payload.get(key)
+            if isinstance(rows, list) and rows:
+                return True
+        summary = inventory_payload.get("summary") if isinstance(inventory_payload.get("summary"), dict) else {}
+        for key in ("inventory_products_total", "inventory_products_with_stock", "stock_risk_45d_count"):
+            try:
+                if float(summary.get(key) or 0) > 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
+
+    @staticmethod
+    def _safe_spec_date(value: Any) -> Optional[str]:
+        if isinstance(value, (datetime, pd.Timestamp)):
+            return value.strftime("%Y-%m-%d")
+        text = str(value or "").strip()
+        return text or None
+
+    def _enrich_roy_operations_inventory_payload(
+        self,
+        dashboard_payload: Dict[str, Any],
+        period_switcher: Optional[Dict[str, Any]],
+    ) -> None:
+        if self.project_name != "roy" or not isinstance(dashboard_payload, dict):
+            return
+
+        candidates: List[Dict[str, Any]] = []
+        base_inventory = dashboard_payload.get("roy_product_demand")
+        if isinstance(base_inventory, dict):
+            candidates.append(
+                {
+                    "key": str((period_switcher or {}).get("current_key") or "full"),
+                    "label": "current",
+                    "payload": base_inventory,
+                    "date_from": None,
+                    "date_to": None,
+                    "path": None,
+                }
+            )
+
+        switcher = period_switcher or {}
+        embedded_specs = switcher.get("_embedded_specs") if isinstance(switcher.get("_embedded_specs"), list) else []
+        for spec in embedded_specs:
+            key = str(spec.get("key") or "").strip().lower()
+            report_path_raw = spec.get("report_path")
+            if not key or not report_path_raw:
+                continue
+            report_path = Path(str(report_path_raw))
+            if not report_path.exists():
+                continue
+            try:
+                embedded_payload = extract_embedded_dashboard_payload(report_path.read_text(encoding="utf-8-sig"))
+            except Exception as exc:
+                logger.warning("Could not read embedded %s payload for ROY operations inventory: %s", key, exc)
+                continue
+            inventory_payload = embedded_payload.get("roy_product_demand")
+            if not isinstance(inventory_payload, dict):
+                continue
+            candidates.append(
+                {
+                    "key": key,
+                    "label": key,
+                    "payload": inventory_payload,
+                    "date_from": self._safe_spec_date(spec.get("date_from")),
+                    "date_to": self._safe_spec_date(spec.get("date_to")),
+                    "path": str(report_path),
+                }
+            )
+
+        selected = None
+        preferred_keys = ("monthly", "weekly", "daily")
+        for key in preferred_keys:
+            selected = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if candidate["key"] == key and self._dashboard_inventory_has_rows(candidate["payload"])
+                ),
+                None,
+            )
+            if selected is not None:
+                break
+        if selected is None:
+            selected = next(
+                (candidate for candidate in candidates if self._dashboard_inventory_has_rows(candidate["payload"])),
+                candidates[0] if candidates else None,
+            )
+        if selected is None:
+            return
+
+        operations_inventory = copy.deepcopy(selected["payload"])
+        summary = operations_inventory.setdefault("summary", {})
+        if isinstance(summary, dict):
+            summary["operations_inventory_source_period"] = selected["key"]
+            summary["operations_inventory_source_path"] = selected["path"]
+            if selected["date_from"]:
+                summary["operations_inventory_date_from"] = selected["date_from"]
+            if selected["date_to"]:
+                summary["operations_inventory_date_to"] = selected["date_to"]
+        dashboard_payload["roy_operations_inventory"] = operations_inventory
+
     def _build_period_switcher_bundle(
         self,
         orders: List[Dict[str, Any]],
@@ -1222,6 +1329,7 @@ class BizniWebExporter:
         report_title: str,
     ) -> Tuple[Path, Path]:
         dashboard_payload = extract_embedded_dashboard_payload(html_content)
+        self._enrich_roy_operations_inventory_payload(dashboard_payload, period_switcher)
         snapshot = {
             "project": self.project_name,
             "report_title": report_title,
