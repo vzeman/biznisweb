@@ -67,6 +67,12 @@ Bootstrap entrypoints:
   - prepaid/card/bank-transfer orders now also count when current status is fulfilled (`Odoslaná`), because BizniWeb exposes only current status and older paid orders otherwise disappeared from rolling windows
   - order cache schema was bumped to `3` because cached order files contain already-filtered order lists and must be revalidated after this filter change
   - local no-cache ROY recompute for `2026-05-03..2026-06-01` verified `385` orders and `25 712.62 EUR` net revenue versus the stale production KPI `181` orders / `12 879.48 EUR`
+  - merged PR `#154` into `main` (`42bec2a`), ECR `latest` refreshed by run `26804665958` with digest `sha256:c2dd3f89c4fef771d605229d38c71fab9155c21a8f4aa0848a53e1964787f6d0`
+  - ROY production artifact refresh/App Runner deploy run `26804769280` succeeded:
+    - Fargate hard-gate: IP `172.31.29.39`, service `roy-daily-report-email`, task def `roy-reporting-daily:27`, task `f080a5713d5b47949656ab956c97817c`, S3 latest `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`, marker `LIVE_ARTIFACT_MARKER_OK`
+    - S3 artifact smoke: `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=251:inventory_alerts=0.0`
+    - App Runner hard-gate: service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, image digest `sha256:c2dd3f89c4fef771d605229d38c71fab9155c21a8f4aa0848a53e1964787f6d0`
+    - App Runner smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=3:personal_pickups=1:inventory_alerts=0:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=111243`
 - Env governance added for multi-PC workflow
 - Pre-commit hook install script exists for Bash and PowerShell
 - CI validates env contract and blocks tracked secret env files
