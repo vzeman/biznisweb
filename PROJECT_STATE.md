@@ -61,6 +61,13 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY App Runner Basic Auth username was restored on `2026-06-02` after the inventory deploy accidentally changed the runtime `LIVE_DASHBOARD_AUTH_USER` from the user-facing `roy2` login to `roy`:
+  - symptom: browser Basic Auth prompt accepted/stored `roy2`, but `/api/operations/roy/live` returned a plain auth challenge/error; the frontend then showed `Unexpected token 'A' ... is not valid JSON`
+  - fix: re-ran `Deploy Live Dashboard App Runner` with `auth_user=roy2` and `skip_artifact_refresh=true`, so report/S3 data were not regenerated
+  - App Runner hard-gate run `26816577768`: service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, image digest `sha256:7ebcb7bab80a22725c4ee46221efe38e68eecd24314936eda0cccbce91afc802`
+  - marker/smoke verified: `LIVE_ARTIFACT_MARKER_OK` in skip-refresh mode and `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=0:personal_pickups=0:inventory_alerts=19:inventory_rows=160:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=80171`
+  - Next exact step: keep future ROY App Runner deploys on `auth_user=roy2`; do not use `roy` unless the browser-facing username is intentionally changed
+
 - ROY live operations dashboard inventory regression was fixed and deployed on `2026-06-02`:
   - root cause: `dashboard_payload_latest.json` is the full/all-time sidecar, and the all-time `roy_product_demand` payload can have `inventory_rows=0` / `alert_rows=0`; the live operations dashboard was using that payload for the stock tables
   - code now embeds a separate `dashboard.roy_operations_inventory` block into the main sidecar from the preferred rolling period report (`monthly`, then `weekly`, then `daily`) when that period has inventory rows
