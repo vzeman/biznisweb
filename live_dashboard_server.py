@@ -22,6 +22,7 @@ from roy_operations_dashboard import (
     get_cached_roy_operations_snapshot,
     load_roy_operations_state,
     mark_picking_orders_printed,
+    mark_personal_pickup_ready,
     mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
     save_roy_operations_state,
@@ -999,7 +1000,9 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     .pickup { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fff; }
     .pickup-top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
     .pickup-title { font-weight:850; font-size:16px; }
+    .pickup-actions { display:grid; gap:5px; margin-top:9px; }
     .checkline { display:flex; gap:8px; align-items:center; margin-top:9px; font-weight:800; }
+    .pickup-actions .checkline { margin-top:0; }
     .checkline input { width:19px; height:19px; }
     .stock-action { display:grid; grid-template-columns:82px 138px auto; gap:6px; align-items:center; min-width:290px; }
     .stock-action input { min-height:34px; border:1px solid var(--line); border-radius:6px; padding:0 8px; font-weight:700; width:100%; }
@@ -1480,9 +1483,11 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     function renderAlerts(data) {
       const orders = (data.orders || {}).summary || {};
       const inv = (data.inventory || {}).summary || {};
+      const readyPickupActions = fmtInt(orders.pickup_ready_actions_available);
+      const shipPickupActions = fmtInt(orders.pickup_ship_actions_available);
       el('alertGrid').innerHTML = [
         metric('Na vybavenie', fmtInt(orders.fulfillable_orders), `${fmtInt(orders.paid_online_orders)} online + ${fmtInt(orders.cod_waiting_orders)} dobierka`),
-        metric('Osobné odbery', fmtInt(orders.personal_pickups), `${fmtInt(orders.pickup_actions_available)} akcií dostupných`),
+        metric('Osobné odbery', fmtInt(orders.personal_pickups), `${readyPickupActions} pripraviť + ${shipPickupActions} odovzdať`),
         metric('Kritický sklad', fmtInt(inv.stock_risk_critical_count), `${fmtInt(inv.stock_risk_30d_count)} položiek v 30d riziku`),
         metric('Objednať teraz', fmtInt(inv.alert_reorder_now_count), `${fmtInt(inv.alert_prepare_po_count)} pripraviť PO`),
         metric('Objednané na ceste', fmtQty(inv.inbound_ordered_units), `${fmtInt(inv.inbound_order_count)} položiek · ETA ${text(inv.inbound_next_arrival_date)}`),
@@ -1525,8 +1530,12 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
           </div>
           <div class="muted" style="margin-top:6px;">${safe((order.payment || {}).title)}</div>
           <div style="margin-top:8px;">${orderItemsHtml(order)}</div>
-          <label class="checkline"><input type="checkbox" data-ship-pickup="${safe(order.order_num)}" ${order.pickup_action_allowed ? '' : 'disabled'}> Označiť ako odoslaná</label>
+          <div class="pickup-actions">
+            <label class="checkline"><input type="checkbox" data-ready-pickup="${safe(order.order_num)}" ${order.pickup_ready ? 'checked disabled' : (order.pickup_ready_action_allowed ? '' : 'disabled')}> Pripravené k odberu</label>
+            <label class="checkline"><input type="checkbox" data-ship-pickup="${safe(order.order_num)}" ${order.pickup_ship_action_allowed ? '' : 'disabled'}> Prevzaté zákazníkom - Odoslaná</label>
+          </div>
         </article>`).join('') : '<p class="muted">Žiadne osobné odbery.</p>';
+      el('pickupList').querySelectorAll('[data-ready-pickup]').forEach((input) => input.addEventListener('change', () => markPickupReady(input)));
       el('pickupList').querySelectorAll('[data-ship-pickup]').forEach((input) => input.addEventListener('change', () => markPickupShipped(input)));
     }
     function rowGrossProfit(row) {
@@ -1713,6 +1722,25 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Objednávka ${orderNum} je zmenená na Odoslaná.`, true);
+        await loadDashboard(true);
+      } catch (error) {
+        input.checked = false;
+        input.disabled = false;
+        showMessage(error instanceof Error ? error.message : String(error));
+      }
+    }
+    async function markPickupReady(input) {
+      const orderNum = input.dataset.readyPickup;
+      if (!window.confirm(`Zmeniť objednávku ${orderNum} v eshope na Pripravené k odberu?`)) {
+        input.checked = false;
+        return;
+      }
+      input.disabled = true;
+      try {
+        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ready`, { method:'POST', cache:'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        showMessage(`Objednávka ${orderNum} je zmenená na Pripravené k odberu.`, true);
         await loadDashboard(true);
       } catch (error) {
         input.checked = false;
@@ -2094,7 +2122,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             and parts[0] == "api"
             and parts[1] == "operations"
             and parts[3] == "pickup"
-            and parts[5] == "ship"
+            and parts[5] in {"ready", "ship"}
         ):
             project = parts[2]
             order_num = unquote(parts[4])
@@ -2102,7 +2130,10 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": f"Unknown project '{project}'."}, status=404)
                 return
             try:
-                self._send_json(mark_personal_pickup_shipped(project, order_num))
+                if parts[5] == "ready":
+                    self._send_json(mark_personal_pickup_ready(project, order_num))
+                else:
+                    self._send_json(mark_personal_pickup_shipped(project, order_num))
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
             return
