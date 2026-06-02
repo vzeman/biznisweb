@@ -12,7 +12,7 @@ on:
         required: true
         default: biznisweb-vevo-production-board
       auth_user:
-        description: Basic Auth username
+        description: Basic Auth username fallback; project settings can override it
         required: true
         default: vevo
       s3_bucket:
@@ -86,6 +86,23 @@ jobs:
           print(settings["report_schedule"]["schedule_name"])
           PY
           )"
+          CONFIGURED_AUTH_USER="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings_path = pathlib.Path("projects") / project / "settings.json"
+          settings = json.loads(settings_path.read_text(encoding="utf-8"))
+          live_dashboard = settings.get("live_dashboard") or {}
+          print(str(live_dashboard.get("auth_user") or "").strip())
+          PY
+          )"
+          if [[ -n "${CONFIGURED_AUTH_USER}" ]]; then
+            if [[ "${AUTH_USER}" != "${CONFIGURED_AUTH_USER}" ]]; then
+              echo "Using configured live dashboard auth user for ${PROJECT}; workflow input auth_user is ignored." >&2
+            fi
+            AUTH_USER="${CONFIGURED_AUTH_USER}"
+          fi
           aws scheduler get-schedule \
             --name "${REPORT_SCHEDULE_NAME}" \
             --region "${AWS_REGION}" > schedule.json
