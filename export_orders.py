@@ -116,7 +116,8 @@ ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 
 MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
 MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15% product margin
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
-EXCLUDED_ORDER_STATUSES: List[str] = []  # Optional project-specific order statuses excluded from realized revenue
+EXCLUDED_ORDER_STATUSES: List[str] = []  # Legacy status-only exclude list retained for compatibility
+ORDER_CACHE_SCHEMA_VERSION = 2
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
 PREFER_MANUAL_ADS_TOTALS = False
@@ -205,6 +206,24 @@ DEFAULT_EXCLUDED_ORDER_STATUSES = [
 FAILED_PAYMENT_STATUSES = [
     'Platba online - platnosť vypršala',
     'Platba online - platba zamietnutá',
+]
+DEFAULT_REALIZED_REVENUE_PAID_STATUSES = [
+    'Platba online - zaplatené',
+]
+DEFAULT_REALIZED_REVENUE_COD_STATUSES = [
+    'Čaká na vybavenie',
+    'Odoslaná',
+]
+DEFAULT_REALIZED_REVENUE_COD_PAYMENT_PATTERNS = [
+    'dobierka',
+    'dobierkou',
+    'dobírka',
+    'dobírkou',
+    'cash on delivery',
+]
+DEFAULT_REALIZED_REVENUE_COD_PAYMENT_IDS = [
+    '7',
+    '10',
 ]
 
 
@@ -300,6 +319,18 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         id
         name
         color
+      }
+      price_elements {
+        type
+        title
+        value
+        reference_id
+        price {
+          value
+          raw_value
+          formatted
+          is_net_price
+        }
       }
       customer {
         ... on Company {
@@ -475,6 +506,7 @@ class BizniWebExporter:
         self.enable_period_bundle = enable_period_bundle
         self.project_settings = load_project_settings(project_name)
         self.reporting_defaults = resolve_reporting_defaults(project_name, self.project_settings)
+        self.realized_revenue_settings = self._resolve_realized_revenue_settings()
         self.project_root_dir = Path("data") / project_name
         self.data_dir = self.project_root_dir / normalized_subdir if normalized_subdir else self.project_root_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -2013,6 +2045,96 @@ class BizniWebExporter:
         return re.sub(r'\s+', ' ', text).strip()
 
     @staticmethod
+    def _as_config_list(value: Any, default: List[str]) -> List[str]:
+        if value is None:
+            return list(default)
+        if isinstance(value, str):
+            return [value] if value.strip() else []
+        return [str(item).strip() for item in value if str(item or "").strip()]
+
+    @staticmethod
+    def _price_elements(order: Dict[str, Any], element_type: str) -> List[Dict[str, Any]]:
+        wanted = BizniWebExporter._normalize_match_text(element_type)
+        return [
+            element
+            for element in order.get("price_elements") or []
+            if BizniWebExporter._normalize_match_text((element or {}).get("type")) == wanted
+        ]
+
+    @staticmethod
+    def _price_element_info(order: Dict[str, Any], element_type: str) -> Dict[str, Any]:
+        elements = BizniWebExporter._price_elements(order, element_type)
+        if not elements:
+            return {"title": "", "reference_id": "", "value": "", "price": None}
+        first = elements[0] or {}
+        return {
+            "title": str(first.get("title") or "").strip(),
+            "reference_id": str(first.get("reference_id") or "").strip(),
+            "value": str(first.get("value") or "").strip(),
+            "price": first.get("price") or None,
+        }
+
+    def _resolve_realized_revenue_settings(self) -> Dict[str, Any]:
+        raw = self.project_settings.get("realized_revenue") or {}
+        paid_statuses = self._as_config_list(
+            raw.get("paid_statuses"),
+            DEFAULT_REALIZED_REVENUE_PAID_STATUSES,
+        )
+        cod_statuses = self._as_config_list(
+            raw.get("cod_statuses"),
+            DEFAULT_REALIZED_REVENUE_COD_STATUSES,
+        )
+        cod_payment_patterns = self._as_config_list(
+            raw.get("cod_payment_patterns"),
+            DEFAULT_REALIZED_REVENUE_COD_PAYMENT_PATTERNS,
+        )
+        cod_payment_ids = self._as_config_list(
+            raw.get("cod_payment_ids"),
+            DEFAULT_REALIZED_REVENUE_COD_PAYMENT_IDS,
+        )
+        return {
+            "paid_statuses": paid_statuses,
+            "paid_statuses_normalized": {self._normalize_match_text(status) for status in paid_statuses},
+            "cod_statuses": cod_statuses,
+            "cod_statuses_normalized": {self._normalize_match_text(status) for status in cod_statuses},
+            "cod_payment_patterns": cod_payment_patterns,
+            "cod_payment_patterns_normalized": {
+                self._normalize_match_text(pattern)
+                for pattern in cod_payment_patterns
+                if self._normalize_match_text(pattern)
+            },
+            "cod_payment_ids": {str(value).strip() for value in cod_payment_ids if str(value).strip()},
+        }
+
+    def _is_cod_payment(self, order: Dict[str, Any]) -> bool:
+        payment = self._price_element_info(order, "payment")
+        reference_id = str(payment.get("reference_id") or "").strip()
+        if reference_id and reference_id in self.realized_revenue_settings["cod_payment_ids"]:
+            return True
+        payment_title = self._normalize_match_text(payment.get("title"))
+        return any(
+            pattern and pattern in payment_title
+            for pattern in self.realized_revenue_settings["cod_payment_patterns_normalized"]
+        )
+
+    def _realized_revenue_decision(self, order: Dict[str, Any]) -> Tuple[bool, str]:
+        status_name = str(((order or {}).get("status") or {}).get("name") or "").strip()
+        status_norm = self._normalize_match_text(status_name)
+        settings = self.realized_revenue_settings
+
+        if status_norm in settings["paid_statuses_normalized"]:
+            return True, "paid_status"
+
+        if status_norm in settings["cod_statuses_normalized"]:
+            if self._is_cod_payment(order):
+                return True, "cod_status_and_payment"
+            return False, "cod_status_without_cod_payment"
+
+        if not status_norm:
+            return False, "missing_status"
+        return False, "non_realized_status"
+
+    @staticmethod
     def _compose_expense_key(*parts: Any) -> str:
         normalized_parts = [str(part or "").strip() for part in parts]
         if not normalized_parts or any(not part for part in normalized_parts):
@@ -3225,26 +3347,7 @@ class BizniWebExporter:
 
         logger.info(f"Filtered to {len(date_filtered_orders)} orders within date range for month")
 
-        # Filter out orders with excluded statuses
-        excluded_statuses = get_excluded_order_statuses()
-
-        filtered_orders = []
-        excluded_counts = {}
-
-        for order in date_filtered_orders:
-            status = order.get('status', {}) or {}
-            status_name = status.get('name', '')
-
-            if status_name not in excluded_statuses:
-                filtered_orders.append(order)
-            else:
-                excluded_counts[status_name] = excluded_counts.get(status_name, 0) + 1
-
-        # Report excluded orders
-        if excluded_counts:
-            print("\nFiltered out orders:")
-            for status, count in excluded_counts.items():
-                print(f"  - {status}: {count} orders")
+        filtered_orders = self._filter_by_status(date_filtered_orders)
 
         logger.info(f"Final count after status filtering for month: {len(filtered_orders)} orders")
 
@@ -3322,6 +3425,13 @@ class BizniWebExporter:
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                schema_version = int(data.get('schema_version') or 0)
+                if schema_version < ORDER_CACHE_SCHEMA_VERSION:
+                    print(
+                        f"  Cache schema outdated for {date.strftime('%Y-%m-%d')} "
+                        f"(found {schema_version}, need {ORDER_CACHE_SCHEMA_VERSION}); refreshing"
+                    )
+                    return None
                 print(f"  Loaded {len(data.get('orders', []))} orders from cache for {date.strftime('%Y-%m-%d')}")
                 return data.get('orders', [])
         except Exception as e:
@@ -3349,6 +3459,7 @@ class BizniWebExporter:
                         day_orders.append(order)
             
             cache_data = {
+                'schema_version': ORDER_CACHE_SCHEMA_VERSION,
                 'date': date_str,
                 'cached_at': datetime.now().isoformat(),
                 'order_count': len(day_orders),
@@ -3700,30 +3811,41 @@ class BizniWebExporter:
         return final_validated_orders
 
     def _filter_by_status(self, orders: List[Dict[str, Any]], track_excluded: bool = True) -> List[Dict[str, Any]]:
-        """Filter out orders with excluded statuses.
+        """Keep only orders that should count as realized reporting revenue.
+
+        Current realized revenue definition:
+        - COD payment + status "Čaká na vybavenie" or "Odoslaná"
+        - Paid online / bank-transfer status "Platba online - zaplatené"
 
         Args:
             orders: List of orders to filter
             track_excluded: If True, store excluded orders for later segmentation analysis
         """
-        excluded_statuses = get_excluded_order_statuses()
-
         # Statuses for failed payment segmentation (subset of excluded)
         failed_payment_statuses = FAILED_PAYMENT_STATUSES
 
         filtered_orders = []
+        excluded_counts: Dict[str, int] = {}
         for order in orders:
             status = order.get('status', {}) or {}
             status_name = status.get('name', '')
+            include_order, reason = self._realized_revenue_decision(order)
 
-            if status_name not in excluded_statuses:
+            if include_order:
                 filtered_orders.append(order)
             else:
+                excluded_counts[reason] = excluded_counts.get(reason, 0) + 1
                 if track_excluded:
                     self.excluded_status_orders.append(order)
                 if track_excluded and status_name in failed_payment_statuses:
                     # Track failed payment orders for segmentation
                     self.excluded_orders.append(order)
+
+        if excluded_counts:
+            logger.info(
+                "Realized revenue filter excluded orders: "
+                + ", ".join(f"{reason}={count}" for reason, count in sorted(excluded_counts.items()))
+            )
 
         return filtered_orders
     
@@ -3733,6 +3855,7 @@ class BizniWebExporter:
         
         try:
             cache_data = {
+                'schema_version': ORDER_CACHE_SCHEMA_VERSION,
                 'date': date.strftime('%Y-%m-%d'),
                 'cached_at': datetime.now().isoformat(),
                 'order_count': len(orders),
@@ -3896,26 +4019,7 @@ class BizniWebExporter:
 
         logger.info(f"Filtered to {len(date_filtered_orders)} orders within date range")
 
-        # Filter out orders with excluded statuses
-        excluded_statuses = get_excluded_order_statuses()
-
-        filtered_orders = []
-        excluded_counts = {}
-
-        for order in date_filtered_orders:
-            status = order.get('status', {}) or {}
-            status_name = status.get('name', '')
-
-            if status_name not in excluded_statuses:
-                filtered_orders.append(order)
-            else:
-                excluded_counts[status_name] = excluded_counts.get(status_name, 0) + 1
-
-        # Report excluded orders
-        if excluded_counts:
-            print("\nFiltered out orders:")
-            for status, count in excluded_counts.items():
-                print(f"  - {status}: {count} orders")
+        filtered_orders = self._filter_by_status(date_filtered_orders)
 
         logger.info(f"Final count after status filtering: {len(filtered_orders)} orders")
 
@@ -3931,6 +4035,9 @@ class BizniWebExporter:
         delivery_addr = order.get('delivery_address', {}) or {}
         status = order.get('status', {}) or {}
         order_sum = order.get('sum', {}) or {}
+        payment = self._price_element_info(order, "payment")
+        shipping = self._price_element_info(order, "shipping")
+        realized_revenue, realized_revenue_reason = self._realized_revenue_decision(order)
         
         # Get order currency
         order_currency = order_sum.get('currency', {}).get('code') if order_sum.get('currency') else 'EUR'
@@ -3958,7 +4065,13 @@ class BizniWebExporter:
             # Status
             'status_id': status.get('id'),
             'status_name': status.get('name'),
-            
+            'realized_revenue': realized_revenue,
+            'realized_revenue_reason': realized_revenue_reason,
+            'payment_title': payment.get('title'),
+            'payment_reference_id': payment.get('reference_id'),
+            'shipping_title': shipping.get('title'),
+            'shipping_reference_id': shipping.get('reference_id'),
+
             # Customer
             'customer_name': customer_name,
             'customer_company_id': customer.get('company_id'),
@@ -4434,6 +4547,8 @@ class BizniWebExporter:
         # Reorder columns for better readability
         column_order = [
             'order_num', 'order_id', 'external_ref', 'purchase_date', 'status_name',
+            'realized_revenue', 'realized_revenue_reason',
+            'payment_title', 'payment_reference_id', 'shipping_title', 'shipping_reference_id',
             'total_items_in_order', 'item_number',
             'product_sku', 'item_label', 'item_ean', 'item_quantity', 
             'item_currency', 'item_unit_price_original', 'item_unit_price',

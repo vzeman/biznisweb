@@ -53,6 +53,26 @@
     "timezone": "Europe/Bratislava",
     "task_family": "vevo-invoice-daily"
   },
+  "realized_revenue": {
+    "paid_statuses": [
+      "Platba online - zaplatené"
+    ],
+    "cod_statuses": [
+      "Čaká na vybavenie",
+      "Odoslaná"
+    ],
+    "cod_payment_patterns": [
+      "dobierka",
+      "dobierkou",
+      "dobírka",
+      "dobírkou",
+      "cash on delivery"
+    ],
+    "cod_payment_ids": [
+      "7",
+      "10"
+    ]
+  },
   "excluded_order_statuses": [
     "madfrog stara odoslana"
   ],
