@@ -3812,3 +3812,32 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - preview picking-list PDF returned `200`, `130112` bytes, starts with `%PDF-`, and first page contains `VEĽKOOBCHOD / VO CENY`, `VEĽKOOBCHODNÁ OBJEDNÁVKA`, and `VO ceny: áno, zľava do 37.4%`
 - Next exact step:
   - use newly generated picking-list PDFs for future VO checks; the older already-downloaded PDFs do not recalculate banners
+
+### 2026-06-02 (VEVO/ROY realized revenue payment filter)
+- Branch: `codex/realized-revenue-payment-filter`
+- PR: `#151` (`https://github.com/vzeman/biznisweb/pull/151`)
+- Context:
+  - ROY report for `2026-06-01` counted transfer order `2677002831` even though it was not paid yet
+  - reporting revenue is item-level net revenue (`item_total_without_tax`), not gross order total with VAT/shipping
+- Change:
+  - realized reporting revenue now includes only:
+    - COD payment with status `Čaká na vybavenie` or `Odoslaná`
+    - status `Platba online - zaplatené` for paid online-card / bank-transfer orders
+  - all other statuses/payments are excluded until the order reaches `Platba online - zaplatené`, at which point the order is counted retroactively on its original purchase date
+  - the same `realized_revenue` config is defined for VEVO and ROY
+  - order query now fetches `price_elements`, and exported CSV rows include payment/shipping audit fields plus realized-revenue decision fields
+  - order cache schema bumped to `2`, so old cached order days without payment metadata are refreshed before reporting
+- Local verification:
+  - `python -m py_compile export_orders.py`
+  - `python -m json.tool projects\vevo\settings.json`
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity` (`62` tests OK)
+  - `git diff --check`
+- Live read-only verification:
+  - ROY `2026-06-01`: current API returned `14` orders; new realized-revenue filter includes `13`
+  - order `2677002831` is excluded with reason `cod_status_without_cod_payment` because status is `Čaká na vybavenie` and payment is `Bankovým prevodom` (`reference_id=6`)
+  - ROY item-net revenue for `2026-06-01` changes from `1401.46` to `791.83` EUR under the new filter
+- Known issues:
+  - production is not deployed yet; corrected historical figures require PR merge, image rebuild, and a full-history reporting refresh for VEVO and ROY
+- Next exact step:
+  - commit/push this branch, open PR, merge to `main`, rebuild the reporting image, run VEVO/ROY full-history reports, then verify on host with localhost marker before UI smoke

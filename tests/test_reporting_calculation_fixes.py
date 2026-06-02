@@ -35,6 +35,26 @@ def write_order_cache(exporter: BizniWebExporter, order_date: datetime, cached_a
     return cache_file
 
 
+def price_element(element_type: str, title: str, reference_id: str) -> dict:
+    return {
+        "type": element_type,
+        "title": title,
+        "reference_id": reference_id,
+        "value": "",
+        "price": {"value": 0, "formatted": "0 €", "is_net_price": False},
+    }
+
+
+def reporting_order(order_num: str, status_name: str, payment_title: str, payment_ref: str) -> dict:
+    return {
+        "id": order_num,
+        "order_num": order_num,
+        "pur_date": "2026-06-01 10:00:00",
+        "status": {"name": status_name},
+        "price_elements": [price_element("payment", payment_title, payment_ref)],
+    }
+
+
 class ReportingCalculationFixTests(unittest.TestCase):
     def test_unknown_currency_is_not_treated_as_eur(self) -> None:
         exporter = make_exporter()
@@ -247,6 +267,71 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
             write_order_cache(exporter, old_date, today - timedelta(days=90))
             self.assertFalse(exporter.should_use_cache(old_date, today=today))
+
+    def test_realized_revenue_filter_counts_only_paid_or_cod_orders(self) -> None:
+        exporter = make_exporter()
+        orders = [
+            reporting_order("COD-WAIT", "Čaká na vybavenie", "Dobierkou", "7"),
+            reporting_order("COD-SHIPPED", "Odoslaná", "Dobírka", "10"),
+            reporting_order("PAID-CARD", "Platba online - zaplatené", "Okamžitá platba online", "18"),
+            reporting_order("PAID-BANK", "Platba online - zaplatené", "Bankovým prevodom", "6"),
+            reporting_order("BANK-WAIT", "Čaká na vybavenie", "Bankovým prevodom", "6"),
+            reporting_order("CARD-WAIT", "Čaká na vybavenie", "Okamžitá platba online", "18"),
+            reporting_order("BANK-SHIPPED", "Odoslaná", "Bankovým prevodom", "6"),
+            reporting_order("CANCELLED", "Nezaplatená - zrušená objednávka", "Bankovým prevodom", "6"),
+        ]
+
+        filtered = exporter._filter_by_status(orders, track_excluded=False)
+
+        self.assertEqual(
+            ["COD-WAIT", "COD-SHIPPED", "PAID-CARD", "PAID-BANK"],
+            [order["order_num"] for order in filtered],
+        )
+
+    def test_flatten_order_exports_payment_audit_fields(self) -> None:
+        exporter = make_exporter()
+        order = {
+            "id": "PAID-BANK",
+            "order_num": "PAID-BANK",
+            "pur_date": "2026-06-01 10:00:00",
+            "status": {"name": "Platba online - zaplatené"},
+            "price_elements": [price_element("payment", "Bankovým prevodom", "6")],
+            "sum": {"value": 123.0, "currency": {"code": "EUR"}},
+            "customer": {"email": "a@example.com"},
+            "items": [
+                {
+                    "item_label": "Unknown unit-test product",
+                    "ean": "",
+                    "quantity": 1,
+                    "tax_rate": 23,
+                    "price": {"value": 100.0, "currency": {"code": "EUR"}},
+                    "sum": {"value": 100.0, "currency": {"code": "EUR"}},
+                    "sum_with_tax": {"value": 123.0, "currency": {"code": "EUR"}},
+                }
+            ],
+        }
+
+        rows = exporter.flatten_order(order)
+
+        self.assertEqual("Bankovým prevodom", rows[0]["payment_title"])
+        self.assertEqual("6", rows[0]["payment_reference_id"])
+        self.assertTrue(rows[0]["realized_revenue"])
+        self.assertEqual("paid_status", rows[0]["realized_revenue_reason"])
+
+    def test_old_order_cache_without_current_schema_is_revalidated(self) -> None:
+        exporter = make_exporter()
+        today = datetime(2026, 5, 20)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.cache_dir = Path(tmp_dir)
+            order_date = today - timedelta(days=30)
+            write_order_cache(
+                exporter,
+                order_date,
+                today,
+                [reporting_order("LEGACY", "Odoslaná", "Dobierkou", "7")],
+            )
+
+            self.assertIsNone(exporter.load_from_cache(order_date))
 
 
 if __name__ == "__main__":
