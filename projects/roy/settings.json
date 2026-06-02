@@ -13,6 +13,9 @@
   "live_dashboard_artifacts": {
     "s3_prefix": "daily-reports/roy-sk"
   },
+  "live_dashboard": {
+    "auth_user": "roy21"
+  },
   "product_identity": {
     "prefer_import_code": true
   },
