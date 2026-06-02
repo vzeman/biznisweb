@@ -61,13 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY live operations dashboard inventory regression is being fixed on branch `codex/restore-roy-inventory-alerts` on `2026-06-02`:
+- ROY live operations dashboard inventory regression was fixed and deployed on `2026-06-02`:
   - root cause: `dashboard_payload_latest.json` is the full/all-time sidecar, and the all-time `roy_product_demand` payload can have `inventory_rows=0` / `alert_rows=0`; the live operations dashboard was using that payload for the stock tables
   - code now embeds a separate `dashboard.roy_operations_inventory` block into the main sidecar from the preferred rolling period report (`monthly`, then `weekly`, then `daily`) when that period has inventory rows
   - ROY operations inventory rendering now prefers `roy_operations_inventory` and falls back to `roy_product_demand`
   - workflow smoke now fails if ROY production operations inventory has no `inventory_rows`
   - verified locally: `python -m unittest tests.test_reporting_calculation_fixes tests.test_unpaid_order_cancellation tests.test_roy_inventory_model tests.test_roy_operations_dashboard tests.test_dashboard_modern`; simulated live inventory payload returned `inventory_rows=160` and `alert_rows=9`
-  - Next exact step: push the branch, open/merge PR, rebuild ECR/App Runner, refresh ROY artifacts, and verify host marker plus live UI/API smoke
+  - merged PR `#156` into `main` (`82d192c`); ECR `latest` refreshed by run `26814207391` with digest `sha256:7ebcb7bab80a22725c4ee46221efe38e68eecd24314936eda0cccbce91afc802`
+  - ROY production artifact refresh/App Runner deploy run `26814312615` succeeded:
+    - Fargate hard-gate: IP `172.31.27.187`, service `roy-daily-report-email`, task def `roy-reporting-daily:28`, task `10b6c69202294ed7a17bd91b7c4bae19`, S3 latest `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`, marker `LIVE_ARTIFACT_MARKER_OK`
+    - S3 artifact smoke: `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=251:inventory_alerts=23.0:inventory_rows=160`
+    - App Runner hard-gate: service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, image digest `sha256:7ebcb7bab80a22725c4ee46221efe38e68eecd24314936eda0cccbce91afc802`
+    - App Runner smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=0:personal_pickups=0:inventory_alerts=19:inventory_rows=160:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=80171`
+  - Next exact step: monitor the next scheduled ROY report and confirm the live dashboard continues to show non-empty inventory rows after the scheduled refresh
 
 - ROY/VEVO realized revenue filtering was corrected on `2026-06-02` so shipped prepaid orders are not lost after the current BizniWeb status changes from `Platba online - zaplatené` to `Odoslaná`:
   - COD still counts only when payment is COD and status is `Čaká na vybavenie` or `Odoslaná`
