@@ -3815,6 +3815,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 
 ### 2026-06-02 (VEVO/ROY realized revenue payment filter)
 - Branch: `codex/realized-revenue-payment-filter`
+- PR: `#151` (`https://github.com/vzeman/biznisweb/pull/151`)
 - Context:
   - ROY report for `2026-06-01` counted transfer order `2677002831` even though it was not paid yet
   - reporting revenue is item-level net revenue (`item_total_without_tax`), not gross order total with VAT/shipping
