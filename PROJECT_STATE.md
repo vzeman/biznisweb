@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-05-27
+Last updated: 2026-06-02
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -247,7 +247,8 @@ Bootstrap entrypoints:
   - production UI/API smoke verified `Vysklad. PDF`, `/api/operations/roy/picking-lists.pdf?refresh=1`, `%PDF-`, `application/pdf`, `Content-Disposition`, and `143923` PDF bytes for `32` fulfillable orders
 
 ## 8) Next Exact Step
-- Review whether the remaining ROY gross-loss product `Roy powerbanka 10000mAh` (`sku=IS-Q6L`, `gross_profit=-51.30 EUR`) is intentional or needs a product-cost/price correction.
+- Monitor BizniWeb transient non-JSON order-list errors in the next scheduled VEVO/ROY reporting runs; if they keep recurring, harden pagination so repeated page failures fail the run explicitly instead of relying on opposite-direction fallback.
+- VEVO corrected revenue logic is deployed in the `latest` image and will be used by the next `vevo-daily-report-email` run; run an untagged VEVO report/email task manually only if an immediate corrected VEVO email artifact is required before the next schedule.
 
 ## 9) Change Log
 
@@ -3841,3 +3842,80 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - production is not deployed yet; corrected historical figures require PR merge, image rebuild, and a full-history reporting refresh for VEVO and ROY
 - Next exact step:
   - commit/push this branch, open PR, merge to `main`, rebuild the reporting image, run VEVO/ROY full-history reports, then verify on host with localhost marker before UI smoke
+
+### 2026-06-02 (VEVO/ROY realized revenue deployed and ROY latest refreshed)
+- Code merged:
+  - PR `#151`: `Filter reporting revenue by payment state`, merge commit `3e7356c`
+  - PR `#152`: `Harden order payment metadata fallback`, merge commit `ce9896a`
+- Final realized revenue logic:
+  - COD (`dobierka`) counts only with status `ÄŚakĂˇ na vybavenie` or `OdoslanĂˇ`
+  - online card / bank transfer counts only with status `Platba online - zaplatenĂ©`
+  - unpaid transfer/card orders are excluded until the paid status appears, then they count retroactively on original `pur_date`
+  - CSV export includes audit fields `realized_revenue`, `realized_revenue_reason`, `payment_title`, `payment_reference_id`, `shipping_title`, `shipping_reference_id`
+- Fetch hardening:
+  - `getOrderList` still fetches `price_elements` by default
+  - if BizniWeb returns an internal error on `price_elements`, the same page is retried without `price_elements`
+  - COD-status orders on fallback pages try per-order payment enrichment via `getOrder`
+  - if payment metadata still fails, the order is not counted and is marked `cod_status_missing_payment_metadata`
+- Local verification:
+  - `python -m py_compile export_orders.py`
+  - `python -m unittest tests.test_reporting_calculation_fixes`
+  - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity` (`64` tests OK)
+  - `git diff --check`
+  - live read-only VEVO probe fetched `600` DESC orders, hit order `2602007112`, continued through fallback, and excluded it as `cod_status_missing_payment_metadata`
+- ECR refresh:
+  - workflow run `26800501453` succeeded
+  - image digest `sha256:709b0f56a664748c5cce28304f93a2b36bbf46d3d159653052dab1ebf7357ef2`
+- Production reporting smoke:
+  - workflow run `26800590329` succeeded for VEVO and ROY with marker `realized-revenue-fallback-20260602`
+  - VEVO Fargate hard-gate:
+    - instance-id `N/A (scheduled ECS/Fargate task)`
+    - private IP `172.31.8.236`
+    - service `vevo-daily-report-email`
+    - task definition `vevo-reporting-daily:5`
+    - task `5cb7e06ce8c548eebbc24a6f99ec95fc`
+    - marker `LOCALHOST_MARKER_OK`
+    - UI smoke `UI_SMOKE_OK:vevo:production-board` and `UI_SMOKE_OK:vevo:daily-profit-loss`
+    - marker summary `daily_profit_rows=395`, production board `active_orders=55`, `manufacturing_products=37`, `units_to_make=105.0`
+    - `price_elements` fallback used twice; metadata enrichment `28/27/1` and `17/17/0`; only failed metadata order was VEVO `2602007112`
+  - ROY Fargate smoke:
+    - instance-id `N/A (scheduled ECS/Fargate task)`
+    - private IP `172.31.20.151`
+    - service `roy-daily-report-email`
+    - task definition `roy-reporting-daily:25`
+    - task `02f1317a52fa403786079e810b4c80fa`
+    - marker `LOCALHOST_MARKER_OK`
+    - UI smoke `UI_SMOKE_OK:roy:daily-profit-loss`
+    - marker summary `daily_profit_rows=251`, `positive_days=166`, `negative_days=85`
+    - ROY saw transient BizniWeb non-JSON order-list errors, but DESC pagination still reached the requested historical boundary (`oldest_in_batch=2025-08-01`, needed `2025-09-24`)
+- ROY stable latest refresh / App Runner deploy:
+  - workflow run `26801879954` succeeded with `skip_artifact_refresh=false`
+  - Fargate hard-gate:
+    - instance-id `N/A (scheduled ECS/Fargate task)`
+    - private IP `172.31.30.127`
+    - service `roy-daily-report-email`
+    - task definition `roy-reporting-daily:26`
+    - task `6c6fd4892d6c466b8061704d8275ec49`
+    - marker path `http://127.0.0.1:8000/marker.json`
+    - latest S3 artifact `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+    - marker `LIVE_ARTIFACT_MARKER_OK`
+    - S3 check `ROY_LIVE_ARTIFACTS_OK:kpi_series_days=251:inventory_alerts=13.0`
+  - App Runner hard-gate:
+    - instance-id `N/A (AWS App Runner managed service)`
+    - private IP `N/A (AWS App Runner managed service)`
+    - service `biznisweb-roy-operations-dashboard`
+    - service ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`
+    - production path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+    - image digest `sha256:709b0f56a664748c5cce28304f93a2b36bbf46d3d159653052dab1ebf7357ef2`
+    - smoke `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=3:personal_pickups=1:inventory_alerts=9:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=109035`
+    - deploy `APP_RUNNER_DEPLOY_OK:biznisweb-roy-operations-dashboard:https://qvfzvh82c3.eu-central-1.awsapprunner.com`
+- ROY order `2677002831` note:
+  - initial live read-only check during PR #151 showed the order as transfer payment + `ÄŚakĂˇ na vybavenie`, so it was correctly excluded and ROY `2026-06-01` item-net revenue was `791.83` EUR under the new filter
+  - later live check showed the same order changed to `Platba online - zaplatenĂ©`, so it now correctly counts retroactively on `2026-06-01`; ROY `2026-06-01` item-net revenue is therefore `1401.46` EUR under the requested paid-status rule
+- AWS billing/runtime observation:
+  - this task was not blocked by an AWS payment/runtime outage: GitHub AWS credentials worked, ECR push succeeded, ECS/Fargate tasks ran, CloudWatch logs were readable, S3 latest artifact refresh succeeded, and App Runner deploy/smoke succeeded
+- Known issues:
+  - BizniWeb API intermittently returns non-JSON error pages during ROY order-list pagination; current opposite-direction fallback covered the verified runs, but repeated failures should be treated as the next pagination hardening target
+  - VEVO latest scheduled email/report will use the corrected image on the next `vevo-daily-report-email` run; immediate VEVO untagged email backfill was not sent during this session
+- Next exact step:
+  - monitor the next scheduled VEVO/ROY reporting runs for BizniWeb non-JSON pagination errors and, if recurring, implement stricter page-level retry/fail-fast telemetry before changing more reporting logic
