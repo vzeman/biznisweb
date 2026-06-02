@@ -26,7 +26,10 @@ DEFAULT_COD_STATUSES = ("Čaká na vybavenie",)
 DEFAULT_COD_PAYMENT_PATTERNS = ("dobierk", "dobirk")
 DEFAULT_PICKUP_SHIPPING_NAMES = ("Osobný odber na sklade",)
 DEFAULT_PICKUP_SHIPPING_IDS = ("11",)
-DEFAULT_PICKUP_ACTION_STATUSES = ("Čaká na vybavenie", "Platba online - zaplatené", "Pripravené k odberu")
+DEFAULT_PICKUP_READY_STATUS_NAME = "Pripravené k odberu"
+DEFAULT_PICKUP_READY_STATUS_ID = 0
+DEFAULT_PICKUP_READY_ACTION_STATUSES = DEFAULT_PAID_STATUSES
+DEFAULT_PICKUP_SHIP_ACTION_STATUSES = (DEFAULT_PICKUP_READY_STATUS_NAME,)
 DEFAULT_SHIPPED_STATUS_NAME = "Odoslaná"
 DEFAULT_SHIPPED_STATUS_ID = 4
 DEFAULT_SCAN_MAX_PAGES = 30
@@ -622,7 +625,16 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
     cod_payment_ids = _as_list(raw.get("cod_payment_ids"), ())
     pickup_shipping_names = _as_list(raw.get("personal_pickup_shipping_names"), DEFAULT_PICKUP_SHIPPING_NAMES)
     pickup_shipping_ids = _as_list(raw.get("personal_pickup_shipping_ids"), DEFAULT_PICKUP_SHIPPING_IDS)
-    pickup_action_statuses = _as_list(raw.get("pickup_action_statuses"), DEFAULT_PICKUP_ACTION_STATUSES)
+    pickup_ready_status_name = str(raw.get("pickup_ready_status_name") or DEFAULT_PICKUP_READY_STATUS_NAME).strip()
+    pickup_ready_action_statuses = _as_list(
+        raw.get("pickup_ready_action_statuses"),
+        DEFAULT_PICKUP_READY_ACTION_STATUSES,
+    )
+    pickup_ship_action_statuses = _as_list(
+        raw.get("pickup_ship_action_statuses"),
+        (pickup_ready_status_name,),
+    )
+    pickup_action_statuses = list(dict.fromkeys(pickup_ready_action_statuses + pickup_ship_action_statuses))
     shipped_status_name = str(raw.get("shipped_status_name") or DEFAULT_SHIPPED_STATUS_NAME).strip()
 
     return {
@@ -637,6 +649,17 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
         "personal_pickup_shipping_names": pickup_shipping_names,
         "personal_pickup_shipping_names_normalized": {_normalize_text(name) for name in pickup_shipping_names},
         "personal_pickup_shipping_ids": {str(value).strip() for value in pickup_shipping_ids if str(value).strip()},
+        "pickup_ready_status_name": pickup_ready_status_name,
+        "pickup_ready_status_name_normalized": _normalize_text(pickup_ready_status_name),
+        "pickup_ready_status_id": _as_int(
+            raw.get("pickup_ready_status_id"),
+            DEFAULT_PICKUP_READY_STATUS_ID,
+            minimum=0,
+        ),
+        "pickup_ready_action_statuses": pickup_ready_action_statuses,
+        "pickup_ready_action_statuses_normalized": {_normalize_text(status) for status in pickup_ready_action_statuses},
+        "pickup_ship_action_statuses": pickup_ship_action_statuses,
+        "pickup_ship_action_statuses_normalized": {_normalize_text(status) for status in pickup_ship_action_statuses},
         "pickup_action_statuses": pickup_action_statuses,
         "pickup_action_statuses_normalized": {_normalize_text(status) for status in pickup_action_statuses},
         "shipped_status_name": shipped_status_name,
@@ -710,6 +733,10 @@ def _is_paid_online(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     return _normalize_text(_status_name(order)) in settings["paid_statuses_normalized"]
 
 
+def _is_pickup_ready_status(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    return _normalize_text(_status_name(order)) == settings["pickup_ready_status_name_normalized"]
+
+
 def _is_cod_fulfillable(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     return (
         _normalize_text(_status_name(order)) in settings["cod_statuses_normalized"]
@@ -737,8 +764,8 @@ def _is_personal_pickup(order: Dict[str, Any], settings: Dict[str, Any]) -> bool
 def _is_paid_personal_pickup(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     return (
         _is_personal_pickup(order, settings)
-        and _is_paid_online(order, settings)
         and _normalize_text(_status_name(order)) != settings["shipped_status_name_normalized"]
+        and (_is_paid_online(order, settings) or _is_pickup_ready_status(order, settings))
     )
 
 
@@ -1069,14 +1096,16 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
     is_pickup = _is_personal_pickup(order, settings)
     status_name = _status_name(order)
     status_norm = _normalize_text(status_name)
-    paid_pickup_ready = (
-        is_pickup
-        and reason == "paid_online"
-        and status_norm != settings["shipped_status_name_normalized"]
-    )
-    pickup_action_allowed = (
+    pickup_ready = status_norm == settings["pickup_ready_status_name_normalized"]
+    paid_pickup_ready = _is_paid_personal_pickup(order, settings)
+    pickup_ready_action_allowed = (
         paid_pickup_ready
-        and status_norm in settings["pickup_action_statuses_normalized"]
+        and not pickup_ready
+        and status_norm in settings["pickup_ready_action_statuses_normalized"]
+    )
+    pickup_ship_action_allowed = (
+        paid_pickup_ready
+        and status_norm in settings["pickup_ship_action_statuses_normalized"]
     )
     return {
         "id": order.get("id"),
@@ -1101,7 +1130,10 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         "fulfillment_reason": reason,
         "personal_pickup": is_pickup,
         "paid_personal_pickup": paid_pickup_ready,
-        "pickup_action_allowed": pickup_action_allowed,
+        "pickup_ready": pickup_ready,
+        "pickup_ready_action_allowed": pickup_ready_action_allowed,
+        "pickup_ship_action_allowed": pickup_ship_action_allowed,
+        "pickup_action_allowed": pickup_ship_action_allowed,
     }
 
 
@@ -1129,6 +1161,8 @@ def build_roy_orders_snapshot(
     generated = generated_at or datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     fulfillable_orders.sort(key=lambda row: (str(row.get("purchase_at") or ""), str(row.get("order_num") or "")))
     pickup_orders.sort(key=lambda row: (str(row.get("purchase_at") or ""), str(row.get("order_num") or "")))
+    pickup_ready_actions_available = len([row for row in pickup_orders if row["pickup_ready_action_allowed"]])
+    pickup_ship_actions_available = len([row for row in pickup_orders if row["pickup_ship_action_allowed"]])
 
     return {
         "project": project,
@@ -1139,7 +1173,9 @@ def build_roy_orders_snapshot(
             "paid_online_orders": len(paid_orders),
             "cod_waiting_orders": len(cod_orders),
             "personal_pickups": len(pickup_orders),
-            "pickup_actions_available": len([row for row in pickup_orders if row["pickup_action_allowed"]]),
+            "pickup_actions_available": pickup_ready_actions_available + pickup_ship_actions_available,
+            "pickup_ready_actions_available": pickup_ready_actions_available,
+            "pickup_ship_actions_available": pickup_ship_actions_available,
             "fulfillable_value": round(sum(float(row.get("sum_value") or 0.0) for row in fulfillable_orders), 2),
             "status_counts": dict(sorted(status_counts.items())),
         },
@@ -2300,22 +2336,45 @@ def get_cached_roy_operations_snapshot(
     return payload
 
 
-def _resolve_shipped_status_id(client: Client, settings: Dict[str, Any]) -> int:
-    configured = int(settings.get("shipped_status_id") or 0)
+def _resolve_order_status_id(
+    client: Client,
+    *,
+    configured_id: Any,
+    target_status_name: str,
+    target_status_name_normalized: str,
+) -> int:
+    configured = int(configured_id or 0)
     if configured > 0:
         return configured
     result = client.execute(LIST_ORDER_STATUSES_QUERY, variable_values={"lang_code": "SK"})
-    target = settings["shipped_status_name_normalized"]
     for row in result.get("listOrderStatuses") or []:
-        if _normalize_text(row.get("name")) == target:
+        if _normalize_text(row.get("name")) == target_status_name_normalized:
             return int(row["id"])
-    raise RuntimeError(f"Target status '{settings['shipped_status_name']}' not found in BiznisWeb.")
+    raise RuntimeError(f"Target status '{target_status_name}' not found in BiznisWeb.")
 
 
-def mark_personal_pickup_shipped(project: str, order_num: str) -> Dict[str, Any]:
+def _resolve_pickup_ready_status_id(client: Client, settings: Dict[str, Any]) -> int:
+    return _resolve_order_status_id(
+        client,
+        configured_id=settings.get("pickup_ready_status_id"),
+        target_status_name=settings["pickup_ready_status_name"],
+        target_status_name_normalized=settings["pickup_ready_status_name_normalized"],
+    )
+
+
+def _resolve_shipped_status_id(client: Client, settings: Dict[str, Any]) -> int:
+    return _resolve_order_status_id(
+        client,
+        configured_id=settings.get("shipped_status_id"),
+        target_status_name=settings["shipped_status_name"],
+        target_status_name_normalized=settings["shipped_status_name_normalized"],
+    )
+
+
+def _mark_personal_pickup_status(project: str, order_num: str, action: str) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
     if project != "roy":
-        raise ValueError("Pickup shipping action is only enabled for project 'roy'.")
+        raise ValueError("Pickup status action is only enabled for project 'roy'.")
 
     load_project_env(project)
     project_settings = load_project_settings(project)
@@ -2353,12 +2412,23 @@ query GetOrderForPickupAction($order_num: String!) {
     row = _public_order_row(order, settings)
     if not row["personal_pickup"]:
         raise ValueError(f"Order '{order_num}' is not configured as personal pickup.")
-    if _normalize_text(row["status"]) == settings["shipped_status_name_normalized"]:
-        raise ValueError(f"Order '{order_num}' is already in target status.")
-    if not row["pickup_action_allowed"]:
-        raise ValueError(f"Order '{order_num}' is not in an allowed pickup action status.")
+    if action == "ready":
+        if row["pickup_ready"]:
+            raise ValueError(f"Order '{order_num}' is already in target status.")
+        if not row["pickup_ready_action_allowed"]:
+            raise ValueError(f"Order '{order_num}' is not in an allowed pickup ready status.")
+        status_id = _resolve_pickup_ready_status_id(client, settings)
+        target_status_name = settings["pickup_ready_status_name"]
+    elif action == "ship":
+        if _normalize_text(row["status"]) == settings["shipped_status_name_normalized"]:
+            raise ValueError(f"Order '{order_num}' is already in target status.")
+        if not row["pickup_ship_action_allowed"]:
+            raise ValueError(f"Order '{order_num}' is not in an allowed pickup ship status.")
+        status_id = _resolve_shipped_status_id(client, settings)
+        target_status_name = settings["shipped_status_name"]
+    else:
+        raise ValueError(f"Unknown pickup action '{action}'.")
 
-    status_id = _resolve_shipped_status_id(client, settings)
     mutation_result = client.execute(
         CHANGE_ORDER_STATUS_MUTATION,
         variable_values={"order_num": order_num, "status_id": status_id},
@@ -2368,7 +2438,16 @@ query GetOrderForPickupAction($order_num: String!) {
         "ok": True,
         "project": project,
         "order_num": order_num,
+        "action": action,
         "target_status_id": status_id,
-        "target_status_name": settings["shipped_status_name"],
+        "target_status_name": target_status_name,
         "result": mutation_result.get("changeOrderStatus"),
     }
+
+
+def mark_personal_pickup_ready(project: str, order_num: str) -> Dict[str, Any]:
+    return _mark_personal_pickup_status(project, order_num, "ready")
+
+
+def mark_personal_pickup_shipped(project: str, order_num: str) -> Dict[str, Any]:
+    return _mark_personal_pickup_status(project, order_num, "ship")

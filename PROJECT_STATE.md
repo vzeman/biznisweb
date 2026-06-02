@@ -61,6 +61,13 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY personal pickup ready checkbox is implemented locally on `2026-06-02`:
+  - change: ROY live dashboard personal pickup cards now have a separate `Pripravené k odberu` checkbox before the existing customer pickup/`Odoslaná` action
+  - backend: new `POST /api/operations/roy/pickup/<order_num>/ready` action validates the order as a paid ROY personal pickup, then changes BiznisWeb status to `Pripravené k odberu` (`status_id=23`)
+  - ship action: the existing `POST /api/operations/roy/pickup/<order_num>/ship` remains, but is now enabled only when the pickup is already in `Pripravené k odberu`; it changes the status to `Odoslaná` (`status_id=4`)
+  - verified locally: `python -m json.tool projects/roy/settings.json`; `python -m unittest tests.test_roy_operations_dashboard tests.test_reporting_calculation_fixes tests.test_unpaid_order_cancellation`
+  - Next exact step: open/merge PR, rebuild ECR image, deploy ROY App Runner with `skip_artifact_refresh=true`, then verify the live dashboard smoke still returns ROY inventory and pickup data
+
 - ROY App Runner Basic Auth username was restored to the correct user-facing login `roy21` on `2026-06-02`:
   - symptom: browser Basic Auth prompt accepted/stored a wrong username while `/api/operations/roy/live` returned a plain auth challenge/error; the frontend then showed `Unexpected token 'A' ... is not valid JSON`
   - root cause: `Deploy Live Dashboard App Runner` accepted `auth_user` as a manual workflow input, wrote it directly to runtime `LIVE_DASHBOARD_AUTH_USER`, and then smoke-tested with the same input, so a wrong deploy username could pass verification

@@ -217,9 +217,12 @@
     "personal_pickup_shipping_ids": [
       "11"
     ],
-    "pickup_action_statuses": [
-      "Čaká na vybavenie",
-      "Platba online - zaplatené",
+    "pickup_ready_status_name": "Pripravené k odberu",
+    "pickup_ready_status_id": 23,
+    "pickup_ready_action_statuses": [
+      "Platba online - zaplatené"
+    ],
+    "pickup_ship_action_statuses": [
       "Pripravené k odberu"
     ],
     "shipped_status_name": "Odoslaná",

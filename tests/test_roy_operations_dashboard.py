@@ -2,6 +2,7 @@ import json
 import shutil
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from dashboard_modern import DASHBOARD_PAYLOAD_SCRIPT_ID
 from export_orders import BizniWebExporter
@@ -14,6 +15,8 @@ from roy_operations_dashboard import (
     build_roy_orders_snapshot,
     filter_unprinted_picking_orders,
     mark_picking_orders_printed,
+    mark_personal_pickup_ready,
+    mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
 )
 
@@ -21,23 +24,28 @@ from roy_operations_dashboard import (
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
-def make_settings() -> dict:
-    return resolve_roy_operations_settings(
-        {
-            "operations_dashboard": {
-                "enabled": True,
-                "paid_statuses": ["Platba online - zaplatené"],
-                "cod_statuses": ["Čaká na vybavenie"],
-                "cod_payment_patterns": ["dobierka", "dobírka"],
-                "cod_payment_ids": ["7", "10"],
-                "personal_pickup_shipping_names": ["Osobný odber na sklade"],
-                "personal_pickup_shipping_ids": ["11"],
-                "pickup_action_statuses": ["Čaká na vybavenie", "Platba online - zaplatené"],
-                "shipped_status_name": "Odoslaná",
-                "shipped_status_id": 4,
-            }
+def make_project_settings() -> dict:
+    return {
+        "operations_dashboard": {
+            "enabled": True,
+            "paid_statuses": ["Platba online - zaplatené"],
+            "cod_statuses": ["Čaká na vybavenie"],
+            "cod_payment_patterns": ["dobierka", "dobírka"],
+            "cod_payment_ids": ["7", "10"],
+            "personal_pickup_shipping_names": ["Osobný odber na sklade"],
+            "personal_pickup_shipping_ids": ["11"],
+            "pickup_ready_status_name": "Pripravené k odberu",
+            "pickup_ready_status_id": 23,
+            "pickup_ready_action_statuses": ["Platba online - zaplatené"],
+            "pickup_ship_action_statuses": ["Pripravené k odberu"],
+            "shipped_status_name": "Odoslaná",
+            "shipped_status_id": 4,
         }
-    )
+    }
+
+
+def make_settings() -> dict:
+    return resolve_roy_operations_settings(make_project_settings())
 
 
 def price_element(kind: str, title: str, reference_id: str = "") -> dict:
@@ -78,6 +86,24 @@ def make_order(
     }
 
 
+class FakePickupActionClient:
+    def __init__(self, order: dict) -> None:
+        self.order = order
+        self.changed_status_ids: list[int] = []
+
+    def execute(self, query: object, variable_values: dict | None = None) -> dict:
+        values = variable_values or {}
+        if "status_id" in values:
+            self.changed_status_ids.append(values["status_id"])
+            return {
+                "changeOrderStatus": {
+                    "order_num": values["order_num"],
+                    "status": {"id": values["status_id"], "name": "target"},
+                }
+            }
+        return {"getOrder": self.order}
+
+
 class RoyOperationsDashboardTests(unittest.TestCase):
     def test_roy_settings_enable_operations_dashboard_and_lead_times(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
@@ -86,6 +112,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
 
         self.assertTrue(operations["enabled"])
         self.assertEqual(90, operations["auto_refresh_seconds"])
+        self.assertEqual(23, operations["pickup_ready_status_id"])
+        self.assertEqual("Pripravené k odberu", operations["pickup_ready_status_name"])
         self.assertEqual(4, operations["shipped_status_id"])
         self.assertEqual(10, operations["wholesale_detection"]["discount_threshold_pct"])
         self.assertTrue(operations["wholesale_detection"]["require_company_customer"])
@@ -112,6 +140,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
             make_order("R-4", "Odoslaná", price_element("payment", "Dobierkou", "7"), pickup_shipping),
             make_order("R-5", "Platba online - zaplatené", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
             make_order("R-6", "Nezaplatená - zrušená objednávka", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
+            make_order("R-7", "Pripravené k odberu", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
         ]
 
         snapshot = build_roy_orders_snapshot(project="roy", orders=orders, settings=settings)
@@ -121,12 +150,54 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(1, snapshot["summary"]["cod_waiting_orders"])
         self.assertEqual(["R-1", "R-2", "R-5"], [row["order_num"] for row in snapshot["orders"]])
         self.assertEqual("13,70 EUR", snapshot["orders"][0]["items"][0]["unit_price_formatted"])
-        self.assertEqual(["R-5"], [row["order_num"] for row in snapshot["personal_pickups"]])
+        self.assertEqual(["R-5", "R-7"], [row["order_num"] for row in snapshot["personal_pickups"]])
+        self.assertEqual(1, snapshot["summary"]["pickup_ready_actions_available"])
+        self.assertEqual(1, snapshot["summary"]["pickup_ship_actions_available"])
+        self.assertEqual(2, snapshot["summary"]["pickup_actions_available"])
         cod_pickup = next(row for row in snapshot["orders"] if row["order_num"] == "R-2")
         self.assertFalse(cod_pickup["paid_personal_pickup"])
         self.assertFalse(cod_pickup["pickup_action_allowed"])
-        self.assertTrue(snapshot["personal_pickups"][0]["pickup_action_allowed"])
-        self.assertTrue(snapshot["personal_pickups"][0]["paid_personal_pickup"])
+        paid_pickup = snapshot["personal_pickups"][0]
+        ready_pickup = snapshot["personal_pickups"][1]
+        self.assertTrue(paid_pickup["pickup_ready_action_allowed"])
+        self.assertFalse(paid_pickup["pickup_ready"])
+        self.assertFalse(paid_pickup["pickup_ship_action_allowed"])
+        self.assertTrue(paid_pickup["paid_personal_pickup"])
+        self.assertFalse(ready_pickup["pickup_ready_action_allowed"])
+        self.assertTrue(ready_pickup["pickup_ready"])
+        self.assertTrue(ready_pickup["pickup_ship_action_allowed"])
+        self.assertTrue(ready_pickup["pickup_action_allowed"])
+        self.assertTrue(ready_pickup["paid_personal_pickup"])
+
+    def test_pickup_ready_and_ship_actions_use_separate_target_statuses(self) -> None:
+        pickup_shipping = price_element("shipping", "Osobný odber na sklade", "11")
+        paid_payment = price_element("payment", "Okamžitá platba online", "18")
+        project_settings = make_project_settings()
+        ready_client = FakePickupActionClient(
+            make_order("R-READY", "Platba online - zaplatené", paid_payment, pickup_shipping)
+        )
+        ship_client = FakePickupActionClient(
+            make_order("R-SHIP", "Pripravené k odberu", paid_payment, pickup_shipping)
+        )
+
+        with patch("roy_operations_dashboard.load_project_env"), patch(
+            "roy_operations_dashboard.load_project_settings",
+            return_value=project_settings,
+        ), patch("roy_operations_dashboard._build_client", return_value=ready_client):
+            ready_result = mark_personal_pickup_ready("roy", "R-READY")
+
+        with patch("roy_operations_dashboard.load_project_env"), patch(
+            "roy_operations_dashboard.load_project_settings",
+            return_value=project_settings,
+        ), patch("roy_operations_dashboard._build_client", return_value=ship_client):
+            ship_result = mark_personal_pickup_shipped("roy", "R-SHIP")
+
+        self.assertEqual([23], ready_client.changed_status_ids)
+        self.assertEqual("ready", ready_result["action"])
+        self.assertEqual("Pripravené k odberu", ready_result["target_status_name"])
+        self.assertEqual([4], ship_client.changed_status_ids)
+        self.assertEqual("ship", ship_result["action"])
+        self.assertEqual("Odoslaná", ship_result["target_status_name"])
 
     def test_snapshot_exposes_notes_addresses_and_wholesale_signal_for_pdf(self) -> None:
         settings = make_settings()
@@ -438,6 +509,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("loud-two-tone-v2", html)
         self.assertIn("playOrderAlertBurst", html)
         self.assertIn("notifyAboutNewFulfillableOrders", html)
+        self.assertIn("data-ready-pickup", html)
+        self.assertIn("/ready", html)
         self.assertIn("Vysklad. PDF", html)
         self.assertIn("/api/operations/roy/picking-lists.pdf", html)
         self.assertIn("seenFulfillableOrderKeys", html)
