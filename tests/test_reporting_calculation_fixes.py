@@ -288,6 +288,72 @@ class ReportingCalculationFixTests(unittest.TestCase):
             [order["order_num"] for order in filtered],
         )
 
+    def test_cod_status_without_payment_metadata_is_not_counted(self) -> None:
+        exporter = make_exporter()
+
+        missing_metadata = {
+            "order_num": "COD-MISSING",
+            "status": {"name": "Odoslana"},
+        }
+        paid_without_metadata = {
+            "order_num": "PAID-MISSING",
+            "status": {"name": "Platba online - zaplatene"},
+        }
+
+        self.assertEqual(
+            (False, "cod_status_missing_payment_metadata"),
+            exporter._realized_revenue_decision(missing_metadata),
+        )
+        self.assertEqual(
+            (True, "paid_status"),
+            exporter._realized_revenue_decision(paid_without_metadata),
+        )
+
+    def test_price_elements_page_failure_falls_back_and_enriches_cod_orders(self) -> None:
+        exporter = make_exporter()
+
+        class FallbackClient:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def execute(self, query, variable_values=None):
+                self.calls.append((query, variable_values))
+                if len(self.calls) == 1:
+                    raise Exception("{'path': ['getOrderList', 'data', 5, 'price_elements']}")
+                if len(self.calls) == 2:
+                    return {
+                        "getOrderList": {
+                            "data": [
+                                {
+                                    "id": "COD-FALLBACK",
+                                    "order_num": "COD-FALLBACK",
+                                    "pur_date": "2026-06-01 09:00:00",
+                                    "status": {"name": "Odoslana"},
+                                }
+                            ],
+                            "pageInfo": {
+                                "hasNextPage": False,
+                                "nextCursor": None,
+                            },
+                        }
+                    }
+                return {
+                    "getOrder": {
+                        "order_num": "COD-FALLBACK",
+                        "price_elements": [price_element("payment", "Dobierkou", "7")],
+                    }
+                }
+
+        exporter.client = FallbackClient()
+
+        orders, next_cursor = exporter.fetch_all_orders_bulk(max_orders=30)
+        filtered = exporter._filter_by_status(orders, track_excluded=False)
+
+        self.assertIsNone(next_cursor)
+        self.assertEqual(["COD-FALLBACK"], [order["order_num"] for order in filtered])
+        self.assertEqual("Dobierkou", exporter._price_element_info(orders[0], "payment")["title"])
+        self.assertEqual(3, len(exporter.client.calls))
+
     def test_flatten_order_exports_payment_audit_fields(self) -> None:
         exporter = make_exporter()
         order = {

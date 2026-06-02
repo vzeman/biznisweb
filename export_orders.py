@@ -431,6 +431,142 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 }
 """)
 
+ORDER_QUERY_WITHOUT_PRICE_ELEMENTS = gql("""
+query GetOrdersWithoutPriceElements($filter: OrderFilter, $params: OrderParams) {
+  getOrderList(filter: $filter, params: $params) {
+    data {
+      id
+      order_num
+      external_ref
+      pur_date
+      var_symb
+      last_change
+      oss
+      oss_country
+      status {
+        id
+        name
+        color
+      }
+      customer {
+        ... on Company {
+          company_name
+          company_id
+          vat_id
+          vat_id2
+          name
+          surname
+          email
+        }
+        ... on Person {
+          name
+          surname
+          email
+        }
+        ... on UnauthenticatedEmail {
+          name
+          surname
+          email
+        }
+      }
+      invoice_address {
+        street
+        descriptive_number
+        orientation_number
+        city
+        zip
+        country
+      }
+      items {
+        item_label
+        ean
+        import_code
+        warehouse_number
+        quantity
+        tax_rate
+        weight {
+          value
+          unit
+        }
+        recycle_fee {
+          value
+          formatted
+          is_net_price
+          currency {
+            symbol
+            code
+          }
+        }
+        price {
+          value
+          formatted
+          is_net_price
+          currency {
+            symbol
+            code
+          }
+        }
+        sum {
+          value
+          formatted
+          is_net_price
+          currency {
+            symbol
+            code
+          }
+        }
+        sum_with_tax {
+          value
+          formatted
+          is_net_price
+          currency {
+            symbol
+            code
+          }
+        }
+      }
+      sum {
+        value
+        formatted
+        is_net_price
+        currency {
+          symbol
+          code
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      nextCursor
+      previousCursor
+      pageIndex
+      totalPages
+    }
+  }
+}
+""")
+
+ORDER_PAYMENT_QUERY = gql("""
+query GetOrderPaymentMetadata($order_num: String!) {
+  getOrder(order_num: $order_num) {
+    order_num
+    price_elements {
+      type
+      title
+      value
+      reference_id
+      price {
+        value
+        raw_value
+        formatted
+        is_net_price
+      }
+    }
+  }
+}
+""")
+
 PRODUCT_INVENTORY_QUERY = gql("""
 query GetProductInventory($lang_code: CountryCodeAlpha2!, $params: ProductParams) {
   getProductList(lang_code: $lang_code, params: $params) {
@@ -2074,6 +2210,21 @@ class BizniWebExporter:
             "price": first.get("price") or None,
         }
 
+    @staticmethod
+    def _has_loaded_price_elements(order: Dict[str, Any]) -> bool:
+        return isinstance((order or {}).get("price_elements"), list)
+
+    @staticmethod
+    def _status_name(order: Dict[str, Any]) -> str:
+        return str(((order or {}).get("status") or {}).get("name") or "").strip()
+
+    def _status_norm(self, order: Dict[str, Any]) -> str:
+        return self._normalize_match_text(self._status_name(order))
+
+    @staticmethod
+    def _is_price_elements_error(error: Exception) -> bool:
+        return "price_elements" in str(error or "")
+
     def _resolve_realized_revenue_settings(self) -> Dict[str, Any]:
         raw = self.project_settings.get("realized_revenue") or {}
         paid_statuses = self._as_config_list(
@@ -2118,14 +2269,15 @@ class BizniWebExporter:
         )
 
     def _realized_revenue_decision(self, order: Dict[str, Any]) -> Tuple[bool, str]:
-        status_name = str(((order or {}).get("status") or {}).get("name") or "").strip()
-        status_norm = self._normalize_match_text(status_name)
+        status_norm = self._status_norm(order)
         settings = self.realized_revenue_settings
 
         if status_norm in settings["paid_statuses_normalized"]:
             return True, "paid_status"
 
         if status_norm in settings["cod_statuses_normalized"]:
+            if not self._has_loaded_price_elements(order):
+                return False, "cod_status_missing_payment_metadata"
             if self._is_cod_payment(order):
                 return True, "cod_status_and_payment"
             return False, "cod_status_without_cod_payment"
@@ -2133,6 +2285,81 @@ class BizniWebExporter:
         if not status_norm:
             return False, "missing_status"
         return False, "non_realized_status"
+
+    def _needs_payment_metadata_for_realized_revenue(self, order: Dict[str, Any]) -> bool:
+        if self._has_loaded_price_elements(order):
+            return False
+        status_norm = self._status_norm(order)
+        return status_norm in self.realized_revenue_settings["cod_statuses_normalized"]
+
+    def _fetch_order_payment_metadata(self, order: Dict[str, Any]) -> bool:
+        order_num = str((order or {}).get("order_num") or "").strip()
+        if not order_num:
+            return False
+
+        try:
+            result = self.client.execute(
+                ORDER_PAYMENT_QUERY,
+                variable_values={"order_num": order_num},
+            )
+        except Exception as exc:
+            logger.warning(
+                f"Could not fetch payment metadata for order {order_num}: {str(exc)[:200]}"
+            )
+            return False
+
+        fetched_order = (result or {}).get("getOrder") or {}
+        price_elements = fetched_order.get("price_elements")
+        if isinstance(price_elements, list):
+            order["price_elements"] = price_elements
+            return True
+
+        logger.warning(f"Payment metadata missing in getOrder response for order {order_num}")
+        return False
+
+    def _enrich_payment_metadata_for_realized_revenue(self, orders: List[Dict[str, Any]]) -> None:
+        candidates = [
+            order
+            for order in orders
+            if self._needs_payment_metadata_for_realized_revenue(order)
+        ]
+        if not candidates:
+            return
+
+        success_count = 0
+        for order in candidates:
+            if self._fetch_order_payment_metadata(order):
+                success_count += 1
+
+        failed_count = len(candidates) - success_count
+        logger.info(
+            "Payment metadata enrichment for realized revenue: "
+            f"attempted={len(candidates)}, succeeded={success_count}, failed={failed_count}"
+        )
+
+    def _execute_order_page_with_price_elements_fallback(
+        self,
+        variables: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        try:
+            return self.client.execute(ORDER_QUERY, variable_values=variables)
+        except Exception as exc:
+            if not self._is_price_elements_error(exc):
+                raise
+
+            params = dict((variables or {}).get("params") or {})
+            logger.warning(
+                "Order page failed while fetching price_elements; "
+                "retrying page without price_elements "
+                f"(sort={params.get('sort')}, cursor_present={bool(params.get('cursor'))})"
+            )
+            result = self.client.execute(
+                ORDER_QUERY_WITHOUT_PRICE_ELEMENTS,
+                variable_values=variables,
+            )
+            orders = ((result or {}).get("getOrderList") or {}).get("data") or []
+            self._enrich_payment_metadata_for_realized_revenue(orders)
+            return result
 
     @staticmethod
     def _compose_expense_key(*parts: Any) -> str:
@@ -3280,7 +3507,7 @@ class BizniWebExporter:
             
             while retry_count < max_retries and not success:
                 try:
-                    result = self.client.execute(ORDER_QUERY, variable_values=variables)
+                    result = self._execute_order_page_with_price_elements_fallback(variables)
                     orders_data = result.get('getOrderList', {})
                     orders = orders_data.get('data', [])
                     all_orders.extend(orders)
@@ -3533,7 +3760,7 @@ class BizniWebExporter:
 
             while retry_count < max_retries and not success:
                 try:
-                    result = self.client.execute(ORDER_QUERY, variable_values=variables)
+                    result = self._execute_order_page_with_price_elements_fallback(variables)
                     orders_data = result.get('getOrderList', {})
                     orders = orders_data.get('data', [])
                     all_orders.extend(orders)
@@ -3952,7 +4179,7 @@ class BizniWebExporter:
 
             while retry_count < max_retries and not success:
                 try:
-                    result = self.client.execute(ORDER_QUERY, variable_values=variables)
+                    result = self._execute_order_page_with_price_elements_fallback(variables)
                     orders_data = result.get('getOrderList', {})
                     orders = orders_data.get('data', [])
                     all_orders.extend(orders)
