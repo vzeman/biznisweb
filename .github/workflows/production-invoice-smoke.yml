@@ -1,0 +1,385 @@
+name: Production Invoice Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Invoice project to verify
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - vevo
+          - roy
+      marker:
+        description: Marker suffix written into the localhost smoke payload
+        required: true
+        default: invoice-email-dry-run
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: vevo-reporting
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  production-invoice-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run production invoice dry-run host smoke
+        shell: bash
+        env:
+          REQUESTED_PROJECT: ${{ inputs.project }}
+          MARKER_SUFFIX: ${{ inputs.marker }}
+        run: |
+          set -euo pipefail
+
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          ECR_LATEST_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag=latest \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          ECR_LATEST_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:latest"
+
+          if [[ "${REQUESTED_PROJECT}" == "all" ]]; then
+            PROJECTS="vevo roy"
+          else
+            PROJECTS="${REQUESTED_PROJECT}"
+          fi
+
+          for PROJECT in ${PROJECTS}; do
+            echo "::group::Production invoice smoke for ${PROJECT}"
+            SCHEDULE_NAME="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["invoice_generation"]["schedule_name"])
+          PY
+            )"
+            EXPECTED_TASK_FAMILY="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["invoice_generation"]["task_family"])
+          PY
+            )"
+            PROJECT_TIMEZONE="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["invoice_generation"].get("timezone") or "Europe/Bratislava")
+          PY
+            )"
+
+            aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > schedule.json
+            CLUSTER_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["Arn"])
+          PY
+            )"
+            TASK_DEFINITION_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])
+          PY
+            )"
+            LAUNCH_TYPE="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"].get("LaunchType") or "FARGATE")
+          PY
+            )"
+            PLATFORM_VERSION="$(python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"].get("PlatformVersion") or "")
+          PY
+            )"
+            python - <<'PY' > network.json
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          raw = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
+          normalized = {
+              "awsvpcConfiguration": {
+                  "subnets": raw.get("Subnets") or raw.get("subnets") or [],
+                  "securityGroups": raw.get("SecurityGroups") or raw.get("securityGroups") or [],
+                  "assignPublicIp": raw.get("AssignPublicIp") or raw.get("assignPublicIp") or "DISABLED",
+              }
+          }
+          print(json.dumps(normalized))
+          PY
+
+            if [[ "${TASK_DEFINITION_ARN}" != *":task-definition/${EXPECTED_TASK_FAMILY}:"* ]]; then
+              echo "Schedule ${SCHEDULE_NAME} targets ${TASK_DEFINITION_ARN}, expected family ${EXPECTED_TASK_FAMILY}" >&2
+              exit 1
+            fi
+
+            aws ecs describe-task-definition --task-definition "${TASK_DEFINITION_ARN}" --region "${AWS_REGION}" > task-definition.json
+            CONTAINER_NAME="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def["containerDefinitions"][0]["name"])
+          PY
+            )"
+            TASK_IMAGE="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def["containerDefinitions"][0]["image"])
+          PY
+            )"
+            LOG_GROUP="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          options = task_def["containerDefinitions"][0].get("logConfiguration", {}).get("options", {})
+          print(options.get("awslogs-group", ""))
+          PY
+            )"
+            LOG_PREFIX="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          options = task_def["containerDefinitions"][0].get("logConfiguration", {}).get("options", {})
+          print(options.get("awslogs-stream-prefix", ""))
+          PY
+            )"
+
+            if [[ "${TASK_IMAGE}" != "${ECR_LATEST_IMAGE}" ]]; then
+              echo "Invoice task image is ${TASK_IMAGE}, expected ${ECR_LATEST_IMAGE}" >&2
+              exit 1
+            fi
+
+            MARKER="${PROJECT}-${MARKER_SUFFIX}"
+            SMOKE_SCRIPT="$(cat <<'SH'
+          set -euo pipefail
+          PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
+          MARKER="${REPORT_OUTPUT_TAG:?REPORT_OUTPUT_TAG missing}"
+          PROJECT_TIMEZONE="${REPORT_TIMEZONE:-Europe/Bratislava}"
+          PIDS=()
+          cleanup() {
+            for pid in "${PIDS[@]:-}"; do
+              kill "${pid}" >/dev/null 2>&1 || true
+            done
+          }
+          trap cleanup EXIT
+          echo "INVOICE_SMOKE_START project=${PROJECT} marker=${MARKER}"
+          python - <<'PY' | tee /tmp/invoice-smoke.log
+          import argparse
+          import json
+          import os
+          from pathlib import Path
+
+          from generate_invoices import resolve_invoice_generation_settings
+          from invoice_runner import run_invoice_runner
+          from reporting_core import load_project_settings
+
+          project = os.environ["REPORT_PROJECT"]
+          timezone_name = os.environ.get("REPORT_TIMEZONE", "Europe/Bratislava")
+          settings = load_project_settings(project)
+          invoice_settings = resolve_invoice_generation_settings(settings)
+          assert invoice_settings["enabled"] is True
+          assert invoice_settings["send_invoice_email"] is True
+          args = argparse.Namespace(
+              project=project,
+              reference_date="",
+              from_date="",
+              to_date="",
+              timezone=timezone_name,
+              dry_run=True,
+              no_web_login=False,
+          )
+          summary = run_invoice_runner(args)
+          summary["send_invoice_email"] = invoice_settings["send_invoice_email"]
+          summary["eligible_statuses"] = invoice_settings["eligible_statuses"]
+          Path("/tmp/invoice-summary.json").write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+          print("INVOICE_SMOKE_SUMMARY " + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+          PY
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary = json.loads(Path("/tmp/invoice-summary.json").read_text(encoding="utf-8"))
+          assert summary["enabled"] is True
+          assert summary["dry_run"] is True
+          assert summary["send_invoice_email"] is True
+          assert int(summary["failed_invoices"]) == 0
+          assert int(summary["failed_invoice_emails"]) == 0
+          assert int(summary["missing_invoice_ids"]) == 0
+          marker_dir = Path("/tmp/invoice-marker")
+          marker_dir.mkdir(parents=True, exist_ok=True)
+          marker = {
+              "marker": "INVOICE_SMOKE_MARKER_OK",
+              "project": summary["project"],
+              "from_date": summary["from_date"],
+              "to_date": summary["to_date"],
+              "matched_orders": summary["matched_orders"],
+              "created_invoices": summary["created_invoices"],
+              "failed_invoices": summary["failed_invoices"],
+              "emailed_invoices": summary["emailed_invoices"],
+              "failed_invoice_emails": summary["failed_invoice_emails"],
+              "missing_invoice_ids": summary["missing_invoice_ids"],
+              "skipped_zero_total_orders": summary["skipped_zero_total_orders"],
+              "send_invoice_email": summary["send_invoice_email"],
+              "dry_run": summary["dry_run"],
+              "ecr_latest_digest": os.environ.get("ECR_LATEST_DIGEST", ""),
+          }
+          (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+          PY
+          python -m http.server 8000 --bind 127.0.0.1 --directory /tmp/invoice-marker >/tmp/invoice-marker/http.log 2>&1 &
+          PIDS+=("$!")
+          sleep 1
+          echo "INVOICE_MARKER_BEGIN"
+          curl -fsS http://127.0.0.1:8000/marker.json
+          echo
+          echo "INVOICE_MARKER_END"
+          SH
+            )"
+
+            export CONTAINER_NAME PROJECT MARKER PROJECT_TIMEZONE SMOKE_SCRIPT ECR_LATEST_DIGEST
+            python - <<'PY' > overrides.json
+          import json
+          import os
+          print(json.dumps({
+              "containerOverrides": [
+                  {
+                      "name": os.environ["CONTAINER_NAME"],
+                      "command": ["/bin/bash", "-lc", os.environ["SMOKE_SCRIPT"]],
+                      "environment": [
+                          {"name": "REPORT_PROJECT", "value": os.environ["PROJECT"]},
+                          {"name": "REPORT_OUTPUT_TAG", "value": os.environ["MARKER"]},
+                          {"name": "REPORT_TIMEZONE", "value": os.environ["PROJECT_TIMEZONE"]},
+                          {"name": "ECR_LATEST_DIGEST", "value": os.environ["ECR_LATEST_DIGEST"]},
+                      ],
+                  }
+              ]
+          }))
+          PY
+
+            RUN_ARGS=(
+              --cluster "${CLUSTER_ARN}"
+              --task-definition "${TASK_DEFINITION_ARN}"
+              --launch-type "${LAUNCH_TYPE}"
+              --network-configuration file://network.json
+              --overrides file://overrides.json
+              --started-by "codex-${MARKER}"
+              --region "${AWS_REGION}"
+            )
+            if [[ -n "${PLATFORM_VERSION}" ]]; then
+              RUN_ARGS+=(--platform-version "${PLATFORM_VERSION}")
+            fi
+
+            aws ecs run-task "${RUN_ARGS[@]}" > run-task.json
+            TASK_ARN="$(python - <<'PY'
+          import json
+          run = json.load(open("run-task.json", encoding="utf-8"))
+          failures = run.get("failures") or []
+          if failures:
+              raise SystemExit(f"run-task failures: {failures}")
+          print(run["tasks"][0]["taskArn"])
+          PY
+            )"
+            TASK_ID="${TASK_ARN##*/}"
+
+            PRIVATE_IP=""
+            for _ in $(seq 1 60); do
+              aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${TASK_ARN}" --region "${AWS_REGION}" > describe-running.json
+              PRIVATE_IP="$(python - <<'PY'
+          import json
+          tasks = json.load(open("describe-running.json", encoding="utf-8")).get("tasks") or []
+          details = []
+          for attachment in (tasks[0].get("attachments") or []) if tasks else []:
+              details.extend(attachment.get("details") or [])
+          print(next((item.get("value") for item in details if item.get("name") == "privateIPv4Address"), ""))
+          PY
+              )"
+              if [[ -n "${PRIVATE_IP}" ]]; then
+                break
+              fi
+              sleep 5
+            done
+
+            echo "HARD_GATE_CONTEXT project=${PROJECT}"
+            echo "instance-id=N/A (scheduled ECS/Fargate task)"
+            echo "private-ip=${PRIVATE_IP:-unavailable-before-stop}"
+            echo "service-name=${SCHEDULE_NAME}"
+            echo "task-definition=${TASK_DEFINITION_ARN}"
+            echo "task-arn=${TASK_ARN}"
+            echo "image-path=${TASK_IMAGE}"
+            echo "ecr-latest-digest=${ECR_LATEST_DIGEST}"
+            echo "marker-path=http://127.0.0.1:8000/marker.json"
+            echo "automation-command=python invoice_runner.py --project ${PROJECT} --dry-run"
+
+            TASK_STOPPED=false
+            for attempt in $(seq 1 160); do
+              aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${TASK_ARN}" --region "${AWS_REGION}" > describe-stopped.json
+              LAST_STATUS="$(python - <<'PY'
+          import json
+          task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
+          print(task.get("lastStatus", ""))
+          PY
+              )"
+              if [[ "${LAST_STATUS}" == "STOPPED" ]]; then
+                TASK_STOPPED=true
+                break
+              fi
+              if (( attempt % 4 == 0 )); then
+                echo "Task ${TASK_ID} still ${LAST_STATUS:-unknown} after $((attempt * 15))s"
+              fi
+              sleep 15
+            done
+
+            if [[ "${TASK_STOPPED}" != "true" ]]; then
+              echo "Task ${TASK_ARN} did not stop within 40 minutes; stopping smoke task." >&2
+              aws ecs stop-task \
+                --cluster "${CLUSTER_ARN}" \
+                --task "${TASK_ARN}" \
+                --reason "Production invoice smoke timed out" \
+                --region "${AWS_REGION}" || true
+              exit 1
+            fi
+
+            EXIT_CODE="$(python - <<'PY'
+          import json
+          task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
+          print(task["containers"][0].get("exitCode", ""))
+          PY
+            )"
+
+            if [[ -n "${LOG_GROUP}" && -n "${LOG_PREFIX}" ]]; then
+              LOG_STREAM="${LOG_PREFIX}/${CONTAINER_NAME}/${TASK_ID}"
+              echo "CloudWatch log stream: ${LOG_GROUP}:${LOG_STREAM}"
+              aws logs get-log-events \
+                --log-group-name "${LOG_GROUP}" \
+                --log-stream-name "${LOG_STREAM}" \
+                --region "${AWS_REGION}" \
+                --query 'events[].message' \
+                --output text || true
+            fi
+
+            if [[ "${EXIT_CODE}" != "0" ]]; then
+              echo "Task ${TASK_ARN} failed with exit code ${EXIT_CODE}" >&2
+              exit 1
+            fi
+            echo "PRODUCTION_INVOICE_SMOKE_OK:${PROJECT}:${TASK_ID}:${PRIVATE_IP:-no-ip}:${ECR_LATEST_DIGEST}"
+            echo "::endgroup::"
+          done

@@ -62,13 +62,16 @@ Bootstrap entrypoints:
 ## 5) Current Verified State
 
 - VEVO/ROY invoice email automation change is implemented locally on `2026-06-03`:
-  - branch: `codex/auto-email-created-invoices`
+  - branch: `codex/auto-email-created-invoices`; merged PR `#163` into `main` (`63a0f40`)
   - change: `invoice_generation.send_invoice_email` is explicit and enabled for VEVO and ROY; newly created invoices must be emailed through the BizniWeb invoice email action when the setting is enabled
   - implementation: invoice finalization now resolves invoice id from JSON/HTML response or by re-reading `getOrder(order_num) { invoices { id invoice_num } }`, then calls `/erp/orders/invoices/sendEmail/<invoice_id>` with AJAX headers
   - runner behavior: `invoice_runner.py` and the legacy daily-report invoice hook now publish email metrics and fail the run if a created invoice cannot be emailed or if the invoice id cannot be resolved
+  - ECR refresh: Build and Push ECR run `26882007249` succeeded for merge commit `63a0f40`; `latest` digest `sha256:9a144775eedf3199d992f881dff2ca186e4787d681ef8493e4bd34c8db5c53eb`
+  - smoke workflow addition: branch `codex/production-invoice-smoke` adds `.github/workflows/production-invoice-smoke.yml`, a GitHub Actions workflow that runs `invoice_runner.py --dry-run` on the real VEVO/ROY invoice ECS/Fargate schedule task definitions and verifies `curl http://127.0.0.1:8000/marker.json` with `INVOICE_SMOKE_MARKER_OK`
   - local verification: `python -m py_compile generate_invoices.py invoice_runner.py daily_report_runner.py`; `python -m json.tool projects/vevo/settings.json`; `python -m json.tool projects/roy/settings.json`; `python -m json.tool templates/reporting-client/settings.template.json`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`; `git diff --check`
-  - production status: not deployed yet
-  - Next exact step: commit/push branch, open/merge PR, rebuild ECR `latest`, then run production invoice smoke for VEVO and ROY with ECS/Fargate hard-gate context, localhost marker, and only then any UI/public check
+  - workflow verification: `python scripts/security_ci.py`; YAML parse for `.github/workflows/production-invoice-smoke.yml`; `git diff --check`
+  - production status: ECR is refreshed, but VEVO/ROY invoice host smoke is not run yet
+  - Next exact step: commit/push the smoke workflow branch, open/merge PR, then dispatch `Production Invoice Smoke` with `project=all` and marker `invoice-email-dry-run-20260603`; record VEVO/ROY hard-gate context, localhost marker output, and final status here
 
 - ROY personal pickup ready checkbox was implemented and deployed on `2026-06-02`:
   - change: ROY live dashboard personal pickup cards now have a separate `Pripravené k odberu` checkbox before the existing customer pickup/`Odoslaná` action
