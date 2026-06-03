@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,15 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- VEVO/ROY invoice email automation change is implemented locally on `2026-06-03`:
+  - branch: `codex/auto-email-created-invoices`
+  - change: `invoice_generation.send_invoice_email` is explicit and enabled for VEVO and ROY; newly created invoices must be emailed through the BizniWeb invoice email action when the setting is enabled
+  - implementation: invoice finalization now resolves invoice id from JSON/HTML response or by re-reading `getOrder(order_num) { invoices { id invoice_num } }`, then calls `/erp/orders/invoices/sendEmail/<invoice_id>` with AJAX headers
+  - runner behavior: `invoice_runner.py` and the legacy daily-report invoice hook now publish email metrics and fail the run if a created invoice cannot be emailed or if the invoice id cannot be resolved
+  - local verification: `python -m py_compile generate_invoices.py invoice_runner.py daily_report_runner.py`; `python -m json.tool projects/vevo/settings.json`; `python -m json.tool projects/roy/settings.json`; `python -m json.tool templates/reporting-client/settings.template.json`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity`; `git diff --check`
+  - production status: not deployed yet
+  - Next exact step: commit/push branch, open/merge PR, rebuild ECR `latest`, then run production invoice smoke for VEVO and ROY with ECS/Fargate hard-gate context, localhost marker, and only then any UI/public check
 
 - ROY personal pickup ready checkbox was implemented and deployed on `2026-06-02`:
   - change: ROY live dashboard personal pickup cards now have a separate `Pripravené k odberu` checkbox before the existing customer pickup/`Odoslaná` action

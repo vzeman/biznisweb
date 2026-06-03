@@ -147,6 +147,9 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
     put_metric("InvoiceStandaloneSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
     put_metric("InvoiceStandaloneCreated", summary.created_invoices, project, reporting_defaults)
     put_metric("InvoiceStandaloneCreateFailures", summary.failed_invoices, project, reporting_defaults)
+    put_metric("InvoiceStandaloneEmailed", summary.emailed_invoices, project, reporting_defaults)
+    put_metric("InvoiceStandaloneEmailFailures", summary.failed_invoice_emails, project, reporting_defaults)
+    put_metric("InvoiceStandaloneMissingInvoiceIds", summary.missing_invoice_ids, project, reporting_defaults)
     put_metric("InvoiceStandaloneRunSucceeded", 1, project, reporting_defaults)
 
     print(
@@ -154,11 +157,20 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         f"matched={summary.matched_orders} "
         f"created={summary.created_invoices} "
         f"failed={summary.failed_invoices} "
+        f"emailed={summary.emailed_invoices} "
+        f"email_failed={summary.failed_invoice_emails} "
+        f"missing_invoice_ids={summary.missing_invoice_ids} "
         f"skipped_zero_total={summary.skipped_zero_total_orders}"
     )
 
-    if not args.dry_run and summary.failed_invoices:
-        raise RuntimeError(f"Invoice automation failed for {summary.failed_invoices} order(s) in project '{project}'")
+    if not args.dry_run and (summary.failed_invoices or summary.failed_invoice_emails):
+        raise RuntimeError(
+            (
+                f"Invoice automation failed for project '{project}': "
+                f"create_failures={summary.failed_invoices}, "
+                f"email_failures={summary.failed_invoice_emails}"
+            )
+        )
 
     return {
         "project": summary.project,
@@ -168,6 +180,9 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         "matched_orders": summary.matched_orders,
         "created_invoices": summary.created_invoices,
         "failed_invoices": summary.failed_invoices,
+        "emailed_invoices": summary.emailed_invoices,
+        "failed_invoice_emails": summary.failed_invoice_emails,
+        "missing_invoice_ids": summary.missing_invoice_ids,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
         "dry_run": summary.dry_run,
     }

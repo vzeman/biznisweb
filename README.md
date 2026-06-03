@@ -317,7 +317,9 @@ python generate_invoices.py --dry-run
 3. **Fetch Orders** - Retrieves orders from GraphQL API for the specified date range
 4. **Filter Orders** - Identifies orders matching the criteria (cash on delivery, no invoice)
 5. **Create Invoices** - Creates invoices for each matching order via web API
-6. **Send Emails** - Automatically sends invoice emails to customers
+6. **Send Emails** - Automatically sends invoice emails to customers through the BizniWeb invoice email action
+
+When `invoice_generation.send_invoice_email` is enabled, the invoice run fails if a newly created invoice cannot be emailed or if the invoice ID cannot be resolved for the BizniWeb send action.
 
 ### Output
 

@@ -116,6 +116,18 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 }
 """)
 
+ORDER_INVOICE_QUERY = gql("""
+query GetOrderInvoices($order_num: String!) {
+  getOrder(order_num: $order_num) {
+    order_num
+    invoices {
+      id
+      invoice_num
+    }
+  }
+}
+""")
+
 
 @dataclass
 class InvoiceRunSummary:
@@ -127,8 +139,24 @@ class InvoiceRunSummary:
     matched_orders: int = 0
     created_invoices: int = 0
     failed_invoices: int = 0
+    emailed_invoices: int = 0
+    failed_invoice_emails: int = 0
+    missing_invoice_ids: int = 0
     skipped_zero_total_orders: int = 0
     total_amount: float = 0.0
+
+
+@dataclass
+class InvoiceCreationResult:
+    created: bool = False
+    invoice_id: Optional[str] = None
+    invoice_num: Optional[str] = None
+    email_required: bool = True
+    email_sent: bool = False
+    email_error: str = ""
+
+    def __bool__(self) -> bool:
+        return self.created and (not self.email_required or self.email_sent)
 
 
 def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -155,6 +183,7 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
         "lookback_days": max(1, lookback_days),
         "exclude_zero_total_orders": bool(raw_settings.get("exclude_zero_total_orders", True)),
         "eligible_statuses": eligible_statuses,
+        "send_invoice_email": bool(raw_settings.get("send_invoice_email", True)),
     }
 
 
@@ -232,6 +261,75 @@ def _redact_headers(headers: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
+def _extract_invoice_id_from_payload(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+
+    for key in ("invoice_id", "invoiceId", "invoiceID"):
+        value = payload.get(key)
+        if value not in (None, ""):
+            return str(value)
+
+    invoice = payload.get("invoice")
+    if isinstance(invoice, dict):
+        value = invoice.get("id") or invoice.get("invoice_id") or invoice.get("invoiceId")
+        if value not in (None, ""):
+            return str(value)
+
+    for key in ("data", "result", "record"):
+        nested = payload.get(key)
+        nested_invoice_id = _extract_invoice_id_from_payload(nested)
+        if nested_invoice_id:
+            return nested_invoice_id
+
+    value = payload.get("id")
+    if value not in (None, ""):
+        return str(value)
+
+    return None
+
+
+def _extract_invoice_num_from_payload(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+
+    for key in ("invoice_num", "invoiceNum", "number"):
+        value = payload.get(key)
+        if value not in (None, ""):
+            return str(value)
+
+    invoice = payload.get("invoice")
+    if isinstance(invoice, dict):
+        value = invoice.get("invoice_num") or invoice.get("invoiceNum") or invoice.get("number")
+        if value not in (None, ""):
+            return str(value)
+
+    for key in ("data", "result", "record"):
+        nested = payload.get(key)
+        nested_invoice_num = _extract_invoice_num_from_payload(nested)
+        if nested_invoice_num:
+            return nested_invoice_num
+
+    return None
+
+
+def _extract_invoice_id_from_text(*values: Any) -> Optional[str]:
+    patterns = (
+        r"/erp/orders/invoices/(?:detail|edit|sendEmail)/(\d+)",
+        r"[\"']invoice[_-]?id[\"']\s*[:=]\s*[\"']?(\d+)",
+        r"[\"']invoiceId[\"']\s*[:=]\s*[\"']?(\d+)",
+    )
+    for value in values:
+        text = str(value or "")
+        if not text:
+            continue
+        for pattern in patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                return match.group(1)
+    return None
+
+
 class InvoiceGenerator:
     def __init__(
         self,
@@ -242,6 +340,7 @@ class InvoiceGenerator:
         password: Optional[str] = None,
         exclude_zero_total_orders: bool = True,
         eligible_statuses: Optional[Iterable[str]] = None,
+        send_invoice_email: bool = True,
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
@@ -262,6 +361,7 @@ class InvoiceGenerator:
         self.arf_token = None
         self.exclude_zero_total_orders = exclude_zero_total_orders
         self.eligible_statuses = tuple(eligible_statuses or DEFAULT_INVOICE_ELIGIBLE_STATUSES)
+        self.send_invoice_email_enabled = bool(send_invoice_email)
         
         # Initialize web session if credentials provided
         if username and password:
@@ -755,6 +855,39 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             return filtered_orders
 
         return all_orders
+
+    def fetch_latest_invoice_for_order(self, order_num: Any) -> Tuple[Optional[str], Optional[str]]:
+        """Read the order again after invoice finalization and return its invoice id/number."""
+        normalized_order_num = str(order_num or "").strip()
+        if not normalized_order_num:
+            return None, None
+
+        try:
+            result = self.client.execute(
+                ORDER_INVOICE_QUERY,
+                variable_values={"order_num": normalized_order_num},
+            )
+            order = result.get("getOrder") or {}
+            invoices = order.get("invoices") or []
+            if not invoices:
+                logger.warning("Order %s has no invoices after finalization fallback", normalized_order_num)
+                return None, None
+
+            invoice = invoices[-1] or {}
+            invoice_id = invoice.get("id")
+            invoice_num = invoice.get("invoice_num")
+            if invoice_id:
+                logger.info(
+                    "Resolved invoice id %s for order %s via GraphQL fallback",
+                    invoice_id,
+                    normalized_order_num,
+                )
+            return (str(invoice_id) if invoice_id not in (None, "") else None), (
+                str(invoice_num) if invoice_num not in (None, "") else None
+            )
+        except Exception as exc:
+            logger.error("Failed to resolve invoice id for order %s after finalization: %s", normalized_order_num, exc)
+            return None, None
     
     def filter_orders_for_invoice(self, orders: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """Filter orders that need invoice generation"""
@@ -797,9 +930,10 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 
         return filtered_orders, stats
     
-    def create_invoice(self, order: Dict[str, Any]) -> bool:
+    def create_invoice(self, order: Dict[str, Any]) -> InvoiceCreationResult:
         """Create invoice for the order"""
         order_num = order.get('order_num')
+        creation_result = InvoiceCreationResult(email_required=self.send_invoice_email_enabled)
         customer = order.get('customer', {})
         customer_name = customer.get('company_name', '')
         if not customer_name:
@@ -813,128 +947,136 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         logger.info(f"  Amount: {order_sum}")
         logger.info(f"  Status: {order.get('status', {}).get('name', 'N/A')}")
         
-        # Create invoice using web session
         try:
-                # Add timestamp to avoid caching
-                import time
+            import time
+            timestamp = int(time.time() * 1000)
+
+            order_id = order.get('id')
+            logger.debug(f"Order {order_num} has ID: {order_id}")
+
+            headers = {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Referer': f'{self.base_url}/erp/orders/orders/detail/{order_num}'
+            }
+
+            create_url = self.invoice_create_url.format(order_num=order_num)
+            if self.arf_token:
+                create_url += f"?arf={self.arf_token}&_dc={timestamp}"
+            else:
+                create_url += f"?_dc={timestamp}"
+
+            logger.debug(f"Attempting to create invoice first: {create_url}")
+            create_response = self.web_session.post(create_url, headers=headers)
+
+            if create_response.status_code == 200:
+                try:
+                    create_result = create_response.json()
+                    logger.debug(f"Create response: {create_result}")
+                    if not create_result.get('success'):
+                        logger.debug(f"Create step failed: {create_result.get('errors', {}).get('reason', 'Unknown error')}")
+                except json.JSONDecodeError:
+                    logger.debug(f"Create response not JSON: {create_response.text[:200]}")
+
+            time.sleep(1)
+
+            response = None
+            finalize_url = ""
+            urls_to_try = [('order_num', order_num)]
+            if order_id:
+                urls_to_try.append(('order_id', order_id))
+
+            for url_type, identifier in urls_to_try:
+                finalize_url = self.invoice_finalize_url.format(order_num=identifier)
                 timestamp = int(time.time() * 1000)
-                
-                # Get order ID from the order data (not order_num)
-                order_id = order.get('id')
-                logger.debug(f"Order {order_num} has ID: {order_id}")
-                
-                # Set headers for AJAX request
-                headers = {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json, text/javascript, */*; q=0.01',
-                    'Referer': f'{self.base_url}/erp/orders/orders/detail/{order_num}'
-                }
-                
-                # First try to create the invoice (this might be required before finalization)
-                create_url = self.invoice_create_url.format(order_num=order_num)
                 if self.arf_token:
-                    create_url += f"?arf={self.arf_token}&_dc={timestamp}"
+                    finalize_url += f"?arf={self.arf_token}&_dc={timestamp}"
                 else:
-                    create_url += f"?_dc={timestamp}"
-                
-                logger.debug(f"Attempting to create invoice first: {create_url}")
-                create_response = self.web_session.post(create_url, headers=headers)
-                
-                if create_response.status_code == 200:
-                    try:
-                        create_result = create_response.json()
-                        logger.debug(f"Create response: {create_result}")
-                        if not create_result.get('success'):
-                            logger.debug(f"Create step failed: {create_result.get('errors', {}).get('reason', 'Unknown error')}")
-                    except json.JSONDecodeError:
-                        logger.debug(f"Create response not JSON: {create_response.text[:200]}")
-                
-                # Add a small delay to avoid locking issues
-                time.sleep(1)
-                
-                # Now try to finalize the invoice
-                # Try order_num first, then order_id
-                urls_to_try = [('order_num', order_num)]
-                if order_id:
-                    urls_to_try.append(('order_id', order_id))
-                
-                for url_type, identifier in urls_to_try:
-                    # Create invoice URL
-                    finalize_url = self.invoice_finalize_url.format(order_num=identifier)
-                    timestamp = int(time.time() * 1000)  # New timestamp for finalize
-                    if self.arf_token:
-                        finalize_url += f"?arf={self.arf_token}&_dc={timestamp}"
-                    else:
-                        finalize_url += f"?_dc={timestamp}"
-                    
-                    logger.debug(f"Attempting to finalize invoice via {url_type}: {finalize_url}")
-                    
-                    # Try POST first, then GET if it fails
-                    response = self.web_session.post(finalize_url, headers=headers)
-                    
-                    if response.status_code == 405:  # Method not allowed
-                        logger.debug("POST not allowed, trying GET")
-                        response = self.web_session.get(finalize_url, headers=headers)
-                    
-                    # If successful, break out of loop
-                    if response.status_code == 200:
-                        break
-                    elif response.status_code == 400:
-                        logger.debug(f"Got 400 error with {url_type}, trying next...")
-                        continue
-                
-                # Check if invoice was created
+                    finalize_url += f"?_dc={timestamp}"
+
+                logger.debug(f"Attempting to finalize invoice via {url_type}: {finalize_url}")
+                response = self.web_session.post(finalize_url, headers=headers)
+
+                if response.status_code == 405:
+                    logger.debug("POST not allowed, trying GET")
+                    response = self.web_session.get(finalize_url, headers=headers)
+
                 if response.status_code == 200:
-                    # Log the raw response first
-                    logger.debug(f"  Raw response: {response.text[:1000]}")
-                    
-                    # Try to parse response
-                    try:
-                        result = response.json()
-                        logger.debug(f"  JSON response: {result}")
-                        if result.get('success'):
-                            invoice_id = result.get('invoice_id') or result.get('id')
-                            invoice_num = result.get('invoice_num')
-                            logger.info(f"  âś“ Invoice created: {invoice_num}")
-                            
-                            # Try to send email
-                            if invoice_id:
-                                if self.send_invoice_email(invoice_id):
-                                    logger.info(f"  âś“ Invoice email notification sent successfully to customer")
-                                else:
-                                    logger.warning(f"  âš  Failed to send invoice email notification")
-                            
-                            return True
-                        else:
-                            error_msg = result.get('message') or result.get('errors', {}).get('reason', 'Unknown error')
-                            logger.error(f"  âś— Invoice creation failed: {error_msg}")
-                            return False
-                    except json.JSONDecodeError:
-                        # Response might be HTML, check for success indicators
-                        if 'success' in response.text.lower() or 'invoice' in response.text.lower():
-                            logger.info(f"  âś“ Invoice likely created (HTML response)")
-                            return True
-                        else:
-                            logger.error(f"  âś— Invoice creation failed (HTML response)")
-                            logger.debug(f"  âś— HTML response: {response.text[:500]}")
-                            return False
-                elif response.status_code == 400:
-                    # Log the actual error response
-                    logger.error(f"  âś— Bad request (400) - URL: {finalize_url}")
-                    try:
-                        error_detail = response.json()
-                        logger.error(f"  âś— Error details: {error_detail}")
-                    except:
-                        logger.error(f"  âś— Error response: {response.text[:500]}")
-                    return False
+                    break
+                if response.status_code == 400:
+                    logger.debug(f"Got 400 error with {url_type}, trying next...")
+                    continue
+
+            if response is None:
+                logger.error("  âś— Invoice creation failed before finalization response")
+                return creation_result
+
+            if response.status_code == 200:
+                logger.debug(f"  Raw response: {response.text[:1000]}")
+                response_payload = None
+                try:
+                    response_payload = response.json()
+                    logger.debug(f"  JSON response: {response_payload}")
+                except json.JSONDecodeError:
+                    response_payload = None
+
+                if isinstance(response_payload, dict):
+                    if not response_payload.get('success'):
+                        error_msg = response_payload.get('message') or response_payload.get('errors', {}).get('reason', 'Unknown error')
+                        logger.error(f"  âś— Invoice creation failed: {error_msg}")
+                        return creation_result
+                    creation_result.created = True
+                    creation_result.invoice_id = _extract_invoice_id_from_payload(response_payload)
+                    creation_result.invoice_num = _extract_invoice_num_from_payload(response_payload)
+                elif 'success' in response.text.lower() or 'invoice' in response.text.lower():
+                    creation_result.created = True
+                    creation_result.invoice_id = _extract_invoice_id_from_text(response.text, response.url)
+                    logger.info("  âś“ Invoice likely created (HTML response)")
                 else:
-                    logger.error(f"  âś— Invoice creation failed with status {response.status_code}")
-                    logger.error(f"  âś— Response: {response.text[:500]}")
-                    return False
+                    logger.error("  âś— Invoice creation failed (HTML response)")
+                    logger.debug(f"  âś— HTML response: {response.text[:500]}")
+                    return creation_result
+
+                if not creation_result.invoice_id:
+                    fallback_invoice_id, fallback_invoice_num = self.fetch_latest_invoice_for_order(order_num)
+                    creation_result.invoice_id = fallback_invoice_id
+                    creation_result.invoice_num = creation_result.invoice_num or fallback_invoice_num
+
+                logger.info(f"  âś“ Invoice created: {creation_result.invoice_num or creation_result.invoice_id or 'unknown'}")
+
+                if not self.send_invoice_email_enabled:
+                    logger.info("  Invoice email notification skipped by configuration")
+                    return creation_result
+
+                if not creation_result.invoice_id:
+                    creation_result.email_error = "missing_invoice_id"
+                    logger.error("  âś— Invoice email notification not sent: missing invoice id")
+                    return creation_result
+
+                if self.send_invoice_email(creation_result.invoice_id):
+                    creation_result.email_sent = True
+                    logger.info("  âś“ Invoice email notification sent successfully to customer")
+                else:
+                    creation_result.email_error = "send_failed"
+                    logger.error("  âś— Failed to send invoice email notification")
+                return creation_result
+
+            if response.status_code == 400:
+                logger.error(f"  âś— Bad request (400) - URL: {finalize_url}")
+                try:
+                    error_detail = response.json()
+                    logger.error(f"  âś— Error details: {error_detail}")
+                except Exception:
+                    logger.error(f"  âś— Error response: {response.text[:500]}")
+                return creation_result
+
+            logger.error(f"  âś— Invoice creation failed with status {response.status_code}")
+            logger.error(f"  âś— Response: {response.text[:500]}")
+            return creation_result
                             
         except Exception as e:
             logger.error(f"  âś— Error creating invoice: {e}")
-            return False
+            return creation_result
     
     def send_invoice_email(self, invoice_id: str) -> bool:
         """Send invoice email notification to customer"""
@@ -949,7 +1091,15 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 send_url += f"?_dc={timestamp}"
             
             logger.debug(f"Sending invoice email via: {send_url}")
-            response = self.web_session.post(send_url)
+            headers = {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Referer': f'{self.base_url}/erp/orders/invoices/detail/{invoice_id}',
+            }
+            response = self.web_session.post(send_url, headers=headers)
+            if response.status_code == 405:
+                logger.debug("Invoice email POST not allowed, trying GET")
+                response = self.web_session.get(send_url, headers=headers)
             response.raise_for_status()
             
             # Check response
@@ -1039,6 +1189,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         # Process orders for invoice creation
         success_count = 0
         failed_count = 0
+        email_failed_count = 0
         total_amount = 0.0
         processed_orders = []
         
@@ -1047,17 +1198,21 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             customer = order.get('customer', {})
             customer_email = customer.get('email', 'N/A')
             
-            if self.create_invoice(order):
+            result = self.create_invoice(order)
+            if result.created:
                 success_count += 1
                 # Try to extract numeric value from formatted amount
                 order_sum = order.get('sum', {}).get('value', 0)
                 if order_sum:
                     total_amount += float(order_sum)
-                processed_orders.append({
-                    'order_num': order_num,
-                    'email': customer_email,
-                    'amount': order.get('sum', {}).get('formatted', 'N/A')
-                })
+                if result.email_required and not result.email_sent:
+                    email_failed_count += 1
+                else:
+                    processed_orders.append({
+                        'order_num': order_num,
+                        'email': customer_email,
+                        'amount': order.get('sum', {}).get('formatted', 'N/A')
+                    })
             else:
                 failed_count += 1
         
@@ -1066,6 +1221,8 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         logger.info(f"  âś“ Invoices created: {success_count}")
         if failed_count > 0:
             logger.info(f"  âś— Failed: {failed_count}")
+        if email_failed_count > 0:
+            logger.info(f"  âś— Invoice emails failed: {email_failed_count}")
         logger.info(f"  Skipped zero-total orders: {filter_stats.get('skipped_zero_total_orders', 0)}")
         logger.info(f"  Total amount: â‚¬{total_amount:.2f}")
         logger.info("=" * 60)
@@ -1113,6 +1270,7 @@ def run_invoice_generation(
         None if no_web_login else web_password,
         exclude_zero_total_orders=invoice_settings["exclude_zero_total_orders"],
         eligible_statuses=invoice_settings["eligible_statuses"],
+        send_invoice_email=invoice_settings["send_invoice_email"],
     )
 
     summary = InvoiceRunSummary(
@@ -1153,18 +1311,32 @@ def run_invoice_generation(
         return summary
 
     for order in orders_for_invoice:
-        if generator.create_invoice(order):
+        result = generator.create_invoice(order)
+        if result.created:
             summary.created_invoices += 1
             summary.total_amount += _coerce_order_total_value(order)
+            if result.email_required:
+                if result.email_sent:
+                    summary.emailed_invoices += 1
+                else:
+                    summary.failed_invoice_emails += 1
+                    if result.email_error == "missing_invoice_id":
+                        summary.missing_invoice_ids += 1
         else:
             summary.failed_invoices += 1
 
     logger.info(
-        "Invoice run summary - project=%s matched=%s created=%s failed=%s skipped_zero_total=%s total_amount=%.2f",
+        (
+            "Invoice run summary - project=%s matched=%s created=%s failed=%s "
+            "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s total_amount=%.2f"
+        ),
         summary.project,
         summary.matched_orders,
         summary.created_invoices,
         summary.failed_invoices,
+        summary.emailed_invoices,
+        summary.failed_invoice_emails,
+        summary.missing_invoice_ids,
         summary.skipped_zero_total_orders,
         summary.total_amount,
     )
@@ -1224,14 +1396,20 @@ def main():
         no_web_login=args.no_web_login,
     )
     logger.info(
-        "Invoice run summary - project=%s matched=%s created=%s failed=%s skipped_zero_total=%s",
+        (
+            "Invoice run summary - project=%s matched=%s created=%s failed=%s "
+            "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s"
+        ),
         summary.project,
         summary.matched_orders,
         summary.created_invoices,
         summary.failed_invoices,
+        summary.emailed_invoices,
+        summary.failed_invoice_emails,
+        summary.missing_invoice_ids,
         summary.skipped_zero_total_orders,
     )
-    if not args.dry_run and summary.failed_invoices:
+    if not args.dry_run and (summary.failed_invoices or summary.failed_invoice_emails):
         raise SystemExit(1)
 
 
