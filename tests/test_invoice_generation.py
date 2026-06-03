@@ -17,13 +17,70 @@ from invoice_runner import resolve_invoice_runner_window
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
+class _FakeInvoiceResponse:
+    def __init__(self, url: str, payload: dict | None = None, status_code: int = 200) -> None:
+        self.url = url
+        self._payload = payload
+        self.status_code = status_code
+        self.text = json.dumps(payload or {})
+
+    def json(self) -> dict:
+        if self._payload is None:
+            raise json.JSONDecodeError("no json", self.text, 0)
+        return self._payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+class _FakeInvoiceWebSession:
+    def __init__(self) -> None:
+        self.post_urls: list[str] = []
+        self.get_urls: list[str] = []
+
+    def post(self, url: str, headers: dict | None = None) -> _FakeInvoiceResponse:
+        self.post_urls.append(url)
+        if "/erp/orders/invoices/create/" in url:
+            return _FakeInvoiceResponse(url, {"success": True})
+        if "/erp/orders/invoices/finalize/" in url:
+            return _FakeInvoiceResponse(url, {"success": True, "invoice_num": "FV-123"})
+        if "/erp/orders/invoices/sendEmail/" in url:
+            return _FakeInvoiceResponse(url, {"success": True})
+        return _FakeInvoiceResponse(url, {"success": False}, status_code=404)
+
+    def get(self, url: str, headers: dict | None = None) -> _FakeInvoiceResponse:
+        self.get_urls.append(url)
+        return _FakeInvoiceResponse(url, {"success": True})
+
+
+class _FakeInvoiceClient:
+    def __init__(self, invoices: list[dict]) -> None:
+        self.invoices = invoices
+
+    def execute(self, query, variable_values=None):
+        return {
+            "getOrder": {
+                "order_num": (variable_values or {}).get("order_num"),
+                "invoices": self.invoices,
+            }
+        }
+
+
 class InvoiceGenerationTests(unittest.TestCase):
     def test_invoice_generation_settings_default_zero_total_exclusion(self) -> None:
         settings = resolve_invoice_generation_settings({"invoice_generation": {"enabled": True}})
         self.assertTrue(settings["enabled"])
         self.assertEqual(settings["lookback_days"], 7)
         self.assertTrue(settings["exclude_zero_total_orders"])
+        self.assertTrue(settings["send_invoice_email"])
         self.assertEqual(["Odoslan\u00e1"], settings["eligible_statuses"])
+
+    def test_invoice_generation_settings_can_disable_invoice_email(self) -> None:
+        settings = resolve_invoice_generation_settings(
+            {"invoice_generation": {"enabled": True, "send_invoice_email": False}}
+        )
+        self.assertFalse(settings["send_invoice_email"])
 
     def test_resolve_invoice_date_window_uses_rolling_lookback(self) -> None:
         from_date, to_date = resolve_invoice_date_window("2026-04-24", 7)
@@ -66,6 +123,8 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual("cron(59 23 * * ? *)", roy["invoice_generation"]["final_sweep_schedule_expression"])
         self.assertEqual(["Odoslan\u00e1"], vevo["invoice_generation"]["eligible_statuses"])
         self.assertEqual(["Odoslan\u00e1"], roy["invoice_generation"]["eligible_statuses"])
+        self.assertTrue(vevo["invoice_generation"]["send_invoice_email"])
+        self.assertTrue(roy["invoice_generation"]["send_invoice_email"])
 
         self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
         self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])
@@ -102,6 +161,61 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
         self.assertEqual(["A-2"], [order["order_num"] for order in filtered])
         self.assertEqual(1, stats["skipped_zero_total_orders"])
+
+    @patch("time.sleep", return_value=None)
+    def test_create_invoice_sends_email_using_graphql_invoice_fallback(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            send_invoice_email=True,
+        )
+        generator.web_session = _FakeInvoiceWebSession()
+        generator.client = _FakeInvoiceClient([{"id": "INV-123", "invoice_num": "FV-123"}])
+        generator.arf_token = "arf123"
+
+        result = generator.create_invoice(
+            {
+                "id": "ORDER-ID",
+                "order_num": "1001",
+                "customer": {"email": "customer@example.test"},
+                "status": {"name": "Odoslana"},
+                "sum": {"value": 12.5, "formatted": "12.50 EUR"},
+            }
+        )
+
+        self.assertTrue(result)
+        self.assertTrue(result.created)
+        self.assertEqual("INV-123", result.invoice_id)
+        self.assertTrue(result.email_sent)
+        self.assertTrue(any("/erp/orders/invoices/sendEmail/INV-123" in url for url in generator.web_session.post_urls))
+
+    @patch("time.sleep", return_value=None)
+    def test_create_invoice_requires_invoice_id_when_email_enabled(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            send_invoice_email=True,
+        )
+        generator.web_session = _FakeInvoiceWebSession()
+        generator.client = _FakeInvoiceClient([])
+        generator.arf_token = "arf123"
+
+        result = generator.create_invoice(
+            {
+                "id": "ORDER-ID",
+                "order_num": "1001",
+                "customer": {"email": "customer@example.test"},
+                "status": {"name": "Odoslana"},
+                "sum": {"value": 12.5, "formatted": "12.50 EUR"},
+            }
+        )
+
+        self.assertFalse(result)
+        self.assertTrue(result.created)
+        self.assertFalse(result.email_sent)
+        self.assertEqual("missing_invoice_id", result.email_error)
 
     @patch("daily_report_runner.put_metric")
     @patch("daily_report_runner.run_invoice_generation")
@@ -148,12 +262,15 @@ class InvoiceGenerationTests(unittest.TestCase):
                 "matched_orders": 3,
                 "created_invoices": 0,
                 "failed_invoices": 0,
+                "emailed_invoices": 0,
+                "failed_invoice_emails": 0,
+                "missing_invoice_ids": 0,
                 "skipped_zero_total_orders": 2,
                 "dry_run": True,
             },
             result,
         )
-        self.assertEqual(5, put_metric_mock.call_count)
+        self.assertEqual(8, put_metric_mock.call_count)
 
 
 if __name__ == "__main__":

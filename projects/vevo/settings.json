@@ -43,6 +43,7 @@
     "enabled": true,
     "lookback_days": 7,
     "exclude_zero_total_orders": true,
+    "send_invoice_email": true,
     "eligible_statuses": [
       "Odoslaná"
     ],

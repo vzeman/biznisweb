@@ -180,11 +180,18 @@ def maybe_run_invoice_automation(
     put_metric("InvoiceAutomationSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
     put_metric("InvoiceAutomationCreated", summary.created_invoices, project, reporting_defaults)
     put_metric("InvoiceAutomationCreateFailures", summary.failed_invoices, project, reporting_defaults)
+    put_metric("InvoiceAutomationEmailed", summary.emailed_invoices, project, reporting_defaults)
+    put_metric("InvoiceAutomationEmailFailures", summary.failed_invoice_emails, project, reporting_defaults)
+    put_metric("InvoiceAutomationMissingInvoiceIds", summary.missing_invoice_ids, project, reporting_defaults)
     put_metric("InvoiceAutomationRunSucceeded", 1, project, reporting_defaults)
 
-    if not dry_run and summary.failed_invoices:
+    if not dry_run and (summary.failed_invoices or summary.failed_invoice_emails):
         raise RuntimeError(
-            f"Invoice automation failed for {summary.failed_invoices} order(s) in project '{project}'"
+            (
+                f"Invoice automation failed for project '{project}': "
+                f"create_failures={summary.failed_invoices}, "
+                f"email_failures={summary.failed_invoice_emails}"
+            )
         )
 
     return {
@@ -193,6 +200,9 @@ def maybe_run_invoice_automation(
         "matched_orders": summary.matched_orders,
         "created_invoices": summary.created_invoices,
         "failed_invoices": summary.failed_invoices,
+        "emailed_invoices": summary.emailed_invoices,
+        "failed_invoice_emails": summary.failed_invoice_emails,
+        "missing_invoice_ids": summary.missing_invoice_ids,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
         "dry_run": summary.dry_run,
     }
@@ -1188,6 +1198,8 @@ def main() -> None:
                 f"matched={invoice_summary['matched_orders']} "
                 f"created={invoice_summary['created_invoices']} "
                 f"failed={invoice_summary['failed_invoices']} "
+                f"emailed={invoice_summary['emailed_invoices']} "
+                f"email_failed={invoice_summary['failed_invoice_emails']} "
                 f"skipped_zero_total={invoice_summary['skipped_zero_total_orders']}"
             )
 
