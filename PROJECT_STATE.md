@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-03
+Last updated: 2026-06-09
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -61,13 +61,18 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY HU COD fulfillment fix is implemented locally on `2026-06-09`:
+- ROY HU COD fulfillment fix is implemented and deployed on `2026-06-09`:
   - root cause: Hungarian COD orders such as `2679000027` and `2679000026` use BiznisWeb payment `Utánvétes fizetés` with `reference_id=16`; ROY operations dashboard only recognized SK/CZ COD IDs `7` and `10`, so those orders stayed `not_ready` and were not included in picking-list PDF generation
   - change: `projects/roy/settings.json` now recognizes `cod_payment_ids=["7","10","16"]` and text fallbacks `utanvetes`/`utanvet` in both `operations_dashboard` and `realized_revenue`
   - local live-data verification: direct BiznisWeb checks for orders `2679000027` and `2679000026` now return `fulfillable=True`, `fulfillment_reason=cod_waiting`
   - local tests: `python -m json.tool projects\roy\settings.json`; `python -m py_compile roy_operations_dashboard.py export_orders.py live_dashboard_server.py`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
-  - production status: not deployed yet from this branch
-  - Next exact step: push branch `codex/roy-hu-cod-fulfillable`, open/merge PR, deploy ROY App Runner, then verify live API/PDF preview includes orders `2679000027` and `2679000026` as `cod_waiting`
+  - PR/deploy: PR `#166` merged into `main` (`f82c521`); ECR build run `27209415810` succeeded with `latest` digest `sha256:d7418756823d4b6b3387130aae44e2a05a391e46562244a1c8e75f81beb795a8`; ROY App Runner deploy run `27209579662` succeeded
+  - Fargate hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.19.244`, service `roy-daily-report-email`, task definition `roy-reporting-daily:31`, task `efc61698ad01438a8940498d3df6b647`, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:d7418756823d4b6b3387130aae44e2a05a391e46562244a1c8e75f81beb795a8`, marker path `http://127.0.0.1:8000/marker.json`, marker `LIVE_ARTIFACT_MARKER_OK`
+  - App Runner hard-gate: instance-id `N/A (AWS App Runner managed service)`, private IP `N/A (AWS App Runner managed service)`, service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, health path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`, production path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, digest `sha256:d7418756823d4b6b3387130aae44e2a05a391e46562244a1c8e75f81beb795a8`
+  - production smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=25:personal_pickups=0:inventory_alerts=19:inventory_rows=160:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=283825`; `APP_RUNNER_DEPLOY_OK:biznisweb-roy-operations-dashboard:https://qvfzvh82c3.eu-central-1.awsapprunner.com`
+  - post-deploy live verification: `/api/operations/roy/live?refresh=1` returned both orders `2679000027` and `2679000026` as `fulfillable=True`, `fulfillment_reason=cod_waiting`; `/api/operations/roy/picking-lists.pdf?refresh=1&preview=1` returned a PDF containing both order numbers without marking them printed
+  - UI verification: Browser smoke on `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy` showed `NA VYBAVENIE=25`, `16 online + 9 dobierka`, and both order numbers after live data loaded
+  - Next exact step: use the live dashboard print action when ready; the preview verification did not mark these orders as printed
 
 - VEVO/ROY invoice email automation change is implemented locally on `2026-06-03`:
   - branch: `codex/auto-email-created-invoices`; merged PR `#163` into `main` (`63a0f40`)
