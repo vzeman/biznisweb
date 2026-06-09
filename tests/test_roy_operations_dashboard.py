@@ -30,7 +30,18 @@ def make_project_settings() -> dict:
             "enabled": True,
             "paid_statuses": ["Platba online - zaplatené"],
             "cod_statuses": ["Čaká na vybavenie"],
-            "cod_payment_patterns": ["dobierka", "dobírka", "utanvetes", "utanvet"],
+            "cod_payment_patterns": [
+                "dobierka",
+                "dobírka",
+                "utanvetes",
+                "utanvet",
+                "cash on delivery",
+                "platnosc przy odbiorze",
+                "nachnahme",
+                "paiement a la livraison",
+                "contra reembolso",
+                "ramburs",
+            ],
             "cod_payment_ids": ["7", "10", "16"],
             "personal_pickup_shipping_names": ["Osobný odber na sklade"],
             "personal_pickup_shipping_ids": ["11"],
@@ -120,6 +131,10 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Čaká na vybavenie", operations["cod_statuses"])
         self.assertIn("16", operations["cod_payment_ids"])
         self.assertIn("utanvetes", operations["cod_payment_patterns"])
+        self.assertIn("cash on delivery", operations["cod_payment_patterns"])
+        self.assertIn("platnosc przy odbiorze", operations["cod_payment_patterns"])
+        self.assertIn("nachnahme", operations["cod_payment_patterns"])
+        self.assertIn("paiement a la livraison", operations["cod_payment_patterns"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["wachman"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["roy"])
         self.assertEqual(12, inventory["lead_time_working_days_by_brand"]["maco_stop"])
@@ -171,6 +186,33 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertTrue(ready_pickup["pickup_ship_action_allowed"])
         self.assertTrue(ready_pickup["pickup_action_allowed"])
         self.assertTrue(ready_pickup["paid_personal_pickup"])
+
+    def test_multilingual_cod_titles_are_fulfillable_without_known_payment_id(self) -> None:
+        settings = make_settings()
+        packeta_shipping = price_element("shipping", "Packeta - výdajné miesto", "9")
+        payment_titles = [
+            "Cash on delivery",
+            "Płatność przy odbiorze",
+            "Zahlung per Nachnahme",
+            "Paiement à la livraison",
+            "Pago contra reembolso",
+            "Plata ramburs",
+        ]
+        orders = [
+            make_order(
+                f"FOREIGN-COD-{index}",
+                "Čaká na vybavenie",
+                price_element("payment", payment_title, str(900 + index)),
+                packeta_shipping,
+            )
+            for index, payment_title in enumerate(payment_titles, start=1)
+        ]
+
+        snapshot = build_roy_orders_snapshot(project="roy", orders=orders, settings=settings)
+
+        self.assertEqual(len(payment_titles), snapshot["summary"]["fulfillable_orders"])
+        self.assertEqual(len(payment_titles), snapshot["summary"]["cod_waiting_orders"])
+        self.assertTrue(all(row["fulfillment_reason"] == "cod_waiting" for row in snapshot["orders"]))
 
     def test_pickup_ready_and_ship_actions_use_separate_target_statuses(self) -> None:
         pickup_shipping = price_element("shipping", "Osobný odber na sklade", "11")

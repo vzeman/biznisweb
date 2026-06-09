@@ -39,6 +39,29 @@ DEFAULT_CACHE_TTL_SECONDS = 60
 DEFAULT_AUTO_REFRESH_SECONDS = 90
 DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT = 10.0
 DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY = True
+LATIN_FOLD_TRANSLATION = str.maketrans(
+    {
+        "Ł": "L",
+        "ł": "l",
+        "Đ": "D",
+        "đ": "d",
+        "Ð": "D",
+        "ð": "d",
+        "Þ": "Th",
+        "þ": "th",
+        "Æ": "Ae",
+        "æ": "ae",
+        "Œ": "Oe",
+        "œ": "oe",
+        "Ø": "O",
+        "ø": "o",
+        "ß": "ss",
+        "ẞ": "SS",
+        "Ħ": "H",
+        "ħ": "h",
+        "ı": "i",
+    }
+)
 
 
 ROY_OPERATIONS_ORDER_QUERY = gql(
@@ -529,13 +552,13 @@ def clear_inbound_stock_order(project: str, sku: str) -> Dict[str, Any]:
 
 def _normalize_text(value: Any) -> str:
     raw = str(value or "").strip().lower()
-    decomposed = unicodedata.normalize("NFKD", raw)
+    decomposed = unicodedata.normalize("NFKD", raw).translate(LATIN_FOLD_TRANSLATION)
     without_marks = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
     return " ".join(without_marks.split())
 
 
 def _normalize_match_text(value: Any) -> str:
-    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = unicodedata.normalize("NFKD", str(value or "")).translate(LATIN_FOLD_TRANSLATION)
     text = "".join(ch for ch in text if not unicodedata.combining(ch)).lower()
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return re.sub(r"\s+", " ", text).strip()

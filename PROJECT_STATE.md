@@ -61,6 +61,14 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY multilingual COD fallback is implemented locally on `2026-06-09`:
+  - change: ROY `operations_dashboard` and `realized_revenue` now include wider COD payment title fallbacks for future foreign-language orders, including English, Polish, Romanian, German, French, Italian, Spanish/Portuguese, Balkan, Dutch, and Cyrillic COD terms
+  - change: string normalization in `roy_operations_dashboard.py` and `export_orders.py` now folds Latin characters that do not decompose through standard accent removal, including Polish `ł`, so titles such as `Płatność przy odbiorze` match configured fallback terms
+  - stable behavior: known BiznisWeb payment IDs `7`, `10`, and `16` remain the primary safe match; multilingual text matching is a fallback for new language variants or new payment IDs with recognizable COD wording
+  - local tests: `python -m json.tool projects\roy\settings.json`; `python -m py_compile roy_operations_dashboard.py export_orders.py live_dashboard_server.py`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
+  - production status: not deployed yet from this branch
+  - Next exact step: merge and deploy ROY App Runner, then verify live dashboard smoke still passes
+
 - ROY HU COD fulfillment fix is implemented and deployed on `2026-06-09`:
   - root cause: Hungarian COD orders such as `2679000027` and `2679000026` use BiznisWeb payment `Utánvétes fizetés` with `reference_id=16`; ROY operations dashboard only recognized SK/CZ COD IDs `7` and `10`, so those orders stayed `not_ready` and were not included in picking-list PDF generation
   - change: `projects/roy/settings.json` now recognizes `cod_payment_ids=["7","10","16"]` and text fallbacks `utanvetes`/`utanvet` in both `operations_dashboard` and `realized_revenue`
