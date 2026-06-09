@@ -61,6 +61,14 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY HU COD fulfillment fix is implemented locally on `2026-06-09`:
+  - root cause: Hungarian COD orders such as `2679000027` and `2679000026` use BiznisWeb payment `Utánvétes fizetés` with `reference_id=16`; ROY operations dashboard only recognized SK/CZ COD IDs `7` and `10`, so those orders stayed `not_ready` and were not included in picking-list PDF generation
+  - change: `projects/roy/settings.json` now recognizes `cod_payment_ids=["7","10","16"]` and text fallbacks `utanvetes`/`utanvet` in both `operations_dashboard` and `realized_revenue`
+  - local live-data verification: direct BiznisWeb checks for orders `2679000027` and `2679000026` now return `fulfillable=True`, `fulfillment_reason=cod_waiting`
+  - local tests: `python -m json.tool projects\roy\settings.json`; `python -m py_compile roy_operations_dashboard.py export_orders.py live_dashboard_server.py`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
+  - production status: not deployed yet from this branch
+  - Next exact step: push branch `codex/roy-hu-cod-fulfillable`, open/merge PR, deploy ROY App Runner, then verify live API/PDF preview includes orders `2679000027` and `2679000026` as `cod_waiting`
+
 - VEVO/ROY invoice email automation change is implemented locally on `2026-06-03`:
   - branch: `codex/auto-email-created-invoices`; merged PR `#163` into `main` (`63a0f40`)
   - change: `invoice_generation.send_invoice_email` is explicit and enabled for VEVO and ROY; newly created invoices must be emailed through the BizniWeb invoice email action when the setting is enabled

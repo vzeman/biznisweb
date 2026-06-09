@@ -10,11 +10,11 @@ from export_orders import BizniWebExporter
 from reporting_core.cfo_kpis import build_order_records_from_export_df
 
 
-def make_exporter() -> BizniWebExporter:
+def make_exporter(project_name: str = "vevo") -> BizniWebExporter:
     return BizniWebExporter(
         api_url="https://example.com/api/graphql",
         api_token="token",
-        project_name="vevo",
+        project_name=project_name,
         output_tag="unit",
         enable_period_bundle=False,
     )
@@ -294,6 +294,15 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
         self.assertEqual(
             (True, "prepaid_fulfilled_status"),
+            exporter._realized_revenue_decision(order),
+        )
+
+    def test_roy_realized_revenue_counts_hungarian_cod(self) -> None:
+        exporter = make_exporter("roy")
+        order = reporting_order("HU-COD", "Čaká na vybavenie", "Utánvétes fizetés", "16")
+
+        self.assertEqual(
+            (True, "cod_status_and_payment"),
             exporter._realized_revenue_decision(order),
         )
 
