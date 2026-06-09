@@ -96,11 +96,14 @@
       "dobierkou",
       "dobírka",
       "dobírkou",
-      "cash on delivery"
+      "cash on delivery",
+      "utanvetes",
+      "utanvet"
     ],
     "cod_payment_ids": [
       "7",
-      "10"
+      "10",
+      "16"
     ],
     "prepaid_fulfilled_statuses": [
       "Odoslana"
@@ -206,11 +209,14 @@
       "dobierka",
       "dobierkou",
       "dobírka",
-      "dobírkou"
+      "dobírkou",
+      "utanvetes",
+      "utanvet"
     ],
     "cod_payment_ids": [
       "7",
-      "10"
+      "10",
+      "16"
     ],
     "personal_pickup_shipping_names": [
       "Osobný odber na sklade"

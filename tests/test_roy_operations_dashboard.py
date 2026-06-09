@@ -30,8 +30,8 @@ def make_project_settings() -> dict:
             "enabled": True,
             "paid_statuses": ["Platba online - zaplatené"],
             "cod_statuses": ["Čaká na vybavenie"],
-            "cod_payment_patterns": ["dobierka", "dobírka"],
-            "cod_payment_ids": ["7", "10"],
+            "cod_payment_patterns": ["dobierka", "dobírka", "utanvetes", "utanvet"],
+            "cod_payment_ids": ["7", "10", "16"],
             "personal_pickup_shipping_names": ["Osobný odber na sklade"],
             "personal_pickup_shipping_ids": ["11"],
             "pickup_ready_status_name": "Pripravené k odberu",
@@ -118,6 +118,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(10, operations["wholesale_detection"]["discount_threshold_pct"])
         self.assertTrue(operations["wholesale_detection"]["require_company_customer"])
         self.assertIn("Čaká na vybavenie", operations["cod_statuses"])
+        self.assertIn("16", operations["cod_payment_ids"])
+        self.assertIn("utanvetes", operations["cod_payment_patterns"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["wachman"])
         self.assertEqual(30, inventory["lead_time_working_days_by_brand"]["roy"])
         self.assertEqual(12, inventory["lead_time_working_days_by_brand"]["maco_stop"])
@@ -141,14 +143,15 @@ class RoyOperationsDashboardTests(unittest.TestCase):
             make_order("R-5", "Platba online - zaplatené", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
             make_order("R-6", "Nezaplatená - zrušená objednávka", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
             make_order("R-7", "Pripravené k odberu", price_element("payment", "Okamžitá platba online", "18"), pickup_shipping),
+            make_order("R-8", "Čaká na vybavenie", price_element("payment", "Utánvétes fizetés", "16"), packeta_shipping),
         ]
 
         snapshot = build_roy_orders_snapshot(project="roy", orders=orders, settings=settings)
 
-        self.assertEqual(3, snapshot["summary"]["fulfillable_orders"])
+        self.assertEqual(4, snapshot["summary"]["fulfillable_orders"])
         self.assertEqual(2, snapshot["summary"]["paid_online_orders"])
-        self.assertEqual(1, snapshot["summary"]["cod_waiting_orders"])
-        self.assertEqual(["R-1", "R-2", "R-5"], [row["order_num"] for row in snapshot["orders"]])
+        self.assertEqual(2, snapshot["summary"]["cod_waiting_orders"])
+        self.assertEqual(["R-1", "R-2", "R-5", "R-8"], [row["order_num"] for row in snapshot["orders"]])
         self.assertEqual("13,70 EUR", snapshot["orders"][0]["items"][0]["unit_price_formatted"])
         self.assertEqual(["R-5", "R-7"], [row["order_num"] for row in snapshot["personal_pickups"]])
         self.assertEqual(1, snapshot["summary"]["pickup_ready_actions_available"])
