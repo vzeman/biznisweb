@@ -306,6 +306,30 @@ class ReportingCalculationFixTests(unittest.TestCase):
             exporter._realized_revenue_decision(order),
         )
 
+    def test_roy_realized_revenue_counts_multilingual_cod_titles_without_known_id(self) -> None:
+        exporter = make_exporter("roy")
+        payment_titles = [
+            "Cash on delivery",
+            "Płatność przy odbiorze",
+            "Zahlung per Nachnahme",
+            "Paiement à la livraison",
+            "Pago contra reembolso",
+            "Plata ramburs",
+        ]
+
+        for index, payment_title in enumerate(payment_titles, start=1):
+            with self.subTest(payment_title=payment_title):
+                order = reporting_order(
+                    f"FOREIGN-COD-{index}",
+                    "Čaká na vybavenie",
+                    payment_title,
+                    str(900 + index),
+                )
+                self.assertEqual(
+                    (True, "cod_status_and_payment"),
+                    exporter._realized_revenue_decision(order),
+                )
+
     def test_cod_status_without_payment_metadata_is_not_counted(self) -> None:
         exporter = make_exporter()
 

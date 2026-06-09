@@ -225,6 +225,29 @@ DEFAULT_REALIZED_REVENUE_COD_PAYMENT_IDS = [
     '7',
     '10',
 ]
+LATIN_FOLD_TRANSLATION = str.maketrans(
+    {
+        'Ł': 'L',
+        'ł': 'l',
+        'Đ': 'D',
+        'đ': 'd',
+        'Ð': 'D',
+        'ð': 'd',
+        'Þ': 'Th',
+        'þ': 'th',
+        'Æ': 'Ae',
+        'æ': 'ae',
+        'Œ': 'Oe',
+        'œ': 'oe',
+        'Ø': 'O',
+        'ø': 'o',
+        'ß': 'ss',
+        'ẞ': 'SS',
+        'Ħ': 'H',
+        'ħ': 'h',
+        'ı': 'i',
+    }
+)
 DEFAULT_REALIZED_REVENUE_PREPAID_FULFILLED_STATUSES = [
     'Odoslana',
 ]
@@ -2305,7 +2328,7 @@ class BizniWebExporter:
     @staticmethod
     def _normalize_match_text(value: Any) -> str:
         """Normalize strings for robust contains-based matching across accents/encoding/punctuation."""
-        text = unicodedata.normalize('NFKD', str(value or ''))
+        text = unicodedata.normalize('NFKD', str(value or '')).translate(LATIN_FOLD_TRANSLATION)
         text = ''.join(ch for ch in text if not unicodedata.combining(ch)).lower()
         text = re.sub(r'[^a-z0-9]+', ' ', text)
         return re.sub(r'\s+', ' ', text).strip()
