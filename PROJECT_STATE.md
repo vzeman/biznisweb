@@ -61,13 +61,17 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY multilingual COD fallback is implemented locally on `2026-06-09`:
+- ROY multilingual COD fallback is implemented and deployed on `2026-06-09`:
   - change: ROY `operations_dashboard` and `realized_revenue` now include wider COD payment title fallbacks for future foreign-language orders, including English, Polish, Romanian, German, French, Italian, Spanish/Portuguese, Balkan, Dutch, and Cyrillic COD terms
   - change: string normalization in `roy_operations_dashboard.py` and `export_orders.py` now folds Latin characters that do not decompose through standard accent removal, including Polish `ł`, so titles such as `Płatność przy odbiorze` match configured fallback terms
   - stable behavior: known BiznisWeb payment IDs `7`, `10`, and `16` remain the primary safe match; multilingual text matching is a fallback for new language variants or new payment IDs with recognizable COD wording
   - local tests: `python -m json.tool projects\roy\settings.json`; `python -m py_compile roy_operations_dashboard.py export_orders.py live_dashboard_server.py`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
-  - production status: not deployed yet from this branch
-  - Next exact step: merge and deploy ROY App Runner, then verify live dashboard smoke still passes
+  - PR/deploy: PR `#168` merged into `main` (`2252ec1`); ECR build run `27211059373` succeeded with `latest` digest `sha256:5fde6f46b52c54edd53ca685550f45cb57a5775c3f6f15c46b585a9b68fa9e77`; ROY App Runner deploy run `27211206949` succeeded
+  - Fargate hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.15.147`, service `roy-daily-report-email`, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:5fde6f46b52c54edd53ca685550f45cb57a5775c3f6f15c46b585a9b68fa9e77`, marker path `http://127.0.0.1:8000/marker.json`, marker `LIVE_ARTIFACT_MARKER_OK`
+  - App Runner hard-gate: instance-id `N/A (AWS App Runner managed service)`, private IP `N/A (AWS App Runner managed service)`, service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, health path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`, production path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, digest `sha256:5fde6f46b52c54edd53ca685550f45cb57a5775c3f6f15c46b585a9b68fa9e77`
+  - production smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=26:personal_pickups=0:inventory_alerts=19:inventory_rows=160:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=292621`; `APP_RUNNER_DEPLOY_OK:biznisweb-roy-operations-dashboard:https://qvfzvh82c3.eu-central-1.awsapprunner.com`
+  - post-deploy live verification: `/health` returned `200`; `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard`, `fulfillable_orders=26`, `cod_waiting_orders=9`, and orders `2679000026`/`2679000027` still as `cod_waiting`
+  - Next exact step: when a new foreign-language payment method appears, verify whether its payment title matches one of the configured COD fallbacks; if BiznisWeb uses an unrelated title, add its stable payment `reference_id`
 
 - ROY HU COD fulfillment fix is implemented and deployed on `2026-06-09`:
   - root cause: Hungarian COD orders such as `2679000027` and `2679000026` use BiznisWeb payment `Utánvétes fizetés` with `reference_id=16`; ROY operations dashboard only recognized SK/CZ COD IDs `7` and `10`, so those orders stayed `not_ready` and were not included in picking-list PDF generation
