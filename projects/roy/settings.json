@@ -301,7 +301,8 @@
     "wholesale_detection": {
       "enabled": true,
       "discount_threshold_pct": 10,
-      "require_company_customer": true
+      "require_company_customer": true,
+      "retail_tax_rate": 23
     }
   },
   "inventory_model": {

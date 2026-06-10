@@ -39,6 +39,7 @@ DEFAULT_CACHE_TTL_SECONDS = 60
 DEFAULT_AUTO_REFRESH_SECONDS = 90
 DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT = 10.0
 DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY = True
+DEFAULT_WHOLESALE_RETAIL_TAX_RATE = 23.0
 LATIN_FOLD_TRANSLATION = str.maketrans(
     {
         "Ł": "L",
@@ -709,6 +710,11 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
                 wholesale_raw.get("require_company_customer"),
                 DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY,
             ),
+            "retail_tax_rate": _as_float(
+                wholesale_raw.get("retail_tax_rate"),
+                DEFAULT_WHOLESALE_RETAIL_TAX_RATE,
+                minimum=0.0,
+            ),
         },
     }
 
@@ -1014,9 +1020,40 @@ def _item_unit_gross_price(item: Dict[str, Any]) -> Optional[float]:
     return unit_price * (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else unit_price
 
 
+def _item_unit_net_price(item: Dict[str, Any]) -> Optional[float]:
+    quantity = _to_float(item.get("quantity"))
+    if quantity <= 0:
+        return None
+    tax_rate = _item_tax_rate(item)
+    net_total = _price_number(item.get("sum"))
+    if net_total is not None:
+        return net_total / quantity
+    gross_total = _price_number(item.get("sum_with_tax"))
+    if gross_total is not None:
+        net_total = gross_total / (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else gross_total
+        return net_total / quantity
+    unit_price = _price_number(item.get("price"))
+    if unit_price is None:
+        return None
+    # BizniWeb ROY item unit prices behave as net values even when is_net_price is false.
+    return unit_price
+
+
 def _product_retail_gross_price(item: Dict[str, Any]) -> Optional[float]:
     product = item.get("product") if isinstance(item.get("product"), dict) else {}
     return _price_as_gross(product.get("final_price"), _item_tax_rate(item))
+
+
+def _product_retail_net_price(item: Dict[str, Any], retail_tax_rate: float) -> Optional[float]:
+    product = item.get("product") if isinstance(item.get("product"), dict) else {}
+    final_price = product.get("final_price")
+    value = _price_number(final_price)
+    if value is None:
+        return None
+    if isinstance(final_price, dict) and bool(final_price.get("is_net_price")):
+        return value
+    tax_rate = _item_tax_rate(item) or retail_tax_rate
+    return value / (1.0 + (tax_rate / 100.0)) if tax_rate > 0 else value
 
 
 def _normalize_discount_signal(value: Any) -> str:
@@ -1050,6 +1087,7 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
     if threshold_pct <= 0:
         threshold_pct = DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT
     threshold_ratio = max(0.0, 1.0 - (threshold_pct / 100.0))
+    retail_tax_rate = _to_float(detection.get("retail_tax_rate"))
 
     priced_lines = 0
     discounted_lines = 0
@@ -1059,8 +1097,8 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
     for item in order.get("items") or []:
         if not isinstance(item, dict):
             continue
-        item_price = _item_unit_gross_price(item)
-        retail_price = _product_retail_gross_price(item)
+        item_price = _item_unit_net_price(item)
+        retail_price = _product_retail_net_price(item, retail_tax_rate)
         if item_price is None or retail_price is None or item_price <= 0 or retail_price <= 0:
             continue
         priced_lines += 1
@@ -1074,8 +1112,9 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
                     {
                         "import_code": str(item.get("import_code") or "").strip(),
                         "label": str(item.get("item_label") or "").strip(),
-                        "order_unit_gross": round(item_price, 2),
-                        "retail_unit_gross": round(retail_price, 2),
+                        "order_unit_net": round(item_price, 2),
+                        "retail_unit_net": round(retail_price, 2),
+                        "comparison_basis": "net",
                         "discount_pct": round(discount_pct, 1),
                     }
                 )
@@ -1105,6 +1144,7 @@ def _detect_wholesale_pricing(order: Dict[str, Any], customer: Dict[str, Any], s
         "discount_code_used": discount_code_used,
         "max_discount_pct": round(max_discount_pct, 1),
         "threshold_pct": round(threshold_pct, 1),
+        "comparison_basis": "net",
         "reason": reason,
         "examples": examples,
     }

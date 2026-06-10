@@ -61,6 +61,14 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY wholesale detection VAT-basis fix is implemented locally on `2026-06-10`:
+  - root cause: ROY picking-list wholesale detection compared order item prices against current retail final prices on a gross/VAT-including basis; foreign company orders sold without VAT could therefore look like discounted/wholesale orders even when the customer paid the normal net price
+  - change: wholesale detection now compares unit prices on a net basis; order line net price is compared against current retail final price converted to net using `operations_dashboard.wholesale_detection.retail_tax_rate=23`
+  - behavior: foreign B2B VAT-exempt orders at normal net retail price are not marked wholesale; foreign B2B VAT-exempt orders with a true net discount still are marked wholesale
+  - local tests: `python -m json.tool projects\roy\settings.json`; `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
+  - production status: not deployed yet from this branch
+  - Next exact step: merge and deploy ROY App Runner, then verify live smoke and spot-check wholesale flags if a known foreign VAT-exempt company order is available
+
 - ROY multilingual COD fallback is implemented and deployed on `2026-06-09`:
   - change: ROY `operations_dashboard` and `realized_revenue` now include wider COD payment title fallbacks for future foreign-language orders, including English, Polish, Romanian, German, French, Italian, Spanish/Portuguese, Balkan, Dutch, and Cyrillic COD terms
   - change: string normalization in `roy_operations_dashboard.py` and `export_orders.py` now folds Latin characters that do not decompose through standard accent removal, including Polish `ł`, so titles such as `Płatność przy odbiorze` match configured fallback terms
