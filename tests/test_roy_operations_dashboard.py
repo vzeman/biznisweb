@@ -51,6 +51,12 @@ def make_project_settings() -> dict:
             "pickup_ship_action_statuses": ["Pripravené k odberu"],
             "shipped_status_name": "Odoslaná",
             "shipped_status_id": 4,
+            "wholesale_detection": {
+                "enabled": True,
+                "discount_threshold_pct": 10,
+                "require_company_customer": True,
+                "retail_tax_rate": 23,
+            },
         }
     }
 
@@ -128,6 +134,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(4, operations["shipped_status_id"])
         self.assertEqual(10, operations["wholesale_detection"]["discount_threshold_pct"])
         self.assertTrue(operations["wholesale_detection"]["require_company_customer"])
+        self.assertEqual(23, operations["wholesale_detection"]["retail_tax_rate"])
         self.assertIn("Čaká na vybavenie", operations["cod_statuses"])
         self.assertIn("16", operations["cod_payment_ids"])
         self.assertIn("utanvetes", operations["cod_payment_patterns"])
@@ -298,6 +305,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Sklad B2B", row["delivery_address"]["lines"])
         self.assertTrue(row["wholesale_pricing"]["is_wholesale"])
         self.assertEqual(20.0, row["wholesale_pricing"]["max_discount_pct"])
+        self.assertEqual("net", row["wholesale_pricing"]["comparison_basis"])
 
     def test_discounted_person_order_is_not_wholesale_when_company_signal_is_required(self) -> None:
         settings = make_settings()
@@ -368,6 +376,87 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertTrue(wholesale["customer_is_company"])
         self.assertEqual(0.0, wholesale["max_discount_pct"])
         self.assertEqual("company customer, no wholesale price discount detected", wholesale["reason"])
+
+    def test_foreign_vat_exempt_company_full_net_price_is_not_wholesale(self) -> None:
+        settings = make_settings()
+        paid_payment = price_element("payment", "Okamžitá platba online", "18")
+        packeta_shipping = price_element("shipping", "Packeta - výdajné miesto", "9")
+        order = make_order("R-EU-B2B-FULL", settings["paid_statuses"][0], paid_payment, packeta_shipping)
+        order["customer"] = {
+            "__typename": "Company",
+            "company_name": "EU Buyer Kft.",
+            "company_id": "12345678",
+            "vat_id": "HU12345678",
+        }
+        order["invoice_address"] = {
+            "company_name": "EU Buyer Kft.",
+            "city": "Budapest",
+            "country": "Maďarsko",
+        }
+        order["items"][0].update(
+            {
+                "tax_rate": 0,
+                "quantity": 1,
+                "price": {"raw_value": 100.0, "value": 100.0, "formatted": "100,00 €", "is_net_price": True},
+                "sum": {"raw_value": 100.0, "value": 100.0, "formatted": "100,00 €", "is_net_price": True},
+                "sum_with_tax": {"raw_value": 100.0, "value": 100.0, "formatted": "100,00 €", "is_net_price": True},
+                "product": {
+                    "final_price": {
+                        "raw_value": 123.0,
+                        "value": 123.0,
+                        "formatted": "123,00 €",
+                        "is_net_price": False,
+                    }
+                },
+            }
+        )
+
+        snapshot = build_roy_orders_snapshot(project="roy", orders=[order], settings=settings)
+        wholesale = snapshot["orders"][0]["wholesale_pricing"]
+
+        self.assertFalse(wholesale["is_wholesale"])
+        self.assertTrue(wholesale["customer_is_company"])
+        self.assertEqual(0.0, wholesale["max_discount_pct"])
+        self.assertEqual("net", wholesale["comparison_basis"])
+        self.assertEqual("company customer, no wholesale price discount detected", wholesale["reason"])
+
+    def test_foreign_vat_exempt_company_discounted_net_price_is_wholesale(self) -> None:
+        settings = make_settings()
+        paid_payment = price_element("payment", "Okamžitá platba online", "18")
+        packeta_shipping = price_element("shipping", "Packeta - výdajné miesto", "9")
+        order = make_order("R-EU-B2B-VO", settings["paid_statuses"][0], paid_payment, packeta_shipping)
+        order["customer"] = {
+            "__typename": "Company",
+            "company_name": "EU Buyer Kft.",
+            "company_id": "12345678",
+            "vat_id": "HU12345678",
+        }
+        order["items"][0].update(
+            {
+                "tax_rate": 0,
+                "quantity": 1,
+                "price": {"raw_value": 80.0, "value": 80.0, "formatted": "80,00 €", "is_net_price": True},
+                "sum": {"raw_value": 80.0, "value": 80.0, "formatted": "80,00 €", "is_net_price": True},
+                "sum_with_tax": {"raw_value": 80.0, "value": 80.0, "formatted": "80,00 €", "is_net_price": True},
+                "product": {
+                    "final_price": {
+                        "raw_value": 123.0,
+                        "value": 123.0,
+                        "formatted": "123,00 €",
+                        "is_net_price": False,
+                    }
+                },
+            }
+        )
+
+        snapshot = build_roy_orders_snapshot(project="roy", orders=[order], settings=settings)
+        wholesale = snapshot["orders"][0]["wholesale_pricing"]
+
+        self.assertTrue(wholesale["is_wholesale"])
+        self.assertEqual(20.0, wholesale["max_discount_pct"])
+        self.assertEqual("net", wholesale["comparison_basis"])
+        self.assertEqual(80.0, wholesale["examples"][0]["order_unit_net"])
+        self.assertEqual(100.0, wholesale["examples"][0]["retail_unit_net"])
 
     def test_discount_code_prevents_wholesale_flag(self) -> None:
         settings = make_settings()
