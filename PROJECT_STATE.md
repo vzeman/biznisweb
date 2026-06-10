@@ -61,13 +61,17 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY wholesale detection VAT-basis fix is implemented locally on `2026-06-10`:
+- ROY wholesale detection VAT-basis fix is implemented and deployed on `2026-06-10`:
   - root cause: ROY picking-list wholesale detection compared order item prices against current retail final prices on a gross/VAT-including basis; foreign company orders sold without VAT could therefore look like discounted/wholesale orders even when the customer paid the normal net price
   - change: wholesale detection now compares unit prices on a net basis; order line net price is compared against current retail final price converted to net using `operations_dashboard.wholesale_detection.retail_tax_rate=23`
   - behavior: foreign B2B VAT-exempt orders at normal net retail price are not marked wholesale; foreign B2B VAT-exempt orders with a true net discount still are marked wholesale
   - local tests: `python -m json.tool projects\roy\settings.json`; `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`; `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
-  - production status: not deployed yet from this branch
-  - Next exact step: merge and deploy ROY App Runner, then verify live smoke and spot-check wholesale flags if a known foreign VAT-exempt company order is available
+  - PR/deploy: PR `#170` merged into `main` (`b691152`); first ECR build run `27258412717` failed at Amazon ECR login with `connect ETIMEDOUT 3.122.128.199:443`, rerun of the same workflow succeeded with digest `sha256:6ff2f4885a51fa46f731505a18dcfc31622329a767597f45ada7746a7a454969`; ROY App Runner deploy run `27258883863` succeeded
+  - Fargate hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.15.182`, service `roy-daily-report-email`, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:6ff2f4885a51fa46f731505a18dcfc31622329a767597f45ada7746a7a454969`, marker path `http://127.0.0.1:8000/marker.json`, marker `LIVE_ARTIFACT_MARKER_OK`
+  - App Runner hard-gate: instance-id `N/A (AWS App Runner managed service)`, private IP `N/A (AWS App Runner managed service)`, service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, health path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`, production path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, digest `sha256:6ff2f4885a51fa46f731505a18dcfc31622329a767597f45ada7746a7a454969`
+  - production smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=29:personal_pickups=0:inventory_alerts=19:inventory_rows=160:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=322138`; `APP_RUNNER_DEPLOY_OK:biznisweb-roy-operations-dashboard:https://qvfzvh82c3.eu-central-1.awsapprunner.com`
+  - post-deploy live verification: `/health` returned `200`; `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard`, `fulfillable_orders=29`, and only one current wholesale-flagged fulfillable order, `2677002963`, with `comparison_basis=net` and a true net discount of `25.0%`
+  - Next exact step: if a specific foreign VAT-exempt company order still shows VO, inspect that order's item `tax_rate`, line net price, and product `final_price` payload from BiznisWeb
 
 - ROY multilingual COD fallback is implemented and deployed on `2026-06-09`:
   - change: ROY `operations_dashboard` and `realized_revenue` now include wider COD payment title fallbacks for future foreign-language orders, including English, Polish, Romanian, German, French, Italian, Spanish/Portuguese, Balkan, Dutch, and Cyrillic COD terms
