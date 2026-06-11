@@ -68,7 +68,8 @@ Bootstrap entrypoints:
   - context: Harnext CLI `1.6.1` is installed globally on this Windows PC; full `harnext setup` remains intentionally disabled until secrets, runner risk, and clean Git source-of-truth state are reviewed
   - local verification: Harnext docs and installed CLI inspected; workflow YAML parsed with PyYAML; `git diff --check` passed
   - GitHub state: draft PR `#172` (`https://github.com/vzeman/biznisweb/pull/172`) is open; branch `codex/setup-harnext` is pushed; PR checks `Env Check` and `Observability Baseline` passed; `Harnext context review` skipped as expected while the PR is draft
-  - known issue: `gh secret list --repo vzeman/biznisweb` does not currently show `OPENAI_API_KEY`, so the guard will not run successfully until that repo secret is added
+  - blocker audit: `OPENAI_API_KEY` is not present in `gh secret list --repo vzeman/biznisweb`, current process env, Windows User env, Windows Machine env, Harnext preferences, or local repo `.env`
+  - known issue: the guard will not run successfully until `OPENAI_API_KEY` is added as a GitHub repo secret
   - Next exact step: set `OPENAI_API_KEY` as a GitHub repo secret, mark PR `#172` ready for review, and verify Harnext on the same-repo ready-for-review PR event
 
 - ROY wholesale detection VAT-basis fix is implemented and deployed on `2026-06-10`:
