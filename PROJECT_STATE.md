@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-09
+Last updated: 2026-06-11
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,17 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- Harnext PR context guard is prepared on branch `codex/setup-harnext` on `2026-06-11`:
+  - change: replaced the initial Codex-only guard with `.github/workflows/harnext-context-review.yml`, `.github/harnext/prompts/context-review.md`, and `docs/ai-agents/harnext.md`
+  - behavior: same-repo non-draft pull requests install `harnext@1.6.1`, build a local `.harnext/context/` PR context pack, run Harnext in `plan` permission mode, and post a concise review comment focused on correctness bugs, missing tests, security/secrets, cross-client/tenant leakage, and infra hard-gate risks
+  - safety: fork PRs are skipped so repository secrets are not exposed to untrusted code; `.harnext/` is ignored as local/runtime state; Harnext is advisory and must not deploy, mutate files, or replace human review/tests
+  - context: Harnext CLI `1.6.1` is installed globally on this Windows PC; full `harnext setup` remains intentionally disabled until secrets, runner risk, and clean Git source-of-truth state are reviewed
+  - local verification: Harnext docs and installed CLI inspected; workflow YAML parsed with PyYAML; `git diff --check` passed
+  - GitHub state: draft PR `#172` (`https://github.com/vzeman/biznisweb/pull/172`) is open; branch `codex/setup-harnext` is pushed; PR checks `Env Check` and `Observability Baseline` passed; `Harnext context review` skipped as expected while the PR is draft
+  - blocker audit: `OPENAI_API_KEY` is not present in `gh secret list --repo vzeman/biznisweb`, current process env, Windows User env, Windows Machine env, Harnext preferences, or local repo `.env`
+  - known issue: the guard will not run successfully until `OPENAI_API_KEY` is added as a GitHub repo secret
+  - Next exact step: set `OPENAI_API_KEY` as a GitHub repo secret, mark PR `#172` ready for review, and verify Harnext on the same-repo ready-for-review PR event
 
 - ROY wholesale detection VAT-basis fix is implemented and deployed on `2026-06-10`:
   - root cause: ROY picking-list wholesale detection compared order item prices against current retail final prices on a gross/VAT-including basis; foreign company orders sold without VAT could therefore look like discounted/wholesale orders even when the customer paid the normal net price
