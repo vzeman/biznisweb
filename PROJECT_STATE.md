@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-09
+Last updated: 2026-06-11
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,15 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- Codex PR quality guard is prepared on branch `codex/setup-harnext` on `2026-06-11`:
+  - change: added `.github/workflows/codex-quality-review.yml` and `.github/codex/prompts/quality-review.md`
+  - behavior: same-repo non-draft pull requests run `openai/codex-action@v1` in `read-only` sandbox mode and post a concise quality review comment focused on correctness bugs, missing tests, security/secrets, cross-client/tenant leakage, and infra hard-gate risks
+  - safety: fork PRs are skipped so repository secrets are not exposed to untrusted code; the workflow fails with a clear error until repo secret `OPENAI_API_KEY` exists
+  - context: Harnext CLI `1.6.1` is installed globally on this Windows PC, but full `harnext setup` was not used because the original `Playground` repo has no remote/unrelated local history and local `codex.exe` returned `Access is denied` for workflow generation
+  - local verification: official OpenAI Codex GitHub Action docs checked; workflow YAML parsed with PyYAML; `git diff --check` passed
+  - known issue: `gh secret list --repo vzeman/biznisweb` does not currently show `OPENAI_API_KEY`, so the guard will not run successfully until that repo secret is added
+  - Next exact step: set `OPENAI_API_KEY` as a GitHub repo secret, push this branch, open a PR, and verify the workflow on a same-repo PR event
 
 - ROY wholesale detection VAT-basis fix is implemented and deployed on `2026-06-10`:
   - root cause: ROY picking-list wholesale detection compared order item prices against current retail final prices on a gross/VAT-including basis; foreign company orders sold without VAT could therefore look like discounted/wholesale orders even when the customer paid the normal net price
