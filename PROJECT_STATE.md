@@ -61,6 +61,33 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY noze.sk AF brand category product assignment was applied live on `2026-06-11`:
+  - scope: AF language version (`lang_id=48`, `code=af`), public domain `https://www.noze.sk`
+  - target categories:
+    - parent `6419` (`Znacky`)
+    - brand categories `6420`-`6435`: Opinel, Morakniv, Walther, Kizlyar, Higonokami, Ganzo, Ruike, Helle, Cold Steel, Civivi, Victorinox, Bestech, Mikov, Boker, Joker, Kanetsune
+  - implementation: added `scripts/roy_noze_af_brand_category_assign.py`; GraphQL is used for product/category reads and ROY admin product form saves are used for category writes because the GraphQL API has no product-category mutation
+  - safety behavior:
+    - existing category assignments are preserved by reading admin checked category IDs and posting the same set plus only the target additions
+    - read-after-write verification checks `getProduct.assigned_categories`
+    - ROY GraphQL/internal transient failures are retried with backoff; product-list pages that fail on `producer` fall back to a basic product query
+    - producer is the primary brand source because some AF product links/titles are stale compared with the admin product form; `Nitecore` titles are excluded because no matching brand category exists
+  - live apply:
+    - dry-run found `2070` active AF candidates before correction filtering
+    - first live batch: `30` candidates, `29` applied, `1` skipped, `0` errors
+    - full offset batch: `2040` candidates, `2040` applied, `0` errors
+    - correction pass resolved stale title/link cases against the admin product form: products `3111` and `2781` are Morakniv by admin title/producer and were verified in `6419` + `6421`; product `2888` (`Nitecore TIKI`) was removed from the new `Znacky/Morakniv` assignment because no suitable brand category exists
+  - final verification:
+    - parent category `6419` has `2057` public/category-listed products
+    - the sum of all brand category `totalRecords` is also `2057`
+    - brand category counts: Opinel `119`, Morakniv `163`, Walther `49`, Kizlyar `143`, Higonokami `27`, Ganzo `115`, Ruike `82`, Helle `46`, Cold Steel `124`, Civivi `283`, Victorinox `332`, Bestech `118`, Mikov `41`, Boker `156`, Joker `236`, Kanetsune `23`
+    - public category smoke checks returned `200` for parent `Znacky` and sample brand pages
+    - explicit correction checks: `3111` and `2781` are in `6419` and `6421`; `3111` is not in `6430`; `2888` is not in `6419`/`6421`
+    - `12` product-list records that ROY GraphQL reported as active are public `404`/category-unlisted records and are not counted in the final public/category-listed totals
+    - product `3326` (`Walther TFW 3`) is a non-standard ROY/API record: GraphQL list reports it active, but public `noze.sk` and `roy.sk` product URLs return `404`, admin category tree is empty, admin product form cannot be loaded, and it is not present in `6419`, `6421`, or `6422`
+  - generated local audit artifacts: `projects/roy/exports/noze-af-brand-category-assign-*.json` and related `.log` files (ignored export output)
+  - Next exact step: if product `3326` should be a real public AF product, fix/recover it in ROY admin first; after it has a loadable product form, rerun the brand assignment script for that product
+
 - ROY noze.sk AF product-to-brand-category assignment test passed live on `2026-06-11`:
   - scope: AF language version (`lang_id=48`, `code=af`), public domain `https://www.noze.sk`
   - target category tested: `6430` (`Nože Victorinox`) under `Nože všetky > Značky`
