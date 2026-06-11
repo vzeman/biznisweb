@@ -61,6 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY noze.sk AF product-to-brand-category assignment test passed live on `2026-06-11`:
+  - scope: AF language version (`lang_id=48`, `code=af`), public domain `https://www.noze.sk`
+  - target category tested: `6430` (`Nože Victorinox`) under `Nože všetky > Značky`
+  - tested product: `3864`, import code `0.6223.3G`, `VICTORINOX CLASSIC SD Colors Dark Illusion`, producer `Victorinox`
+  - method: ROY admin product edit form was used because GraphQL `updateProduct` only supports product text fields and is partner-token gated; product category assignment is saved through admin `nodes` / `nodes_origin`
+  - safety check: a no-op admin save on product `3864` returned `{"success":true}` and GraphQL assigned categories stayed unchanged (`4635 AF`)
+  - live assignment: admin save added category `6430` while preserving the original checked category set
+  - verification:
+    - GraphQL product read-back returned assigned categories `4635 AF` and `6430 Nože Victorinox`
+    - GraphQL category `6430` product sample included product `3864`
+    - public category URL `https://www.noze.sk/c/noze-vsetky/znacky/noze-victorinox` returned the product slug `victorinox-classic-sd-colors-dark-illusion`
+  - Next exact step: build a guarded bulk assignment script that maps the brand categories `6420`-`6435` to producer names/import/title matching, dry-run counts first, then apply with read-after-write checks per product/category
+
 - ROY noze.sk AF category SEO content was applied live on `2026-06-11`:
   - scope: AF language version (`lang_id=48`, `code=af`) under category root `5958` (`Nože všetky`), public domain `https://www.noze.sk`
   - change: `390` existing categories were filled through the ROY admin category form:
