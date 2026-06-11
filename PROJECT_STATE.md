@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-09
+Last updated: 2026-06-11
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,25 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY noze.sk AF category SEO content was applied live on `2026-06-11`:
+  - scope: AF language version (`lang_id=48`, `code=af`) under category root `5958` (`Nože všetky`), public domain `https://www.noze.sk`
+  - change: `390` existing categories were filled through the ROY admin category form:
+    - admin `text` = requested introductory text
+    - admin `bottom_text` = requested content/body text
+    - admin `title_tag` = SEO TITLE
+    - admin `description` = SEO description
+  - implementation: added `scripts/roy_noze_af_category_seo.py` to traverse ROY GraphQL category data, generate short Slovak SEO copy, and write via ROY admin session when `--apply-admin` is used
+  - access note: GraphQL `updateCategory` is partner-package gated for this token, so the successful write path uses the existing ROY web admin login from `projects/roy/.env`; no secrets were committed
+  - local/live verification:
+    - `python -m py_compile scripts\roy_noze_af_category_seo.py`
+    - one-category probe on category `5958` succeeded and GraphQL read-back showed `intro`, `bottom`, `seo_title`, and `seo_description`
+    - full apply completed with `390/390` `applied=True`, `0` errors, `0` missing fields, `0` SEO length violations, and `0` differences between generated values and admin read-after-write values
+    - public URL smoke returned `20/20` OK for noze.sk category pages
+    - public HTML spot checks on categories `5958`, `6030`, `6419`, `6224`, and `6412` contained the new intro text, bottom/content text, TITLE, and meta description
+    - GraphQL spot checks on the same sample confirmed language `AF`/`48` and populated SEO/content fields
+  - generated local audit artifact: `projects/roy/exports/noze-af-category-seo-2026-06-11.json` (ignored export output, reproducible from the script and current admin/API state)
+  - Next exact step: no deploy is required; if content wording needs brand-specific tuning later, rerun the script in dry-run mode first and review the generated JSON before `--apply-admin`
 
 - ROY wholesale detection VAT-basis fix is implemented and deployed on `2026-06-10`:
   - root cause: ROY picking-list wholesale detection compared order item prices against current retail final prices on a gross/VAT-including basis; foreign company orders sold without VAT could therefore look like discounted/wholesale orders even when the customer paid the normal net price
