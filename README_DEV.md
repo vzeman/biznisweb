@@ -76,6 +76,16 @@ Use this before deploys when you want a fast view of:
 - latest `data_quality_*.json`
 - whether the newest run is partial and which source degraded
 
+## AI quality guard
+
+Harnext is wired as an additional read-only PR context reviewer. It is documented in `docs/ai-agents/harnext.md`.
+
+Operational rules:
+- Harnext is advisory and must not replace tests, human review, or production hard-gates.
+- The workflow runs only on same-repo non-draft pull requests.
+- The required GitHub secret is `OPENAI_API_KEY`.
+- Full `harnext setup` is not enabled until runner/secrets risk is reviewed on a clean branch.
+
 ## Client scaffolding template
 
 To scaffold a new reporting client from the internal template:

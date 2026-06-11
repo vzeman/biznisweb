@@ -77,5 +77,6 @@ site/
 # Local multi-tool/runtime artifacts
 node_modules/
 downloads/
+.harnext/
 .env.imap
 .env.oauth

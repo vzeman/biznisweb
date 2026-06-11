@@ -1,0 +1,120 @@
+name: Harnext context review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Harnext context review
+    if: ${{ github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Check OpenAI API key
+        env:
+          HAS_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: |
+          if [ "$HAS_OPENAI_API_KEY" != "true" ]; then
+            echo "::error::Missing OPENAI_API_KEY repository secret. Add it with: gh secret set OPENAI_API_KEY --repo ${{ github.repository }}"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Harnext
+        run: npm install -g harnext@1.6.1
+
+      - name: Build PR context pack
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p .harnext/context
+          git fetch --no-tags origin \
+            "$PR_BASE_REF:refs/remotes/origin/$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head:refs/remotes/pull/$PR_NUMBER/head"
+
+          {
+            echo "# Pull request context"
+            echo
+            echo "- PR: #$PR_NUMBER"
+            echo "- Base: $PR_BASE_REF"
+            echo "- Head: $PR_HEAD_REF"
+            echo "- Head SHA: $PR_HEAD_SHA"
+            echo "- Workflow: Harnext context review"
+            echo "- Mode: review-only, no deploy, no file edits"
+          } > .harnext/context/pr-metadata.md
+
+          git diff --name-only "origin/$PR_BASE_REF...HEAD" > .harnext/context/pr-changed-files.txt
+          git diff --stat "origin/$PR_BASE_REF...HEAD" > .harnext/context/pr-diff-stat.txt
+          git diff "origin/$PR_BASE_REF...HEAD" > .harnext/context/pr-diff.patch
+
+      - name: Run Harnext context review
+        id: harnext
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HARNEXT_PROVIDER: openai
+          HARNEXT_MODEL: gpt-5.3-codex
+        run: |
+          set +e
+          harnext \
+            --print \
+            --provider openai \
+            --model gpt-5.3-codex \
+            --permission-mode plan \
+            --max-turns 6 \
+            --cwd "$GITHUB_WORKSPACE" \
+            "$(cat .github/harnext/prompts/context-review.md)" \
+            > harnext-context-review.md 2>&1
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Post Harnext review comment
+        if: ${{ hashFiles('harnext-context-review.md') != '' }}
+        uses: actions/github-script@v7
+        env:
+          HARNEXT_EXIT_CODE: ${{ steps.harnext.outputs.exit_code }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('harnext-context-review.md', 'utf8').trim();
+            const body = [
+              '## Harnext context review',
+              '',
+              `Exit code: ${process.env.HARNEXT_EXIT_CODE}`,
+              '',
+              output || '_Harnext produced no output._'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+
+      - name: Fail if Harnext failed
+        if: ${{ steps.harnext.outputs.exit_code != '0' }}
+        run: |
+          echo "::error::Harnext context review failed. See the posted PR comment and job logs."
+          exit 1
