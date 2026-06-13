@@ -1,3 +1,4 @@
+import copy
 import json
 import shutil
 import unittest
@@ -7,6 +8,7 @@ from unittest.mock import patch
 from dashboard_modern import DASHBOARD_PAYLOAD_SCRIPT_ID
 from export_orders import BizniWebExporter
 from live_dashboard_server import build_roy_operations_dashboard_html
+import roy_operations_dashboard as rod
 from roy_operations_dashboard import (
     _select_current_stock_for_target,
     build_executive_kpi_snapshot,
@@ -651,6 +653,89 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("nová objednávka na odoslanie", html)
         self.assertIn("replace(/[\"\\\\]/g, '\\\\$&')", html)
         self.assertNotIn('replace(/["\\]/g', html)
+
+    def test_stale_operations_cache_returns_cached_snapshot_and_revalidates_in_background(self) -> None:
+        project = "roy"
+        settings = make_project_settings()
+        settings["operations_dashboard"]["cache_ttl_seconds"] = 1
+        cached_payload = {
+            "marker": "roy-operations-dashboard",
+            "project": project,
+            "generated_at": "old",
+        }
+        with rod._CACHE_LOCK:
+            previous_cache = copy.deepcopy(rod._CACHE)
+            previous_background = copy.deepcopy(rod._BACKGROUND_REFRESH)
+            previous_tokens = copy.deepcopy(rod._CACHE_TOKENS)
+            rod._CACHE.clear()
+            rod._BACKGROUND_REFRESH.clear()
+            rod._CACHE_TOKENS.clear()
+            rod._CACHE[project] = (100.0, copy.deepcopy(cached_payload))
+        try:
+            with (
+                patch("roy_operations_dashboard.load_project_settings", return_value=settings),
+                patch("roy_operations_dashboard.time.monotonic", return_value=105.0),
+                patch("roy_operations_dashboard._start_background_operations_refresh") as start_background,
+                patch("roy_operations_dashboard.generate_roy_operations_snapshot") as generate_snapshot,
+            ):
+                result = rod.get_cached_roy_operations_snapshot(project)
+
+            self.assertEqual("old", result["generated_at"])
+            self.assertEqual("stale_revalidating", result["cache"]["status"])
+            start_background.assert_called_once_with(project, None)
+            generate_snapshot.assert_not_called()
+        finally:
+            with rod._CACHE_LOCK:
+                rod._CACHE.clear()
+                rod._CACHE.update(previous_cache)
+                rod._BACKGROUND_REFRESH.clear()
+                rod._BACKGROUND_REFRESH.update(previous_background)
+                rod._CACHE_TOKENS.clear()
+                rod._CACHE_TOKENS.update(previous_tokens)
+
+    def test_force_refresh_bypasses_stale_cache_and_generates_snapshot(self) -> None:
+        project = "roy"
+        settings = make_project_settings()
+        settings["operations_dashboard"]["cache_ttl_seconds"] = 1
+        cached_payload = {
+            "marker": "roy-operations-dashboard",
+            "project": project,
+            "generated_at": "old",
+        }
+        fresh_payload = {
+            "marker": "roy-operations-dashboard",
+            "project": project,
+            "generated_at": "new",
+        }
+        with rod._CACHE_LOCK:
+            previous_cache = copy.deepcopy(rod._CACHE)
+            previous_background = copy.deepcopy(rod._BACKGROUND_REFRESH)
+            previous_tokens = copy.deepcopy(rod._CACHE_TOKENS)
+            rod._CACHE.clear()
+            rod._BACKGROUND_REFRESH.clear()
+            rod._CACHE_TOKENS.clear()
+            rod._CACHE[project] = (100.0, copy.deepcopy(cached_payload))
+        try:
+            with (
+                patch("roy_operations_dashboard.load_project_settings", return_value=settings),
+                patch("roy_operations_dashboard.time.monotonic", return_value=105.0),
+                patch("roy_operations_dashboard._start_background_operations_refresh") as start_background,
+                patch("roy_operations_dashboard.generate_roy_operations_snapshot", return_value=fresh_payload) as generate_snapshot,
+            ):
+                result = rod.get_cached_roy_operations_snapshot(project, force_refresh=True)
+
+            self.assertEqual("new", result["generated_at"])
+            self.assertEqual("refreshed", result["cache"]["status"])
+            start_background.assert_not_called()
+            generate_snapshot.assert_called_once_with(project, report_payload=None)
+        finally:
+            with rod._CACHE_LOCK:
+                rod._CACHE.clear()
+                rod._CACHE.update(previous_cache)
+                rod._BACKGROUND_REFRESH.clear()
+                rod._BACKGROUND_REFRESH.update(previous_background)
+                rod._CACHE_TOKENS.clear()
+                rod._CACHE_TOKENS.update(previous_tokens)
 
     def test_inbound_order_units_suppress_covered_stock_alert_until_restock(self) -> None:
         payload = {

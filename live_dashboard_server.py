@@ -1705,7 +1705,8 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         if (refreshTimer) clearInterval(refreshTimer);
         refreshTimer = setInterval(() => loadDashboard(false), Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000);
       } catch (error) {
-        showMessage(error instanceof Error ? error.message : String(error));
+        const message = error instanceof Error ? error.message : String(error);
+        showMessage(latestData ? `Live refresh zlyhal, zobrazujem posledné načítané dáta: ${message}` : message);
       } finally {
         el('refreshBtn').disabled = false;
       }

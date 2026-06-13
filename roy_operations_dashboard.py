@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import threading
 import time
 import unicodedata
 from collections import defaultdict
@@ -252,7 +253,17 @@ ROY_PRODUCT_STOCK_SEARCH_FIELDS = """
 
 
 _CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_CACHE_LOCK = threading.RLock()
+_BACKGROUND_REFRESH: Dict[str, Dict[str, Any]] = {}
+_CACHE_TOKENS: Dict[str, int] = {}
 STATE_VERSION = 1
+
+
+def _clear_operations_cache(project: str) -> None:
+    with _CACHE_LOCK:
+        _CACHE.pop(project, None)
+        _BACKGROUND_REFRESH.pop(project, None)
+        _CACHE_TOKENS[project] = _CACHE_TOKENS.get(project, 0) + 1
 
 
 def _empty_operations_state() -> Dict[str, Any]:
@@ -495,7 +506,7 @@ def acknowledge_loss_product(project: str, sku: str, product: str = "") -> Dict[
         "acknowledged_at": _state_now_iso(),
     }
     storage = save_roy_operations_state(project, state, project_settings)
-    _CACHE.pop(project, None)
+    _clear_operations_cache(project)
     return {"ok": True, "project": project, "sku": sku, "storage": storage}
 
 
@@ -532,7 +543,7 @@ def set_inbound_stock_order(
         "updated_at": now,
     }
     storage = save_roy_operations_state(project, state, project_settings)
-    _CACHE.pop(project, None)
+    _clear_operations_cache(project)
     return {"ok": True, "project": project, "sku": sku, "storage": storage, "inbound_order": state["inbound_orders"][sku]}
 
 
@@ -547,7 +558,7 @@ def clear_inbound_stock_order(project: str, sku: str) -> Dict[str, Any]:
     state = load_roy_operations_state(project, project_settings)
     removed = (state.get("inbound_orders") or {}).pop(sku, None)
     storage = save_roy_operations_state(project, state, project_settings)
-    _CACHE.pop(project, None)
+    _clear_operations_cache(project)
     return {"ok": True, "project": project, "sku": sku, "removed": bool(removed), "storage": storage}
 
 
@@ -2340,6 +2351,66 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
     }
 
 
+def _cache_payload(
+    project: str,
+    payload: Dict[str, Any],
+    *,
+    token: Optional[int] = None,
+) -> bool:
+    cached_at = time.monotonic()
+    with _CACHE_LOCK:
+        current_token = _CACHE_TOKENS.get(project, 0)
+        if token is not None and token != current_token:
+            return False
+        _CACHE[project] = (cached_at, copy.deepcopy(payload))
+        return True
+
+
+def _background_refresh_state(project: str) -> Dict[str, Any]:
+    with _CACHE_LOCK:
+        return copy.deepcopy(_BACKGROUND_REFRESH.get(project) or {})
+
+
+def _start_background_operations_refresh(project: str, report_payload: Optional[Dict[str, Any]]) -> None:
+    with _CACHE_LOCK:
+        state = _BACKGROUND_REFRESH.setdefault(project, {})
+        if state.get("running"):
+            return
+        token = _CACHE_TOKENS.get(project, 0)
+        state.update(
+            {
+                "running": True,
+                "started_at": time.monotonic(),
+                "last_error": "",
+            }
+        )
+
+    report_payload_copy = copy.deepcopy(report_payload)
+
+    def _worker() -> None:
+        try:
+            payload = generate_roy_operations_snapshot(project, report_payload=report_payload_copy)
+            stored = _cache_payload(project, payload, token=token)
+            with _CACHE_LOCK:
+                state = _BACKGROUND_REFRESH.setdefault(project, {})
+                state["running"] = False
+                state["last_completed_at"] = time.monotonic()
+                state["last_error"] = "" if stored else "Cache invalidated while refresh was running."
+        except Exception as exc:
+            with _CACHE_LOCK:
+                state = _BACKGROUND_REFRESH.setdefault(project, {})
+                state["running"] = False
+                state["last_failed_at"] = time.monotonic()
+                state["last_error"] = str(exc)
+
+    thread = threading.Thread(
+        target=_worker,
+        name=f"roy-operations-refresh-{project}",
+        daemon=True,
+    )
+    thread.start()
+
+
 def get_cached_roy_operations_snapshot(
     project: str,
     *,
@@ -2354,17 +2425,31 @@ def get_cached_roy_operations_snapshot(
 
     cache_key = project
     now = time.monotonic()
-    cached = _CACHE.get(cache_key)
+    with _CACHE_LOCK:
+        cached = _CACHE.get(cache_key)
     if cached and not force_refresh:
         cached_at, payload = cached
-        if now - cached_at <= settings["cache_ttl_seconds"]:
+        age_seconds = now - cached_at
+        if age_seconds <= settings["cache_ttl_seconds"]:
             result = copy.deepcopy(payload)
             result["cache"] = {
                 "status": "fresh",
-                "age_seconds": round(now - cached_at, 1),
+                "age_seconds": round(age_seconds, 1),
                 "ttl_seconds": settings["cache_ttl_seconds"],
             }
             return result
+        _start_background_operations_refresh(project, report_payload)
+        background_state = _background_refresh_state(project)
+        result = copy.deepcopy(payload)
+        result["cache"] = {
+            "status": "stale_revalidating",
+            "age_seconds": round(age_seconds, 1),
+            "ttl_seconds": settings["cache_ttl_seconds"],
+            "refresh_in_progress": bool(background_state.get("running")),
+        }
+        if background_state.get("last_error"):
+            result["cache"]["last_refresh_error"] = str(background_state["last_error"])
+        return result
 
     generate_attempts = 3 if cached is None else 1
     last_error: Optional[Exception] = None
@@ -2390,7 +2475,7 @@ def get_cached_roy_operations_snapshot(
             return result
         raise last_error or RuntimeError("Failed to generate ROY operations snapshot")
 
-    _CACHE[cache_key] = (now, copy.deepcopy(payload))
+    _cache_payload(cache_key, payload)
     payload["cache"] = {
         "status": "refreshed",
         "age_seconds": 0,
@@ -2496,7 +2581,7 @@ query GetOrderForPickupAction($order_num: String!) {
         CHANGE_ORDER_STATUS_MUTATION,
         variable_values={"order_num": order_num, "status_id": status_id},
     )
-    _CACHE.pop(project, None)
+    _clear_operations_cache(project)
     return {
         "ok": True,
         "project": project,
