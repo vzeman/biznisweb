@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-09
+Last updated: 2026-06-13
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,14 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY live dashboard failed-to-fetch mitigation is implemented locally on branch `codex/roy-live-stale-cache-refresh` on `2026-06-13`:
+  - root cause found live: `/api/operations/roy/live` is healthy but can take about 49-51 seconds when cache expires because the ROY operations snapshot scans BiznisWeb orders and stock; dashboard auto-refresh is 90 seconds while cache TTL is 60 seconds, so regular live refreshes can hit the slow path
+  - change: normal non-forced ROY operations API calls now return the last cached snapshot immediately when cache is stale and start a background refresh instead of blocking the UI request
+  - change: cache writes are guarded by a lock and invalidation token so an old background refresh cannot overwrite a cache invalidated by dashboard actions
+  - change: the frontend keeps the latest rendered data visible and reports a clearer message if a refresh fails after data was already loaded
+  - local tests: `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`; `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
+  - Next exact step: run the broader dashboard regression tests, open PR, merge, deploy App Runner, then verify `/health`, `/production/roy`, `/api/operations/roy/live`, and stale-cache latency on production
 
 - ROY wholesale detection VAT-basis fix is implemented and deployed on `2026-06-10`:
   - root cause: ROY picking-list wholesale detection compared order item prices against current retail final prices on a gross/VAT-including basis; foreign company orders sold without VAT could therefore look like discounted/wholesale orders even when the customer paid the normal net price
