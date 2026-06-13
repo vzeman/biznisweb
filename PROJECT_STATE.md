@@ -61,14 +61,18 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY live dashboard failed-to-fetch mitigation is implemented locally on branch `codex/roy-live-stale-cache-refresh` on `2026-06-13`:
+- ROY live dashboard failed-to-fetch mitigation is implemented and deployed on `2026-06-13`:
   - root cause found live: `/api/operations/roy/live` is healthy but can take about 49-51 seconds when cache expires because the ROY operations snapshot scans BiznisWeb orders and stock; dashboard auto-refresh is 90 seconds while cache TTL is 60 seconds, so regular live refreshes can hit the slow path
   - second root cause found by production UI test: when the page is opened via a URL containing Basic Auth credentials, browser JS resolves relative API `fetch()` calls against a credentialed document URL and rejects the request; ROY operations fetch calls now use a sanitized `window.location.origin` API helper
   - change: normal non-forced ROY operations API calls now return the last cached snapshot immediately when cache is stale and start a background refresh instead of blocking the UI request
   - change: cache writes are guarded by a lock and invalidation token so an old background refresh cannot overwrite a cache invalidated by dashboard actions
-  - change: the frontend keeps the latest rendered data visible and reports a clearer message if a refresh fails after data was already loaded
-  - local tests: `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`; `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
-  - Next exact step: run the broader dashboard regression tests, open PR, merge, deploy App Runner, then verify `/health`, `/production/roy`, `/api/operations/roy/live`, and stale-cache latency on production
+  - change: the frontend keeps the latest rendered data visible and reports a clearer message if a refresh fails after data was already loaded; all ROY operations API fetches use sanitized same-origin URLs
+  - local tests: `python -m py_compile roy_operations_dashboard.py live_dashboard_server.py`; `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `python -m py_compile live_dashboard_server.py roy_operations_dashboard.py`; `python -m unittest tests.test_roy_operations_dashboard tests.test_live_dashboard_auth tests.test_live_dashboard_mobile`; `git diff --check`
+  - PR/deploy: PR `#173` merged stale-cache behavior into `main` (`8c426fa`), PR `#174` merged sanitized ROY fetch URLs into `main` (`9f118a2`); final ROY App Runner deploy run `27460189231` succeeded with digest `sha256:c41f9463ee724ac1be904130179958afe76eef5f2998b40b487a52e098e241de`
+  - App Runner hard-gate: instance-id `N/A (AWS App Runner managed service)`, private IP `N/A (AWS App Runner managed service)`, service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, health path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`, production path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - production smoke: `APP_RUNNER_ROY_OPERATIONS_OK:fulfillable_orders=7:personal_pickups=0:inventory_alerts=20:inventory_rows=160:kpi_months=10:gross_loss_products=1:picking_pdf_bytes=138008`; `APP_RUNNER_DEPLOY_OK:biznisweb-roy-operations-dashboard:https://qvfzvh82c3.eu-central-1.awsapprunner.com`
+  - post-deploy verification: `/health` returned `200`; `/production/roy` returned `200`; `/api/operations/roy/live` returned marker `roy-operations-dashboard`, `cache.status=fresh` in `0.50s`, and later `cache.status=stale_revalidating` in `0.76s` after TTL expiry; browser UI test through credential URL rendered without `Failed to fetch`, without credential URL error, and with no console errors
+  - Next exact step: monitor the next scheduled auto-refresh window; no known blocker
 
 - ROY wholesale detection VAT-basis fix is implemented and deployed on `2026-06-10`:
   - root cause: ROY picking-list wholesale detection compared order item prices against current retail final prices on a gross/VAT-including basis; foreign company orders sold without VAT could therefore look like discounted/wholesale orders even when the customer paid the normal net price
