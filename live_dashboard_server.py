@@ -1234,6 +1234,8 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     const text = (value, fallback='-') => value === null || value === undefined || value === '' ? fallback : String(value);
     const safe = (value) => text(value, '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     const cssEscape = (value) => window.CSS && CSS.escape ? CSS.escape(String(value)) : String(value).replace(/["\\\\]/g, '\\\\$&');
+    const apiUrl = (path) => new URL(path, window.location.origin).toString();
+    const fetchApi = (path, options={}) => fetch(apiUrl(path), { credentials:'same-origin', ...options });
     let latestData = null;
     let refreshTimer = null;
     let kpiScope = 'monthly';
@@ -1697,7 +1699,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     async function loadDashboard(force=false) {
       el('refreshBtn').disabled = true;
       try {
-        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`, { cache:'no-store' });
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`, { cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         clearMessage();
@@ -1719,7 +1721,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       }
       input.disabled = true;
       try {
-        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ship`, { method:'POST', cache:'no-store' });
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ship`, { method:'POST', cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Objednávka ${orderNum} je zmenená na Odoslaná.`, true);
@@ -1738,7 +1740,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       }
       input.disabled = true;
       try {
-        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ready`, { method:'POST', cache:'no-store' });
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ready`, { method:'POST', cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Objednávka ${orderNum} je zmenená na Pripravené k odberu.`, true);
@@ -1761,7 +1763,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       }
       button.disabled = true;
       try {
-        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}`, {
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}`, {
           method:'POST',
           cache:'no-store',
           headers:{ 'Content-Type':'application/json' },
@@ -1786,7 +1788,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const sku = button.dataset.clearInbound;
       button.disabled = true;
       try {
-        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}/clear`, { method:'POST', cache:'no-store' });
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}/clear`, { method:'POST', cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Inbound objednávka pre ${sku} je zrušená.`, true);
@@ -1801,7 +1803,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const sku = input.dataset.ackLoss;
       input.disabled = true;
       try {
-        const response = await fetch(`/api/operations/${encodeURIComponent(project)}/loss-product/${encodeURIComponent(sku)}/ack`, {
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/loss-product/${encodeURIComponent(sku)}/ack`, {
           method:'POST',
           cache:'no-store',
           headers:{ 'Content-Type':'application/json' },
