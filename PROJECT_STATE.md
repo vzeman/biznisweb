@@ -63,6 +63,7 @@ Bootstrap entrypoints:
 
 - ROY live dashboard failed-to-fetch mitigation is implemented locally on branch `codex/roy-live-stale-cache-refresh` on `2026-06-13`:
   - root cause found live: `/api/operations/roy/live` is healthy but can take about 49-51 seconds when cache expires because the ROY operations snapshot scans BiznisWeb orders and stock; dashboard auto-refresh is 90 seconds while cache TTL is 60 seconds, so regular live refreshes can hit the slow path
+  - second root cause found by production UI test: when the page is opened via a URL containing Basic Auth credentials, browser JS resolves relative API `fetch()` calls against a credentialed document URL and rejects the request; ROY operations fetch calls now use a sanitized `window.location.origin` API helper
   - change: normal non-forced ROY operations API calls now return the last cached snapshot immediately when cache is stale and start a background refresh instead of blocking the UI request
   - change: cache writes are guarded by a lock and invalidation token so an old background refresh cannot overwrite a cache invalidated by dashboard actions
   - change: the frontend keeps the latest rendered data visible and reports a clearer message if a refresh fails after data was already loaded
