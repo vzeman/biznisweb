@@ -61,6 +61,30 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY roy.sk SK category SEO content for the knife tree was applied live on `2026-06-16`:
+  - scope: SK language version (`lang_id=1`, `code=sk`), public domain `https://www.roy.sk`
+  - target tree: category `6437` (`Noze vsetky`, public URL `https://www.roy.sk/c/noze`) and all SK descendants
+  - change: `399` categories were filled through the ROY admin category form:
+    - admin `text` = introductory text
+    - admin `bottom_text` = content/body text
+    - admin `title_tag` = SEO TITLE without a `roy.sk` suffix, because the public page appends `- Roy.sk` automatically
+    - admin `description` = SEO description
+  - implementation: added `scripts/roy_sk_category_seo.py`; GraphQL is used for traversal/read checks and the ROY admin form is used for writes because category text writes through GraphQL require a partner token
+  - content rules verified:
+    - generated fields contain no `noze.sk`
+    - generated SEO TITLE values contain no `roy.sk`
+    - all generated fields are non-empty
+    - SEO TITLE values are `<=60` characters and descriptions are `<=155` characters
+  - local/live verification:
+    - `python -m py_compile scripts\roy_sk_category_seo.py`
+    - dry-run found `399` categories under `6437`
+    - one-category live probe on `6437` succeeded and admin read-after-write matched `intro`, `bottom`, `seo_title`, and `seo_description`
+    - full live apply completed with `399/399` applied, `0` errors, `0` read-after-write mismatches, and `399` unique category IDs
+    - public URL smoke returned `20/20` OK for roy.sk category pages
+    - public HTML spot checks for categories `6437`, `6594`, `6611`, `6642`, `6726`, `6804`, `6827`, and `2760` returned `200`, contained the new intro and bottom text, matched the new meta description, and had no `noze.sk` in public title/meta description
+  - generated local audit artifacts: `projects/roy/exports/roy-sk-category-seo-*.json` (ignored export output, reproducible from the script and current admin/API state)
+  - Next exact step: no deploy is required; if wording needs manual tuning later, run `scripts\roy_sk_category_seo.py` in dry-run mode first and review the export JSON before `--apply-admin`
+
 - ROY live dashboard failed-to-fetch mitigation is implemented and deployed on `2026-06-13`:
   - root cause found live: `/api/operations/roy/live` is healthy but can take about 49-51 seconds when cache expires because the ROY operations snapshot scans BiznisWeb orders and stock; dashboard auto-refresh is 90 seconds while cache TTL is 60 seconds, so regular live refreshes can hit the slow path
   - second root cause found by production UI test: when the page is opened via a URL containing Basic Auth credentials, browser JS resolves relative API `fetch()` calls against a credentialed document URL and rejects the request; ROY operations fetch calls now use a sanitized `window.location.origin` API helper
