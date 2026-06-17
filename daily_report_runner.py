@@ -1174,11 +1174,16 @@ def main() -> None:
         subject = build_email_subject(reporting_defaults)
         summary_text = build_report_summary(output_paths)
         body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults, data_quality)
+        extra_attachments: List[Path] = []
+        missing_product_costs_csv = output_paths.get("missing_product_costs_csv")
+        if missing_product_costs_csv and missing_product_costs_csv.exists():
+            extra_attachments.append(missing_product_costs_csv)
         message_id = send_email_ses(
             subject=subject,
             body_text=body_text,
             file_paths=output_paths,
             reporting_defaults=reporting_defaults,
+            extra_attachments=extra_attachments,
         )
         put_metric("ReportEmailSent", 1, project, reporting_defaults)
         print(f"SES message sent. MessageId={message_id}")

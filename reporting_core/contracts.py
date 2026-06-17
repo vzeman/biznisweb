@@ -31,6 +31,7 @@ class ReportingArtifactSet:
     dashboard_payload_latest_json: Path
     data_quality_json: Path
     weather_impact_csv: Path
+    missing_product_costs_csv: Path
 
     def as_dict(self) -> Dict[str, Path]:
         return {
@@ -45,6 +46,7 @@ class ReportingArtifactSet:
             "dashboard_payload_latest_json": self.dashboard_payload_latest_json,
             "data_quality_json": self.data_quality_json,
             "weather_impact_csv": self.weather_impact_csv,
+            "missing_product_costs_csv": self.missing_product_costs_csv,
         }
 
     def required_daily_runner_outputs(self) -> Dict[str, Path]:
@@ -90,4 +92,5 @@ def build_artifact_set(project: str, from_date: str, to_date: str, output_tag: O
         dashboard_payload_latest_json=apply_output_tag(data_dir / "dashboard_payload_latest.json", tag),
         data_quality_json=apply_output_tag(data_dir / f"data_quality_{compact_range}.json", tag),
         weather_impact_csv=apply_output_tag(data_dir / f"weather_impact_{compact_range}.csv", tag),
+        missing_product_costs_csv=apply_output_tag(data_dir / f"missing_product_costs_{compact_range}.csv", tag),
     )

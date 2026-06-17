@@ -1,4 +1,5 @@
 import unittest
+import csv
 import json
 import tempfile
 from datetime import datetime, timedelta
@@ -8,6 +9,7 @@ import pandas as pd
 
 from export_orders import BizniWebExporter
 from reporting_core.cfo_kpis import build_order_records_from_export_df
+from scripts.apply_missing_product_costs import apply_missing_cost_rows, parse_purchase_cost, resolve_expense_key
 
 
 def make_exporter(project_name: str = "vevo") -> BizniWebExporter:
@@ -88,6 +90,77 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(50.0, rows[0]["expense_per_item"])
         self.assertEqual(100.0, rows[0]["total_expense"])
         self.assertEqual(0.0, rows[0]["profit_before_ads"])
+
+    def test_product_expense_coverage_writes_missing_cost_fill_in_csv(self) -> None:
+        exporter = make_exporter()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.data_dir = Path(tmp_dir)
+            qa = exporter._build_product_expense_coverage_qa(
+                pd.DataFrame(
+                    [
+                        {
+                            "order_num": "A-1",
+                            "item_label": "Unknown unit-test product",
+                            "product_sku": "SKU-FALLBACK",
+                            "item_ean": "8581234567890",
+                            "item_import_code": "IMP-1",
+                            "item_warehouse_number": "WH-1",
+                            "item_quantity": 2,
+                            "item_total_without_tax": 100.0,
+                            "profit_before_ads": 0.0,
+                            "expense_per_item": 50.0,
+                            "expense_source": "missing_cost_zero_margin_fallback",
+                        }
+                    ]
+                ),
+                date_from=datetime(2026, 6, 1),
+                date_to=datetime(2026, 6, 1),
+            )
+
+            csv_path = Path(qa["missing_product_costs_path"])
+            self.assertTrue(csv_path.exists())
+            self.assertEqual(1, qa["missing_product_cost_rows"])
+            with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+                csv_rows = list(csv.DictReader(handle))
+
+            self.assertEqual(1, len(csv_rows))
+            self.assertEqual(
+                "Unknown unit-test product||IMP-1",
+                csv_rows[0]["suggested_expense_key"],
+            )
+            self.assertEqual("", csv_rows[0]["purchase_cost_net"])
+
+    def test_apply_missing_product_cost_rows_is_conflict_safe(self) -> None:
+        rows = [
+            {
+                "suggested_expense_key": "Product A||IMP-1",
+                "purchase_cost_net": "12,50",
+            },
+            {
+                "suggested_expense_key": "Product B||IMP-2",
+                "purchase_cost_net": "",
+            },
+            {
+                "item_label": "Product C",
+                "item_import_code": "IMP-3",
+                "purchase_cost_net": "7.25",
+            },
+        ]
+
+        updated, summary = apply_missing_cost_rows(
+            {"Product A||IMP-1": 11.0},
+            rows,
+            allow_overwrite=False,
+        )
+
+        self.assertEqual(1, summary["applied"])
+        self.assertEqual(1, summary["skipped_empty_cost"])
+        self.assertEqual(1, summary["skipped_existing_conflict"])
+        self.assertEqual(11.0, updated["Product A||IMP-1"])
+        self.assertEqual(7.25, updated["Product C||IMP-3"])
+        self.assertEqual(12.5, parse_purchase_cost("12,50"))
+        self.assertEqual(1234.5, parse_purchase_cost("1 234,50 €"))
+        self.assertEqual("Product C||IMP-3", resolve_expense_key(rows[2]))
 
     def test_zero_revenue_order_allocates_item_level_overhead(self) -> None:
         exporter = make_exporter()

@@ -76,6 +76,23 @@ Use this before deploys when you want a fast view of:
 - latest `data_quality_*.json`
 - whether the newest run is partial and which source degraded
 
+## Missing Product Purchase Costs
+
+Daily reports warn when revenue contains item rows whose purchase cost is not mapped in `projects/<project>/product_expenses.json`.
+When that happens, the run writes `data/<project>/missing_product_costs_<from>-<to>.csv` and the daily email attaches it.
+
+Workflow:
+
+```powershell
+# 1. Fill purchase_cost_net in the generated CSV.
+python scripts/apply_missing_product_costs.py --project vevo --csv data/vevo/missing_product_costs_20260601-20260617.csv --dry-run
+
+# 2. Apply after the dry-run has no invalid rows or conflicts.
+python scripts/apply_missing_product_costs.py --project vevo --csv data/vevo/missing_product_costs_20260601-20260617.csv
+```
+
+The script resolves the target JSON through `projects/<project>/settings.json`, does not overwrite conflicting existing costs unless `--allow-overwrite` is passed, and accepts either decimal dots or commas in `purchase_cost_net`.
+
 ## Client scaffolding template
 
 To scaffold a new reporting client from the internal template:

@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-13
+Last updated: 2026-06-17
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,21 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- Missing product purchase-cost alert workflow is implemented locally on `2026-06-17`:
+  - change: product cost coverage QA now lists every revenue item group using `missing_cost_zero_margin_fallback` or `fallback_default`
+  - change: daily exports with missing product costs write `data/<project>/missing_product_costs_<from>-<to>.csv` with suggested expense keys and a blank `purchase_cost_net` column
+  - change: daily report email attaches the missing-cost CSV when it exists
+  - change: `scripts/apply_missing_product_costs.py` applies filled CSV rows into the project's configured `product_expenses.json`, supports `--dry-run`, decimal commas, and conflict-safe defaults
+  - docs: `README_DEV.md` documents the fill-in workflow
+  - local verification:
+    - `python -m py_compile export_orders.py daily_report_runner.py reporting_core\contracts.py scripts\apply_missing_product_costs.py`
+    - `python -m unittest tests.test_reporting_calculation_fixes`
+    - `python scripts\reporting_qa_smoke.py`
+    - `python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_product_identity tests.test_reporting_calculation_fixes`
+    - `python -m json.tool projects\vevo\settings.json`; `python -m json.tool projects\roy\settings.json`
+    - `git diff --check`
+  - Next exact step: open PR, merge through `main`, deploy the daily reporting image, then verify the next run's data quality output and email attachment when a missing-cost product appears
 
 - ROY live dashboard failed-to-fetch mitigation is implemented and deployed on `2026-06-13`:
   - root cause found live: `/api/operations/roy/live` is healthy but can take about 49-51 seconds when cache expires because the ROY operations snapshot scans BiznisWeb orders and stock; dashboard auto-refresh is 90 seconds while cache TTL is 60 seconds, so regular live refreshes can hit the slow path

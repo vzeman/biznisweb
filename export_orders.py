@@ -1731,7 +1731,107 @@ class BizniWebExporter:
             "label_row_total": label_row_total,
         }
 
-    def _build_product_expense_coverage_qa(self, export_df: Optional[pd.DataFrame]) -> Dict[str, Any]:
+    @staticmethod
+    def _clean_product_cost_csv_value(value: Any) -> str:
+        if value is None:
+            return ""
+        try:
+            if pd.isna(value):
+                return ""
+        except (TypeError, ValueError):
+            pass
+        text = str(value).strip()
+        if text.lower() in {"nan", "none", "null"}:
+            return ""
+        return text
+
+    def _suggest_product_expense_key_from_row(self, row: Dict[str, Any]) -> str:
+        item_label = self._clean_product_cost_csv_value(row.get("item_label"))
+        product_sku = self._clean_product_cost_csv_value(row.get("product_sku"))
+        import_code = self._normalize_product_identifier(row.get("item_import_code"))
+        ean = self._normalize_product_identifier(row.get("item_ean"))
+        warehouse_number = self._clean_product_cost_csv_value(row.get("item_warehouse_number"))
+        identifier = import_code or ean or warehouse_number or product_sku
+        if item_label and identifier:
+            return self._compose_expense_key(item_label, identifier)
+        return product_sku or item_label
+
+    def _missing_product_costs_output_path(
+        self,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+    ) -> Path:
+        if date_from is not None and date_to is not None:
+            return self.output_path(
+                f"missing_product_costs_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv"
+            )
+        return self.output_path("missing_product_costs.csv")
+
+    def _build_missing_product_cost_rows(self, fallback_df: pd.DataFrame) -> List[Dict[str, Any]]:
+        if fallback_df.empty:
+            return []
+
+        frame = fallback_df.copy()
+        group_columns = [
+            "product_sku",
+            "item_label",
+            "item_ean",
+            "item_import_code",
+            "item_warehouse_number",
+        ]
+        for column in group_columns:
+            if column not in frame.columns:
+                frame[column] = ""
+            frame[column] = frame[column].map(self._clean_product_cost_csv_value)
+        for column in ("item_quantity", "item_total_without_tax", "profit_before_ads", "expense_per_item"):
+            frame[column] = pd.to_numeric(frame.get(column, 0.0), errors="coerce").fillna(0.0)
+
+        row_count_column = "order_num" if "order_num" in frame.columns else "expense_source"
+        grouped = (
+            frame.groupby(group_columns, dropna=False)
+            .agg(
+                rows=(row_count_column, "size"),
+                units=("item_quantity", "sum"),
+                revenue_net=("item_total_without_tax", "sum"),
+                profit_before_ads=("profit_before_ads", "sum"),
+                current_fallback_unit_cost_net=("expense_per_item", "mean"),
+            )
+            .reset_index()
+            .sort_values(["revenue_net", "rows"], ascending=[False, False])
+            .reset_index(drop=True)
+        )
+
+        missing_rows: List[Dict[str, Any]] = []
+        for row in grouped.to_dict("records"):
+            suggested_key = self._suggest_product_expense_key_from_row(row)
+            missing_rows.append(
+                {
+                    "suggested_expense_key": suggested_key,
+                    "purchase_cost_net": "",
+                    "product_sku": row.get("product_sku") or "",
+                    "item_label": row.get("item_label") or "",
+                    "item_ean": row.get("item_ean") or "",
+                    "item_import_code": row.get("item_import_code") or "",
+                    "item_warehouse_number": row.get("item_warehouse_number") or "",
+                    "rows": int(row.get("rows") or 0),
+                    "units": round(float(row.get("units") or 0.0), 2),
+                    "revenue_net": round(float(row.get("revenue_net") or 0.0), 2),
+                    "current_fallback_unit_cost_net": round(
+                        float(row.get("current_fallback_unit_cost_net") or 0.0),
+                        4,
+                    ),
+                    "profit_before_ads": round(float(row.get("profit_before_ads") or 0.0), 2),
+                    "notes": "Fill purchase_cost_net and run scripts/apply_missing_product_costs.py.",
+                }
+            )
+        return missing_rows
+
+    def _build_product_expense_coverage_qa(
+        self,
+        export_df: Optional[pd.DataFrame],
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
         df = export_df.copy() if isinstance(export_df, pd.DataFrame) else pd.DataFrame()
         required = {
             "item_label",
@@ -1802,13 +1902,35 @@ class BizniWebExporter:
         fallback_revenue_share_pct = round((fallback_revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0
         fallback_profit_share_pct = round((fallback_profit / total_profit) * 100, 2) if total_profit > 0 else 0.0
         unknown_source_rows = int((item_df["expense_source"] == "unknown").sum())
+        missing_product_cost_rows: List[Dict[str, Any]] = []
+        missing_product_costs_path: Optional[Path] = None
+        missing_product_costs_write_error = ""
 
         fallback_items_df = pd.DataFrame()
         if fallback_rows > 0:
+            missing_product_cost_rows = self._build_missing_product_cost_rows(fallback_df)
+            if missing_product_cost_rows and date_from is not None and date_to is not None:
+                missing_product_costs_path = self._missing_product_costs_output_path(date_from, date_to)
+                try:
+                    missing_product_costs_path.parent.mkdir(parents=True, exist_ok=True)
+                    pd.DataFrame(missing_product_cost_rows).to_csv(
+                        missing_product_costs_path,
+                        index=False,
+                        encoding="utf-8-sig",
+                    )
+                except Exception as exc:
+                    missing_product_costs_write_error = str(exc)
+                    logger.warning(
+                        "Could not write missing product costs CSV %s: %s",
+                        missing_product_costs_path,
+                        exc,
+                    )
+
+            row_count_column = "order_num" if "order_num" in fallback_df.columns else "expense_source"
             fallback_items_df = (
                 fallback_df.groupby(["product_sku", "item_label"], dropna=False)
                 .agg(
-                    rows=("order_num", "size"),
+                    rows=(row_count_column, "size"),
                     units=("item_quantity", "sum"),
                     revenue=("item_total_without_tax", "sum"),
                     profit_before_ads=("profit_before_ads", "sum"),
@@ -1850,6 +1972,17 @@ class BizniWebExporter:
             warnings.append(
                 f"{fallback_rows} item row(s) ({fallback_row_share_pct:.2f}%) use a missing-cost zero-margin fallback."
             )
+            if missing_product_cost_rows:
+                missing_file_label = (
+                    str(missing_product_costs_path)
+                    if missing_product_costs_path is not None
+                    else "missing_product_costs.csv"
+                )
+                warnings.append(
+                    f"{len(missing_product_cost_rows)} unique product cost mapping(s) are missing. "
+                    f"Fill purchase_cost_net in {missing_file_label} and run "
+                    f"`python scripts/apply_missing_product_costs.py --project {self.project_name} --csv {missing_file_label}`."
+                )
             if fallback_revenue_share_pct >= 5 or fallback_profit_share_pct >= 5:
                 warnings.append(
                     f"Missing-cost fallback rows represent {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit."
@@ -1863,6 +1996,8 @@ class BizniWebExporter:
 
         if unknown_source_rows > 0:
             warnings.append(f"{unknown_source_rows} item row(s) are missing expense_source metadata.")
+        if missing_product_costs_write_error:
+            failures.append(f"Missing product cost CSV could not be written: {missing_product_costs_write_error}")
 
         if fallback_revenue_share_pct >= 10 or fallback_profit_share_pct >= 10:
             failures.append(
@@ -1924,6 +2059,11 @@ class BizniWebExporter:
             "unknown_source_rows": unknown_source_rows,
             "source_mix": source_mix_rows,
             "top_fallback_items": top_fallback_items,
+            "missing_product_cost_rows": len(missing_product_cost_rows),
+            "missing_product_costs_path": str(missing_product_costs_path) if missing_product_costs_path else "",
+            "missing_product_costs_generated": bool(
+                missing_product_cost_rows and missing_product_costs_path and not missing_product_costs_write_error
+            ),
         }
 
     def _build_margin_stability_qa(self, date_agg: Optional[pd.DataFrame]) -> Dict[str, Any]:
@@ -5141,6 +5281,8 @@ class BizniWebExporter:
         )
         source_health.setdefault("qa", {})["product_expense_coverage"] = self._build_product_expense_coverage_qa(
             df,
+            date_from=date_from,
+            date_to=date_to,
         )
         source_health.setdefault("qa", {})["margin_stability"] = self._build_margin_stability_qa(
             date_agg=date_agg,
