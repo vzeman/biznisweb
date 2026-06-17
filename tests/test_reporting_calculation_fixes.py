@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from export_orders import BizniWebExporter
+from export_orders import ORDER_CACHE_SCHEMA_VERSION, BizniWebExporter
 from reporting_core.cfo_kpis import build_order_records_from_export_df
 
 
@@ -148,6 +148,69 @@ class ReportingCalculationFixTests(unittest.TestCase):
             places=6,
         )
 
+    def test_creditnoted_excluded_order_keeps_fulfillment_cost_without_revenue(self) -> None:
+        exporter = make_exporter()
+        exporter.project_settings["creditnote_fulfillment_costs"] = {
+            "enabled": True,
+            "shipping_cost_per_order": 0.2,
+        }
+        exporter._creditnote_order_nums_cache = {"RETURN-1"}
+        exporter.excluded_status_orders = [
+            {
+                "order_num": "RETURN-1",
+                "pur_date": "2026-04-20 11:00:00",
+                "status": {"name": "Storno"},
+            }
+        ]
+        df = pd.DataFrame(
+            [
+                {
+                    "order_num": "OK-1",
+                    "customer_email": "ok@example.com",
+                    "purchase_date": "2026-04-20 10:00:00",
+                    "purchase_date_only": "2026-04-20",
+                    "order_revenue_net": 100.0,
+                    "total_items_in_order": 1,
+                    "fb_ads_daily_spend": 0.0,
+                    "google_ads_daily_spend": 0.0,
+                    "product_sku": "SKU-OK",
+                    "item_label": "Revenue item",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 100.0,
+                    "item_total_with_tax": 123.0,
+                    "item_unit_price": 100.0,
+                    "item_line_sum_original": 100.0,
+                    "item_line_sum_with_tax_original": 123.0,
+                    "item_unit_price_original": 100.0,
+                    "total_expense": 40.0,
+                    "profit_before_ads": 60.0,
+                }
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.data_dir = Path(tmp_dir)
+            _, date_agg, _, month_agg, _ = exporter.create_aggregated_reports(
+                df,
+                datetime(2026, 4, 20),
+                datetime(2026, 4, 20),
+                fb_daily_spend={},
+                google_ads_daily_spend={},
+            )
+
+        day = date_agg.iloc[0]
+        self.assertEqual(1, int(day["unique_orders"]))
+        self.assertEqual(1, int(day["creditnote_fulfillment_orders"]))
+        self.assertEqual(100.0, float(day["total_revenue"]))
+        self.assertEqual(40.0, float(day["product_expense"]))
+        self.assertEqual(0.3, float(day["creditnote_packaging_cost"]))
+        self.assertEqual(0.2, float(day["creditnote_shipping_net_cost"]))
+        self.assertEqual(0.5, float(day["creditnote_fulfillment_cost"]))
+        self.assertEqual(0.6, float(day["packaging_cost"]))
+        self.assertEqual(0.4, float(day["shipping_net_cost"]))
+        self.assertEqual(59.0, float(day["net_profit"]))
+        self.assertEqual(1, int(month_agg.iloc[0]["creditnote_fulfillment_orders"]))
+
     def test_period_customer_history_marks_prior_customer_returning(self) -> None:
         exporter = make_exporter()
         full_orders = [
@@ -235,6 +298,23 @@ class ReportingCalculationFixTests(unittest.TestCase):
             )
 
             self.assertFalse(exporter.should_use_cache(order_date, today=today))
+
+    def test_cache_save_preserves_raw_excluded_status_orders(self) -> None:
+        exporter = make_exporter()
+        order_date = datetime(2026, 6, 1)
+        orders = [
+            reporting_order("OK-1", "Odoslana", "Dobierkou", "7"),
+            reporting_order("STORNO-1", "Storno", "Dobierkou", "7"),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.cache_dir = Path(tmp_dir)
+            exporter.save_to_cache_simple(order_date, orders)
+            payload = json.loads(exporter.get_cache_filename(order_date).read_text(encoding="utf-8"))
+            loaded = exporter.load_from_cache(order_date)
+
+        self.assertEqual(ORDER_CACHE_SCHEMA_VERSION, payload["schema_version"])
+        self.assertEqual(["OK-1", "STORNO-1"], [order["order_num"] for order in loaded])
 
     def test_cache_policy_revalidates_late_payment_windows(self) -> None:
         exporter = make_exporter()

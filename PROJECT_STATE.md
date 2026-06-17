@@ -4108,3 +4108,35 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - local regenerated report artifacts were not uploaded to S3 in this step
 - Next exact step:
   - commit and push this branch, open/merge PR, rebuild the reporting image, then run a production artifact refresh with infra hard-gate verification before UI checks
+
+### 2026-06-17 (creditnote fulfillment cost correction)
+- Branch: `codex/creditnote-carrier-audit`
+- Correction:
+  - creditnoted/storno orders now remove revenue and sold-product COGS, but keep outbound fulfillment cost because the parcel was actually sent
+  - added `creditnote_fulfillment_costs` settings for ROY and VEVO
+  - daily/date/month aggregations now expose `creditnote_fulfillment_orders`, `creditnote_packaging_cost`, `creditnote_shipping_net_cost`, and `creditnote_fulfillment_cost`
+  - `packaging_cost`, `shipping_net_cost`, `total_cost`, `net_profit`, CM1, CM2, and financial metrics now include those retained fulfillment costs
+  - cache schema bumped to `4` and daily cache now stores raw status orders, not only revenue-included orders, so cached future runs can still account for dobropis/storno fulfillment costs
+- Corrected impact of the 2026-06-17 status-change intervention:
+  - ROY: `51` orders, revenue down `6279.26` EUR, net profit down `3469.10` EUR
+  - VEVO: `45` orders, revenue down `628.65` EUR, net profit down `407.40` EUR
+  - Total: `96` orders, revenue down `6907.91` EUR, net profit down `3876.50` EUR
+- Current regenerated reports now retain all creditnote fulfillment costs:
+  - ROY: `105` creditnote fulfillment orders, retained fulfillment cost `26.25` EUR
+  - VEVO: `266` creditnote fulfillment orders, retained fulfillment cost `133.00` EUR
+- Backfill:
+  - regenerated ROY local reporting outputs for `2025-09-24..2026-06-16` with `--clear-cache`; exit code `0`
+  - regenerated VEVO local reporting outputs for `2025-05-03..2026-06-16` with `--clear-cache`; exit code `0`
+- Verification:
+  - `python -m py_compile export_orders.py creditnote_storno_guard.py creditnote_export.py monthly_creditnote_export_runner.py daily_report_runner.py`
+  - `python -m unittest tests.test_reporting_calculation_fixes tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation` (`49` tests OK)
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m json.tool projects\vevo\settings.json`
+  - `python -m json.tool data\roy\dashboard_payload_latest.json`
+  - `python -m json.tool data\vevo\dashboard_payload_latest.json`
+  - `git diff --check`
+- Known issues:
+  - code is not deployed yet; production daily reporting needs PR merge/build/deploy and production artifact refresh
+  - regenerated local artifacts are not uploaded to S3 yet
+- Next exact step:
+  - commit and push correction to PR `#177`, then merge/deploy and run production artifact refresh with required infra hard-gate verification before UI checks

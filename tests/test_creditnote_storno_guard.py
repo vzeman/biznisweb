@@ -144,6 +144,7 @@ class CreditnoteStornoGuardTests(unittest.TestCase):
                 self.assertTrue(guard.enabled)
                 self.assertEqual("Storno", guard.target_status_name)
                 self.assertTrue(guard.only_if_in_realized_revenue)
+                self.assertTrue(settings["creditnote_fulfillment_costs"]["enabled"])
 
 
 if __name__ == "__main__":

@@ -112,6 +112,10 @@
       "Stripe - cancelled"
     ]
   },
+  "creditnote_fulfillment_costs": {
+    "enabled": true,
+    "shipping_cost_per_order": 0.2
+  },
   "realized_revenue": {
     "paid_statuses": [
       "Platba online - zaplatené"

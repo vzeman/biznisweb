@@ -16,7 +16,7 @@ import re
 import shutil
 import unicodedata
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import calendar
@@ -117,7 +117,7 @@ MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
 MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15% product margin
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 EXCLUDED_ORDER_STATUSES: List[str] = []  # Legacy status-only exclude list retained for compatibility
-ORDER_CACHE_SCHEMA_VERSION = 3
+ORDER_CACHE_SCHEMA_VERSION = 4
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
 PREFER_MANUAL_ADS_TOTALS = False
@@ -735,6 +735,7 @@ class BizniWebExporter:
         self.unknown_currencies = set()
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
         self.excluded_status_orders = []  # Track all excluded status orders for lifecycle proxy reporting
+        self._creditnote_order_nums_cache: Optional[set[str]] = None
         self.product_expenses_exact = dict(PRODUCT_EXPENSES)
         self.product_expenses_normalized = {}
         for key, value in PRODUCT_EXPENSES.items():
@@ -4179,13 +4180,12 @@ class BizniWebExporter:
                 day_orders = orders_by_date.get(date_str, [])
                 days_ago = (today - date).days
 
-                # Filter by status
-                filtered_orders = self._filter_by_status(day_orders)
-
-                # Validate that all orders are actually from the requested date
-                validated_orders = []
+                # Validate raw day orders before both caching and realized-revenue filtering.
+                # The cache intentionally stores raw status data so future cached runs can still
+                # account for fulfillment costs on creditnoted/storno orders.
+                raw_validated_orders = []
                 seen_day_order_keys = set()
-                for order in filtered_orders:
+                for order in day_orders:
                     pur_date_str = order.get('pur_date', '')
                     if pur_date_str:
                         try:
@@ -4195,18 +4195,21 @@ class BizniWebExporter:
                                 if dedupe_key in seen_day_order_keys:
                                     continue
                                 seen_day_order_keys.add(dedupe_key)
-                                validated_orders.append(order)
+                                raw_validated_orders.append(order)
                             else:
                                 logger.warning(f"Order {order.get('order_num', 'unknown')} has date {order_date.strftime('%Y-%m-%d')} but was in {date_str} bucket")
                         except (ValueError, IndexError) as e:
                             logger.warning(f"Could not validate date for order {order.get('order_num', 'unknown')}: {e}")
+
+                filtered_orders = self._filter_by_status(raw_validated_orders)
+                validated_orders = list(filtered_orders)
 
                 print(f"  {date_str}: {len(validated_orders)} orders")
                 all_orders.extend(validated_orders)
 
                 # Cache if appropriate
                 if days_ago > self.cache_days_threshold:
-                    self.save_to_cache_simple(date, validated_orders)
+                    self.save_to_cache_simple(date, raw_validated_orders)
 
         # Final validation: ensure all orders are within the overall date range
         final_validated_orders = []
@@ -4273,6 +4276,103 @@ class BizniWebExporter:
             )
 
         return filtered_orders
+
+    def _creditnote_fulfillment_cost_settings(self) -> Dict[str, Any]:
+        raw = self.project_settings.get("creditnote_fulfillment_costs") or {}
+        return {
+            "enabled": bool(raw.get("enabled", False)),
+            "shipping_cost_per_order": raw.get("shipping_cost_per_order"),
+        }
+
+    def _fetch_creditnote_order_nums(self) -> set[str]:
+        if self._creditnote_order_nums_cache is not None:
+            return set(self._creditnote_order_nums_cache)
+
+        from creditnote_export import _creditnote_order_nums, build_creditnote_export_rows, fetch_project_creditnotes
+
+        raw_rows, _reported_total = fetch_project_creditnotes(self.project_name)
+        creditnote_rows = build_creditnote_export_rows(
+            self.project_name,
+            raw_rows,
+            date(2000, 1, 1),
+            datetime.utcnow().date(),
+        )
+        self._creditnote_order_nums_cache = set(_creditnote_order_nums(creditnote_rows))
+        return set(self._creditnote_order_nums_cache)
+
+    def _creditnote_shipping_cost_per_order(self) -> float:
+        settings = self._creditnote_fulfillment_cost_settings()
+        configured = settings.get("shipping_cost_per_order")
+        if configured not in (None, ""):
+            return float(configured)
+        return abs(float(SHIPPING_NET_PER_ORDER))
+
+    def _build_creditnote_fulfillment_costs_by_date(self, date_from: datetime, date_to: datetime) -> pd.DataFrame:
+        columns = [
+            "date",
+            "creditnote_fulfillment_orders",
+            "creditnote_packaging_cost",
+            "creditnote_shipping_net_cost",
+            "creditnote_fulfillment_cost",
+        ]
+        settings = self._creditnote_fulfillment_cost_settings()
+        if not settings["enabled"]:
+            return pd.DataFrame(columns=columns)
+
+        excluded_by_num: Dict[str, Dict[str, Any]] = {}
+        for order in self.excluded_status_orders or []:
+            order_num = str((order or {}).get("order_num") or "").strip()
+            if not order_num or order_num in excluded_by_num:
+                continue
+            purchase_dt = self._order_purchase_datetime(order)
+            if purchase_dt is None or not (date_from.date() <= purchase_dt.date() <= date_to.date()):
+                continue
+            excluded_by_num[order_num] = order
+
+        if not excluded_by_num:
+            return pd.DataFrame(columns=columns)
+
+        try:
+            creditnote_order_nums = self._fetch_creditnote_order_nums()
+        except Exception as exc:
+            logger.warning("Could not load creditnote fulfillment cost source for %s: %s", self.project_name, exc)
+            return pd.DataFrame(columns=columns)
+
+        rows = []
+        packaging_cost = float(PACKAGING_COST_PER_ORDER)
+        shipping_cost = self._creditnote_shipping_cost_per_order()
+        for order_num, order in excluded_by_num.items():
+            if order_num not in creditnote_order_nums:
+                continue
+            purchase_dt = self._order_purchase_datetime(order)
+            if purchase_dt is None:
+                continue
+            rows.append(
+                {
+                    "date": purchase_dt.date(),
+                    "creditnote_fulfillment_orders": 1,
+                    "creditnote_packaging_cost": packaging_cost,
+                    "creditnote_shipping_net_cost": shipping_cost,
+                    "creditnote_fulfillment_cost": packaging_cost + shipping_cost,
+                }
+            )
+
+        if not rows:
+            return pd.DataFrame(columns=columns)
+
+        cost_df = pd.DataFrame(rows)
+        return (
+            cost_df.groupby("date", as_index=False)
+            .agg(
+                {
+                    "creditnote_fulfillment_orders": "sum",
+                    "creditnote_packaging_cost": "sum",
+                    "creditnote_shipping_net_cost": "sum",
+                    "creditnote_fulfillment_cost": "sum",
+                }
+            )
+            .reindex(columns=columns)
+        )
     
     def save_to_cache_simple(self, date: datetime, orders: List[Dict[str, Any]]):
         """Save orders to cache for a specific date (simplified version for single-day fetches)"""
@@ -5334,8 +5434,27 @@ class BizniWebExporter:
 
         # Add variable per-order logistics costs
         # Packaging and net shipping both scale with number of orders.
-        date_agg['packaging_cost'] = date_agg['unique_orders'] * PACKAGING_COST_PER_ORDER
-        date_agg['shipping_net_cost'] = date_agg['unique_orders'] * SHIPPING_NET_PER_ORDER
+        creditnote_fulfillment_costs = self._build_creditnote_fulfillment_costs_by_date(date_from, date_to)
+        if not creditnote_fulfillment_costs.empty:
+            date_agg = date_agg.merge(creditnote_fulfillment_costs, on='date', how='left')
+        for column in [
+            'creditnote_fulfillment_orders',
+            'creditnote_packaging_cost',
+            'creditnote_shipping_net_cost',
+            'creditnote_fulfillment_cost',
+        ]:
+            if column not in date_agg.columns:
+                date_agg[column] = 0
+            date_agg[column] = date_agg[column].fillna(0)
+
+        date_agg['packaging_cost'] = (
+            date_agg['unique_orders'] * PACKAGING_COST_PER_ORDER
+            + date_agg['creditnote_packaging_cost']
+        )
+        date_agg['shipping_net_cost'] = (
+            date_agg['unique_orders'] * SHIPPING_NET_PER_ORDER
+            + date_agg['creditnote_shipping_net_cost']
+        )
         date_agg['shipping_subsidy_cost'] = date_agg['shipping_net_cost']  # backward-compatible alias
 
         # Add daily fixed cost based on the date
@@ -5421,6 +5540,11 @@ class BizniWebExporter:
         date_agg['fb_ads_spend'] = date_agg['fb_ads_spend'].round(2)
         date_agg['google_ads_spend'] = date_agg['google_ads_spend'].round(2)
         date_agg['packaging_cost'] = date_agg['packaging_cost'].round(2)
+        date_agg['creditnote_fulfillment_orders'] = date_agg['creditnote_fulfillment_orders'].fillna(0).astype(int)
+        date_agg['creditnote_packaging_cost'] = date_agg['creditnote_packaging_cost'].round(2)
+        date_agg['creditnote_shipping_net_cost'] = date_agg['creditnote_shipping_net_cost'].round(2)
+        date_agg['creditnote_fulfillment_cost'] = date_agg['creditnote_fulfillment_cost'].round(2)
+        date_agg['shipping_net_cost'] = date_agg['shipping_net_cost'].round(2)
         date_agg['shipping_subsidy_cost'] = date_agg['shipping_subsidy_cost'].round(2)
         date_agg['total_cost'] = date_agg['total_cost'].round(2)
         date_agg['net_profit'] = date_agg['net_profit'].round(2)
@@ -5456,6 +5580,11 @@ class BizniWebExporter:
             'total_revenue': 'sum',
             'product_expense': 'sum',
             'packaging_cost': 'sum',
+            'creditnote_fulfillment_orders': 'sum',
+            'creditnote_packaging_cost': 'sum',
+            'creditnote_shipping_net_cost': 'sum',
+            'creditnote_fulfillment_cost': 'sum',
+            'shipping_net_cost': 'sum',
             'shipping_subsidy_cost': 'sum',
             'fixed_daily_cost': 'sum',
             'fb_ads_spend': 'sum',
