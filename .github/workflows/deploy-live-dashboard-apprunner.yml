@@ -496,7 +496,7 @@ jobs:
             exit 0
           fi
           echo "LIVE_ARTIFACT_REFRESH_START project=${PROJECT}"
-          python daily_report_runner.py --project "${PROJECT}" --skip-email --skip-invoices
+          python daily_report_runner.py --project "${PROJECT}" --skip-email --skip-invoices --creditnote-storno-dry-run
           python - <<'PY'
           import json
           import os

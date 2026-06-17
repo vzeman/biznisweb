@@ -54,6 +54,23 @@
     "timezone": "Europe/Bratislava",
     "task_family": "vevo-invoice-daily"
   },
+  "creditnote_storno_guard": {
+    "enabled": true,
+    "target_status_name": "Storno",
+    "target_status_id": null,
+    "lang_code": "SK",
+    "only_if_in_realized_revenue": true,
+    "final_statuses": [
+      "Storno",
+      "Vratene",
+      "Vrátené",
+      "Dobropis",
+      "Neprevzate - storno",
+      "Neprevzaté - storno",
+      "Stripe - refunded",
+      "Stripe - cancelled"
+    ]
+  },
   "realized_revenue": {
     "paid_statuses": [
       "Platba online - zaplatené"

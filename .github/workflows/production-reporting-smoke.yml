@@ -151,7 +151,7 @@ jobs:
           }
           trap cleanup EXIT
           echo "HOST_SMOKE_START project=${PROJECT} marker=${MARKER}"
-          python daily_report_runner.py --project "${PROJECT}" --output-tag "${MARKER}" --skip-email --skip-invoices
+          python daily_report_runner.py --project "${PROJECT}" --output-tag "${MARKER}" --skip-email --skip-invoices --creditnote-storno-dry-run
           python - <<'PY'
           import json
           import os

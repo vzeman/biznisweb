@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
+from creditnote_storno_guard import resolve_creditnote_storno_settings, run_creditnote_storno_guard
 from generate_invoices import resolve_invoice_date_window, resolve_invoice_generation_settings, run_invoice_generation
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
@@ -120,6 +121,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Preview invoice candidates without creating invoices.",
     )
     parser.add_argument(
+        "--skip-creditnote-storno-guard",
+        action="store_true",
+        default=env_bool("REPORT_SKIP_CREDITNOTE_STORNO_GUARD", False),
+        help="Skip the pre-export guard that changes creditnoted revenue orders to Storno.",
+    )
+    parser.add_argument(
+        "--creditnote-storno-dry-run",
+        action="store_true",
+        default=env_bool("REPORT_CREDITNOTE_STORNO_DRY_RUN", False),
+        help="Preview creditnoted orders that would be changed to Storno without changing BizniWeb.",
+    )
+    parser.add_argument(
         "--output-tag",
         default=os.getenv("REPORT_OUTPUT_TAG", ""),
         help="Optional output tag for side-by-side test artifacts (e.g. ui_test).",
@@ -206,6 +219,43 @@ def maybe_run_invoice_automation(
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
         "dry_run": summary.dry_run,
     }
+
+
+def maybe_run_creditnote_storno_guard(
+    project: str,
+    reporting_defaults: Dict[str, Any],
+    dry_run: bool = False,
+) -> Optional[Dict[str, Any]]:
+    project_settings = load_project_settings(project)
+    guard_settings = resolve_creditnote_storno_settings(project_settings)
+    if not guard_settings.enabled:
+        print(f"Creditnote storno guard disabled for project={project}")
+        put_metric("CreditnoteStornoGuardDisabled", 1, project, reporting_defaults)
+        return None
+
+    print(f"Running creditnote storno guard for project={project} dry_run={dry_run}")
+    try:
+        summary = run_creditnote_storno_guard(
+            project_name=project,
+            dry_run=dry_run,
+            project_settings=project_settings,
+        )
+    except Exception:
+        put_metric("CreditnoteStornoGuardRunFailed", 1, project, reporting_defaults)
+        raise
+
+    put_metric("CreditnoteStornoGuardCreditnotedOrders", summary.creditnoted_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardEligibleOrders", summary.eligible_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardUpdatedOrders", summary.updated_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardFailedOrders", summary.failed_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardRunSucceeded", 1, project, reporting_defaults)
+
+    print("CREDITNOTE_STORNO_GUARD_SUMMARY " + json.dumps(summary.as_dict(), ensure_ascii=False, sort_keys=True))
+
+    if not dry_run and summary.failed_orders:
+        raise RuntimeError(f"Creditnote storno guard failed for {summary.failed_orders} order(s) in project '{project}'")
+
+    return summary.as_dict()
 
 
 def run_export(
@@ -1120,7 +1170,8 @@ def main() -> None:
     os.environ["REPORT_PROJECT"] = project
     os.environ["REPORT_DATA_DIR"] = str(project_data_dir(project).resolve())
     os.environ["REPORT_OUTPUT_TAG"] = output_tag
-    reporting_defaults = resolve_reporting_defaults(project, load_project_settings(project))
+    project_settings = load_project_settings(project)
+    reporting_defaults = resolve_reporting_defaults(project, project_settings)
 
     to_date = normalize_date(resolve_to_date(args.to_date, args.timezone))
     from_date = normalize_date(args.from_date)
@@ -1130,6 +1181,19 @@ def main() -> None:
 
     use_clear_cache = args.clear_cache or env_bool("REPORT_FORCE_CLEAR_CACHE", False)
     use_no_cache = args.no_cache or env_bool("REPORT_FORCE_NO_CACHE", False)
+
+    creditnote_storno_summary = None
+    if args.skip_creditnote_storno_guard:
+        print("Creditnote storno guard skipped by flag.")
+    else:
+        creditnote_storno_summary = maybe_run_creditnote_storno_guard(
+            project=project,
+            reporting_defaults=reporting_defaults,
+            dry_run=args.creditnote_storno_dry_run,
+        )
+        if creditnote_storno_summary and int(creditnote_storno_summary.get("updated_orders") or 0) > 0:
+            use_clear_cache = True
+            print("Creditnote storno guard updated orders; forcing cache clear before export.")
 
     if not args.skip_export:
         run_export(

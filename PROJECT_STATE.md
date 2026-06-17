@@ -4077,3 +4077,34 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - VEVO latest scheduled email/report will use the corrected image on the next `vevo-daily-report-email` run; immediate VEVO untagged email backfill was not sent during this session
 - Next exact step:
   - monitor the next scheduled VEVO/ROY reporting runs for BizniWeb non-JSON pagination errors and, if recurring, implement stricter page-level retry/fail-fast telemetry before changing more reporting logic
+
+### 2026-06-17 (creditnote Storno guard and full-history refresh)
+- Branch: `codex/creditnote-carrier-audit`
+- Change:
+  - added `creditnote_storno_guard.py`, a reusable pre-export guard that scans creditnotes and changes creditnoted orders to `Storno` only when the order still counts in realized reporting revenue
+  - enabled the guard for `roy` and `vevo` project settings with target status `Storno`
+  - wired the guard into `daily_report_runner.py` before export, with metrics, fail-fast behavior on mutation failures, and automatic `--clear-cache` when any order status is changed
+  - added CLI/env controls: `--skip-creditnote-storno-guard`, `--creditnote-storno-dry-run`, `REPORT_SKIP_CREDITNOTE_STORNO_GUARD`, `REPORT_CREDITNOTE_STORNO_DRY_RUN`
+  - kept GitHub smoke/artifact-refresh workflows in `--creditnote-storno-dry-run` mode so verification jobs do not mutate BizniWeb
+  - added `audits/creditnote_storno_20260617.json` with the live order-change audit
+- Live BizniWeb action:
+  - target status resolved to `Storno` with status id `17` for both shops
+  - ROY dry run found `51` eligible creditnoted revenue orders; live run changed all `51`; failures `0`
+  - VEVO dry run found `45` eligible creditnoted revenue orders; live run changed all `45`; failures `0`
+  - post-mutation dry run found `eligible_orders=0` for both ROY and VEVO
+- Backfill:
+  - regenerated ROY local reporting outputs for `2025-09-24..2026-06-16` with `--clear-cache`; export completed with exit code `0` and found `2888` orders
+  - regenerated VEVO local reporting outputs for `2025-05-03..2026-06-16` with `--clear-cache`; export completed with exit code `0`
+  - refreshed local latest files: `data/roy/report_latest.html`, `data/roy/dashboard_payload_latest.json`, `data/vevo/report_latest.html`, `data/vevo/dashboard_payload_latest.json`
+- Verification:
+  - `python -m py_compile creditnote_storno_guard.py creditnote_export.py monthly_creditnote_export_runner.py daily_report_runner.py`
+  - `python -m unittest tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation` (`31` tests OK)
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m json.tool projects\vevo\settings.json`
+  - YAML parse check for modified GitHub workflows
+  - `git diff --check`
+- Known issues:
+  - code is not deployed yet; daily production automation will use the guard only after merge/build/deploy
+  - local regenerated report artifacts were not uploaded to S3 in this step
+- Next exact step:
+  - commit and push this branch, open/merge PR, rebuild the reporting image, then run a production artifact refresh with infra hard-gate verification before UI checks
