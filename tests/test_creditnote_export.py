@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from creditnote_export import (
+    build_creditnote_reporting_audit,
     build_creditnote_export_rows,
     parse_biznisweb_js_object,
     parse_project_list,
@@ -121,6 +122,7 @@ class CreditnoteExportTests(unittest.TestCase):
             self.assertEqual(1, result.exported_rows)
             self.assertEqual({"ROY": 1}, result.project_counts)
             self.assertEqual(-53.49, result.summary_rows[0]["Suma_s_DPH"])
+            self.assertEqual(53.49, result.total_rows[0]["Suma_s_DPH"])
 
     def test_email_body_includes_summary_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -144,7 +146,60 @@ class CreditnoteExportTests(unittest.TestCase):
             body = build_creditnote_email_body(result)
             self.assertIn("mesacny PDF export", body)
             self.assertIn("Pocet dobropisov: 1", body)
+            self.assertIn("Dobropisovana suma spolu", body)
             self.assertIn("VEVO €", body)
+
+    def test_reporting_audit_flags_creditnoted_orders_still_in_revenue_by_carrier(self) -> None:
+        export_rows = [
+            {
+                "Eshop": "ROY",
+                "Dobropis cislo": "2626070101",
+                "Objednavka": "2677003012",
+                "Mena": "EUR",
+                "Suma bez DPH": -40.0,
+                "Suma s DPH": -49.2,
+            },
+            {
+                "Eshop": "ROY",
+                "Dobropis cislo": "2626070102",
+                "Objednavka": "2677003013",
+                "Mena": "EUR",
+                "Suma bez DPH": -10.0,
+                "Suma s DPH": -12.3,
+            },
+        ]
+        packeta = {"type": "shipping", "title": "Packeta - vydajne miesto/box - (100) Foo", "reference_id": "9"}
+        packeta_other = {"type": "shipping", "title": "Packeta - vydajne miesto/box - (200) Bar", "reference_id": "12"}
+        courier = {"type": "shipping", "title": "Kurier", "reference_id": "1"}
+        context = {
+            "roy": {
+                "available": True,
+                "included_orders": [
+                    {"order_num": "2677003012", "status": {"name": "Odoslana"}, "price_elements": [packeta]},
+                    {"order_num": "2677003999", "status": {"name": "Odoslana"}, "price_elements": [packeta_other]},
+                    {"order_num": "2677004000", "status": {"name": "Odoslana"}, "price_elements": [courier]},
+                ],
+                "all_orders": [
+                    {"order_num": "2677003012", "status": {"name": "Odoslana"}, "price_elements": [packeta]},
+                    {"order_num": "2677003013", "status": {"name": "Vratene"}, "price_elements": [packeta_other]},
+                    {"order_num": "2677003999", "status": {"name": "Odoslana"}, "price_elements": [packeta_other]},
+                    {"order_num": "2677004000", "status": {"name": "Odoslana"}, "price_elements": [courier]},
+                ],
+            }
+        }
+
+        enriched, carrier_rows, audit = build_creditnote_reporting_audit(export_rows, context)
+
+        self.assertEqual("included", enriched[0]["Reporting revenue"])
+        self.assertEqual("excluded", enriched[1]["Reporting revenue"])
+        self.assertEqual(1, audit["included_in_revenue"])
+        self.assertEqual(1, audit["excluded_from_revenue"])
+        packeta_row = next(row for row in carrier_rows if row["Prepravca"] == "Packeta")
+        self.assertEqual("9, 12", packeta_row["Prepravca ID"])
+        self.assertEqual(2, packeta_row["Realized objednavky"])
+        self.assertEqual(2, packeta_row["Dobropisovane objednavky"])
+        self.assertEqual(100.0, packeta_row["Dobropis rate %"])
+        self.assertEqual(61.5, packeta_row["Suma_s_DPH"])
 
     def test_parse_project_list_defaults_and_normalizes(self) -> None:
         self.assertEqual(("roy", "vevo"), parse_project_list(None))

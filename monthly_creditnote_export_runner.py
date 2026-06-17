@@ -107,6 +107,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=_env_bool("CREDITNOTE_EXPORT_DRY_RUN_EMAIL", False),
         help="Build the email body and attachments but do not call SES.",
     )
+    parser.add_argument(
+        "--skip-metrics",
+        action="store_true",
+        default=_env_bool("CREDITNOTE_EXPORT_SKIP_METRICS", False),
+        help="Generate files but do not publish CloudWatch metrics.",
+    )
     return parser.parse_args(argv)
 
 
@@ -147,6 +153,15 @@ def _format_amount(value: Any) -> str:
         return "0.00"
 
 
+def _format_rate(value: Any) -> str:
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):.2f}%"
+    except (TypeError, ValueError):
+        return "-"
+
+
 def build_creditnote_email_body(result: CreditnoteExportResult) -> str:
     lines = [
         "Dobry den,",
@@ -156,8 +171,65 @@ def build_creditnote_email_body(result: CreditnoteExportResult) -> str:
         f"E-shopy: {', '.join(project.upper() for project in result.projects)}.",
         f"Pocet dobropisov: {result.exported_rows}.",
         "",
-        "Sumar:",
+        "Dobropisovana suma spolu:",
     ]
+    if result.total_rows:
+        for row in result.total_rows:
+            lines.append(
+                f"- {row.get('Mena') or '-'}: "
+                f"{int(row.get('Pocet') or 0)} ks, "
+                f"s DPH {_format_amount(row.get('Suma_s_DPH'))}"
+            )
+    else:
+        lines.append("- Bez dobropisov v zadanom obdobi.")
+
+    lines.extend(
+        [
+            "",
+            "Kontrola vylucenia z reporting revenue:",
+        ]
+    )
+    audit = result.reporting_exclusion_summary or {}
+    audit_errors = audit.get("audit_errors") or {}
+    if audit_errors:
+        lines.append("- Audit nie je kompletne dostupny: " + "; ".join(f"{k}: {v}" for k, v in audit_errors.items()))
+    else:
+        lines.append(
+            f"- V realized revenue ostava {int(audit.get('included_in_revenue') or 0)} "
+            f"z {int(audit.get('checked_orders') or 0)} dobropisovanych objednavok."
+        )
+        if int(audit.get("order_not_found") or 0):
+            lines.append(f"- Nenajdene povodne objednavky v auditovanom okne: {int(audit.get('order_not_found') or 0)}.")
+
+    lines.extend(
+        [
+            "",
+            "Prepravcovia podla dobropis rate (dobropisovane objednavky / realized objednavky v reportovanom obdobi):",
+        ]
+    )
+    carrier_rows = [
+        row for row in (result.carrier_rows or [])
+        if int(row.get("Dobropisovane objednavky") or 0) > 0
+    ]
+    if carrier_rows:
+        for row in carrier_rows[:8]:
+            lines.append(
+                f"- {row.get('Eshop')} / {row.get('Prepravca') or '-'}: "
+                f"{int(row.get('Dobropisovane objednavky') or 0)}/"
+                f"{int(row.get('Realized objednavky') or 0)} objednavok = "
+                f"{_format_rate(row.get('Dobropis rate %'))}, "
+                f"dobropisy {int(row.get('Dobropisy') or 0)} ks, "
+                f"s DPH {_format_amount(row.get('Suma_s_DPH'))}"
+            )
+    else:
+        lines.append("- Bez dostupnej carrier statistiky alebo bez dobropisov.")
+
+    lines.extend(
+        [
+            "",
+            "Sumar:",
+        ]
+    )
     if result.summary_rows:
         for row in result.summary_rows:
             lines.append(
@@ -235,6 +307,7 @@ def run_creditnote_export_runner(args: argparse.Namespace) -> Dict[str, Any]:
     project_settings = load_project_settings(owner_project)
     reporting_defaults = resolve_reporting_defaults(owner_project, project_settings)
     projects = parse_project_list(args.projects)
+    skip_metrics = bool(getattr(args, "skip_metrics", False))
     date_from, date_to = resolve_creditnote_export_window(
         timezone_name=args.timezone,
         reference_date=args.reference_date,
@@ -257,11 +330,23 @@ def run_creditnote_export_runner(args: argparse.Namespace) -> Dict[str, Any]:
             output_tag=args.output_tag,
         )
     except Exception:
-        put_metric("CreditnoteExportRunFailed", 1, owner_project, reporting_defaults)
+        if not skip_metrics:
+            put_metric("CreditnoteExportRunFailed", 1, owner_project, reporting_defaults)
         raise
 
-    put_metric("CreditnoteExportRows", result.exported_rows, owner_project, reporting_defaults)
-    put_metric("CreditnoteExportRunSucceeded", 1, owner_project, reporting_defaults)
+    total_gross_credit = sum(abs(float(row.get("Suma_s_DPH") or 0.0)) for row in result.total_rows)
+    if skip_metrics:
+        print("Creditnote export CloudWatch metrics skipped by flag.")
+    else:
+        put_metric("CreditnoteExportRows", result.exported_rows, owner_project, reporting_defaults)
+        put_metric("CreditnoteExportGrossAmount", round(total_gross_credit, 2), owner_project, reporting_defaults)
+        put_metric(
+            "CreditnoteExportRevenueIncludedOrders",
+            int((result.reporting_exclusion_summary or {}).get("included_in_revenue") or 0),
+            owner_project,
+            reporting_defaults,
+        )
+        put_metric("CreditnoteExportRunSucceeded", 1, owner_project, reporting_defaults)
 
     subject = build_creditnote_email_subject(result, args.email_subject)
     body_text = build_creditnote_email_body(result)
@@ -290,6 +375,7 @@ def run_creditnote_export_runner(args: argparse.Namespace) -> Dict[str, Any]:
             "email_dry_run": bool(args.dry_run_email),
             "email_message_id": message_id,
             "email_to": args.email_to,
+            "metrics_skipped": skip_metrics,
             "subject": subject,
         }
     )

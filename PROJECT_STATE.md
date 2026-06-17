@@ -61,6 +61,29 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Credit-note credited-amount, revenue-exclusion, and carrier-rate audit extension is implemented locally on `2026-06-17`:
+  - branch/worktree: `codex/creditnote-carrier-audit` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - PDF/email summary now shows positive total credited amount separately from the existing signed accounting summary
+  - exact creditnoted order numbers are checked through BizniWeb `getOrder(order_num)` and the existing realized-revenue decision logic; the PDF/email summary reports how many creditnoted orders still remain in reporting revenue
+  - carrier stats are grouped by normalized provider per e-shop (`Packeta`, `SPS Balikovo`, `Slovenska posta`, `DPD`, etc.), not by individual pickup-point address; `Dobropis rate % = dobropisovane objednavky / realized objednavky v reportovanom obdobi`
+  - CloudWatch metrics added for `CreditnoteExportGrossAmount` and `CreditnoteExportRevenueIncludedOrders`; local smoke can use `--skip-metrics` / `CREDITNOTE_EXPORT_SKIP_METRICS=1` without changing production defaults
+  - local verification:
+    - `python -m py_compile creditnote_export.py monthly_creditnote_export_runner.py`
+    - `python -m unittest tests.test_creditnote_export`
+    - `python -m unittest tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation`
+    - `python -m json.tool projects\roy\settings.json`
+    - `python -m json.tool projects\vevo\settings.json`
+    - `git diff --check` (only Git CRLF normalization warning for `creditnote_export.py`)
+    - PDF text check confirmed sections `Dobropisovana suma spolu`, `Dobropisy podla prepravcu`, `Kontrola vylucenia z reporting revenue`, and rate definition in the generated PDF
+  - live local smoke: `python monthly_creditnote_export_runner.py --reference-date 2026-06-14 --skip-email --skip-metrics --output-tag carrier_audit_smoke3` exited `0`
+    - output PDF: `data/combined_exports/dobropisy_actual_roy_vevo_2026-05_created_carrier_audit_smoke3.pdf` (ignored artifact)
+    - exported dobropisy: total `39`, ROY `14`, VEVO `25`
+    - positive credited gross totals from smoke summary: EUR bucket `1,649.91`, Kc `1,294.00`, RON `94.14`
+    - revenue exclusion audit: checked `39`, excluded from realized revenue `34`, still included `5`, original orders not found `0`, audit errors `0`
+    - top nonzero carrier rates by provider in smoke: ROY FanBox `1/1 = 100.00%`; VEVO Slovenska posta `3/37 = 8.11%`; VEVO DPD `3/42 = 7.14%`; VEVO Packeta `8/114 = 7.02%`; VEVO SPS Balikovo `11/261 = 4.21%`; ROY Packeta `5/129 = 3.88%`; ROY Kurier na adresu `3/87 = 3.45%`; ROY SPS Balikovo `4/122 = 3.28%`; ROY Slovenska posta `1/31 = 3.23%`
+    - BizniWeb logged one transient `price_elements` internal-server warning for VEVO order `2602007112`; the runner completed and summary `audit_errors` stayed empty
+  - Next exact step: commit and push `codex/creditnote-carrier-audit`, open/merge PR, then deploy the monthly credit-note task and record the Fargate hard-gate marker/context after workflow success
+
 - Monthly combined ROY+VEVO credit-note export automation was implemented locally on `2026-06-17`:
   - scope: one repo-local mini module for accounting credit notes, not GraphQL invoices
   - source endpoint: BizniWeb admin `/erp/orders/creditnotes/getListJson`

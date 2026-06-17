@@ -6,6 +6,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
@@ -60,6 +61,11 @@ EXPORT_COLUMNS = [
     "Refund type",
     "Dovod",
     "Storno",
+    "Prepravca",
+    "Prepravca ID",
+    "Reporting revenue",
+    "Reporting revenue reason",
+    "Order status",
     "Vytvoril",
     "Variabilny symbol",
     "Povodny nakup",
@@ -91,6 +97,10 @@ class CreditnoteExportResult:
     project_counts: Dict[str, int]
     fetch_totals: Dict[str, Dict[str, int]]
     summary_rows: List[Dict[str, Any]]
+    total_rows: List[Dict[str, Any]]
+    carrier_rows: List[Dict[str, Any]]
+    reporting_exclusion_rows: List[Dict[str, Any]]
+    reporting_exclusion_summary: Dict[str, Any]
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -102,6 +112,10 @@ class CreditnoteExportResult:
             "project_counts": self.project_counts,
             "fetch_totals": self.fetch_totals,
             "summary_rows": self.summary_rows,
+            "total_rows": self.total_rows,
+            "carrier_rows": self.carrier_rows,
+            "reporting_exclusion_rows": self.reporting_exclusion_rows,
+            "reporting_exclusion_summary": self.reporting_exclusion_summary,
         }
 
 
@@ -336,6 +350,11 @@ def build_creditnote_export_rows(
                 "Refund type": row.get("refund_type"),
                 "Dovod": row.get("reason"),
                 "Storno": row.get("storno"),
+                "Prepravca": "",
+                "Prepravca ID": "",
+                "Reporting revenue": "not_checked",
+                "Reporting revenue reason": "",
+                "Order status": "",
                 "Vytvoril": row.get("created_name"),
                 "Variabilny symbol": row.get("var_symb"),
                 "Povodny nakup": row.get("buy_date"),
@@ -357,6 +376,497 @@ def build_summary_frame(df: pd.DataFrame) -> pd.DataFrame:
         .agg(Pocet=("Dobropis cislo", "count"), Suma_bez_DPH=("Suma bez DPH", "sum"), Suma_s_DPH=("Suma s DPH", "sum"))
         .reset_index()
     )
+
+
+def build_total_frame(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=["Mena", "Pocet", "Suma_bez_DPH", "Suma_s_DPH"])
+    totals_df = df.copy()
+    totals_df["Suma bez DPH"] = pd.to_numeric(totals_df["Suma bez DPH"], errors="coerce").fillna(0.0).abs()
+    totals_df["Suma s DPH"] = pd.to_numeric(totals_df["Suma s DPH"], errors="coerce").fillna(0.0).abs()
+    return (
+        totals_df.groupby(["Mena"], dropna=False)
+        .agg(Pocet=("Dobropis cislo", "count"), Suma_bez_DPH=("Suma bez DPH", "sum"), Suma_s_DPH=("Suma s DPH", "sum"))
+        .reset_index()
+    )
+
+
+def normalize_order_num(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _order_shipping_info(order: Dict[str, Any]) -> Dict[str, str]:
+    for element in order.get("price_elements") or []:
+        if str((element or {}).get("type") or "").strip().lower() != "shipping":
+            continue
+        return {
+            "title": str((element or {}).get("title") or "").strip(),
+            "reference_id": str((element or {}).get("reference_id") or "").strip(),
+        }
+    return {"title": "", "reference_id": ""}
+
+
+def _carrier_key(title: Any, reference_id: Any = "") -> Tuple[str, str]:
+    carrier = _normalize_carrier_title(title)
+    carrier_id = str(reference_id or "").strip()
+    return carrier, carrier_id
+
+
+def _normalize_text_for_match(value: Any) -> str:
+    decomposed = unicodedata.normalize("NFKD", str(value or ""))
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", without_accents).strip().lower()
+
+
+def _normalize_carrier_title(title: Any) -> str:
+    raw = str(title or "").strip()
+    if not raw:
+        return "Unknown carrier"
+
+    normalized = _normalize_text_for_match(raw)
+    if "packeta" in normalized or "zasielkovna" in normalized:
+        return "Packeta"
+    if "sps" in normalized or "balikovo" in normalized:
+        return "SPS Balikovo"
+    if re.search(r"\bdpd\b", normalized):
+        return "DPD"
+    if "magyar posta" in normalized:
+        return "Magyar Posta"
+    if "slovenska posta" in normalized or ("slovensk" in normalized and "posta" in normalized):
+        return "Slovenska posta"
+    if "cargus" in normalized:
+        return "Cargus"
+    if "fanbox" in normalized:
+        return "FanBox"
+    if "osobn" in normalized and "odber" in normalized:
+        return "Osobny odber"
+    if "courier delivery" in normalized:
+        return "Courier delivery"
+    if "kurier" in normalized or "kuryr" in normalized:
+        return "Kurier na adresu"
+
+    prefix = re.split(r"\s+-\s+", raw, maxsplit=1)[0].strip()
+    return prefix or raw
+
+
+def _carrier_id_sort_key(value: str) -> Tuple[int, Any]:
+    text = str(value or "").strip()
+    return (0, int(text)) if text.isdigit() else (1, text.lower())
+
+
+def _order_status_name(order: Dict[str, Any]) -> str:
+    return str(((order or {}).get("status") or {}).get("name") or "").strip()
+
+
+def _unique_orders_by_num(orders: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    result: Dict[str, Dict[str, Any]] = {}
+    for order in orders:
+        order_num = normalize_order_num((order or {}).get("order_num"))
+        if order_num and order_num not in result:
+            result[order_num] = order
+    return result
+
+
+def _creditnote_order_nums(project_rows: Sequence[Dict[str, Any]]) -> List[str]:
+    return sorted(
+        {
+            order_num
+            for order_num in (normalize_order_num(row.get("Objednavka")) for row in project_rows)
+            if order_num
+        }
+    )
+
+
+def fetch_creditnote_orders_by_number(exporter: Any, order_nums: Sequence[str]) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]], Dict[str, str]]:
+    from gql import gql
+
+    query = gql(
+        """
+        query GetCreditnoteOrderContext($order_num: String!) {
+          getOrder(order_num: $order_num) {
+            id
+            order_num
+            pur_date
+            status {
+              id
+              name
+            }
+            price_elements {
+              type
+              title
+              value
+              reference_id
+              price {
+                value
+                raw_value
+                formatted
+                is_net_price
+              }
+            }
+          }
+        }
+        """
+    )
+    query_without_price_elements = gql(
+        """
+        query GetCreditnoteOrderContextWithoutPriceElements($order_num: String!) {
+          getOrder(order_num: $order_num) {
+            id
+            order_num
+            pur_date
+            status {
+              id
+              name
+            }
+          }
+        }
+        """
+    )
+
+    orders: List[Dict[str, Any]] = []
+    decisions: Dict[str, Dict[str, Any]] = {}
+    errors: Dict[str, str] = {}
+    for order_num in order_nums:
+        order: Dict[str, Any] = {}
+        try:
+            result = exporter.client.execute(query, variable_values={"order_num": order_num})
+            order = (result or {}).get("getOrder") or {}
+        except Exception as exc:
+            if not exporter._is_price_elements_error(exc):
+                errors[order_num] = str(exc)
+                continue
+            try:
+                result = exporter.client.execute(query_without_price_elements, variable_values={"order_num": order_num})
+                order = (result or {}).get("getOrder") or {}
+                exporter._fetch_order_payment_metadata(order)
+            except Exception as fallback_exc:
+                errors[order_num] = str(fallback_exc)
+                continue
+
+        if not order:
+            errors[order_num] = "getOrder returned no order"
+            continue
+        include, reason = exporter._realized_revenue_decision(order)
+        normalized_order_num = normalize_order_num(order.get("order_num")) or order_num
+        orders.append(order)
+        decisions[normalized_order_num] = {"included": bool(include), "reason": reason}
+    return orders, decisions, errors
+
+
+def _order_purchase_date(order: Dict[str, Any]) -> Optional[date]:
+    raw_value = str((order or {}).get("pur_date") or "").strip()
+    if not raw_value:
+        return None
+    try:
+        return datetime.strptime(raw_value.split()[0], "%Y-%m-%d").date()
+    except (ValueError, IndexError):
+        return None
+
+
+def fetch_reporting_orders_for_window_desc(exporter: Any, window_from: date, window_to: date) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    raw_window_orders: List[Dict[str, Any]] = []
+    cursor = None
+    seen_order_nums: set[str] = set()
+
+    for _ in range(50):
+        page_orders, cursor = exporter.fetch_all_orders_bulk(
+            max_orders=900,
+            start_cursor=cursor,
+            sort_order="DESC",
+        )
+        if not page_orders:
+            break
+
+        oldest_seen: Optional[date] = None
+        for order in page_orders:
+            order_date = _order_purchase_date(order)
+            if order_date is None:
+                continue
+            oldest_seen = order_date if oldest_seen is None else min(oldest_seen, order_date)
+            if not (window_from <= order_date <= window_to):
+                continue
+            order_num = normalize_order_num(order.get("order_num") or order.get("id"))
+            if order_num and order_num in seen_order_nums:
+                continue
+            if order_num:
+                seen_order_nums.add(order_num)
+            raw_window_orders.append(order)
+
+        if oldest_seen is not None and oldest_seen < window_from:
+            break
+        if not cursor:
+            break
+
+    exporter.excluded_status_orders = []
+    exporter.excluded_orders = []
+    included_orders = exporter._filter_by_status(raw_window_orders)
+    excluded_orders = list(exporter.excluded_status_orders)
+    return included_orders, excluded_orders
+
+
+def fetch_project_reporting_order_context(
+    project: str,
+    creditnote_rows: Sequence[Dict[str, Any]],
+    fallback_from: date,
+    fallback_to: date,
+) -> Dict[str, Any]:
+    """Fetch order context through the same reporting filter used by daily revenue exports."""
+    if not creditnote_rows:
+        return {
+            "project": project,
+            "available": True,
+            "error": "",
+            "included_orders": [],
+            "all_orders": [],
+            "creditnote_order_decisions": {},
+            "creditnote_order_errors": {},
+            "window_from": fallback_from,
+            "window_to": fallback_to,
+        }
+
+    if os.getenv("CREDITNOTE_EXPORT_SKIP_REPORTING_AUDIT", "").strip().lower() in {"1", "true", "yes", "y", "on"}:
+        return {
+            "project": project,
+            "available": False,
+            "error": "Skipped by CREDITNOTE_EXPORT_SKIP_REPORTING_AUDIT",
+            "included_orders": [],
+            "all_orders": [],
+            "creditnote_order_decisions": {},
+            "creditnote_order_errors": {},
+            "window_from": fallback_from,
+            "window_to": fallback_to,
+        }
+
+    window_from, window_to = fallback_from, fallback_to
+    try:
+        from export_orders import BizniWebExporter  # Imported lazily to keep creditnote-only tests lightweight.
+    except Exception as exc:  # pragma: no cover - dependency guard
+        return {
+            "project": project,
+            "available": False,
+            "error": f"Could not import reporting exporter: {exc}",
+            "included_orders": [],
+            "all_orders": [],
+            "creditnote_order_decisions": {},
+            "creditnote_order_errors": {},
+            "window_from": window_from,
+            "window_to": window_to,
+        }
+
+    try:
+        load_project_env(project, logger=_SilentLogger())
+        settings = load_project_settings(project)
+        api_url = resolve_biznisweb_api_url(project, settings)
+        api_token = os.getenv("BIZNISWEB_API_TOKEN", "").strip()
+        if not api_token:
+            raise RuntimeError(f"BIZNISWEB_API_TOKEN missing for project '{project}'")
+
+        exporter = BizniWebExporter(
+            api_url=api_url,
+            api_token=api_token,
+            project_name=project,
+            output_tag="creditnote_audit",
+            enable_period_bundle=False,
+        )
+        included_orders, excluded_orders = fetch_reporting_orders_for_window_desc(exporter, window_from, window_to)
+        creditnote_orders, creditnote_order_decisions, creditnote_order_errors = fetch_creditnote_orders_by_number(
+            exporter,
+            _creditnote_order_nums(creditnote_rows),
+        )
+        all_orders = list(_unique_orders_by_num([*included_orders, *excluded_orders, *creditnote_orders]).values())
+        return {
+            "project": project,
+            "available": True,
+            "error": "; ".join(f"{key}: {value}" for key, value in creditnote_order_errors.items()),
+            "included_orders": included_orders,
+            "all_orders": all_orders,
+            "creditnote_order_decisions": creditnote_order_decisions,
+            "creditnote_order_errors": creditnote_order_errors,
+            "window_from": window_from,
+            "window_to": window_to,
+        }
+    except Exception as exc:
+        return {
+            "project": project,
+            "available": False,
+            "error": str(exc),
+            "included_orders": [],
+            "all_orders": [],
+            "creditnote_order_decisions": {},
+            "creditnote_order_errors": {},
+            "window_from": window_from,
+            "window_to": window_to,
+        }
+
+
+def build_creditnote_reporting_audit(
+    export_rows: Sequence[Dict[str, Any]],
+    order_context_by_project: Dict[str, Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+    enriched_rows = [dict(row) for row in export_rows]
+    included_order_sets: Dict[str, set[str]] = {}
+    all_order_maps: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    decision_maps: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    denominator_by_carrier: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    for project, context in order_context_by_project.items():
+        included_orders = context.get("included_orders") or []
+        all_orders = context.get("all_orders") or []
+        included_order_sets[project.upper()] = {
+            normalize_order_num(order.get("order_num"))
+            for order in included_orders
+            if normalize_order_num(order.get("order_num"))
+        }
+        all_order_maps[project.upper()] = _unique_orders_by_num(all_orders)
+        decision_maps[project.upper()] = dict(context.get("creditnote_order_decisions") or {})
+        for order in included_orders:
+            order_num = normalize_order_num(order.get("order_num"))
+            if not order_num:
+                continue
+            shipping = _order_shipping_info(order)
+            carrier, carrier_id = _carrier_key(shipping.get("title"), shipping.get("reference_id"))
+            denominator_bucket = denominator_by_carrier.setdefault(
+                (project.upper(), carrier),
+                {"orders": set(), "ids": set()},
+            )
+            denominator_bucket["orders"].add(order_num)
+            if carrier_id:
+                denominator_bucket["ids"].add(carrier_id)
+
+    creditnote_groups: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    numerator_by_carrier: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    for row in enriched_rows:
+        project = str(row.get("Eshop") or "").strip().upper()
+        order_num = normalize_order_num(row.get("Objednavka"))
+        order = all_order_maps.get(project, {}).get(order_num)
+        decision = decision_maps.get(project, {}).get(order_num)
+        in_reporting = bool(decision.get("included")) if decision is not None else order_num in included_order_sets.get(project, set())
+        shipping = _order_shipping_info(order or {})
+        carrier, carrier_id = _carrier_key(shipping.get("title"), shipping.get("reference_id"))
+        status_name = _order_status_name(order or {})
+
+        if order is None:
+            row["Prepravca"] = "Unknown carrier"
+            row["Prepravca ID"] = ""
+            row["Reporting revenue"] = "order_not_found"
+            row["Reporting revenue reason"] = "Original order was not found in the audited reporting order window"
+            row["Order status"] = ""
+        else:
+            row["Prepravca"] = carrier
+            row["Prepravca ID"] = carrier_id
+            row["Reporting revenue"] = "included" if in_reporting else "excluded"
+            row["Reporting revenue reason"] = (
+                str(decision.get("reason") or "")
+                if decision is not None
+                else ("Counts in realized revenue filter" if in_reporting else "Excluded by realized revenue filter")
+            )
+            row["Order status"] = status_name
+
+        group_key = (project, order_num)
+        group = creditnote_groups.setdefault(
+            group_key,
+            {
+                "Eshop": project,
+                "Objednavka": order_num,
+                "Prepravca": row.get("Prepravca") or "Unknown carrier",
+                "Prepravca ID": row.get("Prepravca ID") or "",
+                "Order status": row.get("Order status") or "",
+                "Reporting revenue": row.get("Reporting revenue") or "not_checked",
+                "Reporting revenue reason": row.get("Reporting revenue reason") or "",
+                "Pocet dobropisov": 0,
+                "Suma_s_DPH": 0.0,
+                "Suma_bez_DPH": 0.0,
+            },
+        )
+        group["Pocet dobropisov"] += 1
+        group["Suma_s_DPH"] += abs(float(row.get("Suma s DPH") or 0.0))
+        group["Suma_bez_DPH"] += abs(float(row.get("Suma bez DPH") or 0.0))
+        if group["Reporting revenue"] != "included" and row.get("Reporting revenue") == "included":
+            group["Reporting revenue"] = "included"
+            group["Reporting revenue reason"] = row.get("Reporting revenue reason") or ""
+
+        carrier_key = (project, carrier)
+        carrier_bucket = numerator_by_carrier.setdefault(
+            carrier_key,
+            {
+                "Eshop": project,
+                "Prepravca": carrier,
+                "Prepravca ID": set(),
+                "Dobropisy": 0,
+                "Dobropisovane objednavky": set(),
+                "Suma_s_DPH": 0.0,
+                "Suma_bez_DPH": 0.0,
+            },
+        )
+        if carrier_id:
+            carrier_bucket["Prepravca ID"].add(carrier_id)
+        carrier_bucket["Dobropisy"] += 1
+        if order_num:
+            carrier_bucket["Dobropisovane objednavky"].add(order_num)
+        carrier_bucket["Suma_s_DPH"] += abs(float(row.get("Suma s DPH") or 0.0))
+        carrier_bucket["Suma_bez_DPH"] += abs(float(row.get("Suma bez DPH") or 0.0))
+
+    carrier_rows: List[Dict[str, Any]] = []
+    all_carrier_keys = set(denominator_by_carrier) | set(numerator_by_carrier)
+    for key in sorted(all_carrier_keys, key=lambda item: (item[0], item[1].lower())):
+        project, carrier = key
+        numerator = numerator_by_carrier.get(key) or {}
+        denominator = denominator_by_carrier.get(key) or {}
+        denominator_count = len(denominator.get("orders") or set())
+        creditnote_order_count = len(numerator.get("Dobropisovane objednavky") or set())
+        carrier_ids = sorted(
+            {
+                str(value).strip()
+                for value in [
+                    *(denominator.get("ids") or set()),
+                    *(numerator.get("Prepravca ID") or set()),
+                ]
+                if str(value).strip()
+            },
+            key=_carrier_id_sort_key,
+        )
+        rate = round((creditnote_order_count / denominator_count) * 100, 2) if denominator_count > 0 else None
+        carrier_rows.append(
+            {
+                "Eshop": project,
+                "Prepravca": carrier,
+                "Prepravca ID": ", ".join(carrier_ids),
+                "Realized objednavky": denominator_count,
+                "Dobropisovane objednavky": creditnote_order_count,
+                "Dobropisy": int(numerator.get("Dobropisy") or 0),
+                "Dobropis rate %": rate,
+                "Suma_s_DPH": round(float(numerator.get("Suma_s_DPH") or 0.0), 2),
+                "Suma_bez_DPH": round(float(numerator.get("Suma_bez_DPH") or 0.0), 2),
+            }
+        )
+    carrier_rows.sort(
+        key=lambda row: (
+            -1 if row.get("Dobropis rate %") is None else -float(row.get("Dobropis rate %") or 0.0),
+            -int(row.get("Dobropisovane objednavky") or 0),
+            str(row.get("Prepravca") or ""),
+        )
+    )
+
+    reporting_rows = list(creditnote_groups.values())
+    for row in reporting_rows:
+        row["Suma_s_DPH"] = round(float(row.get("Suma_s_DPH") or 0.0), 2)
+        row["Suma_bez_DPH"] = round(float(row.get("Suma_bez_DPH") or 0.0), 2)
+    reporting_rows.sort(key=lambda row: (row.get("Eshop") or "", row.get("Reporting revenue") != "included", row.get("Objednavka") or ""))
+
+    context_errors = {
+        project.upper(): context.get("error")
+        for project, context in order_context_by_project.items()
+        if (not context.get("available")) or context.get("creditnote_order_errors")
+    }
+    summary = {
+        "checked_orders": len(reporting_rows),
+        "included_in_revenue": sum(1 for row in reporting_rows if row.get("Reporting revenue") == "included"),
+        "excluded_from_revenue": sum(1 for row in reporting_rows if row.get("Reporting revenue") == "excluded"),
+        "order_not_found": sum(1 for row in reporting_rows if row.get("Reporting revenue") == "order_not_found"),
+        "audit_errors": context_errors,
+    }
+    return enriched_rows, carrier_rows, summary | {"rows": reporting_rows}
 
 
 def _pdf_font_candidates() -> Sequence[Path]:
@@ -508,7 +1018,11 @@ def _draw_creditnote_detail_header(pdf: Any, x: float, y: float, columns: Sequen
 def _draw_creditnote_pdf(
     rows: pd.DataFrame,
     summary: pd.DataFrame,
+    total_summary: pd.DataFrame,
     fetch_totals: Dict[str, Dict[str, int]],
+    carrier_rows: Sequence[Dict[str, Any]],
+    reporting_exclusion_rows: Sequence[Dict[str, Any]],
+    reporting_exclusion_summary: Dict[str, Any],
     output_pdf: Path,
     date_from: date,
     date_to: date,
@@ -539,7 +1053,32 @@ def _draw_creditnote_pdf(
     pdf.drawString(margin_x, top_y - 21 * mm, f"Pocet dobropisov: {len(rows)}")
     pdf.drawString(margin_x, top_y - 27 * mm, "Zdroj: BiznisWeb admin credit-note export")
 
-    y = top_y - 42 * mm
+    y = top_y - 38 * mm
+    pdf.setFont(fonts["bold"], 12)
+    pdf.drawString(margin_x, y, "Dobropisovana suma spolu")
+    y -= 7 * mm
+    total_columns = [("Mena", 24 * mm), ("Pocet", 22 * mm), ("Suma bez DPH", 38 * mm), ("Suma s DPH", 38 * mm)]
+    _draw_creditnote_detail_header(pdf, margin_x, y, total_columns, fonts)
+    y -= 8 * mm
+    pdf.setFont(fonts["regular"], 8)
+    if total_summary.empty:
+        pdf.drawString(margin_x, y, "Bez dobropisov v zadanom obdobi.")
+        y -= 8 * mm
+    else:
+        for row in total_summary.to_dict(orient="records"):
+            values = [
+                _pdf_text(row.get("Mena"), "-"),
+                str(int(row.get("Pocet") or 0)),
+                _format_pdf_amount(row.get("Suma_bez_DPH"), row.get("Mena")),
+                _format_pdf_amount(row.get("Suma_s_DPH"), row.get("Mena")),
+            ]
+            current_x = margin_x
+            for value, (_, col_width) in zip(values, total_columns):
+                pdf.drawString(current_x + 1.2 * mm, y, value)
+                current_x += col_width
+            y -= 6 * mm
+
+    y -= 5 * mm
     pdf.setFont(fonts["bold"], 12)
     pdf.drawString(margin_x, y, "Sumar")
     y -= 7 * mm
@@ -565,7 +1104,93 @@ def _draw_creditnote_pdf(
                 current_x += col_width
             y -= 6 * mm
 
-    y -= 7 * mm
+    y -= 5 * mm
+    pdf.setFont(fonts["bold"], 12)
+    pdf.drawString(margin_x, y, "Dobropisy podla prepravcu")
+    y -= 5 * mm
+    pdf.setFont(fonts["regular"], 7)
+    pdf.drawString(margin_x, y, "Rate = dobropisovane objednavky / realized objednavky v reportovanom obdobi.")
+    y -= 6 * mm
+    carrier_columns = [
+        ("Eshop", 18 * mm),
+        ("Prepravca", 54 * mm),
+        ("Realized", 22 * mm),
+        ("Dobrop. obj.", 25 * mm),
+        ("Dobropisy", 22 * mm),
+        ("Rate", 20 * mm),
+        ("Suma s DPH", 34 * mm),
+    ]
+    _draw_creditnote_detail_header(pdf, margin_x, y, carrier_columns, fonts)
+    y -= 8 * mm
+    pdf.setFont(fonts["regular"], 7)
+    if not carrier_rows:
+        pdf.drawString(margin_x, y, "Carrier audit nie je dostupny alebo v obdobi neboli dobropisy.")
+        y -= 6 * mm
+    else:
+        shown_carriers = list(carrier_rows)[:6]
+        for row in shown_carriers:
+            rate = row.get("Dobropis rate %")
+            values = [
+                _pdf_text(row.get("Eshop"), "-"),
+                _pdf_text(row.get("Prepravca"), "-"),
+                str(int(row.get("Realized objednavky") or 0)),
+                str(int(row.get("Dobropisovane objednavky") or 0)),
+                str(int(row.get("Dobropisy") or 0)),
+                "-" if rate is None else f"{float(rate):.2f}%",
+                _format_pdf_amount(row.get("Suma_s_DPH"), "EUR"),
+            ]
+            current_x = margin_x
+            for value, (_, col_width) in zip(values, carrier_columns):
+                pdf.drawString(current_x + 1.2 * mm, y, value[:36])
+                current_x += col_width
+            y -= 5.5 * mm
+        if len(carrier_rows) > len(shown_carriers):
+            pdf.drawString(margin_x + 1.2 * mm, y, f"... dalsich {len(carrier_rows) - len(shown_carriers)} prepravcov v summary vystupe.")
+            y -= 5.5 * mm
+
+    y -= 5 * mm
+    pdf.setFont(fonts["bold"], 12)
+    pdf.drawString(margin_x, y, "Kontrola vylucenia z reporting revenue")
+    y -= 6 * mm
+    pdf.setFont(fonts["regular"], 8)
+    audit_errors = reporting_exclusion_summary.get("audit_errors") or {}
+    included_count = int(reporting_exclusion_summary.get("included_in_revenue") or 0)
+    checked_count = int(reporting_exclusion_summary.get("checked_orders") or 0)
+    missing_count = int(reporting_exclusion_summary.get("order_not_found") or 0)
+    if audit_errors:
+        pdf.drawString(margin_x, y, "Audit nie je kompletne dostupny: " + "; ".join(f"{k}: {v}" for k, v in audit_errors.items())[:170])
+        y -= 6 * mm
+    elif included_count:
+        pdf.drawString(margin_x, y, f"POZOR: {included_count} dobropisovana objednavka/objednavky su stale v realized revenue.")
+        y -= 6 * mm
+    else:
+        pdf.drawString(margin_x, y, f"OK: 0 z {checked_count} skontrolovanych dobropisovanych objednavok je v realized revenue.")
+        y -= 6 * mm
+    if missing_count:
+        pdf.drawString(margin_x, y, f"Nenajdene povodne objednavky v auditovanom okne: {missing_count}.")
+        y -= 6 * mm
+
+    included_rows = [row for row in reporting_exclusion_rows if row.get("Reporting revenue") == "included"]
+    if included_rows:
+        exception_columns = [("Eshop", 18 * mm), ("Objednavka", 32 * mm), ("Prepravca", 54 * mm), ("Status", 48 * mm), ("Suma s DPH", 34 * mm)]
+        _draw_creditnote_detail_header(pdf, margin_x, y, exception_columns, fonts)
+        y -= 8 * mm
+        pdf.setFont(fonts["regular"], 7)
+        for row in included_rows[:6]:
+            values = [
+                _pdf_text(row.get("Eshop"), "-"),
+                _pdf_text(row.get("Objednavka"), "-"),
+                _pdf_text(row.get("Prepravca"), "-"),
+                _pdf_text(row.get("Order status"), "-"),
+                _format_pdf_amount(row.get("Suma_s_DPH"), "EUR"),
+            ]
+            current_x = margin_x
+            for value, (_, col_width) in zip(values, exception_columns):
+                pdf.drawString(current_x + 1.2 * mm, y, value[:36])
+                current_x += col_width
+            y -= 5.5 * mm
+
+    y -= 5 * mm
     pdf.setFont(fonts["bold"], 12)
     pdf.drawString(margin_x, y, "Kontrola fetch")
     y -= 7 * mm
@@ -598,8 +1223,8 @@ def _draw_creditnote_pdf(
         ("Vystavene", 24 * mm, "Datum vystavenia"),
         ("Objednavka", 28 * mm, "Objednavka"),
         ("Faktura", 28 * mm, "Faktura"),
-        ("Zakaznik", 49 * mm, "Zakaznik"),
-        ("Email", 50 * mm, "Email"),
+        ("Zakaznik", 42 * mm, "Zakaznik"),
+        ("Prepravca", 43 * mm, "Prepravca"),
         ("Suma s DPH", 21 * mm, "Suma s DPH"),
     ]
     header_columns = [(label, col_width) for label, col_width, _ in detail_columns]
@@ -659,11 +1284,18 @@ def write_creditnote_pdf(
     date_from: date,
     date_to: date,
     projects: Sequence[str],
+    carrier_rows: Optional[Sequence[Dict[str, Any]]] = None,
+    reporting_exclusion_rows: Optional[Sequence[Dict[str, Any]]] = None,
+    reporting_exclusion_summary: Optional[Dict[str, Any]] = None,
 ) -> CreditnoteExportResult:
     df = pd.DataFrame(list(export_rows), columns=EXPORT_COLUMNS)
     if not df.empty:
         df = df.sort_values(["Eshop", "Vytvorene", "Dobropis cislo"]).reset_index(drop=True)
     summary = build_summary_frame(df)
+    total_summary = build_total_frame(df)
+    carrier_rows_list = list(carrier_rows or [])
+    reporting_exclusion_rows_list = list(reporting_exclusion_rows or [])
+    reporting_exclusion_summary_dict = dict(reporting_exclusion_summary or {})
     project_counts = {
         project.upper(): int((df["Eshop"] == project.upper()).sum()) if not df.empty else 0
         for project in projects
@@ -672,7 +1304,11 @@ def write_creditnote_pdf(
     _draw_creditnote_pdf(
         rows=df,
         summary=summary,
+        total_summary=total_summary,
         fetch_totals=fetch_totals,
+        carrier_rows=carrier_rows_list,
+        reporting_exclusion_rows=reporting_exclusion_rows_list,
+        reporting_exclusion_summary=reporting_exclusion_summary_dict,
         output_pdf=output_pdf,
         date_from=date_from,
         date_to=date_to,
@@ -688,6 +1324,10 @@ def write_creditnote_pdf(
         project_counts=project_counts,
         fetch_totals=fetch_totals,
         summary_rows=summary.to_dict(orient="records"),
+        total_rows=total_summary.to_dict(orient="records"),
+        carrier_rows=carrier_rows_list,
+        reporting_exclusion_rows=reporting_exclusion_rows_list,
+        reporting_exclusion_summary=reporting_exclusion_summary_dict,
     )
 
 
@@ -722,6 +1362,23 @@ def run_monthly_creditnote_export(
             "exported_rows": len(project_rows),
         }
 
+    order_context_by_project: Dict[str, Dict[str, Any]] = {}
+    for project in resolved_projects:
+        project_key = project.upper()
+        project_rows = [row for row in export_rows if str(row.get("Eshop") or "").strip().upper() == project_key]
+        order_context_by_project[project] = fetch_project_reporting_order_context(
+            project=project,
+            creditnote_rows=project_rows,
+            fallback_from=date_from,
+            fallback_to=date_to,
+        )
+
+    export_rows, carrier_rows, reporting_audit = build_creditnote_reporting_audit(
+        export_rows,
+        order_context_by_project,
+    )
+    reporting_exclusion_rows = list(reporting_audit.pop("rows", []))
+
     base_output_dir = output_dir or (ROOT_DIR / "data" / "combined_exports")
     filename = build_export_filename(resolved_projects, date_from, date_to, output_tag=output_tag)
     return write_creditnote_pdf(
@@ -731,4 +1388,7 @@ def run_monthly_creditnote_export(
         date_from=date_from,
         date_to=date_to,
         projects=resolved_projects,
+        carrier_rows=carrier_rows,
+        reporting_exclusion_rows=reporting_exclusion_rows,
+        reporting_exclusion_summary=reporting_audit,
     )
