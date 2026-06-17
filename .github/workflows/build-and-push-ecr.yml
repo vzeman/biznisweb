@@ -11,6 +11,8 @@ on:
       - export_orders.py
       - generate_invoices.py
       - invoice_runner.py
+      - creditnote_export.py
+      - monthly_creditnote_export_runner.py
       - unpaid_order_cancellation.py
       - unpaid_order_cancellation_runner.py
       - html_report_generator.py

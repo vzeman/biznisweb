@@ -83,6 +83,18 @@
     "timezone": "Europe/Bratislava",
     "task_family": "roy-invoice-daily"
   },
+  "monthly_creditnote_export": {
+    "enabled": true,
+    "schedule_name": "monthly-creditnote-export",
+    "schedule_expression": "cron(0 6 14 * ? *)",
+    "timezone": "Europe/Bratislava",
+    "task_family": "monthly-creditnote-export",
+    "projects": [
+      "roy",
+      "vevo"
+    ],
+    "email_to": "mil.terem@gmail.com"
+  },
   "realized_revenue": {
     "paid_statuses": [
       "Platba online - zaplatené"

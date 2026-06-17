@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-13
+Last updated: 2026-06-17
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,24 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- Monthly combined ROY+VEVO credit-note export automation was implemented locally on `2026-06-17`:
+  - scope: one repo-local mini module for accounting credit notes, not GraphQL invoices
+  - source endpoint: BizniWeb admin `/erp/orders/creditnotes/getListJson`
+  - default window: previous calendar month based on `Europe/Bratislava`; when the scheduler runs on the 14th, it exports the previous month
+  - output: one XLSX workbook with `Dobropisy`, `Sumar`, and `Kontrola_fetch` sheets, plus a source JSON sidecar in `data/combined_exports`
+  - email: SES raw email with the XLSX attached; default recipient `mil.terem@gmail.com`; sender comes from `CREDITNOTE_EXPORT_EMAIL_FROM` or `REPORT_EMAIL_FROM`
+  - schedule metadata: `projects/roy/settings.json` -> `monthly_creditnote_export`, schedule `monthly-creditnote-export`, cron `cron(0 6 14 * ? *)`, timezone `Europe/Bratislava`, task family `monthly-creditnote-export`, projects `roy,vevo`
+  - deploy workflow: `.github/workflows/deploy-monthly-creditnote-export.yml` registers/updates the dedicated ECS task family and EventBridge Scheduler job, copies ROY/VEVO BizniWeb credentials into prefixed runtime env/secrets, and verifies a host smoke marker at `http://127.0.0.1:8000/marker.json`
+  - local verification:
+    - `python -m py_compile creditnote_export.py monthly_creditnote_export_runner.py`
+    - `python -m json.tool projects\roy\settings.json`
+    - `python -m unittest tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation`
+    - `python monthly_creditnote_export_runner.py --reference-date 2026-06-14 --skip-email --output-tag local_smoke` returned `exported_rows=39`, ROY `14`, VEVO `25`
+    - parsed `.github/workflows/deploy-monthly-creditnote-export.yml` and `.github/workflows/build-and-push-ecr.yml` with `yaml.safe_load`
+    - `git diff --check`
+  - local generated artifacts: `data/combined_exports/dobropisy_actual_roy_vevo_2026-05_created_local_smoke.*` (ignored export output)
+  - Next exact step: merge through PR, let `Build and Push ECR` publish an image containing `monthly_creditnote_export_runner.py`, then run `Deploy Monthly Creditnote Export` and record the Fargate hard-gate marker/context after the workflow succeeds
 
 - ROY live dashboard failed-to-fetch mitigation is implemented and deployed on `2026-06-13`:
   - root cause found live: `/api/operations/roy/live` is healthy but can take about 49-51 seconds when cache expires because the ROY operations snapshot scans BiznisWeb orders and stock; dashboard auto-refresh is 90 seconds while cache TTL is 60 seconds, so regular live refreshes can hit the slow path

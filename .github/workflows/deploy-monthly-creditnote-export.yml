@@ -1,0 +1,592 @@
+name: Deploy Monthly Creditnote Export
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute_now:
+        description: Run the export after registering the schedule
+        required: false
+        default: false
+        type: boolean
+      send_email_now:
+        description: Send the email during execute_now instead of SES dry-run
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - creditnote_export.py
+      - monthly_creditnote_export_runner.py
+      - projects/roy/settings.json
+      - requirements.txt
+      - .github/workflows/deploy-monthly-creditnote-export.yml
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: vevo-reporting
+  IMAGE_TAG: latest
+  OWNER_PROJECT: roy
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy scheduler and run host smoke
+        shell: bash
+        env:
+          EXECUTE_NOW: ${{ inputs.execute_now || 'false' }}
+          SEND_EMAIL_NOW: ${{ inputs.send_email_now || 'false' }}
+        run: |
+          set -euo pipefail
+
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          IMAGE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${IMAGE_TAG}" \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+
+          python - "${OWNER_PROJECT}" <<'PY' > creditnote-settings.env
+          import json
+          import pathlib
+          import sys
+
+          owner_project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / owner_project / "settings.json").read_text(encoding="utf-8"))
+          raw = settings.get("monthly_creditnote_export") or {}
+          if not raw.get("enabled"):
+              raise SystemExit("monthly_creditnote_export is disabled")
+          required = ["schedule_name", "schedule_expression", "task_family", "projects", "email_to"]
+          missing = [key for key in required if not raw.get(key)]
+          if missing:
+              raise SystemExit(f"Missing monthly_creditnote_export settings: {missing}")
+
+          def emit(name, value):
+              value = str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+              print(f'{name}="{value}"')
+
+          emit("SOURCE_REPORT_SCHEDULE_NAME", settings["report_schedule"]["schedule_name"])
+          emit("SCHEDULE_NAME", raw["schedule_name"])
+          emit("SCHEDULE_EXPRESSION", raw["schedule_expression"])
+          emit("SCHEDULE_TIMEZONE", raw.get("timezone") or "Europe/Bratislava")
+          emit("TASK_FAMILY", raw["task_family"])
+          emit("CREDITNOTE_PROJECTS", ",".join(raw["projects"]))
+          emit("CREDITNOTE_EMAIL_TO", raw["email_to"])
+          PY
+          # shellcheck disable=SC1091
+          source creditnote-settings.env
+
+          aws scheduler get-schedule \
+            --name "${SOURCE_REPORT_SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > source-schedule.json
+          CLUSTER_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["Arn"])
+          PY
+          )"
+          SOURCE_TASK_DEFINITION_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])
+          PY
+          )"
+          LAUNCH_TYPE="$(python - <<'PY'
+          import json
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"].get("LaunchType") or "FARGATE")
+          PY
+          )"
+          PLATFORM_VERSION="$(python - <<'PY'
+          import json
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"].get("PlatformVersion") or "")
+          PY
+          )"
+          SCHEDULE_ROLE_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          print(schedule["Target"].get("RoleArn") or "")
+          PY
+          )"
+
+          aws ecs describe-task-definition \
+            --task-definition "${SOURCE_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > source-task-definition.json
+
+          IFS=',' read -r -a CREDITNOTE_PROJECT_ARRAY <<< "${CREDITNOTE_PROJECTS}"
+          for project in "${CREDITNOTE_PROJECT_ARRAY[@]}"; do
+            schedule_name="$(python - "${project}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["report_schedule"]["schedule_name"])
+          PY
+            )"
+            aws scheduler get-schedule \
+              --name "${schedule_name}" \
+              --region "${AWS_REGION}" > "source-schedule-${project}.json"
+            task_definition_arn="$(python - "${project}" <<'PY'
+          import json
+          import sys
+          project = sys.argv[1]
+          schedule = json.load(open(f"source-schedule-{project}.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])
+          PY
+            )"
+            aws ecs describe-task-definition \
+              --task-definition "${task_definition_arn}" \
+              --region "${AWS_REGION}" > "source-task-definition-${project}.json"
+          done
+
+          LOG_GROUP="/ecs/${TASK_FAMILY}"
+          aws logs create-log-group --log-group-name "${LOG_GROUP}" --region "${AWS_REGION}" 2>/dev/null || true
+          aws logs put-retention-policy \
+            --log-group-name "${LOG_GROUP}" \
+            --retention-in-days 30 \
+            --region "${AWS_REGION}"
+
+          python - "${TASK_FAMILY}" "${IMAGE_IDENTIFIER}" "${OWNER_PROJECT}" "${CREDITNOTE_PROJECTS}" "${CREDITNOTE_EMAIL_TO}" "${LOG_GROUP}" "${AWS_REGION}" <<'PY' > task-definition-creditnote.json
+          import copy
+          import json
+          import pathlib
+          import sys
+
+          task_family, image_identifier, owner_project, projects_csv, email_to, log_group, region = sys.argv[1:8]
+          projects = [item.strip() for item in projects_csv.split(",") if item.strip()]
+          source = json.load(open("source-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          allowed = {
+              "taskRoleArn",
+              "executionRoleArn",
+              "networkMode",
+              "containerDefinitions",
+              "volumes",
+              "placementConstraints",
+              "requiresCompatibilities",
+              "cpu",
+              "memory",
+              "ipcMode",
+              "pidMode",
+              "proxyConfiguration",
+              "inferenceAccelerators",
+              "ephemeralStorage",
+              "runtimePlatform",
+          }
+          task = {key: copy.deepcopy(value) for key, value in source.items() if key in allowed and value not in (None, [], {})}
+          task["family"] = task_family
+          container = task["containerDefinitions"][0]
+          container["image"] = image_identifier
+          container["command"] = ["python", "monthly_creditnote_export_runner.py", "--owner-project", owner_project]
+
+          env = [
+              item for item in container.get("environment", [])
+              if item.get("name") not in {
+                  "REPORT_PROJECT",
+                  "REPORT_OUTPUT_TAG",
+                  "REPORT_SKIP_INVOICES",
+                  "CREDITNOTE_EXPORT_PROJECTS",
+                  "CREDITNOTE_EXPORT_EMAIL_TO",
+                  "CREDITNOTE_EXPORT_OWNER_PROJECT",
+              }
+          ]
+          secrets = [
+              item for item in container.get("secrets", [])
+              if not item.get("name", "").startswith(("ROY_", "VEVO_"))
+          ]
+
+          credential_names = {"BIZNISWEB_USERNAME", "BIZNISWEB_PASSWORD", "BIZNISWEB_API_TOKEN", "BIZNISWEB_API_URL"}
+          for project in projects:
+              prefix = project.upper().replace("-", "_")
+              path = pathlib.Path(f"source-task-definition-{project}.json")
+              if not path.exists():
+                  continue
+              source_task = json.loads(path.read_text(encoding="utf-8"))["taskDefinition"]
+              source_container = source_task["containerDefinitions"][0]
+              for item in source_container.get("environment", []):
+                  name = item.get("name")
+                  if name in credential_names:
+                      env.append({"name": f"{prefix}_{name}", "value": item.get("value", "")})
+              for item in source_container.get("secrets", []):
+                  name = item.get("name")
+                  if name in credential_names:
+                      secrets.append({"name": f"{prefix}_{name}", "valueFrom": item.get("valueFrom", "")})
+
+          env.extend(
+              [
+                  {"name": "REPORT_PROJECT", "value": owner_project},
+                  {"name": "CREDITNOTE_EXPORT_OWNER_PROJECT", "value": owner_project},
+                  {"name": "CREDITNOTE_EXPORT_PROJECTS", "value": projects_csv},
+                  {"name": "CREDITNOTE_EXPORT_EMAIL_TO", "value": email_to},
+              ]
+          )
+          container["environment"] = env
+          if secrets:
+              seen = set()
+              deduped = []
+              for item in secrets:
+                  key = (item.get("name"), item.get("valueFrom"))
+                  if key in seen:
+                      continue
+                  seen.add(key)
+                  deduped.append(item)
+              container["secrets"] = deduped
+          container["logConfiguration"] = {
+              "logDriver": "awslogs",
+              "options": {
+                  "awslogs-group": log_group,
+                  "awslogs-region": region,
+                  "awslogs-stream-prefix": "ecs",
+              },
+          }
+          json.dump(task, sys.stdout)
+          PY
+
+          REGISTERED_TASK_DEFINITION_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition-creditnote.json \
+            --region "${AWS_REGION}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+          aws ecs describe-task-definition \
+            --task-definition "${REGISTERED_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > task-definition-creditnote-registered.json
+
+          if [[ -n "${SCHEDULE_ROLE_ARN}" ]]; then
+            SCHEDULE_ROLE_NAME="$(python - "${SCHEDULE_ROLE_ARN}" <<'PY'
+          import sys
+          print(sys.argv[1].rsplit("/", 1)[-1])
+          PY
+            )"
+            TASK_ROLE_ARN="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition-creditnote-registered.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def.get("taskRoleArn") or "")
+          PY
+            )"
+            EXECUTION_ROLE_ARN="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition-creditnote-registered.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def.get("executionRoleArn") or "")
+          PY
+            )"
+            python - "${ACCOUNT_ID}" "${AWS_REGION}" "${TASK_FAMILY}" "${TASK_ROLE_ARN}" "${EXECUTION_ROLE_ARN}" <<'PY' > scheduler-role-policy.json
+          import json
+          import sys
+
+          account_id, region, task_family, task_role_arn, execution_role_arn = sys.argv[1:6]
+          pass_roles = [arn for arn in [task_role_arn, execution_role_arn] if arn]
+          statements = [
+              {
+                  "Effect": "Allow",
+                  "Action": "ecs:RunTask",
+                  "Resource": f"arn:aws:ecs:{region}:{account_id}:task-definition/{task_family}:*",
+              }
+          ]
+          if pass_roles:
+              statements.append(
+                  {
+                      "Effect": "Allow",
+                      "Action": "iam:PassRole",
+                      "Resource": pass_roles,
+                      "Condition": {"StringLike": {"iam:PassedToService": "ecs-tasks.amazonaws.com"}},
+                  }
+              )
+          json.dump({"Version": "2012-10-17", "Statement": statements}, sys.stdout)
+          PY
+            aws iam put-role-policy \
+              --role-name "${SCHEDULE_ROLE_NAME}" \
+              --policy-name MonthlyCreditnoteExportScheduleRunTask \
+              --policy-document file://scheduler-role-policy.json
+          fi
+
+          python - "${REGISTERED_TASK_DEFINITION_ARN}" <<'PY' > schedule-target.json
+          import copy
+          import json
+          import sys
+
+          task_definition_arn = sys.argv[1]
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+
+          def clean(value):
+              if isinstance(value, dict):
+                  cleaned = {}
+                  for key, raw in value.items():
+                      item = clean(raw)
+                      if item in (None, "", [], {}):
+                          continue
+                      cleaned[key] = item
+                  return cleaned
+              if isinstance(value, list):
+                  return [clean(item) for item in value if clean(item) not in (None, "", [], {})]
+              return value
+
+          target = clean(copy.deepcopy(schedule["Target"]))
+          target.pop("Input", None)
+          target["EcsParameters"]["TaskDefinitionArn"] = task_definition_arn
+          json.dump(target, sys.stdout)
+          PY
+          echo '{"Mode":"OFF"}' > flexible-time-window.json
+
+          if aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > existing-schedule.json 2>/dev/null; then
+            aws scheduler update-schedule \
+              --name "${SCHEDULE_NAME}" \
+              --schedule-expression "${SCHEDULE_EXPRESSION}" \
+              --schedule-expression-timezone "${SCHEDULE_TIMEZONE}" \
+              --flexible-time-window file://flexible-time-window.json \
+              --target file://schedule-target.json \
+              --state ENABLED \
+              --region "${AWS_REGION}"
+          else
+            aws scheduler create-schedule \
+              --name "${SCHEDULE_NAME}" \
+              --schedule-expression "${SCHEDULE_EXPRESSION}" \
+              --schedule-expression-timezone "${SCHEDULE_TIMEZONE}" \
+              --flexible-time-window file://flexible-time-window.json \
+              --target file://schedule-target.json \
+              --state ENABLED \
+              --region "${AWS_REGION}"
+          fi
+          aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > deployed-schedule.json
+
+          python - <<'PY' > network.json
+          import json
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          raw = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
+          normalized = {
+              "awsvpcConfiguration": {
+                  "subnets": raw.get("Subnets") or raw.get("subnets") or [],
+                  "securityGroups": raw.get("SecurityGroups") or raw.get("securityGroups") or [],
+                  "assignPublicIp": raw.get("AssignPublicIp") or raw.get("assignPublicIp") or "DISABLED",
+              }
+          }
+          print(json.dumps(normalized))
+          PY
+          CONTAINER_NAME="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition-creditnote-registered.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def["containerDefinitions"][0]["name"])
+          PY
+          )"
+
+          EMAIL_MODE="--dry-run-email"
+          EXPECTED_MARKER="CREDITNOTE_EXPORT_MARKER_OK"
+          if [[ "${EXECUTE_NOW}" == "true" && "${SEND_EMAIL_NOW}" == "true" ]]; then
+            EMAIL_MODE=""
+            EXPECTED_MARKER="CREDITNOTE_EXPORT_EMAIL_MARKER_OK"
+          fi
+
+          SMOKE_SCRIPT="$(cat <<'SH'
+          set -euo pipefail
+          OWNER_PROJECT="${CREDITNOTE_EXPORT_OWNER_PROJECT:-roy}"
+          PROJECTS="${CREDITNOTE_EXPORT_PROJECTS:?CREDITNOTE_EXPORT_PROJECTS missing}"
+          EMAIL_TO="${CREDITNOTE_EXPORT_EMAIL_TO:?CREDITNOTE_EXPORT_EMAIL_TO missing}"
+          EMAIL_MODE="${EMAIL_MODE:---dry-run-email}"
+          PIDS=()
+          cleanup() {
+            for pid in "${PIDS[@]:-}"; do
+              kill "$pid" >/dev/null 2>&1 || true
+            done
+          }
+          trap cleanup EXIT
+          RUN_ARGS=(--owner-project "${OWNER_PROJECT}" --projects "${PROJECTS}" --email-to "${EMAIL_TO}" --output-tag smoke)
+          if [[ -n "${EMAIL_MODE}" ]]; then
+            RUN_ARGS+=("${EMAIL_MODE}")
+          fi
+          python monthly_creditnote_export_runner.py "${RUN_ARGS[@]}" | tee /tmp/creditnote-export.log
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_line = ""
+          for line in Path("/tmp/creditnote-export.log").read_text(encoding="utf-8").splitlines():
+              if line.startswith("CREDITNOTE_EXPORT_SUMMARY "):
+                  summary_line = line.split(" ", 1)[1]
+          assert summary_line, "missing creditnote export summary"
+          summary = json.loads(summary_line)
+          assert summary["projects"] == [item.strip() for item in os.environ["CREDITNOTE_EXPORT_PROJECTS"].split(",") if item.strip()]
+          assert Path(summary["output_xlsx"]).exists()
+          assert Path(summary["output_json"]).exists()
+          assert summary["email_to"] == os.environ["CREDITNOTE_EXPORT_EMAIL_TO"]
+          marker_name = "CREDITNOTE_EXPORT_EMAIL_MARKER_OK" if not summary["email_dry_run"] and not summary["email_skipped"] else "CREDITNOTE_EXPORT_MARKER_OK"
+          marker_dir = Path("/tmp/creditnote-export-marker")
+          marker_dir.mkdir(parents=True, exist_ok=True)
+          marker = {
+              "marker": marker_name,
+              "projects": summary["projects"],
+              "date_from": summary["date_from"],
+              "date_to": summary["date_to"],
+              "exported_rows": summary["exported_rows"],
+              "email_dry_run": summary["email_dry_run"],
+              "email_skipped": summary["email_skipped"],
+          }
+          (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+          PY
+          python -m http.server 8000 --bind 127.0.0.1 --directory /tmp/creditnote-export-marker >/tmp/creditnote-export-marker/http.log 2>&1 &
+          PIDS+=("$!")
+          sleep 1
+          echo "CREDITNOTE_EXPORT_MARKER_BEGIN"
+          curl -fsS http://127.0.0.1:8000/marker.json
+          echo
+          echo "CREDITNOTE_EXPORT_MARKER_END"
+          SH
+          )"
+          export CONTAINER_NAME OWNER_PROJECT CREDITNOTE_PROJECTS CREDITNOTE_EMAIL_TO SMOKE_SCRIPT EMAIL_MODE
+          python - <<'PY' > smoke-overrides.json
+          import json
+          import os
+          print(json.dumps({
+              "containerOverrides": [
+                  {
+                      "name": os.environ["CONTAINER_NAME"],
+                      "command": ["/bin/bash", "-lc", os.environ["SMOKE_SCRIPT"]],
+                      "environment": [
+                          {"name": "REPORT_PROJECT", "value": os.environ["OWNER_PROJECT"]},
+                          {"name": "CREDITNOTE_EXPORT_OWNER_PROJECT", "value": os.environ["OWNER_PROJECT"]},
+                          {"name": "CREDITNOTE_EXPORT_PROJECTS", "value": os.environ["CREDITNOTE_PROJECTS"]},
+                          {"name": "CREDITNOTE_EXPORT_EMAIL_TO", "value": os.environ["CREDITNOTE_EMAIL_TO"]},
+                          {"name": "EMAIL_MODE", "value": os.environ.get("EMAIL_MODE", "--dry-run-email")},
+                      ],
+                  }
+              ]
+          }))
+          PY
+
+          RUN_ARGS=(
+            --cluster "${CLUSTER_ARN}"
+            --task-definition "${REGISTERED_TASK_DEFINITION_ARN}"
+            --launch-type "${LAUNCH_TYPE}"
+            --network-configuration file://network.json
+            --overrides file://smoke-overrides.json
+            --started-by "codex-monthly-creditnote-export-smoke"
+            --region "${AWS_REGION}"
+          )
+          if [[ -n "${PLATFORM_VERSION}" ]]; then
+            RUN_ARGS+=(--platform-version "${PLATFORM_VERSION}")
+          fi
+          aws ecs run-task "${RUN_ARGS[@]}" > smoke-run-task.json
+          SMOKE_TASK_ARN="$(python - <<'PY'
+          import json
+          run = json.load(open("smoke-run-task.json", encoding="utf-8"))
+          failures = run.get("failures") or []
+          if failures:
+              raise SystemExit(f"run-task failures: {failures}")
+          print(run["tasks"][0]["taskArn"])
+          PY
+          )"
+          SMOKE_TASK_ID="${SMOKE_TASK_ARN##*/}"
+
+          PRIVATE_IP=""
+          for _ in $(seq 1 60); do
+            aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${SMOKE_TASK_ARN}" --region "${AWS_REGION}" > smoke-describe-running.json
+            PRIVATE_IP="$(python - <<'PY'
+          import json
+          tasks = json.load(open("smoke-describe-running.json", encoding="utf-8")).get("tasks") or []
+          details = []
+          for attachment in (tasks[0].get("attachments") or []) if tasks else []:
+              details.extend(attachment.get("details") or [])
+          print(next((item.get("value") for item in details if item.get("name") == "privateIPv4Address"), ""))
+          PY
+            )"
+            if [[ -n "${PRIVATE_IP}" ]]; then
+              break
+            fi
+            sleep 5
+          done
+
+          echo "HARD_GATE_CONTEXT monthly-creditnote-export"
+          echo "instance-id=N/A (scheduled ECS/Fargate task)"
+          echo "private-ip=${PRIVATE_IP:-unavailable-before-stop}"
+          echo "service-name=${SCHEDULE_NAME}"
+          echo "task-definition=${REGISTERED_TASK_DEFINITION_ARN}"
+          echo "task-arn=${SMOKE_TASK_ARN}"
+          echo "image-path=${IMAGE_URI}"
+          echo "image-identifier=${IMAGE_IDENTIFIER}"
+          echo "marker-path=http://127.0.0.1:8000/marker.json"
+          echo "automation-command=python monthly_creditnote_export_runner.py --owner-project ${OWNER_PROJECT}"
+
+          SMOKE_STOPPED=false
+          for attempt in $(seq 1 160); do
+            aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${SMOKE_TASK_ARN}" --region "${AWS_REGION}" > smoke-describe-stopped.json
+            LAST_STATUS="$(python - <<'PY'
+          import json
+          task = json.load(open("smoke-describe-stopped.json", encoding="utf-8"))["tasks"][0]
+          print(task.get("lastStatus", ""))
+          PY
+            )"
+            if [[ "${LAST_STATUS}" == "STOPPED" ]]; then
+              SMOKE_STOPPED=true
+              break
+            fi
+            if (( attempt % 4 == 0 )); then
+              echo "Smoke task ${SMOKE_TASK_ID} still ${LAST_STATUS:-unknown} after $((attempt * 15))s"
+            fi
+            sleep 15
+          done
+          if [[ "${SMOKE_STOPPED}" != "true" ]]; then
+            aws ecs stop-task \
+              --cluster "${CLUSTER_ARN}" \
+              --task "${SMOKE_TASK_ARN}" \
+              --reason "Monthly creditnote export smoke timed out" \
+              --region "${AWS_REGION}" || true
+            exit 1
+          fi
+
+          EXIT_CODE="$(python - <<'PY'
+          import json
+          task = json.load(open("smoke-describe-stopped.json", encoding="utf-8"))["tasks"][0]
+          print(task["containers"][0].get("exitCode", ""))
+          PY
+          )"
+          LOG_STREAM="ecs/${CONTAINER_NAME}/${SMOKE_TASK_ID}"
+          : > smoke-task.log
+          for _ in $(seq 1 12); do
+            aws logs get-log-events \
+              --log-group-name "${LOG_GROUP}" \
+              --log-stream-name "${LOG_STREAM}" \
+              --region "${AWS_REGION}" \
+              --query 'events[].message' \
+              --output text > smoke-task.log || true
+            if grep -q "${EXPECTED_MARKER}" smoke-task.log; then
+              break
+            fi
+            sleep 5
+          done
+          cat smoke-task.log
+          if [[ "${EXIT_CODE}" != "0" ]]; then
+            echo "Monthly creditnote export smoke task ${SMOKE_TASK_ARN} failed with exit code ${EXIT_CODE}" >&2
+            exit 1
+          fi
+          grep -q "${EXPECTED_MARKER}" smoke-task.log
+
+          python - <<'PY'
+          import json
+          schedule = json.load(open("deployed-schedule.json", encoding="utf-8"))
+          target = schedule["Target"]
+          assert schedule["State"] == "ENABLED"
+          assert target["EcsParameters"]["TaskDefinitionArn"]
+          print(
+              "DEPLOY_MONTHLY_CREDITNOTE_EXPORT_OK "
+              f"schedule={schedule['Name']} "
+              f"task_definition={target['EcsParameters']['TaskDefinitionArn']}"
+          )
+          PY
