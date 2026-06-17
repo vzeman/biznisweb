@@ -17,9 +17,45 @@ from monthly_creditnote_export_runner import (
     resolve_creditnote_export_window,
     run_creditnote_export_runner,
 )
+from money_s3_invoice_export import (
+    MoneyS3InvoiceExportResult,
+    biznisweb_php_serialize,
+    money_s3_invoice_filters,
+    run_money_s3_invoice_export,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+
+
+class FakeMoneyS3Response:
+    def __init__(self, text: str = "", content: bytes = b"", headers: dict | None = None) -> None:
+        self.text = text
+        self.content = content or text.encode("utf-8")
+        self.headers = headers or {}
+        self.status_code = 200
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+class FakeMoneyS3Session:
+    def __init__(self) -> None:
+        self.posts: list[tuple[str, dict]] = []
+
+    def post(self, url: str, data=None, **kwargs):
+        payload = dict(data or {})
+        self.posts.append((url, payload))
+        if url.endswith("/erp/orders/invoices/getListJson"):
+            self.last_count_filter = payload["massfilter"]
+            return FakeMoneyS3Response("{ 'rows': [], 'total': 2 }")
+        if url.endswith("/erp/impexp/export/index/invoices/moneys3"):
+            self.last_export_payload = payload
+            return FakeMoneyS3Response(
+                content=b'<MoneyData KodAgendy="invoices"></MoneyData>',
+                headers={"content-disposition": 'attachment; filename="Flox_invoices_test.xml"'},
+            )
+        raise AssertionError(f"Unexpected URL: {url}")
 
 
 class CreditnoteExportTests(unittest.TestCase):
@@ -52,6 +88,38 @@ class CreditnoteExportTests(unittest.TestCase):
                 to_date="2026-05-31",
             ),
         )
+
+    def test_money_s3_invoice_filter_serialization_uses_invoice_issue_dates(self) -> None:
+        filters = money_s3_invoice_filters(date(2026, 5, 1), date(2026, 5, 31))
+
+        self.assertEqual({"inv_date_from": "1.5.2026", "inv_date_to": "31.5.2026"}, filters)
+        self.assertEqual(
+            'a:2:{s:13:"inv_date_from";s:8:"1.5.2026";s:11:"inv_date_to";s:9:"31.5.2026";}',
+            biznisweb_php_serialize(filters),
+        )
+
+    @patch("money_s3_invoice_export._login_admin")
+    def test_money_s3_invoice_export_downloads_project_xml(self, login_mock) -> None:
+        fake_session = FakeMoneyS3Session()
+        login_mock.return_value = ("https://example.test", fake_session, "csrf")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = run_money_s3_invoice_export(
+                projects=("roy",),
+                date_from=date(2026, 5, 1),
+                date_to=date(2026, 5, 31),
+                output_dir=Path(tmp),
+                output_tag="unit",
+            )
+
+            output_file = result.output_files["ROY"]
+            self.assertTrue(output_file.exists())
+            self.assertEqual(b"<MoneyData", output_file.read_bytes()[:10])
+            self.assertEqual({"ROY": 2}, result.invoice_counts)
+            self.assertEqual("Flox_invoices_test.xml", result.source_filenames["ROY"])
+            self.assertIn("inv_date_from", fake_session.last_count_filter)
+            self.assertEqual("invoices", fake_session.last_export_payload["data"])
+            self.assertEqual(fake_session.last_count_filter, fake_session.last_export_payload["massFilter"])
 
     def test_build_creditnote_rows_filters_created_window_and_signs_amounts(self) -> None:
         rows = build_creditnote_export_rows(
@@ -146,13 +214,41 @@ class CreditnoteExportTests(unittest.TestCase):
             self.assertIn("Pocet dobropisov: 1", body)
             self.assertIn("VEVO €", body)
 
+    def test_email_body_includes_money_s3_invoice_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            creditnote_result = write_creditnote_pdf(
+                export_rows=[],
+                fetch_totals={"roy": {"reported_total": 0, "fetched_rows": 0, "exported_rows": 0}},
+                output_pdf=Path(tmp) / "dobropisy.pdf",
+                date_from=date(2026, 5, 1),
+                date_to=date(2026, 5, 31),
+                projects=("roy",),
+            )
+            invoice_path = Path(tmp) / "faktury_money_s3_roy_2026-05_issued.xml"
+            invoice_path.write_text("<MoneyData />", encoding="utf-8")
+            invoice_result = MoneyS3InvoiceExportResult(
+                projects=("roy",),
+                date_from="2026-05-01",
+                date_to="2026-05-31",
+                output_files={"ROY": invoice_path},
+                invoice_counts={"ROY": 384},
+                source_filenames={"ROY": "Flox_invoices.xml"},
+            )
+
+            body = build_creditnote_email_body(creditnote_result, invoice_result=invoice_result)
+
+            self.assertIn("Money S3 export faktur", body)
+            self.assertIn("podla datumu vystavenia: 2026-05-01 az 2026-05-31", body)
+            self.assertIn("ROY: 384 ks", body)
+
     def test_parse_project_list_defaults_and_normalizes(self) -> None:
         self.assertEqual(("roy", "vevo"), parse_project_list(None))
         self.assertEqual(("roy", "vevo"), parse_project_list(" ROY, vevo ,,"))
 
     @patch("monthly_creditnote_export_runner.put_metric")
+    @patch("monthly_creditnote_export_runner.run_money_s3_invoice_export")
     @patch("monthly_creditnote_export_runner.run_monthly_creditnote_export")
-    def test_runner_skip_email_uses_previous_month(self, export_mock, put_metric_mock) -> None:
+    def test_runner_skip_email_uses_previous_month(self, export_mock, invoice_export_mock, put_metric_mock) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = write_creditnote_pdf(
                 export_rows=[],
@@ -163,6 +259,16 @@ class CreditnoteExportTests(unittest.TestCase):
                 projects=("roy", "vevo"),
             )
             export_mock.return_value = result
+            invoice_path = Path(tmp) / "faktury_money_s3_roy_2026-05_issued.xml"
+            invoice_path.write_text("<MoneyData />", encoding="utf-8")
+            invoice_export_mock.return_value = MoneyS3InvoiceExportResult(
+                projects=("roy", "vevo"),
+                date_from="2026-05-01",
+                date_to="2026-05-31",
+                output_files={"ROY": invoice_path, "VEVO": invoice_path},
+                invoice_counts={"ROY": 2, "VEVO": 3},
+                source_filenames={"ROY": "roy.xml", "VEVO": "vevo.xml"},
+            )
 
             args = type(
                 "Args",
@@ -181,6 +287,8 @@ class CreditnoteExportTests(unittest.TestCase):
                     "email_to": "mil.terem@gmail.com",
                     "skip_email": True,
                     "dry_run_email": False,
+                    "skip_invoice_export": False,
+                    "include_creditnote_reporting_audit": False,
                 },
             )()
 
@@ -190,7 +298,13 @@ class CreditnoteExportTests(unittest.TestCase):
             _, kwargs = export_mock.call_args
             self.assertEqual("2026-05-01", kwargs["date_from"])
             self.assertEqual("2026-05-31", kwargs["date_to"])
+            invoice_export_mock.assert_called_once()
+            _, invoice_kwargs = invoice_export_mock.call_args
+            self.assertEqual("2026-05-01", invoice_kwargs["date_from"])
+            self.assertEqual("2026-05-31", invoice_kwargs["date_to"])
             self.assertTrue(summary["email_skipped"])
+            self.assertFalse(summary["invoice_export_skipped"])
+            self.assertEqual(5, summary["invoice_export"]["total_invoices"])
             self.assertGreaterEqual(put_metric_mock.call_count, 2)
 
     def test_monthly_creditnote_settings_are_configured(self) -> None:
@@ -203,6 +317,9 @@ class CreditnoteExportTests(unittest.TestCase):
         self.assertEqual("Europe/Bratislava", raw["timezone"])
         self.assertEqual("monthly-creditnote-export", raw["task_family"])
         self.assertEqual(["roy", "vevo"], raw["projects"])
+        self.assertTrue(raw["include_invoice_money_s3"])
+        self.assertEqual("moneys3", raw["invoice_export_format"])
+        self.assertEqual("inv_date", raw["invoice_date_field"])
         self.assertEqual("mil.terem@gmail.com", raw["email_to"])
 
 

@@ -159,13 +159,16 @@ REPORT_FORCE_CLEAR_CACHE=false
 REPORT_FORCE_NO_CACHE=false
 ```
 
-## Monthly Creditnote Export
+## Monthly Accounting Export
 
-Use `monthly_creditnote_export_runner.py` to export credit notes from ROY and VEVO into one PDF file and email it through AWS SES.
+Use `monthly_creditnote_export_runner.py` to export credit notes from ROY and VEVO into one PDF file, export invoices from each shop in Money S3 XML format, and email the files through AWS SES.
 
 Default behavior:
 - projects: `roy,vevo`
 - period: previous calendar month based on `REPORT_TIMEZONE`
+- credit notes: filtered by credit-note creation date
+- invoices: filtered by invoice issue date (`inv_date_from` / `inv_date_to`) and exported as separate Money S3 XML files per shop
+- credit-note reporting-revenue audit: disabled by default for this accounting email run; use `--include-creditnote-reporting-audit` only when that slower audit is needed
 - schedule metadata: `projects/roy/settings.json` -> `monthly_creditnote_export`
 - production cadence: every 14th day of the month at 06:00 Europe/Bratislava
 - recipient: `mil.terem@gmail.com`
@@ -188,6 +191,8 @@ Email env vars:
 AWS_REGION=eu-central-1
 REPORT_EMAIL_FROM=reports@example.com
 CREDITNOTE_EXPORT_EMAIL_TO=mil.terem@gmail.com
+CREDITNOTE_EXPORT_SKIP_INVOICE_EXPORT=false
+CREDITNOTE_EXPORT_INCLUDE_REPORTING_AUDIT=false
 ```
 
 The deploy workflow is `.github/workflows/deploy-monthly-creditnote-export.yml`. It registers a dedicated ECS task family and EventBridge Scheduler job, then verifies the run on the host through `http://127.0.0.1:8000/marker.json`.

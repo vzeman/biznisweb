@@ -93,6 +93,9 @@
       "roy",
       "vevo"
     ],
+    "include_invoice_money_s3": true,
+    "invoice_export_format": "moneys3",
+    "invoice_date_field": "inv_date",
     "email_to": "mil.terem@gmail.com"
   },
   "realized_revenue": {

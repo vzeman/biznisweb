@@ -18,6 +18,7 @@ on:
       - main
     paths:
       - creditnote_export.py
+      - money_s3_invoice_export.py
       - monthly_creditnote_export_runner.py
       - projects/roy/settings.json
       - requirements.txt
@@ -427,6 +428,16 @@ jobs:
           output_pdf = Path(summary["output_pdf"])
           assert output_pdf.exists()
           assert output_pdf.read_bytes()[:5] == b"%PDF-"
+          assert not summary["invoice_export_skipped"]
+          invoice_export = summary["invoice_export"]
+          assert invoice_export, "missing Money S3 invoice export summary"
+          assert invoice_export["date_field"] == "inv_date"
+          assert invoice_export["format"] == "moneys3"
+          assert invoice_export["projects"] == summary["projects"]
+          for project, output_path in invoice_export["output_files"].items():
+              xml_path = Path(output_path)
+              assert xml_path.exists(), f"missing Money S3 XML for {project}: {xml_path}"
+              assert xml_path.read_bytes().lstrip().startswith(b"<MoneyData")
           assert summary["email_to"] == os.environ["CREDITNOTE_EXPORT_EMAIL_TO"]
           marker_name = "CREDITNOTE_EXPORT_EMAIL_MARKER_OK" if not summary["email_dry_run"] and not summary["email_skipped"] else "CREDITNOTE_EXPORT_MARKER_OK"
           marker_dir = Path("/tmp/creditnote-export-marker")
@@ -437,6 +448,7 @@ jobs:
               "date_from": summary["date_from"],
               "date_to": summary["date_to"],
               "exported_rows": summary["exported_rows"],
+              "invoice_counts": invoice_export["invoice_counts"],
               "email_dry_run": summary["email_dry_run"],
               "email_skipped": summary["email_skipped"],
           }

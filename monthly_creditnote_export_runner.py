@@ -24,6 +24,7 @@ from creditnote_export import (
     previous_calendar_month,
     run_monthly_creditnote_export,
 )
+from money_s3_invoice_export import MoneyS3InvoiceExportResult, run_money_s3_invoice_export
 from reporting_core import load_project_settings, put_metric, resolve_reporting_defaults
 
 
@@ -39,7 +40,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export monthly BizniWeb credit notes and email one PDF")
+    parser = argparse.ArgumentParser(description="Export monthly BizniWeb credit notes and Money S3 invoices")
     parser.add_argument(
         "--projects",
         default=os.getenv("CREDITNOTE_EXPORT_PROJECTS", "roy,vevo"),
@@ -107,6 +108,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=_env_bool("CREDITNOTE_EXPORT_DRY_RUN_EMAIL", False),
         help="Build the email body and attachments but do not call SES.",
     )
+    parser.add_argument(
+        "--skip-invoice-export",
+        action="store_true",
+        default=_env_bool("CREDITNOTE_EXPORT_SKIP_INVOICE_EXPORT", False),
+        help="Skip Money S3 invoice XML export. Default: export invoices for the same previous-month window.",
+    )
+    parser.add_argument(
+        "--include-creditnote-reporting-audit",
+        action="store_true",
+        default=_env_bool("CREDITNOTE_EXPORT_INCLUDE_REPORTING_AUDIT", False),
+        help="Include the slower reporting-revenue audit in the credit-note PDF. Default: off for accounting email runs.",
+    )
     return parser.parse_args(argv)
 
 
@@ -133,10 +146,16 @@ def resolve_creditnote_export_window(
     return start.isoformat(), end.isoformat()
 
 
-def build_creditnote_email_subject(result: CreditnoteExportResult, override: str = "") -> str:
+def build_creditnote_email_subject(
+    result: CreditnoteExportResult,
+    override: str = "",
+    invoice_result: MoneyS3InvoiceExportResult | None = None,
+) -> str:
     if override.strip():
         return override.strip()
     projects = "+".join(project.upper() for project in result.projects)
+    if invoice_result is not None:
+        return f"Dobropisy a faktury {projects} {result.date_from[:7]}"
     return f"Dobropisy {projects} {result.date_from[:7]}"
 
 
@@ -147,11 +166,18 @@ def _format_amount(value: Any) -> str:
         return "0.00"
 
 
-def build_creditnote_email_body(result: CreditnoteExportResult) -> str:
+def build_creditnote_email_body(
+    result: CreditnoteExportResult,
+    invoice_result: MoneyS3InvoiceExportResult | None = None,
+) -> str:
     lines = [
         "Dobry den,",
         "",
-        "v prilohe posielam mesacny PDF export dobropisov z BizniWebu.",
+        (
+            "v prilohe posielam mesacny PDF export dobropisov a Money S3 export faktur z BizniWebu."
+            if invoice_result is not None
+            else "v prilohe posielam mesacny PDF export dobropisov z BizniWebu."
+        ),
         f"Obdobie vytvorenia dobropisov: {result.date_from} az {result.date_to}.",
         f"E-shopy: {', '.join(project.upper() for project in result.projects)}.",
         f"Pocet dobropisov: {result.exported_rows}.",
@@ -167,6 +193,24 @@ def build_creditnote_email_body(result: CreditnoteExportResult) -> str:
             )
     else:
         lines.append("- Bez dobropisov v zadanom obdobi.")
+    if invoice_result is not None:
+        lines.extend(
+            [
+                "",
+                f"Money S3 faktury podla datumu vystavenia: {invoice_result.date_from} az {invoice_result.date_to}.",
+                f"Pocet faktur: {invoice_result.total_invoices}.",
+                "",
+                "Money S3 exporty:",
+            ]
+        )
+        if invoice_result.invoice_counts:
+            for project in invoice_result.projects:
+                key = project.upper()
+                path = invoice_result.output_files.get(key)
+                filename = path.name if path else "-"
+                lines.append(f"- {key}: {invoice_result.invoice_counts.get(key, 0)} ks, subor {filename}")
+        else:
+            lines.append("- Bez faktur v zadanom obdobi.")
     lines.extend(
         [
             "",
@@ -183,6 +227,7 @@ def send_creditnote_email_ses(
     email_from: str,
     email_to: str,
     reporting_defaults: Dict[str, Any],
+    invoice_result: MoneyS3InvoiceExportResult | None = None,
 ) -> str:
     source = email_from.strip()
     destinations = [email.strip() for email in email_to.split(",") if email.strip()]
@@ -206,6 +251,19 @@ def send_creditnote_email_ses(
         part = MIMEApplication(fh.read(), _subtype="pdf", Name=result.output_pdf.name)
     part["Content-Disposition"] = f'attachment; filename="{result.output_pdf.name}"'
     msg.attach(part)
+
+    if invoice_result is not None:
+        for project in invoice_result.projects:
+            key = project.upper()
+            path = invoice_result.output_files.get(key)
+            if path is None:
+                raise FileNotFoundError(f"Missing Money S3 invoice export path for project: {key}")
+            if not path.exists():
+                raise FileNotFoundError(f"Missing Money S3 invoice export: {path}")
+            with path.open("rb") as fh:
+                invoice_part = MIMEApplication(fh.read(), _subtype="xml", Name=path.name)
+            invoice_part["Content-Disposition"] = f'attachment; filename="{path.name}"'
+            msg.attach(invoice_part)
 
     try:
         import boto3  # type: ignore
@@ -245,8 +303,13 @@ def run_creditnote_export_runner(args: argparse.Namespace) -> Dict[str, Any]:
     print(
         "Running monthly creditnote export "
         f"projects={','.join(projects)} window={date_from}..{date_to} "
-        f"skip_email={args.skip_email} dry_run_email={args.dry_run_email}"
+        f"skip_email={args.skip_email} dry_run_email={args.dry_run_email} "
+        f"skip_invoice_export={args.skip_invoice_export} "
+        f"include_creditnote_reporting_audit={args.include_creditnote_reporting_audit}"
     )
+
+    if not args.include_creditnote_reporting_audit and not os.getenv("CREDITNOTE_EXPORT_SKIP_REPORTING_AUDIT"):
+        os.environ["CREDITNOTE_EXPORT_SKIP_REPORTING_AUDIT"] = "true"
 
     try:
         result = run_monthly_creditnote_export(
@@ -263,8 +326,26 @@ def run_creditnote_export_runner(args: argparse.Namespace) -> Dict[str, Any]:
     put_metric("CreditnoteExportRows", result.exported_rows, owner_project, reporting_defaults)
     put_metric("CreditnoteExportRunSucceeded", 1, owner_project, reporting_defaults)
 
-    subject = build_creditnote_email_subject(result, args.email_subject)
-    body_text = build_creditnote_email_body(result)
+    invoice_result: MoneyS3InvoiceExportResult | None = None
+    if args.skip_invoice_export:
+        print("Money S3 invoice export skipped by flag.")
+    else:
+        try:
+            invoice_result = run_money_s3_invoice_export(
+                projects=projects,
+                date_from=date_from,
+                date_to=date_to,
+                output_dir=output_dir,
+                output_tag=args.output_tag,
+            )
+        except Exception:
+            put_metric("InvoiceMoneyS3ExportRunFailed", 1, owner_project, reporting_defaults)
+            raise
+        put_metric("InvoiceMoneyS3ExportRows", invoice_result.total_invoices, owner_project, reporting_defaults)
+        put_metric("InvoiceMoneyS3ExportRunSucceeded", 1, owner_project, reporting_defaults)
+
+    subject = build_creditnote_email_subject(result, args.email_subject, invoice_result=invoice_result)
+    body_text = build_creditnote_email_body(result, invoice_result=invoice_result)
     message_id = ""
     if args.skip_email:
         print("Creditnote export email skipped by flag.")
@@ -279,6 +360,7 @@ def run_creditnote_export_runner(args: argparse.Namespace) -> Dict[str, Any]:
             email_from=args.email_from,
             email_to=args.email_to,
             reporting_defaults=reporting_defaults,
+            invoice_result=invoice_result,
         )
         put_metric("CreditnoteExportEmailSent", 1, owner_project, reporting_defaults)
         print(f"SES creditnote export sent. MessageId={message_id}")
@@ -291,6 +373,8 @@ def run_creditnote_export_runner(args: argparse.Namespace) -> Dict[str, Any]:
             "email_message_id": message_id,
             "email_to": args.email_to,
             "subject": subject,
+            "invoice_export_skipped": bool(args.skip_invoice_export),
+            "invoice_export": invoice_result.as_dict() if invoice_result else None,
         }
     )
     print("CREDITNOTE_EXPORT_SUMMARY " + json.dumps(summary, ensure_ascii=False, sort_keys=True))
