@@ -161,7 +161,7 @@ REPORT_FORCE_NO_CACHE=false
 
 ## Monthly Creditnote Export
 
-Use `monthly_creditnote_export_runner.py` to export credit notes from ROY and VEVO into one XLSX workbook and email it through AWS SES.
+Use `monthly_creditnote_export_runner.py` to export credit notes from ROY and VEVO into one PDF file and email it through AWS SES.
 
 Default behavior:
 - projects: `roy,vevo`

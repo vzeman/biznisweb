@@ -10,7 +10,7 @@ from creditnote_export import (
     parse_biznisweb_js_object,
     parse_project_list,
     previous_calendar_month,
-    write_creditnote_workbook,
+    write_creditnote_pdf,
 )
 from monthly_creditnote_export_runner import (
     build_creditnote_email_body,
@@ -94,10 +94,10 @@ class CreditnoteExportTests(unittest.TestCase):
         self.assertEqual(-53.49, rows[0]["Suma s DPH"])
         self.assertEqual("€", rows[0]["Mena"])
 
-    def test_write_workbook_outputs_summary(self) -> None:
+    def test_write_pdf_outputs_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            result = write_creditnote_workbook(
+            result = write_creditnote_pdf(
                 export_rows=[
                     {
                         "Eshop": "ROY",
@@ -108,22 +108,23 @@ class CreditnoteExportTests(unittest.TestCase):
                     }
                 ],
                 fetch_totals={"roy": {"reported_total": 1, "fetched_rows": 1, "exported_rows": 1}},
-                output_xlsx=tmp_path / "dobropisy.xlsx",
-                output_json=tmp_path / "dobropisy_source.json",
+                output_pdf=tmp_path / "dobropisy.pdf",
                 date_from=date(2026, 5, 1),
                 date_to=date(2026, 5, 31),
                 projects=("roy",),
             )
 
-            self.assertTrue(result.output_xlsx.exists())
-            self.assertTrue(result.output_json.exists())
+            self.assertTrue(result.output_pdf.exists())
+            self.assertEqual(b"%PDF-", result.output_pdf.read_bytes()[:5])
+            self.assertFalse((tmp_path / "dobropisy.xlsx").exists())
+            self.assertFalse((tmp_path / "dobropisy_source.json").exists())
             self.assertEqual(1, result.exported_rows)
             self.assertEqual({"ROY": 1}, result.project_counts)
             self.assertEqual(-53.49, result.summary_rows[0]["Suma_s_DPH"])
 
     def test_email_body_includes_summary_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            result = write_creditnote_workbook(
+            result = write_creditnote_pdf(
                 export_rows=[
                     {
                         "Eshop": "VEVO",
@@ -134,14 +135,14 @@ class CreditnoteExportTests(unittest.TestCase):
                     }
                 ],
                 fetch_totals={"vevo": {"reported_total": 1, "fetched_rows": 1, "exported_rows": 1}},
-                output_xlsx=Path(tmp) / "dobropisy.xlsx",
-                output_json=Path(tmp) / "dobropisy_source.json",
+                output_pdf=Path(tmp) / "dobropisy.pdf",
                 date_from=date(2026, 5, 1),
                 date_to=date(2026, 5, 31),
                 projects=("vevo",),
             )
 
             body = build_creditnote_email_body(result)
+            self.assertIn("mesacny PDF export", body)
             self.assertIn("Pocet dobropisov: 1", body)
             self.assertIn("VEVO €", body)
 
@@ -153,11 +154,10 @@ class CreditnoteExportTests(unittest.TestCase):
     @patch("monthly_creditnote_export_runner.run_monthly_creditnote_export")
     def test_runner_skip_email_uses_previous_month(self, export_mock, put_metric_mock) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            result = write_creditnote_workbook(
+            result = write_creditnote_pdf(
                 export_rows=[],
                 fetch_totals={"roy": {"reported_total": 0, "fetched_rows": 0, "exported_rows": 0}},
-                output_xlsx=Path(tmp) / "dobropisy.xlsx",
-                output_json=Path(tmp) / "dobropisy_source.json",
+                output_pdf=Path(tmp) / "dobropisy.pdf",
                 date_from=date(2026, 5, 1),
                 date_to=date(2026, 5, 31),
                 projects=("roy", "vevo"),

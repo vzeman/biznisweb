@@ -39,11 +39,11 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export monthly BizniWeb credit notes and email a workbook")
+    parser = argparse.ArgumentParser(description="Export monthly BizniWeb credit notes and email one PDF")
     parser.add_argument(
         "--projects",
         default=os.getenv("CREDITNOTE_EXPORT_PROJECTS", "roy,vevo"),
-        help="Comma-separated project slugs to include in one workbook.",
+        help="Comma-separated project slugs to include in one PDF.",
     )
     parser.add_argument(
         "--owner-project",
@@ -151,7 +151,7 @@ def build_creditnote_email_body(result: CreditnoteExportResult) -> str:
     lines = [
         "Dobry den,",
         "",
-        "v prilohe posielam mesacny export dobropisov z BizniWebu.",
+        "v prilohe posielam mesacny PDF export dobropisov z BizniWebu.",
         f"Obdobie vytvorenia dobropisov: {result.date_from} az {result.date_to}.",
         f"E-shopy: {', '.join(project.upper() for project in result.projects)}.",
         f"Pocet dobropisov: {result.exported_rows}.",
@@ -190,8 +190,8 @@ def send_creditnote_email_ses(
         raise ValueError("CREDITNOTE_EXPORT_EMAIL_FROM or REPORT_EMAIL_FROM is required")
     if not destinations:
         raise ValueError("CREDITNOTE_EXPORT_EMAIL_TO has no valid recipients")
-    if not result.output_xlsx.exists():
-        raise FileNotFoundError(f"Missing creditnote workbook: {result.output_xlsx}")
+    if not result.output_pdf.exists():
+        raise FileNotFoundError(f"Missing creditnote PDF: {result.output_pdf}")
 
     msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
@@ -202,9 +202,9 @@ def send_creditnote_email_ses(
     msg["Reply-To"] = source
     msg.attach(MIMEText(body_text, "plain", "utf-8"))
 
-    with result.output_xlsx.open("rb") as fh:
-        part = MIMEApplication(fh.read(), Name=result.output_xlsx.name)
-    part["Content-Disposition"] = f'attachment; filename="{result.output_xlsx.name}"'
+    with result.output_pdf.open("rb") as fh:
+        part = MIMEApplication(fh.read(), _subtype="pdf", Name=result.output_pdf.name)
+    part["Content-Disposition"] = f'attachment; filename="{result.output_pdf.name}"'
     msg.attach(part)
 
     try:
