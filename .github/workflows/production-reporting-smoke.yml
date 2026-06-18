@@ -179,7 +179,7 @@ jobs:
             SMOKE_SCRIPT="$(cat <<'SH'
           set -euo pipefail
           PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
-          MARKER="${REPORT_OUTPUT_TAG:-}"
+          MARKER="${REPORT_MARKER:-${REPORT_OUTPUT_TAG:-}}"
           SEND_EMAIL="${REPORT_SEND_EMAIL:-false}"
           PIDS=()
           cleanup() {
@@ -190,6 +190,7 @@ jobs:
           trap cleanup EXIT
           echo "HOST_SMOKE_START project=${PROJECT} marker=${MARKER} send_email=${SEND_EMAIL}"
           if [[ "${SEND_EMAIL}" == "true" ]]; then
+            unset REPORT_OUTPUT_TAG
             python daily_report_runner.py --project "${PROJECT}" --skip-invoices
           else
             python daily_report_runner.py --project "${PROJECT}" --output-tag "${MARKER}" --skip-email --skip-invoices --creditnote-storno-dry-run
@@ -199,7 +200,7 @@ jobs:
           import os
           from pathlib import Path
           project = os.environ["REPORT_PROJECT"]
-          marker = os.environ["REPORT_OUTPUT_TAG"]
+          marker = os.environ.get("REPORT_MARKER") or os.environ.get("REPORT_OUTPUT_TAG") or ""
           send_email = os.environ.get("REPORT_SEND_EMAIL", "false").strip().lower() == "true"
           data_dir = Path("data") / project
           if send_email:
@@ -326,6 +327,7 @@ jobs:
                       "command": ["/bin/bash", "-lc", os.environ["SMOKE_SCRIPT"]],
                       "environment": [
                           {"name": "REPORT_PROJECT", "value": os.environ["PROJECT"]},
+                          {"name": "REPORT_MARKER", "value": os.environ["MARKER"]},
                           {"name": "REPORT_OUTPUT_TAG", "value": os.environ["MARKER"]},
                           {"name": "REPORT_SKIP_INVOICES", "value": "true"},
                           {"name": "REPORT_SEND_EMAIL", "value": os.environ["SEND_EMAIL"]},
