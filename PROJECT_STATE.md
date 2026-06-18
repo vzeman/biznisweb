@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-13
+Last updated: 2026-06-18
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,62 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- Daily reporting creditnote metrics visibility fix is implemented locally on `2026-06-18`:
+  - branch/worktree: `codex/creditnote-carrier-audit` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - reason: the morning `2026-06-18` VEVO/ROY report emails were generated before PR `#177` was merged/deployed, and the main HTML/email report did not yet expose the new creditnote metrics as a visible reporting section
+  - change: `export_orders.py` now builds `advanced_dtc_metrics["creditnotes"]` from the BizniWeb creditnote registry for the report window, converts credited gross/net amounts to EUR, keeps revenue-exclusion audit counts, and exposes retained fulfillment cost on creditnoted/storno orders
+  - change: creditnote carrier rate is now `creditnoted orders / sent orders by the same carrier`, where sent orders include current realized orders plus found creditnoted orders so Storno creditnotes do not disappear from the denominator
+  - change: `dashboard_modern.py` renders a visible `Creditnotes and carrier return rate` section in the main HTML report and embeds the same data under `dashboard.creditnotes`
+  - change: `daily_report_runner.py` appends a `DOBROPISY` block into the plain-text email summary from the dashboard payload
+  - local verification:
+    - `python -m py_compile export_orders.py creditnote_export.py dashboard_modern.py daily_report_runner.py`
+    - `python -m unittest tests.test_creditnote_export tests.test_reporting_calculation_fixes tests.test_dashboard_modern`
+    - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf`
+    - `python -m json.tool projects\roy\settings.json`; `python -m json.tool projects\vevo\settings.json`
+    - `git diff --check` (only existing Git CRLF normalization warning for `creditnote_export.py`)
+  - Next exact step: commit/push this fix, mark PR `#177` ready, merge to `main`, wait for ECR `latest` rebuild, then run production host smoke and real report/email regeneration for VEVO and ROY
+
+- Credit-note credited-amount, revenue-exclusion, and carrier-rate audit extension is implemented locally on `2026-06-17`:
+  - branch/worktree: `codex/creditnote-carrier-audit` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - PDF/email summary now shows positive total credited amount separately from the existing signed accounting summary
+  - exact creditnoted order numbers are checked through BizniWeb `getOrder(order_num)` and the existing realized-revenue decision logic; the PDF/email summary reports how many creditnoted orders still remain in reporting revenue
+  - carrier stats are grouped by normalized provider per e-shop (`Packeta`, `SPS Balikovo`, `Slovenska posta`, `DPD`, etc.), not by individual pickup-point address; `Dobropis rate % = dobropisovane objednavky / realized objednavky v reportovanom obdobi`
+  - CloudWatch metrics added for `CreditnoteExportGrossAmount` and `CreditnoteExportRevenueIncludedOrders`; local smoke can use `--skip-metrics` / `CREDITNOTE_EXPORT_SKIP_METRICS=1` without changing production defaults
+  - local verification:
+    - `python -m py_compile creditnote_export.py monthly_creditnote_export_runner.py`
+    - `python -m unittest tests.test_creditnote_export`
+    - `python -m unittest tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation`
+    - `python -m json.tool projects\roy\settings.json`
+    - `python -m json.tool projects\vevo\settings.json`
+    - `git diff --check` (only Git CRLF normalization warning for `creditnote_export.py`)
+    - PDF text check confirmed sections `Dobropisovana suma spolu`, `Dobropisy podla prepravcu`, `Kontrola vylucenia z reporting revenue`, and rate definition in the generated PDF
+  - live local smoke: `python monthly_creditnote_export_runner.py --reference-date 2026-06-14 --skip-email --skip-metrics --output-tag carrier_audit_smoke3` exited `0`
+    - output PDF: `data/combined_exports/dobropisy_actual_roy_vevo_2026-05_created_carrier_audit_smoke3.pdf` (ignored artifact)
+    - exported dobropisy: total `39`, ROY `14`, VEVO `25`
+    - positive credited gross totals from smoke summary: EUR bucket `1,649.91`, Kc `1,294.00`, RON `94.14`
+    - revenue exclusion audit: checked `39`, excluded from realized revenue `34`, still included `5`, original orders not found `0`, audit errors `0`
+    - top nonzero carrier rates by provider in smoke: ROY FanBox `1/1 = 100.00%`; VEVO Slovenska posta `3/37 = 8.11%`; VEVO DPD `3/42 = 7.14%`; VEVO Packeta `8/114 = 7.02%`; VEVO SPS Balikovo `11/261 = 4.21%`; ROY Packeta `5/129 = 3.88%`; ROY Kurier na adresu `3/87 = 3.45%`; ROY SPS Balikovo `4/122 = 3.28%`; ROY Slovenska posta `1/31 = 3.23%`
+    - BizniWeb logged one transient `price_elements` internal-server warning for VEVO order `2602007112`; the runner completed and summary `audit_errors` stayed empty
+  - Next exact step: commit and push `codex/creditnote-carrier-audit`, open/merge PR, then deploy the monthly credit-note task and record the Fargate hard-gate marker/context after workflow success
+
+- Monthly combined ROY+VEVO credit-note export automation was implemented locally on `2026-06-17`:
+  - scope: one repo-local mini module for accounting credit notes, not GraphQL invoices
+  - source endpoint: BizniWeb admin `/erp/orders/creditnotes/getListJson`
+  - default window: previous calendar month based on `Europe/Bratislava`; when the scheduler runs on the 14th, it exports the previous month
+  - output: one PDF file in `data/combined_exports`; no XLSX workbook and no source JSON sidecar are generated by the monthly credit-note run
+  - email: SES raw email with the PDF attached; default recipient `mil.terem@gmail.com`; sender comes from `CREDITNOTE_EXPORT_EMAIL_FROM` or `REPORT_EMAIL_FROM`
+  - schedule metadata: `projects/roy/settings.json` -> `monthly_creditnote_export`, schedule `monthly-creditnote-export`, cron `cron(0 6 14 * ? *)`, timezone `Europe/Bratislava`, task family `monthly-creditnote-export`, projects `roy,vevo`
+  - deploy workflow: `.github/workflows/deploy-monthly-creditnote-export.yml` registers/updates the dedicated ECS task family and EventBridge Scheduler job, copies ROY/VEVO BizniWeb credentials into prefixed runtime env/secrets, and verifies a host smoke marker at `http://127.0.0.1:8000/marker.json`
+  - local verification:
+    - `python -m py_compile creditnote_export.py monthly_creditnote_export_runner.py`
+    - `python -m json.tool projects\roy\settings.json`
+    - `python -m unittest tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation`
+    - `python monthly_creditnote_export_runner.py --reference-date 2026-06-14 --skip-email --output-tag local_pdf_smoke2` returned `exported_rows=39`, ROY `14`, VEVO `25`, generated a valid `%PDF-` file, and did not create `.xlsx` or `_source.json` artifacts for that tag
+    - parsed `.github/workflows/deploy-monthly-creditnote-export.yml` and `.github/workflows/build-and-push-ecr.yml` with `yaml.safe_load`
+    - `git diff --check`
+  - local generated artifacts: `data/combined_exports/dobropisy_actual_roy_vevo_2026-05_created_local_pdf_smoke2.pdf` (ignored export output)
+  - Next exact step: merge through PR, let `Build and Push ECR` publish an image containing `monthly_creditnote_export_runner.py`, then run `Deploy Monthly Creditnote Export` and record the Fargate hard-gate marker/context after the workflow succeeds
 
 - ROY live dashboard failed-to-fetch mitigation is implemented and deployed on `2026-06-13`:
   - root cause found live: `/api/operations/roy/live` is healthy but can take about 49-51 seconds when cache expires because the ROY operations snapshot scans BiznisWeb orders and stock; dashboard auto-refresh is 90 seconds while cache TTL is 60 seconds, so regular live refreshes can hit the slow path
@@ -4036,3 +4092,66 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - VEVO latest scheduled email/report will use the corrected image on the next `vevo-daily-report-email` run; immediate VEVO untagged email backfill was not sent during this session
 - Next exact step:
   - monitor the next scheduled VEVO/ROY reporting runs for BizniWeb non-JSON pagination errors and, if recurring, implement stricter page-level retry/fail-fast telemetry before changing more reporting logic
+
+### 2026-06-17 (creditnote Storno guard and full-history refresh)
+- Branch: `codex/creditnote-carrier-audit`
+- Change:
+  - added `creditnote_storno_guard.py`, a reusable pre-export guard that scans creditnotes and changes creditnoted orders to `Storno` only when the order still counts in realized reporting revenue
+  - enabled the guard for `roy` and `vevo` project settings with target status `Storno`
+  - wired the guard into `daily_report_runner.py` before export, with metrics, fail-fast behavior on mutation failures, and automatic `--clear-cache` when any order status is changed
+  - added CLI/env controls: `--skip-creditnote-storno-guard`, `--creditnote-storno-dry-run`, `REPORT_SKIP_CREDITNOTE_STORNO_GUARD`, `REPORT_CREDITNOTE_STORNO_DRY_RUN`
+  - kept GitHub smoke/artifact-refresh workflows in `--creditnote-storno-dry-run` mode so verification jobs do not mutate BizniWeb
+  - added `audits/creditnote_storno_20260617.json` with the live order-change audit
+- Live BizniWeb action:
+  - target status resolved to `Storno` with status id `17` for both shops
+  - ROY dry run found `51` eligible creditnoted revenue orders; live run changed all `51`; failures `0`
+  - VEVO dry run found `45` eligible creditnoted revenue orders; live run changed all `45`; failures `0`
+  - post-mutation dry run found `eligible_orders=0` for both ROY and VEVO
+- Backfill:
+  - regenerated ROY local reporting outputs for `2025-09-24..2026-06-16` with `--clear-cache`; export completed with exit code `0` and found `2888` orders
+  - regenerated VEVO local reporting outputs for `2025-05-03..2026-06-16` with `--clear-cache`; export completed with exit code `0`
+  - refreshed local latest files: `data/roy/report_latest.html`, `data/roy/dashboard_payload_latest.json`, `data/vevo/report_latest.html`, `data/vevo/dashboard_payload_latest.json`
+- Verification:
+  - `python -m py_compile creditnote_storno_guard.py creditnote_export.py monthly_creditnote_export_runner.py daily_report_runner.py`
+  - `python -m unittest tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation` (`31` tests OK)
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m json.tool projects\vevo\settings.json`
+  - YAML parse check for modified GitHub workflows
+  - `git diff --check`
+- Known issues:
+  - code is not deployed yet; daily production automation will use the guard only after merge/build/deploy
+  - local regenerated report artifacts were not uploaded to S3 in this step
+- Next exact step:
+  - commit and push this branch, open/merge PR, rebuild the reporting image, then run a production artifact refresh with infra hard-gate verification before UI checks
+
+### 2026-06-17 (creditnote fulfillment cost correction)
+- Branch: `codex/creditnote-carrier-audit`
+- Correction:
+  - creditnoted/storno orders now remove revenue and sold-product COGS, but keep outbound fulfillment cost because the parcel was actually sent
+  - added `creditnote_fulfillment_costs` settings for ROY and VEVO
+  - daily/date/month aggregations now expose `creditnote_fulfillment_orders`, `creditnote_packaging_cost`, `creditnote_shipping_net_cost`, and `creditnote_fulfillment_cost`
+  - `packaging_cost`, `shipping_net_cost`, `total_cost`, `net_profit`, CM1, CM2, and financial metrics now include those retained fulfillment costs
+  - cache schema bumped to `4` and daily cache now stores raw status orders, not only revenue-included orders, so cached future runs can still account for dobropis/storno fulfillment costs
+- Corrected impact of the 2026-06-17 status-change intervention:
+  - ROY: `51` orders, revenue down `6279.26` EUR, net profit down `3469.10` EUR
+  - VEVO: `45` orders, revenue down `628.65` EUR, net profit down `407.40` EUR
+  - Total: `96` orders, revenue down `6907.91` EUR, net profit down `3876.50` EUR
+- Current regenerated reports now retain all creditnote fulfillment costs:
+  - ROY: `105` creditnote fulfillment orders, retained fulfillment cost `26.25` EUR
+  - VEVO: `266` creditnote fulfillment orders, retained fulfillment cost `133.00` EUR
+- Backfill:
+  - regenerated ROY local reporting outputs for `2025-09-24..2026-06-16` with `--clear-cache`; exit code `0`
+  - regenerated VEVO local reporting outputs for `2025-05-03..2026-06-16` with `--clear-cache`; exit code `0`
+- Verification:
+  - `python -m py_compile export_orders.py creditnote_storno_guard.py creditnote_export.py monthly_creditnote_export_runner.py daily_report_runner.py`
+  - `python -m unittest tests.test_reporting_calculation_fixes tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_invoice_generation tests.test_unpaid_order_cancellation` (`49` tests OK)
+  - `python -m json.tool projects\roy\settings.json`
+  - `python -m json.tool projects\vevo\settings.json`
+  - `python -m json.tool data\roy\dashboard_payload_latest.json`
+  - `python -m json.tool data\vevo\dashboard_payload_latest.json`
+  - `git diff --check`
+- Known issues:
+  - code is not deployed yet; production daily reporting needs PR merge/build/deploy and production artifact refresh
+  - regenerated local artifacts are not uploaded to S3 yet
+- Next exact step:
+  - commit and push correction to PR `#177`, then merge/deploy and run production artifact refresh with required infra hard-gate verification before UI checks

@@ -159,6 +159,39 @@ REPORT_FORCE_CLEAR_CACHE=false
 REPORT_FORCE_NO_CACHE=false
 ```
 
+## Monthly Creditnote Export
+
+Use `monthly_creditnote_export_runner.py` to export credit notes from ROY and VEVO into one PDF file and email it through AWS SES.
+
+Default behavior:
+- projects: `roy,vevo`
+- period: previous calendar month based on `REPORT_TIMEZONE`
+- schedule metadata: `projects/roy/settings.json` -> `monthly_creditnote_export`
+- production cadence: every 14th day of the month at 06:00 Europe/Bratislava
+- recipient: `mil.terem@gmail.com`
+
+Local smoke without email:
+
+```bash
+python monthly_creditnote_export_runner.py --reference-date 2026-06-14 --skip-email
+```
+
+Manual fixed window:
+
+```bash
+python monthly_creditnote_export_runner.py --from-date 2026-05-01 --to-date 2026-05-31 --skip-email
+```
+
+Email env vars:
+
+```env
+AWS_REGION=eu-central-1
+REPORT_EMAIL_FROM=reports@example.com
+CREDITNOTE_EXPORT_EMAIL_TO=mil.terem@gmail.com
+```
+
+The deploy workflow is `.github/workflows/deploy-monthly-creditnote-export.yml`. It registers a dedicated ECS task family and EventBridge Scheduler job, then verifies the run on the host through `http://127.0.0.1:8000/marker.json`.
+
 ### Docker
 
 Build and run:

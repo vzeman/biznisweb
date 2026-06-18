@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
+from creditnote_storno_guard import resolve_creditnote_storno_settings, run_creditnote_storno_guard
 from generate_invoices import resolve_invoice_date_window, resolve_invoice_generation_settings, run_invoice_generation
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
@@ -120,6 +121,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Preview invoice candidates without creating invoices.",
     )
     parser.add_argument(
+        "--skip-creditnote-storno-guard",
+        action="store_true",
+        default=env_bool("REPORT_SKIP_CREDITNOTE_STORNO_GUARD", False),
+        help="Skip the pre-export guard that changes creditnoted revenue orders to Storno.",
+    )
+    parser.add_argument(
+        "--creditnote-storno-dry-run",
+        action="store_true",
+        default=env_bool("REPORT_CREDITNOTE_STORNO_DRY_RUN", False),
+        help="Preview creditnoted orders that would be changed to Storno without changing BizniWeb.",
+    )
+    parser.add_argument(
         "--output-tag",
         default=os.getenv("REPORT_OUTPUT_TAG", ""),
         help="Optional output tag for side-by-side test artifacts (e.g. ui_test).",
@@ -206,6 +219,43 @@ def maybe_run_invoice_automation(
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
         "dry_run": summary.dry_run,
     }
+
+
+def maybe_run_creditnote_storno_guard(
+    project: str,
+    reporting_defaults: Dict[str, Any],
+    dry_run: bool = False,
+) -> Optional[Dict[str, Any]]:
+    project_settings = load_project_settings(project)
+    guard_settings = resolve_creditnote_storno_settings(project_settings)
+    if not guard_settings.enabled:
+        print(f"Creditnote storno guard disabled for project={project}")
+        put_metric("CreditnoteStornoGuardDisabled", 1, project, reporting_defaults)
+        return None
+
+    print(f"Running creditnote storno guard for project={project} dry_run={dry_run}")
+    try:
+        summary = run_creditnote_storno_guard(
+            project_name=project,
+            dry_run=dry_run,
+            project_settings=project_settings,
+        )
+    except Exception:
+        put_metric("CreditnoteStornoGuardRunFailed", 1, project, reporting_defaults)
+        raise
+
+    put_metric("CreditnoteStornoGuardCreditnotedOrders", summary.creditnoted_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardEligibleOrders", summary.eligible_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardUpdatedOrders", summary.updated_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardFailedOrders", summary.failed_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardRunSucceeded", 1, project, reporting_defaults)
+
+    print("CREDITNOTE_STORNO_GUARD_SUMMARY " + json.dumps(summary.as_dict(), ensure_ascii=False, sort_keys=True))
+
+    if not dry_run and summary.failed_orders:
+        raise RuntimeError(f"Creditnote storno guard failed for {summary.failed_orders} order(s) in project '{project}'")
+
+    return summary.as_dict()
 
 
 def run_export(
@@ -774,6 +824,71 @@ def _build_roy_inventory_alert_summary(file_paths: Dict[str, Path]) -> str:
     return "\n".join(lines)
 
 
+def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
+    payload = _load_dashboard_payload(file_paths.get("dashboard_payload_json"))
+    dashboard = payload.get("dashboard") if isinstance(payload.get("dashboard"), dict) else payload
+    if not isinstance(dashboard, dict):
+        return ""
+
+    creditnotes = dashboard.get("creditnotes") or {}
+    if not isinstance(creditnotes, dict):
+        return ""
+    summary = creditnotes.get("summary") or {}
+    if not isinstance(summary, dict) or not summary:
+        return ""
+
+    if summary.get("available") is False:
+        error = str(summary.get("error") or "unknown error")
+        return "DOBROPISY\n- Creditnote metriky sa nepodarilo nacitat: " + error
+
+    lines = [
+        "DOBROPISY",
+        (
+            f"- Dobropisovana suma spolu: {_fmt_eur(float(summary.get('credited_gross_eur') or 0.0))} brutto "
+            f"({_fmt_eur(float(summary.get('credited_net_eur') or 0.0))} netto), "
+            f"{int(float(summary.get('creditnotes') or 0))} dobropisov / "
+            f"{int(float(summary.get('creditnoted_orders') or 0))} objednavok."
+        ),
+        (
+            f"- Dobropis rate: {float(summary.get('creditnote_rate_pct') or 0.0):.2f}% z "
+            f"{int(float(summary.get('realized_orders') or 0))} realizovanych objednavok."
+        ),
+        (
+            f"- Kontrola revenue: {int(float(summary.get('revenue_excluded_orders') or 0))} dobropisovanych objednavok je mimo revenue, "
+            f"{int(float(summary.get('revenue_included_orders') or 0))} este ostava v revenue; "
+            f"nenajdene objednavky: {int(float(summary.get('order_not_found') or 0))}."
+        ),
+        (
+            f"- Ponechane fulfillment naklady pri dobropisoch: {_fmt_eur(float(summary.get('fulfillment_cost_eur') or 0.0))} "
+            f"({int(float(summary.get('fulfillment_orders') or 0))} odoslanych balikov)."
+        ),
+    ]
+    carrier_rows = list(creditnotes.get("carrier_rows") or [])
+    nonzero_rows = [
+        row
+        for row in carrier_rows
+        if int(float(row.get("creditnoted_orders") or 0)) > 0
+    ][:5]
+    if nonzero_rows:
+        lines.append("- Prepravcovia s dobropismi podla percenta:")
+        for row in nonzero_rows:
+            carrier = str(row.get("carrier") or "Unknown carrier")
+            rate = row.get("creditnote_rate_pct")
+            rate_text = "N/A" if rate is None else f"{float(rate):.2f}%"
+            index = row.get("rate_index")
+            index_text = "N/A" if index is None else f"{float(index):.2f}x"
+            flag = " OUTLIER" if bool(row.get("outlier")) else ""
+            lines.append(
+                f"  - {carrier}: {rate_text}, {int(float(row.get('creditnoted_orders') or 0))}/"
+                f"{int(float(row.get('realized_orders') or 0))} obj., index {index_text}, "
+                f"suma {_fmt_eur(float(row.get('credited_gross_eur') or 0.0))}{flag}."
+            )
+    else:
+        lines.append("- V reportovanom okne nie su dobropisovane objednavky podla prepravcu.")
+
+    return "\n".join(lines)
+
+
 def build_report_summary(file_paths: Dict[str, Path]) -> str:
     date_csv = file_paths.get("aggregate_by_date_csv")
     if not date_csv or not date_csv.exists():
@@ -984,6 +1099,9 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     inventory_alert_summary = _build_roy_inventory_alert_summary(file_paths)
     if inventory_alert_summary:
         sections.append(inventory_alert_summary)
+    creditnote_summary = _build_creditnote_summary(file_paths)
+    if creditnote_summary:
+        sections.append(creditnote_summary)
     return "\n\n".join(sections)
 
 
@@ -1120,7 +1238,8 @@ def main() -> None:
     os.environ["REPORT_PROJECT"] = project
     os.environ["REPORT_DATA_DIR"] = str(project_data_dir(project).resolve())
     os.environ["REPORT_OUTPUT_TAG"] = output_tag
-    reporting_defaults = resolve_reporting_defaults(project, load_project_settings(project))
+    project_settings = load_project_settings(project)
+    reporting_defaults = resolve_reporting_defaults(project, project_settings)
 
     to_date = normalize_date(resolve_to_date(args.to_date, args.timezone))
     from_date = normalize_date(args.from_date)
@@ -1130,6 +1249,19 @@ def main() -> None:
 
     use_clear_cache = args.clear_cache or env_bool("REPORT_FORCE_CLEAR_CACHE", False)
     use_no_cache = args.no_cache or env_bool("REPORT_FORCE_NO_CACHE", False)
+
+    creditnote_storno_summary = None
+    if args.skip_creditnote_storno_guard:
+        print("Creditnote storno guard skipped by flag.")
+    else:
+        creditnote_storno_summary = maybe_run_creditnote_storno_guard(
+            project=project,
+            reporting_defaults=reporting_defaults,
+            dry_run=args.creditnote_storno_dry_run,
+        )
+        if creditnote_storno_summary and int(creditnote_storno_summary.get("updated_orders") or 0) > 0:
+            use_clear_cache = True
+            print("Creditnote storno guard updated orders; forcing cache clear before export.")
 
     if not args.skip_export:
         run_export(

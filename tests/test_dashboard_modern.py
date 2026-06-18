@@ -110,6 +110,79 @@ class DashboardModernTests(unittest.TestCase):
         self.assertEqual(-3.0, row["gross_profit"])
         self.assertEqual(-10.0, row["gross_margin_pct"])
 
+    def test_creditnote_metrics_are_visible_in_modern_dashboard(self) -> None:
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2026-06-01"),
+                    "total_revenue": 100.0,
+                    "net_profit": 20.0,
+                    "contribution_profit": 25.0,
+                    "unique_orders": 2,
+                    "fb_ads_spend": 0.0,
+                    "google_ads_spend": 0.0,
+                    "total_items": 2,
+                    "product_expense": 60.0,
+                    "total_cost": 80.0,
+                    "pre_ad_contribution_profit": 35.0,
+                }
+            ]
+        )
+        items_agg = pd.DataFrame([{"item_label": "Test", "total_quantity": 2, "total_revenue": 100.0}])
+
+        html = generate_modern_dashboard(
+            date_agg,
+            items_agg,
+            datetime(2026, 6, 1),
+            datetime(2026, 6, 1),
+            advanced_dtc_metrics={
+                "creditnotes": {
+                    "summary": {
+                        "available": True,
+                        "creditnotes": 2,
+                        "creditnoted_orders": 2,
+                        "realized_orders": 10,
+                        "creditnote_rate_pct": 20.0,
+                        "credited_gross_eur": 49.2,
+                        "credited_net_eur": 40.0,
+                        "revenue_excluded_orders": 2,
+                        "revenue_included_orders": 0,
+                        "fulfillment_cost_eur": 1.0,
+                        "fulfillment_orders": 2,
+                        "outlier_carrier_count": 1,
+                    },
+                    "carrier_rows": [
+                        {
+                            "carrier": "Packeta",
+                            "realized_orders": 10,
+                            "creditnoted_orders": 2,
+                            "creditnotes": 2,
+                            "creditnote_rate_pct": 20.0,
+                            "rate_index": 2.0,
+                            "credited_gross_eur": 49.2,
+                            "outlier": True,
+                        }
+                    ],
+                    "currency_rows": [
+                        {
+                            "currency": "EUR",
+                            "creditnotes": 2,
+                            "credited_gross": 49.2,
+                            "credited_gross_eur": 49.2,
+                            "credited_net_eur": 40.0,
+                        }
+                    ],
+                }
+            },
+        )
+
+        self.assertIn("Creditnotes and carrier return rate", html)
+        self.assertIn("creditnote-carrier-row outlier", html)
+        self.assertIn("Packeta", html)
+        payload = extract_embedded_dashboard_payload(html)
+        self.assertEqual(49.2, payload["creditnotes"]["summary"]["credited_gross_eur"])
+        self.assertEqual("Packeta", payload["creditnotes"]["carrier_rows"][0]["carrier"])
+
 
 if __name__ == "__main__":
     unittest.main()

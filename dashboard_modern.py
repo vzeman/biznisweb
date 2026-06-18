@@ -655,6 +655,45 @@ def _daily_profit_row_html(row: Dict[str, Any]) -> str:
     )
 
 
+def _creditnote_carrier_row_html(row: Dict[str, Any]) -> str:
+    outlier = bool(row.get("outlier"))
+    row_class = "creditnote-carrier-row outlier" if outlier else "creditnote-carrier-row"
+    rate_value = row.get("creditnote_rate_pct")
+    rate_index = row.get("rate_index")
+    badge = (
+        '<span class="daily-profit-badge negative"><span class="lang-en">Outlier</span>'
+        '<span class="lang-sk hidden">Odchylka</span></span>'
+        if outlier
+        else '<span class="muted-note">-</span>'
+    )
+    rate_html = "N/A" if rate_value is None else _format_library_tile_value(rate_value, kind="percent", decimals=2)
+    index_html = "N/A" if rate_index is None else _format_library_tile_value(rate_index, kind="multiple", decimals=2)
+    return (
+        f'<tr class="{row_class}">'
+        f'<td>{escape(str(row.get("carrier") or "Unknown carrier"))}</td>'
+        f'<td class="number">{int(round(_num(row.get("realized_orders"))))}</td>'
+        f'<td class="number">{int(round(_num(row.get("creditnoted_orders"))))}</td>'
+        f'<td class="number">{int(round(_num(row.get("creditnotes"))))}</td>'
+        f'<td class="number">{rate_html}</td>'
+        f'<td class="number">{index_html}</td>'
+        f'<td class="number">{_format_library_tile_value(row.get("credited_gross_eur"), kind="currency")}</td>'
+        f'<td>{badge}</td>'
+        '</tr>'
+    )
+
+
+def _creditnote_currency_row_html(row: Dict[str, Any]) -> str:
+    return (
+        '<tr class="creditnote-currency-row">'
+        f'<td>{escape(str(row.get("currency") or "-"))}</td>'
+        f'<td class="number">{int(round(_num(row.get("creditnotes"))))}</td>'
+        f'<td class="number">{_format_library_tile_value(row.get("credited_gross"), kind="number")}</td>'
+        f'<td class="number">{_format_library_tile_value(row.get("credited_gross_eur"), kind="currency")}</td>'
+        f'<td class="number">{_format_library_tile_value(row.get("credited_net_eur"), kind="currency")}</td>'
+        '</tr>'
+    )
+
+
 def _profit_status_class(value: Any) -> str:
     numeric = _num(value)
     if numeric > 0:
@@ -1880,6 +1919,40 @@ def generate_modern_dashboard(
     avg_daily_profit = round(total_profit / active_days, 2)
     avg_fb_cost_per_order = round((total_fb_ads / total_orders) if total_orders > 0 else 0.0, 2)
     refund_summary = _resolve_refund_summary(financial_metrics, refunds_analysis)
+    creditnote_metrics = (advanced_dtc_metrics or {}).get("creditnotes") or {}
+    creditnote_summary = creditnote_metrics.get("summary") if isinstance(creditnote_metrics.get("summary"), dict) else {}
+    creditnote_available = bool(creditnote_summary.get("available", bool(creditnote_summary)))
+    creditnote_carrier_rows = list(creditnote_metrics.get("carrier_rows") or [])
+    creditnote_currency_rows = list(creditnote_metrics.get("currency_rows") or [])
+    creditnote_error = str(creditnote_summary.get("error") or "")
+    creditnote_carrier_rows_html = "".join(_creditnote_carrier_row_html(row) for row in creditnote_carrier_rows[:12])
+    if not creditnote_carrier_rows_html:
+        creditnote_carrier_rows_html = (
+            '<tr class="creditnote-carrier-row"><td colspan="8" class="muted-note">'
+            '<span class="lang-en">No creditnote carrier rows in this window.</span>'
+            '<span class="lang-sk hidden">V tomto okne nie su ziadne dobropisove riadky podla prepravcu.</span>'
+            '</td></tr>'
+        )
+    creditnote_currency_rows_html = "".join(_creditnote_currency_row_html(row) for row in creditnote_currency_rows[:8])
+    if not creditnote_currency_rows_html:
+        creditnote_currency_rows_html = (
+            '<tr class="creditnote-currency-row"><td colspan="5" class="muted-note">'
+            '<span class="lang-en">No creditnote currency rows in this window.</span>'
+            '<span class="lang-sk hidden">V tomto okne nie su ziadne dobropisove riadky podla meny.</span>'
+            '</td></tr>'
+        )
+    creditnote_note_html = (
+        '<p class="muted-note"><span class="lang-en">Creditnote source is unavailable for this run. '
+        + escape(creditnote_error)
+        + '</span><span class="lang-sk hidden">Zdroj dobropisov nie je dostupny pre tento beh. '
+        + escape(creditnote_error)
+        + '</span></p>'
+        if not creditnote_available and creditnote_error
+        else (
+            '<p class="muted-note"><span class="lang-en">Carrier rate is creditnoted orders divided by realized orders shipped by the same carrier in the reporting window.</span>'
+            '<span class="lang-sk hidden">Miera prepravcu je pocet dobropisovanych objednavok deleny realizovanymi objednavkami odoslanymi rovnakym prepravcom v reportovanom okne.</span></p>'
+        )
+    )
     google_source_available = _source_has_metric_coverage(source_health, "google_ads")
     google_cpo_value = _maybe_num((cost_per_order or {}).get("google_cpo")) if google_source_available else None
     ads_correlation_source = ((ads_effectiveness or {}).get("correlations") or {})
@@ -2041,6 +2114,12 @@ def generate_modern_dashboard(
         "weather": weather_payload,
         "weather_bucket": weather_bucket_payload,
         "refunds": refunds_payload,
+        "creditnotes": {
+            "summary": {k: _json_safe(v) for k, v in creditnote_summary.items()},
+            "carrier_rows": [_json_safe(row) for row in creditnote_carrier_rows],
+            "currency_rows": [_json_safe(row) for row in creditnote_currency_rows],
+            "revenue_audit_rows": [_json_safe(row) for row in list(creditnote_metrics.get("revenue_audit_rows") or [])[:50]],
+        },
         "customer_top_rows": customer_top_rows,
         "customer_concentration_summary": {
             "top_10_pct_revenue_share": _num((customer_concentration or {}).get("top_10_pct_revenue_share")),
@@ -3219,6 +3298,7 @@ def generate_modern_dashboard(
         .daily-profit-row.positive {{ background: rgba(31,157,102,.045); }}
         .daily-profit-row.negative {{ background: rgba(207,80,96,.065); }}
         .daily-profit-row.neutral {{ background: rgba(127,119,111,.035); }}
+        .creditnote-carrier-row.outlier {{ background: rgba(207,80,96,.065); }}
         .daily-profit-badge {{ display:inline-flex; align-items:center; padding: 6px 10px; border-radius: 999px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }}
         .daily-profit-badge.positive {{ color:#11633f; background: rgba(31,157,102,.13); }}
         .daily-profit-badge.negative {{ color:#a22d40; background: rgba(207,80,96,.15); }}
@@ -3426,6 +3506,37 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small>CM3 / order</small><strong>{_format_mini_value_html(cm3_profit_per_order, kind="currency")}</strong><span class="delta neutral"><span class="lang-en">after fixed overhead</span><span class="lang-sk hidden">po fixnom overheade</span></span></div>
                         </div>
                         <p class="muted-note">{escape(cm_taxonomy_note) if cm_taxonomy_note else '<span class="lang-en">CM1 currently excludes payment fees because the reporting model does not ingest them separately.</span><span class="lang-sk hidden">CM1 zatial vylucuje payment fees, pretoze reporting ich zatial nenasava samostatne.</span>'}</p>
+                    </div>
+                    <div class="panel table-card" id="creditnotes" style="margin-bottom:18px;">
+                        <div class="card-head">
+                            <div>
+                                <h3><span class="lang-en">Creditnotes and carrier return rate</span><span class="lang-sk hidden">Dobropisy a miera podla prepravcu</span></h3>
+                                <p><span class="lang-en">Credited amount and carrier diagnostics use the real BizniWeb creditnote registry, not final order status alone.</span><span class="lang-sk hidden">Dobropisovana suma a diagnostika prepravcov pouzivaju realny BizniWeb register dobropisov, nie iba finalny stav objednavky.</span></p>
+                            </div>
+                        </div>
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Credited gross</span><span class="lang-sk hidden">Dobropisovane brutto</span></small><strong>{_format_mini_value_html(creditnote_summary.get("credited_gross_eur"), kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Creditnotes</span><span class="lang-sk hidden">Pocet dobropisov</span></small><strong>{int(round(_num(creditnote_summary.get("creditnotes"))))}</strong><span class="delta neutral">{int(round(_num(creditnote_summary.get("creditnoted_orders"))))} orders</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Creditnote rate</span><span class="lang-sk hidden">Dobropis rate</span></small><strong>{_format_mini_value_html(creditnote_summary.get("creditnote_rate_pct"), kind="percent", decimals=2)}</strong><span class="delta neutral">{int(round(_num(creditnote_summary.get("realized_orders"))))} realized</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Revenue audit</span><span class="lang-sk hidden">Kontrola revenue</span></small><strong>{int(round(_num(creditnote_summary.get("revenue_excluded_orders"))))} / {int(round(_num(creditnote_summary.get("revenue_included_orders"))))}</strong><span class="delta neutral">excluded / included</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Retained fulfillment cost</span><span class="lang-sk hidden">Ponechany fulfillment naklad</span></small><strong>{_format_mini_value_html(creditnote_summary.get("fulfillment_cost_eur"), kind="currency")}</strong><span class="delta neutral">{int(round(_num(creditnote_summary.get("fulfillment_orders"))))} orders</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Carrier outliers</span><span class="lang-sk hidden">Odchylky prepravcov</span></small><strong>{int(round(_num(creditnote_summary.get("outlier_carrier_count"))))}</strong><span class="delta neutral">{_format_mini_value_html(creditnote_summary.get("credited_net_eur"), kind="currency")} net</span></div>
+                        </div>
+                        {creditnote_note_html}
+                        <div class="grid-2" style="margin-top:14px;">
+                            <div>
+                                <table>
+                                    <thead><tr><th><span class="lang-en">Carrier</span><span class="lang-sk hidden">Prepravca</span></th><th class="number"><span class="lang-en">Realized</span><span class="lang-sk hidden">Realizovane</span></th><th class="number"><span class="lang-en">Credited orders</span><span class="lang-sk hidden">Dobropisovane obj.</span></th><th class="number"><span class="lang-en">Creditnotes</span><span class="lang-sk hidden">Dobropisy</span></th><th class="number"><span class="lang-en">Rate</span><span class="lang-sk hidden">Miera</span></th><th class="number"><span class="lang-en">Index</span><span class="lang-sk hidden">Index</span></th><th class="number"><span class="lang-en">Gross EUR</span><span class="lang-sk hidden">Brutto EUR</span></th><th><span class="lang-en">Flag</span><span class="lang-sk hidden">Flag</span></th></tr></thead>
+                                    <tbody>{creditnote_carrier_rows_html}</tbody>
+                                </table>
+                            </div>
+                            <div>
+                                <table>
+                                    <thead><tr><th><span class="lang-en">Currency</span><span class="lang-sk hidden">Mena</span></th><th class="number"><span class="lang-en">Creditnotes</span><span class="lang-sk hidden">Dobropisy</span></th><th class="number"><span class="lang-en">Gross original</span><span class="lang-sk hidden">Brutto original</span></th><th class="number"><span class="lang-en">Gross EUR</span><span class="lang-sk hidden">Brutto EUR</span></th><th class="number"><span class="lang-en">Net EUR</span><span class="lang-sk hidden">Netto EUR</span></th></tr></thead>
+                                    <tbody>{creditnote_currency_rows_html}</tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                     <div class="panel chart-card" style="margin-bottom:18px;">
                         <div class="mini-grid">

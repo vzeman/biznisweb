@@ -1,0 +1,81 @@
+{
+  "date": "2026-06-17",
+  "branch": "codex/creditnote-carrier-audit",
+  "reason": "Creditnoted/storno orders must remove revenue and sold-product COGS, but keep outbound packaging and shipping cost because the parcel was shipped.",
+  "reporting_change": {
+    "revenue": "removed from creditnoted/storno orders",
+    "product_expense": "removed because returned product is not treated as sold",
+    "packaging_cost": "retained as creditnote fulfillment cost",
+    "shipping_cost": "retained as creditnote outbound fulfillment cost",
+    "cache_schema": 4
+  },
+  "settings": {
+    "roy": {
+      "packaging_cost_per_order": 0.05,
+      "normal_shipping_net_per_order": -0.2,
+      "creditnote_shipping_cost_per_order": 0.2
+    },
+    "vevo": {
+      "packaging_cost_per_order": 0.3,
+      "normal_shipping_net_per_order": 0.2,
+      "creditnote_shipping_cost_per_order": 0.2
+    }
+  },
+  "status_change_impact_corrected": {
+    "roy": {
+      "changed_orders": 51,
+      "removed_revenue_net": 6279.26,
+      "removed_product_expense": 2830.56,
+      "removed_product_profit": 3448.7,
+      "creditnote_packaging_retained": 2.55,
+      "creditnote_outbound_shipping_retained": 10.2,
+      "profit_decrease": 3469.1,
+      "after_report_revenue": 211695.16,
+      "after_report_net_profit": 30507.76,
+      "before_estimated_revenue": 217974.42,
+      "before_estimated_net_profit": 33976.86
+    },
+    "vevo": {
+      "changed_orders": 45,
+      "removed_revenue_net": 628.65,
+      "removed_product_expense": 221.25,
+      "removed_product_profit": 407.4,
+      "creditnote_packaging_retained": 13.5,
+      "creditnote_outbound_shipping_retained": 9.0,
+      "profit_decrease": 407.4,
+      "after_report_revenue": 113823.39,
+      "after_report_net_profit": 17355.11,
+      "before_estimated_revenue": 114452.04,
+      "before_estimated_net_profit": 17762.51
+    },
+    "total": {
+      "changed_orders": 96,
+      "removed_revenue_net": 6907.91,
+      "profit_decrease": 3876.5
+    }
+  },
+  "current_report_creditnote_fulfillment_costs": {
+    "roy": {
+      "creditnote_fulfillment_orders": 105,
+      "creditnote_fulfillment_cost": 26.25
+    },
+    "vevo": {
+      "creditnote_fulfillment_orders": 266,
+      "creditnote_fulfillment_cost": 133.0
+    }
+  },
+  "regenerated_reports": {
+    "roy": {
+      "from_date": "2025-09-24",
+      "to_date": "2026-06-16",
+      "clear_cache": true,
+      "exit_code": 0
+    },
+    "vevo": {
+      "from_date": "2025-05-03",
+      "to_date": "2026-06-16",
+      "clear_cache": true,
+      "exit_code": 0
+    }
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "date": "2026-06-17",
+  "branch": "codex/creditnote-carrier-audit",
+  "action": "Changed creditnoted orders that still counted in realized revenue to Storno.",
+  "target_status": {
+    "name": "Storno",
+    "id": 17
+  },
+  "projects": {
+    "roy": {
+      "dry_run_before": {
+        "creditnoted_orders": 107,
+        "eligible_orders": 51,
+        "skipped_by_reason": {
+          "already_final_status": 10,
+          "already_target_status": 39,
+          "not_in_realized_revenue": 7
+        }
+      },
+      "mutation": {
+        "updated_orders": 51,
+        "failed_orders": 0,
+        "updated_order_nums": [
+          "2577000182",
+          "2577000254",
+          "2577000373",
+          "2577000432",
+          "2577000474",
+          "2577000501",
+          "2577000532",
+          "2577000538",
+          "2577000558",
+          "2577000647",
+          "2577000679",
+          "2577000719",
+          "2577000796",
+          "2577000883",
+          "2577001023",
+          "2578000041",
+          "2677001064",
+          "2677001072",
+          "2677001090",
+          "2677001116",
+          "2677001166",
+          "2677001205",
+          "2677001234",
+          "2677001244",
+          "2677001451",
+          "2677001457",
+          "2677001462",
+          "2677001513",
+          "2677001543",
+          "2677001598",
+          "2677001752",
+          "2677001798",
+          "2677001901",
+          "2677001951",
+          "2677001972",
+          "2677002002",
+          "2677002111",
+          "2677002116",
+          "2677002178",
+          "2677002262",
+          "2677002472",
+          "2677002484",
+          "2677002694",
+          "2677002696",
+          "2677002738",
+          "2677002796",
+          "2677002815",
+          "2678000075",
+          "2678000077",
+          "2678000091",
+          "2678000099"
+        ]
+      },
+      "dry_run_after": {
+        "eligible_orders": 0,
+        "skipped_by_reason": {
+          "already_final_status": 10,
+          "already_target_status": 90,
+          "not_in_realized_revenue": 7
+        }
+      },
+      "regenerated_report": {
+        "from_date": "2025-09-24",
+        "to_date": "2026-06-16",
+        "clear_cache": true,
+        "orders_found": 2888,
+        "exit_code": 0,
+        "latest_files": [
+          "data/roy/report_latest.html",
+          "data/roy/dashboard_payload_latest.json"
+        ]
+      }
+    },
+    "vevo": {
+      "dry_run_before": {
+        "creditnoted_orders": 273,
+        "eligible_orders": 45,
+        "skipped_by_reason": {
+          "already_final_status": 9,
+          "already_target_status": 218,
+          "not_in_realized_revenue": 1
+        }
+      },
+      "mutation": {
+        "updated_orders": 45,
+        "failed_orders": 0,
+        "updated_order_nums": [
+          "2502000017",
+          "2502000019",
+          "2502000038",
+          "2502000155",
+          "2502000180",
+          "2502000205",
+          "2502000216",
+          "2502000233",
+          "2502000240",
+          "2502000265",
+          "2502000268",
+          "2502000281",
+          "2502000293",
+          "2502000339",
+          "2502000368",
+          "2502000375",
+          "2502000383",
+          "2502000406",
+          "2502000430",
+          "2502000436",
+          "2502000442",
+          "2502000445",
+          "2502000454",
+          "2502000490",
+          "2502000562",
+          "2502000590",
+          "2502000613",
+          "2502000628",
+          "2502000678",
+          "2502000679",
+          "2502000893",
+          "2502002643",
+          "2502003489",
+          "2503000078",
+          "2602005487",
+          "2602005591",
+          "2602005666",
+          "2602005903",
+          "2602006308",
+          "2602006466",
+          "2602006564",
+          "2602006572",
+          "2602006587",
+          "2602006625",
+          "2602007562"
+        ]
+      },
+      "dry_run_after": {
+        "eligible_orders": 0,
+        "skipped_by_reason": {
+          "already_final_status": 9,
+          "already_target_status": 263,
+          "not_in_realized_revenue": 1
+        }
+      },
+      "regenerated_report": {
+        "from_date": "2025-05-03",
+        "to_date": "2026-06-16",
+        "clear_cache": true,
+        "orders_found": null,
+        "exit_code": 0,
+        "latest_files": [
+          "data/vevo/report_latest.html",
+          "data/vevo/dashboard_payload_latest.json"
+        ]
+      }
+    }
+  },
+  "notes": [
+    "Post-mutation dry run found zero remaining eligible orders for both shops.",
+    "Local report exports were regenerated with cleared cache. S3/live dashboard artifact refresh still requires merge/deploy or a dedicated production refresh run."
+  ]
+}

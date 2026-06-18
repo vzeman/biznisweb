@@ -83,6 +83,39 @@
     "timezone": "Europe/Bratislava",
     "task_family": "roy-invoice-daily"
   },
+  "monthly_creditnote_export": {
+    "enabled": true,
+    "schedule_name": "monthly-creditnote-export",
+    "schedule_expression": "cron(0 6 14 * ? *)",
+    "timezone": "Europe/Bratislava",
+    "task_family": "monthly-creditnote-export",
+    "projects": [
+      "roy",
+      "vevo"
+    ],
+    "email_to": "mil.terem@gmail.com"
+  },
+  "creditnote_storno_guard": {
+    "enabled": true,
+    "target_status_name": "Storno",
+    "target_status_id": null,
+    "lang_code": "SK",
+    "only_if_in_realized_revenue": true,
+    "final_statuses": [
+      "Storno",
+      "Vratene",
+      "Vrátené",
+      "Dobropis",
+      "Neprevzate - storno",
+      "Neprevzaté - storno",
+      "Stripe - refunded",
+      "Stripe - cancelled"
+    ]
+  },
+  "creditnote_fulfillment_costs": {
+    "enabled": true,
+    "shipping_cost_per_order": 0.2
+  },
   "realized_revenue": {
     "paid_statuses": [
       "Platba online - zaplatené"
