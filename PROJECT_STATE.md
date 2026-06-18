@@ -71,6 +71,15 @@ Bootstrap entrypoints:
   - local verification: workflow YAML parse check and `git diff --check`
   - Next exact step: commit/push this workflow hardening, merge it through PR, then re-dispatch production reporting with `send_email=true` and record `LOCALHOST_MARKER_OK`, SES message IDs, and UI smoke for VEVO and ROY
 
+- Production email rerun marker/tag correction is in progress on `2026-06-18`:
+  - branch/worktree: `codex/report-email-untagged-rerun` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - rerun `27735689741` for `project=all`, `marker=creditnote-email-20260618-rerun`, `send_email=true` started VEVO task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/69ff9f779be0455aa562e17e4d946a98`
+  - VEVO hard-gate context: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.28.112`, service `vevo-daily-report-email`, CloudWatch stream `/ecs/vevo-reporting-daily:ecs/reporting/69ff9f779be0455aa562e17e4d946a98`
+  - VEVO report generation completed and SES sent `MessageId=0107019ed8eea57d-883dd5e4-7574-44f9-afbe-927d58b6cb9e-000000`
+  - the run still failed before localhost marker/UI smoke because `REPORT_OUTPUT_TAG` was present during `send_email=true`; `daily_report_runner.py` wrote tagged latest files like `report_latest__vevo-creditnote-email-20260618-rerun.html`, while validation correctly expected untagged `report_latest.html`
+  - change in this branch: separate `REPORT_MARKER` from `REPORT_OUTPUT_TAG`, unset `REPORT_OUTPUT_TAG` before real email generation, and keep marker metadata available for localhost validation
+  - Next exact step: validate/merge this workflow fix, then run ROY `send_email=true`; avoid re-sending VEVO unless an untagged production latest refresh is explicitly needed
+
 - Production reporting smoke email dispatch mode is implemented locally on `2026-06-18`:
   - branch/worktree: `codex/report-email-dispatch` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - workflow `.github/workflows/production-reporting-smoke.yml` keeps the default `send_email=false` dry-run behavior
