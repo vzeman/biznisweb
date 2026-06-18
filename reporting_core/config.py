@@ -69,6 +69,12 @@ def load_project_settings(project_name: str) -> Dict[str, Any]:
     return _load_json_file(settings_path)
 
 
+def resolve_project_env_value(project_name: str, key: str) -> str:
+    """Resolve a project-prefixed env value with the legacy unprefixed value as fallback."""
+    prefix = project_name.upper().replace("-", "_")
+    return os.getenv(f"{prefix}_{key}", "").strip() or os.getenv(key, "").strip()
+
+
 def build_project_context(project_name: str, settings: Optional[Dict[str, Any]] = None) -> ReportingProjectContext:
     loaded_settings = settings or load_project_settings(project_name)
     return ReportingProjectContext(
@@ -92,7 +98,9 @@ def get_project_display_name(project_name: str, settings: Optional[Dict[str, Any
 
 def resolve_biznisweb_api_url(project_name: str, settings: Optional[Dict[str, Any]] = None) -> str:
     settings = settings or {}
-    api_url = os.getenv("BIZNISWEB_API_URL", "").strip() or str(settings.get("biznisweb_api_url", "")).strip()
+    api_url = resolve_project_env_value(project_name, "BIZNISWEB_API_URL") or str(
+        settings.get("biznisweb_api_url", "")
+    ).strip()
     if not api_url:
         raise ValueError(
             f"BIZNISWEB_API_URL not found for project '{project_name}'. "

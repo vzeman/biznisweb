@@ -15,6 +15,7 @@ from .config import (
     project_data_dir,
     project_dir,
     resolve_biznisweb_api_url,
+    resolve_project_env_value,
     resolve_reporting_defaults,
 )
 from .contracts import ReportingArtifactSet, apply_output_tag, build_artifact_set, sanitize_output_tag
@@ -43,6 +44,7 @@ __all__ = [
     "project_data_dir",
     "project_dir",
     "resolve_biznisweb_api_url",
+    "resolve_project_env_value",
     "resolve_reporting_defaults",
     "sanitize_output_tag",
 ]

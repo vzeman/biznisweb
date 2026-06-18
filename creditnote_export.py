@@ -26,6 +26,7 @@ from reporting_core import (
     project_data_dir,
     project_dir,
     resolve_biznisweb_api_url,
+    resolve_project_env_value,
     sanitize_output_tag,
 )
 
@@ -809,7 +810,7 @@ def fetch_project_reporting_order_context(
         load_project_env(project, logger=_SilentLogger())
         settings = load_project_settings(project)
         api_url = resolve_biznisweb_api_url(project, settings)
-        api_token = os.getenv("BIZNISWEB_API_TOKEN", "").strip()
+        api_token = resolve_project_env_value(project, "BIZNISWEB_API_TOKEN")
         if not api_token:
             raise RuntimeError(f"BIZNISWEB_API_TOKEN missing for project '{project}'")
 

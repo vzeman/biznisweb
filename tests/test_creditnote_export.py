@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from datetime import date
@@ -19,6 +20,8 @@ from monthly_creditnote_export_runner import (
     resolve_creditnote_export_window,
     run_creditnote_export_runner,
 )
+from reporting_core import resolve_biznisweb_api_url, resolve_project_env_value
+from reporting_core.runtime import load_project_runtime
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -54,6 +57,33 @@ class CreditnoteExportTests(unittest.TestCase):
                 to_date="2026-05-31",
             ),
         )
+
+    def test_project_prefixed_biznisweb_env_wins_for_monthly_multi_project_runtime(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "BIZNISWEB_API_URL": "https://legacy.example.test/api/graphql",
+                "BIZNISWEB_API_TOKEN": "legacy-token",
+                "ROY_BIZNISWEB_API_URL": "https://roy.example.test/api/graphql",
+                "ROY_BIZNISWEB_API_TOKEN": "roy-token",
+            },
+            clear=False,
+        ):
+            self.assertEqual("roy-token", resolve_project_env_value("roy", "BIZNISWEB_API_TOKEN"))
+            self.assertEqual(
+                "https://roy.example.test/api/graphql",
+                resolve_biznisweb_api_url("roy", {"biznisweb_api_url": "https://settings.example.test/api/graphql"}),
+            )
+            runtime = load_project_runtime(
+                "roy",
+                settings={},
+                default_packaging_cost_per_order=0.3,
+                default_shipping_subsidy_per_order=0.2,
+                default_fixed_monthly_cost=0,
+                default_fixed_daily_cost=0,
+            )
+            self.assertEqual("https://roy.example.test/api/graphql", runtime.api_url)
+            self.assertEqual("roy-token", runtime.api_token)
 
     def test_build_creditnote_rows_filters_created_window_and_signs_amounts(self) -> None:
         rows = build_creditnote_export_rows(

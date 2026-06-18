@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .config import project_dir, resolve_biznisweb_api_url, resolve_reporting_defaults
+from .config import project_dir, resolve_biznisweb_api_url, resolve_project_env_value, resolve_reporting_defaults
 
 
 @dataclass(frozen=True)
@@ -135,7 +135,7 @@ def load_project_runtime(
     return ProjectRuntime(
         project_name=project_name,
         api_url=resolve_biznisweb_api_url(project_name, settings),
-        api_token=os.getenv("BIZNISWEB_API_TOKEN", ""),
+        api_token=resolve_project_env_value(project_name, "BIZNISWEB_API_TOKEN"),
         item_price_values_are_net=bool(settings.get("item_price_values_are_net", False)),
         expense_match_mode=str(settings.get("expense_match_mode", "identifier_first")).strip().lower() or "identifier_first",
         product_name_aliases=dict(product_name_aliases),
