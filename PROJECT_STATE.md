@@ -61,6 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Creditnote shipped-before-cancel reporting correction is implemented locally on `2026-06-18`:
+  - branch/worktree: `codex/shipped-before-cancel-creditnotes` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - change: creditnoted/canceled orders count as sent only when the current status is `Odoslaná`/`Odoslana` or the creditnote storno guard persisted an audit showing the previous status before cancellation was shipped
+  - change: carrier dobropis rate now uses sent orders as denominator and sent creditnoted orders as numerator; total credited EUR and creditnote document counts remain visible
+  - change: retained creditnote fulfillment cost is kept only for creditnoted orders that were demonstrably sent before being canceled/refunded
+  - change: `creditnote_storno_guard.py` now records previous order status before changing eligible creditnoted revenue orders to `Storno`, and persists the audit locally plus S3 when `REPORT_S3_BUCKET` is configured
+  - local verification:
+    - `python -m py_compile export_orders.py creditnote_export.py creditnote_storno_guard.py daily_report_runner.py dashboard_modern.py`
+    - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_invoice_generation`
+    - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf`
+    - `python -m json.tool projects\roy\settings.json`; `python -m json.tool projects\vevo\settings.json`; `git diff --check`
+  - Next exact step: commit/push this branch, merge through PR, wait for ECR rebuild, then dispatch `Production Reporting Smoke` with `project=all`, `send_email=true`, `update_task_image=true`, and record Fargate hard-gate context plus localhost marker/UI smoke before considering tomorrow morning's email protected
+
 - Production report email regeneration follow-up is in progress on `2026-06-18`:
   - branch/worktree: `codex/report-smoke-logs` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - PR `#177` and PR `#178` are merged to `main`; ECR rebuild run `27734814979` succeeded for `vevo-reporting:latest` with digest `sha256:10202cb947ab0ab50ec2be9fe6331c8cc48e5204df60ebdaffe271369dd03bbd`

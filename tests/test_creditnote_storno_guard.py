@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from creditnote_storno_guard import resolve_creditnote_storno_settings, run_creditnote_storno_guard
 
@@ -106,6 +107,8 @@ class CreditnoteStornoGuardTests(unittest.TestCase):
         self.assertEqual(3, summary.creditnoted_orders)
         self.assertEqual(1, summary.eligible_orders)
         self.assertEqual(["R-1"], summary.eligible_order_nums)
+        self.assertEqual("Odoslana", summary.eligible_order_statuses[0]["previous_status"])
+        self.assertTrue(summary.eligible_order_statuses[0]["sent_before_cancel"])
         self.assertEqual({"already_final_status": 1, "already_target_status": 1}, summary.skipped_by_reason)
         self.assertEqual([], exporter.client.mutations)
 
@@ -118,22 +121,32 @@ class CreditnoteStornoGuardTests(unittest.TestCase):
             ]
         )
 
-        summary = run_creditnote_storno_guard(
-            "roy",
-            date_from="2026-05-01",
-            date_to="2026-05-31",
-            dry_run=False,
-            exporter=exporter,
-            raw_creditnote_rows=[
-                creditnote_row("D-1", "R-1"),
-                creditnote_row("D-2", "R-2"),
-                creditnote_row("D-3", "R-3"),
-            ],
-            project_settings=self.settings(),
-        )
+        saved_audits = []
+        with patch("creditnote_storno_guard.load_creditnote_status_change_audit", return_value={"project": "roy", "orders": []}), patch(
+            "creditnote_storno_guard.save_creditnote_status_change_audit",
+            side_effect=lambda project, audit, settings: saved_audits.append(audit) or Path("audit.json"),
+        ):
+            summary = run_creditnote_storno_guard(
+                "roy",
+                date_from="2026-05-01",
+                date_to="2026-05-31",
+                dry_run=False,
+                exporter=exporter,
+                raw_creditnote_rows=[
+                    creditnote_row("D-1", "R-1"),
+                    creditnote_row("D-2", "R-2"),
+                    creditnote_row("D-3", "R-3"),
+                ],
+                project_settings=self.settings(),
+            )
 
         self.assertEqual(1, summary.updated_orders)
         self.assertEqual(["R-1"], summary.updated_order_nums)
+        self.assertEqual("Odoslana", summary.updated_order_statuses[0]["previous_status"])
+        self.assertTrue(summary.updated_order_statuses[0]["sent_before_cancel"])
+        self.assertEqual("audit.json", summary.status_audit_path)
+        self.assertEqual("R-1", saved_audits[-1]["orders"][0]["order_num"])
+        self.assertEqual("Odoslana", saved_audits[-1]["orders"][0]["previous_status"])
         self.assertEqual([("R-1", 99)], exporter.client.mutations)
 
     def test_project_settings_enable_guard_for_both_shops(self) -> None:

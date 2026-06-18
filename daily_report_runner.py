@@ -847,11 +847,12 @@ def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
             f"- Dobropisovana suma spolu: {_fmt_eur(float(summary.get('credited_gross_eur') or 0.0))} brutto "
             f"({_fmt_eur(float(summary.get('credited_net_eur') or 0.0))} netto), "
             f"{int(float(summary.get('creditnotes') or 0))} dobropisov / "
-            f"{int(float(summary.get('creditnoted_orders') or 0))} objednavok."
+            f"{int(float(summary.get('creditnoted_orders') or 0))} odoslanych dobropisovanych objednavok "
+            f"(celkovo {int(float(summary.get('all_creditnoted_orders') or summary.get('creditnoted_orders') or 0))})."
         ),
         (
             f"- Dobropis rate: {float(summary.get('creditnote_rate_pct') or 0.0):.2f}% z "
-            f"{int(float(summary.get('realized_orders') or 0))} realizovanych objednavok."
+            f"{int(float(summary.get('realized_orders') or 0))} odoslanych objednavok."
         ),
         (
             f"- Kontrola revenue: {int(float(summary.get('revenue_excluded_orders') or 0))} dobropisovanych objednavok je mimo revenue, "
@@ -880,7 +881,7 @@ def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
             flag = " OUTLIER" if bool(row.get("outlier")) else ""
             lines.append(
                 f"  - {carrier}: {rate_text}, {int(float(row.get('creditnoted_orders') or 0))}/"
-                f"{int(float(row.get('realized_orders') or 0))} obj., index {index_text}, "
+                f"{int(float(row.get('realized_orders') or 0))} odosl. obj., index {index_text}, "
                 f"suma {_fmt_eur(float(row.get('credited_gross_eur') or 0.0))}{flag}."
             )
     else:
