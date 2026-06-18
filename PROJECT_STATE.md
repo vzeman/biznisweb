@@ -61,6 +61,21 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Monthly creditnote export runtime env isolation fix is in progress on `2026-06-18`:
+  - branch/worktree: `codex/monthly-creditnote-runtime-env` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - context: PR `#186` merged as `8685eea41de88516c462c9261695a5ea9656e679` and deploy run `27749819179` proved that GitHub Secrets were present (`credential_override_count=4`) and task definition `monthly-creditnote-export:3` was registered, but the smoke task still failed ROY admin login with `401 Unauthorized`
+  - hard-gate context from failed follow-up run: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.3.234`, service `monthly-creditnote-export`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/monthly-creditnote-export:3`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/91f56b39195d4c6dafe608ac072767c3`, image digest `sha256:0bcb914911f4726949032991bff95a390e8bae1cd7984f91e5604e1b55fe7699`, marker path `http://127.0.0.1:8000/marker.json`
+  - local finding: clean-process admin login using `projects/roy/.env` and `projects/vevo/.env` succeeds for both projects, so the local credential values are valid; the monthly runtime must avoid image/project `.env` overriding ECS runtime credentials
+  - change: monthly deploy workflow now sets `REPORT_SKIP_PROJECT_ENV=true` in the registered ECS task definition and in the host-smoke container override
+  - change: monthly deploy workflow now performs a runner-side ROY/VEVO GitHub Secret admin-login preflight before writing SSM overrides, and asserts the registered task definition contains the required `ROY_`/`VEVO_` credential override secrets
+  - local verification:
+    - YAML parse check for `.github/workflows/deploy-monthly-creditnote-export.yml`
+    - embedded Python heredoc syntax check for the workflow
+    - stdlib admin-login preflight succeeds locally for ROY and VEVO using the same request shape added to the workflow
+    - `_login_admin()` succeeds locally for ROY and VEVO with `REPORT_SKIP_PROJECT_ENV=true` and prefixed runtime credentials
+    - `git diff --check`
+  - Next exact step: validate/merge this workflow follow-up, then rerun `Deploy Monthly Creditnote Export` and require `GITHUB_SECRET_ADMIN_LOGIN_OK`, `TASK_CREDENTIAL_OVERRIDES_OK`, `CREDITNOTE_EXPORT_MARKER_OK`, and localhost marker before closing the monthly export deploy issue
+
 - Monthly creditnote export credential override fix is in progress on `2026-06-18`:
   - branch/worktree: `codex/fix-monthly-creditnote-credentials` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - context: deploy workflow run `27742671211` failed in the monthly creditnote export host smoke because the Fargate task received stale ROY BizniWeb web credentials and `/admin/login/authenticate/` returned `401 Unauthorized`
