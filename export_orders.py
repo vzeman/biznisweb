@@ -736,6 +736,7 @@ class BizniWebExporter:
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
         self.excluded_status_orders = []  # Track all excluded status orders for lifecycle proxy reporting
         self._creditnote_order_nums_cache: Optional[set[str]] = None
+        self._creditnote_status_change_audit_cache: Optional[Dict[str, Any]] = None
         self.product_expenses_exact = dict(PRODUCT_EXPENSES)
         self.product_expenses_normalized = {}
         for key, value in PRODUCT_EXPENSES.items():
@@ -4282,6 +4283,7 @@ class BizniWebExporter:
         return {
             "enabled": bool(raw.get("enabled", False)),
             "shipping_cost_per_order": raw.get("shipping_cost_per_order"),
+            "shipped_statuses": raw.get("shipped_statuses"),
         }
 
     def _fetch_creditnote_order_nums(self) -> set[str]:
@@ -4299,6 +4301,33 @@ class BizniWebExporter:
         )
         self._creditnote_order_nums_cache = set(_creditnote_order_nums(creditnote_rows))
         return set(self._creditnote_order_nums_cache)
+
+    def _creditnote_shipped_statuses(self) -> Tuple[str, ...]:
+        from creditnote_export import creditnote_shipped_statuses
+
+        return creditnote_shipped_statuses(self.project_settings)
+
+    def _creditnote_status_change_audit(self) -> Dict[str, Any]:
+        if self._creditnote_status_change_audit_cache is not None:
+            return self._creditnote_status_change_audit_cache
+
+        from creditnote_export import load_creditnote_status_change_audit
+
+        self._creditnote_status_change_audit_cache = load_creditnote_status_change_audit(
+            self.project_name,
+            self.project_settings,
+        )
+        return self._creditnote_status_change_audit_cache
+
+    def _order_was_sent_before_creditnote(self, order: Dict[str, Any], order_num: str = "") -> bool:
+        from creditnote_export import order_was_sent_before_creditnote
+
+        return order_was_sent_before_creditnote(
+            order,
+            order_num=order_num,
+            status_change_audit=self._creditnote_status_change_audit(),
+            shipped_statuses=self._creditnote_shipped_statuses(),
+        )
 
     def _creditnote_shipping_cost_per_order(self) -> float:
         settings = self._creditnote_fulfillment_cost_settings()
@@ -4380,6 +4409,8 @@ class BizniWebExporter:
             "all_orders": list(all_order_map.values()),
             "creditnote_order_decisions": decision_map,
             "creditnote_order_errors": {},
+            "status_change_audit": self._creditnote_status_change_audit(),
+            "shipped_statuses": self._creditnote_shipped_statuses(),
         }
 
     def analyze_creditnote_reporting_metrics(
@@ -4474,7 +4505,8 @@ class BizniWebExporter:
         )
 
         realized_orders_total = int(date_agg["unique_orders"].sum()) if "unique_orders" in date_agg.columns else len(orders or [])
-        creditnoted_order_count = len(creditnoted_order_nums)
+        sent_creditnoted_order_count = int(audit.get("sent_creditnoted_orders") or 0)
+        creditnoted_order_count = sent_creditnoted_order_count
         overall_rate_pct = round((creditnoted_order_count / realized_orders_total) * 100, 2) if realized_orders_total else 0.0
 
         normalized_carrier_rows = []
@@ -4531,6 +4563,8 @@ class BizniWebExporter:
             "reported_total_rows": int(reported_total or 0),
             "creditnotes": len(enriched_rows),
             "creditnoted_orders": creditnoted_order_count,
+            "all_creditnoted_orders": len(creditnoted_order_nums),
+            "sent_creditnoted_orders": sent_creditnoted_order_count,
             "realized_orders": realized_orders_total,
             "creditnote_rate_pct": overall_rate_pct,
             "credited_gross_eur": round(gross_eur, 2),
@@ -4591,6 +4625,8 @@ class BizniWebExporter:
         shipping_cost = self._creditnote_shipping_cost_per_order()
         for order_num, order in excluded_by_num.items():
             if order_num not in creditnote_order_nums:
+                continue
+            if not self._order_was_sent_before_creditnote(order, order_num=order_num):
                 continue
             purchase_dt = self._order_purchase_datetime(order)
             if purchase_dt is None:

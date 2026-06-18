@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from gql import Client
@@ -13,9 +13,14 @@ from gql import Client
 from creditnote_export import (
     _creditnote_order_nums,
     build_creditnote_export_rows,
+    creditnote_shipped_statuses,
     fetch_creditnote_orders_by_number,
     fetch_project_creditnotes,
+    load_creditnote_status_change_audit,
+    normalize_order_num,
+    normalize_status_name,
     parse_date,
+    save_creditnote_status_change_audit,
 )
 from logger_config import get_logger
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
@@ -80,6 +85,9 @@ class CreditnoteStornoSummary:
     eligible_order_nums: List[str] = field(default_factory=list)
     updated_order_nums: List[str] = field(default_factory=list)
     failed_order_nums: List[str] = field(default_factory=list)
+    eligible_order_statuses: List[Dict[str, Any]] = field(default_factory=list)
+    updated_order_statuses: List[Dict[str, Any]] = field(default_factory=list)
+    status_audit_path: str = ""
     audit_errors: Dict[str, str] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, Any]:
@@ -169,6 +177,53 @@ def _build_exporter(project: str, project_settings: Dict[str, Any]) -> Any:
     )
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _status_audit_entry(
+    project: str,
+    order: Dict[str, Any],
+    settings: CreditnoteStornoSettings,
+    target_status_id: Optional[int],
+    shipped_statuses: Sequence[str],
+) -> Dict[str, Any]:
+    status = (order or {}).get("status") or {}
+    previous_status = str(status.get("name") or "").strip()
+    order_num = normalize_order_num((order or {}).get("order_num") or (order or {}).get("id"))
+    return {
+        "project": project,
+        "order_num": order_num,
+        "previous_status": previous_status,
+        "previous_status_id": status.get("id"),
+        "target_status": settings.target_status_name,
+        "target_status_id": target_status_id,
+        "sent_before_cancel": normalize_status_name(previous_status) in set(shipped_statuses),
+        "source": "creditnote_storno_guard",
+    }
+
+
+def _merge_status_audit(project: str, audit: Dict[str, Any], entry: Dict[str, Any]) -> Dict[str, Any]:
+    by_order: Dict[str, Dict[str, Any]] = {}
+    for existing in audit.get("orders") or []:
+        if not isinstance(existing, dict):
+            continue
+        order_num = normalize_order_num(existing.get("order_num"))
+        if order_num:
+            by_order[order_num] = existing
+
+    order_num = normalize_order_num(entry.get("order_num"))
+    if order_num:
+        by_order[order_num] = entry
+
+    return {
+        **audit,
+        "project": project,
+        "updated_at": _utc_now_iso(),
+        "orders": sorted(by_order.values(), key=lambda row: str(row.get("order_num") or "")),
+    }
+
+
 def run_creditnote_storno_guard(
     project_name: str,
     date_from: Union[str, date, None] = None,
@@ -221,6 +276,7 @@ def run_creditnote_storno_guard(
 
     target_status_id = resolve_target_status_id(exporter.client, settings)
     summary.target_status_id = target_status_id
+    shipped_statuses = creditnote_shipped_statuses(project_settings)
 
     orders, decisions, errors = fetch_creditnote_orders_by_number(exporter, order_nums)
     summary.audit_errors = dict(sorted(errors.items()))
@@ -241,6 +297,10 @@ def run_creditnote_storno_guard(
     summary.eligible_orders = len(eligible_orders)
     summary.skipped_by_reason = dict(sorted(skipped.items()))
     summary.eligible_order_nums = [str(order.get("order_num") or "") for order in eligible_orders]
+    summary.eligible_order_statuses = [
+        _status_audit_entry(project, order, settings, target_status_id, shipped_statuses)
+        for order in eligible_orders
+    ]
 
     logger.info(
         "Creditnote storno guard project=%s creditnoted_orders=%s eligible=%s dry_run=%s",
@@ -253,16 +313,23 @@ def run_creditnote_storno_guard(
     if dry_run:
         return summary
 
+    status_audit = load_creditnote_status_change_audit(project, project_settings)
     for order in eligible_orders:
         order_num = str(order.get("order_num") or "").strip()
         if not order_num:
             summary.failed_orders += 1
             summary.failed_order_nums.append("")
             continue
+        audit_entry = _status_audit_entry(project, order, settings, target_status_id, shipped_statuses)
         try:
             change_order_status(exporter.client, order_num, target_status_id)
             summary.updated_orders += 1
             summary.updated_order_nums.append(order_num)
+            audit_entry["changed_at"] = _utc_now_iso()
+            audit_entry["change_result"] = "updated"
+            summary.updated_order_statuses.append(audit_entry)
+            status_audit = _merge_status_audit(project, status_audit, audit_entry)
+            summary.status_audit_path = str(save_creditnote_status_change_audit(project, status_audit, project_settings))
             logger.info("Changed creditnoted order %s to status_id=%s", order_num, target_status_id)
         except Exception as exc:  # pragma: no cover - API failure path
             summary.failed_orders += 1

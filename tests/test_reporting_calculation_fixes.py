@@ -156,6 +156,10 @@ class ReportingCalculationFixTests(unittest.TestCase):
             "shipping_cost_per_order": 0.2,
         }
         exporter._creditnote_order_nums_cache = {"RETURN-1"}
+        exporter._creditnote_status_change_audit_cache = {
+            "project": "vevo",
+            "orders": [{"order_num": "RETURN-1", "previous_status": "Odoslaná"}],
+        }
         exporter.excluded_status_orders = [
             {
                 "order_num": "RETURN-1",
@@ -212,10 +216,72 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(59.0, float(day["net_profit"]))
         self.assertEqual(1, int(month_agg.iloc[0]["creditnote_fulfillment_orders"]))
 
+    def test_creditnoted_excluded_order_without_sent_audit_does_not_keep_fulfillment_cost(self) -> None:
+        exporter = make_exporter()
+        exporter.project_settings["creditnote_fulfillment_costs"] = {
+            "enabled": True,
+            "shipping_cost_per_order": 0.2,
+        }
+        exporter._creditnote_order_nums_cache = {"RETURN-1"}
+        exporter._creditnote_status_change_audit_cache = {"project": "vevo", "orders": []}
+        exporter.excluded_status_orders = [
+            {
+                "order_num": "RETURN-1",
+                "pur_date": "2026-04-20 11:00:00",
+                "status": {"name": "Storno"},
+            }
+        ]
+        df = pd.DataFrame(
+            [
+                {
+                    "order_num": "OK-1",
+                    "customer_email": "ok@example.com",
+                    "purchase_date": "2026-04-20 10:00:00",
+                    "purchase_date_only": "2026-04-20",
+                    "order_revenue_net": 100.0,
+                    "total_items_in_order": 1,
+                    "fb_ads_daily_spend": 0.0,
+                    "google_ads_daily_spend": 0.0,
+                    "product_sku": "SKU-OK",
+                    "item_label": "Revenue item",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 100.0,
+                    "item_total_with_tax": 123.0,
+                    "item_unit_price": 100.0,
+                    "item_line_sum_original": 100.0,
+                    "item_line_sum_with_tax_original": 123.0,
+                    "item_unit_price_original": 100.0,
+                    "total_expense": 40.0,
+                    "profit_before_ads": 60.0,
+                }
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.data_dir = Path(tmp_dir)
+            _, date_agg, _, month_agg, _ = exporter.create_aggregated_reports(
+                df,
+                datetime(2026, 4, 20),
+                datetime(2026, 4, 20),
+                fb_daily_spend={},
+                google_ads_daily_spend={},
+            )
+
+        day = date_agg.iloc[0]
+        self.assertEqual(0, int(day["creditnote_fulfillment_orders"]))
+        self.assertEqual(0.0, float(day["creditnote_fulfillment_cost"]))
+        self.assertEqual(1, int(day["unique_orders"]))
+        self.assertEqual(59.5, float(day["net_profit"]))
+        self.assertEqual(0, int(month_agg.iloc[0]["creditnote_fulfillment_orders"]))
+
     @patch("creditnote_export.fetch_project_creditnotes")
     def test_creditnote_reporting_metrics_use_sent_orders_as_carrier_denominator(self, fetch_mock) -> None:
         exporter = make_exporter()
         exporter.project_settings["currency_rates_to_eur"] = {"EUR": 1.0, "CZK": 0.04}
+        exporter._creditnote_status_change_audit_cache = {
+            "project": "vevo",
+            "orders": [{"order_num": "RET-1", "previous_status": "Odoslaná"}],
+        }
         packeta = price_element("shipping", "Packeta - vydajne miesto", "9")
         sps = price_element("shipping", "SPS Balikovo", "14")
         orders = [
@@ -284,6 +350,8 @@ class ReportingCalculationFixTests(unittest.TestCase):
         summary = metrics["summary"]
         self.assertEqual(2, summary["creditnotes"])
         self.assertEqual(2, summary["creditnoted_orders"])
+        self.assertEqual(2, summary["all_creditnoted_orders"])
+        self.assertEqual(2, summary["sent_creditnoted_orders"])
         self.assertEqual(133.0, summary["credited_gross_eur"])
         self.assertEqual(108.0, summary["credited_net_eur"])
         self.assertEqual(1, summary["fulfillment_orders"])
@@ -291,6 +359,79 @@ class ReportingCalculationFixTests(unittest.TestCase):
         packeta_row = next(row for row in metrics["carrier_rows"] if row["carrier"] == "Packeta")
         self.assertEqual(2, packeta_row["realized_orders"])
         self.assertEqual(2, packeta_row["creditnoted_orders"])
+        self.assertEqual(100.0, packeta_row["creditnote_rate_pct"])
+
+    @patch("creditnote_export.fetch_project_creditnotes")
+    def test_creditnote_reporting_metrics_exclude_unproven_canceled_orders_from_sent_rate(self, fetch_mock) -> None:
+        exporter = make_exporter()
+        exporter.project_settings["currency_rates_to_eur"] = {"EUR": 1.0}
+        exporter._creditnote_status_change_audit_cache = {"project": "vevo", "orders": []}
+        packeta = price_element("shipping", "Packeta - vydajne miesto", "9")
+        orders = [
+            {
+                "order_num": "OK-1",
+                "pur_date": "2026-06-01 10:00:00",
+                "status": {"name": "Odoslaná"},
+                "price_elements": [packeta, price_element("payment", "Dobierka", "7")],
+            },
+        ]
+        exporter.excluded_status_orders = [
+            {
+                "order_num": "RET-1",
+                "pur_date": "2026-06-01 12:00:00",
+                "status": {"name": "Storno"},
+                "price_elements": [packeta, price_element("payment", "Dobierka", "7")],
+            }
+        ]
+        fetch_mock.return_value = (
+            [
+                {
+                    "number": "D-1",
+                    "creditnote_id": "1",
+                    "created": "2026-06-02 08:00:00",
+                    "order_num": "OK-1",
+                    "price": "100 €",
+                    "taxed_price": "123 €",
+                },
+                {
+                    "number": "D-2",
+                    "creditnote_id": "2",
+                    "created": "2026-06-02 09:00:00",
+                    "order_num": "RET-1",
+                    "price": "40 €",
+                    "taxed_price": "49.2 €",
+                },
+            ],
+            2,
+        )
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": datetime(2026, 6, 1).date(),
+                    "unique_orders": 1,
+                    "creditnote_fulfillment_orders": 0,
+                    "creditnote_packaging_cost": 0.0,
+                    "creditnote_shipping_net_cost": 0.0,
+                    "creditnote_fulfillment_cost": 0.0,
+                }
+            ]
+        )
+
+        metrics = exporter.analyze_creditnote_reporting_metrics(
+            orders,
+            datetime(2026, 6, 1),
+            datetime(2026, 6, 30),
+            date_agg,
+        )
+
+        summary = metrics["summary"]
+        self.assertEqual(2, summary["creditnotes"])
+        self.assertEqual(2, summary["all_creditnoted_orders"])
+        self.assertEqual(1, summary["creditnoted_orders"])
+        self.assertEqual(1, summary["sent_creditnoted_orders"])
+        packeta_row = next(row for row in metrics["carrier_rows"] if row["carrier"] == "Packeta")
+        self.assertEqual(1, packeta_row["realized_orders"])
+        self.assertEqual(1, packeta_row["creditnoted_orders"])
         self.assertEqual(100.0, packeta_row["creditnote_rate_pct"])
 
     def test_period_customer_history_marks_prior_customer_returning(self) -> None:

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import os
 import re
 import unicodedata
@@ -17,10 +18,12 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from http_client import build_retry_session, resolve_timeout
+from logger_config import get_logger
 from reporting_core import (
     derive_biznisweb_base_url,
     load_project_env,
     load_project_settings,
+    project_data_dir,
     project_dir,
     resolve_biznisweb_api_url,
     sanitize_output_tag,
@@ -28,8 +31,11 @@ from reporting_core import (
 
 
 ROOT_DIR = Path(__file__).resolve().parent
+logger = get_logger("creditnote_export")
 DEFAULT_CREDITNOTE_PROJECTS = ("roy", "vevo")
 DEFAULT_PAGE_LIMIT = 100
+DEFAULT_SHIPPED_STATUSES = ("Odoslaná", "Odoslana")
+STATUS_CHANGE_AUDIT_FILENAME = "creditnote_status_change_audit.json"
 WEB_TIMEOUT = resolve_timeout(os.getenv("BIZNISWEB_WEB_TIMEOUT_SEC"))
 CURRENCY_ALIASES = {
     "\u00e2\u201a\u00ac": "\u20ac",
@@ -458,6 +464,149 @@ def _order_status_name(order: Dict[str, Any]) -> str:
     return str(((order or {}).get("status") or {}).get("name") or "").strip()
 
 
+def normalize_status_name(value: Any) -> str:
+    decomposed = unicodedata.normalize("NFKD", str(value or ""))
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", without_accents).strip().casefold()
+
+
+def creditnote_shipped_statuses(project_settings: Optional[Dict[str, Any]] = None) -> Tuple[str, ...]:
+    raw_settings = (project_settings or {}).get("creditnote_fulfillment_costs") or {}
+    configured = raw_settings.get("shipped_statuses")
+    if isinstance(configured, str):
+        values = [configured]
+    elif isinstance(configured, Iterable):
+        values = [str(value) for value in configured]
+    else:
+        values = list(DEFAULT_SHIPPED_STATUSES)
+    normalized = tuple(dict.fromkeys(normalize_status_name(value) for value in values if normalize_status_name(value)))
+    return normalized or tuple(normalize_status_name(value) for value in DEFAULT_SHIPPED_STATUSES)
+
+
+def _status_change_audit_entries(status_change_audit: Any) -> List[Dict[str, Any]]:
+    if isinstance(status_change_audit, dict):
+        entries = status_change_audit.get("orders")
+        if isinstance(entries, list):
+            return [entry for entry in entries if isinstance(entry, dict)]
+        return [entry for entry in status_change_audit.values() if isinstance(entry, dict)]
+    if isinstance(status_change_audit, list):
+        return [entry for entry in status_change_audit if isinstance(entry, dict)]
+    return []
+
+
+def load_creditnote_status_change_audit(project: str, project_settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    data_dir = project_data_dir(project)
+    audit_path = data_dir / STATUS_CHANGE_AUDIT_FILENAME
+    merged: Dict[str, Any] = {"project": project, "orders": []}
+
+    if audit_path.exists():
+        try:
+            loaded = json.loads(audit_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                merged.update(loaded)
+        except Exception as exc:
+            logger.warning("Could not read local creditnote status audit for %s: %s", project, exc)
+
+    bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
+    if bucket:
+        prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
+        if not prefix:
+            prefix = str(((project_settings or {}).get("live_dashboard_artifacts") or {}).get("s3_prefix") or "").strip().strip("/")
+        if not prefix:
+            prefix = f"daily-reports/{project}"
+        key = f"{prefix}/state/{STATUS_CHANGE_AUDIT_FILENAME}"
+        try:
+            import boto3  # type: ignore
+
+            region = os.getenv("AWS_REGION", "eu-central-1").strip() or "eu-central-1"
+            response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
+            loaded = json.loads(response["Body"].read().decode("utf-8"))
+            if isinstance(loaded, dict):
+                local_entries = _status_change_audit_entries(merged)
+                remote_entries = _status_change_audit_entries(loaded)
+                by_order: Dict[str, Dict[str, Any]] = {}
+                for entry in [*local_entries, *remote_entries]:
+                    order_num = normalize_order_num(entry.get("order_num"))
+                    if order_num:
+                        by_order[order_num] = entry
+                merged.update(loaded)
+                merged["orders"] = sorted(by_order.values(), key=lambda row: str(row.get("order_num") or ""))
+        except Exception as exc:
+            error_code = getattr(getattr(exc, "response", None), "get", lambda *_args, **_kwargs: {})("Error", {}).get("Code")
+            if error_code not in {"NoSuchKey", "404", "NotFound"}:
+                logger.warning("Could not read S3 creditnote status audit s3://%s/%s: %s", bucket, key, exc)
+
+    return merged
+
+
+def save_creditnote_status_change_audit(
+    project: str,
+    audit: Dict[str, Any],
+    project_settings: Optional[Dict[str, Any]] = None,
+) -> Path:
+    data_dir = project_data_dir(project)
+    audit_path = data_dir / STATUS_CHANGE_AUDIT_FILENAME
+    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+    bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
+    if bucket:
+        prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
+        if not prefix:
+            prefix = str(((project_settings or {}).get("live_dashboard_artifacts") or {}).get("s3_prefix") or "").strip().strip("/")
+        if not prefix:
+            prefix = f"daily-reports/{project}"
+        key = f"{prefix}/state/{STATUS_CHANGE_AUDIT_FILENAME}"
+        try:
+            import boto3  # type: ignore
+
+            region = os.getenv("AWS_REGION", "eu-central-1").strip() or "eu-central-1"
+            boto3.client("s3", region_name=region).put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"),
+                ContentType="application/json",
+            )
+        except Exception as exc:
+            logger.warning("Could not write S3 creditnote status audit s3://%s/%s: %s", bucket, key, exc)
+
+    return audit_path
+
+
+def creditnote_status_change_audit_by_order(status_change_audit: Any) -> Dict[str, Dict[str, Any]]:
+    result: Dict[str, Dict[str, Any]] = {}
+    for entry in _status_change_audit_entries(status_change_audit):
+        order_num = normalize_order_num(entry.get("order_num"))
+        if order_num:
+            result[order_num] = entry
+    return result
+
+
+def order_was_sent_before_creditnote(
+    order: Optional[Dict[str, Any]],
+    order_num: Any = "",
+    status_change_audit: Any = None,
+    shipped_statuses: Optional[Sequence[str]] = None,
+) -> bool:
+    shipped = set(shipped_statuses or creditnote_shipped_statuses())
+    if order and normalize_status_name(_order_status_name(order)) in shipped:
+        return True
+
+    normalized_order_num = normalize_order_num(order_num or ((order or {}).get("order_num") if order else ""))
+    if not normalized_order_num:
+        return False
+
+    audit_entry = creditnote_status_change_audit_by_order(status_change_audit).get(normalized_order_num)
+    if not audit_entry:
+        return False
+    previous_status = (
+        audit_entry.get("previous_status")
+        or audit_entry.get("status_before")
+        or audit_entry.get("from_status")
+        or audit_entry.get("previous_status_name")
+    )
+    return normalize_status_name(previous_status) in shipped
+
+
 def _unique_orders_by_num(orders: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     result: Dict[str, Dict[str, Any]] = {}
     for order in orders:
@@ -620,6 +769,7 @@ def fetch_project_reporting_order_context(
             "all_orders": [],
             "creditnote_order_decisions": {},
             "creditnote_order_errors": {},
+            "status_change_audit": load_creditnote_status_change_audit(project),
             "window_from": fallback_from,
             "window_to": fallback_to,
         }
@@ -633,6 +783,7 @@ def fetch_project_reporting_order_context(
             "all_orders": [],
             "creditnote_order_decisions": {},
             "creditnote_order_errors": {},
+            "status_change_audit": load_creditnote_status_change_audit(project),
             "window_from": fallback_from,
             "window_to": fallback_to,
         }
@@ -649,6 +800,7 @@ def fetch_project_reporting_order_context(
             "all_orders": [],
             "creditnote_order_decisions": {},
             "creditnote_order_errors": {},
+            "status_change_audit": load_creditnote_status_change_audit(project),
             "window_from": window_from,
             "window_to": window_to,
         }
@@ -682,6 +834,8 @@ def fetch_project_reporting_order_context(
             "all_orders": all_orders,
             "creditnote_order_decisions": creditnote_order_decisions,
             "creditnote_order_errors": creditnote_order_errors,
+            "status_change_audit": load_creditnote_status_change_audit(project, settings),
+            "shipped_statuses": creditnote_shipped_statuses(settings),
             "window_from": window_from,
             "window_to": window_to,
         }
@@ -694,6 +848,7 @@ def fetch_project_reporting_order_context(
             "all_orders": [],
             "creditnote_order_decisions": {},
             "creditnote_order_errors": {},
+            "status_change_audit": load_creditnote_status_change_audit(project),
             "window_from": window_from,
             "window_to": window_to,
         }
@@ -707,26 +862,38 @@ def build_creditnote_reporting_audit(
     included_order_sets: Dict[str, set[str]] = {}
     all_order_maps: Dict[str, Dict[str, Dict[str, Any]]] = {}
     decision_maps: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    status_audits: Dict[str, Any] = {}
+    shipped_statuses_by_project: Dict[str, Tuple[str, ...]] = {}
     denominator_by_carrier: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
     for project, context in order_context_by_project.items():
+        project_key = project.upper()
         included_orders = context.get("included_orders") or []
         all_orders = context.get("all_orders") or []
-        included_order_sets[project.upper()] = {
+        included_order_sets[project_key] = {
             normalize_order_num(order.get("order_num"))
             for order in included_orders
             if normalize_order_num(order.get("order_num"))
         }
-        all_order_maps[project.upper()] = _unique_orders_by_num(all_orders)
-        decision_maps[project.upper()] = dict(context.get("creditnote_order_decisions") or {})
-        for order in included_orders:
+        all_order_maps[project_key] = _unique_orders_by_num(all_orders)
+        decision_maps[project_key] = dict(context.get("creditnote_order_decisions") or {})
+        status_audits[project_key] = context.get("status_change_audit") or {}
+        shipped_statuses_by_project[project_key] = tuple(context.get("shipped_statuses") or creditnote_shipped_statuses())
+        for order in all_orders:
             order_num = normalize_order_num(order.get("order_num"))
             if not order_num:
+                continue
+            if not order_was_sent_before_creditnote(
+                order,
+                order_num=order_num,
+                status_change_audit=status_audits.get(project_key),
+                shipped_statuses=shipped_statuses_by_project.get(project_key),
+            ):
                 continue
             shipping = _order_shipping_info(order)
             carrier, carrier_id = _carrier_key(shipping.get("title"), shipping.get("reference_id"))
             denominator_bucket = denominator_by_carrier.setdefault(
-                (project.upper(), carrier),
+                (project_key, carrier),
                 {"orders": set(), "ids": set()},
             )
             denominator_bucket["orders"].add(order_num)
@@ -745,6 +912,12 @@ def build_creditnote_reporting_audit(
         shipping = _order_shipping_info(order or {})
         carrier, carrier_id = _carrier_key(shipping.get("title"), shipping.get("reference_id"))
         status_name = _order_status_name(order or {})
+        was_sent = order_was_sent_before_creditnote(
+            order,
+            order_num=order_num,
+            status_change_audit=status_audits.get(project),
+            shipped_statuses=shipped_statuses_by_project.get(project),
+        )
 
         if order is None:
             row["Prepravca"] = "Unknown carrier"
@@ -752,6 +925,7 @@ def build_creditnote_reporting_audit(
             row["Reporting revenue"] = "order_not_found"
             row["Reporting revenue reason"] = "Original order was not found in the audited reporting order window"
             row["Order status"] = ""
+            row["Sent before creditnote"] = False
         else:
             row["Prepravca"] = carrier
             row["Prepravca ID"] = carrier_id
@@ -762,14 +936,7 @@ def build_creditnote_reporting_audit(
                 else ("Counts in realized revenue filter" if in_reporting else "Excluded by realized revenue filter")
             )
             row["Order status"] = status_name
-            if order_num:
-                denominator_bucket = denominator_by_carrier.setdefault(
-                    (project, carrier),
-                    {"orders": set(), "ids": set()},
-                )
-                denominator_bucket["orders"].add(order_num)
-                if carrier_id:
-                    denominator_bucket["ids"].add(carrier_id)
+            row["Sent before creditnote"] = was_sent
 
         group_key = (project, order_num)
         group = creditnote_groups.setdefault(
@@ -780,6 +947,7 @@ def build_creditnote_reporting_audit(
                 "Prepravca": row.get("Prepravca") or "Unknown carrier",
                 "Prepravca ID": row.get("Prepravca ID") or "",
                 "Order status": row.get("Order status") or "",
+                "Sent before creditnote": bool(row.get("Sent before creditnote")),
                 "Reporting revenue": row.get("Reporting revenue") or "not_checked",
                 "Reporting revenue reason": row.get("Reporting revenue reason") or "",
                 "Pocet dobropisov": 0,
@@ -790,6 +958,7 @@ def build_creditnote_reporting_audit(
         group["Pocet dobropisov"] += 1
         group["Suma_s_DPH"] += abs(float(row.get("Suma s DPH") or 0.0))
         group["Suma_bez_DPH"] += abs(float(row.get("Suma bez DPH") or 0.0))
+        group["Sent before creditnote"] = bool(group.get("Sent before creditnote")) or bool(row.get("Sent before creditnote"))
         if group["Reporting revenue"] != "included" and row.get("Reporting revenue") == "included":
             group["Reporting revenue"] = "included"
             group["Reporting revenue reason"] = row.get("Reporting revenue reason") or ""
@@ -810,7 +979,7 @@ def build_creditnote_reporting_audit(
         if carrier_id:
             carrier_bucket["Prepravca ID"].add(carrier_id)
         carrier_bucket["Dobropisy"] += 1
-        if order_num:
+        if order_num and was_sent:
             carrier_bucket["Dobropisovane objednavky"].add(order_num)
         carrier_bucket["Suma_s_DPH"] += abs(float(row.get("Suma s DPH") or 0.0))
         carrier_bucket["Suma_bez_DPH"] += abs(float(row.get("Suma bez DPH") or 0.0))
@@ -873,6 +1042,7 @@ def build_creditnote_reporting_audit(
         "included_in_revenue": sum(1 for row in reporting_rows if row.get("Reporting revenue") == "included"),
         "excluded_from_revenue": sum(1 for row in reporting_rows if row.get("Reporting revenue") == "excluded"),
         "order_not_found": sum(1 for row in reporting_rows if row.get("Reporting revenue") == "order_not_found"),
+        "sent_creditnoted_orders": sum(1 for row in reporting_rows if row.get("Sent before creditnote")),
         "audit_errors": context_errors,
     }
     return enriched_rows, carrier_rows, summary | {"rows": reporting_rows}

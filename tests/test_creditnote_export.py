@@ -186,6 +186,9 @@ class CreditnoteExportTests(unittest.TestCase):
                     {"order_num": "2677003999", "status": {"name": "Odoslana"}, "price_elements": [packeta_other]},
                     {"order_num": "2677004000", "status": {"name": "Odoslana"}, "price_elements": [courier]},
                 ],
+                "status_change_audit": {
+                    "orders": [{"order_num": "2677003013", "previous_status": "Odoslana"}],
+                },
             }
         }
 
