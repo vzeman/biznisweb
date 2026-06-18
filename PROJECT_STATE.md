@@ -61,18 +61,25 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY inventory cost value history is implemented locally on `2026-06-18`:
+- ROY inventory cost value history is implemented and deployed on `2026-06-18`:
   - branch/worktree: `codex/roy-inventory-cost-value` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - context: ROY already calculated current `inventory_cost_value` in the inventory snapshot and showed it as a dashboard KPI, but the daily reporting payload did not persist a historical series for a trend chart
   - change: ROY product demand analytics now builds `inventory_cost_history_rows` from the current inventory snapshot and merges it with the previous stable `dashboard_payload_latest.json` from local output/S3, deduplicated by snapshot date and capped to `730` points
   - change: the modern dashboard payload now includes `roy_product_demand.inventory_cost_history_rows`
   - change: the ROY inventory section now renders an `Inventory cost value trend` chart with inventory cost value, retail value, and dead-stock cost value in time
+  - code PR `#193` merged to `main` as `11157aecffa65e6dc302bcd740ed193d294c2b8f`
   - local verification:
     - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py`
     - `python -m unittest tests.test_roy_inventory_model tests.test_dashboard_modern`
     - `python -m unittest tests.test_roy_inventory_model tests.test_dashboard_modern tests.test_roy_operations_dashboard tests.test_reporting_calculation_fixes tests.test_creditnote_export tests.test_creditnote_storno_guard` (`81` tests OK)
     - `git diff --check`
-  - Next exact step: commit/push this branch, open/merge PR, wait for ECR rebuild, then run ROY production reporting smoke with `send_email=true`, `update_task_image=true`, localhost marker verification, and UI smoke before treating tomorrow morning's reporting as covered
+  - ECR refresh: run `27758206041` succeeded for `vevo-reporting:latest`, digest `sha256:3e97b5034433b09c3f4a4b9b9f5b3a0a3a1ad9c475fffcf799add5c4668032be`
+  - production ROY reporting smoke: run `27758328013` succeeded with `project=roy`, marker `roy-inventory-cost-value-20260618`, `send_email=true`, `update_task_image=true`
+  - ROY hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.39.116`, service `roy-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:39`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/d72920a7a2aa4fb69799903574a02a13`, marker path `http://127.0.0.1:8000/marker.json`
+  - ROY verification: task image updated from digest `sha256:f6b1d59a73dc3db38f9efae07f25ebca92946793b9f0df1b7807ac623b4893c1` to `sha256:3e97b5034433b09c3f4a4b9b9f5b3a0a3a1ad9c475fffcf799add5c4668032be`, `task-image-updated=true`, SES `MessageId=0107019edad1c5b8-543e9286-435e-41e9-8d23-07f3bd0ff385-000000`, `LOCALHOST_MARKER_OK`, `send_email=true`, `daily_profit_rows=267`, `creditnote_count=110`, `credited_gross_eur=11063.52`, report path `data/roy/report_latest.html`, payload path `data/roy/dashboard_payload_latest.json`, UI smoke `UI_SMOKE_OK:roy:daily-profit-loss`
+  - Note: direct local S3 artifact read from this Windows PC was not possible because local AWS credentials were not configured; production task generated the stable report/payload and local tests explicitly assert the new `royInventoryCostValueChart` and `inventory_cost_history_rows` payload
+  - Current status: ROY scheduled daily email now points to the image containing the inventory cost value history and chart; the series starts from the first available stable payload/current snapshot and grows with each daily run
+  - Next exact step: monitor the next regular ROY morning email; no known code/deploy blocker remains for this requested metric
 
 - Creditnote carrier rate from creditnote documents is implemented and deployed on `2026-06-18`:
   - branch/worktree: `codex/creditnote-rate-from-creditnotes` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
