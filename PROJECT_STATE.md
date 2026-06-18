@@ -4206,3 +4206,35 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - `git diff --check`
 - Next exact step:
   - commit/push this branch, merge through PR, wait for the ECR rebuild, then dispatch `Production Reporting Smoke` with `project=all`, `send_email=true`, and `update_task_image=true` to regenerate and send the corrected VEVO and ROY reports
+
+### 2026-06-18 (creditnote reporting email regeneration completed)
+- Code merged:
+  - PR `#182`: `Restore report output tag after creditnote guard`, merge commit `cee74e40ceff584b6109e2d7547fae64c08847c8`
+- ECR refresh:
+  - workflow run `27738925105` succeeded
+  - image digest `sha256:2b358fceeae7dc26bf4196b4cc11048a67416deb12c8c891143b4225b48c1aa5`
+- Production reporting rerun:
+  - workflow run `27739014933` succeeded with `project=all`, marker `creditnote-email-20260618-final2`, `send_email=true`, `update_task_image=true`
+  - VEVO schedule `vevo-daily-report-email` updated from digest `sha256:10202cb947ab0ab50ec2be9fe6331c8cc48e5204df60ebdaffe271369dd03bbd` to `sha256:2b358fceeae7dc26bf4196b4cc11048a67416deb12c8c891143b4225b48c1aa5`
+  - ROY schedule `roy-daily-report-email` updated from digest `sha256:c41f9463ee724ac1be904130179958afe76eef5f2998b40b487a52e098e241de` to `sha256:2b358fceeae7dc26bf4196b4cc11048a67416deb12c8c891143b4225b48c1aa5`
+- VEVO verification:
+  - instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.10.0`, service `vevo-daily-report-email`
+  - task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:7`
+  - task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/053d8a2e87f640d1ae522419b454f992`
+  - task image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:2b358fceeae7dc26bf4196b4cc11048a67416deb12c8c891143b4225b48c1aa5`, `task-image-updated=true`
+  - SES `MessageId=0107019ed949eeb9-b4aa020a-ee22-4041-a082-5ad1342cdab2-000000`
+  - localhost marker `LOCALHOST_MARKER_OK`, `has_creditnote_payload=true`, `send_email=true`, `creditnote_count=267`, `credited_gross_eur=4794.93`, report path `data/vevo/report_latest.html`
+  - UI smoke `UI_SMOKE_OK:vevo:production-board` and `UI_SMOKE_OK:vevo:daily-profit-loss`
+- ROY verification:
+  - instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.42.198`, service `roy-daily-report-email`
+  - task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:36`
+  - task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/b83d7d5a6cf4426881f65ac906134528`
+  - task image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:2b358fceeae7dc26bf4196b4cc11048a67416deb12c8c891143b4225b48c1aa5`, `task-image-updated=true`
+  - SES `MessageId=0107019ed971382b-a168b65e-3369-4c9f-b0f3-d344d2ffba2f-000000`
+  - localhost marker `LOCALHOST_MARKER_OK`, `has_creditnote_payload=true`, `send_email=true`, `creditnote_count=110`, `credited_gross_eur=11063.52`, report path `data/roy/report_latest.html`
+  - UI smoke `UI_SMOKE_OK:roy:daily-profit-loss`
+- Current status:
+  - corrected reporting emails for both e-shops were regenerated and sent on `2026-06-18`
+  - future scheduled daily emails now use the image containing the visible creditnote metrics and the output-tag leak fix
+- Next exact step:
+  - monitor the next regular morning email for both e-shops; no known code blocker remains for the requested creditnote reporting metrics
