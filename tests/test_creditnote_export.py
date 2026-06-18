@@ -13,6 +13,7 @@ from creditnote_export import (
     previous_calendar_month,
     write_creditnote_pdf,
 )
+from daily_report_runner import _build_creditnote_summary
 from monthly_creditnote_export_runner import (
     build_creditnote_email_body,
     resolve_creditnote_export_window,
@@ -196,10 +197,59 @@ class CreditnoteExportTests(unittest.TestCase):
         self.assertEqual(1, audit["excluded_from_revenue"])
         packeta_row = next(row for row in carrier_rows if row["Prepravca"] == "Packeta")
         self.assertEqual("9, 12", packeta_row["Prepravca ID"])
-        self.assertEqual(2, packeta_row["Realized objednavky"])
+        self.assertEqual(3, packeta_row["Realized objednavky"])
+        self.assertEqual(3, packeta_row["Odoslane objednavky"])
         self.assertEqual(2, packeta_row["Dobropisovane objednavky"])
-        self.assertEqual(100.0, packeta_row["Dobropis rate %"])
+        self.assertEqual(66.67, packeta_row["Dobropis rate %"])
         self.assertEqual(61.5, packeta_row["Suma_s_DPH"])
+
+    def test_daily_email_summary_includes_creditnote_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload_path = Path(tmp) / "dashboard_payload_latest.json"
+            payload_path.write_text(
+                json.dumps(
+                    {
+                        "dashboard": {
+                            "creditnotes": {
+                                "summary": {
+                                    "available": True,
+                                    "credited_gross_eur": 123.0,
+                                    "credited_net_eur": 100.0,
+                                    "creditnotes": 2,
+                                    "creditnoted_orders": 2,
+                                    "creditnote_rate_pct": 10.0,
+                                    "realized_orders": 20,
+                                    "revenue_excluded_orders": 2,
+                                    "revenue_included_orders": 0,
+                                    "order_not_found": 0,
+                                    "fulfillment_cost_eur": 1.0,
+                                    "fulfillment_orders": 2,
+                                },
+                                "carrier_rows": [
+                                    {
+                                        "carrier": "Packeta",
+                                        "creditnote_rate_pct": 10.0,
+                                        "creditnoted_orders": 2,
+                                        "realized_orders": 20,
+                                        "rate_index": 1.5,
+                                        "credited_gross_eur": 123.0,
+                                        "outlier": True,
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            summary = _build_creditnote_summary({"dashboard_payload_json": payload_path})
+
+        self.assertIn("DOBROPISY", summary)
+        self.assertIn("Dobropisovana suma spolu", summary)
+        self.assertIn("Packeta", summary)
+        self.assertIn("OUTLIER", summary)
 
     def test_parse_project_list_defaults_and_normalizes(self) -> None:
         self.assertEqual(("roy", "vevo"), parse_project_list(None))

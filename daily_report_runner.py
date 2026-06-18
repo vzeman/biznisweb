@@ -824,6 +824,71 @@ def _build_roy_inventory_alert_summary(file_paths: Dict[str, Path]) -> str:
     return "\n".join(lines)
 
 
+def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
+    payload = _load_dashboard_payload(file_paths.get("dashboard_payload_json"))
+    dashboard = payload.get("dashboard") if isinstance(payload.get("dashboard"), dict) else payload
+    if not isinstance(dashboard, dict):
+        return ""
+
+    creditnotes = dashboard.get("creditnotes") or {}
+    if not isinstance(creditnotes, dict):
+        return ""
+    summary = creditnotes.get("summary") or {}
+    if not isinstance(summary, dict) or not summary:
+        return ""
+
+    if summary.get("available") is False:
+        error = str(summary.get("error") or "unknown error")
+        return "DOBROPISY\n- Creditnote metriky sa nepodarilo nacitat: " + error
+
+    lines = [
+        "DOBROPISY",
+        (
+            f"- Dobropisovana suma spolu: {_fmt_eur(float(summary.get('credited_gross_eur') or 0.0))} brutto "
+            f"({_fmt_eur(float(summary.get('credited_net_eur') or 0.0))} netto), "
+            f"{int(float(summary.get('creditnotes') or 0))} dobropisov / "
+            f"{int(float(summary.get('creditnoted_orders') or 0))} objednavok."
+        ),
+        (
+            f"- Dobropis rate: {float(summary.get('creditnote_rate_pct') or 0.0):.2f}% z "
+            f"{int(float(summary.get('realized_orders') or 0))} realizovanych objednavok."
+        ),
+        (
+            f"- Kontrola revenue: {int(float(summary.get('revenue_excluded_orders') or 0))} dobropisovanych objednavok je mimo revenue, "
+            f"{int(float(summary.get('revenue_included_orders') or 0))} este ostava v revenue; "
+            f"nenajdene objednavky: {int(float(summary.get('order_not_found') or 0))}."
+        ),
+        (
+            f"- Ponechane fulfillment naklady pri dobropisoch: {_fmt_eur(float(summary.get('fulfillment_cost_eur') or 0.0))} "
+            f"({int(float(summary.get('fulfillment_orders') or 0))} odoslanych balikov)."
+        ),
+    ]
+    carrier_rows = list(creditnotes.get("carrier_rows") or [])
+    nonzero_rows = [
+        row
+        for row in carrier_rows
+        if int(float(row.get("creditnoted_orders") or 0)) > 0
+    ][:5]
+    if nonzero_rows:
+        lines.append("- Prepravcovia s dobropismi podla percenta:")
+        for row in nonzero_rows:
+            carrier = str(row.get("carrier") or "Unknown carrier")
+            rate = row.get("creditnote_rate_pct")
+            rate_text = "N/A" if rate is None else f"{float(rate):.2f}%"
+            index = row.get("rate_index")
+            index_text = "N/A" if index is None else f"{float(index):.2f}x"
+            flag = " OUTLIER" if bool(row.get("outlier")) else ""
+            lines.append(
+                f"  - {carrier}: {rate_text}, {int(float(row.get('creditnoted_orders') or 0))}/"
+                f"{int(float(row.get('realized_orders') or 0))} obj., index {index_text}, "
+                f"suma {_fmt_eur(float(row.get('credited_gross_eur') or 0.0))}{flag}."
+            )
+    else:
+        lines.append("- V reportovanom okne nie su dobropisovane objednavky podla prepravcu.")
+
+    return "\n".join(lines)
+
+
 def build_report_summary(file_paths: Dict[str, Path]) -> str:
     date_csv = file_paths.get("aggregate_by_date_csv")
     if not date_csv or not date_csv.exists():
@@ -1034,6 +1099,9 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     inventory_alert_summary = _build_roy_inventory_alert_summary(file_paths)
     if inventory_alert_summary:
         sections.append(inventory_alert_summary)
+    creditnote_summary = _build_creditnote_summary(file_paths)
+    if creditnote_summary:
+        sections.append(creditnote_summary)
     return "\n\n".join(sections)
 
 

@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,21 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- Daily reporting creditnote metrics visibility fix is implemented locally on `2026-06-18`:
+  - branch/worktree: `codex/creditnote-carrier-audit` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - reason: the morning `2026-06-18` VEVO/ROY report emails were generated before PR `#177` was merged/deployed, and the main HTML/email report did not yet expose the new creditnote metrics as a visible reporting section
+  - change: `export_orders.py` now builds `advanced_dtc_metrics["creditnotes"]` from the BizniWeb creditnote registry for the report window, converts credited gross/net amounts to EUR, keeps revenue-exclusion audit counts, and exposes retained fulfillment cost on creditnoted/storno orders
+  - change: creditnote carrier rate is now `creditnoted orders / sent orders by the same carrier`, where sent orders include current realized orders plus found creditnoted orders so Storno creditnotes do not disappear from the denominator
+  - change: `dashboard_modern.py` renders a visible `Creditnotes and carrier return rate` section in the main HTML report and embeds the same data under `dashboard.creditnotes`
+  - change: `daily_report_runner.py` appends a `DOBROPISY` block into the plain-text email summary from the dashboard payload
+  - local verification:
+    - `python -m py_compile export_orders.py creditnote_export.py dashboard_modern.py daily_report_runner.py`
+    - `python -m unittest tests.test_creditnote_export tests.test_reporting_calculation_fixes tests.test_dashboard_modern`
+    - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf`
+    - `python -m json.tool projects\roy\settings.json`; `python -m json.tool projects\vevo\settings.json`
+    - `git diff --check` (only existing Git CRLF normalization warning for `creditnote_export.py`)
+  - Next exact step: commit/push this fix, mark PR `#177` ready, merge to `main`, wait for ECR `latest` rebuild, then run production host smoke and real report/email regeneration for VEVO and ROY
 
 - Credit-note credited-amount, revenue-exclusion, and carrier-rate audit extension is implemented locally on `2026-06-17`:
   - branch/worktree: `codex/creditnote-carrier-audit` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`

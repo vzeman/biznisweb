@@ -762,6 +762,14 @@ def build_creditnote_reporting_audit(
                 else ("Counts in realized revenue filter" if in_reporting else "Excluded by realized revenue filter")
             )
             row["Order status"] = status_name
+            if order_num:
+                denominator_bucket = denominator_by_carrier.setdefault(
+                    (project, carrier),
+                    {"orders": set(), "ids": set()},
+                )
+                denominator_bucket["orders"].add(order_num)
+                if carrier_id:
+                    denominator_bucket["ids"].add(carrier_id)
 
         group_key = (project, order_num)
         group = creditnote_groups.setdefault(
@@ -833,6 +841,7 @@ def build_creditnote_reporting_audit(
                 "Prepravca": carrier,
                 "Prepravca ID": ", ".join(carrier_ids),
                 "Realized objednavky": denominator_count,
+                "Odoslane objednavky": denominator_count,
                 "Dobropisovane objednavky": creditnote_order_count,
                 "Dobropisy": int(numerator.get("Dobropisy") or 0),
                 "Dobropis rate %": rate,
@@ -1109,12 +1118,12 @@ def _draw_creditnote_pdf(
     pdf.drawString(margin_x, y, "Dobropisy podla prepravcu")
     y -= 5 * mm
     pdf.setFont(fonts["regular"], 7)
-    pdf.drawString(margin_x, y, "Rate = dobropisovane objednavky / realized objednavky v reportovanom obdobi.")
+    pdf.drawString(margin_x, y, "Rate = dobropisovane objednavky / odoslane objednavky daneho prepravcu v reportovanom obdobi.")
     y -= 6 * mm
     carrier_columns = [
         ("Eshop", 18 * mm),
         ("Prepravca", 54 * mm),
-        ("Realized", 22 * mm),
+        ("Odoslane", 22 * mm),
         ("Dobrop. obj.", 25 * mm),
         ("Dobropisy", 22 * mm),
         ("Rate", 20 * mm),
