@@ -61,6 +61,18 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Monthly creditnote export Fargate runtime preflight is in progress on `2026-06-18`:
+  - branch/worktree: `codex/monthly-creditnote-fargate-preflight` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - context: PR `#187` merged as `f04859d22a2b3031b7c2dc8b647475561b5566be`; deploy run `27750334925` proved `GITHUB_SECRET_ADMIN_LOGIN_OK` for ROY and VEVO, `credential_override_count=4`, and `TASK_CREDENTIAL_OVERRIDES_OK`, but the Fargate smoke still failed ROY admin login with `401 Unauthorized`
+  - hard-gate context from failed run: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.19.15`, service `monthly-creditnote-export`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/monthly-creditnote-export:4`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/f7fc158140e64bd8ab6fea8979a1e497`, image digest `sha256:0bcb914911f4726949032991bff95a390e8bae1cd7984f91e5604e1b55fe7699`, marker path `http://127.0.0.1:8000/marker.json`
+  - change: monthly task-definition builder now removes inherited unprefixed `BIZNISWEB_USERNAME`, `BIZNISWEB_PASSWORD`, `BIZNISWEB_API_TOKEN`, and `BIZNISWEB_API_URL` from the source daily task so the monthly export cannot silently fall back to stale source credentials
+  - change: host smoke now runs a Fargate-side admin-login preflight before `monthly_creditnote_export_runner.py`, logging only credential presence booleans and `FARGATE_ADMIN_LOGIN_OK` markers, never secret values
+  - local verification:
+    - YAML parse check for `.github/workflows/deploy-monthly-creditnote-export.yml`
+    - embedded Python heredoc syntax check for the workflow
+    - `git diff --check`
+  - Next exact step: merge this workflow diagnostic/fallback removal, rerun `Deploy Monthly Creditnote Export`, and use the Fargate-side preflight result to distinguish runtime credential injection from a BizniWeb/ECS egress authorization problem
+
 - Monthly creditnote export runtime env isolation fix is in progress on `2026-06-18`:
   - branch/worktree: `codex/monthly-creditnote-runtime-env` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - context: PR `#186` merged as `8685eea41de88516c462c9261695a5ea9656e679` and deploy run `27749819179` proved that GitHub Secrets were present (`credential_override_count=4`) and task definition `monthly-creditnote-export:3` was registered, but the smoke task still failed ROY admin login with `401 Unauthorized`
