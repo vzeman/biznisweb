@@ -127,6 +127,25 @@ WEATHER_SETTINGS: Dict[str, Any] = {
     "locations": []
 }
 ENABLE_EMAIL_STRATEGY_REPORT = False
+ROY_INVENTORY_COST_HISTORY_COLUMNS = [
+    "date",
+    "inventory_cost_value",
+    "inventory_retail_value",
+    "inventory_available_units",
+    "inventory_products_with_stock",
+    "inventory_products_total",
+    "inventory_cost_coverage_units_pct",
+    "inventory_cost_coverage_retail_pct",
+    "dead_stock_cost_value",
+    "dead_stock_count",
+    "stock_risk_critical_count",
+    "stock_risk_30d_count",
+    "stock_risk_45d_count",
+    "negative_stock_count",
+    "revenue_at_risk_30d",
+    "profit_at_risk_30d",
+]
+ROY_INVENTORY_COST_HISTORY_MAX_POINTS = 730
 
 # Currency conversion rates to EUR
 # These should be updated regularly or fetched from an API
@@ -760,6 +779,177 @@ class BizniWebExporter:
         if not self.output_tag:
             return path
         return path.with_name(f"{path.stem}__{self.output_tag}{path.suffix}")
+
+    @staticmethod
+    def _history_float(value: Any, default: float = 0.0) -> float:
+        try:
+            if pd.isna(value):
+                return default
+        except (TypeError, ValueError):
+            pass
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _history_int(cls, value: Any, default: int = 0) -> int:
+        return int(round(cls._history_float(value, float(default))))
+
+    @staticmethod
+    def _history_date(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            return None
+        return parsed.strftime("%Y-%m-%d")
+
+    @classmethod
+    def _normalize_roy_inventory_cost_history_point(cls, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(row, dict):
+            return None
+        date_value = cls._history_date(
+            row.get("date")
+            or row.get("inventory_snapshot_date")
+            or row.get("snapshot_date")
+        )
+        if not date_value:
+            return None
+        return {
+            "date": date_value,
+            "inventory_cost_value": round(cls._history_float(row.get("inventory_cost_value")), 2),
+            "inventory_retail_value": round(cls._history_float(row.get("inventory_retail_value")), 2),
+            "inventory_available_units": round(cls._history_float(row.get("inventory_available_units")), 1),
+            "inventory_products_with_stock": cls._history_int(row.get("inventory_products_with_stock")),
+            "inventory_products_total": cls._history_int(row.get("inventory_products_total")),
+            "inventory_cost_coverage_units_pct": round(cls._history_float(row.get("inventory_cost_coverage_units_pct")), 2),
+            "inventory_cost_coverage_retail_pct": round(cls._history_float(row.get("inventory_cost_coverage_retail_pct")), 2),
+            "dead_stock_cost_value": round(cls._history_float(row.get("dead_stock_cost_value")), 2),
+            "dead_stock_count": cls._history_int(row.get("dead_stock_count")),
+            "stock_risk_critical_count": cls._history_int(row.get("stock_risk_critical_count")),
+            "stock_risk_30d_count": cls._history_int(row.get("stock_risk_30d_count")),
+            "stock_risk_45d_count": cls._history_int(row.get("stock_risk_45d_count")),
+            "negative_stock_count": cls._history_int(row.get("negative_stock_count")),
+            "revenue_at_risk_30d": round(cls._history_float(row.get("revenue_at_risk_30d")), 2),
+            "profit_at_risk_30d": round(cls._history_float(row.get("profit_at_risk_30d")), 2),
+        }
+
+    @classmethod
+    def _build_roy_inventory_cost_history_point(cls, summary: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(summary, dict):
+            return None
+        inventory_status = str(summary.get("inventory_status") or "").strip().lower()
+        if inventory_status and inventory_status != "ok":
+            return None
+        return cls._normalize_roy_inventory_cost_history_point(
+            {
+                "date": summary.get("inventory_snapshot_date"),
+                "inventory_cost_value": summary.get("inventory_cost_value"),
+                "inventory_retail_value": summary.get("inventory_retail_value"),
+                "inventory_available_units": summary.get("inventory_available_units"),
+                "inventory_products_with_stock": summary.get("inventory_products_with_stock"),
+                "inventory_products_total": summary.get("inventory_products_total"),
+                "inventory_cost_coverage_units_pct": summary.get("inventory_cost_coverage_units_pct"),
+                "inventory_cost_coverage_retail_pct": summary.get("inventory_cost_coverage_retail_pct"),
+                "dead_stock_cost_value": summary.get("dead_stock_cost_value"),
+                "dead_stock_count": summary.get("dead_stock_count"),
+                "stock_risk_critical_count": summary.get("stock_risk_critical_count"),
+                "stock_risk_30d_count": summary.get("stock_risk_30d_count"),
+                "stock_risk_45d_count": summary.get("stock_risk_45d_count"),
+                "negative_stock_count": summary.get("negative_stock_count"),
+                "revenue_at_risk_30d": summary.get("revenue_at_risk_30d"),
+                "profit_at_risk_30d": summary.get("profit_at_risk_30d"),
+            }
+        )
+
+    @classmethod
+    def _extract_roy_inventory_cost_history_rows_from_snapshot(cls, snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
+        if not isinstance(snapshot, dict):
+            return []
+        dashboard = snapshot.get("dashboard") if isinstance(snapshot.get("dashboard"), dict) else snapshot
+        roy_payload = dashboard.get("roy_product_demand") if isinstance(dashboard, dict) else {}
+        if not isinstance(roy_payload, dict):
+            return []
+        raw_rows = roy_payload.get("inventory_cost_history_rows")
+        if isinstance(raw_rows, list) and raw_rows:
+            normalized_rows = [
+                point
+                for point in (
+                    cls._normalize_roy_inventory_cost_history_point(row)
+                    for row in raw_rows
+                )
+                if point
+            ]
+            if normalized_rows:
+                return normalized_rows
+        summary = roy_payload.get("summary") if isinstance(roy_payload.get("summary"), dict) else {}
+        point = cls._build_roy_inventory_cost_history_point(summary)
+        return [point] if point else []
+
+    @classmethod
+    def _load_roy_inventory_cost_history_rows_from_payload_path(cls, path: Path) -> List[Dict[str, Any]]:
+        if not path.exists():
+            return []
+        try:
+            snapshot = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Previous Roy inventory history payload is unreadable: %s", exc)
+            return []
+        return cls._extract_roy_inventory_cost_history_rows_from_snapshot(snapshot)
+
+    def _load_roy_inventory_cost_history_rows_from_s3(self) -> List[Dict[str, Any]]:
+        if self.project_name != "roy" or self.output_tag:
+            return []
+        bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
+        if not bucket:
+            return []
+        prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/") or f"daily-reports/{self.project_name}"
+        region = os.getenv("AWS_REGION", "eu-central-1").strip()
+        try:
+            import boto3  # type: ignore
+        except ImportError:
+            logger.info("boto3 unavailable; skipping previous Roy inventory history S3 load.")
+            return []
+        key = f"{prefix}/latest/dashboard_payload_latest.json"
+        try:
+            body = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)["Body"].read()
+            text = body.decode("utf-8-sig") if isinstance(body, bytes) else str(body)
+            snapshot = json.loads(text)
+        except Exception as exc:
+            logger.info("Previous Roy inventory history S3 payload unavailable: %s", exc)
+            return []
+        return self._extract_roy_inventory_cost_history_rows_from_snapshot(snapshot)
+
+    def _load_previous_roy_inventory_cost_history_rows(self) -> List[Dict[str, Any]]:
+        if self.project_name != "roy":
+            return []
+        rows: List[Dict[str, Any]] = []
+        rows.extend(self._load_roy_inventory_cost_history_rows_from_payload_path(self.output_path("dashboard_payload_latest.json")))
+        rows.extend(self._load_roy_inventory_cost_history_rows_from_s3())
+        return rows
+
+    @classmethod
+    def _merge_roy_inventory_cost_history_rows(
+        cls,
+        previous_rows: List[Dict[str, Any]],
+        current_point: Optional[Dict[str, Any]],
+        max_points: int = ROY_INVENTORY_COST_HISTORY_MAX_POINTS,
+    ) -> List[Dict[str, Any]]:
+        by_date: Dict[str, Dict[str, Any]] = {}
+        for row in previous_rows or []:
+            point = cls._normalize_roy_inventory_cost_history_point(row)
+            if point:
+                by_date[point["date"]] = point
+        current = cls._normalize_roy_inventory_cost_history_point(current_point or {})
+        if current:
+            by_date[current["date"]] = current
+        rows = [by_date[key] for key in sorted(by_date)]
+        if max_points > 0 and len(rows) > max_points:
+            rows = rows[-max_points:]
+        return rows
 
     @staticmethod
     def _order_purchase_datetime(order: Dict[str, Any]) -> Optional[datetime]:
@@ -11645,6 +11835,16 @@ class BizniWebExporter:
             "loss_product_rows": loss_product_rows_df,
             "country_rows": country_rows_df,
         }
+        current_inventory_cost_point = self._build_roy_inventory_cost_history_point(result["summary"])
+        inventory_cost_history_rows = self._merge_roy_inventory_cost_history_rows(
+            self._load_previous_roy_inventory_cost_history_rows(),
+            current_inventory_cost_point,
+        ) if current_inventory_cost_point else []
+        result["inventory_cost_history_rows"] = pd.DataFrame(
+            inventory_cost_history_rows,
+            columns=ROY_INVENTORY_COST_HISTORY_COLUMNS,
+        )
+        result["summary"]["inventory_cost_history_points"] = int(len(inventory_cost_history_rows))
         print(
             f"Roy product demand analytics complete: growing={len(growing_rows_df)}, "
             f"declining={len(declining_rows_df)}, forecasted={len(forecast_rows_df)}, "
