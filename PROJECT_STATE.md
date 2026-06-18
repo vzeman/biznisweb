@@ -61,8 +61,8 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- Creditnote shipped-before-cancel reporting correction is implemented locally on `2026-06-18`:
-  - branch/worktree: `codex/shipped-before-cancel-creditnotes` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+- Creditnote shipped-before-cancel reporting correction is implemented and deployed on `2026-06-18`:
+  - code PR `#184` merged to `main` as `8437d7723100b7b9f5abed65a5bb3b462af0f68d`
   - change: creditnoted/canceled orders count as sent only when the current status is `Odoslaná`/`Odoslana` or the creditnote storno guard persisted an audit showing the previous status before cancellation was shipped
   - change: carrier dobropis rate now uses sent orders as denominator and sent creditnoted orders as numerator; total credited EUR and creditnote document counts remain visible
   - change: retained creditnote fulfillment cost is kept only for creditnoted orders that were demonstrably sent before being canceled/refunded
@@ -72,7 +72,14 @@ Bootstrap entrypoints:
     - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_invoice_generation`
     - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity tests.test_roy_picking_lists_pdf`
     - `python -m json.tool projects\roy\settings.json`; `python -m json.tool projects\vevo\settings.json`; `git diff --check`
-  - Next exact step: commit/push this branch, merge through PR, wait for ECR rebuild, then dispatch `Production Reporting Smoke` with `project=all`, `send_email=true`, `update_task_image=true`, and record Fargate hard-gate context plus localhost marker/UI smoke before considering tomorrow morning's email protected
+  - ECR refresh: run `27742671194` succeeded, image digest `sha256:0bcb914911f4726949032991bff95a390e8bae1cd7984f91e5604e1b55fe7699`
+  - production reporting smoke: run `27742785997` succeeded with `project=all`, marker `shipped-creditnote-20260618`, `send_email=true`, `update_task_image=true`
+  - VEVO hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.8.124`, service `vevo-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:8`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/a4336972bed74697b965ced4b3d543c7`, task image digest `sha256:0bcb914911f4726949032991bff95a390e8bae1cd7984f91e5604e1b55fe7699`, `task-image-updated=true`
+  - VEVO verification: SES `MessageId=0107019ed99af316-56d7082e-1821-40c5-a5c7-19afc911e80e-000000`, localhost marker `LOCALHOST_MARKER_OK`, `has_creditnote_payload=true`, `send_email=true`, `creditnote_count=267`, `credited_gross_eur=4794.93`, report path `data/vevo/report_latest.html`, UI smoke `UI_SMOKE_OK:vevo:production-board` and `UI_SMOKE_OK:vevo:daily-profit-loss`
+  - ROY hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.20.25`, service `roy-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:37`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/ea014a9e2172470b83ecfd0fdc2f9cda`, task image digest `sha256:0bcb914911f4726949032991bff95a390e8bae1cd7984f91e5604e1b55fe7699`, `task-image-updated=true`
+  - ROY verification: SES `MessageId=0107019ed9c45858-7709c644-0eca-4738-bedb-a4a848542743-000000`, localhost marker `LOCALHOST_MARKER_OK`, `has_creditnote_payload=true`, `send_email=true`, `creditnote_count=110`, `credited_gross_eur=11063.52`, report path `data/roy/report_latest.html`, UI smoke `UI_SMOKE_OK:roy:daily-profit-loss`
+  - Current status: scheduled daily emails for both shops now point to the new image and the corrected reporting emails were regenerated and sent on `2026-06-18`
+  - Next exact step: monitor the next regular morning email for both e-shops; no known code/deploy blocker remains for shipped-before-cancel creditnote reporting
 
 - Production report email regeneration follow-up is in progress on `2026-06-18`:
   - branch/worktree: `codex/report-smoke-logs` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
