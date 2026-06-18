@@ -300,10 +300,12 @@ jobs:
           container = task["containerDefinitions"][0]
           container["image"] = image_identifier
           container["command"] = ["python", "monthly_creditnote_export_runner.py", "--owner-project", owner_project]
+          credential_names = {"BIZNISWEB_USERNAME", "BIZNISWEB_PASSWORD", "BIZNISWEB_API_TOKEN", "BIZNISWEB_API_URL"}
 
           env = [
               item for item in container.get("environment", [])
-              if item.get("name") not in {
+              if item.get("name") not in credential_names
+              and item.get("name") not in {
                   "REPORT_PROJECT",
                   "REPORT_OUTPUT_TAG",
                   "REPORT_SKIP_INVOICES",
@@ -314,14 +316,14 @@ jobs:
           ]
           secrets = [
               item for item in container.get("secrets", [])
-              if not item.get("name", "").startswith(("ROY_", "VEVO_"))
+              if item.get("name") not in credential_names
+              and not item.get("name", "").startswith(("ROY_", "VEVO_"))
           ]
           credential_overrides = {}
           override_path = pathlib.Path("credential-overrides.json")
           if override_path.exists():
               credential_overrides = json.loads(override_path.read_text(encoding="utf-8"))
 
-          credential_names = {"BIZNISWEB_USERNAME", "BIZNISWEB_PASSWORD", "BIZNISWEB_API_TOKEN", "BIZNISWEB_API_URL"}
           for project in projects:
               prefix = project.upper().replace("-", "_")
               path = pathlib.Path(f"source-task-definition-{project}.json")
@@ -583,6 +585,64 @@ jobs:
             done
           }
           trap cleanup EXIT
+          python - <<'PY'
+          import http.cookiejar
+          import json
+          import os
+          import pathlib
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          projects = [item.strip() for item in os.environ["CREDITNOTE_EXPORT_PROJECTS"].split(",") if item.strip()]
+
+          def extract_arf(text):
+              match = re.search(r"[?&]arf=([a-zA-Z0-9]+)", text or "")
+              if not match:
+                  match = re.search(
+                      r"CsrfToken\s*=\s*function\s*\(\)\s*\{\s*var\s+\w+\s*=\s*'([a-zA-Z0-9]+)'",
+                      text or "",
+                  )
+              return match.group(1) if match else ""
+
+          for project in projects:
+              prefix = project.upper().replace("-", "_")
+              username = os.environ.get(f"{prefix}_BIZNISWEB_USERNAME", "")
+              password = os.environ.get(f"{prefix}_BIZNISWEB_PASSWORD", "")
+              print(
+                  "FARGATE_RUNTIME_ENV_OK "
+                  f"project={project} "
+                  f"username_present={bool(username)} "
+                  f"password_present={bool(password)} "
+                  f"unprefixed_username_present={bool(os.environ.get('BIZNISWEB_USERNAME'))} "
+                  f"skip_project_env={os.environ.get('REPORT_SKIP_PROJECT_ENV')}"
+              )
+              if not username or not password:
+                  raise SystemExit(f"{project}: missing prefixed runtime admin credentials")
+              settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+              api_url = str(settings.get("biznisweb_api_url") or "").strip()
+              parsed = urllib.parse.urlparse(api_url)
+              base_url = f"{parsed.scheme}://{parsed.netloc}"
+              opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+              login_page = opener.open(f"{base_url}/erp/main/login", timeout=30).read().decode("utf-8", "replace")
+              arf = extract_arf(login_page)
+              payload = urllib.parse.urlencode(
+                  {"username": username, "password": password, "res": "1890x900", "arf": arf}
+              ).encode("utf-8")
+              request = urllib.request.Request(
+                  f"{base_url}/admin/login/authenticate/",
+                  data=payload,
+                  headers={"Content-Type": "application/x-www-form-urlencoded"},
+              )
+              try:
+                  response = opener.open(request, timeout=30)
+              except urllib.error.HTTPError as exc:
+                  raise SystemExit(f"{project}: Fargate runtime admin login failed status={exc.code}") from exc
+              if response.getcode() >= 400:
+                  raise SystemExit(f"{project}: Fargate runtime admin login failed status={response.getcode()}")
+              print(f"FARGATE_ADMIN_LOGIN_OK project={project} base_url={base_url} arf_present={bool(arf)}")
+          PY
           RUN_ARGS=(--owner-project "${OWNER_PROJECT}" --projects "${PROJECTS}" --email-to "${EMAIL_TO}" --output-tag smoke)
           if [[ -n "${EMAIL_MODE}" ]]; then
             RUN_ARGS+=("${EMAIL_MODE}")
