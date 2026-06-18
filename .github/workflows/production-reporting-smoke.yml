@@ -152,6 +152,29 @@ jobs:
           PY
             )"
 
+            dump_task_logs() {
+              if [[ -z "$LOG_GROUP" || -z "$LOG_PREFIX" ]]; then
+                echo "CloudWatch log stream unavailable: missing log group or prefix"
+                return 0
+              fi
+              local log_stream="${LOG_PREFIX}/${CONTAINER_NAME}/${TASK_ID}"
+              echo "CloudWatch log stream: ${LOG_GROUP}:${log_stream}"
+              set +e
+              aws logs get-log-events \
+                --log-group-name "$LOG_GROUP" \
+                --log-stream-name "$log_stream" \
+                --region "$AWS_REGION" \
+                --limit 200 \
+                --no-paginate \
+                --query 'events[].message' \
+                --output text
+              local log_rc=$?
+              set -e
+              if [[ "$log_rc" != "0" ]]; then
+                echo "CloudWatch log fetch failed with exit code ${log_rc}" >&2
+              fi
+            }
+
             MARKER="${PROJECT}-${MARKER_SUFFIX}"
             SMOKE_SCRIPT="$(cat <<'SH'
           set -euo pipefail
@@ -387,16 +410,30 @@ jobs:
 
             if [[ "$TASK_STOPPED" != "true" ]]; then
               echo "Task ${TASK_ARN} did not stop within 60 minutes; stopping smoke task." >&2
-              if [[ -n "$LOG_GROUP" && -n "$LOG_PREFIX" ]]; then
-                LOG_STREAM="${LOG_PREFIX}/${CONTAINER_NAME}/${TASK_ID}"
-                echo "CloudWatch log stream: ${LOG_GROUP}:${LOG_STREAM}"
-                aws logs get-log-events \
-                  --log-group-name "$LOG_GROUP" \
-                  --log-stream-name "$LOG_STREAM" \
-                  --region "$AWS_REGION" \
-                  --query 'events[].message' \
-                  --output text || true
-              fi
+              echo "TASK_TIMEOUT_CONTEXT_BEGIN"
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("describe-stopped.json").read_text(encoding="utf-8"))
+          task = (data.get("tasks") or [{}])[0]
+          print(json.dumps({
+              "lastStatus": task.get("lastStatus"),
+              "desiredStatus": task.get("desiredStatus"),
+              "stopCode": task.get("stopCode"),
+              "stoppedReason": task.get("stoppedReason"),
+              "containers": [
+                  {
+                      "name": container.get("name"),
+                      "lastStatus": container.get("lastStatus"),
+                      "exitCode": container.get("exitCode"),
+                      "reason": container.get("reason"),
+                  }
+                  for container in task.get("containers", [])
+              ],
+          }, ensure_ascii=False, sort_keys=True))
+          PY
+              echo "TASK_TIMEOUT_CONTEXT_END"
+              dump_task_logs
               aws ecs stop-task \
                 --cluster "$CLUSTER_ARN" \
                 --task "$TASK_ARN" \
@@ -408,20 +445,34 @@ jobs:
             EXIT_CODE="$(python - <<'PY'
           import json
           task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
-          print(task["containers"][0].get("exitCode", ""))
+          print(task["containers"][0].get("exitCode", "MISSING"))
           PY
             )"
 
-            if [[ -n "$LOG_GROUP" && -n "$LOG_PREFIX" ]]; then
-              LOG_STREAM="${LOG_PREFIX}/${CONTAINER_NAME}/${TASK_ID}"
-              echo "CloudWatch log stream: ${LOG_GROUP}:${LOG_STREAM}"
-              aws logs get-log-events \
-                --log-group-name "$LOG_GROUP" \
-                --log-stream-name "$LOG_STREAM" \
-                --region "$AWS_REGION" \
-                --query 'events[].message' \
-                --output text || true
-            fi
+            echo "TASK_STOPPED_CONTEXT_BEGIN"
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("describe-stopped.json").read_text(encoding="utf-8"))
+          task = data["tasks"][0]
+          print(json.dumps({
+              "lastStatus": task.get("lastStatus"),
+              "desiredStatus": task.get("desiredStatus"),
+              "stopCode": task.get("stopCode"),
+              "stoppedReason": task.get("stoppedReason"),
+              "containers": [
+                  {
+                      "name": container.get("name"),
+                      "lastStatus": container.get("lastStatus"),
+                      "exitCode": container.get("exitCode"),
+                      "reason": container.get("reason"),
+                  }
+                  for container in task.get("containers", [])
+              ],
+          }, ensure_ascii=False, sort_keys=True))
+          PY
+            echo "TASK_STOPPED_CONTEXT_END"
+            dump_task_logs
 
             if [[ "$EXIT_CODE" != "0" ]]; then
               echo "Task ${TASK_ARN} failed with exit code ${EXIT_CODE}" >&2
