@@ -236,6 +236,49 @@ class CreditnoteExportTests(unittest.TestCase):
         self.assertEqual(66.67, packeta_row["Dobropis rate %"])
         self.assertEqual(61.5, packeta_row["Suma_s_DPH"])
 
+    def test_carrier_rate_uses_creditnote_documents_not_only_sent_creditnoted_orders(self) -> None:
+        export_rows = [
+            {
+                "Eshop": "VEVO",
+                "Dobropis cislo": "260002",
+                "Objednavka": "2602009001",
+                "Mena": "EUR",
+                "Suma bez DPH": -20.0,
+                "Suma s DPH": -24.6,
+            },
+            {
+                "Eshop": "VEVO",
+                "Dobropis cislo": "260003",
+                "Objednavka": "2602009002",
+                "Mena": "EUR",
+                "Suma bez DPH": -30.0,
+                "Suma s DPH": -36.9,
+            },
+        ]
+        packeta = {"type": "shipping", "title": "Packeta - vydajne miesto/box - (100) Foo", "reference_id": "9"}
+        context = {
+            "vevo": {
+                "available": True,
+                "included_orders": [],
+                "all_orders": [
+                    {"order_num": "2602008001", "status": {"name": "Odoslana"}, "price_elements": [packeta]},
+                    {"order_num": "2602008002", "status": {"name": "Odoslana"}, "price_elements": [packeta]},
+                    {"order_num": "2602009001", "status": {"name": "Storno"}, "price_elements": [packeta]},
+                    {"order_num": "2602009002", "status": {"name": "Storno"}, "price_elements": [packeta]},
+                ],
+                "status_change_audit": {"orders": []},
+            }
+        }
+
+        _, carrier_rows, audit = build_creditnote_reporting_audit(export_rows, context)
+
+        self.assertEqual(0, audit["sent_creditnoted_orders"])
+        packeta_row = next(row for row in carrier_rows if row["Prepravca"] == "Packeta")
+        self.assertEqual(2, packeta_row["Odoslane objednavky"])
+        self.assertEqual(0, packeta_row["Dobropisovane objednavky"])
+        self.assertEqual(2, packeta_row["Dobropisy"])
+        self.assertEqual(100.0, packeta_row["Dobropis rate %"])
+
     def test_daily_email_summary_includes_creditnote_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload_path = Path(tmp) / "dashboard_payload_latest.json"

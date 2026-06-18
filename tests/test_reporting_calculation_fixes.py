@@ -362,7 +362,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(100.0, packeta_row["creditnote_rate_pct"])
 
     @patch("creditnote_export.fetch_project_creditnotes")
-    def test_creditnote_reporting_metrics_exclude_unproven_canceled_orders_from_sent_rate(self, fetch_mock) -> None:
+    def test_creditnote_reporting_metrics_use_creditnote_count_for_rate(self, fetch_mock) -> None:
         exporter = make_exporter()
         exporter.project_settings["currency_rates_to_eur"] = {"EUR": 1.0}
         exporter._creditnote_status_change_audit_cache = {"project": "vevo", "orders": []}
@@ -429,10 +429,12 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(2, summary["all_creditnoted_orders"])
         self.assertEqual(1, summary["creditnoted_orders"])
         self.assertEqual(1, summary["sent_creditnoted_orders"])
+        self.assertEqual(200.0, summary["creditnote_rate_pct"])
         packeta_row = next(row for row in metrics["carrier_rows"] if row["carrier"] == "Packeta")
         self.assertEqual(1, packeta_row["realized_orders"])
         self.assertEqual(1, packeta_row["creditnoted_orders"])
-        self.assertEqual(100.0, packeta_row["creditnote_rate_pct"])
+        self.assertEqual(2, packeta_row["creditnotes"])
+        self.assertEqual(200.0, packeta_row["creditnote_rate_pct"])
 
     def test_period_customer_history_marks_prior_customer_returning(self) -> None:
         exporter = make_exporter()
