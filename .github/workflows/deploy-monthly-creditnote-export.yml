@@ -51,6 +51,10 @@ jobs:
         env:
           EXECUTE_NOW: ${{ inputs.execute_now || 'false' }}
           SEND_EMAIL_NOW: ${{ inputs.send_email_now || 'false' }}
+          ROY_BIZNISWEB_USERNAME: ${{ secrets.ROY_BIZNISWEB_USERNAME }}
+          ROY_BIZNISWEB_PASSWORD: ${{ secrets.ROY_BIZNISWEB_PASSWORD }}
+          VEVO_BIZNISWEB_USERNAME: ${{ secrets.VEVO_BIZNISWEB_USERNAME }}
+          VEVO_BIZNISWEB_PASSWORD: ${{ secrets.VEVO_BIZNISWEB_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -159,6 +163,48 @@ jobs:
               --region "${AWS_REGION}" > "source-task-definition-${project}.json"
           done
 
+          : > credential-overrides.tsv
+          put_credential_override() {
+            local env_name="$1"
+            local value="${!env_name:-}"
+            if [[ -z "${value}" ]]; then
+              return
+            fi
+            local param_name="/biznisweb/monthly-creditnote-export/${env_name}"
+            aws ssm put-parameter \
+              --name "${param_name}" \
+              --type SecureString \
+              --value "${value}" \
+              --overwrite \
+              --region "${AWS_REGION}" >/dev/null
+            local param_arn
+            param_arn="$(aws ssm get-parameter \
+              --name "${param_name}" \
+              --region "${AWS_REGION}" \
+              --query 'Parameter.ARN' \
+              --output text)"
+            printf '%s\t%s\n' "${env_name}" "${param_arn}" >> credential-overrides.tsv
+          }
+          put_credential_override "ROY_BIZNISWEB_USERNAME"
+          put_credential_override "ROY_BIZNISWEB_PASSWORD"
+          put_credential_override "VEVO_BIZNISWEB_USERNAME"
+          put_credential_override "VEVO_BIZNISWEB_PASSWORD"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          overrides = {}
+          path = Path("credential-overrides.tsv")
+          if path.exists():
+              for line in path.read_text(encoding="utf-8").splitlines():
+                  if not line.strip():
+                      continue
+                  name, arn = line.split("\t", 1)
+                  overrides[name] = arn
+          Path("credential-overrides.json").write_text(json.dumps(overrides, sort_keys=True), encoding="utf-8")
+          print(json.dumps({"credential_override_count": len(overrides)}, sort_keys=True))
+          PY
+
           LOG_GROUP="/ecs/${TASK_FAMILY}"
           aws logs create-log-group --log-group-name "${LOG_GROUP}" --region "${AWS_REGION}" 2>/dev/null || true
           aws logs put-retention-policy \
@@ -213,6 +259,10 @@ jobs:
               item for item in container.get("secrets", [])
               if not item.get("name", "").startswith(("ROY_", "VEVO_"))
           ]
+          credential_overrides = {}
+          override_path = pathlib.Path("credential-overrides.json")
+          if override_path.exists():
+              credential_overrides = json.loads(override_path.read_text(encoding="utf-8"))
 
           credential_names = {"BIZNISWEB_USERNAME", "BIZNISWEB_PASSWORD", "BIZNISWEB_API_TOKEN", "BIZNISWEB_API_URL"}
           for project in projects:
@@ -231,6 +281,13 @@ jobs:
                   if name in credential_names:
                       secrets.append({"name": f"{prefix}_{name}", "valueFrom": item.get("valueFrom", "")})
 
+          if credential_overrides:
+              env = [item for item in env if item.get("name") not in credential_overrides]
+              secrets = [item for item in secrets if item.get("name") not in credential_overrides]
+              for name, value_from in sorted(credential_overrides.items()):
+                  if value_from:
+                      secrets.append({"name": name, "valueFrom": value_from})
+
           env.extend(
               [
                   {"name": "REPORT_PROJECT", "value": owner_project},
@@ -241,15 +298,14 @@ jobs:
           )
           container["environment"] = env
           if secrets:
-              seen = set()
-              deduped = []
+              deduped_by_name = {}
               for item in secrets:
-                  key = (item.get("name"), item.get("valueFrom"))
-                  if key in seen:
+                  name = item.get("name")
+                  value_from = item.get("valueFrom")
+                  if not name or not value_from:
                       continue
-                  seen.add(key)
-                  deduped.append(item)
-              container["secrets"] = deduped
+                  deduped_by_name[name] = item
+              container["secrets"] = list(deduped_by_name.values())
           container["logConfiguration"] = {
               "logDriver": "awslogs",
               "options": {
@@ -316,6 +372,47 @@ jobs:
               --role-name "${SCHEDULE_ROLE_NAME}" \
               --policy-name MonthlyCreditnoteExportScheduleRunTask \
               --policy-document file://scheduler-role-policy.json
+            if [[ -n "${EXECUTION_ROLE_ARN}" ]]; then
+              EXECUTION_ROLE_NAME="$(python - "${EXECUTION_ROLE_ARN}" <<'PY'
+          import sys
+          print(sys.argv[1].rsplit("/", 1)[-1])
+          PY
+              )"
+              python - <<'PY' > credential-override-execution-policy.json
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path("credential-overrides.json")
+          overrides = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+          resources = sorted({value for value in overrides.values() if value})
+          if resources:
+              json.dump(
+                  {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+                              "Resource": resources,
+                          },
+                          {
+                              "Effect": "Allow",
+                              "Action": "kms:Decrypt",
+                              "Resource": "*",
+                          },
+                      ],
+                  },
+                  sys.stdout,
+              )
+          PY
+              if [[ -s credential-override-execution-policy.json ]]; then
+                aws iam put-role-policy \
+                  --role-name "${EXECUTION_ROLE_NAME}" \
+                  --policy-name MonthlyCreditnoteExportCredentialOverrides \
+                  --policy-document file://credential-override-execution-policy.json
+              fi
+            fi
           fi
 
           python - "${REGISTERED_TASK_DEFINITION_ARN}" <<'PY' > schedule-target.json
