@@ -61,17 +61,27 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- Creditnote carrier rate from creditnote documents is implemented locally on `2026-06-18`:
+- Creditnote carrier rate from creditnote documents is implemented and deployed on `2026-06-18`:
   - branch/worktree: `codex/creditnote-rate-from-creditnotes` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - context: the daily carrier table showed carriers with `Creditnotes > 0` but `Rate = 0.00%` because the rate used sent-creditnoted order count as the numerator
   - change: monthly creditnote carrier audit now calculates `Dobropis rate %` as `Dobropisy / Odoslane objednavky` while keeping `Dobropisovane objednavky` as a separate sent-order audit column
   - change: daily dashboard creditnote metrics now calculate overall and per-carrier `creditnote_rate_pct`, rate index, outlier gating, and carrier sorting from creditnote document count instead of credited sent order count
+  - code PR `#191` merged to `main` as `9fd307c9a1bdeb7abe3cb2a5b8d71eab682f1b08`
   - local verification:
     - `python -m py_compile export_orders.py creditnote_export.py dashboard_modern.py daily_report_runner.py`
     - `python -m unittest tests.test_creditnote_export tests.test_reporting_calculation_fixes tests.test_dashboard_modern` (`40` tests OK)
     - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_invoice_generation` (`55` tests OK)
     - `git diff --check`
-  - Next exact step: commit/push this branch, merge through PR, wait for the ECR rebuild, then run production reporting smoke for `project=all` with `send_email=true` and `update_task_image=true` and record VEVO/ROY host marker + UI smoke results
+  - ECR refresh: run `27752466811` succeeded for `vevo-reporting:latest`, digest `sha256:f6b1d59a73dc3db38f9efae07f25ebca92946793b9f0df1b7807ac623b4893c1`
+  - production daily reporting smoke: run `27752601944` succeeded with `project=all`, marker `creditnote-rate-docs-20260618`, `send_email=true`, `update_task_image=true`
+  - VEVO hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.6.196`, service `vevo-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:9`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/15fc7cc2e24741db90ab742703d38086`, marker path `http://127.0.0.1:8000/marker.json`
+  - VEVO verification: task image digest `sha256:f6b1d59a73dc3db38f9efae07f25ebca92946793b9f0df1b7807ac623b4893c1`, `task-image-updated=true`, SES `MessageId=0107019eda4e95e7-766fb685-afe6-4bcc-a6c4-6f486537495a-000000`, `LOCALHOST_MARKER_OK`, `has_creditnote_payload=true`, `send_email=true`, `creditnote_count=267`, `credited_gross_eur=4794.93`, report path `data/vevo/report_latest.html`, UI smoke `UI_SMOKE_OK:vevo:production-board` and `UI_SMOKE_OK:vevo:daily-profit-loss`
+  - ROY hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.25.38`, service `roy-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:38`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/2af40f698aeb4b499750790405ec0f38`, marker path `http://127.0.0.1:8000/marker.json`
+  - ROY verification: task image digest `sha256:f6b1d59a73dc3db38f9efae07f25ebca92946793b9f0df1b7807ac623b4893c1`, `task-image-updated=true`, SES `MessageId=0107019eda8293a3-c6919a8b-246d-478d-8abd-112aadf137b0-000000`, `LOCALHOST_MARKER_OK`, `has_creditnote_payload=true`, `send_email=true`, `creditnote_count=110`, `credited_gross_eur=11063.52`, report path `data/roy/report_latest.html`, UI smoke `UI_SMOKE_OK:roy:daily-profit-loss`
+  - monthly creditnote deploy: initial auto run `27752466796` raced ECR and registered old digest `sha256:df5f61b564d155dc0a7f9a658682e1cbf7d20089b066125f0c898a82980ab5ac`; manual rerun `27756747537` succeeded after ECR and updated `monthly-creditnote-export` to task definition `monthly-creditnote-export:9` using digest `sha256:f6b1d59a73dc3db38f9efae07f25ebca92946793b9f0df1b7807ac623b4893c1`
+  - monthly verification: `CREDITNOTE_EXPORT_MARKER_OK`, `DEPLOY_MONTHLY_CREDITNOTE_EXPORT_OK`, and carrier rows now show non-zero rates when `Dobropisy > 0`, e.g. VEVO Packeta `8/114 = 7.02%`, VEVO SPS Balikovo `11/260 = 4.23%`, ROY Packeta `5/134 = 3.73%`
+  - Current status: scheduled daily emails for both shops and the monthly creditnote schedule now point to the image with `Creditnotes / Sent` carrier rates
+  - Next exact step: implement the next requested ROY inventory cost value metric and deploy it through the same PR/ECR/production-smoke path
 
 - Monthly combined ROY+VEVO creditnote export deploy is fixed and verified on `2026-06-18`:
   - code/workflow PRs merged to `main`:
