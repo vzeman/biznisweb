@@ -61,6 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Monthly creditnote export credential override fix is in progress on `2026-06-18`:
+  - branch/worktree: `codex/fix-monthly-creditnote-credentials` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - context: deploy workflow run `27742671211` failed in the monthly creditnote export host smoke because the Fargate task received stale ROY BizniWeb web credentials and `/admin/login/authenticate/` returned `401 Unauthorized`
+  - hard-gate context from the failed run: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.11.12`, service `monthly-creditnote-export`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/monthly-creditnote-export:2`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/95a845aef9f148b1a36bb7c3f7466914`, marker path `http://127.0.0.1:8000/marker.json`
+  - change: `.github/workflows/deploy-monthly-creditnote-export.yml` now accepts `ROY_BIZNISWEB_USERNAME`, `ROY_BIZNISWEB_PASSWORD`, `VEVO_BIZNISWEB_USERNAME`, and `VEVO_BIZNISWEB_PASSWORD` from GitHub Secrets, writes provided values into AWS SSM `SecureString` parameters, and wires those SSM parameters into the monthly ECS task definition as credential overrides
+  - change: the monthly task execution role gets an inline policy to read only the configured SSM credential override parameters, while the existing copied daily-task credentials remain the fallback when overrides are not present
+  - remote secret setup: the four GitHub Secrets above were populated from local project `.env` files without printing secret values
+  - local verification:
+    - YAML parse check for `.github/workflows/deploy-monthly-creditnote-export.yml`
+    - embedded Python heredoc syntax check for the workflow
+    - `git diff --check`
+  - Next exact step: commit/push this branch, merge through PR, then run/monitor `Deploy Monthly Creditnote Export` and require `CREDITNOTE_EXPORT_MARKER_OK` plus localhost marker before treating the monthly export deploy as fixed
+
 - Creditnote shipped-before-cancel reporting correction is implemented and deployed on `2026-06-18`:
   - code PR `#184` merged to `main` as `8437d7723100b7b9f5abed65a5bb3b462af0f68d`
   - change: creditnoted/canceled orders count as sent only when the current status is `Odoslaná`/`Odoslana` or the creditnote storno guard persisted an audit showing the previous status before cancellation was shipped
