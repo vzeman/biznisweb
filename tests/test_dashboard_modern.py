@@ -110,6 +110,71 @@ class DashboardModernTests(unittest.TestCase):
         self.assertEqual(-3.0, row["gross_profit"])
         self.assertEqual(-10.0, row["gross_margin_pct"])
 
+    def test_roy_inventory_cost_history_payload_and_chart_are_visible(self) -> None:
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2026-06-18"),
+                    "total_revenue": 100.0,
+                    "net_profit": 20.0,
+                    "contribution_profit": 25.0,
+                    "unique_orders": 1,
+                    "fb_ads_spend": 0.0,
+                    "google_ads_spend": 0.0,
+                    "total_items": 1,
+                    "product_expense": 60.0,
+                    "total_cost": 80.0,
+                    "pre_ad_contribution_profit": 35.0,
+                }
+            ]
+        )
+        items_agg = pd.DataFrame([{"item_label": "Test", "total_quantity": 1, "total_revenue": 100.0}])
+        history_rows = pd.DataFrame(
+            [
+                {
+                    "date": "2026-06-17",
+                    "inventory_cost_value": 100.0,
+                    "inventory_retail_value": 180.0,
+                    "dead_stock_cost_value": 15.0,
+                },
+                {
+                    "date": "2026-06-18",
+                    "inventory_cost_value": 150.0,
+                    "inventory_retail_value": 260.0,
+                    "dead_stock_cost_value": 20.0,
+                },
+            ]
+        )
+
+        html = generate_modern_dashboard(
+            date_agg,
+            items_agg,
+            datetime(2026, 6, 18),
+            datetime(2026, 6, 18),
+            report_title="ROY inventory test",
+            advanced_dtc_metrics={
+                "roy_product_demand": {
+                    "summary": {
+                        "inventory_status": "ok",
+                        "inventory_snapshot_date": "2026-06-18",
+                        "inventory_cost_value": 150.0,
+                        "inventory_retail_value": 260.0,
+                    },
+                    "inventory_cost_history_rows": history_rows,
+                }
+            },
+            source_health={"project": "roy"},
+        )
+
+        self.assertIn("royInventoryCostValueChart", html)
+        self.assertIn("Inventory cost value trend", html)
+        payload = extract_embedded_dashboard_payload(html)
+        self.assertEqual(2, len(payload["roy_product_demand"]["inventory_cost_history_rows"]))
+        self.assertEqual(
+            150.0,
+            payload["roy_product_demand"]["inventory_cost_history_rows"][-1]["inventory_cost_value"],
+        )
+
     def test_creditnote_metrics_are_visible_in_modern_dashboard(self) -> None:
         date_agg = pd.DataFrame(
             [

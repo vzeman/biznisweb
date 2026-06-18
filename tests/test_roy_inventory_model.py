@@ -425,6 +425,65 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual("CZ", cz_row["country_label"])
         self.assertEqual("P-CZ-A", cz_row["top_products"][0]["sku"])
 
+    def test_inventory_cost_history_merges_previous_rows_by_snapshot_date(self) -> None:
+        current_point = BizniWebExporter._build_roy_inventory_cost_history_point(
+            {
+                "inventory_status": "ok",
+                "inventory_snapshot_date": "2026-06-18",
+                "inventory_cost_value": 150.456,
+                "inventory_retail_value": 300.123,
+                "inventory_available_units": 12.4,
+                "inventory_products_with_stock": 4,
+                "inventory_products_total": 5,
+                "inventory_cost_coverage_units_pct": 88.8,
+                "inventory_cost_coverage_retail_pct": 91.2,
+                "dead_stock_cost_value": 25.5,
+                "dead_stock_count": 1,
+                "stock_risk_critical_count": 2,
+                "stock_risk_30d_count": 3,
+                "stock_risk_45d_count": 4,
+                "negative_stock_count": 0,
+                "revenue_at_risk_30d": 42.42,
+                "profit_at_risk_30d": 12.34,
+            }
+        )
+
+        history_rows = BizniWebExporter._merge_roy_inventory_cost_history_rows(
+            [
+                {"date": "2026-06-17", "inventory_cost_value": 100.0, "inventory_retail_value": 180.0},
+                {"date": "2026-06-18", "inventory_cost_value": 120.0, "inventory_retail_value": 220.0},
+            ],
+            current_point,
+        )
+
+        self.assertEqual(["2026-06-17", "2026-06-18"], [row["date"] for row in history_rows])
+        self.assertEqual(150.46, history_rows[-1]["inventory_cost_value"])
+        self.assertEqual(300.12, history_rows[-1]["inventory_retail_value"])
+        self.assertEqual(25.5, history_rows[-1]["dead_stock_cost_value"])
+        self.assertEqual(3, history_rows[-1]["stock_risk_30d_count"])
+
+    def test_inventory_cost_history_seeds_from_previous_dashboard_summary(self) -> None:
+        rows = BizniWebExporter._extract_roy_inventory_cost_history_rows_from_snapshot(
+            {
+                "dashboard": {
+                    "roy_product_demand": {
+                        "summary": {
+                            "inventory_status": "ok",
+                            "inventory_snapshot_date": "2026-06-17",
+                            "inventory_cost_value": 100.0,
+                            "inventory_retail_value": 180.0,
+                            "dead_stock_cost_value": 15.0,
+                        }
+                    }
+                }
+            }
+        )
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual("2026-06-17", rows[0]["date"])
+        self.assertEqual(100.0, rows[0]["inventory_cost_value"])
+        self.assertEqual(15.0, rows[0]["dead_stock_cost_value"])
+
 
 if __name__ == "__main__":
     unittest.main()

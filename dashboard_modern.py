@@ -1377,6 +1377,28 @@ def generate_modern_dashboard(
         ],
         limit=160,
     )
+    roy_inventory_cost_history_rows = _frame_rows(
+        (roy_product_demand or {}).get("inventory_cost_history_rows"),
+        [
+            "date",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "inventory_available_units",
+            "inventory_products_with_stock",
+            "inventory_products_total",
+            "inventory_cost_coverage_units_pct",
+            "inventory_cost_coverage_retail_pct",
+            "dead_stock_cost_value",
+            "dead_stock_count",
+            "stock_risk_critical_count",
+            "stock_risk_30d_count",
+            "stock_risk_45d_count",
+            "negative_stock_count",
+            "revenue_at_risk_30d",
+            "profit_at_risk_30d",
+        ],
+        limit=730,
+    )
     roy_stock_risk_rows = _frame_rows(
         (roy_product_demand or {}).get("stock_risk_rows"),
         [
@@ -2177,6 +2199,7 @@ def generate_modern_dashboard(
             "seasonality_rows": roy_seasonality_rows,
             "forecast_rows": roy_forecast_rows,
             "inventory_rows": roy_inventory_rows,
+            "inventory_cost_history_rows": roy_inventory_cost_history_rows,
             "stock_risk_rows": roy_stock_risk_rows,
             "dead_stock_rows": roy_dead_stock_rows,
             "alert_rows": roy_alert_rows,
@@ -2568,6 +2591,14 @@ def generate_modern_dashboard(
         )
         for row in roy_brand_profit_rows
     ) or '<tr><td colspan="6"><span class="lang-en">No brand profit data available.</span><span class="lang-sk hidden">Data o ziskovosti znaciek nie su dostupne.</span></td></tr>'
+    roy_inventory_cost_history_chart_html = ""
+    if roy_inventory_cost_history_rows:
+        roy_inventory_cost_history_chart_html = f"""
+                    <div class="panel chart-card" style="margin-top:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Inventory cost value trend</span><span class="lang-sk hidden">Vyvoj hodnoty skladu</span></h3><p><span class="lang-en">Daily inventory cost snapshots with retail and dead-stock value context.</span><span class="lang-sk hidden">Denne skladove snapshoty v nakupnych cenach s retail a dead-stock kontextom.</span></p></div></div>
+                        <div class="chart-shell compact"><canvas id="royInventoryCostValueChart"></canvas></div>
+                    </div>
+        """
     roy_product_demand_section_html = ""
     if any([
         roy_growing_rows,
@@ -2575,6 +2606,7 @@ def generate_modern_dashboard(
         roy_seasonality_rows,
         roy_forecast_rows,
         roy_inventory_rows,
+        roy_inventory_cost_history_rows,
         roy_stock_risk_rows,
         roy_dead_stock_rows,
         roy_alert_rows,
@@ -2664,6 +2696,7 @@ def generate_modern_dashboard(
                         </div>
                         {roy_inventory_status_note_html}
                     </div>
+                    {roy_inventory_cost_history_chart_html}
                     <div class="panel table-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Actionable inventory alerts</span><span class="lang-sk hidden">Akcne skladove alerty</span></h3><p><span class="lang-en">This is the operational {roy_alert_delivery_horizon_days}-day alert bucket that should drive daily replenishment decisions and morning email alerts.</span><span class="lang-sk hidden">Toto je operativny {roy_alert_delivery_horizon_days}-dnovy alert bucket, ktory ma riadit denny replenishment a ranne emailove upozornenia.</span></p></div></div>
                         <table>
@@ -4856,6 +4889,21 @@ def generate_modern_dashboard(
                             y1: {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }},
                         }},
                     }},
+                }});
+            }}
+            if ((DATA.roy_product_demand || {{}}).inventory_cost_history_rows?.length && document.getElementById('royInventoryCostValueChart')) {{
+                const inventoryHistory = DATA.roy_product_demand.inventory_cost_history_rows;
+                const inventoryPointRadius = inventoryHistory.length > 14 ? 0 : 3;
+                new Chart(document.getElementById('royInventoryCostValueChart'), {{
+                    data: {{
+                        labels: inventoryHistory.map(x => x.date || '-'),
+                        datasets: [
+                            {{ type: 'line', label: 'Inventory cost value', data: inventoryHistory.map(x => Number(x.inventory_cost_value || 0)), borderColor: '#0f766e', backgroundColor: 'rgba(15,118,110,.10)', fill: true, tension: .32, borderWidth: 2.5, pointRadius: inventoryPointRadius }},
+                            {{ type: 'line', label: 'Inventory retail value', data: inventoryHistory.map(x => Number(x.inventory_retail_value || 0)), borderColor: '#4766ff', tension: .32, borderWidth: 2.1, pointRadius: inventoryPointRadius }},
+                            {{ type: 'bar', label: 'Dead stock value', data: inventoryHistory.map(x => Number(x.dead_stock_cost_value || 0)), backgroundColor: 'rgba(207,80,96,.34)', borderRadius: 6 }},
+                        ],
+                    }},
+                    options: baseOptions(),
                 }});
             }}
             const economicsOpts = baseOptions();

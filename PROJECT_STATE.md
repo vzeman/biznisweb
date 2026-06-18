@@ -61,6 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY inventory cost value history is implemented locally on `2026-06-18`:
+  - branch/worktree: `codex/roy-inventory-cost-value` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - context: ROY already calculated current `inventory_cost_value` in the inventory snapshot and showed it as a dashboard KPI, but the daily reporting payload did not persist a historical series for a trend chart
+  - change: ROY product demand analytics now builds `inventory_cost_history_rows` from the current inventory snapshot and merges it with the previous stable `dashboard_payload_latest.json` from local output/S3, deduplicated by snapshot date and capped to `730` points
+  - change: the modern dashboard payload now includes `roy_product_demand.inventory_cost_history_rows`
+  - change: the ROY inventory section now renders an `Inventory cost value trend` chart with inventory cost value, retail value, and dead-stock cost value in time
+  - local verification:
+    - `python -m py_compile export_orders.py dashboard_modern.py daily_report_runner.py`
+    - `python -m unittest tests.test_roy_inventory_model tests.test_dashboard_modern`
+    - `python -m unittest tests.test_roy_inventory_model tests.test_dashboard_modern tests.test_roy_operations_dashboard tests.test_reporting_calculation_fixes tests.test_creditnote_export tests.test_creditnote_storno_guard` (`81` tests OK)
+    - `git diff --check`
+  - Next exact step: commit/push this branch, open/merge PR, wait for ECR rebuild, then run ROY production reporting smoke with `send_email=true`, `update_task_image=true`, localhost marker verification, and UI smoke before treating tomorrow morning's reporting as covered
+
 - Creditnote carrier rate from creditnote documents is implemented and deployed on `2026-06-18`:
   - branch/worktree: `codex/creditnote-rate-from-creditnotes` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - context: the daily carrier table showed carriers with `Creditnotes > 0` but `Rate = 0.00%` because the rate used sent-creditnoted order count as the numerator
