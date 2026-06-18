@@ -61,6 +61,22 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Monthly combined ROY+VEVO creditnote export deploy is fixed and verified on `2026-06-18`:
+  - code/workflow PRs merged to `main`:
+    - PR `#186` (`8685eea41de88516c462c9261695a5ea9656e679`) added GitHub Secret -> SSM credential overrides for monthly ROY/VEVO admin credentials
+    - PR `#187` (`f04859d22a2b3031b7c2dc8b647475561b5566be`) isolated monthly runtime from project `.env` files and added runner-side admin credential preflight
+    - PR `#188` (`fffa6aaa8470791f154bd7f7676cca67ef9ae323`) removed inherited unprefixed `BIZNISWEB_*` fallback credentials and added Fargate-side admin preflight
+    - PR `#189` (`175fc2d0df8d5052e4332519eeee935db3c75cdd`) added project-prefixed API URL/token support so carrier/reporting audit works without unprefixed source credentials
+  - GitHub Secrets now configured: `ROY_BIZNISWEB_USERNAME`, `ROY_BIZNISWEB_PASSWORD`, `VEVO_BIZNISWEB_USERNAME`, `VEVO_BIZNISWEB_PASSWORD`; values were populated from local project `.env` files without printing secret values
+  - ECR refresh: run `27751472242` succeeded for `vevo-reporting:latest`, digest `sha256:df5f61b564d155dc0a7f9a658682e1cbf7d20089b066125f0c898a82980ab5ac`
+  - final monthly deploy/smoke: manual workflow run `27751599462` succeeded on `main` after the ECR refresh; `send_email_now=false`, so SES email send was dry-run only
+  - hard-gate context: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.17.194`, service `monthly-creditnote-export`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/monthly-creditnote-export:7`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/ad2e56e713534e7e82161b7810984ce6`, image digest `sha256:df5f61b564d155dc0a7f9a658682e1cbf7d20089b066125f0c898a82980ab5ac`, marker path `http://127.0.0.1:8000/marker.json`
+  - deploy verification markers: `GITHUB_SECRET_ADMIN_LOGIN_OK` for ROY and VEVO, `credential_override_count=4`, `TASK_CREDENTIAL_OVERRIDES_OK secret_count=4 skip_project_env=true`, `FARGATE_ADMIN_LOGIN_OK` for ROY and VEVO, `CREDITNOTE_EXPORT_MARKER_OK`, and `DEPLOY_MONTHLY_CREDITNOTE_EXPORT_OK schedule=monthly-creditnote-export task_definition=...:7`
+  - final smoke summary: `exported_rows=39`, project counts `ROY=14`, `VEVO=25`, fetch totals `ROY fetched=120/exported=14`, `VEVO fetched=288/exported=25`, carrier rows `15`, non-unknown carrier rows `14`
+  - reporting exclusion/carrier audit is healthy: `audit_errors={}`, `checked_orders=39`, `excluded_from_revenue=39`, `included_in_revenue=0`, `order_not_found=0`, `sent_creditnoted_orders=0`
+  - current production status: EventBridge schedule `monthly-creditnote-export` now points to task definition `monthly-creditnote-export:7` with the corrected image and credential/runtime handling
+  - Next exact step: monitor the next regular monthly run on `2026-07-14 06:00 Europe/Bratislava`; use `send_email_now=true` only when an immediate real email send is intentionally needed
+
 - Monthly creditnote prefixed API runtime fix is in progress on `2026-06-18`:
   - branch/worktree: `codex/monthly-creditnote-prefixed-api-runtime` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - context: deploy run `27750720572` succeeded after PR `#188` and confirmed `FARGATE_ADMIN_LOGIN_OK` for ROY and VEVO, but the generated monthly summary still showed reporting audit errors `BIZNISWEB_API_TOKEN missing for project 'roy'/'vevo'`, causing carrier context to degrade to `Unknown carrier`
