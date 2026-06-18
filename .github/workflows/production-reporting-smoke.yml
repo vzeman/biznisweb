@@ -24,9 +24,19 @@ on:
         options:
           - "false"
           - "true"
+      update_task_image:
+        description: Update the scheduled ECS task definition to the current ECR latest digest before running
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 env:
   AWS_REGION: eu-central-1
+  ECR_REPOSITORY: vevo-reporting
+  IMAGE_TAG: latest
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
@@ -51,11 +61,17 @@ jobs:
           REQUESTED_PROJECT: ${{ inputs.project }}
           MARKER_SUFFIX: ${{ inputs.marker }}
           SEND_EMAIL: ${{ inputs.send_email || 'false' }}
+          UPDATE_TASK_IMAGE: ${{ inputs.update_task_image || 'false' }}
         run: |
           set -euo pipefail
           SEND_EMAIL="$(printf '%s' "${SEND_EMAIL}" | tr '[:upper:]' '[:lower:]')"
           if [[ "${SEND_EMAIL}" != "true" && "${SEND_EMAIL}" != "false" ]]; then
             echo "send_email must be true or false, got ${SEND_EMAIL}" >&2
+            exit 1
+          fi
+          UPDATE_TASK_IMAGE="$(printf '%s' "${UPDATE_TASK_IMAGE}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${UPDATE_TASK_IMAGE}" != "true" && "${UPDATE_TASK_IMAGE}" != "false" ]]; then
+            echo "update_task_image must be true or false, got ${UPDATE_TASK_IMAGE}" >&2
             exit 1
           fi
 
@@ -64,6 +80,16 @@ jobs:
           else
             PROJECTS="$REQUESTED_PROJECT"
           fi
+
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          IMAGE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${IMAGE_TAG}" \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
 
           for PROJECT in $PROJECTS; do
             echo "::group::Production smoke for ${PROJECT}"
@@ -131,6 +157,114 @@ jobs:
             fi
 
             aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_ARN" --region "$AWS_REGION" > task-definition.json
+            TASK_IMAGE_UPDATED="false"
+            TASK_IMAGE="$(python - <<'PY'
+          import json
+          task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def["containerDefinitions"][0].get("image") or "")
+          PY
+            )"
+            if [[ "${UPDATE_TASK_IMAGE}" == "true" && "${TASK_IMAGE}" != "${IMAGE_IDENTIFIER}" ]]; then
+              echo "Updating ${SCHEDULE_NAME} task image from ${TASK_IMAGE} to ${IMAGE_IDENTIFIER}"
+              python - "${IMAGE_IDENTIFIER}" <<'PY' > task-definition-image.json
+          import copy
+          import json
+          import sys
+
+          image_identifier = sys.argv[1]
+          source = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          allowed = {
+              "family",
+              "taskRoleArn",
+              "executionRoleArn",
+              "networkMode",
+              "containerDefinitions",
+              "volumes",
+              "placementConstraints",
+              "requiresCompatibilities",
+              "cpu",
+              "memory",
+              "ipcMode",
+              "pidMode",
+              "proxyConfiguration",
+              "inferenceAccelerators",
+              "ephemeralStorage",
+              "runtimePlatform",
+          }
+          task = {key: copy.deepcopy(value) for key, value in source.items() if key in allowed and value not in (None, [], {})}
+          task["containerDefinitions"][0]["image"] = image_identifier
+          json.dump(task, sys.stdout)
+          PY
+              TASK_DEFINITION_ARN="$(aws ecs register-task-definition \
+                --cli-input-json file://task-definition-image.json \
+                --region "$AWS_REGION" \
+                --query 'taskDefinition.taskDefinitionArn' \
+                --output text)"
+              aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_ARN" --region "$AWS_REGION" > task-definition.json
+              python - "${TASK_DEFINITION_ARN}" <<'PY'
+          import json
+          import sys
+
+          task_definition_arn = sys.argv[1]
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+
+          def clean(value):
+              if isinstance(value, dict):
+                  cleaned = {}
+                  for key, raw in value.items():
+                      item = clean(raw)
+                      if item in (None, "", [], {}):
+                          continue
+                      cleaned[key] = item
+                  return cleaned
+              if isinstance(value, list):
+                  return [clean(item) for item in value if clean(item) not in (None, "", [], {})]
+              return value
+
+          target = clean(schedule["Target"])
+          target["EcsParameters"]["TaskDefinitionArn"] = task_definition_arn
+          json.dump(target, open("schedule-target.json", "w", encoding="utf-8"))
+          json.dump(clean(schedule["FlexibleTimeWindow"]), open("schedule-flexible-time-window.json", "w", encoding="utf-8"))
+          PY
+              SCHEDULE_EXPRESSION="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8"))["ScheduleExpression"])
+          PY
+              )"
+              SCHEDULE_STATE="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8")).get("State") or "ENABLED")
+          PY
+              )"
+              SCHEDULE_TIMEZONE="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8")).get("ScheduleExpressionTimezone") or "")
+          PY
+              )"
+              SCHEDULE_GROUP="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8")).get("GroupName") or "")
+          PY
+              )"
+              UPDATE_SCHEDULE_ARGS=(
+                --name "$SCHEDULE_NAME"
+                --schedule-expression "$SCHEDULE_EXPRESSION"
+                --flexible-time-window file://schedule-flexible-time-window.json
+                --target file://schedule-target.json
+                --state "$SCHEDULE_STATE"
+                --region "$AWS_REGION"
+              )
+              if [[ -n "$SCHEDULE_TIMEZONE" ]]; then
+                UPDATE_SCHEDULE_ARGS+=(--schedule-expression-timezone "$SCHEDULE_TIMEZONE")
+              fi
+              if [[ -n "$SCHEDULE_GROUP" ]]; then
+                UPDATE_SCHEDULE_ARGS+=(--group-name "$SCHEDULE_GROUP")
+              fi
+              aws scheduler update-schedule "${UPDATE_SCHEDULE_ARGS[@]}"
+              aws scheduler get-schedule --name "$SCHEDULE_NAME" --region "$AWS_REGION" > schedule.json
+              TASK_IMAGE_UPDATED="true"
+              TASK_IMAGE="${IMAGE_IDENTIFIER}"
+            fi
             CONTAINER_NAME="$(python - <<'PY'
           import json
           task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
@@ -386,7 +520,10 @@ jobs:
             echo "service-name=${SCHEDULE_NAME}"
             echo "task-definition=${TASK_DEFINITION_ARN}"
             echo "task-arn=${TASK_ARN}"
-            echo "image-path=919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting:latest"
+            echo "image-path=${IMAGE_URI}"
+            echo "image-identifier=${IMAGE_IDENTIFIER}"
+            echo "task-image=${TASK_IMAGE}"
+            echo "task-image-updated=${TASK_IMAGE_UPDATED}"
             echo "marker-path=http://127.0.0.1:8000/marker.json"
             echo "ui-path=http://127.0.0.1:8787/dashboard/${PROJECT}"
             echo "production-board-ui-path=http://127.0.0.1:8787/production/${PROJECT}"

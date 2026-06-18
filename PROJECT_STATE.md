@@ -80,6 +80,14 @@ Bootstrap entrypoints:
   - change in this branch: separate `REPORT_MARKER` from `REPORT_OUTPUT_TAG`, unset `REPORT_OUTPUT_TAG` before real email generation, and keep marker metadata available for localhost validation
   - Next exact step: validate/merge this workflow fix, then run ROY `send_email=true`; avoid re-sending VEVO unless an untagged production latest refresh is explicitly needed
 
+- Production daily reporting task image refresh is in progress on `2026-06-18`:
+  - branch/worktree: `codex/reporting-task-image-refresh` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - ROY rerun `27736341042` used task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:35`, private IP `172.31.45.82`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/ce2ad8375fe844abb8b162d13489fc72`
+  - ROY generated and sent email `MessageId=0107019ed917c4a0-07b1b061-c542-42ef-8c66-dd8dde05111b-000000`, but smoke failed with `AssertionError: creditnote summary missing from dashboard payload`
+  - because the code path would write `summary.available=false` even on creditnote API failure, a missing `dashboard.creditnotes.summary` indicates the scheduled reporting task was still running an older image/task definition rather than the new PR `#177` reporting code
+  - change in this branch: `Production Reporting Smoke` gains `update_task_image`; when true it resolves ECR `vevo-reporting:latest` to the current digest, registers a new daily reporting task definition if the scheduled container image differs, updates the EventBridge schedule, and then runs the host smoke/email task against that refreshed definition
+  - Next exact step: validate/merge this workflow update, dispatch production reporting smoke with `update_task_image=true`, and require `LOCALHOST_MARKER_OK`, SES message IDs, and UI smoke before considering both shops fixed
+
 - Production reporting smoke email dispatch mode is implemented locally on `2026-06-18`:
   - branch/worktree: `codex/report-email-dispatch` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - workflow `.github/workflows/production-reporting-smoke.yml` keeps the default `send_email=false` dry-run behavior
