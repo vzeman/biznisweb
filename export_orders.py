@@ -4507,7 +4507,8 @@ class BizniWebExporter:
         realized_orders_total = int(date_agg["unique_orders"].sum()) if "unique_orders" in date_agg.columns else len(orders or [])
         sent_creditnoted_order_count = int(audit.get("sent_creditnoted_orders") or 0)
         creditnoted_order_count = sent_creditnoted_order_count
-        overall_rate_pct = round((creditnoted_order_count / realized_orders_total) * 100, 2) if realized_orders_total else 0.0
+        creditnote_count = len(enriched_rows)
+        overall_rate_pct = round((creditnote_count / realized_orders_total) * 100, 2) if realized_orders_total else 0.0
 
         normalized_carrier_rows = []
         for row in carrier_rows:
@@ -4516,6 +4517,7 @@ class BizniWebExporter:
             carrier = str(row.get("Prepravca") or "Unknown carrier")
             realized_count = int(row.get("Realized objednavky") or 0)
             creditnote_order_count = int(row.get("Dobropisovane objednavky") or 0)
+            carrier_creditnote_count = int(row.get("Dobropisy") or 0)
             rate_pct = row.get("Dobropis rate %")
             rate_value = float(rate_pct) if rate_pct is not None else None
             rate_index = round((rate_value / overall_rate_pct), 2) if rate_value is not None and overall_rate_pct > 0 else None
@@ -4523,7 +4525,7 @@ class BizniWebExporter:
             outlier = bool(
                 rate_value is not None
                 and realized_count >= 5
-                and creditnote_order_count >= 2
+                and carrier_creditnote_count >= 2
                 and overall_rate_pct > 0
                 and rate_value >= max(overall_rate_pct * 2.0, overall_rate_pct + 3.0)
             )
@@ -4533,7 +4535,7 @@ class BizniWebExporter:
                     "carrier_id": row.get("Prepravca ID") or "",
                     "realized_orders": realized_count,
                     "creditnoted_orders": creditnote_order_count,
-                    "creditnotes": int(row.get("Dobropisy") or 0),
+                    "creditnotes": carrier_creditnote_count,
                     "creditnote_rate_pct": rate_value,
                     "rate_index": rate_index,
                     "rate_delta_pct": round((rate_value or 0.0) - overall_rate_pct, 2) if rate_value is not None else None,
@@ -4545,6 +4547,7 @@ class BizniWebExporter:
         normalized_carrier_rows.sort(
             key=lambda row: (
                 -1 if row.get("creditnote_rate_pct") is None else -float(row.get("creditnote_rate_pct") or 0.0),
+                -int(row.get("creditnotes") or 0),
                 -int(row.get("creditnoted_orders") or 0),
                 str(row.get("carrier") or ""),
             )
@@ -4561,7 +4564,7 @@ class BizniWebExporter:
             "date_from": date_from.strftime("%Y-%m-%d"),
             "date_to": date_to.strftime("%Y-%m-%d"),
             "reported_total_rows": int(reported_total or 0),
-            "creditnotes": len(enriched_rows),
+            "creditnotes": creditnote_count,
             "creditnoted_orders": creditnoted_order_count,
             "all_creditnoted_orders": len(creditnoted_order_nums),
             "sent_creditnoted_orders": sent_creditnoted_order_count,

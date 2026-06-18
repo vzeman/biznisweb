@@ -993,6 +993,7 @@ def build_creditnote_reporting_audit(
         denominator = denominator_by_carrier.get(key) or {}
         denominator_count = len(denominator.get("orders") or set())
         creditnote_order_count = len(numerator.get("Dobropisovane objednavky") or set())
+        creditnote_count = int(numerator.get("Dobropisy") or 0)
         carrier_ids = sorted(
             {
                 str(value).strip()
@@ -1004,7 +1005,7 @@ def build_creditnote_reporting_audit(
             },
             key=_carrier_id_sort_key,
         )
-        rate = round((creditnote_order_count / denominator_count) * 100, 2) if denominator_count > 0 else None
+        rate = round((creditnote_count / denominator_count) * 100, 2) if denominator_count > 0 else None
         carrier_rows.append(
             {
                 "Eshop": project,
@@ -1013,7 +1014,7 @@ def build_creditnote_reporting_audit(
                 "Realized objednavky": denominator_count,
                 "Odoslane objednavky": denominator_count,
                 "Dobropisovane objednavky": creditnote_order_count,
-                "Dobropisy": int(numerator.get("Dobropisy") or 0),
+                "Dobropisy": creditnote_count,
                 "Dobropis rate %": rate,
                 "Suma_s_DPH": round(float(numerator.get("Suma_s_DPH") or 0.0), 2),
                 "Suma_bez_DPH": round(float(numerator.get("Suma_bez_DPH") or 0.0), 2),
@@ -1022,6 +1023,7 @@ def build_creditnote_reporting_audit(
     carrier_rows.sort(
         key=lambda row: (
             -1 if row.get("Dobropis rate %") is None else -float(row.get("Dobropis rate %") or 0.0),
+            -int(row.get("Dobropisy") or 0),
             -int(row.get("Dobropisovane objednavky") or 0),
             str(row.get("Prepravca") or ""),
         )
@@ -1289,7 +1291,7 @@ def _draw_creditnote_pdf(
     pdf.drawString(margin_x, y, "Dobropisy podla prepravcu")
     y -= 5 * mm
     pdf.setFont(fonts["regular"], 7)
-    pdf.drawString(margin_x, y, "Rate = dobropisovane objednavky / odoslane objednavky daneho prepravcu v reportovanom obdobi.")
+    pdf.drawString(margin_x, y, "Rate = pocet dobropisov / odoslane objednavky daneho prepravcu v reportovanom obdobi.")
     y -= 6 * mm
     carrier_columns = [
         ("Eshop", 18 * mm),

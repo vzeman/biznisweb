@@ -61,6 +61,18 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Creditnote carrier rate from creditnote documents is implemented locally on `2026-06-18`:
+  - branch/worktree: `codex/creditnote-rate-from-creditnotes` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - context: the daily carrier table showed carriers with `Creditnotes > 0` but `Rate = 0.00%` because the rate used sent-creditnoted order count as the numerator
+  - change: monthly creditnote carrier audit now calculates `Dobropis rate %` as `Dobropisy / Odoslane objednavky` while keeping `Dobropisovane objednavky` as a separate sent-order audit column
+  - change: daily dashboard creditnote metrics now calculate overall and per-carrier `creditnote_rate_pct`, rate index, outlier gating, and carrier sorting from creditnote document count instead of credited sent order count
+  - local verification:
+    - `python -m py_compile export_orders.py creditnote_export.py dashboard_modern.py daily_report_runner.py`
+    - `python -m unittest tests.test_creditnote_export tests.test_reporting_calculation_fixes tests.test_dashboard_modern` (`40` tests OK)
+    - `python -m unittest tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_reporting_calculation_fixes tests.test_dashboard_modern tests.test_invoice_generation` (`55` tests OK)
+    - `git diff --check`
+  - Next exact step: commit/push this branch, merge through PR, wait for the ECR rebuild, then run production reporting smoke for `project=all` with `send_email=true` and `update_task_image=true` and record VEVO/ROY host marker + UI smoke results
+
 - Monthly combined ROY+VEVO creditnote export deploy is fixed and verified on `2026-06-18`:
   - code/workflow PRs merged to `main`:
     - PR `#186` (`8685eea41de88516c462c9261695a5ea9656e679`) added GitHub Secret -> SSM credential overrides for monthly ROY/VEVO admin credentials
