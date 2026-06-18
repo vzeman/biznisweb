@@ -1262,6 +1262,9 @@ def main() -> None:
         if creditnote_storno_summary and int(creditnote_storno_summary.get("updated_orders") or 0) > 0:
             use_clear_cache = True
             print("Creditnote storno guard updated orders; forcing cache clear before export.")
+        # The guard builds its own exporter and may temporarily set REPORT_OUTPUT_TAG.
+        # Restore the daily-runner tag before spawning the report export subprocess.
+        os.environ["REPORT_OUTPUT_TAG"] = output_tag
 
     if not args.skip_export:
         run_export(

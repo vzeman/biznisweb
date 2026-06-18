@@ -4189,3 +4189,20 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - regenerated local artifacts are not uploaded to S3 yet
 - Next exact step:
   - commit and push correction to PR `#177`, then merge/deploy and run production artifact refresh with required infra hard-gate verification before UI checks
+
+### 2026-06-18 (daily email output tag reset after creditnote guard)
+- Branch: `codex/reset-output-tag-after-storno`
+- Context:
+  - production reporting smoke run `27737957097` refreshed the VEVO scheduled task definition to the new creditnote reporting image and confirmed the Fargate hard-gate context before export
+  - VEVO hard-gate context from that run: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.14.23`, service `vevo-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:6`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/694dfb31d74c47f0ab155148ac985417`, image digest `sha256:10202cb947ab0ab50ec2be9fe6331c8cc48e5204df60ebdaffe271369dd03bbd`
+  - the run failed before SES send because `creditnote_storno_guard.py` built its exporter with `output_tag=creditnote_storno_guard`; `BiznisWebExporter.__init__` writes that tag to `REPORT_OUTPUT_TAG`, and the daily export subprocess inherited it
+  - result: the real daily run produced tagged files like `report_...__creditnote_storno_guard.html`, while `daily_report_runner.py` correctly expected untagged daily files for the email
+- Change:
+  - `daily_report_runner.py` now restores the daily runner `REPORT_OUTPUT_TAG` immediately after the creditnote storno guard finishes and before spawning the export subprocess
+  - added a regression test that simulates the guard leaking `REPORT_OUTPUT_TAG=creditnote_storno_guard` and asserts the subsequent daily export receives the intended empty tag
+- Local verification:
+  - `python -m py_compile daily_report_runner.py`
+  - `python -m unittest tests.test_invoice_generation tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_reporting_calculation_fixes tests.test_dashboard_modern` (`51` tests OK)
+  - `git diff --check`
+- Next exact step:
+  - commit/push this branch, merge through PR, wait for the ECR rebuild, then dispatch `Production Reporting Smoke` with `project=all`, `send_email=true`, and `update_task_image=true` to regenerate and send the corrected VEVO and ROY reports
