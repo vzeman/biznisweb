@@ -61,6 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Monthly creditnote prefixed API runtime fix is in progress on `2026-06-18`:
+  - branch/worktree: `codex/monthly-creditnote-prefixed-api-runtime` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - context: deploy run `27750720572` succeeded after PR `#188` and confirmed `FARGATE_ADMIN_LOGIN_OK` for ROY and VEVO, but the generated monthly summary still showed reporting audit errors `BIZNISWEB_API_TOKEN missing for project 'roy'/'vevo'`, causing carrier context to degrade to `Unknown carrier`
+  - root cause: the monthly task now correctly avoids unprefixed source credentials, but reusable reporting runtime still read only unprefixed `BIZNISWEB_API_TOKEN` for order-context/carrier audit; multi-project monthly runtime needs prefixed `ROY_`/`VEVO_` API URL/token support
+  - change: `reporting_core.config` now resolves project-prefixed env values first (`ROY_BIZNISWEB_API_TOKEN`, `VEVO_BIZNISWEB_API_TOKEN`, etc.) with legacy unprefixed fallback
+  - change: `reporting_core.runtime` and `creditnote_export.fetch_project_reporting_order_context()` now use the project-prefixed resolver for API token/runtime context
+  - local verification:
+    - `python -m py_compile creditnote_export.py reporting_core/config.py reporting_core/runtime.py`
+    - `python -m unittest tests.test_creditnote_export`
+    - ECS-like local live smoke with `REPORT_SKIP_PROJECT_ENV=true` and only prefixed ROY/VEVO runtime credentials: `exported_rows=39`, `project_counts={"ROY":14,"VEVO":25}`, `audit_errors={}`, `carrier_rows=15`, `non_unknown_carriers=14`
+    - `git diff --check`
+  - Next exact step: commit/push this code fix, merge through PR, wait for ECR rebuild, then rerun `Deploy Monthly Creditnote Export` so task definition uses the rebuilt image and verify carrier/reporting audit has no API-token errors
+
 - Monthly creditnote export Fargate runtime preflight is in progress on `2026-06-18`:
   - branch/worktree: `codex/monthly-creditnote-fargate-preflight` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - context: PR `#187` merged as `f04859d22a2b3031b7c2dc8b647475561b5566be`; deploy run `27750334925` proved `GITHUB_SECRET_ADMIN_LOGIN_OK` for ROY and VEVO, `credential_override_count=4`, and `TASK_CREDENTIAL_OVERRIDES_OK`, but the Fargate smoke still failed ROY admin login with `401 Unauthorized`
