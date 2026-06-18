@@ -1,8 +1,11 @@
 import json
+import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import daily_report_runner as daily_runner
 from daily_report_runner import maybe_run_invoice_automation, parse_args as parse_daily_report_args
 from generate_invoices import (
     InvoiceGenerator,
@@ -106,6 +109,61 @@ class InvoiceGenerationTests(unittest.TestCase):
     def test_daily_report_runner_skips_invoices_by_default(self) -> None:
         args = parse_daily_report_args([])
         self.assertTrue(args.skip_invoices)
+
+    def test_daily_report_runner_restores_output_tag_after_creditnote_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            required_outputs = {
+                "report_html": tmp_path / "report.html",
+                "export_csv": tmp_path / "export.csv",
+                "date_csv": tmp_path / "date.csv",
+                "month_csv": tmp_path / "month.csv",
+            }
+            for path in required_outputs.values():
+                path.write_text("ok", encoding="utf-8")
+
+            class FakeArtifactSet:
+                def as_dict(self):
+                    return {
+                        "report_html": required_outputs["report_html"],
+                        "data_quality_json": tmp_path / "data_quality.json",
+                    }
+
+                def required_daily_runner_outputs(self):
+                    return required_outputs
+
+            def guard_side_effect(**_kwargs):
+                os.environ["REPORT_OUTPUT_TAG"] = "creditnote_storno_guard"
+                return {"updated_orders": 1}
+
+            def export_side_effect(**kwargs):
+                self.assertEqual("", kwargs["output_tag"])
+                self.assertEqual("", os.environ.get("REPORT_OUTPUT_TAG"))
+
+            with patch.object(daily_runner.sys, "argv", [
+                "daily_report_runner.py",
+                "--project",
+                "vevo",
+                "--from-date",
+                "2026-06-17",
+                "--to-date",
+                "2026-06-17",
+                "--skip-email",
+                "--skip-invoices",
+            ]), patch.dict(os.environ, {"REPORT_OUTPUT_TAG": ""}, clear=False), \
+                patch.object(daily_runner, "load_dotenv"), \
+                patch.object(daily_runner, "load_project_env"), \
+                patch.object(daily_runner, "load_project_settings", return_value={}), \
+                patch.object(daily_runner, "resolve_reporting_defaults", return_value={}), \
+                patch.object(daily_runner, "maybe_run_creditnote_storno_guard", side_effect=guard_side_effect), \
+                patch.object(daily_runner, "run_export", side_effect=export_side_effect) as run_export_mock, \
+                patch.object(daily_runner, "build_artifact_set", return_value=FakeArtifactSet()), \
+                patch.object(daily_runner, "s3_upload_outputs"), \
+                patch.object(daily_runner, "load_data_quality", return_value={}), \
+                patch.object(daily_runner, "put_metric"):
+                daily_runner.main()
+
+            run_export_mock.assert_called_once()
 
     def test_vevo_and_roy_have_separate_schedule_settings(self) -> None:
         vevo = json.loads((ROOT_DIR / "projects" / "vevo" / "settings.json").read_text(encoding="utf-8"))
