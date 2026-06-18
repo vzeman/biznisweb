@@ -61,6 +61,16 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Production report email regeneration follow-up is in progress on `2026-06-18`:
+  - branch/worktree: `codex/report-smoke-logs` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - PR `#177` and PR `#178` are merged to `main`; ECR rebuild run `27734814979` succeeded for `vevo-reporting:latest` with digest `sha256:10202cb947ab0ab50ec2be9fe6331c8cc48e5204df60ebdaffe271369dd03bbd`
+  - first manual `Production Reporting Smoke` dispatch run `27734954008` used `project=all`, `marker=creditnote-email-20260618`, `send_email=true`
+  - VEVO hard-gate context from that run: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.40.4`, service `vevo-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:5`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/b992759c693845039e84f6f58542f268`
+  - the run failed before `LOCALHOST_MARKER_OK`, SES proof, or UI smoke could be recorded; GitHub log showed the VEVO task running through `840s` and then ended after the CloudWatch log stream line without enough task-stop context
+  - change in this branch: production smoke now prints explicit task timeout/stopped context, container exit code/reason, and bounded `--no-paginate` CloudWatch log output so the next run can distinguish report failure from smoke/log collection failure
+  - local verification: workflow YAML parse check and `git diff --check`
+  - Next exact step: commit/push this workflow hardening, merge it through PR, then re-dispatch production reporting with `send_email=true` and record `LOCALHOST_MARKER_OK`, SES message IDs, and UI smoke for VEVO and ROY
+
 - Production reporting smoke email dispatch mode is implemented locally on `2026-06-18`:
   - branch/worktree: `codex/report-email-dispatch` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - workflow `.github/workflows/production-reporting-smoke.yml` keeps the default `send_email=false` dry-run behavior
