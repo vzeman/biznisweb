@@ -61,6 +61,13 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Production reporting smoke email dispatch mode is implemented locally on `2026-06-18`:
+  - branch/worktree: `codex/report-email-dispatch` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - workflow `.github/workflows/production-reporting-smoke.yml` keeps the default `send_email=false` dry-run behavior
+  - manual dispatch with `send_email=true` runs the real untagged `daily_report_runner.py --project <project> --skip-invoices`, sends the SES report email, writes `LOCALHOST_MARKER_OK`, verifies the new `dashboard.creditnotes` payload and visible HTML section, then runs the existing localhost UI/API smoke
+  - hard-gate targets: instance-id `N/A (scheduled ECS/Fargate task)`, service names `vevo-daily-report-email` and `roy-daily-report-email`, private IP resolved at ECS task start, marker path `http://127.0.0.1:8000/marker.json`, local UI path `http://127.0.0.1:8787/dashboard/{project}`
+  - Next exact step: validate workflow syntax, commit/push, open/merge PR, then dispatch `Production Reporting Smoke` with `project=all` and `send_email=true` after ECR build `27734814979` succeeds
+
 - Daily reporting creditnote metrics visibility fix is implemented locally on `2026-06-18`:
   - branch/worktree: `codex/creditnote-carrier-audit` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - reason: the morning `2026-06-18` VEVO/ROY report emails were generated before PR `#177` was merged/deployed, and the main HTML/email report did not yet expose the new creditnote metrics as a visible reporting section
