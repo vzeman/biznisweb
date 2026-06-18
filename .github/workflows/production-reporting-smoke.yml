@@ -16,6 +16,14 @@ on:
         description: Marker suffix written into tagged smoke artifacts
         required: true
         default: daily-profit-loss-prodcheck
+      send_email:
+        description: Send the real untagged daily report email after host generation
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 env:
   AWS_REGION: eu-central-1
@@ -42,8 +50,14 @@ jobs:
         env:
           REQUESTED_PROJECT: ${{ inputs.project }}
           MARKER_SUFFIX: ${{ inputs.marker }}
+          SEND_EMAIL: ${{ inputs.send_email || 'false' }}
         run: |
           set -euo pipefail
+          SEND_EMAIL="$(printf '%s' "${SEND_EMAIL}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${SEND_EMAIL}" != "true" && "${SEND_EMAIL}" != "false" ]]; then
+            echo "send_email must be true or false, got ${SEND_EMAIL}" >&2
+            exit 1
+          fi
 
           if [[ "$REQUESTED_PROJECT" == "all" ]]; then
             PROJECTS="vevo roy"
@@ -142,7 +156,8 @@ jobs:
             SMOKE_SCRIPT="$(cat <<'SH'
           set -euo pipefail
           PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
-          MARKER="${REPORT_OUTPUT_TAG:?REPORT_OUTPUT_TAG missing}"
+          MARKER="${REPORT_OUTPUT_TAG:-}"
+          SEND_EMAIL="${REPORT_SEND_EMAIL:-false}"
           PIDS=()
           cleanup() {
             for pid in "${PIDS[@]:-}"; do
@@ -150,32 +165,47 @@ jobs:
             done
           }
           trap cleanup EXIT
-          echo "HOST_SMOKE_START project=${PROJECT} marker=${MARKER}"
-          python daily_report_runner.py --project "${PROJECT}" --output-tag "${MARKER}" --skip-email --skip-invoices --creditnote-storno-dry-run
+          echo "HOST_SMOKE_START project=${PROJECT} marker=${MARKER} send_email=${SEND_EMAIL}"
+          if [[ "${SEND_EMAIL}" == "true" ]]; then
+            python daily_report_runner.py --project "${PROJECT}" --skip-invoices
+          else
+            python daily_report_runner.py --project "${PROJECT}" --output-tag "${MARKER}" --skip-email --skip-invoices --creditnote-storno-dry-run
+          fi
           python - <<'PY'
           import json
           import os
           from pathlib import Path
           project = os.environ["REPORT_PROJECT"]
           marker = os.environ["REPORT_OUTPUT_TAG"]
+          send_email = os.environ.get("REPORT_SEND_EMAIL", "false").strip().lower() == "true"
           data_dir = Path("data") / project
-          html_path = data_dir / f"report_latest__{marker}.html"
-          payload_path = data_dir / f"dashboard_payload_latest__{marker}.json"
+          if send_email:
+              html_path = data_dir / "report_latest.html"
+              payload_path = data_dir / "dashboard_payload_latest.json"
+          else:
+              html_path = data_dir / f"report_latest__{marker}.html"
+              payload_path = data_dir / f"dashboard_payload_latest__{marker}.json"
           html = html_path.read_text(encoding="utf-8")
           payload = json.loads(payload_path.read_text(encoding="utf-8"))
           dashboard = payload["dashboard"]
           daily = dashboard["daily_profit_loss"]
           rows = daily["rows"]
           summary = daily["summary"]
+          creditnotes = dashboard.get("creditnotes") or {}
           assert rows, "daily profit/loss rows missing"
           assert "dailyProfitLossChart" in html, "daily profit/loss chart missing from HTML"
           assert "daily-profit-row" in html, "daily profit/loss ledger rows missing from HTML"
+          assert creditnotes.get("summary") is not None, "creditnote summary missing from dashboard payload"
+          assert "Creditnotes and carrier return rate" in html, "creditnote HTML section missing"
+          assert "creditnote-carrier-row" in html, "creditnote carrier table rows missing"
           marker_dir = Path("/tmp/marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
+          creditnote_summary = creditnotes.get("summary") or {}
           marker_payload = {
               "marker": "LOCALHOST_MARKER_OK",
               "project": project,
               "output_tag": marker,
+              "send_email": send_email,
               "report_path": str(html_path),
               "payload_path": str(payload_path),
               "daily_profit_rows": len(rows),
@@ -183,6 +213,9 @@ jobs:
               "negative_days": summary.get("negative_days"),
               "has_daily_profit_loss_chart": True,
               "has_daily_profit_loss_payload": True,
+              "has_creditnote_payload": True,
+              "creditnote_count": creditnote_summary.get("creditnotes"),
+              "credited_gross_eur": creditnote_summary.get("credited_gross_eur"),
               "report_skip_invoices": os.environ.get("REPORT_SKIP_INVOICES"),
           }
           (marker_dir / "marker.json").write_text(json.dumps(marker_payload, sort_keys=True), encoding="utf-8")
@@ -272,6 +305,7 @@ jobs:
                           {"name": "REPORT_PROJECT", "value": os.environ["PROJECT"]},
                           {"name": "REPORT_OUTPUT_TAG", "value": os.environ["MARKER"]},
                           {"name": "REPORT_SKIP_INVOICES", "value": "true"},
+                          {"name": "REPORT_SEND_EMAIL", "value": os.environ["SEND_EMAIL"]},
                       ],
                   }
               ]
