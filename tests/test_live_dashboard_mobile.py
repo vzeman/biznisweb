@@ -13,6 +13,9 @@ class LiveDashboardMobileTests(unittest.TestCase):
         self.assertIn(".products-cards", html)
         self.assertIn("product-card", html)
         self.assertIn("@media (max-width:680px)", html)
+        self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", html)
+        self.assertIn("fetchApi(path, { cache: 'no-store' })", html)
+        self.assertNotIn("await fetch(url,", html)
 
 
 if __name__ == "__main__":

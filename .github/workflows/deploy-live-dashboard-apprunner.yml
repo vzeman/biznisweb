@@ -768,7 +768,7 @@ jobs:
             --output text)"
 
           ACCESS_ROLE_NAME="BiznisWebAppRunnerECRAccessRole"
-          INSTANCE_ROLE_NAME="BiznisWebLiveDashboardAppRunnerInstanceRole"
+          INSTANCE_ROLE_NAME="BiznisWebLiveDashboardAppRunnerInstanceRole-${PROJECT}"
 
           cat > ecr-access-trust.json <<'JSON'
           {

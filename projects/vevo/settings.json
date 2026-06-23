@@ -35,6 +35,9 @@
     "cache_ttl_seconds": 60,
     "auto_refresh_seconds": 90
   },
+  "live_dashboard": {
+    "auth_user": "marek"
+  },
   "packaging_cost_per_order": 0.3,
   "shipping_net_per_order": 0.2,
   "fixed_monthly_cost": 0,
