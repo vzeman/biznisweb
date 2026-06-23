@@ -801,6 +801,8 @@ def build_production_board_html(project: str) -> str:
     const fmtQty = (value) => new Intl.NumberFormat('sk-SK', { maximumFractionDigits: 2 }).format(Number(value || 0));
     const text = (value, fallback = '-') => value === null || value === undefined || value === '' ? fallback : String(value);
     const safe = (value) => text(value, '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const apiUrl = (path) => new URL(path, window.location.origin).toString();
+    const fetchApi = (path, options={}) => fetch(apiUrl(path), { credentials:'same-origin', ...options });
     let refreshTimer = null;
 
     function metric(label, value, note) {
@@ -909,8 +911,8 @@ def build_production_board_html(project: str) -> str:
     async function loadBoard(force = false) {
       el('refreshBtn').disabled = true;
       try {
-        const url = `/api/production/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`;
-        const response = await fetch(url, { cache: 'no-store' });
+        const path = `/api/production/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`;
+        const response = await fetchApi(path, { cache: 'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         renderSummary(data);

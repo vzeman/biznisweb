@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-18
+Last updated: 2026-06-23
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,22 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- VEVO live dashboard App Runner outage fix is implemented locally on `2026-06-23`:
+  - symptom verified before code: VEVO App Runner public URL returned HTTP `404` for `/health`, `/production/vevo`, and `/api/production/vevo/live?refresh=1`, while ROY `/health` returned `200`
+  - VEVO hard-gate before code: instance-id `N/A (AWS App Runner managed service)`, private IP `N/A (AWS App Runner managed service)`, service `biznisweb-vevo-production-board`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-vevo-production-board/8c8a7a5d694b401baeccf0f1af19ca50`, health path `https://zxtma5mxta.eu-central-1.awsapprunner.com/health`, production path `https://zxtma5mxta.eu-central-1.awsapprunner.com/production/vevo`, live API path `https://zxtma5mxta.eu-central-1.awsapprunner.com/api/production/vevo/live?refresh=1`, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:58df20cab335f7376331103676737c04acc17d23a1c43a5aa8c2aad719257bb1`, runtime auth user `marek`
+  - ROY comparison hard-gate: instance-id `N/A (AWS App Runner managed service)`, private IP `N/A (AWS App Runner managed service)`, service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, health path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/health`, production path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - root cause: both App Runner services used the shared instance role `BiznisWebLiveDashboardAppRunnerInstanceRole`; the latest ROY deploy rewrote the inline `LiveDashboardRuntimeSecrets` policy for ROY-only runtime resources, so VEVO instances failed startup with `AccessDeniedException` on `arn:aws:secretsmanager:eu-central-1:919341186960:secret:vevo/reporting/runtime-env-ygoPma`
+  - change: `.github/workflows/deploy-live-dashboard-apprunner.yml` now uses project-scoped instance roles `BiznisWebLiveDashboardAppRunnerInstanceRole-${PROJECT}` so VEVO and ROY deployments cannot overwrite each other's runtime secret policy
+  - change: `projects/vevo/settings.json` now stores the current VEVO live dashboard auth user `marek`, so workflow input defaults cannot silently switch the user-facing Basic Auth username
+  - change: the VEVO production board frontend now uses the same sanitized same-origin `fetchApi()` helper as the ROY operations dashboard, preventing Basic Auth credentialed URL fetch failures in browser JS
+  - local verification:
+    - `python -m json.tool projects\vevo\settings.json`
+    - `python -m py_compile live_dashboard_server.py`
+    - `python -m unittest tests.test_live_dashboard_mobile tests.test_live_dashboard_auth tests.test_production_board` (`8` tests OK)
+    - `python -c "from pathlib import Path; import yaml; yaml.safe_load(Path('.github/workflows/deploy-live-dashboard-apprunner.yml').read_text(encoding='utf-8')); print('YAML_OK')"`
+    - `git diff --check`
+  - Next exact step: commit/push `codex/fix-vevo-live-dashboard`, merge through PR, wait for ECR `latest` rebuild, run `Deploy Live Dashboard App Runner` with `project=vevo`, `service_name=biznisweb-vevo-production-board`, and verify direct App Runner `/health`, `/production/vevo`, `/api/production/vevo/live?refresh=1`, then browser UI through the credentialed URL
 
 - ROY inventory cost value history is implemented and deployed on `2026-06-18`:
   - branch/worktree: `codex/roy-inventory-cost-value` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
