@@ -949,6 +949,46 @@ jobs:
               --region "${AWS_REGION}" > service-operation.json
           fi
 
+          OPERATION_ID="$(python - <<'PY'
+          import json
+          payload = json.load(open("service-operation.json", encoding="utf-8"))
+          print(payload.get("OperationId") or "")
+          PY
+          )"
+          if [[ -n "${OPERATION_ID}" ]]; then
+            OPERATION_STATUS=""
+            for _ in $(seq 1 90); do
+              aws apprunner list-operations \
+                --service-arn "${SERVICE_ARN}" \
+                --region "${AWS_REGION}" > service-operations.json
+              OPERATION_STATUS="$(python - "${OPERATION_ID}" <<'PY'
+          import json
+          import sys
+          target_id = sys.argv[1]
+          operations = json.load(open("service-operations.json", encoding="utf-8")).get("OperationSummaryList", [])
+          for operation in operations:
+              if operation.get("Id") == target_id:
+                  print(operation.get("Status") or "")
+                  raise SystemExit(0)
+          print("")
+          PY
+              )"
+              if [[ "${OPERATION_STATUS}" == "SUCCEEDED" ]]; then
+                break
+              fi
+              if [[ "${OPERATION_STATUS}" == "FAILED" || "${OPERATION_STATUS}" == ROLLBACK_* ]]; then
+                cat service-operations.json
+                exit 1
+              fi
+              echo "App Runner operation ${OPERATION_ID} status=${OPERATION_STATUS:-unknown}; waiting..."
+              sleep 20
+            done
+            if [[ "${OPERATION_STATUS}" != "SUCCEEDED" ]]; then
+              cat service-operations.json
+              exit 1
+            fi
+          fi
+
           for _ in $(seq 1 90); do
             aws apprunner describe-service \
               --service-arn "${SERVICE_ARN}" \
