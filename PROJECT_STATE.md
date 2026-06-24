@@ -66,14 +66,19 @@ Bootstrap entrypoints:
   - change: `projects/roy/settings.json` now sets `fixed_monthly_cost` to `6500`
   - change: `scripts/reporting_qa_smoke.py` now asserts ROY runtime loads `fixed_monthly_cost = 6500.0`
   - expected runtime effect after production image refresh: ROY fixed overhead spreads as `6500 / days_in_month`, e.g. June daily fixed allocation becomes `216.67 EUR/day` before CSV rounding
+  - code PR `#198` merged to `main` as `dae2a8c248f938753aa9a7fe07f1d301b589c4be`
   - local verification:
     - `python -m json.tool projects\roy\settings.json`
     - `python -m py_compile export_orders.py scripts\reporting_qa_smoke.py reporting_core\runtime.py`
     - `python scripts\reporting_qa_smoke.py`
     - `python -m unittest tests.test_reporting_calculation_fixes tests.test_dashboard_modern` (`26` tests OK)
     - `git diff --check`
-  - Current status: code change is locally verified and still needs commit, push, PR merge, ECR rebuild, and production reporting smoke before scheduled ROY reports use the new fixed expense
-  - Next exact step: commit/push this branch, merge through PR, wait for ECR, then run ROY production reporting smoke and verify localhost marker before UI smoke
+  - ECR refresh: run `28096120599` succeeded for `vevo-reporting:latest`, digest `sha256:3c6ac1f3b30a2746cf4a6f4bb72678a5950034cf686f6b678a5371c57d1f0749`
+  - ROY production reporting smoke: run `28096233324` succeeded with `project=roy`, marker `roy-fixed-6500-20260624`, `send_email=false`, `update_task_image=true`
+  - ROY hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.28.73`, service `roy-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/roy-reporting-daily:40`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/45556687af884eb1b81a75e33cf551fe`, marker path `http://127.0.0.1:8000/marker.json`
+  - ROY verification: scheduled task `roy-daily-report-email` now targets `roy-reporting-daily:40` with image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:3c6ac1f3b30a2746cf4a6f4bb72678a5950034cf686f6b678a5371c57d1f0749`; host log showed a `216.67` EUR daily fixed allocation, `LOCALHOST_MARKER_OK`, `daily_profit_rows=273`, `creditnote_count=114`, `credited_gross_eur=11462.82`, `send_email=false`, report path `data/roy/report_latest__roy-roy-fixed-6500-20260624.html`, payload path `data/roy/dashboard_payload_latest__roy-roy-fixed-6500-20260624.json`, and UI smoke `UI_SMOKE_OK:roy:daily-profit-loss`
+  - Current status: ROY scheduled daily reporting now points to the image containing `6500 EUR/month` fixed expenses; no real email was sent during smoke
+  - Next exact step: monitor the next regular ROY scheduled daily report for the updated fixed overhead; no known code or deploy blocker remains
 
 - VEVO live dashboard App Runner outage is fixed and deployed on `2026-06-23`:
   - symptom verified before code: VEVO App Runner public URL returned HTTP `404` for `/health`, `/production/vevo`, and `/api/production/vevo/live?refresh=1`, while ROY `/health` returned `200`
