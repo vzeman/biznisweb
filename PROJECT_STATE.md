@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-23
+Last updated: 2026-06-24
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,20 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY fixed monthly expenses are raised to `6500 EUR/month` in source-of-truth on `2026-06-24`:
+  - branch/worktree: `codex/roy-fixed-monthly-6500` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - change: `projects/roy/settings.json` now sets `fixed_monthly_cost` to `6500`
+  - change: `scripts/reporting_qa_smoke.py` now asserts ROY runtime loads `fixed_monthly_cost = 6500.0`
+  - expected runtime effect after production image refresh: ROY fixed overhead spreads as `6500 / days_in_month`, e.g. June daily fixed allocation becomes `216.67 EUR/day` before CSV rounding
+  - local verification:
+    - `python -m json.tool projects\roy\settings.json`
+    - `python -m py_compile export_orders.py scripts\reporting_qa_smoke.py reporting_core\runtime.py`
+    - `python scripts\reporting_qa_smoke.py`
+    - `python -m unittest tests.test_reporting_calculation_fixes tests.test_dashboard_modern` (`26` tests OK)
+    - `git diff --check`
+  - Current status: code change is locally verified and still needs commit, push, PR merge, ECR rebuild, and production reporting smoke before scheduled ROY reports use the new fixed expense
+  - Next exact step: commit/push this branch, merge through PR, wait for ECR, then run ROY production reporting smoke and verify localhost marker before UI smoke
 
 - VEVO live dashboard App Runner outage is fixed and deployed on `2026-06-23`:
   - symptom verified before code: VEVO App Runner public URL returned HTTP `404` for `/health`, `/production/vevo`, and `/api/production/vevo/live?refresh=1`, while ROY `/health` returned `200`
