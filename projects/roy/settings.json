@@ -67,7 +67,7 @@
   ],
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
-  "fixed_monthly_cost": 5500,
+  "fixed_monthly_cost": 6500,
   "invoice_generation": {
     "enabled": true,
     "lookback_days": 7,
