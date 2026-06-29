@@ -74,6 +74,10 @@ jobs:
             echo "update_task_image must be true or false, got ${UPDATE_TASK_IMAGE}" >&2
             exit 1
           fi
+          if [[ "${UPDATE_TASK_IMAGE}" == "true" && "$REQUESTED_PROJECT" != "all" ]]; then
+            echo "update_task_image=true must run with project=all so no daily schedule remains pinned to an older ECR digest." >&2
+            exit 1
+          fi
 
           if [[ "$REQUESTED_PROJECT" == "all" ]]; then
             PROJECTS="vevo roy"

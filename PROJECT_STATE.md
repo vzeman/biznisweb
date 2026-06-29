@@ -61,6 +61,17 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- VEVO daily reporting email outage from `2026-06-27` is fixed on `2026-06-29`:
+  - symptom: VEVO daily emails stopped after the last successful scheduled runs on `2026-06-25 01:00 Europe/Bratislava` and `2026-06-26 01:00 Europe/Bratislava`; ROY continued sending daily SES emails on `2026-06-27`, `2026-06-28`, and `2026-06-29`
+  - root cause: EventBridge Scheduler still invoked `vevo-daily-report-email`, but its target `vevo-reporting-daily:9` was pinned to ECR digest `sha256:f6b1d59a73dc3db38f9efae07f25ebca92946793b9f0df1b7807ac623b4893c1`; ECR lifecycle policy expires untagged images older than `7` days, and that digest returned `ImageNotFound`
+  - evidence: `/ecs/vevo-reporting-daily` had no application log streams for the scheduled tasks started at `2026-06-26T23:00:13Z`, `2026-06-27T23:00:13Z`, and `2026-06-28T23:00:13Z`; CloudTrail still recorded the daily `RunTask` calls for task IDs `3e04d8ec31d94914a0513369225f2dbb`, `7338f080a0b4459cb78121890ac60f98`, and `381f92fcc2444a358d8a53f0a4fd1db0`
+  - restore action: manual `Production Reporting Smoke` run `28345745563` updated `vevo-daily-report-email` from `vevo-reporting-daily:9` to `vevo-reporting-daily:10`, using current ECR digest `sha256:3c6ac1f3b30a2746cf4a6f4bb72678a5950034cf686f6b678a5371c57d1f0749`
+  - hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.17.178`, service `vevo-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:10`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/6590fc1b98dc4c0bb6853d14a130bc84`, marker path `http://127.0.0.1:8000/marker.json`, UI path `http://127.0.0.1:8787/dashboard/vevo`
+  - verification: CloudWatch stream `ecs/reporting/6590fc1b98dc4c0bb6853d14a130bc84` saved `data/vevo/report_latest.html` and `data/vevo/dashboard_payload_latest.json`, sent SES `MessageId=0107019f11645817-e1bb38cc-272c-40ef-905b-b1d9a2c52b34-000000`, showed `LOCALHOST_MARKER_OK`, `daily_profit_rows=422`, `creditnote_count=274`, `credited_gross_eur=4854.34`, `send_email=true`, `UI_SMOKE_OK:vevo:production-board`, and `UI_SMOKE_OK:vevo:daily-profit-loss`
+  - recurrence guard: `.github/workflows/production-reporting-smoke.yml` now fails when `update_task_image=true` is dispatched for anything other than `project=all`, so future image refreshes update and smoke both daily schedules instead of leaving one project pinned to an older digest
+  - Current status: VEVO scheduled daily reporting is enabled at `01:00 Europe/Bratislava` and now targets `vevo-reporting-daily:10`; the immediate recovery email was sent by SES
+  - Next exact step: monitor the next regular `vevo-daily-report-email` scheduled run on `2026-06-30 01:00 Europe/Bratislava` and confirm a new SES message plus CloudWatch stream
+
 - ROY fixed monthly expenses are raised to `6500 EUR/month` in source-of-truth on `2026-06-24`:
   - branch/worktree: `codex/roy-fixed-monthly-6500` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - change: `projects/roy/settings.json` now sets `fixed_monthly_cost` to `6500`
