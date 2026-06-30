@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-24
+Last updated: 2026-06-30
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,16 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY/noze.sk local MCP content workflow is configured on `2026-06-30`:
+  - branch/worktree: `codex/roy-noze-mcp` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - change: `scripts/mcp/biznisweb_roy_mcp.py` adds a repo-local MCP server `biznisweb-roy` for ROY/noze.sk content operations, using GraphQL for read checks and BiznisWeb admin endpoints for news-post create/update/delete
+  - local Codex config now points `mcp_servers.biznisweb-roy` to the repo-local script and sets `PYTHONIOENCODING=utf-8` plus `BIZNISWEB_ROY_REPO`
+  - verified access: `roy.flox.sk` admin login works from existing ROY credentials, and language version `AF` resolves as `id=48`, `code=af`, `system_lang=sk`, `visible=true`
+  - verified page/block map: page `823` is the `Ostry magazin` overview with directory/contentfrom blocks only; category news blocks are `1888` recenzie, `1889` rady/tipy, `1892` typy cepeli, `1896` materialy rukovati, `1897` materialy cepeli, `1899` udrzba/brusenie, `1901` znacky/vyrobcovia, and `1903` podla pouzitia
+  - verified write smoke: MCP JSON-RPC against `scripts/mcp/biznisweb_roy_mcp.py` listed tools, created hidden post `1939` in block `1897` with slug `codex-mcp-smoke-test-20260630155651`, public URL returned `404`, delete returned success, and block `1897` returned to `0` rows
+  - Current status: the repo-local MCP server is ready; this already works by manual JSON-RPC, and a new/reloaded Codex session should expose the `biznisweb-roy` tools from config
+  - Next exact step: reload Codex so the new MCP server is available in the active tool list, then use hidden drafts first when creating noze.sk article batches
 
 - VEVO daily reporting email outage from `2026-06-27` is fixed on `2026-06-29`:
   - symptom: VEVO daily emails stopped after the last successful scheduled runs on `2026-06-25 01:00 Europe/Bratislava` and `2026-06-26 01:00 Europe/Bratislava`; ROY continued sending daily SES emails on `2026-06-27`, `2026-06-28`, and `2026-06-29`
