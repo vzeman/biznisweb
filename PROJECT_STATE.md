@@ -61,6 +61,22 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY recent zero-margin product SKU override is implemented locally on `2026-07-01`:
+  - branch/worktree: `codex/roy-zero-margin-35-overrides` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - source audit: ROY stable export `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/20260701T083224Z/export_20250924-20260630.csv` showed `70` product labels / `66` unique SKUs with `missing_cost_zero_margin_fallback` in `2026-04-01..2026-06-30`
+  - change: reporting runtime now supports `margin_override_skus` percentage maps, checked by normalized product SKU/import code before brand/label margin overrides
+  - change: `projects/roy/settings.json` sets `35%` product margin for those `66` recent zero-margin SKUs
+  - runtime effect: matching SKU rows use cost `65%` of net `item_total_without_tax` and source `margin_35_override`; explicit zero-cost and zero-margin exceptions still take precedence
+  - local verification:
+    - `python -m json.tool projects\roy\settings.json`
+    - `python -m py_compile export_orders.py reporting_core\runtime.py tests\test_reporting_calculation_fixes.py`
+    - `python -m unittest tests.test_reporting_calculation_fixes` (`25` tests OK)
+    - `python -m unittest tests.test_reporting_calculation_fixes tests.test_roy_inventory_model tests.test_dashboard_modern` (`41` tests OK)
+    - `python scripts\reporting_qa_smoke.py`
+    - `git diff --check`
+  - Current status: source/config/test change is ready locally; it is not yet deployed to the scheduled ROY reporting runtime
+  - Next exact step: commit and push the branch, merge through PR to `main`, rebuild/reporting image, run production reporting smoke with task image update, then rerun/backfill ROY stable latest artifacts so historical dashboard/report values use the 35% SKU margin
+
 - ROY knife-brand VO margin override is deployed and stable latest artifacts were regenerated on `2026-07-01`:
   - code PR: `https://github.com/vzeman/biznisweb/pull/203`, merged to `main` as `3df5f41b2a3909ea43ff8d41a45188dcad0fd9af`
   - change: reporting runtime supports generic `margin_override_brands` and `margin_override_label_patterns` percentage maps, applied after explicit zero-cost/zero-margin exceptions and before SKU cost maps or missing-cost zero-margin fallback

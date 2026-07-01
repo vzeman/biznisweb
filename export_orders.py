@@ -113,6 +113,7 @@ PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
 ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
+MARGIN_OVERRIDE_SKUS: Dict[str, float] = {}  # Optional product SKU/import code -> product margin percent override
 MARGIN_OVERRIDE_BRANDS: Dict[str, float] = {}  # Optional brand -> product margin percent override
 MARGIN_OVERRIDE_LABEL_PATTERNS: Dict[str, float] = {}  # Optional label pattern -> product margin percent override
 MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
@@ -2939,6 +2940,15 @@ class BizniWebExporter:
                 return float(margin_pct)
         return None
 
+    @classmethod
+    def _margin_override_pct_for_item(cls, product_sku: str, label: str) -> Optional[float]:
+        normalized_sku = cls._normalize_product_identifier(product_sku)
+        if normalized_sku:
+            for sku, margin_pct in MARGIN_OVERRIDE_SKUS.items():
+                if cls._normalize_product_identifier(sku) == normalized_sku:
+                    return float(margin_pct)
+        return cls._margin_override_pct_for_label(label)
+
     @staticmethod
     def _margin_override_source(margin_pct: float) -> str:
         token = f"{float(margin_pct):g}".replace(".", "_")
@@ -5203,7 +5213,7 @@ class BizniWebExporter:
                 force_zero_cost = False
                 force_zero_margin = False
                 force_margin_15 = False
-                margin_override_pct = self._margin_override_pct_for_label(item_label)
+                margin_override_pct = self._margin_override_pct_for_item(product_sku, item_label)
                 if (ZERO_COST_BRANDS or ZERO_MARGIN_BRANDS or MARGIN_15_BRANDS) and item_label:
                     label_lc = str(item_label).lower()
                     force_zero_cost = any(brand in label_lc for brand in ZERO_COST_BRANDS)

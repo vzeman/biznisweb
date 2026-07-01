@@ -94,7 +94,9 @@ class ReportingCalculationFixTests(unittest.TestCase):
     def test_margin_override_brand_forces_configured_product_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
 
-        with patch("export_orders.MARGIN_OVERRIDE_BRANDS", {"Ganzo": 35.0}), patch(
+        with patch("export_orders.MARGIN_OVERRIDE_SKUS", {}), patch(
+            "export_orders.MARGIN_OVERRIDE_BRANDS", {"Ganzo": 35.0}
+        ), patch(
             "export_orders.MARGIN_OVERRIDE_LABEL_PATTERNS", {}
         ):
             rows = exporter.flatten_order(
@@ -108,6 +110,39 @@ class ReportingCalculationFixTests(unittest.TestCase):
                         {
                             "item_label": "Noz Ganzo G7211-BK",
                             "ean": "",
+                            "quantity": 1,
+                            "tax_rate": 23,
+                            "price": {"value": 100.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 100.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 123.0, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        self.assertEqual("margin_35_override", rows[0]["expense_source"])
+        self.assertEqual(65.0, rows[0]["expense_per_item"])
+        self.assertEqual(65.0, rows[0]["total_expense"])
+        self.assertEqual(35.0, rows[0]["profit_before_ads"])
+
+    def test_margin_override_sku_uses_net_line_total(self) -> None:
+        exporter = make_exporter(project_name="roy")
+
+        with patch("export_orders.MARGIN_OVERRIDE_SKUS", {"12837": 35.0}), patch(
+            "export_orders.MARGIN_OVERRIDE_BRANDS", {}
+        ), patch("export_orders.MARGIN_OVERRIDE_LABEL_PATTERNS", {}):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-1",
+                    "pur_date": "2026-04-20 10:00:00",
+                    "sum": {"value": 123.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Puzdro na spreje 300ml univerzal",
+                            "ean": "",
+                            "import_code": "12837",
                             "quantity": 1,
                             "tax_rate": 23,
                             "price": {"value": 100.0, "currency": {"code": "EUR"}},
@@ -160,6 +195,90 @@ class ReportingCalculationFixTests(unittest.TestCase):
         for brand in expected_brands:
             with self.subTest(brand=brand):
                 self.assertEqual(35.0, runtime.margin_override_brands[brand])
+
+    def test_roy_zero_margin_sku_overrides_cover_recent_fallback_products(self) -> None:
+        expected_skus = [
+            "12837",
+            "H-1DADF217",
+            "BC_AP2X",
+            "7310-2G-4G",
+            "11898",
+            "H-CF3B7CAD",
+            "690",
+            "11439",
+            "MCS30943",
+            "H-E4CC29CC",
+            "H-69235D5B",
+            "F_393",
+            "27068",
+            "H-45306D08",
+            "F_359",
+            "F_1509",
+            "H-93405DC3",
+            "14949",
+            "H-177FC644",
+            "14002701",
+            "39179",
+            "840086",
+            "F_438",
+            "12039",
+            "H-791A744A",
+            "165016",
+            "456890",
+            "F_476",
+            "F_392",
+            "CONF-5643",
+            "F_261",
+            "F_1562",
+            "78607-3",
+            "H-AF2FD84B",
+            "CONF-16806",
+            "41001",
+            "31853L",
+            "ZSK001",
+            "0-45",
+            "H-9D2E0A2C",
+            "1157",
+            "F_403",
+            "H-52688CE6",
+            "TK-02S",
+            "NTR002",
+            "452045-1",
+            "636",
+            "CONF-7200",
+            "15305",
+            "CONF-15794",
+            "14955",
+            "16394",
+            "33385",
+            "780701",
+            "4507700",
+            "780700",
+            "11442",
+            "0-61",
+            "406780",
+            "TKO-02H",
+            "870578",
+            "TK-02H",
+            "AOF-S+",
+            "AOF-S+-G",
+            "12252",
+            "12258",
+        ]
+        settings_path = Path(__file__).resolve().parents[1] / "projects" / "roy" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        runtime = load_project_runtime(
+            "roy",
+            settings=settings,
+            default_packaging_cost_per_order=0.0,
+            default_shipping_subsidy_per_order=0.0,
+            default_fixed_monthly_cost=0.0,
+            default_fixed_daily_cost=0.0,
+        )
+
+        for sku in expected_skus:
+            with self.subTest(sku=sku):
+                self.assertEqual(35.0, runtime.margin_override_skus[sku])
 
     def test_zero_revenue_order_allocates_item_level_overhead(self) -> None:
         exporter = make_exporter()
