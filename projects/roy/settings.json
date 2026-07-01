@@ -468,6 +468,28 @@
   "exclude_zero_price_label_patterns": [
     "Roy Hunter Knife 11004"
   ],
+  "margin_override_brands": {
+    "Opinel": 35,
+    "Morakniv": 35,
+    "Walther": 35,
+    "Kizlyar": 35,
+    "Higonokami": 35,
+    "Ganzo": 35,
+    "Ruike": 35,
+    "Helle": 35,
+    "Cold Steel": 35,
+    "Civivi": 35,
+    "Victorinox": 35,
+    "Bestech": 35,
+    "Mikov": 35,
+    "Boker": 35,
+    "Joker": 35,
+    "Kanetsune": 35,
+    "Muela": 35,
+    "Marttiini": 35,
+    "Benchmade": 35,
+    "Spyderco": 35
+  },
   "margin_15_brands": [
     "Pixfra",
     "Pard"

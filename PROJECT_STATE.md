@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-06-24
+Last updated: 2026-07-01
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,20 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY knife-brand VO margin override is implemented locally on `2026-07-01`:
+  - branch/worktree: `codex/roy-knife-brand-35-margin` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+  - change: reporting runtime now supports generic `margin_override_brands` and `margin_override_label_patterns` percentage maps, applied before SKU cost maps and missing-cost zero-margin fallback
+  - change: `projects/roy/settings.json` sets `35%` product margin for these knife brands: Opinel, Morakniv, Walther, Kizlyar, Higonokami, Ganzo, Ruike, Helle, Cold Steel, Civivi, Victorinox, Bestech, Mikov, Boker, Joker, Kanetsune, Muela, Marttiini, Benchmade, Spyderco
+  - expected runtime effect: matching product labels use cost `65%` of net line price and source `margin_35_override`, so ROY reporting no longer treats those brands as `1 EUR`, `0 EUR`, or zero-margin fallback unless an explicit zero-cost/zero-margin exception takes precedence
+  - local verification:
+    - `python -m json.tool projects\roy\settings.json`
+    - `python -m py_compile export_orders.py reporting_core\runtime.py tests\test_reporting_calculation_fixes.py`
+    - `python -m unittest tests.test_reporting_calculation_fixes` (`23` tests OK)
+    - `python scripts\reporting_qa_smoke.py`
+    - `git diff --check`
+  - Current status: source/config/test change is ready on the task branch; it is not yet deployed to the scheduled ROY reporting runtime
+  - Next exact step: commit and push the branch, merge through PR to `main`, rebuild/reporting image, run ROY production reporting smoke with task image update, then rerun/backfill ROY stable latest artifacts so historical dashboard/report values use the 35% knife-brand margin
 
 - VEVO daily reporting email outage from `2026-06-27` is fixed on `2026-06-29`:
   - symptom: VEVO daily emails stopped after the last successful scheduled runs on `2026-06-25 01:00 Europe/Bratislava` and `2026-06-26 01:00 Europe/Bratislava`; ROY continued sending daily SES emails on `2026-06-27`, `2026-06-28`, and `2026-06-29`

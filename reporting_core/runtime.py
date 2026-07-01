@@ -32,6 +32,8 @@ class ProjectRuntime:
     zero_margin_brands: List[str]
     zero_cost_brands: List[str]
     zero_cost_label_patterns: List[str]
+    margin_override_brands: Dict[str, float]
+    margin_override_label_patterns: Dict[str, float]
     margin_15_brands: List[str]
     margin_15_label_patterns: List[str]
     exclude_zero_price_label_patterns: List[str]
@@ -69,6 +71,8 @@ class ProjectRuntime:
             "zero_margin_brands": list(self.zero_margin_brands),
             "zero_cost_brands": list(self.zero_cost_brands),
             "zero_cost_label_patterns": list(self.zero_cost_label_patterns),
+            "margin_override_brands": dict(self.margin_override_brands),
+            "margin_override_label_patterns": dict(self.margin_override_label_patterns),
             "margin_15_brands": list(self.margin_15_brands),
             "margin_15_label_patterns": list(self.margin_15_label_patterns),
             "exclude_zero_price_label_patterns": list(self.exclude_zero_price_label_patterns),
@@ -79,6 +83,25 @@ class ProjectRuntime:
             "weather": copy.deepcopy(self.weather),
             "reporting_defaults": dict(self.reporting_defaults),
         }
+
+
+def _coerce_margin_override_map(raw: Any) -> Dict[str, float]:
+    if not raw:
+        return {}
+
+    items = raw.items() if isinstance(raw, dict) else []
+    result: Dict[str, float] = {}
+    for key, value in items:
+        key_text = str(key or "").strip()
+        if not key_text:
+            continue
+        try:
+            margin_pct = float(str(value).strip().rstrip("%"))
+        except (TypeError, ValueError):
+            continue
+        if 0.0 <= margin_pct < 100.0:
+            result[key_text] = margin_pct
+    return result
 
 
 def load_project_runtime(
@@ -156,6 +179,8 @@ def load_project_runtime(
         zero_margin_brands=[str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
         zero_cost_brands=[str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
         zero_cost_label_patterns=[str(v).strip() for v in settings.get("zero_cost_label_patterns", []) if str(v).strip()],
+        margin_override_brands=_coerce_margin_override_map(settings.get("margin_override_brands", {})),
+        margin_override_label_patterns=_coerce_margin_override_map(settings.get("margin_override_label_patterns", {})),
         margin_15_brands=[str(v).strip() for v in settings.get("margin_15_brands", []) if str(v).strip()],
         margin_15_label_patterns=[str(v).strip() for v in settings.get("margin_15_label_patterns", []) if str(v).strip()],
         exclude_zero_price_label_patterns=[
@@ -194,6 +219,8 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     target_globals["ZERO_MARGIN_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_margin_brands if str(v).strip()]
     target_globals["ZERO_COST_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_cost_brands if str(v).strip()]
     target_globals["ZERO_COST_LABEL_PATTERNS"] = [str(v).strip() for v in runtime.zero_cost_label_patterns if str(v).strip()]
+    target_globals["MARGIN_OVERRIDE_BRANDS"] = dict(runtime.margin_override_brands)
+    target_globals["MARGIN_OVERRIDE_LABEL_PATTERNS"] = dict(runtime.margin_override_label_patterns)
     target_globals["MARGIN_15_BRANDS"] = [str(v).strip().lower() for v in runtime.margin_15_brands if str(v).strip()]
     target_globals["MARGIN_15_LABEL_PATTERNS"] = [str(v).strip() for v in runtime.margin_15_label_patterns if str(v).strip()]
     target_globals["EXCLUDE_ZERO_PRICE_LABEL_PATTERNS"] = [
