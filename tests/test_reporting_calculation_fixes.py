@@ -9,6 +9,7 @@ import pandas as pd
 
 from export_orders import ORDER_CACHE_SCHEMA_VERSION, BizniWebExporter
 from reporting_core.cfo_kpis import build_order_records_from_export_df
+from reporting_core.runtime import load_project_runtime
 
 
 def make_exporter(project_name: str = "vevo") -> BizniWebExporter:
@@ -89,6 +90,76 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(50.0, rows[0]["expense_per_item"])
         self.assertEqual(100.0, rows[0]["total_expense"])
         self.assertEqual(0.0, rows[0]["profit_before_ads"])
+
+    def test_margin_override_brand_forces_configured_product_margin(self) -> None:
+        exporter = make_exporter(project_name="roy")
+
+        with patch("export_orders.MARGIN_OVERRIDE_BRANDS", {"Ganzo": 35.0}), patch(
+            "export_orders.MARGIN_OVERRIDE_LABEL_PATTERNS", {}
+        ):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-1",
+                    "pur_date": "2026-04-20 10:00:00",
+                    "sum": {"value": 123.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Noz Ganzo G7211-BK",
+                            "ean": "",
+                            "quantity": 1,
+                            "tax_rate": 23,
+                            "price": {"value": 100.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 100.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 123.0, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        self.assertEqual("margin_35_override", rows[0]["expense_source"])
+        self.assertEqual(65.0, rows[0]["expense_per_item"])
+        self.assertEqual(65.0, rows[0]["total_expense"])
+        self.assertEqual(35.0, rows[0]["profit_before_ads"])
+
+    def test_roy_knife_brand_margin_overrides_cover_requested_brands(self) -> None:
+        expected_brands = [
+            "Opinel",
+            "Morakniv",
+            "Walther",
+            "Kizlyar",
+            "Higonokami",
+            "Ganzo",
+            "Ruike",
+            "Helle",
+            "Cold Steel",
+            "Civivi",
+            "Victorinox",
+            "Bestech",
+            "Mikov",
+            "Boker",
+            "Joker",
+            "Kanetsune",
+            "Muela",
+            "Marttiini",
+            "Benchmade",
+            "Spyderco",
+        ]
+        settings_path = Path(__file__).resolve().parents[1] / "projects" / "roy" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        runtime = load_project_runtime(
+            "roy",
+            settings=settings,
+            default_packaging_cost_per_order=0.0,
+            default_shipping_subsidy_per_order=0.0,
+            default_fixed_monthly_cost=0.0,
+            default_fixed_daily_cost=0.0,
+        )
+
+        for brand in expected_brands:
+            with self.subTest(brand=brand):
+                self.assertEqual(35.0, runtime.margin_override_brands[brand])
 
     def test_zero_revenue_order_allocates_item_level_overhead(self) -> None:
         exporter = make_exporter()

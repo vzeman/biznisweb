@@ -113,6 +113,8 @@ PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
 ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
+MARGIN_OVERRIDE_BRANDS: Dict[str, float] = {}  # Optional brand -> product margin percent override
+MARGIN_OVERRIDE_LABEL_PATTERNS: Dict[str, float] = {}  # Optional label pattern -> product margin percent override
 MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
 MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15% product margin
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
@@ -2922,6 +2924,26 @@ class BizniWebExporter:
                 return True
         return False
 
+    @classmethod
+    def _margin_override_pct_for_label(cls, label: str) -> Optional[float]:
+        if not label:
+            return None
+        normalized_label = cls._normalize_match_text(label)
+        for pattern, margin_pct in MARGIN_OVERRIDE_BRANDS.items():
+            normalized_pattern = cls._normalize_match_text(pattern)
+            if normalized_pattern and normalized_pattern in normalized_label:
+                return float(margin_pct)
+        for pattern, margin_pct in MARGIN_OVERRIDE_LABEL_PATTERNS.items():
+            normalized_pattern = cls._normalize_match_text(pattern)
+            if normalized_pattern and normalized_pattern in normalized_label:
+                return float(margin_pct)
+        return None
+
+    @staticmethod
+    def _margin_override_source(margin_pct: float) -> str:
+        token = f"{float(margin_pct):g}".replace(".", "_")
+        return f"margin_{token}_override"
+
     def _bundle_accessory_config(self) -> Dict[str, Any]:
         config = self.project_settings.get("bundle_accessory_model") or {}
         return config if isinstance(config, dict) else {}
@@ -5177,10 +5199,11 @@ class BizniWebExporter:
                 ):
                     continue
 
-                # Force 0 cost for configured brands, then optional 0 margin brands, otherwise use configured costs.
+                # Apply explicit cost overrides before falling back to configured product cost maps.
                 force_zero_cost = False
                 force_zero_margin = False
                 force_margin_15 = False
+                margin_override_pct = self._margin_override_pct_for_label(item_label)
                 if (ZERO_COST_BRANDS or ZERO_MARGIN_BRANDS or MARGIN_15_BRANDS) and item_label:
                     label_lc = str(item_label).lower()
                     force_zero_cost = any(brand in label_lc for brand in ZERO_COST_BRANDS)
@@ -5196,6 +5219,9 @@ class BizniWebExporter:
                 elif force_zero_margin and item_quantity:
                     expense_per_item = item_total_without_tax / item_quantity
                     expense_source = "zero_margin_override"
+                elif margin_override_pct is not None and item_quantity:
+                    expense_per_item = (item_total_without_tax / item_quantity) * (1 - margin_override_pct / 100)
+                    expense_source = self._margin_override_source(margin_override_pct)
                 elif force_margin_15 and item_quantity:
                     # Keep product margin at 15%: cost = 85% of net unit selling price.
                     expense_per_item = (item_total_without_tax / item_quantity) * 0.85
