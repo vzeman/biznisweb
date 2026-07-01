@@ -61,19 +61,26 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY knife-brand VO margin override is implemented locally on `2026-07-01`:
-  - branch/worktree: `codex/roy-knife-brand-35-margin` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
-  - change: reporting runtime now supports generic `margin_override_brands` and `margin_override_label_patterns` percentage maps, applied before SKU cost maps and missing-cost zero-margin fallback
+- ROY knife-brand VO margin override is deployed and stable latest artifacts were regenerated on `2026-07-01`:
+  - code PR: `https://github.com/vzeman/biznisweb/pull/203`, merged to `main` as `3df5f41b2a3909ea43ff8d41a45188dcad0fd9af`
+  - change: reporting runtime supports generic `margin_override_brands` and `margin_override_label_patterns` percentage maps, applied after explicit zero-cost/zero-margin exceptions and before SKU cost maps or missing-cost zero-margin fallback
   - change: `projects/roy/settings.json` sets `35%` product margin for these knife brands: Opinel, Morakniv, Walther, Kizlyar, Higonokami, Ganzo, Ruike, Helle, Cold Steel, Civivi, Victorinox, Bestech, Mikov, Boker, Joker, Kanetsune, Muela, Marttiini, Benchmade, Spyderco
-  - expected runtime effect: matching product labels use cost `65%` of net line price and source `margin_35_override`, so ROY reporting no longer treats those brands as `1 EUR`, `0 EUR`, or zero-margin fallback unless an explicit zero-cost/zero-margin exception takes precedence
-  - local verification:
+  - runtime effect: matching product labels use cost `65%` of net line price and source `margin_35_override`; explicit exceptions still win, so the existing zero-cost `Walther 2x20...` exception remains zero-cost
+  - local verification before merge:
     - `python -m json.tool projects\roy\settings.json`
     - `python -m py_compile export_orders.py reporting_core\runtime.py tests\test_reporting_calculation_fixes.py`
     - `python -m unittest tests.test_reporting_calculation_fixes` (`23` tests OK)
+    - `python -m unittest tests.test_reporting_calculation_fixes tests.test_roy_inventory_model tests.test_dashboard_modern` (`39` tests OK)
     - `python scripts\reporting_qa_smoke.py`
     - `git diff --check`
-  - Current status: source/config/test change is ready on the task branch; it is not yet deployed to the scheduled ROY reporting runtime
-  - Next exact step: commit and push the branch, merge through PR to `main`, rebuild/reporting image, run ROY production reporting smoke with task image update, then rerun/backfill ROY stable latest artifacts so historical dashboard/report values use the 35% knife-brand margin
+  - image/deploy: ECR build run `28498303881` published `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:65f10b1f6646f56a0cbb2c36f7fd72bd1b54fa041d8046529c98809b28be9248`
+  - scheduled task definitions after production smoke run `28498402842`: `roy-daily-report-email` -> `roy-reporting-daily:41`; `vevo-daily-report-email` -> `vevo-reporting-daily:11`
+  - hard-gate smoke evidence for ROY: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.43.101`, task `d50ca24ca0694ce8874231cadb0c070d`, marker path `http://127.0.0.1:8000/marker.json`, UI path `http://127.0.0.1:8787/dashboard/roy`, `PRODUCTION_SMOKE_OK:roy:d50ca24ca0694ce8874231cadb0c070d:172.31.43.101`, `UI_SMOKE_OK:roy:daily-profit-loss`
+  - stable latest backfill: one-off ROY ECS task `914eac51fd7448bf99050344e4512887` on `roy-reporting-daily:41`, private IP `172.31.11.202`, `--skip-email --skip-invoices --creditnote-storno-dry-run`, exit code `0`
+  - backfill marker: `LOCALHOST_BACKFILL_MARKER_OK`, `daily_profit_rows=280`, `creditnote_count=115`, `credited_gross_eur=11520.89`, `margin_35_rows=16`, `margin_35_revenue_eur=419.76`, `margin_35_expense_eur=272.87`, `margin_35_profit_eur=146.89`, `margin_35_margin_pct=34.9938`, `margin_override_brands_configured=20`
+  - backfill UI/S3 verification: `UI_SMOKE_OK:roy:stable-latest-backfill`; `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json` and `report_latest.html` were last modified at `2026-07-01T08:32:25Z`
+  - Current status: production code, scheduled runtime image, ROY stable latest dashboard payload, and ROY stable latest HTML report are updated
+  - Next exact step: after the next scheduled run on `2026-07-02 01:30 Europe/Bratislava`, confirm `roy-reporting-daily:41` still emits `margin_35_override` rows and sends the normal daily email
 
 - VEVO daily reporting email outage from `2026-06-27` is fixed on `2026-06-29`:
   - symptom: VEVO daily emails stopped after the last successful scheduled runs on `2026-06-25 01:00 Europe/Bratislava` and `2026-06-26 01:00 Europe/Bratislava`; ROY continued sending daily SES emails on `2026-06-27`, `2026-06-28`, and `2026-06-29`
