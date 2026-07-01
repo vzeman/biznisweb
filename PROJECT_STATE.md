@@ -61,21 +61,37 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY recent zero-margin product SKU override is implemented locally on `2026-07-01`:
-  - branch/worktree: `codex/roy-zero-margin-35-overrides` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+- ROY recent zero-margin product SKU override is deployed and stable latest artifacts were regenerated on `2026-07-01`:
   - source audit: ROY stable export `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/20260701T083224Z/export_20250924-20260630.csv` showed `70` product labels / `66` unique SKUs with `missing_cost_zero_margin_fallback` in `2026-04-01..2026-06-30`
-  - change: reporting runtime now supports `margin_override_skus` percentage maps, checked by normalized product SKU/import code before brand/label margin overrides
-  - change: `projects/roy/settings.json` sets `35%` product margin for those `66` recent zero-margin SKUs
+  - code/config change: PR `#205` merged as `86e348b`; reporting runtime supports `margin_override_skus`, and `projects/roy/settings.json` sets `35%` product margin for those `66` SKUs
   - runtime effect: matching SKU rows use cost `65%` of net `item_total_without_tax` and source `margin_35_override`; explicit zero-cost and zero-margin exceptions still take precedence
-  - local verification:
+  - local verification before merge:
     - `python -m json.tool projects\roy\settings.json`
     - `python -m py_compile export_orders.py reporting_core\runtime.py tests\test_reporting_calculation_fixes.py`
     - `python -m unittest tests.test_reporting_calculation_fixes` (`25` tests OK)
     - `python -m unittest tests.test_reporting_calculation_fixes tests.test_roy_inventory_model tests.test_dashboard_modern` (`41` tests OK)
     - `python scripts\reporting_qa_smoke.py`
     - `git diff --check`
-  - Current status: source/config/test change is ready locally; it is not yet deployed to the scheduled ROY reporting runtime
-  - Next exact step: commit and push the branch, merge through PR to `main`, rebuild/reporting image, run production reporting smoke with task image update, then rerun/backfill ROY stable latest artifacts so historical dashboard/report values use the 35% SKU margin
+  - production image: ECR `vevo-reporting:latest` digest `sha256:ebd43d8904940e03bdcc1253a749119eb943d80565b387611b2a23d73e6d28a9` from build run `28509060634`
+  - production smoke: GitHub run `28509192170` completed `success`; schedules were updated to `vevo-reporting-daily:12` and `roy-reporting-daily:42`
+  - ROY smoke task: `40363c1f7812425eb98dda558e673d01`, private IP `172.31.18.96`, `roy-reporting-daily:42`, exit code `0`, marker `LOCALHOST_MARKER_OK`, UI marker `UI_SMOKE_OK:roy:daily-profit-loss`
+  - stable ROY backfill: task `e86d17adb1f545d3b29a754dafe73e13`, private IP `172.31.36.213`, `roy-reporting-daily:42`, exit code `0`, command `daily_report_runner.py --project roy --skip-email --skip-invoices --creditnote-storno-dry-run`
+  - backfill marker for `2026-04-01..2026-06-30`:
+    - `sku_override_count=66`
+    - `target_sku_rows=421`
+    - `zero_margin_fallback_rows_after=0`
+    - `sku_margin_35_rows=413`
+    - `sku_margin_35_revenue_eur_net=4023.20`
+    - `sku_margin_35_expense_eur=2615.24`
+    - `sku_margin_35_profit_eur=1407.96`
+    - `sku_margin_35_margin_pct=34.996`
+    - `source_counts={"margin_35_override":413,"zero_cost_override":8}`
+  - stable S3 latest refreshed at `2026-07-01T12:01:21Z`:
+    - `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/dashboard_payload_latest.json`
+    - `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/report_latest.html`
+  - live ROY App Runner check: `biznisweb-roy-operations-dashboard` was `RUNNING`; `/production/roy` contained `roy-operations-dashboard`, `/api/operations/roy/live?refresh=1` returned marker `roy-operations-dashboard` with `generated_at=2026-07-01T12:04:36Z`
+  - Current status: deployed, stable ROY latest report/dashboard regenerated with 35% SKU margin on net prices, and public ROY operations dashboard reads the refreshed payload
+  - Next exact step: monitor the next scheduled `roy-daily-report-email` run on `roy-reporting-daily:42` and re-audit any new future `missing_cost_zero_margin_fallback` rows separately
 
 - ROY knife-brand VO margin override is deployed and stable latest artifacts were regenerated on `2026-07-01`:
   - code PR: `https://github.com/vzeman/biznisweb/pull/203`, merged to `main` as `3df5f41b2a3909ea43ff8d41a45188dcad0fd9af`
