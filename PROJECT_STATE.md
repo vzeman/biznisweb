@@ -61,18 +61,30 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY picking-list print confirmation fix is implemented locally on `2026-07-07`:
-  - branch/worktree: `codex/roy-picking-print-confirmation` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
+- ROY picking-list print confirmation fix is merged, deployed, and live state is repaired on `2026-07-07`:
+  - code PR: `https://github.com/vzeman/biznisweb/pull/207`, merged as `ff1fa6e Fix ROY picking PDF print confirmation flow`
+  - deploy run: `https://github.com/vzeman/biznisweb/actions/runs/28850346056`
+  - App Runner hard-gate context: service `biznisweb-roy-operations-dashboard`, service ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, instance-id/IP `N/A` because AWS App Runner is managed, production path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`, health path `/health`
+  - deployed image: `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede`
+  - App Runner operation: `8ab498381b454bd181ecc345dd306f44` completed, workflow smoke ended with `APP_RUNNER_ROY_OPERATIONS_OK` and `APP_RUNNER_DEPLOY_OK`
   - live symptom: ROY live dashboard still showed active orders from `2026-07-06`, but the normal picking-list PDF flow skipped them while newer `2026-07-07` orders could still be printed
   - live root cause evidence: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/operations/state.json` already contained active `2026-07-06` orders in `printed_picking_orders`, including batch `picking-20260707062639`; therefore the normal PDF endpoint filtered those orders out
   - code root cause: `GET /api/operations/roy/picking-lists.pdf` generated the PDF and immediately called `mark_picking_orders_printed()` before the browser/user could prove that the download or physical print succeeded
   - change: picking-list PDF GET is now read-only; it defaults to currently unprinted active orders and can still render all active orders for preview with `preview=1`/`include_printed=1`
   - change: a separate explicit `POST /api/operations/roy/picking-lists/printed` marks only the submitted order numbers as printed
   - change: `/api/operations/roy/live` annotates active orders with `picking_printed`, `picking_printed_at`, and print summary counts, and the ROY dashboard shows the print state plus separate `Vysklad. PDF` and `Označiť vytlačené` controls
+  - remote state backup before repair: `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/operations/backups/state-20260707T080233Z-before-picking-print-repair.json`
+  - remote state repair: removed erroneous active printed flags for `2677003373`, `2678000179`, `2677003374`, `2677003375`, `2677003376`, `2677003377`; adjusted batch `picking-20260707062639` from `10` to `4` remaining historical order numbers
+  - live verification after repair:
+    - `/health` returned `{"ok": true, "projects": ["roy", "vevo"]}`
+    - `/api/operations/roy/live?refresh=1` at `2026-07-07T08:08:51Z` returned marker `roy-operations-dashboard`, `picking_printed_orders=0`, `picking_unprinted_orders=5`, active order nums `2677003373`, `2678000179`, `2677003374`, `2677003376`, `2677003384`
+    - default dashboard PDF endpoint `/api/operations/roy/picking-lists.pdf?refresh=1` returned HTTP `200`, `application/pdf`, filename `roy-vyskladnovacie-listy-5-20260707-0810.pdf`, size `120794`, PDF contained active order nums `2677003373`, `2678000179`, `2677003374`, `2677003376`, `2677003384`
+    - S3 state ETag stayed unchanged across PDF GET: `"ae7b3f9484125809d44c431d7a00dcc4"` before and after, proving GET is read-only in production
+    - `/production/roy` HTML contains marker `roy-operations-dashboard`, link `pickingPdfLink`, button `markPickingPrintedBtn`, and the `Tlač` column
   - local verification:
     - `python -m py_compile live_dashboard_server.py roy_operations_dashboard.py`
     - `python -m unittest tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_mobile` (`37` tests OK)
-  - Next exact step: run `git diff --check`, push branch, merge through PR, deploy `biznisweb-roy-operations-dashboard`, remove the erroneous active `2026-07-06` printed flags from remote operations state, then verify PDF/API/UI on the live App Runner service
+  - Next exact step: warehouse can download/print the current `Vysklad. PDF`; only after the physical print/download succeeds, click `Označiť vytlačené` so the explicit POST records the printed batch
 
 - ROY recent zero-margin product SKU override is deployed and stable latest artifacts were regenerated on `2026-07-01`:
   - source audit: ROY stable export `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/20260701T083224Z/export_20250924-20260630.csv` showed `70` product labels / `66` unique SKUs with `missing_cost_zero_margin_fallback` in `2026-04-01..2026-06-30`
