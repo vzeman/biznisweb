@@ -11,6 +11,7 @@ from live_dashboard_server import build_roy_operations_dashboard_html
 import roy_operations_dashboard as rod
 from roy_operations_dashboard import (
     _select_current_stock_for_target,
+    annotate_picking_print_state,
     build_executive_kpi_snapshot,
     build_commercial_snapshot,
     build_inventory_snapshot,
@@ -20,6 +21,7 @@ from roy_operations_dashboard import (
     mark_personal_pickup_ready,
     mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
+    select_picking_orders_for_print,
 )
 
 
@@ -536,6 +538,51 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         unprinted = filter_unprinted_picking_orders(orders, state)
 
         self.assertEqual(["R-3"], [row["order_num"] for row in unprinted])
+
+    def test_picking_pdf_selection_is_read_only_until_explicit_print_mark(self) -> None:
+        orders = [{"order_num": "R-1"}, {"order_num": "R-2"}, {"order_num": "R-3"}]
+        state = {
+            "version": 1,
+            "printed_picking_orders": {
+                "R-1": {"order_num": "R-1", "printed_at": "2026-05-28T10:00:00Z"},
+            },
+        }
+
+        selected = select_picking_orders_for_print(orders, state, order_nums=["R-1", "R-2", "R-3"])
+
+        self.assertEqual(["R-2", "R-3"], [row["order_num"] for row in selected])
+        self.assertEqual({"R-1"}, set(state["printed_picking_orders"]))
+
+    def test_operations_snapshot_marks_active_printed_orders(self) -> None:
+        order_snapshot = {
+            "orders": [{"order_num": "R-1"}, {"order_num": "R-2"}],
+            "summary": {},
+        }
+        state = {
+            "version": 1,
+            "printed_picking_orders": {
+                "R-1": {
+                    "order_num": "R-1",
+                    "printed_at": "2026-05-28T10:00:00Z",
+                    "batch_id": "picking-20260528100000",
+                },
+            },
+        }
+
+        annotate_picking_print_state(order_snapshot, state)
+
+        self.assertTrue(order_snapshot["orders"][0]["picking_printed"])
+        self.assertEqual("2026-05-28T10:00:00Z", order_snapshot["orders"][0]["picking_printed_at"])
+        self.assertFalse(order_snapshot["orders"][1]["picking_printed"])
+        self.assertEqual(1, order_snapshot["summary"]["picking_printed_orders"])
+        self.assertEqual(1, order_snapshot["summary"]["picking_unprinted_orders"])
+
+    def test_operations_dashboard_has_explicit_print_confirmation_action(self) -> None:
+        html = build_roy_operations_dashboard_html("roy")
+
+        self.assertIn("/api/operations/roy/picking-lists.pdf", html)
+        self.assertIn("/api/operations/${encodeURIComponent(project)}/picking-lists/printed", html)
+        self.assertIn("Označiť vytlačené", html)
 
     def test_snapshot_expands_bundle_order_items_to_pickable_components(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
