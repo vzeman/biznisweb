@@ -432,6 +432,55 @@ def filter_unprinted_picking_orders(
     return result
 
 
+def select_picking_orders_for_print(
+    orders: Iterable[Dict[str, Any]],
+    state: Optional[Dict[str, Any]],
+    *,
+    order_nums: Optional[Iterable[Any]] = None,
+    include_printed: bool = False,
+) -> List[Dict[str, Any]]:
+    selected_keys = None
+    if order_nums is not None:
+        selected_keys = {str(value).strip() for value in order_nums if str(value).strip()}
+
+    selected: List[Dict[str, Any]] = []
+    for order in orders:
+        key = _picking_order_key(order)
+        if selected_keys is not None and key not in selected_keys:
+            continue
+        selected.append(order)
+    if include_printed:
+        return selected
+    return filter_unprinted_picking_orders(selected, state)
+
+
+def annotate_picking_print_state(order_snapshot: Dict[str, Any], state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    printed = (state or {}).get("printed_picking_orders")
+    printed_records = printed if isinstance(printed, dict) else {}
+    active_printed_count = 0
+    for order in order_snapshot.get("orders") or []:
+        if not isinstance(order, dict):
+            continue
+        key = _picking_order_key(order)
+        record = printed_records.get(key) if key else None
+        if isinstance(record, dict):
+            order["picking_printed"] = True
+            order["picking_printed_at"] = str(record.get("printed_at") or "").strip()
+            order["picking_print_batch_id"] = str(record.get("batch_id") or "").strip()
+            active_printed_count += 1
+        else:
+            order["picking_printed"] = False
+            order["picking_printed_at"] = ""
+            order["picking_print_batch_id"] = ""
+
+    summary = order_snapshot.setdefault("summary", {})
+    if isinstance(summary, dict):
+        total = len([order for order in order_snapshot.get("orders") or [] if isinstance(order, dict)])
+        summary["picking_printed_orders"] = active_printed_count
+        summary["picking_unprinted_orders"] = max(total - active_printed_count, 0)
+    return order_snapshot
+
+
 def mark_picking_orders_printed(
     state: Dict[str, Any],
     orders: Iterable[Dict[str, Any]],
@@ -2304,6 +2353,7 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
     order_snapshot = build_roy_orders_snapshot(project=project, orders=orders, settings=settings, scan=scan)
     payload = report_payload or {}
     operations_state = load_roy_operations_state(project, project_settings)
+    annotate_picking_print_state(order_snapshot, operations_state)
     base_inventory, _ = build_inventory_snapshot(payload, project_settings=project_settings)
     try:
         current_stock_by_sku, live_stock_diagnostics = fetch_current_stock_for_inventory_alerts(

@@ -18,7 +18,6 @@ from production_board import get_cached_production_board_snapshot, resolve_produ
 from roy_operations_dashboard import (
     acknowledge_loss_product,
     clear_inbound_stock_order,
-    filter_unprinted_picking_orders,
     get_cached_roy_operations_snapshot,
     load_roy_operations_state,
     mark_picking_orders_printed,
@@ -26,6 +25,7 @@ from roy_operations_dashboard import (
     mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
     save_roy_operations_state,
+    select_picking_orders_for_print,
     set_inbound_stock_order,
 )
 from roy_picking_lists_pdf import build_roy_picking_lists_filename, build_roy_picking_lists_pdf
@@ -1045,7 +1045,8 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       </div>
       <div class="actions">
         <button id="soundToggleBtn" class="sound" type="button" aria-pressed="false">Zvuk vyp.</button>
-        <a class="button" href="/api/operations/roy/picking-lists.pdf?refresh=1">Vysklad. PDF</a>
+        <a id="pickingPdfLink" class="button" href="/api/operations/roy/picking-lists.pdf?refresh=1" target="_blank" rel="noopener">Vysklad. PDF</a>
+        <button id="markPickingPrintedBtn" type="button">Označiť vytlačené</button>
         <button id="refreshBtn" class="primary" type="button">Refresh</button>
         <a class="button" href="/">Dashboardy</a>
       </div>
@@ -1084,7 +1085,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Objednávka</th><th>Status</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
+              <thead><tr><th>Objednávka</th><th>Status</th><th>Tlač</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
               <tbody id="ordersBody"></tbody>
             </table>
           </div>
@@ -1191,7 +1192,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         <div class="panel-head"><h2>Všetky vybaviteľné objednávky</h2><p id="ordersScanMeta">-</p></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Objednávka</th><th>Dátum</th><th>Status</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
+            <thead><tr><th>Objednávka</th><th>Dátum</th><th>Status</th><th>Tlač</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
             <tbody id="ordersFullBody"></tbody>
           </table>
         </div>
@@ -1503,10 +1504,36 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       if (!items.length) return '<span class="muted">bez položiek</span>';
       return `<div class="items">${items.slice(0, 6).map((item) => `<div class="item-line"><span>${safe(item.label)}</span><strong>${fmtQty(item.quantity)} ks</strong></div>`).join('')}${items.length > 6 ? `<div class="muted">+${fmtInt(items.length - 6)} ďalších</div>` : ''}</div>`;
     }
+    function currentUnprintedPickingOrderNums() {
+      return ((((latestData || {}).orders || {}).orders) || [])
+        .filter((order) => !order.picking_printed)
+        .map((order) => String(order.order_num || order.id || '').trim())
+        .filter(Boolean);
+    }
+    function updatePickingControls() {
+      const orderNums = currentUnprintedPickingOrderNums();
+      const pdfUrl = new URL(`/api/operations/${encodeURIComponent(project)}/picking-lists.pdf`, window.location.origin);
+      pdfUrl.searchParams.set('refresh', '1');
+      orderNums.forEach((orderNum) => pdfUrl.searchParams.append('order_num', orderNum));
+      const link = el('pickingPdfLink');
+      const markButton = el('markPickingPrintedBtn');
+      link.href = `${pdfUrl.pathname}${pdfUrl.search}`;
+      link.textContent = `Vysklad. PDF (${fmtInt(orderNums.length)})`;
+      link.classList.toggle('disabled', !orderNums.length);
+      link.setAttribute('aria-disabled', orderNums.length ? 'false' : 'true');
+      markButton.disabled = !orderNums.length;
+      markButton.textContent = `Označiť vytlačené (${fmtInt(orderNums.length)})`;
+    }
+    function pickingPrintBadge(order) {
+      if (!order.picking_printed) return '<span class="badge good">nové</span>';
+      const printedAt = text(order.picking_printed_at, '');
+      return `<span class="badge warn">vytlačené</span>${printedAt ? `<div class="muted">${safe(printedAt)}</div>` : ''}`;
+    }
     function orderRow(order, includeDate=false) {
       return `<tr>
         <td><strong class="mono">${safe(order.order_num)}</strong>${includeDate ? `<div class="muted">${safe(order.purchase_at)}</div>` : ''}</td>
         <td><span class="badge ${order.fulfillment_reason === 'paid_online' ? 'good' : 'warn'}">${safe(order.status)}</span></td>
+        <td>${pickingPrintBadge(order)}</td>
         <td>${safe((order.payment || {}).title)}</td>
         <td>${safe((order.shipping || {}).title)}</td>
         <td>${safe(order.sum)}</td>
@@ -1517,11 +1544,13 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const ordersPayload = data.orders || {};
       const orders = ordersPayload.orders || [];
       const scan = ordersPayload.scan || {};
-      el('ordersMeta').textContent = `${fmtInt(orders.length)} objednávok · hodnota ${fmtMoney((ordersPayload.summary || {}).fulfillable_value)}`;
+      const summary = ordersPayload.summary || {};
+      el('ordersMeta').textContent = `${fmtInt(orders.length)} objednávok · ${fmtInt(summary.picking_unprinted_orders)} nevytlačených · hodnota ${fmtMoney(summary.fulfillable_value)}`;
       el('ordersScanMeta').textContent = `${fmtInt(scan.orders_scanned)} skenovaných objednávok, ${fmtInt(scan.pages_scanned)} strán, stop=${text(scan.stop_reason)}`;
       const limited = orders.slice(0, 24);
-      el('ordersBody').innerHTML = limited.length ? limited.map((order) => orderRow(order)).join('') : '<tr><td colspan="6" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
-      el('ordersFullBody').innerHTML = orders.length ? orders.map((order) => orderRow(order, true)).join('') : '<tr><td colspan="7" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+      el('ordersBody').innerHTML = limited.length ? limited.map((order) => orderRow(order)).join('') : '<tr><td colspan="7" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+      el('ordersFullBody').innerHTML = orders.length ? orders.map((order) => orderRow(order, true)).join('') : '<tr><td colspan="8" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+      updatePickingControls();
     }
     function renderPickups(data) {
       const pickups = ((data.orders || {}).personal_pickups) || [];
@@ -1801,6 +1830,32 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         button.disabled = false;
       }
     }
+    async function markPickingPrinted() {
+      const orderNums = currentUnprintedPickingOrderNums();
+      if (!orderNums.length) {
+        showMessage('Nie sú žiadne nevytlačené objednávky na označenie.', true);
+        return;
+      }
+      if (!window.confirm(`Označiť ${orderNums.length} objednávok z posledného PDF ako vytlačené?`)) return;
+      const button = el('markPickingPrintedBtn');
+      button.disabled = true;
+      try {
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/picking-lists/printed`, {
+          method:'POST',
+          cache:'no-store',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ order_nums: orderNums }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        showMessage(`Označené ako vytlačené: ${fmtInt((data.batch || {}).order_count)} objednávok.`, true);
+        await loadDashboard(true);
+      } catch (error) {
+        showMessage(error instanceof Error ? error.message : String(error));
+      } finally {
+        button.disabled = false;
+      }
+    }
     async function acknowledgeLossProduct(input) {
       const sku = input.dataset.ackLoss;
       input.disabled = true;
@@ -1822,6 +1877,13 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       }
     }
     el('refreshBtn').addEventListener('click', () => loadDashboard(true));
+    el('markPickingPrintedBtn').addEventListener('click', () => markPickingPrinted());
+    el('pickingPdfLink').addEventListener('click', (event) => {
+      if (!currentUnprintedPickingOrderNums().length) {
+        event.preventDefault();
+        showMessage('Nie sú žiadne nevytlačené objednávky na PDF.', true);
+      }
+    });
     initializeOrderSound();
     document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
       document.querySelectorAll('[data-view]').forEach((btn) => btn.classList.toggle('active', btn === button));
@@ -1979,7 +2041,16 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 )
                 return
             force_refresh = (query.get("refresh", ["1"])[0] or "").strip().lower() not in {"0", "false", "no"}
-            preview_only = (query.get("preview", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
+            include_printed = (
+                (query.get("preview", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
+                or (query.get("include_printed", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
+            )
+            requested_order_nums = [
+                value.strip()
+                for raw in query.get("order_num", []) + query.get("order_nums", [])
+                for value in str(raw).replace(",", " ").split()
+                if value.strip()
+            ]
             try:
                 payload = get_cached_roy_operations_snapshot(
                     project,
@@ -1990,14 +2061,16 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 operations_state = load_roy_operations_state(
                     project,
                     project_settings,
-                    require_configured_remote=not preview_only,
+                    require_configured_remote=not include_printed,
                 )
-                orders = list(all_orders) if preview_only else filter_unprinted_picking_orders(all_orders, operations_state)
+                orders = select_picking_orders_for_print(
+                    all_orders,
+                    operations_state,
+                    order_nums=requested_order_nums or None,
+                    include_printed=include_printed,
+                )
                 pdf = build_roy_picking_lists_pdf(orders)
                 filename = build_roy_picking_lists_filename(orders)
-                if orders and not preview_only:
-                    mark_picking_orders_printed(operations_state, orders)
-                    save_roy_operations_state(project, operations_state, project_settings)
                 self._send_download(pdf, content_type="application/pdf", filename=filename)
             except Exception as exc:
                 self._send_text(
@@ -2122,6 +2195,46 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
 
         projects = available_projects()
         parts = [part for part in path.split("/") if part]
+        if (
+            len(parts) == 5
+            and parts[0] == "api"
+            and parts[1] == "operations"
+            and parts[3] == "picking-lists"
+            and parts[4] == "printed"
+        ):
+            project = parts[2]
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            if project != "roy":
+                self._send_json({"error": f"Picking-list printing is not enabled for '{project}'."}, status=404)
+                return
+            try:
+                body = self._read_json_body()
+                requested_order_nums = body.get("order_nums")
+                if not isinstance(requested_order_nums, list) or not requested_order_nums:
+                    raise ValueError("order_nums must contain at least one order number.")
+                project_settings = load_project_settings(project)
+                payload = get_cached_roy_operations_snapshot(
+                    project,
+                    report_payload=read_latest_dashboard_payload(project),
+                    force_refresh=False,
+                )
+                all_orders = ((payload.get("orders") or {}).get("orders") or [])
+                operations_state = load_roy_operations_state(project, project_settings, require_configured_remote=True)
+                orders = select_picking_orders_for_print(
+                    all_orders,
+                    operations_state,
+                    order_nums=requested_order_nums,
+                    include_printed=False,
+                )
+                batch = mark_picking_orders_printed(operations_state, orders)
+                storage = save_roy_operations_state(project, operations_state, project_settings)
+                self._send_json({"ok": True, "project": project, "batch": batch, "storage": storage})
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
         if (
             len(parts) == 6
             and parts[0] == "api"
