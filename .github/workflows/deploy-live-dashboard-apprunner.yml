@@ -76,6 +76,100 @@ jobs:
             --output text)"
           IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
 
+          protect_ecr_image_tag() {
+            local image_identifier="$1"
+            local protection_tag="$2"
+            if [[ "${image_identifier}" != *@sha256:* ]]; then
+              echo "Skipping ${protection_tag}; image is not digest-pinned: ${image_identifier}"
+              return 0
+            fi
+            local image_digest="${image_identifier##*@}"
+            local existing_digest
+            existing_digest="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag="${protection_tag}" \
+              --region "${AWS_REGION}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text 2>/dev/null || true)"
+            if [[ "${existing_digest}" == "${image_digest}" ]]; then
+              echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:already"
+              return 0
+            fi
+            local manifest_file
+            manifest_file="$(mktemp)"
+            aws ecr batch-get-image \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageDigest="${image_digest}" \
+              --region "${AWS_REGION}" \
+              --query 'images[0].imageManifest' \
+              --output text > "${manifest_file}"
+            python -m json.tool "${manifest_file}" >/dev/null
+            aws ecr put-image \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-tag "${protection_tag}" \
+              --image-manifest "file://${manifest_file}" \
+              --region "${AWS_REGION}" >/dev/null
+            rm -f "${manifest_file}"
+            echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:updated"
+          }
+
+          protect_current_daily_schedule_image() {
+            local report_project="$1"
+            local schedule_name
+            local expected_task_family
+            schedule_name="$(python - "${report_project}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["report_schedule"]["schedule_name"])
+          PY
+            )"
+            expected_task_family="$(python - "${report_project}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["report_schedule"]["task_family"])
+          PY
+            )"
+            aws scheduler get-schedule \
+              --name "${schedule_name}" \
+              --region "${AWS_REGION}" > "schedule-${report_project}.json"
+            local task_definition_arn
+            task_definition_arn="$(python - "${report_project}" <<'PY'
+          import json
+          import sys
+          project = sys.argv[1]
+          schedule = json.load(open(f"schedule-{project}.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])
+          PY
+            )"
+            if [[ "${task_definition_arn}" != *":task-definition/${expected_task_family}:"* ]]; then
+              echo "Schedule ${schedule_name} targets ${task_definition_arn}, expected family ${expected_task_family}" >&2
+              exit 1
+            fi
+            aws ecs describe-task-definition \
+              --task-definition "${task_definition_arn}" \
+              --region "${AWS_REGION}" > "task-definition-${report_project}.json"
+            local task_image
+            task_image="$(python - "${report_project}" <<'PY'
+          import json
+          import sys
+          project = sys.argv[1]
+          task_def = json.load(open(f"task-definition-{project}.json", encoding="utf-8"))["taskDefinition"]
+          print(task_def["containerDefinitions"][0].get("image") or "")
+          PY
+            )"
+            protect_ecr_image_tag "${task_image}" "${expected_task_family}-current"
+          }
+
+          for REPORT_PROJECT in vevo roy; do
+            protect_current_daily_schedule_image "${REPORT_PROJECT}"
+          done
+
           REPORT_SCHEDULE_NAME="$(python - "${PROJECT}" <<'PY'
           import json
           import pathlib
@@ -402,6 +496,7 @@ jobs:
                 --name "${REPORT_SCHEDULE_NAME}" \
                 --region "${AWS_REGION}" > schedule.json
             fi
+            protect_ecr_image_tag "${IMAGE_IDENTIFIER}" "${TASK_FAMILY}-current"
 
             CLUSTER_ARN="$(python - <<'PY'
           import json

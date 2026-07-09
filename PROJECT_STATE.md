@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-07-07
+Last updated: 2026-07-09
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,26 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- VEVO daily reporting email outage on `2026-07-09` is fixed and ECR digest protection is being hardened:
+  - symptom: the regular `vevo-daily-report-email` run for `2026-07-09 01:00 Europe/Bratislava` did not send a VEVO reporting email; ROY sent normally at `2026-07-09 01:30 Europe/Bratislava`
+  - root cause: `vevo-daily-report-email` still targeted `vevo-reporting-daily:12` with image digest `sha256:ebd43d8904940e03bdcc1253a749119eb943d80565b387611b2a23d73e6d28a9`; the digest had become untagged after the `2026-07-07` ROY App Runner deploy pushed `latest` to `sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede`, then ECR lifecycle deleted the untagged VEVO digest
+  - evidence: ECR `batch-get-image` for `sha256:ebd43d8904940e03bdcc1253a749119eb943d80565b387611b2a23d73e6d28a9` returned `ImageNotFound`; CloudTrail still showed the scheduled VEVO `RunTask` at `2026-07-08T23:00:13Z` for task `adfca2c7aed64091ab3fe1a342503817`, but `/ecs/vevo-reporting-daily` had no application log stream for that run; ROY task `fa90233638d04cd1931bd03c29824417` logged SES `MessageId=0107019f442e998f-8c6f3367-f63f-4db9-a941-2616b6e0fed5-000000`
+  - drift source: CloudTrail showed `Deploy Live Dashboard App Runner` run `28850346056` registered `roy-reporting-daily:43` and updated only `roy-daily-report-email` at `2026-07-07T07:49Z`, bypassing the earlier `production-reporting-smoke` guard that only protected that workflow
+  - repair run: `Production Reporting Smoke` run `29000488380` with `project=all`, `send_email=false`, `update_task_image=true` updated VEVO from `vevo-reporting-daily:12` to `vevo-reporting-daily:13` on `sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede`
+  - repair hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.1.133`, service `vevo-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:13`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/b44ca918db124255be1fbb6891a31662`, marker path `http://127.0.0.1:8000/marker.json`
+  - repair verification: VEVO dry host smoke in run `29000488380` showed `LOCALHOST_MARKER_OK`, `UI_SMOKE_OK:vevo:production-board`, `UI_SMOKE_OK:vevo:daily-profit-loss`; ROY dry smoke also passed with task `a752e29e34324e98b943bf92e91a365d`
+  - email resend: `Production Reporting Smoke` run `29008069794` with `project=vevo`, `send_email=true`, `update_task_image=false` sent the missing VEVO report via SES `MessageId=0107019f4645cbeb-c78b87bb-a6c3-49fa-83fa-bc1768a9b9d6-000000`
+  - resend hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.15.232`, service `vevo-daily-report-email`, task definition `arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:13`, task `arn:aws:ecs:eu-central-1:919341186960:task/vevo-reporting-cluster/2b322c0fec82493b980a806472573746`, marker path `http://127.0.0.1:8000/marker.json`
+  - resend verification: CloudWatch showed `data/vevo/report_latest.html`, `data/vevo/dashboard_payload_latest.json`, `LOCALHOST_MARKER_OK`, `daily_profit_rows=432`, `creditnote_count=280`, `credited_gross_eur=4938.74`, `send_email=true`, `PRODUCTION_BOARD_OK`, `UI_SMOKE_OK:vevo:production-board`, and `UI_SMOKE_OK:vevo:daily-profit-loss`
+  - immediate ECR protection: digest `sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede` now has tags `latest`, `vevo-reporting-daily-current`, and `roy-reporting-daily-current`, so it is protected from the current untagged-image lifecycle rule
+  - code hardening branch: `codex/protect-reporting-schedule-images` updates `.github/workflows/production-reporting-smoke.yml` and `.github/workflows/deploy-live-dashboard-apprunner.yml` so daily schedule digests are protected with project-specific ECR tags whenever report smoke runs or App Runner deploy touches reporting artifacts
+  - local verification for hardening branch:
+    - YAML parse for both workflows returned `YAML_OK`
+    - extracted workflow bash blocks passed `bash -n` after LF normalization
+    - `git diff --check`
+  - Current status: VEVO scheduled daily reporting is enabled at `01:00 Europe/Bratislava`, targets `vevo-reporting-daily:13`, and uses the current protected digest `sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede`
+  - Next exact step: merge the hardening PR, then monitor the next regular `vevo-daily-report-email` run on `2026-07-10 01:00 Europe/Bratislava` for a new CloudWatch stream and SES `MessageId`
 
 - ROY picking-list print confirmation fix is merged, deployed, and live state is repaired on `2026-07-07`:
   - code PR: `https://github.com/vzeman/biznisweb/pull/207`, merged as `ff1fa6e Fix ROY picking PDF print confirmation flow`
