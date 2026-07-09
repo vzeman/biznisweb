@@ -95,6 +95,43 @@ jobs:
             --output text)"
           IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
 
+          protect_ecr_image_tag() {
+            local image_identifier="$1"
+            local protection_tag="$2"
+            if [[ "${image_identifier}" != *@sha256:* ]]; then
+              echo "Skipping ${protection_tag}; image is not digest-pinned: ${image_identifier}"
+              return 0
+            fi
+            local image_digest="${image_identifier##*@}"
+            local existing_digest
+            existing_digest="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag="${protection_tag}" \
+              --region "${AWS_REGION}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text 2>/dev/null || true)"
+            if [[ "${existing_digest}" == "${image_digest}" ]]; then
+              echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:already"
+              return 0
+            fi
+            local manifest_file
+            manifest_file="$(mktemp)"
+            aws ecr batch-get-image \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageDigest="${image_digest}" \
+              --region "${AWS_REGION}" \
+              --query 'images[0].imageManifest' \
+              --output text > "${manifest_file}"
+            python -m json.tool "${manifest_file}" >/dev/null
+            aws ecr put-image \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-tag "${protection_tag}" \
+              --image-manifest "file://${manifest_file}" \
+              --region "${AWS_REGION}" >/dev/null
+            rm -f "${manifest_file}"
+            echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:updated"
+          }
+
           for PROJECT in $PROJECTS; do
             echo "::group::Production smoke for ${PROJECT}"
             SCHEDULE_NAME="$(python - "$PROJECT" <<'PY'
@@ -269,6 +306,7 @@ jobs:
               TASK_IMAGE_UPDATED="true"
               TASK_IMAGE="${IMAGE_IDENTIFIER}"
             fi
+            protect_ecr_image_tag "${TASK_IMAGE}" "${EXPECTED_TASK_FAMILY}-current"
             CONTAINER_NAME="$(python - <<'PY'
           import json
           task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
