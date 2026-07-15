@@ -2024,6 +2024,36 @@ class BizniWebExporter:
         fallback_profit_share_pct = round((fallback_profit / total_profit) * 100, 2) if total_profit > 0 else 0.0
         unknown_source_rows = int((item_df["expense_source"] == "unknown").sum())
 
+        recent_30d_total_revenue = 0.0
+        recent_30d_fallback_revenue = 0.0
+        recent_30d_fallback_profit = 0.0
+        recent_30d_revenue_share_pct = 0.0
+        recent_30d_date_from: Optional[str] = None
+        recent_30d_date_to: Optional[str] = None
+        if "purchase_date" in item_df.columns:
+            item_df["_expense_purchase_date"] = pd.to_datetime(
+                item_df["purchase_date"], errors="coerce"
+            ).dt.normalize()
+            valid_dates = item_df["_expense_purchase_date"].dropna()
+            if not valid_dates.empty:
+                recent_end = valid_dates.max()
+                recent_start = recent_end - pd.Timedelta(days=29)
+                recent_mask = item_df["_expense_purchase_date"].between(recent_start, recent_end)
+                recent_fallback_mask = recent_mask & fallback_mask
+                recent_30d_total_revenue = float(item_df.loc[recent_mask, "item_total_without_tax"].sum())
+                recent_30d_fallback_revenue = float(
+                    item_df.loc[recent_fallback_mask, "item_total_without_tax"].sum()
+                )
+                recent_30d_fallback_profit = float(
+                    item_df.loc[recent_fallback_mask, "profit_before_ads"].sum()
+                )
+                recent_30d_revenue_share_pct = (
+                    round((recent_30d_fallback_revenue / recent_30d_total_revenue) * 100, 2)
+                    if recent_30d_total_revenue > 0 else 0.0
+                )
+                recent_30d_date_from = recent_start.strftime("%Y-%m-%d")
+                recent_30d_date_to = recent_end.strftime("%Y-%m-%d")
+
         fallback_items_df = pd.DataFrame()
         if fallback_rows > 0:
             fallback_items_df = (
@@ -2079,6 +2109,11 @@ class BizniWebExporter:
             if fallback_revenue_share_pct >= 5 or fallback_profit_share_pct >= 5:
                 warnings.append(
                     f"Missing-cost fallback rows represent {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit."
+                )
+            if recent_30d_revenue_share_pct >= 3:
+                warnings.append(
+                    f"Recent 30-day missing-cost rows represent {recent_30d_revenue_share_pct:.2f}% "
+                    f"of item revenue (€{recent_30d_fallback_revenue:,.2f} of €{recent_30d_total_revenue:,.2f})."
                 )
             if top_fallback_items:
                 preview = ", ".join(
@@ -2150,6 +2185,12 @@ class BizniWebExporter:
             "fallback_unit_share_pct": fallback_unit_share_pct,
             "fallback_revenue_share_pct": fallback_revenue_share_pct,
             "fallback_profit_share_pct": fallback_profit_share_pct,
+            "fallback_recent_30d_date_from": recent_30d_date_from,
+            "fallback_recent_30d_date_to": recent_30d_date_to,
+            "fallback_recent_30d_total_revenue": round(recent_30d_total_revenue, 2),
+            "fallback_recent_30d_revenue": round(recent_30d_fallback_revenue, 2),
+            "fallback_recent_30d_profit_before_ads": round(recent_30d_fallback_profit, 2),
+            "fallback_recent_30d_revenue_share_pct": recent_30d_revenue_share_pct,
             "fallback_product_count": len(fallback_items),
             "unknown_source_rows": unknown_source_rows,
             "source_mix": source_mix_rows,

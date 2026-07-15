@@ -213,6 +213,44 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual("MISSING-6", qa["fallback_items"][0]["product_sku"])
         self.assertAlmostEqual(28.5714, qa["fallback_items"][0]["total_revenue_share_pct"], places=4)
 
+    def test_product_expense_qa_flags_recent_missing_cost_revenue_concentration(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "V-MISSING",
+                    "purchase_date": "2026-07-14",
+                    "item_label": "Missing recent product",
+                    "product_sku": "MISSING-RECENT",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 4.0,
+                    "profit_before_ads": 1.4,
+                    "expense_per_item": 2.6,
+                    "expense_source": "missing_cost_margin_35_fallback",
+                },
+                {
+                    "order_num": "V-MAPPED",
+                    "purchase_date": "2026-07-14",
+                    "item_label": "Mapped recent product",
+                    "product_sku": "MAPPED-RECENT",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 96.0,
+                    "profit_before_ads": 40.0,
+                    "expense_per_item": 56.0,
+                    "expense_source": "mapped_product_identifier",
+                },
+            ]
+        )
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
+            qa = exporter._build_product_expense_coverage_qa(frame)
+
+        self.assertEqual("2026-06-15", qa["fallback_recent_30d_date_from"])
+        self.assertEqual("2026-07-14", qa["fallback_recent_30d_date_to"])
+        self.assertEqual(4.0, qa["fallback_recent_30d_revenue"])
+        self.assertEqual(4.0, qa["fallback_recent_30d_revenue_share_pct"])
+        self.assertTrue(any("Recent 30-day missing-cost rows" in warning for warning in qa["warnings"]))
+
     def test_roy_mapped_cost_keeps_real_loss_despite_missing_cost_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["LOSS-SKU"] = 80.0
