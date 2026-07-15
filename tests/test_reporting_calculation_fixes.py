@@ -90,6 +90,146 @@ def analytics_item_row(
 
 
 class ReportingCalculationFixTests(unittest.TestCase):
+    def test_period_bundle_carries_range_filtered_excluded_order_context(self) -> None:
+        exporter = BizniWebExporter(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            project_name="vevo",
+            output_tag="unit",
+            enable_period_bundle=True,
+        )
+        date_from = datetime(2026, 1, 1)
+        date_to = datetime(2026, 6, 30)
+        packeta = price_element("shipping", "Packeta - vydajne miesto", "9")
+        orders = [
+            {
+                "order_num": "OK-7D",
+                "pur_date": "2026-06-29 10:00:00",
+                "status": {"name": "odoslana"},
+                "price_elements": [packeta],
+            },
+            {"order_num": "OK-30D", "pur_date": "2026-06-10 10:00:00"},
+            {"order_num": "OK-90D", "pur_date": "2026-05-01 10:00:00"},
+        ]
+        exporter.excluded_status_orders = [
+            {"order_num": "RETURN-7D", "pur_date": "2026-06-29 11:00:00", "status": {"name": "Storno"}},
+            {"order_num": "RETURN-30D", "pur_date": "2026-06-10 11:00:00", "status": {"name": "Storno"}},
+            {"order_num": "RETURN-90D", "pur_date": "2026-05-01 11:00:00", "status": {"name": "Storno"}},
+            {
+                "order_num": "RETURN-OLD",
+                "pur_date": "2026-02-01 11:00:00",
+                "status": {"name": "Storno"},
+                "price_elements": [packeta],
+            },
+        ]
+        exporter.excluded_orders = [
+            {"order_num": "FAILED-7D", "pur_date": "2026-06-29 12:00:00"},
+            {"order_num": "FAILED-30D", "pur_date": "2026-06-10 12:00:00"},
+            {"order_num": "FAILED-90D", "pur_date": "2026-05-01 12:00:00"},
+            {"order_num": "FAILED-OLD", "pur_date": "2026-02-01 12:00:00"},
+        ]
+
+        with patch.object(BizniWebExporter, "export_to_csv", autospec=True) as export_mock:
+            exporter._build_period_switcher_bundle(orders, date_from, date_to)
+
+        children = {
+            Path(call.args[0].artifact_subdir).name: call.args[0]
+            for call in export_mock.call_args_list
+        }
+        expected = {
+            "7d": (["RETURN-7D"], ["FAILED-7D"]),
+            "30d": (["RETURN-7D", "RETURN-30D"], ["FAILED-7D", "FAILED-30D"]),
+            "90d": (
+                ["RETURN-7D", "RETURN-30D", "RETURN-90D"],
+                ["FAILED-7D", "FAILED-30D", "FAILED-90D"],
+            ),
+        }
+        self.assertEqual(set(expected), set(children))
+        for key, (status_order_nums, excluded_order_nums) in expected.items():
+            child = children[key]
+            self.assertEqual(status_order_nums, [row["order_num"] for row in child.excluded_status_orders])
+            self.assertEqual(excluded_order_nums, [row["order_num"] for row in child.excluded_orders])
+            child._creditnote_status_change_audit_cache = {"project": "vevo", "orders": []}
+
+        self.assertIsNot(
+            children["7d"].excluded_status_orders[0],
+            exporter.excluded_status_orders[0],
+        )
+
+        child_7d = children["7d"]
+        child_7d._creditnote_status_change_audit_cache = {
+            "project": "vevo",
+            "orders": [{"order_num": "RETURN-OLD", "previous_status": "odoslana"}],
+        }
+        creditnote_rows = [
+            {
+                "number": "CN-PERIOD-1",
+                "creditnote_id": "1",
+                "created": "2026-06-30 08:00:00",
+                "order_num": "RETURN-OLD",
+                "price": "10 EUR",
+                "taxed_price": "12.30 EUR",
+            }
+        ]
+        with patch("creditnote_export.fetch_project_creditnotes", return_value=(creditnote_rows, 1)):
+            metrics = child_7d.analyze_creditnote_reporting_metrics(
+                [orders[0]],
+                datetime(2026, 6, 24),
+                date_to,
+                pd.DataFrame([{"unique_orders": 1}]),
+            )
+        self.assertEqual(0, metrics["summary"]["order_not_found"])
+        self.assertEqual(1, metrics["summary"]["revenue_excluded_orders"])
+        audit_row = metrics["revenue_audit_rows"][0]
+        self.assertEqual("excluded", audit_row["Reporting revenue"])
+        self.assertEqual(
+            "Original order is outside the report purchase-date window",
+            audit_row["Reporting revenue reason"],
+        )
+        self.assertNotIn(
+            "RETURN-OLD",
+            [row["order_num"] for row in child_7d.excluded_status_orders],
+        )
+        packeta_carrier = next(
+            row for row in metrics["carrier_rows"] if row["carrier"] == "Packeta"
+        )
+        self.assertEqual(1, packeta_carrier["realized_orders"])
+        self.assertEqual(1, packeta_carrier["creditnoted_orders"])
+
+        child_7d.excluded_status_orders = []
+        with patch("creditnote_export.fetch_project_creditnotes", return_value=(creditnote_rows, 1)):
+            empty_period_metrics = child_7d.analyze_creditnote_reporting_metrics(
+                [],
+                datetime(2026, 6, 24),
+                date_to,
+                pd.DataFrame(),
+            )
+        empty_period_packeta = next(
+            row for row in empty_period_metrics["carrier_rows"] if row["carrier"] == "Packeta"
+        )
+        self.assertEqual(0, empty_period_packeta["realized_orders"])
+        self.assertIsNone(empty_period_packeta["creditnote_rate_pct"])
+
+        child_30d = children["30d"]
+        child_30d.project_settings["creditnote_fulfillment_costs"] = {
+            "enabled": True,
+            "shipping_cost_per_order": 0.2,
+        }
+        child_30d._creditnote_order_nums_cache = {"RETURN-30D", "RETURN-OLD"}
+        child_30d._creditnote_status_change_audit_cache = {
+            "project": "vevo",
+            "orders": [
+                {"order_num": "RETURN-30D", "previous_status": "odoslana"},
+                {"order_num": "RETURN-OLD", "previous_status": "odoslana"},
+            ],
+        }
+        fulfillment = child_30d._build_creditnote_fulfillment_costs_by_date(
+            datetime(2026, 6, 1),
+            date_to,
+        )
+        self.assertEqual(1, int(fulfillment["creditnote_fulfillment_orders"].sum()))
+        self.assertEqual(0.5, float(fulfillment["creditnote_fulfillment_cost"].sum()))
+
     def test_unknown_currency_is_not_treated_as_eur(self) -> None:
         exporter = make_exporter()
         with self.assertRaises(ValueError):

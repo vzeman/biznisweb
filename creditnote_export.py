@@ -871,6 +871,9 @@ def build_creditnote_reporting_audit(
         project_key = project.upper()
         included_orders = context.get("included_orders") or []
         all_orders = context.get("all_orders") or []
+        carrier_denominator_orders = context.get("carrier_denominator_orders")
+        if carrier_denominator_orders is None:
+            carrier_denominator_orders = all_orders
         included_order_sets[project_key] = {
             normalize_order_num(order.get("order_num"))
             for order in included_orders
@@ -880,7 +883,7 @@ def build_creditnote_reporting_audit(
         decision_maps[project_key] = dict(context.get("creditnote_order_decisions") or {})
         status_audits[project_key] = context.get("status_change_audit") or {}
         shipped_statuses_by_project[project_key] = tuple(context.get("shipped_statuses") or creditnote_shipped_statuses())
-        for order in all_orders:
+        for order in carrier_denominator_orders:
             order_num = normalize_order_num(order.get("order_num"))
             if not order_num:
                 continue
