@@ -1794,9 +1794,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         overall_clv = clv_return_time_analysis['cumulative_avg_clv'].iloc[-1]
         
         # Calculate overall CAC
-        total_fb_spend = clv_return_time_analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in clv_return_time_analysis.columns else 0
+        cac_spend_column = 'paid_ads_spend' if 'paid_ads_spend' in clv_return_time_analysis.columns else 'fb_ads_spend'
+        total_paid_spend = clv_return_time_analysis[cac_spend_column].sum() if cac_spend_column in clv_return_time_analysis.columns else 0
         total_new_customers = clv_return_time_analysis['new_customers'].sum()
-        overall_cac = total_fb_spend / total_new_customers if total_new_customers > 0 else 0
+        overall_cac = total_paid_spend / total_new_customers if total_new_customers > 0 else None
+        revenue_ltv_cac = (
+            overall_clv / overall_cac
+            if overall_cac is not None and overall_cac > 0
+            else None
+        )
+        overall_cac_display = f"&#8364;{overall_cac:.2f}" if overall_cac is not None else "N/A"
+        revenue_ltv_cac_display = f"{revenue_ltv_cac:.2f}x" if revenue_ltv_cac is not None else "N/A"
         
         html_content += f"""
             <div class="card">
@@ -1805,12 +1813,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div style="color: #718096; font-size: 0.8rem;">Realized revenue/customer in selected interval</div>
             </div>
             <div class="card">
-                <div class="card-title">Customer Acq. Cost (FB)</div>
-                <div class="card-value cost">&#8364;{overall_cac:.2f}</div>
+                <div class="card-title">Customer Acq. Cost (FB + Google)</div>
+                <div class="card-value cost">{overall_cac_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">Revenue LTV/CAC</div>
-                <div class="card-value {'profit' if (overall_clv / overall_cac if overall_cac > 0 else 0) > 1 else 'cost'}">{overall_clv / overall_cac if overall_cac > 0 else 0:.2f}x</div>
+                <div class="card-value {'profit' if revenue_ltv_cac is not None and revenue_ltv_cac > 1 else 'cost'}">{revenue_ltv_cac_display}</div>
                 <div style="color: #718096; font-size: 0.8rem;">Revenue-based ratio</div>
             </div>"""
 
@@ -1831,13 +1839,17 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         break_even_cac = financial_metrics.get('break_even_cac', 0)
         break_even_cac_order_based = financial_metrics.get('break_even_cac_order_based', pre_ad_contribution_per_order)
         pre_ad_contribution_per_customer = financial_metrics.get('pre_ad_contribution_per_customer', 0)
-        current_fb_cac = financial_metrics.get('current_fb_cac', 0)
-        paid_cac = financial_metrics.get('paid_cac', current_fb_cac)
-        blended_cac = financial_metrics.get('blended_cac', current_fb_cac)
+        current_fb_cac = financial_metrics.get('current_fb_cac')
+        paid_cac = financial_metrics.get('paid_cac')
+        blended_cac = financial_metrics.get('blended_cac')
         blended_cac_scope = financial_metrics.get('blended_cac_scope', 'tracked_ads_fb_google')
-        cac_headroom = financial_metrics.get('cac_headroom', 0)
-        contribution_ltv_cac = financial_metrics.get('contribution_ltv_cac', 0)
-        cac_vs_break_even = (current_fb_cac / break_even_cac) if break_even_cac > 0 else 0
+        cac_headroom = financial_metrics.get('cac_headroom')
+        contribution_ltv_cac = financial_metrics.get('contribution_ltv_cac')
+        cac_vs_break_even = (
+            current_fb_cac / break_even_cac
+            if current_fb_cac is not None and break_even_cac > 0
+            else None
+        )
         new_revenue = financial_metrics.get('new_revenue', 0)
         returning_revenue = financial_metrics.get('returning_revenue', 0)
         new_revenue_share_pct = financial_metrics.get('new_revenue_share_pct', 0)
@@ -1851,6 +1863,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         payback_days_display = f"{payback_days_estimated:.0f} days" if payback_days_estimated is not None else "N/A"
         post_ad_payback_orders_display = f"{post_ad_payback_orders:.2f} orders" if post_ad_payback_orders is not None else "N/A"
         post_ad_payback_days_display = f"{post_ad_payback_days_estimated:.0f} days" if post_ad_payback_days_estimated is not None else "N/A"
+        current_fb_cac_display = f"&#8364;{current_fb_cac:,.2f}" if current_fb_cac is not None else "N/A"
+        paid_cac_display = f"&#8364;{paid_cac:,.2f}" if paid_cac is not None else "N/A"
+        blended_cac_display = f"&#8364;{blended_cac:,.2f}" if blended_cac is not None else "N/A"
+        cac_headroom_display = f"&#8364;{cac_headroom:+,.2f}" if cac_headroom is not None else "N/A"
+        cac_vs_break_even_display = f"{cac_vs_break_even:.2f}x" if cac_vs_break_even is not None else "N/A"
+        contribution_ltv_cac_display = f"{contribution_ltv_cac:.2f}x" if contribution_ltv_cac is not None else "N/A"
         blended_cac_hint = "FB+Google" if blended_cac_scope == "tracked_ads_fb_google" else "tracked channels"
         html_content += f"""
             <div class="card">
@@ -1916,28 +1934,28 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Current FB CAC</div>
-                <div class="card-value {'profit' if break_even_cac > 0 and current_fb_cac <= break_even_cac else 'cost'}">&#8364;{current_fb_cac:,.2f}</div>
+                <div class="card-value {'profit' if current_fb_cac is not None and break_even_cac > 0 and current_fb_cac <= break_even_cac else 'cost'}">{current_fb_cac_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">Paid CAC (FB)</div>
-                <div class="card-value {'profit' if break_even_cac > 0 and paid_cac <= break_even_cac else 'cost'}">&#8364;{paid_cac:,.2f}</div>
+                <div class="card-value {'profit' if paid_cac is not None and break_even_cac > 0 and paid_cac <= break_even_cac else 'cost'}">{paid_cac_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">Blended CAC (Tracked Ads)</div>
-                <div class="card-value {'profit' if break_even_cac > 0 and blended_cac <= break_even_cac else 'cost'}">&#8364;{blended_cac:,.2f}</div>
+                <div class="card-value {'profit' if blended_cac is not None and break_even_cac > 0 and blended_cac <= break_even_cac else 'cost'}">{blended_cac_display}</div>
                 <div style="color: #718096; font-size: 0.8rem;">{blended_cac_hint}</div>
             </div>
             <div class="card">
                 <div class="card-title">CAC Headroom</div>
-                <div class="card-value {'profit' if cac_headroom >= 0 else 'cost'}">&#8364;{cac_headroom:+,.2f}</div>
+                <div class="card-value {'profit' if cac_headroom is not None and cac_headroom >= 0 else 'cost'}">{cac_headroom_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">CAC / Break-even</div>
-                <div class="card-value {'profit' if break_even_cac > 0 and cac_vs_break_even <= 1 else 'cost'}">{cac_vs_break_even:.2f}x</div>
+                <div class="card-value {'profit' if cac_vs_break_even is not None and cac_vs_break_even <= 1 else 'cost'}">{cac_vs_break_even_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">Contribution LTV/CAC</div>
-                <div class="card-value {'profit' if contribution_ltv_cac > 1 else 'cost'}">{contribution_ltv_cac:.2f}x</div>
+                <div class="card-value {'profit' if contribution_ltv_cac is not None and contribution_ltv_cac > 1 else 'cost'}">{contribution_ltv_cac_display}</div>
                 <div style="color: #718096; font-size: 0.8rem;">Pre-ad contribution/customer / FB CAC</div>
             </div>
             <div class="card">
@@ -1973,9 +1991,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     if consistency_checks:
         roas_delta = consistency_checks.get('roas_delta', 0)
         margin_delta = consistency_checks.get('company_margin_delta_pct', 0)
-        cac_expected = consistency_checks.get('cac_expected', 0)
-        cac_delta = consistency_checks.get('cac_delta', 0)
+        cac_expected = consistency_checks.get('cac_expected')
+        cac_delta = consistency_checks.get('cac_delta')
         cac_if_orders = consistency_checks.get('cac_if_orders_denominator', 0)
+        cac_expected_display = f"&#8364;{cac_expected:.2f}" if cac_expected is not None else "N/A"
+        cac_delta_display = f"{cac_delta:+.4f}" if cac_delta is not None else "N/A"
         html_content += f"""
             <div class="card">
                 <div class="card-title">ROAS Check Delta</div>
@@ -1987,11 +2007,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">CAC (FB/New Cust.)</div>
-                <div class="card-value">&#8364;{cac_expected:.2f}</div>
+                <div class="card-value">{cac_expected_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">CAC Check Delta</div>
-                <div class="card-value {'profit' if abs(cac_delta) <= 0.01 else 'cost'}">{cac_delta:+.4f}</div>
+                <div class="card-value {'profit' if cac_delta is not None and abs(cac_delta) <= 0.01 else 'cost'}">{cac_delta_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">FB Spend / Orders</div>
@@ -3161,9 +3181,18 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         avg_return_days = clv_return_time_analysis['avg_return_time_days'].fillna(0).tolist()
         clv_new_customers = clv_return_time_analysis['new_customers'].tolist()
         clv_returning_customers = clv_return_time_analysis['returning_customers'].tolist()
-        cac_data = clv_return_time_analysis['cac'].tolist() if 'cac' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
-        cumulative_cac = clv_return_time_analysis['cumulative_avg_cac'].tolist() if 'cumulative_avg_cac' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
-        ltv_cac_ratio_data = clv_return_time_analysis['ltv_cac_ratio'].tolist() if 'ltv_cac_ratio' in clv_return_time_analysis.columns else [0] * len(clv_weeks)
+        cac_data = (
+            [None if pd.isna(value) else float(value) for value in clv_return_time_analysis['cac'].tolist()]
+            if 'cac' in clv_return_time_analysis.columns else [None] * len(clv_weeks)
+        )
+        cumulative_cac = (
+            [None if pd.isna(value) else float(value) for value in clv_return_time_analysis['cumulative_avg_cac'].tolist()]
+            if 'cumulative_avg_cac' in clv_return_time_analysis.columns else [None] * len(clv_weeks)
+        )
+        ltv_cac_ratio_data = (
+            [None if pd.isna(value) else float(value) for value in clv_return_time_analysis['ltv_cac_ratio'].tolist()]
+            if 'ltv_cac_ratio' in clv_return_time_analysis.columns else [None] * len(clv_weeks)
+        )
         pre_ad_contribution_per_order = (
             financial_metrics.get('pre_ad_contribution_per_order', 0)
             if financial_metrics else 0
@@ -3194,7 +3223,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Customer Acquisition Cost Trend (Weekly)</h2>
-                <p class="chart-explanation">CAC (Customer Acquisition Cost) = Facebook Ads Spend / Number of New Customers. Measures cost to acquire each new customer. Cumulative = running average across all time</p>
+                <p class="chart-explanation">CAC (Customer Acquisition Cost) = tracked Facebook + Google ad spend / number of new customers, including spend on days without orders. Cumulative = running average across all time.</p>
                 <canvas id="cacChart"></canvas>
             </div>
         </div>
@@ -3250,7 +3279,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         # Add weekly rows
         for i, row in clv_return_time_analysis.iterrows():
             return_time_str = f"{row['avg_return_time_days']:.1f}" if pd.notna(row['avg_return_time_days']) else "N/A"
-            cac = row.get('cac', 0)
+            cac = row.get('cac')
+            cac_display = f"&#8364;{float(cac):.2f}" if pd.notna(cac) else "N/A"
             html_content += f"""
                     <tr>
                         <td>{row['week']}</td>
@@ -3260,7 +3290,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{row['returning_customers']}</td>
                         <td class="number">&#8364;{row['avg_clv']:.2f}</td>
                         <td class="number">&#8364;{row['cumulative_avg_clv']:.2f}</td>
-                        <td class="number">&#8364;{cac:.2f}</td>
+                        <td class="number">{cac_display}</td>
                         <td class="number">{return_time_str}</td>
                         <td class="number">&#8364;{row['total_revenue']:.2f}</td>
                     </tr>"""
@@ -3273,8 +3303,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         return_time_total = f"{overall_avg_return:.1f}" if pd.notna(overall_avg_return) else "N/A"
         
         # Calculate overall CAC for the total row
-        total_fb_spend_table = clv_return_time_analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in clv_return_time_analysis.columns else 0
-        overall_cac_table = total_fb_spend_table / total_new if total_new > 0 else 0
+        total_paid_spend_table = clv_return_time_analysis[cac_spend_column].sum() if cac_spend_column in clv_return_time_analysis.columns else 0
+        overall_cac_table = total_paid_spend_table / total_new if total_new > 0 else None
+        overall_cac_table_display = (
+            f"&#8364;{overall_cac_table:.2f}" if overall_cac_table is not None else "N/A"
+        )
         
         html_content += f"""
                     <tr class="total-row">
@@ -3284,7 +3317,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">{total_returning}</td>
                         <td class="number">&#8364;{overall_avg_clv:.2f}</td>
                         <td class="number">&#8364;{final_cumulative_clv:.2f}</td>
-                        <td class="number">&#8364;{overall_cac_table:.2f}</td>
+                        <td class="number">{overall_cac_table_display}</td>
                         <td class="number">{return_time_total}</td>
                         <td class="number">&#8364;{total_revenue:.2f}</td>
                     </tr>
@@ -4378,6 +4411,12 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     # Advanced DTC Metrics
     if advanced_dtc_metrics:
         adv_summary = advanced_dtc_metrics.get('summary', {}) or {}
+        advanced_contribution_ltv_cac = adv_summary.get('contribution_ltv_cac')
+        advanced_contribution_ltv_cac_display = (
+            f"{advanced_contribution_ltv_cac:.2f}x"
+            if advanced_contribution_ltv_cac is not None
+            else "N/A"
+        )
         adv_basket = advanced_dtc_metrics.get('basket_contribution')
         adv_payday = advanced_dtc_metrics.get('payday_window')
         adv_payback = advanced_dtc_metrics.get('cohort_payback')
@@ -4403,7 +4442,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="card">
                 <div class="card-title">Contribution LTV/CAC</div>
-                <div class="card-value {'profit' if adv_summary.get('contribution_ltv_cac', 0) > 1 else 'cost'}">{adv_summary.get('contribution_ltv_cac', 0):.2f}x</div>
+                <div class="card-value {'profit' if advanced_contribution_ltv_cac is not None and advanced_contribution_ltv_cac > 1 else 'cost'}">{advanced_contribution_ltv_cac_display}</div>
             </div>
             <div class="card">
                 <div class="card-title">Margin Stability Index</div>
@@ -7614,8 +7653,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
     if financial_metrics:
         break_even_cac = financial_metrics.get('break_even_cac', 0)
-        paid_cac = financial_metrics.get('paid_cac', 0)
-        blended_cac = financial_metrics.get('blended_cac', 0)
+        paid_cac = financial_metrics.get('paid_cac')
+        blended_cac = financial_metrics.get('blended_cac')
+        paid_cac_js = "null" if paid_cac is None else f"{paid_cac:.2f}"
+        blended_cac_js = "null" if blended_cac is None else f"{blended_cac:.2f}"
         html_content += f"""
 
         // CAC vs Break-even Comparison Chart
@@ -7627,7 +7668,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 labels: ['Paid CAC (FB)', 'Blended CAC (Tracked Ads)', 'Break-even CAC (Customer)'],
                     datasets: [{{
                         label: 'EUR',
-                        data: [{paid_cac:.2f}, {blended_cac:.2f}, {break_even_cac:.2f}],
+                        data: [{paid_cac_js}, {blended_cac_js}, {break_even_cac:.2f}],
                         backgroundColor: ['#EF4444', '#F97316', '#10B981'],
                         borderRadius: 6
                     }}]

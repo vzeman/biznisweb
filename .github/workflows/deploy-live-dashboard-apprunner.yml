@@ -24,7 +24,7 @@ on:
         required: false
         default: ""
       skip_artifact_refresh:
-        description: Skip ROY report artifact regeneration and run only a lightweight host marker check
+        description: Skip report artifact regeneration and run only a lightweight host marker check
         required: false
         default: "false"
 
@@ -33,6 +33,10 @@ env:
   ECR_REPOSITORY: vevo-reporting
   IMAGE_TAG: latest
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: live-dashboard-deploy-${{ inputs.project }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -255,6 +259,7 @@ jobs:
             echo "Schedule ${REPORT_SCHEDULE_NAME} targets ${TASK_DEFINITION_ARN}, expected family ${TASK_FAMILY}" >&2
             exit 1
           fi
+          CURRENT_SCHEDULE_TASK_DEFINITION_ARN="${TASK_DEFINITION_ARN}"
           aws ecs describe-task-definition \
             --task-definition "${TASK_DEFINITION_ARN}" \
             --region "${AWS_REGION}" > task-definition.json
@@ -323,14 +328,14 @@ jobs:
               )"
             fi
           fi
-          if [[ "${PROJECT}" == "roy" && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
+          if [[ ( "${PROJECT}" == "roy" || "${PROJECT}" == "vevo" ) && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
             REPORT_S3_BUCKET_VALUE="biznisweb-reporting-artifacts-${ACCOUNT_ID}-${AWS_REGION}"
           fi
           REPORT_S3_PREFIX_VALUE="${REPORT_S3_PREFIX_VALUE:-daily-reports/${PROJECT}}"
           REPORT_S3_PREFIX_VALUE="${REPORT_S3_PREFIX_VALUE#/}"
           REPORT_S3_PREFIX_VALUE="${REPORT_S3_PREFIX_VALUE%/}"
-          if [[ "${PROJECT}" == "roy" && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
-            echo "ROY App Runner requires REPORT_S3_BUCKET or an input s3_bucket for latest KPI artifacts." >&2
+          if [[ ( "${PROJECT}" == "roy" || "${PROJECT}" == "vevo" ) && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
+            echo "${PROJECT} App Runner requires REPORT_S3_BUCKET or an input s3_bucket for latest KPI artifacts." >&2
             exit 1
           fi
 
@@ -354,22 +359,93 @@ jobs:
               '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
           fi
 
-          if [[ "${PROJECT}" == "roy" ]]; then
-            TASK_ROLE_ARN="$(python - <<'PY'
+          if [[ -n "${REPORT_S3_BUCKET_VALUE}" ]]; then
+            SOURCE_TASK_ROLE_ARN="$(python - <<'PY'
           import json
           task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
           print(task_def.get("taskRoleArn") or "")
           PY
             )"
-            if [[ -z "${TASK_ROLE_ARN}" ]]; then
-              echo "ROY reporting task definition has no taskRoleArn; cannot grant S3 artifact upload access." >&2
+            if [[ -z "${SOURCE_TASK_ROLE_ARN}" ]]; then
+              echo "${PROJECT} reporting task definition has no taskRoleArn; cannot grant S3 artifact upload access." >&2
               exit 1
             fi
-            TASK_ROLE_NAME="$(python - "${TASK_ROLE_ARN}" <<'PY'
+            SOURCE_TASK_ROLE_NAME="$(python - "${SOURCE_TASK_ROLE_ARN}" <<'PY'
           import sys
           print(sys.argv[1].rsplit("/", 1)[-1])
           PY
             )"
+            PROJECT_TASK_ROLE_NAME="BiznisWebReportingTaskRole-${PROJECT}"
+            cat > reporting-task-role-trust.json <<'JSON'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+          JSON
+            if ! aws iam get-role --role-name "${PROJECT_TASK_ROLE_NAME}" >/dev/null 2>&1; then
+              aws iam create-role \
+                --role-name "${PROJECT_TASK_ROLE_NAME}" \
+                --description "Dedicated ${PROJECT} reporting ECS task role" \
+                --assume-role-policy-document file://reporting-task-role-trust.json \
+                --tags "Key=Project,Value=biznisweb" "Key=Component,Value=${PROJECT}-reporting" >/dev/null
+            else
+              aws iam update-assume-role-policy \
+                --role-name "${PROJECT_TASK_ROLE_NAME}" \
+                --policy-document file://reporting-task-role-trust.json
+            fi
+            aws iam wait role-exists --role-name "${PROJECT_TASK_ROLE_NAME}"
+
+            SOURCE_MANAGED_POLICY_ARNS="$(aws iam list-attached-role-policies \
+              --role-name "${SOURCE_TASK_ROLE_NAME}" \
+              --query 'AttachedPolicies[].PolicyArn' \
+              --output text)"
+            for POLICY_ARN in ${SOURCE_MANAGED_POLICY_ARNS}; do
+              if [[ "${POLICY_ARN}" == "None" ]]; then
+                continue
+              fi
+              aws iam attach-role-policy \
+                --role-name "${PROJECT_TASK_ROLE_NAME}" \
+                --policy-arn "${POLICY_ARN}"
+            done
+
+            SOURCE_INLINE_POLICY_NAMES="$(aws iam list-role-policies \
+              --role-name "${SOURCE_TASK_ROLE_NAME}" \
+              --query 'PolicyNames' \
+              --output text)"
+            for POLICY_NAME in ${SOURCE_INLINE_POLICY_NAMES}; do
+              if [[ "${POLICY_NAME}" == "None" || "${POLICY_NAME}" == ReportingLiveDashboardArtifacts* ]]; then
+                continue
+              fi
+              aws iam get-role-policy \
+                --role-name "${SOURCE_TASK_ROLE_NAME}" \
+                --policy-name "${POLICY_NAME}" \
+                --query PolicyDocument \
+                --output json > source-task-role-policy.json
+              aws iam put-role-policy \
+                --role-name "${PROJECT_TASK_ROLE_NAME}" \
+                --policy-name "${POLICY_NAME}" \
+                --policy-document file://source-task-role-policy.json
+            done
+
+            DESIRED_ARTIFACT_POLICY_NAME="ReportingLiveDashboardArtifacts-${PROJECT}"
+            PROJECT_INLINE_POLICY_NAMES="$(aws iam list-role-policies \
+              --role-name "${PROJECT_TASK_ROLE_NAME}" \
+              --query 'PolicyNames' \
+              --output text)"
+            for POLICY_NAME in ${PROJECT_INLINE_POLICY_NAMES}; do
+              if [[ "${POLICY_NAME}" == ReportingLiveDashboardArtifacts* && "${POLICY_NAME}" != "${DESIRED_ARTIFACT_POLICY_NAME}" ]]; then
+                aws iam delete-role-policy \
+                  --role-name "${PROJECT_TASK_ROLE_NAME}" \
+                  --policy-name "${POLICY_NAME}"
+              fi
+            done
+
             cat > reporting-artifacts-policy.json <<JSON
           {
             "Version": "2012-10-17",
@@ -396,14 +472,18 @@ jobs:
           }
           JSON
             aws iam put-role-policy \
-              --role-name "${TASK_ROLE_NAME}" \
-              --policy-name ReportingLiveDashboardArtifacts \
+              --role-name "${PROJECT_TASK_ROLE_NAME}" \
+              --policy-name "${DESIRED_ARTIFACT_POLICY_NAME}" \
               --policy-document file://reporting-artifacts-policy.json
+            PROJECT_TASK_ROLE_ARN="$(aws iam get-role \
+              --role-name "${PROJECT_TASK_ROLE_NAME}" \
+              --query 'Role.Arn' \
+              --output text)"
 
-            NEEDS_REPORT_TASK_UPDATE="$(python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" "${IMAGE_IDENTIFIER}" <<'PY'
+            NEEDS_REPORT_TASK_UPDATE="$(python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" "${IMAGE_IDENTIFIER}" "${PROJECT_TASK_ROLE_ARN}" <<'PY'
           import json
           import sys
-          bucket, prefix, image_identifier = sys.argv[1], sys.argv[2], sys.argv[3]
+          bucket, prefix, image_identifier, task_role_arn = sys.argv[1:5]
           task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
           container = task_def["containerDefinitions"][0]
           env = {
@@ -421,17 +501,18 @@ jobs:
               or env.get("REPORT_S3_BUCKET") != bucket
               or env.get("REPORT_S3_PREFIX") != prefix
               or image_mismatch
+              or task_def.get("taskRoleArn") != task_role_arn
           )
           print("true" if needs_update else "false")
           PY
             )"
             if [[ "${NEEDS_REPORT_TASK_UPDATE}" == "true" ]]; then
-              python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" "${IMAGE_IDENTIFIER}" <<'PY' > task-definition-s3.json
+              python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" "${IMAGE_IDENTIFIER}" "${PROJECT_TASK_ROLE_ARN}" <<'PY' > task-definition-s3.json
           import copy
           import json
           import sys
 
-          bucket, prefix, image_identifier = sys.argv[1], sys.argv[2], sys.argv[3]
+          bucket, prefix, image_identifier, task_role_arn = sys.argv[1:5]
           source = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
           allowed = {
               "family",
@@ -452,6 +533,7 @@ jobs:
               "runtimePlatform",
           }
           task = {key: copy.deepcopy(value) for key, value in source.items() if key in allowed and value not in (None, [], {})}
+          task["taskRoleArn"] = task_role_arn
           container = task["containerDefinitions"][0]
           container["image"] = image_identifier
           env = [item for item in container.get("environment", []) if item.get("name") not in {"REPORT_S3_BUCKET", "REPORT_S3_PREFIX"}]
@@ -476,72 +558,8 @@ jobs:
               aws ecs describe-task-definition \
                 --task-definition "${TASK_DEFINITION_ARN}" \
                 --region "${AWS_REGION}" > task-definition.json
-
-              python - "${TASK_DEFINITION_ARN}" <<'PY'
-          import json
-          import sys
-
-          task_definition_arn = sys.argv[1]
-          schedule = json.load(open("schedule.json", encoding="utf-8"))
-
-          def clean(value):
-              if isinstance(value, dict):
-                  cleaned = {}
-                  for key, raw in value.items():
-                      item = clean(raw)
-                      if item in (None, "", [], {}):
-                          continue
-                      cleaned[key] = item
-                  return cleaned
-              if isinstance(value, list):
-                  return [clean(item) for item in value if clean(item) not in (None, "", [], {})]
-              return value
-
-          target = clean(schedule["Target"])
-          target["EcsParameters"]["TaskDefinitionArn"] = task_definition_arn
-          json.dump(target, open("schedule-target.json", "w", encoding="utf-8"))
-          json.dump(clean(schedule["FlexibleTimeWindow"]), open("schedule-flexible-time-window.json", "w", encoding="utf-8"))
-          PY
-              SCHEDULE_EXPRESSION="$(python - <<'PY'
-          import json
-          print(json.load(open("schedule.json", encoding="utf-8"))["ScheduleExpression"])
-          PY
-              )"
-              SCHEDULE_STATE="$(python - <<'PY'
-          import json
-          print(json.load(open("schedule.json", encoding="utf-8")).get("State") or "ENABLED")
-          PY
-              )"
-              SCHEDULE_TIMEZONE="$(python - <<'PY'
-          import json
-          print(json.load(open("schedule.json", encoding="utf-8")).get("ScheduleExpressionTimezone") or "")
-          PY
-              )"
-              SCHEDULE_GROUP="$(python - <<'PY'
-          import json
-          print(json.load(open("schedule.json", encoding="utf-8")).get("GroupName") or "")
-          PY
-              )"
-              UPDATE_SCHEDULE_ARGS=(
-                --name "${REPORT_SCHEDULE_NAME}"
-                --schedule-expression "${SCHEDULE_EXPRESSION}"
-                --flexible-time-window file://schedule-flexible-time-window.json
-                --target file://schedule-target.json
-                --state "${SCHEDULE_STATE}"
-                --region "${AWS_REGION}"
-              )
-              if [[ -n "${SCHEDULE_TIMEZONE}" ]]; then
-                UPDATE_SCHEDULE_ARGS+=(--schedule-expression-timezone "${SCHEDULE_TIMEZONE}")
-              fi
-              if [[ -n "${SCHEDULE_GROUP}" ]]; then
-                UPDATE_SCHEDULE_ARGS+=(--group-name "${SCHEDULE_GROUP}")
-              fi
-              aws scheduler update-schedule "${UPDATE_SCHEDULE_ARGS[@]}"
-              aws scheduler get-schedule \
-                --name "${REPORT_SCHEDULE_NAME}" \
-                --region "${AWS_REGION}" > schedule.json
             fi
-            protect_ecr_image_tag "${IMAGE_IDENTIFIER}" "${TASK_FAMILY}-current"
+            protect_ecr_image_tag "${IMAGE_IDENTIFIER}" "${TASK_FAMILY}-candidate"
 
             CLUSTER_ARN="$(python - <<'PY'
           import json
@@ -595,14 +613,106 @@ jobs:
           PY
             )"
             if [[ -z "${LOG_GROUP}" || -z "${LOG_PREFIX}" ]]; then
-              echo "ROY reporting task definition needs CloudWatch logs for localhost marker verification." >&2
+              echo "${PROJECT} reporting task definition needs CloudWatch logs for localhost marker verification." >&2
               exit 1
             fi
           REFRESH_SCRIPT="$(cat <<'SH'
           set -euo pipefail
           PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
+
+          run_local_live_dashboard_smoke() {
+            LOCAL_AUTH_USER="workflow-local-${PROJECT}"
+            LOCAL_AUTH_PASSWORD="$(python - <<'PY'
+          import secrets
+          print(secrets.token_urlsafe(32))
+          PY
+            )"
+            export LIVE_DASHBOARD_AUTH_USER="${LOCAL_AUTH_USER}"
+            export LIVE_DASHBOARD_AUTH_PASSWORD="${LOCAL_AUTH_PASSWORD}"
+            export REPORT_PROJECT="${PROJECT}"
+            export REPORT_SKIP_PROJECT_ENV="true"
+
+            python live_dashboard_server.py --host 127.0.0.1 --port 8080 >/tmp/live-dashboard-server.log 2>&1 &
+            LIVE_SERVER_PID="$!"
+            trap 'kill "${LIVE_SERVER_PID}" >/dev/null 2>&1 || true' EXIT
+
+            LOCAL_SERVER_READY=false
+            for server_attempt in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:8080/health -o /tmp/local-live-health.json; then
+                LOCAL_SERVER_READY=true
+                break
+              fi
+              if ! kill -0 "${LIVE_SERVER_PID}" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+            if [[ "${LOCAL_SERVER_READY}" != "true" ]]; then
+              cat /tmp/live-dashboard-server.log >&2 || true
+              echo "Local live dashboard server failed its /health hard gate." >&2
+              exit 1
+            fi
+
+            curl -fsS --max-time 240 \
+              -u "${LOCAL_AUTH_USER}:${LOCAL_AUTH_PASSWORD}" \
+              "http://127.0.0.1:8080/production/${PROJECT}" \
+              -o /tmp/local-production-board.html
+            if [[ "${PROJECT}" == "roy" ]]; then
+              LOCAL_PRODUCTION_API_PATH="/api/operations/roy/live?refresh=1"
+            else
+              LOCAL_PRODUCTION_API_PATH="/api/production/${PROJECT}/live?refresh=1"
+            fi
+            curl -fsS --max-time 240 \
+              -u "${LOCAL_AUTH_USER}:${LOCAL_AUTH_PASSWORD}" \
+              "http://127.0.0.1:8080${LOCAL_PRODUCTION_API_PATH}" \
+              -o /tmp/local-production-board-api.json
+            for PERIOD in 7d 30d 90d full; do
+              curl -fsS --max-time 240 \
+                -u "${LOCAL_AUTH_USER}:${LOCAL_AUTH_PASSWORD}" \
+                "http://127.0.0.1:8080/api/${PROJECT}/latest?period=${PERIOD}" \
+                -o "/tmp/local-accounting-${PERIOD}.json"
+              curl -fsS --max-time 240 \
+                -u "${LOCAL_AUTH_USER}:${LOCAL_AUTH_PASSWORD}" \
+                "http://127.0.0.1:8080/report/${PROJECT}?period=${PERIOD}" \
+                -o "/tmp/local-accounting-${PERIOD}.html"
+            done
+            python - "${PROJECT}" <<'PY'
+          import json
+          import sys
+
+          project = sys.argv[1]
+          health = json.load(open("/tmp/local-live-health.json", encoding="utf-8"))
+          assert health.get("ok") is True, "Local /health response is not healthy"
+          assert project in (health.get("projects") or []), f"Local /health does not expose {project}"
+
+          production_html = open("/tmp/local-production-board.html", encoding="utf-8-sig").read()
+          production_api = json.load(open("/tmp/local-production-board-api.json", encoding="utf-8"))
+          expected_board_marker = "roy-operations-dashboard" if project == "roy" else f"{project}-production-board"
+          assert expected_board_marker in production_html, f"Local production board marker missing for {project}"
+          assert production_api.get("project") == project, f"Local production API served the wrong project for {project}"
+
+          for period in ("7d", "30d", "90d", "full"):
+              payload = json.load(open(f"/tmp/local-accounting-{period}.json", encoding="utf-8"))
+              report_html = open(f"/tmp/local-accounting-{period}.html", encoding="utf-8-sig").read()
+              assert payload.get("project") == project, f"Local {period} payload served the wrong project"
+              switcher = payload.get("period_switcher") or {}
+              assert switcher.get("current_key") == period, f"Local {period} payload served the wrong period"
+              assert len(report_html) > 1000 and "<html" in report_html.lower(), f"Local {period} HTML report is invalid"
+              assert "window.__PERIOD_HREF_BASE_MAP__" in report_html, f"Local {period} live period map missing"
+              for mapped_period in ("7d", "30d", "90d", "full"):
+                  expected_href = f"/report/{project}?period={mapped_period}"
+                  assert expected_href in report_html, f"Local {period} HTML is missing {expected_href}"
+          PY
+
+            kill "${LIVE_SERVER_PID}" >/dev/null 2>&1 || true
+            wait "${LIVE_SERVER_PID}" 2>/dev/null || true
+            trap - EXIT
+            echo "LOCALHOST_LIVE_DASHBOARD_OK:${PROJECT}:periods=7d,30d,90d,full"
+          }
+
           if [[ "${SKIP_ARTIFACT_REFRESH:-false}" == "true" ]]; then
             echo "LIVE_ARTIFACT_REFRESH_SKIPPED project=${PROJECT}"
+            run_local_live_dashboard_smoke
             python - <<'PY'
           import json
           import os
@@ -637,6 +747,7 @@ jobs:
           fi
           echo "LIVE_ARTIFACT_REFRESH_START project=${PROJECT}"
           python daily_report_runner.py --project "${PROJECT}" --skip-email --skip-invoices --creditnote-storno-dry-run
+          run_local_live_dashboard_smoke
           python - <<'PY'
           import json
           import os
@@ -727,12 +838,14 @@ jobs:
               --launch-type "${LAUNCH_TYPE}"
               --network-configuration file://network.json
               --overrides file://refresh-overrides.json
-              --started-by "codex-roy-live-dashboard-refresh"
+              --started-by "codex-${PROJECT}-live-dashboard-refresh"
               --region "${AWS_REGION}"
             )
             if [[ -n "${PLATFORM_VERSION}" ]]; then
               RUN_ARGS+=(--platform-version "${PLATFORM_VERSION}")
             fi
+            REFRESH_STARTED_EPOCH="$(date -u +%s)"
+            echo "LIVE_ARTIFACT_GENERATION_GATE_START:${PROJECT}:${REFRESH_STARTED_EPOCH}"
             aws ecs run-task "${RUN_ARGS[@]}" > refresh-run-task.json
             REFRESH_TASK_ARN="$(python - <<'PY'
           import json
@@ -761,11 +874,18 @@ jobs:
               fi
               sleep 5
             done
+            if [[ -z "${PRIVATE_IP}" ]]; then
+              cat refresh-describe-running.json >&2
+              echo "Fargate hard gate failed: task ${REFRESH_TASK_ARN} did not expose a private IPv4 address." >&2
+              exit 1
+            fi
             echo "HARD_GATE_CONTEXT project=${PROJECT}"
             echo "instance-id=N/A (scheduled ECS/Fargate task)"
-            echo "private-ip=${PRIVATE_IP:-unavailable-before-stop}"
+            echo "private-ip=${PRIVATE_IP}"
             echo "service-name=${REPORT_SCHEDULE_NAME}"
-            echo "task-definition=${TASK_DEFINITION_ARN}"
+            echo "schedule-task-definition-before-promotion=${CURRENT_SCHEDULE_TASK_DEFINITION_ARN}"
+            echo "candidate-task-definition=${TASK_DEFINITION_ARN}"
+            echo "candidate-task-role=${PROJECT_TASK_ROLE_ARN}"
             echo "task-arn=${REFRESH_TASK_ARN}"
             echo "image-path=${IMAGE_URI}"
             echo "image-identifier=${IMAGE_IDENTIFIER}"
@@ -794,7 +914,7 @@ jobs:
               aws ecs stop-task \
                 --cluster "${CLUSTER_ARN}" \
                 --task "${REFRESH_TASK_ARN}" \
-                --reason "ROY live dashboard artifact refresh timed out" \
+                --reason "${PROJECT} live dashboard artifact refresh timed out" \
                 --region "${AWS_REGION}" || true
               exit 1
             fi
@@ -820,21 +940,157 @@ jobs:
             done
             cat refresh-task.log
             if [[ "${REFRESH_EXIT_CODE}" != "0" ]]; then
-              echo "ROY live artifact refresh task ${REFRESH_TASK_ARN} failed with exit code ${REFRESH_EXIT_CODE}" >&2
+              echo "${PROJECT} live artifact refresh task ${REFRESH_TASK_ARN} failed with exit code ${REFRESH_EXIT_CODE}" >&2
               exit 1
             fi
             grep -q "LIVE_ARTIFACT_MARKER_OK" refresh-task.log
-            aws s3api head-object \
-              --bucket "${REPORT_S3_BUCKET_VALUE}" \
-              --key "${REPORT_S3_PREFIX_VALUE}/latest/dashboard_payload_latest.json" \
-              --region "${AWS_REGION}" >/dev/null
-            aws s3 cp \
-              "s3://${REPORT_S3_BUCKET_VALUE}/${REPORT_S3_PREFIX_VALUE}/latest/dashboard_payload_latest.json" \
-              /tmp/roy-dashboard-payload-latest.json \
-              --region "${AWS_REGION}" >/dev/null
-            python - <<'PY'
+            LIVE_ARTIFACT_FILENAMES=(
+              report_latest.html
+              dashboard_payload_latest.json
+              report_7d.html
+              dashboard_payload_7d.json
+              report_30d.html
+              dashboard_payload_30d.json
+              report_90d.html
+              dashboard_payload_90d.json
+            )
+            if [[ "${SKIP_ARTIFACT_REFRESH:-false}" != "true" ]]; then
+              aws s3 cp \
+                "s3://${REPORT_S3_BUCKET_VALUE}/${REPORT_S3_PREFIX_VALUE}/latest/generation.json" \
+                /tmp/live-generation.json \
+                --region "${AWS_REGION}" >/dev/null
+              python - "${PROJECT}" "${REPORT_S3_PREFIX_VALUE}" "${REFRESH_STARTED_EPOCH}" <<'PY' > /tmp/live-generation-artifacts.tsv
+          import datetime as dt
           import json
-          payload = json.load(open("/tmp/roy-dashboard-payload-latest.json", encoding="utf-8"))
+          import re
+          import sys
+
+          project, prefix, refresh_started_raw = sys.argv[1:4]
+          refresh_started = int(refresh_started_raw)
+          manifest = json.load(open("/tmp/live-generation.json", encoding="utf-8"))
+          expected_names = (
+              "report_latest.html",
+              "dashboard_payload_latest.json",
+              "report_7d.html",
+              "dashboard_payload_7d.json",
+              "report_30d.html",
+              "dashboard_payload_30d.json",
+              "report_90d.html",
+              "dashboard_payload_90d.json",
+          )
+          assert manifest.get("schema_version") == 1, "Unsupported S3 generation manifest schema"
+          assert manifest.get("project") == project, "S3 generation manifest project mismatch"
+          generation_id = str(manifest.get("generation_id") or "")
+          assert re.fullmatch(r"\d{8}T\d{6}Z", generation_id), "Invalid S3 generation id"
+          generation_timestamp = dt.datetime.strptime(generation_id, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
+          generation_epoch = int(generation_timestamp.timestamp())
+          assert generation_epoch >= refresh_started, (
+              f"S3 generation {generation_id} predates refresh gate start "
+              f"({generation_epoch} < {refresh_started})"
+          )
+          generated_at_raw = str(manifest.get("generated_at_utc") or "")
+          generated_at = dt.datetime.fromisoformat(generated_at_raw.replace("Z", "+00:00"))
+          assert generated_at.tzinfo is not None, "S3 generation timestamp must be timezone-aware"
+          generated_epoch = int(generated_at.timestamp())
+          assert generated_epoch >= generation_epoch, "S3 manifest was finalized before its generation id"
+          assert generated_epoch - generation_epoch <= 3600, "S3 generation manifest finalization took over one hour"
+          assert generated_epoch <= int(dt.datetime.now(dt.timezone.utc).timestamp()) + 300, (
+              "S3 generation timestamp is implausibly far in the future"
+          )
+          artifacts = manifest.get("artifacts") or {}
+          assert set(artifacts) == set(expected_names), "S3 generation manifest must contain exactly eight live artifacts"
+          prefix = prefix.strip("/")
+          for filename in expected_names:
+              item = artifacts.get(filename) or {}
+              expected_key = f"{prefix}/{generation_id}/{filename}"
+              key = str(item.get("key") or "")
+              sha256 = str(item.get("sha256") or "").lower()
+              size = item.get("size")
+              assert key == expected_key, f"Immutable S3 key mismatch for {filename}"
+              assert re.fullmatch(r"[0-9a-f]{64}", sha256), f"Invalid SHA-256 for {filename}"
+              assert type(size) is int and size > 0, f"Invalid size for {filename}"
+              print(f"{filename}\t{key}\t{sha256}\t{size}")
+          PY
+              while IFS=$'\t' read -r ARTIFACT_FILENAME IMMUTABLE_KEY EXPECTED_SHA256 EXPECTED_SIZE; do
+                IMMUTABLE_HEAD_SIZE="$(aws s3api head-object \
+                  --bucket "${REPORT_S3_BUCKET_VALUE}" \
+                  --key "${IMMUTABLE_KEY}" \
+                  --region "${AWS_REGION}" \
+                  --query ContentLength \
+                  --output text)"
+                if [[ "${IMMUTABLE_HEAD_SIZE}" != "${EXPECTED_SIZE}" ]]; then
+                  echo "Immutable S3 size mismatch for ${IMMUTABLE_KEY}: ${IMMUTABLE_HEAD_SIZE} != ${EXPECTED_SIZE}" >&2
+                  exit 1
+                fi
+                LOCAL_IMMUTABLE_PATH="/tmp/generation-${ARTIFACT_FILENAME}"
+                aws s3 cp \
+                  "s3://${REPORT_S3_BUCKET_VALUE}/${IMMUTABLE_KEY}" \
+                  "${LOCAL_IMMUTABLE_PATH}" \
+                  --region "${AWS_REGION}" >/dev/null
+                ACTUAL_SIZE="$(wc -c < "${LOCAL_IMMUTABLE_PATH}")"
+                ACTUAL_SHA256="$(sha256sum "${LOCAL_IMMUTABLE_PATH}" | awk '{print $1}')"
+                if [[ "${ACTUAL_SIZE}" != "${EXPECTED_SIZE}" || "${ACTUAL_SHA256}" != "${EXPECTED_SHA256}" ]]; then
+                  echo "Immutable S3 integrity mismatch for ${IMMUTABLE_KEY}" >&2
+                  exit 1
+                fi
+              done < /tmp/live-generation-artifacts.tsv
+              python - "${PROJECT}" <<'PY'
+          import json
+          import sys
+
+          project = sys.argv[1]
+          payload_files = {
+              "full": "/tmp/generation-dashboard_payload_latest.json",
+              "7d": "/tmp/generation-dashboard_payload_7d.json",
+              "30d": "/tmp/generation-dashboard_payload_30d.json",
+              "90d": "/tmp/generation-dashboard_payload_90d.json",
+          }
+          for period, path in payload_files.items():
+              payload = json.load(open(path, encoding="utf-8"))
+              assert payload.get("project") == project, f"Immutable S3 {period} payload project mismatch"
+              switcher = payload.get("period_switcher") or {}
+              assert switcher.get("current_key") == period, f"Immutable S3 {period} payload period mismatch"
+          PY
+              FULL_S3_PAYLOAD_PATH="/tmp/generation-dashboard_payload_latest.json"
+              echo "LIVE_GENERATION_MANIFEST_OK:${PROJECT}:$(python -c 'import json; print(json.load(open("/tmp/live-generation.json", encoding="utf-8"))["generation_id"])')"
+            else
+              echo "LIVE_GENERATION_MANIFEST_FRESHNESS_SKIPPED:${PROJECT}:skip_artifact_refresh=true"
+              aws s3 cp \
+                "s3://${REPORT_S3_BUCKET_VALUE}/${REPORT_S3_PREFIX_VALUE}/latest/dashboard_payload_latest.json" \
+                /tmp/dashboard-payload-latest.json \
+                --region "${AWS_REGION}" >/dev/null
+              FULL_S3_PAYLOAD_PATH="/tmp/dashboard-payload-latest.json"
+            fi
+            for ARTIFACT_FILENAME in "${LIVE_ARTIFACT_FILENAMES[@]}"; do
+              STABLE_HEAD_SIZE="$(aws s3api head-object \
+                --bucket "${REPORT_S3_BUCKET_VALUE}" \
+                --key "${REPORT_S3_PREFIX_VALUE}/latest/${ARTIFACT_FILENAME}" \
+                --region "${AWS_REGION}" \
+                --query ContentLength \
+                --output text)"
+              if [[ "${SKIP_ARTIFACT_REFRESH:-false}" != "true" ]]; then
+                MANIFEST_SIZE="$(python - "${ARTIFACT_FILENAME}" <<'PY'
+          import json
+          import sys
+          manifest = json.load(open("/tmp/live-generation.json", encoding="utf-8"))
+          print(manifest["artifacts"][sys.argv[1]]["size"])
+          PY
+                )"
+                if [[ "${STABLE_HEAD_SIZE}" != "${MANIFEST_SIZE}" ]]; then
+                  echo "Stable S3 artifact size mismatch for ${ARTIFACT_FILENAME}: ${STABLE_HEAD_SIZE} != ${MANIFEST_SIZE}" >&2
+                  exit 1
+                fi
+              fi
+            done
+            python - "${PROJECT}" "${FULL_S3_PAYLOAD_PATH}" <<'PY'
+          import json
+          import sys
+
+          project, payload_path = sys.argv[1:3]
+          payload = json.load(open(payload_path, encoding="utf-8"))
+          assert payload.get("project") == project, "S3 full payload project mismatch"
+          switcher = payload.get("period_switcher") or {}
+          assert switcher.get("current_key") == "full", "S3 full payload period mismatch"
           dashboard = payload.get("dashboard") or {}
           kpis = dashboard.get("kpis") or {}
           series = dashboard.get("series") or {}
@@ -842,8 +1098,9 @@ jobs:
           inventory = dashboard.get("roy_operations_inventory") or commercial
           assert kpis.get("windows"), "S3 KPI windows missing"
           assert series.get("dates"), "S3 KPI source series dates missing"
-          assert inventory.get("summary"), "S3 operations inventory summary missing"
-          assert inventory.get("inventory_rows"), "S3 operations inventory rows missing"
+          if project == "roy":
+              assert inventory.get("summary"), "S3 operations inventory summary missing"
+              assert inventory.get("inventory_rows"), "S3 operations inventory rows missing"
           invalid_loss_rows = []
           for row in commercial.get("loss_product_rows") or []:
               if not isinstance(row, dict):
@@ -860,13 +1117,100 @@ jobs:
               if gross_profit >= 0:
                   invalid_loss_rows.append(row)
           assert not invalid_loss_rows, "S3 loss products must be based on negative gross profit only"
+          marker_name = "ROY_LIVE_ARTIFACTS_OK" if project == "roy" else f"{project.upper()}_LIVE_ARTIFACTS_OK"
           print(
-              "ROY_LIVE_ARTIFACTS_OK:"
+              f"{marker_name}:"
               f"kpi_series_days={len(series.get('dates') or [])}:"
               f"inventory_alerts={(inventory.get('summary') or {}).get('alert_delivery_count')}:"
               f"inventory_rows={len(inventory.get('inventory_rows') or [])}"
           )
           PY
+            if [[ "${SKIP_ARTIFACT_REFRESH:-false}" == "true" && "${NEEDS_REPORT_TASK_UPDATE}" == "true" ]]; then
+              echo "REPORT_SCHEDULE_PROMOTION_SKIPPED:${REPORT_SCHEDULE_NAME}:${TASK_DEFINITION_ARN}:skip_artifact_refresh=true"
+            elif [[ "${NEEDS_REPORT_TASK_UPDATE}" == "true" ]]; then
+              aws scheduler get-schedule \
+                --name "${REPORT_SCHEDULE_NAME}" \
+                --region "${AWS_REGION}" > schedule-promotion-current.json
+              PROMOTION_SOURCE_TASK_DEFINITION_ARN="$(python -c 'import json; schedule = json.load(open("schedule-promotion-current.json", encoding="utf-8")); print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])')"
+              if [[ "${PROMOTION_SOURCE_TASK_DEFINITION_ARN}" != "${CURRENT_SCHEDULE_TASK_DEFINITION_ARN}" ]]; then
+                echo "Schedule ${REPORT_SCHEDULE_NAME} drifted from ${CURRENT_SCHEDULE_TASK_DEFINITION_ARN} to ${PROMOTION_SOURCE_TASK_DEFINITION_ARN}; refusing to overwrite concurrent infrastructure changes." >&2
+                exit 1
+              fi
+              mv schedule-promotion-current.json schedule.json
+              python - "${TASK_DEFINITION_ARN}" <<'PY'
+          import json
+          import sys
+
+          task_definition_arn = sys.argv[1]
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+
+          def clean(value):
+              if isinstance(value, dict):
+                  cleaned = {}
+                  for key, raw in value.items():
+                      item = clean(raw)
+                      if item in (None, "", [], {}):
+                          continue
+                      cleaned[key] = item
+                  return cleaned
+              if isinstance(value, list):
+                  return [clean(item) for item in value if clean(item) not in (None, "", [], {})]
+              return value
+
+          target = clean(schedule["Target"])
+          target["EcsParameters"]["TaskDefinitionArn"] = task_definition_arn
+          json.dump(target, open("schedule-target.json", "w", encoding="utf-8"))
+          json.dump(clean(schedule["FlexibleTimeWindow"]), open("schedule-flexible-time-window.json", "w", encoding="utf-8"))
+          PY
+              SCHEDULE_EXPRESSION="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8"))["ScheduleExpression"])
+          PY
+              )"
+              SCHEDULE_STATE="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8")).get("State") or "ENABLED")
+          PY
+              )"
+              SCHEDULE_TIMEZONE="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8")).get("ScheduleExpressionTimezone") or "")
+          PY
+              )"
+              SCHEDULE_GROUP="$(python - <<'PY'
+          import json
+          print(json.load(open("schedule.json", encoding="utf-8")).get("GroupName") or "")
+          PY
+              )"
+              UPDATE_SCHEDULE_ARGS=(
+                --name "${REPORT_SCHEDULE_NAME}"
+                --schedule-expression "${SCHEDULE_EXPRESSION}"
+                --flexible-time-window file://schedule-flexible-time-window.json
+                --target file://schedule-target.json
+                --state "${SCHEDULE_STATE}"
+                --region "${AWS_REGION}"
+              )
+              if [[ -n "${SCHEDULE_TIMEZONE}" ]]; then
+                UPDATE_SCHEDULE_ARGS+=(--schedule-expression-timezone "${SCHEDULE_TIMEZONE}")
+              fi
+              if [[ -n "${SCHEDULE_GROUP}" ]]; then
+                UPDATE_SCHEDULE_ARGS+=(--group-name "${SCHEDULE_GROUP}")
+              fi
+              aws scheduler update-schedule "${UPDATE_SCHEDULE_ARGS[@]}"
+              aws scheduler get-schedule \
+                --name "${REPORT_SCHEDULE_NAME}" \
+                --region "${AWS_REGION}" > schedule.json
+              PROMOTED_TASK_DEFINITION_ARN="$(python -c 'import json; schedule = json.load(open("schedule.json", encoding="utf-8")); print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])')"
+              if [[ "${PROMOTED_TASK_DEFINITION_ARN}" != "${TASK_DEFINITION_ARN}" ]]; then
+                echo "Schedule ${REPORT_SCHEDULE_NAME} promotion resolved to ${PROMOTED_TASK_DEFINITION_ARN}, expected ${TASK_DEFINITION_ARN}" >&2
+                exit 1
+              fi
+              echo "REPORT_SCHEDULE_PROMOTED:${REPORT_SCHEDULE_NAME}:${TASK_DEFINITION_ARN}"
+              protect_ecr_image_tag "${IMAGE_IDENTIFIER}" "${TASK_FAMILY}-current"
+            else
+              echo "REPORT_SCHEDULE_UNCHANGED:${REPORT_SCHEDULE_NAME}:${TASK_DEFINITION_ARN}"
+              protect_ecr_image_tag "${IMAGE_IDENTIFIER}" "${TASK_FAMILY}-current"
+            fi
           fi
 
           REQUESTED_AUTH_PASSWORD="${DEFAULT_AUTH_PASSWORD:-}"
@@ -987,11 +1331,11 @@ jobs:
           policy["Statement"].append({
               "Effect": "Allow",
               "Action": ["s3:GetObject"],
-              "Resource": [f"arn:aws:s3:::{bucket}/{prefix}/latest/*"],
+              "Resource": [f"arn:aws:s3:::{bucket}/{prefix}/*"],
           })
           policy["Statement"].append({
               "Effect": "Allow",
-              "Action": ["s3:GetObject", "s3:PutObject"],
+              "Action": ["s3:PutObject"],
               "Resource": [f"arn:aws:s3:::{bucket}/{prefix}/operations/*"],
           })
           json.dump(policy, open("instance-policy.json", "w", encoding="utf-8"), indent=2)
@@ -1057,6 +1401,27 @@ jobs:
             --region "${AWS_REGION}" \
             --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn | [0]" \
             --output text)"
+
+          CURRENT_SERVICE_URL=""
+          if [[ "${SERVICE_ARN}" != "None" && -n "${SERVICE_ARN}" ]]; then
+            CURRENT_SERVICE_URL="$(aws apprunner describe-service \
+              --service-arn "${SERVICE_ARN}" \
+              --region "${AWS_REGION}" \
+              --query 'Service.ServiceUrl' \
+              --output text)"
+          fi
+          echo "PRE_DEPLOY_HARD_GATE_CONTEXT project=${PROJECT}"
+          echo "instance-id=N/A (AWS App Runner managed service)"
+          echo "private-ip=N/A (AWS App Runner managed service)"
+          echo "service-name=${SERVICE_NAME}"
+          echo "service-arn=${SERVICE_ARN:-pending-create}"
+          echo "candidate-image-path=${IMAGE_URI}"
+          echo "candidate-image-digest=${IMAGE_DIGEST}"
+          echo "candidate-image-identifier=${IMAGE_IDENTIFIER}"
+          echo "health-path=https://${CURRENT_SERVICE_URL:-pending-service-url}/health"
+          echo "production-board-path=https://${CURRENT_SERVICE_URL:-pending-service-url}/production/${PROJECT}"
+          echo "accounting-api-path=https://${CURRENT_SERVICE_URL:-pending-service-url}/api/${PROJECT}/latest?period=full"
+          echo "accounting-report-path=https://${CURRENT_SERVICE_URL:-pending-service-url}/report/${PROJECT}?period=full"
 
           if [[ "${SERVICE_ARN}" == "None" || -z "${SERVICE_ARN}" ]]; then
             cat > create-service.json <<JSON
@@ -1258,9 +1623,19 @@ jobs:
             grep -q "productsCards" /tmp/production-board.html
             grep -q "@media (max-width:680px)" /tmp/production-board.html
             curl_with_retry -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/production/vevo/live?refresh=1" -o /tmp/production-board-api.json
+            for PERIOD in 7d 30d 90d full; do
+              curl_with_retry -fsS --max-time 240 -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+                "${SERVICE_URL}/api/vevo/latest?period=${PERIOD}" \
+                -o "/tmp/vevo-accounting-${PERIOD}.json"
+              curl_with_retry -fsS --max-time 240 -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+                "${SERVICE_URL}/report/vevo?period=${PERIOD}" \
+                -o "/tmp/vevo-accounting-${PERIOD}.html"
+            done
             python - <<'PY'
           import json
           api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
+          accounting = json.load(open("/tmp/vevo-accounting-full.json", encoding="utf-8"))
+          accounting_html = open("/tmp/vevo-accounting-full.html", encoding="utf-8-sig").read()
           assert api["project"] == "vevo"
           assert "Čaká na vybavenie" in api["active_order_statuses"]
           assert "Platba online - zaplatené" in api["active_order_statuses"]
@@ -1272,12 +1647,44 @@ jobs:
               for product in api["products"]
               for order in product.get("orders", [])
           )
+          assert accounting["project"] == "vevo"
+          assert accounting.get("date_to"), "VEVO accounting payload date_to missing"
+          for period in ("7d", "30d", "90d", "full"):
+              period_payload = json.load(open(f"/tmp/vevo-accounting-{period}.json", encoding="utf-8"))
+              period_html = open(f"/tmp/vevo-accounting-{period}.html", encoding="utf-8-sig").read()
+              assert period_payload.get("project") == "vevo", f"VEVO {period} project marker missing"
+              switcher = period_payload.get("period_switcher") or {}
+              assert switcher.get("current_key") == period, f"VEVO {period} served the wrong period payload"
+              assert "CEO decision cockpit" in period_html, f"VEVO {period} report marker missing"
+              assert "window.__PERIOD_HREF_BASE_MAP__" in period_html, f"VEVO {period} live period map missing"
+              for mapped_period in ("7d", "30d", "90d", "full"):
+                  expected_href = f"/report/vevo?period={mapped_period}"
+                  assert expected_href in period_html, f"VEVO {period} HTML is missing {expected_href}"
+          source_health = accounting.get("source_health") or {}
+          assumptions = source_health.get("reporting_assumptions") or {}
+          assert assumptions.get("missing_cost_margin_pct") == 35.0, "VEVO 35% missing-cost rule missing"
+          fixed_cost = assumptions.get("fixed_cost") or {}
+          assert fixed_cost.get("mode") == "manual_daily_estimate", "VEVO fixed-cost estimate marker missing"
+          expense_qa = ((source_health.get("qa") or {}).get("product_expense_coverage") or {})
+          assert "fallback_items" in expense_qa, "Complete VEVO missing-cost list missing"
+          cockpit = ((accounting.get("dashboard") or {}).get("ceo_cockpit") or {})
+          assert set((cockpit.get("window_metrics") or {}).keys()) >= {"7", "30", "90", "full"}
+          assert len(cockpit.get("actions") or []) == 5, "VEVO CEO actions missing"
+          assert "CEO decision cockpit" in accounting_html
+          assert "Complete missing purchase-cost list" in accounting_html
           print(
               "APP_RUNNER_PRODUCTION_BOARD_OK:"
               f"active_orders={api['summary'].get('active_orders')}:"
               f"manufacturing_products={api['summary'].get('manufacturing_products')}:"
               f"units_to_make={api['summary'].get('units_to_make')}:"
               f"orders_scanned={api['scan'].get('orders_scanned')}"
+          )
+          print(
+              "APP_RUNNER_VEVO_ACCOUNTING_OK:"
+              f"date_to={accounting.get('date_to')}:"
+              f"missing_cost_products={expense_qa.get('fallback_product_count')}:"
+              f"missing_cost_revenue_share_pct={expense_qa.get('fallback_revenue_share_pct')}:"
+              f"ceo_actions={len(cockpit.get('actions') or [])}"
           )
           PY
           fi

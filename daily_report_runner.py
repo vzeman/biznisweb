@@ -10,6 +10,7 @@ Optional S3 upload is supported.
 import argparse
 import calendar
 import csv
+import hashlib
 import json
 import mimetypes
 import os
@@ -46,6 +47,21 @@ STABLE_LIVE_ARTIFACT_NAMES = {
     "report_latest.html",
     "dashboard_payload_latest.json",
 }
+PERIOD_LIVE_ARTIFACT_NAMES = {
+    "7d": {
+        "report": "report_7d.html",
+        "payload": "dashboard_payload_7d.json",
+    },
+    "30d": {
+        "report": "report_30d.html",
+        "payload": "dashboard_payload_30d.json",
+    },
+    "90d": {
+        "report": "report_90d.html",
+        "payload": "dashboard_payload_90d.json",
+    },
+}
+STRICT_LIVE_REPORT_PROJECTS = {"roy", "vevo"}
 
 
 def bootstrap_project_from_argv(argv: List[str]) -> str:
@@ -336,7 +352,119 @@ def build_data_quality_summary(data_quality: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def resolve_period_live_artifacts(paths: Dict[str, Path]) -> Dict[str, Dict[str, Path]]:
+    """Resolve generated 7D/30D/90D report and payload pairs from the full payload."""
+    latest_payload_path = paths.get("dashboard_payload_latest_json")
+    if latest_payload_path is None or not latest_payload_path.exists():
+        return {}
+    try:
+        full_payload = json.loads(latest_payload_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(full_payload, dict):
+        return {}
+
+    data_root = latest_payload_path.parent.resolve()
+    period_switcher = full_payload.get("period_switcher") or {}
+    embedded_specs = period_switcher.get("_embedded_specs") or []
+    resolved: Dict[str, Dict[str, Path]] = {}
+    for spec in embedded_specs:
+        if not isinstance(spec, dict):
+            continue
+        period_key = str(spec.get("key") or "").strip().lower()
+        if period_key not in PERIOD_LIVE_ARTIFACT_NAMES:
+            continue
+        raw_report_path = str(spec.get("report_path") or "").strip()
+        if not raw_report_path:
+            continue
+        report_path = Path(raw_report_path)
+        if not report_path.is_absolute():
+            report_path = ROOT_DIR / report_path
+        report_path = report_path.resolve()
+        try:
+            report_path.relative_to(data_root)
+        except ValueError:
+            continue
+        if not report_path.exists():
+            continue
+
+        derived_payload_path = report_path.with_name(
+            report_path.name.replace("report_", "dashboard_payload_", 1).replace(".html", ".json")
+        )
+        payload_path = (
+            derived_payload_path
+            if derived_payload_path.exists()
+            else report_path.parent / "dashboard_payload_latest.json"
+        )
+        if not payload_path.exists():
+            continue
+        resolved[period_key] = {
+            "report": report_path,
+            "payload": payload_path.resolve(),
+        }
+    return resolved
+
+
+def _canonical_live_artifact_paths(project: str, paths: Dict[str, Path]) -> Dict[str, Path]:
+    """Resolve and validate one complete live report generation."""
+    normalized_project = str(project or "").strip().lower()
+    canonical: Dict[str, Path] = {}
+
+    full_report = paths.get("report_latest_html")
+    full_payload = paths.get("dashboard_payload_latest_json")
+    if full_report is not None and full_report.exists():
+        canonical["report_latest.html"] = full_report.resolve()
+    if full_payload is not None and full_payload.exists():
+        canonical["dashboard_payload_latest.json"] = full_payload.resolve()
+
+    for period_key, artifact_paths in resolve_period_live_artifacts(paths).items():
+        stable_names = PERIOD_LIVE_ARTIFACT_NAMES[period_key]
+        canonical[stable_names["report"]] = artifact_paths["report"].resolve()
+        canonical[stable_names["payload"]] = artifact_paths["payload"].resolve()
+
+    expected_names = set(STABLE_LIVE_ARTIFACT_NAMES)
+    for stable_names in PERIOD_LIVE_ARTIFACT_NAMES.values():
+        expected_names.update(stable_names.values())
+
+    if normalized_project in STRICT_LIVE_REPORT_PROJECTS:
+        missing_names = sorted(expected_names - set(canonical))
+        if missing_names:
+            raise RuntimeError(
+                f"Refusing to publish incomplete {normalized_project.upper()} live generation; "
+                f"missing artifacts: {', '.join(missing_names)}"
+            )
+
+    if set(canonical) != expected_names:
+        return canonical
+
+    expected_period_by_payload = {
+        "dashboard_payload_latest.json": "full",
+        "dashboard_payload_7d.json": "7d",
+        "dashboard_payload_30d.json": "30d",
+        "dashboard_payload_90d.json": "90d",
+    }
+    for filename, expected_period in expected_period_by_payload.items():
+        payload_path = canonical[filename]
+        try:
+            payload = json.loads(payload_path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Invalid live payload '{payload_path}': {exc}") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Live payload '{payload_path}' must be a JSON object.")
+        payload_project = str(payload.get("project") or "").strip().lower()
+        payload_period = str((payload.get("period_switcher") or {}).get("current_key") or "").strip().lower()
+        if payload_project != normalized_project or payload_period != expected_period:
+            raise RuntimeError(
+                f"Live payload identity mismatch in '{payload_path}': "
+                f"expected project={normalized_project}, period={expected_period}; "
+                f"got project={payload_project or 'missing'}, period={payload_period or 'missing'}."
+            )
+
+    return canonical
+
+
 def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
+    """Archive outputs and atomically publish a complete live generation manifest."""
     bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
     prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
     if not prefix:
@@ -353,40 +481,109 @@ def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
 
     s3 = boto3.client("s3", region_name=region)
     uploaded_links: Dict[str, str] = {}
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    generation_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    expires = int(os.getenv("REPORT_S3_PRESIGN_EXPIRES_SEC", "604800"))
+    uploaded_object_keys: set[str] = set()
+    canonical_artifacts = _canonical_live_artifact_paths(project, paths)
+    expected_live_artifact_count = len(STABLE_LIVE_ARTIFACT_NAMES) + sum(
+        len(names) for names in PERIOD_LIVE_ARTIFACT_NAMES.values()
+    )
+    manifest_ready = len(canonical_artifacts) == expected_live_artifact_count
 
-    for key, path in paths.items():
-        if not path.exists():
-            continue
-        object_key = f"{prefix}/{timestamp}/{path.name}"
-        content_type, _ = mimetypes.guess_type(path.name)
-        extra_args = {"ContentType": content_type} if content_type else {}
+    def extra_args_for(filename: str) -> Dict[str, str]:
+        content_type, _ = mimetypes.guess_type(filename)
+        return {"ContentType": content_type} if content_type else {}
 
-        s3.upload_file(str(path), bucket, object_key, ExtraArgs=extra_args)
+    def upload_immutable(path: Path, object_filename: str) -> str:
+        object_key = f"{prefix}/{generation_id}/{object_filename}"
+        if object_key not in uploaded_object_keys:
+            s3.upload_file(
+                str(path),
+                bucket,
+                object_key,
+                ExtraArgs=extra_args_for(object_filename),
+            )
+            uploaded_object_keys.add(object_key)
+        return object_key
 
-        expires = int(os.getenv("REPORT_S3_PRESIGN_EXPIRES_SEC", "604800"))
-        presigned = s3.generate_presigned_url(
+    def presign(object_key: str) -> str:
+        return s3.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": object_key},
             ExpiresIn=expires,
         )
-        uploaded_links[key] = presigned
 
-        if path.name in STABLE_LIVE_ARTIFACT_NAMES:
-            stable_key = f"{prefix}/latest/{path.name}"
-            s3.upload_file(str(path), bucket, stable_key, ExtraArgs=extra_args)
-            stable_presigned = s3.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": bucket, "Key": stable_key},
-                ExpiresIn=expires,
-            )
-            uploaded_links[f"{key}_latest"] = stable_presigned
+    # Phase 1: upload every immutable artifact. No live pointer changes here.
+    for key, path in paths.items():
+        if not path.exists():
+            continue
+        object_key = upload_immutable(path, path.name)
+        uploaded_links[key] = presign(object_key)
+
+    manifest_artifacts: Dict[str, Dict[str, Any]] = {}
+    for filename, path in sorted(canonical_artifacts.items()):
+        object_key = upload_immutable(path, filename)
+        if manifest_ready:
+            raw = path.read_bytes()
+            manifest_artifacts[filename] = {
+                "key": object_key,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size": len(raw),
+            }
+        uploaded_links[f"live_{filename}"] = presign(object_key)
+
+    # Phase 2: update compatibility aliases only after the immutable generation is complete.
+    stable_artifacts = {
+        path.name: path
+        for path in paths.values()
+        if path.exists() and path.name in STABLE_LIVE_ARTIFACT_NAMES
+    }
+    stable_artifacts.update(canonical_artifacts)
+    for filename, path in sorted(stable_artifacts.items()):
+        stable_key = f"{prefix}/latest/{filename}"
+        s3.upload_file(
+            str(path),
+            bucket,
+            stable_key,
+            ExtraArgs=extra_args_for(filename),
+        )
+        uploaded_links[f"live_{filename}_latest"] = presign(stable_key)
+
+    # The manifest is the atomic live pointer and must be written last.
+    if manifest_artifacts:
+        manifest = {
+            "schema_version": 1,
+            "project": str(project or "").strip().lower(),
+            "generation_id": generation_id,
+            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "artifacts": manifest_artifacts,
+        }
+        manifest_key = f"{prefix}/latest/generation.json"
+        s3.put_object(
+            Bucket=bucket,
+            Key=manifest_key,
+            Body=json.dumps(manifest, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+            ContentType="application/json",
+            CacheControl="no-store",
+        )
+        uploaded_links["generation_manifest_latest"] = presign(manifest_key)
 
     return uploaded_links
 
 
-def build_email_subject(reporting_defaults: Dict[str, Any]) -> str:
-    return os.getenv("REPORT_EMAIL_SUBJECT", reporting_defaults["email_subject"]).strip()
+def build_email_subject(
+    reporting_defaults: Dict[str, Any],
+    data_quality: Optional[Dict[str, Any]] = None,
+) -> str:
+    subject = os.getenv("REPORT_EMAIL_SUBJECT", reporting_defaults["email_subject"]).strip()
+    quality = data_quality or {}
+    qa_failure_count = int(quality.get("qa_failure_count") or 0)
+    qa_status = str(quality.get("qa_status") or "").strip().lower()
+    if qa_failure_count > 0 or qa_status == "critical":
+        return f"[CRITICAL QA] {subject}"
+    if bool(quality.get("is_partial")):
+        return f"[PARTIAL DATA] {subject}"
+    return subject
 
 
 def _to_float(value: str) -> float:
@@ -1131,6 +1328,21 @@ def build_email_body(
         f"Stav dat: {overall_status} / QA {qa_status}",
     ]
 
+    if qa_failure_count > 0 or qa_status == "CRITICAL":
+        lines.extend(
+            [
+                "",
+                "POZOR: REPORT MA KRITICKU QA CHYBU. NEPOUZIVAJTE HO NA RIADENIE ANI ROZHODOVANIE, KYM SA CHYBA NEOPRAVI.",
+            ]
+        )
+    elif is_partial:
+        lines.extend(
+            [
+                "",
+                "POZOR: REPORT OBSAHUJE IBA CIASTOCNE DATA. VYSLEDKY NEPOUZIVAJTE AKO UPLNY FIREMNY OBRAZ.",
+            ]
+        )
+
     if is_partial or qa_failure_count > 0 or qa_warning_count > 0:
         lines.append(
             "Poznamka: report obsahuje datove upozornenia. "
@@ -1307,7 +1519,7 @@ def main() -> None:
     if args.skip_email:
         print("Email sending skipped by flag.")
     else:
-        subject = build_email_subject(reporting_defaults)
+        subject = build_email_subject(reporting_defaults, data_quality)
         summary_text = build_report_summary(output_paths)
         body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults, data_quality)
         message_id = send_email_ses(

@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from export_orders import ORDER_CACHE_SCHEMA_VERSION, BizniWebExporter
+from html_report_generator import generate_html_report
 from reporting_core.cfo_kpis import build_order_records_from_export_df
 from reporting_core.runtime import load_project_runtime
 
@@ -57,16 +58,59 @@ def reporting_order(order_num: str, status_name: str, payment_title: str, paymen
     }
 
 
+def analytics_item_row(
+    order_num: str,
+    customer_email: str,
+    purchase_date: str,
+    *,
+    revenue: float = 100.0,
+    fb_spend: float = 0.0,
+    google_spend: float = 0.0,
+) -> dict:
+    return {
+        "order_num": order_num,
+        "customer_email": customer_email,
+        "purchase_date": purchase_date,
+        "customer_first_purchase_date": purchase_date,
+        "order_total": revenue,
+        "total_items_in_order": 1,
+        "fb_ads_daily_spend": fb_spend,
+        "google_ads_daily_spend": google_spend,
+        "total_expense": 40.0,
+        "product_sku": "TEST-SKU",
+        "item_label": "Test product",
+        "item_quantity": 1,
+        "item_total_without_tax": revenue,
+        "item_total_with_tax": revenue,
+        "item_unit_price": revenue,
+        "item_line_sum_original": revenue,
+        "item_line_sum_with_tax_original": revenue,
+        "item_unit_price_original": revenue,
+    }
+
+
 class ReportingCalculationFixTests(unittest.TestCase):
     def test_unknown_currency_is_not_treated_as_eur(self) -> None:
         exporter = make_exporter()
         with self.assertRaises(ValueError):
             exporter.convert_to_eur(10.0, "BTC")
 
-    def test_vevo_missing_product_cost_keeps_zero_margin_fallback(self) -> None:
+    def test_vevo_missing_product_cost_uses_configured_35_percent_margin(self) -> None:
         exporter = make_exporter()
-        rows = exporter.flatten_order(
-            {
+        settings_path = Path(__file__).resolve().parents[1] / "projects" / "vevo" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        runtime = load_project_runtime(
+            "vevo",
+            settings=settings,
+            default_packaging_cost_per_order=0.0,
+            default_shipping_subsidy_per_order=0.0,
+            default_fixed_monthly_cost=0.0,
+            default_fixed_daily_cost=0.0,
+        )
+        self.assertEqual(35.0, runtime.missing_cost_margin_pct)
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", runtime.missing_cost_margin_pct):
+            rows = exporter.flatten_order({
                 "id": "1",
                 "order_num": "A-1",
                 "pur_date": "2026-04-20 10:00:00",
@@ -83,13 +127,12 @@ class ReportingCalculationFixTests(unittest.TestCase):
                         "sum_with_tax": {"value": 120.0, "currency": {"code": "EUR"}},
                     }
                 ],
-            }
-        )
+            })
 
-        self.assertEqual("missing_cost_zero_margin_fallback", rows[0]["expense_source"])
-        self.assertEqual(50.0, rows[0]["expense_per_item"])
-        self.assertEqual(100.0, rows[0]["total_expense"])
-        self.assertEqual(0.0, rows[0]["profit_before_ads"])
+        self.assertEqual("missing_cost_margin_35_fallback", rows[0]["expense_source"])
+        self.assertEqual(32.5, rows[0]["expense_per_item"])
+        self.assertEqual(65.0, rows[0]["total_expense"])
+        self.assertEqual(35.0, rows[0]["profit_before_ads"])
 
     def test_roy_missing_product_cost_uses_configured_35_percent_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
@@ -137,12 +180,146 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
 
         with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
-            qa = exporter._build_product_expense_coverage_qa(frame)
+            qa = exporter._build_product_expense_coverage_qa(
+                frame,
+                report_date_from="2026-06-01",
+                report_date_to="2026-07-14",
+            )
 
         self.assertEqual(
             "missing costs use a configured 35% margin estimate (65% of net item revenue is treated as expense)",
             qa["fallback_policy"],
         )
+
+    def test_product_expense_qa_keeps_complete_missing_cost_product_list(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": f"V-{index}",
+                    "item_label": f"Missing product {index}",
+                    "product_sku": f"MISSING-{index}",
+                    "item_quantity": 1,
+                    "item_total_without_tax": float(10 * index),
+                    "profit_before_ads": float(3.5 * index),
+                    "expense_per_item": float(6.5 * index),
+                    "expense_source": "missing_cost_margin_35_fallback",
+                }
+                for index in range(1, 7)
+            ]
+        )
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
+            qa = exporter._build_product_expense_coverage_qa(frame)
+
+        self.assertEqual(6, qa["fallback_product_count"])
+        self.assertEqual(6, len(qa["fallback_items"]))
+        self.assertEqual(5, len(qa["top_fallback_items"]))
+        self.assertEqual("MISSING-6", qa["fallback_items"][0]["product_sku"])
+        self.assertAlmostEqual(28.5714, qa["fallback_items"][0]["total_revenue_share_pct"], places=4)
+
+    def test_product_expense_qa_lists_unmapped_zero_revenue_roy_gifts_separately(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "R-GIFT-MISSING",
+                    "purchase_date": "2026-07-14",
+                    "item_label": "Unmapped free knife",
+                    "product_sku": "GIFT-MISSING",
+                    "item_quantity": 2,
+                    "item_total_without_tax": 0.0,
+                    "profit_before_ads": 0.0,
+                    "expense_per_item": 0.0,
+                    "expense_source": "zero_revenue_gift_missing_cost",
+                }
+            ]
+        )
+
+        qa = exporter._build_product_expense_coverage_qa(
+            frame,
+            report_date_to="2026-07-14",
+        )
+
+        self.assertEqual(0, qa["fallback_rows"])
+        self.assertEqual(1, qa["missing_cost_product_entry_count"])
+        self.assertEqual(1, qa["zero_revenue_gift_missing_cost_rows"])
+        self.assertEqual(2.0, qa["zero_revenue_gift_missing_cost_units"])
+        self.assertEqual(1, qa["zero_revenue_gift_missing_cost_product_count"])
+        self.assertEqual("zero_revenue_gift", qa["missing_cost_items"][0]["category"])
+        self.assertEqual(0.0, qa["missing_cost_items"][0]["revenue"])
+        self.assertEqual(0.0, qa["missing_cost_items"][0]["profit_before_ads"])
+
+    def test_product_expense_qa_flags_recent_missing_cost_revenue_concentration(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "V-MISSING",
+                    "purchase_date": "2026-07-14",
+                    "item_label": "Missing recent product",
+                    "product_sku": "MISSING-RECENT",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 4.0,
+                    "profit_before_ads": 1.4,
+                    "expense_per_item": 2.6,
+                    "expense_source": "missing_cost_margin_35_fallback",
+                },
+                {
+                    "order_num": "V-MAPPED",
+                    "purchase_date": "2026-07-14",
+                    "item_label": "Mapped recent product",
+                    "product_sku": "MAPPED-RECENT",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 96.0,
+                    "profit_before_ads": 40.0,
+                    "expense_per_item": 56.0,
+                    "expense_source": "mapped_product_identifier",
+                },
+            ]
+        )
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
+            qa = exporter._build_product_expense_coverage_qa(
+                frame,
+                report_date_from="2026-06-01",
+                report_date_to="2026-07-14",
+            )
+
+        self.assertEqual("2026-06-15", qa["fallback_recent_30d_date_from"])
+        self.assertEqual("2026-07-14", qa["fallback_recent_30d_date_to"])
+        self.assertEqual(4.0, qa["fallback_recent_30d_revenue"])
+        self.assertEqual(4.0, qa["fallback_recent_30d_revenue_share_pct"])
+        self.assertTrue(any("Recent 30-day missing-cost rows" in warning for warning in qa["warnings"]))
+
+    def test_product_expense_qa_recent_window_uses_report_end_not_last_sale(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "V-OLD-MISSING",
+                    "purchase_date": "2026-06-01",
+                    "item_label": "Old missing-cost product",
+                    "product_sku": "MISSING-OLD",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 100.0,
+                    "profit_before_ads": 35.0,
+                    "expense_per_item": 65.0,
+                    "expense_source": "missing_cost_margin_35_fallback",
+                }
+            ]
+        )
+
+        qa = exporter._build_product_expense_coverage_qa(
+            frame,
+            report_date_to="2026-07-14",
+        )
+
+        self.assertEqual("2026-06-15", qa["fallback_recent_30d_date_from"])
+        self.assertEqual("2026-07-14", qa["fallback_recent_30d_date_to"])
+        self.assertEqual(0.0, qa["fallback_recent_30d_total_revenue"])
+        self.assertEqual(0.0, qa["fallback_recent_30d_revenue"])
+        self.assertEqual(0.0, qa["fallback_recent_30d_revenue_share_pct"])
 
     def test_roy_mapped_cost_keeps_real_loss_despite_missing_cost_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
@@ -358,9 +535,82 @@ class ReportingCalculationFixTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual("zero_revenue_gift", rows[0]["expense_source"])
+        self.assertEqual("zero_revenue_gift_mapped_cost", rows[0]["expense_source"])
         self.assertEqual(0.0, rows[0]["total_expense"])
         self.assertEqual(0.0, rows[0]["profit_before_ads"])
+        self.assertEqual(80.0, rows[0]["purchase_cost_reference_per_item"])
+        self.assertEqual("mapped_product_identifier", rows[0]["purchase_cost_reference_source"])
+
+    def test_vevo_zero_revenue_rows_keep_known_purchase_costs(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter.product_expenses_exact.update({"GIFT-A": 4.29, "GIFT-B": 0.31})
+
+        rows = exporter.flatten_order(
+            {
+                "id": "1",
+                "order_num": "V-ZERO-EUR-KNOWN-COSTS",
+                "pur_date": "2026-07-14 10:00:00",
+                "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                "customer": {"email": "a@example.com"},
+                "items": [
+                    {
+                        "item_label": "VEVO sample A",
+                        "ean": "GIFT-A",
+                        "quantity": 1,
+                        "tax_rate": 20,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    },
+                    {
+                        "item_label": "VEVO sample B",
+                        "ean": "GIFT-B",
+                        "quantity": 1,
+                        "tax_rate": 20,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(2, len(rows))
+        self.assertEqual(
+            ["mapped_product_identifier", "mapped_product_identifier"],
+            [row["expense_source"] for row in rows],
+        )
+        self.assertAlmostEqual(4.60, sum(row["total_expense"] for row in rows), places=2)
+        self.assertAlmostEqual(-4.60, sum(row["profit_before_ads"] for row in rows), places=2)
+
+    def test_roy_scissors_do_not_match_zero_revenue_knife_gift_exception(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        exporter.product_expenses_exact["FREE-SCISSORS"] = 12.0
+
+        rows = exporter.flatten_order(
+            {
+                "id": "1",
+                "order_num": "R-ZERO-EUR-NON-KNIFE",
+                "pur_date": "2026-07-14 10:00:00",
+                "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                "customer": {"email": "a@example.com"},
+                "items": [
+                    {
+                        "item_label": "ROY nožnice 20 cm zdarma",
+                        "ean": "FREE-SCISSORS",
+                        "quantity": 1,
+                        "tax_rate": 23,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual("mapped_product_identifier", rows[0]["expense_source"])
+        self.assertEqual(12.0, rows[0]["total_expense"])
+        self.assertEqual(-12.0, rows[0]["profit_before_ads"])
 
     def test_low_confidence_incrementality_requires_experiment(self) -> None:
         exporter = make_exporter(project_name="roy")
@@ -445,6 +695,268 @@ class ReportingCalculationFixTests(unittest.TestCase):
             cost_per_order={},
         )
         self.assertEqual(0, qa["shell_parity_failures"])
+
+    def test_weekly_cac_includes_blended_spend_on_days_without_orders(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                analytics_item_row(
+                    "V-1",
+                    "new@example.com",
+                    "2026-07-06 10:00:00",
+                    fb_spend=3.0,
+                    google_spend=2.0,
+                )
+            ]
+        )
+        fb_calendar = {
+            "2026-07-06": 4.0,
+            "2026-07-07": 6.0,  # no order
+            "2026-07-13": 10.0,  # spend-only week
+        }
+        google_calendar = {
+            "2026-07-06": 1.0,
+            "2026-07-07": 2.0,  # no order
+            "2026-07-13": 2.0,  # spend-only week
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exporter.data_dir = Path(tmp)
+            weekly = exporter.calculate_clv_and_return_time(
+                frame,
+                fb_daily_spend=fb_calendar,
+                google_ads_daily_spend=google_calendar,
+            )
+
+        self.assertEqual(2, len(weekly))
+        self.assertEqual([10.0, 10.0], weekly["fb_ads_spend"].tolist())
+        self.assertEqual([3.0, 2.0], weekly["google_ads_spend"].tolist())
+        self.assertEqual([13.0, 12.0], weekly["paid_ads_spend"].tolist())
+        self.assertEqual(13.0, weekly.iloc[0]["cac"])
+        self.assertTrue(pd.isna(weekly.iloc[1]["cac"]))
+        self.assertTrue(pd.isna(weekly.iloc[1]["ltv_cac_ratio"]))
+        self.assertEqual(25.0, weekly.iloc[-1]["cumulative_avg_cac"])
+
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "total_revenue": 100.0,
+                    "fb_ads_spend": 20.0,
+                    "google_ads_spend": 5.0,
+                    "net_profit": 40.0,
+                    "unique_orders": 1,
+                }
+            ]
+        )
+        checks = exporter.validate_metric_consistency(
+            date_agg,
+            {
+                "roas": 4.0,
+                "company_profit_margin_pct": 40.0,
+                "paid_cac": 25.0,
+            },
+            weekly,
+        )
+        self.assertTrue(checks["cac_ok"])
+        self.assertEqual("paid_ads_spend", checks["cac_spend_source"])
+        self.assertEqual("paid_ads_spend / new_customers", checks["cac_formula"])
+
+        metrics = exporter.calculate_financial_metrics(frame, date_agg, weekly)
+        self.assertEqual(2, len(metrics["payback_weekly_orders"]))
+        self.assertAlmostEqual(0.22, metrics["payback_weekly_orders"][0], places=2)
+        self.assertIsNone(metrics["payback_weekly_orders"][1])
+
+    def test_cumulative_cac_is_undefined_until_the_first_acquired_customer(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                analytics_item_row(
+                    "V-LATER",
+                    "later@example.com",
+                    "2026-07-13 10:00:00",
+                    fb_spend=1.0,
+                    google_spend=1.0,
+                )
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exporter.data_dir = Path(tmp)
+            weekly = exporter.calculate_clv_and_return_time(
+                frame,
+                fb_daily_spend={"2026-07-06": 10.0, "2026-07-13": 3.0},
+                google_ads_daily_spend={"2026-07-06": 2.0, "2026-07-13": 1.0},
+            )
+
+        self.assertEqual(2, len(weekly))
+        self.assertTrue(pd.isna(weekly.iloc[0]["cac"]))
+        self.assertTrue(pd.isna(weekly.iloc[0]["cumulative_avg_cac"]))
+        self.assertEqual(16.0, weekly.iloc[1]["cumulative_avg_cac"])
+
+    def test_advanced_cohort_cac_uses_full_fb_google_calendars(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                analytics_item_row(
+                    "V-1",
+                    "first@example.com",
+                    "2026-07-01 10:00:00",
+                    fb_spend=1.0,
+                    google_spend=1.0,
+                ),
+                analytics_item_row(
+                    "V-2",
+                    "second@example.com",
+                    "2026-07-10 10:00:00",
+                    fb_spend=1.0,
+                    google_spend=1.0,
+                ),
+            ]
+        )
+        fallback_calendar = exporter._build_daily_paid_spend_calendar(frame)
+        self.assertEqual(2.0, fallback_calendar["fb_ads_daily_spend"].sum())
+        self.assertEqual(2.0, fallback_calendar["google_ads_daily_spend"].sum())
+
+        metrics = exporter.analyze_advanced_dtc_metrics(
+            frame,
+            fb_daily_spend={"2026-07-01": 10.0, "2026-07-05": 20.0},
+            google_ads_daily_spend={"2026-07-02": 5.0, "2026-07-10": 5.0},
+        )
+        cohort = metrics["cohort_payback"].iloc[0]
+
+        self.assertEqual(15.0, metrics["summary"]["paid_cac_fb"])
+        self.assertEqual(20.0, metrics["summary"]["paid_cac"])
+        self.assertEqual(30.0, cohort["cohort_fb_spend"])
+        self.assertEqual(10.0, cohort["cohort_google_spend"])
+        self.assertEqual(40.0, cohort["cohort_paid_spend"])
+        self.assertEqual(20.0, cohort["cohort_cac"])
+
+    def test_advanced_cac_is_undefined_when_paid_spend_has_no_new_customer(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                analytics_item_row(
+                    "V-RETURNING",
+                    "returning@example.com",
+                    "2026-07-15 10:00:00",
+                    fb_spend=5.0,
+                    google_spend=2.0,
+                )
+            ]
+        )
+        frame["customer_first_purchase_date"] = "2026-01-01 10:00:00"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exporter.data_dir = Path(tmp)
+            metrics = exporter.analyze_advanced_dtc_metrics(
+                frame,
+                fb_daily_spend={"2026-07-15": 5.0},
+                google_ads_daily_spend={"2026-07-15": 2.0},
+            )
+
+        self.assertIsNone(metrics["summary"]["paid_cac"])
+        self.assertIsNone(metrics["summary"]["contribution_ltv_cac"])
+
+    def test_legacy_report_renders_undefined_cac_as_na_and_null_chart_values(self) -> None:
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": "2026-07-15",
+                    "total_revenue": 0.0,
+                    "product_expense": 0.0,
+                    "fb_ads_spend": 10.0,
+                    "google_ads_spend": 5.0,
+                    "net_profit": -15.0,
+                    "roi_percent": -100.0,
+                    "unique_orders": 0,
+                    "total_items": 0,
+                    "total_cost": 15.0,
+                    "packaging_cost": 0.0,
+                    "shipping_net_cost": 0.0,
+                    "fixed_daily_cost": 0.0,
+                }
+            ]
+        )
+        items_agg = pd.DataFrame(columns=["item_label", "total_revenue", "total_quantity", "profit"])
+        clv_analysis = pd.DataFrame(
+            [
+                {
+                    "week": "2026-W29",
+                    "week_start": pd.Timestamp("2026-07-13"),
+                    "unique_customers": 1,
+                    "new_customers": 0,
+                    "returning_customers": 1,
+                    "avg_clv": 42.0,
+                    "cumulative_avg_clv": 42.0,
+                    "cac": float("nan"),
+                    "avg_return_time_days": float("nan"),
+                    "total_revenue": 42.0,
+                    "paid_ads_spend": 15.0,
+                }
+            ]
+        )
+
+        html = generate_html_report(
+            date_agg,
+            pd.DataFrame(),
+            items_agg,
+            datetime(2026, 7, 15),
+            datetime(2026, 7, 15),
+            clv_return_time_analysis=clv_analysis,
+            financial_metrics={
+                "break_even_cac": 20.0,
+                "paid_cac": None,
+                "blended_cac": None,
+                "contribution_ltv_cac": None,
+            },
+            consistency_checks={
+                "roas_delta": 0.0,
+                "company_margin_delta_pct": 0.0,
+                "cac_expected": None,
+                "cac_delta": None,
+                "cac_if_orders_denominator": 0.0,
+            },
+            advanced_dtc_metrics={"summary": {"contribution_ltv_cac": None}},
+            dashboard_variant="legacy",
+        )
+
+        self.assertIn("Contribution LTV/CAC", html)
+        self.assertIn("data: [null, null, 20.00]", html)
+        self.assertIn("N/A", html)
+        cac_card = html[html.index("Customer Acq. Cost (FB + Google)"):][:250]
+        revenue_ltv_cac_card = html[html.index("Revenue LTV/CAC"):][:250]
+        self.assertIn("N/A", cac_card)
+        self.assertNotIn("&#8364;0.00", cac_card)
+        self.assertIn("N/A", revenue_ltv_cac_card)
+        self.assertNotIn("0.00x", revenue_ltv_cac_card)
+
+        modern_html = generate_html_report(
+            date_agg,
+            pd.DataFrame(),
+            items_agg,
+            datetime(2026, 7, 15),
+            datetime(2026, 7, 15),
+            financial_metrics={"paid_cac": None, "contribution_ltv_cac": None},
+            consistency_checks={
+                "roas_delta": 0.0,
+                "company_margin_delta_pct": 0.0,
+                "cac_delta": None,
+            },
+        )
+        self.assertIn("CAC check delta</span></small><strong>N/A</strong>", modern_html)
+        self.assertIn("value: nullableNumber(DATA.consistency.cac_delta)", modern_html)
+        self.assertNotIn("value: Number(DATA.consistency.cac_delta || 0)", modern_html)
+
+        exporter = make_exporter(project_name="vevo")
+        with patch("builtins.print") as print_mock:
+            exporter.display_clv_return_time_analysis(clv_analysis)
+        total_lines = [
+            str(call.args[0])
+            for call in print_mock.call_args_list
+            if call.args and "TOTAL" in str(call.args[0])
+        ]
+        self.assertTrue(total_lines)
+        self.assertIn("N/A", total_lines[-1])
 
     def test_customer_concentration_includes_profit_shares(self) -> None:
         exporter = make_exporter(project_name="roy")
