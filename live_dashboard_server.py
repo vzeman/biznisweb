@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import hmac
 import json
 import os
@@ -158,12 +159,67 @@ def _latest_s3_artifact_bytes(project: str, filename: str) -> Optional[bytes]:
         or os.getenv("AWS_REGION", "eu-central-1").strip()
         or "eu-central-1"
     )
-    key = f"{prefix}/latest/{filename}"
+    s3 = boto3.client("s3", region_name=region)
+    manifest_key = f"{prefix}/latest/generation.json"
+
+    def is_missing_object_error(exc: Exception) -> bool:
+        response = getattr(exc, "response", {}) or {}
+        error_code = str((response.get("Error") or {}).get("Code") or "")
+        http_status = (response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+        return error_code in {"NoSuchKey", "NotFound", "404"} or http_status == 404
+
     try:
-        response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
-        return response["Body"].read()
+        manifest_response = s3.get_object(Bucket=bucket, Key=manifest_key)
+    except Exception as exc:
+        if not is_missing_object_error(exc):
+            return None
+        # Backward compatibility only when the bucket explicitly has no manifest.
+        key = f"{prefix}/latest/{filename}"
+        try:
+            response = s3.get_object(Bucket=bucket, Key=key)
+            return response["Body"].read()
+        except Exception:
+            return None
+
+    try:
+        manifest = json.loads(manifest_response["Body"].read().decode("utf-8"))
+    except (AttributeError, KeyError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    artifacts = manifest.get("artifacts") if isinstance(manifest, dict) else None
+    manifest_valid = bool(
+        isinstance(manifest, dict)
+        and manifest.get("schema_version") == 1
+        and str(manifest.get("project") or "").strip().lower() == str(project or "").strip().lower()
+        and str(manifest.get("generation_id") or "").strip()
+        and isinstance(artifacts, dict)
+    )
+    if not manifest_valid:
+        return None
+
+    artifact = artifacts.get(filename)
+    if not isinstance(artifact, dict):
+        return None
+    artifact_key = str(artifact.get("key") or "").strip()
+    expected_sha256 = str(artifact.get("sha256") or "").strip().lower()
+    try:
+        expected_size = int(artifact.get("size"))
+    except (TypeError, ValueError):
+        return None
+    if (
+        not artifact_key.startswith(f"{prefix}/")
+        or len(expected_sha256) != 64
+        or any(ch not in "0123456789abcdef" for ch in expected_sha256)
+        or expected_size < 0
+    ):
+        return None
+    try:
+        artifact_response = s3.get_object(Bucket=bucket, Key=artifact_key)
+        raw = artifact_response["Body"].read()
     except Exception:
         return None
+    if len(raw) != expected_size or hashlib.sha256(raw).hexdigest() != expected_sha256:
+        return None
+    return raw
 
 
 def read_latest_dashboard_payload(project: str) -> Dict[str, Any]:
@@ -183,6 +239,26 @@ def read_latest_dashboard_payload(project: str) -> Dict[str, Any]:
 def _normalize_period_key(period_key: Optional[str]) -> str:
     normalized = str(period_key or "full").strip().lower()
     return normalized or "full"
+
+
+PERIOD_S3_ARTIFACT_NAMES = {
+    "full": {
+        "payload": "dashboard_payload_latest.json",
+        "report": "report_latest.html",
+    },
+    "7d": {
+        "payload": "dashboard_payload_7d.json",
+        "report": "report_7d.html",
+    },
+    "30d": {
+        "payload": "dashboard_payload_30d.json",
+        "report": "report_30d.html",
+    },
+    "90d": {
+        "payload": "dashboard_payload_90d.json",
+        "report": "report_90d.html",
+    },
+}
 
 
 def _path_within_root(candidate: Path) -> bool:
@@ -264,25 +340,47 @@ def resolve_period_payload_path(project: str, period_key: Optional[str]) -> Opti
 
 
 def read_period_dashboard_payload_bytes(project: str, period_key: Optional[str]) -> Optional[bytes]:
-    """Read a generated dashboard payload locally, with a durable S3 fallback for latest/full."""
+    """Read a generated dashboard payload locally, then from its exact stable S3 period key."""
     normalized = _normalize_period_key(period_key)
     payload_path = resolve_period_payload_path(project, normalized)
     if payload_path is not None and payload_path.exists():
         return payload_path.read_bytes()
-    if normalized == "full":
-        return _latest_s3_artifact_bytes(project, "dashboard_payload_latest.json")
-    return None
+    artifact_names = PERIOD_S3_ARTIFACT_NAMES.get(normalized)
+    return (
+        _latest_s3_artifact_bytes(project, artifact_names["payload"])
+        if artifact_names is not None
+        else None
+    )
 
 
 def read_period_report_bytes(project: str, period_key: Optional[str]) -> Optional[bytes]:
-    """Read a generated HTML report locally, with a durable S3 fallback for latest/full."""
+    """Read a generated HTML report locally, then from its exact stable S3 period key."""
     normalized = _normalize_period_key(period_key)
     report_path = resolve_period_report_path(project, normalized)
     if report_path is not None and report_path.exists():
         return report_path.read_bytes()
-    if normalized == "full":
-        return _latest_s3_artifact_bytes(project, "report_latest.html")
-    return None
+    artifact_names = PERIOD_S3_ARTIFACT_NAMES.get(normalized)
+    return (
+        _latest_s3_artifact_bytes(project, artifact_names["report"])
+        if artifact_names is not None
+        else None
+    )
+
+
+def inject_live_period_href_map(report_bytes: bytes, project: str) -> bytes:
+    """Replace filesystem period navigation with stable authenticated live routes."""
+    project_path = quote(str(project or "").strip(), safe="")
+    href_map = {
+        period: f"/report/{project_path}?period={period}"
+        for period in PERIOD_S3_ARTIFACT_NAMES
+    }
+    serialized = json.dumps(href_map, ensure_ascii=False, sort_keys=True).replace("<", "\\u003c")
+    bootstrap = f"<script>window.__PERIOD_HREF_BASE_MAP__ = {serialized};</script>"
+    html = report_bytes.decode("utf-8")
+    head_end = html.lower().find("</head>")
+    if head_end < 0:
+        return (bootstrap + html).encode("utf-8")
+    return (html[:head_end] + bootstrap + html[head_end:]).encode("utf-8")
 
 
 def _json_script_content(value: Any) -> str:
@@ -2200,7 +2298,10 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     status=404,
                 )
                 return
-            self._send_bytes(report_bytes, content_type="text/html; charset=utf-8")
+            self._send_bytes(
+                inject_live_period_href_map(report_bytes, project),
+                content_type="text/html; charset=utf-8",
+            )
             return
 
         self._send_text("Not found.", content_type="text/plain; charset=utf-8", status=404)

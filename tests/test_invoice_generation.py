@@ -1,8 +1,11 @@
+import hashlib
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import daily_report_runner as daily_runner
@@ -71,6 +74,125 @@ class _FakeInvoiceClient:
 
 
 class InvoiceGenerationTests(unittest.TestCase):
+    def test_daily_report_s3_upload_publishes_each_period_under_exact_stable_key(self) -> None:
+        class FakeS3:
+            def __init__(self) -> None:
+                self.uploads: list[str] = []
+                self.operations: list[tuple[str, str]] = []
+                self.objects: dict[str, bytes] = {}
+
+            def upload_file(self, path, _bucket, key, ExtraArgs=None) -> None:
+                self.uploads.append(key)
+                self.operations.append(("upload_file", key))
+                self.objects[key] = Path(path).read_bytes()
+
+            def put_object(self, *, Bucket, Key, Body, **_kwargs):
+                self.operations.append(("put_object", Key))
+                self.objects[Key] = bytes(Body)
+
+            def generate_presigned_url(self, _operation, Params, ExpiresIn):
+                return f"https://example.test/{Params['Key']}"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            report_latest = data_dir / "report_latest.html"
+            payload_latest = data_dir / "dashboard_payload_latest.json"
+            report_latest.write_text("full", encoding="utf-8")
+
+            embedded_specs = []
+            for period in ("7d", "30d", "90d"):
+                period_dir = data_dir / "_periods" / period
+                period_dir.mkdir(parents=True)
+                report_path = period_dir / f"report_20260701-20260714_{period}.html"
+                payload_path = period_dir / f"dashboard_payload_20260701-20260714_{period}.json"
+                report_path.write_text(period, encoding="utf-8")
+                payload_path.write_text(
+                    json.dumps(
+                        {
+                            "project": "vevo",
+                            "period_switcher": {"current_key": period},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                embedded_specs.append({"key": period, "report_path": str(report_path)})
+
+            payload_latest.write_text(
+                json.dumps(
+                    {
+                        "project": "vevo",
+                        "period_switcher": {
+                            "current_key": "full",
+                            "_embedded_specs": embedded_specs,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fake_s3 = FakeS3()
+            fake_boto3 = SimpleNamespace(client=lambda *_args, **_kwargs: fake_s3)
+
+            with patch.dict(
+                os.environ,
+                {
+                    "REPORT_S3_BUCKET": "reporting-bucket",
+                    "REPORT_S3_PREFIX": "daily-reports/vevo",
+                },
+                clear=False,
+            ), patch.dict(sys.modules, {"boto3": fake_boto3}):
+                daily_runner.s3_upload_outputs(
+                    "vevo",
+                    {
+                        "report_latest_html": report_latest,
+                        "dashboard_payload_latest_json": payload_latest,
+                    },
+                )
+
+        stable_keys = {
+            key for key in fake_s3.uploads if "/latest/" in key
+        }
+        self.assertEqual(
+            {
+                "daily-reports/vevo/latest/report_latest.html",
+                "daily-reports/vevo/latest/dashboard_payload_latest.json",
+                "daily-reports/vevo/latest/report_7d.html",
+                "daily-reports/vevo/latest/dashboard_payload_7d.json",
+                "daily-reports/vevo/latest/report_30d.html",
+                "daily-reports/vevo/latest/dashboard_payload_30d.json",
+                "daily-reports/vevo/latest/report_90d.html",
+                "daily-reports/vevo/latest/dashboard_payload_90d.json",
+            },
+            stable_keys,
+        )
+        manifest_key = "daily-reports/vevo/latest/generation.json"
+        self.assertEqual(("put_object", manifest_key), fake_s3.operations[-1])
+        manifest = json.loads(fake_s3.objects[manifest_key].decode("utf-8"))
+        self.assertEqual(1, manifest["schema_version"])
+        self.assertEqual("vevo", manifest["project"])
+        self.assertEqual(
+            {
+                "report_latest.html",
+                "dashboard_payload_latest.json",
+                "report_7d.html",
+                "dashboard_payload_7d.json",
+                "report_30d.html",
+                "dashboard_payload_30d.json",
+                "report_90d.html",
+                "dashboard_payload_90d.json",
+            },
+            set(manifest["artifacts"]),
+        )
+        for filename, metadata in manifest["artifacts"].items():
+            self.assertEqual(
+                f"daily-reports/vevo/{manifest['generation_id']}/{filename}",
+                metadata["key"],
+            )
+            self.assertEqual(len(fake_s3.objects[metadata["key"]]), metadata["size"])
+            self.assertEqual(
+                hashlib.sha256(fake_s3.objects[metadata["key"]]).hexdigest(),
+                metadata["sha256"],
+            )
+
     def test_daily_report_subject_and_body_hard_mark_critical_qa(self) -> None:
         defaults = {
             "display_name": "Vevo",
