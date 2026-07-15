@@ -10,7 +10,7 @@ import pandas as pd
 from export_orders import ORDER_CACHE_SCHEMA_VERSION, BizniWebExporter
 from html_report_generator import generate_html_report
 from reporting_core.cfo_kpis import build_order_records_from_export_df
-from reporting_core.runtime import load_project_runtime
+from reporting_core.runtime import apply_project_runtime, load_project_runtime
 
 
 def make_exporter(project_name: str = "vevo") -> BizniWebExporter:
@@ -541,6 +541,50 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(0, qa["fallback_rows"])
         self.assertEqual(0, qa["missing_cost_product_entry_count"])
 
+    def test_product_cost_qa_audits_authoritative_margin_policy_against_mapped_reference(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "V-POLICY-1",
+                    "product_sku": "POLICY-MAPPED",
+                    "item_label": "Mapped policy product",
+                    "item_quantity": 2,
+                    "item_total_without_tax": 100.0,
+                    "profit_before_ads": 90.0,
+                    "expense_per_item": 5.0,
+                    "expense_source": "authoritative_margin_90_override",
+                    "purchase_cost_reference_per_item": 40.0,
+                    "purchase_cost_reference_source": "mapped_product_identifier",
+                },
+                {
+                    "order_num": "V-POLICY-2",
+                    "product_sku": "POLICY-MISSING",
+                    "item_label": "Missing policy product",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 50.0,
+                    "profit_before_ads": 45.0,
+                    "expense_per_item": 5.0,
+                    "expense_source": "authoritative_margin_90_override",
+                    "purchase_cost_reference_per_item": None,
+                    "purchase_cost_reference_source": None,
+                },
+            ]
+        )
+
+        qa = exporter._build_product_expense_coverage_qa(frame)
+
+        self.assertEqual(2, qa["authoritative_margin_rows"])
+        self.assertEqual(3.0, qa["authoritative_margin_units"])
+        self.assertEqual(150.0, qa["authoritative_margin_revenue"])
+        self.assertEqual(15.0, qa["authoritative_margin_applied_cost"])
+        self.assertEqual(135.0, qa["authoritative_margin_profit_before_ads"])
+        self.assertEqual(1, qa["authoritative_margin_mapped_reference_rows"])
+        self.assertEqual(80.0, qa["authoritative_margin_mapped_reference_cost"])
+        self.assertEqual(70.0, qa["authoritative_margin_profit_delta_vs_mapped_reference"])
+        self.assertEqual(2, len(qa["authoritative_margin_items"]))
+        self.assertEqual(0, qa["fallback_rows"])
+
     def test_roy_mapped_cost_keeps_real_loss_despite_missing_cost_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["LOSS-SKU"] = 80.0
@@ -680,6 +724,182 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
         self.assertEqual([18.0, 42.0, 73.0], [row["expense_per_item"] for row in rows])
         self.assertTrue(all(row["expense_source"] == "mapped_product_identifier" for row in rows))
+
+    def test_authoritative_margin_policy_overrides_mapped_and_missing_costs_by_exact_sku(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter.product_expenses_exact.update({"POLICY-MAPPED": 40.0, "SIMILAR-SKU": 12.0})
+
+        with patch(
+            "export_orders.AUTHORITATIVE_MARGIN_OVERRIDE_SKUS",
+            {"POLICY-MAPPED": 90.0, "POLICY-MISSING": 90.0},
+        ), patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "V-AUTHORITATIVE-MARGIN",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 276.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Mapped policy product",
+                            "ean": "POLICY-MAPPED",
+                            "quantity": 2,
+                            "tax_rate": 20,
+                            "price": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 100.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 120.0, "currency": {"code": "EUR"}},
+                        },
+                        {
+                            "item_label": "Missing policy product",
+                            "ean": "POLICY-MISSING",
+                            "quantity": 2,
+                            "tax_rate": 20,
+                            "price": {"value": 40.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 80.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 96.0, "currency": {"code": "EUR"}},
+                        },
+                        {
+                            "item_label": "Similar but not configured",
+                            "ean": "SIMILAR-SKU",
+                            "quantity": 1,
+                            "tax_rate": 20,
+                            "price": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 60.0, "currency": {"code": "EUR"}},
+                        },
+                    ],
+                }
+            )
+
+        self.assertEqual(
+            ["authoritative_margin_90_override", "authoritative_margin_90_override", "mapped_product_identifier"],
+            [row["expense_source"] for row in rows],
+        )
+        self.assertEqual([5.0, 4.0, 12.0], [round(row["expense_per_item"], 2) for row in rows])
+        self.assertEqual([10.0, 8.0, 12.0], [row["total_expense"] for row in rows])
+        self.assertEqual(40.0, rows[0]["purchase_cost_reference_per_item"])
+        self.assertEqual("mapped_product_identifier", rows[0]["purchase_cost_reference_source"])
+        self.assertIsNone(rows[1]["purchase_cost_reference_per_item"])
+
+    def test_authoritative_margin_policy_does_not_rewrite_zero_negative_or_zero_quantity_rows(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter.product_expenses_exact.update(
+            {"ZERO-MAPPED": 7.0, "NEGATIVE-MAPPED": 11.0, "ZERO-QUANTITY": 9.0}
+        )
+
+        with patch(
+            "export_orders.AUTHORITATIVE_MARGIN_OVERRIDE_SKUS",
+            {"ZERO-MAPPED": 90.0, "NEGATIVE-MAPPED": 90.0, "ZERO-QUANTITY": 90.0},
+        ):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "V-AUTHORITATIVE-GUARDS",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": -12.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Zero revenue",
+                            "ean": "ZERO-MAPPED",
+                            "quantity": 1,
+                            "tax_rate": 20,
+                            "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                        },
+                        {
+                            "item_label": "Negative revenue",
+                            "ean": "NEGATIVE-MAPPED",
+                            "quantity": 1,
+                            "tax_rate": 20,
+                            "price": {"value": -10.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": -10.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": -12.0, "currency": {"code": "EUR"}},
+                        },
+                        {
+                            "item_label": "Zero quantity",
+                            "ean": "ZERO-QUANTITY",
+                            "quantity": 0,
+                            "tax_rate": 20,
+                            "price": {"value": 10.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 10.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 12.0, "currency": {"code": "EUR"}},
+                        },
+                    ],
+                }
+            )
+
+        self.assertTrue(all(row["expense_source"] == "mapped_product_identifier" for row in rows))
+        self.assertEqual([7.0, 11.0, 9.0], [row["expense_per_item"] for row in rows])
+
+    def test_authoritative_margin_policy_stays_below_roy_zero_revenue_gift_exception(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        exporter.product_expenses_exact["GIFT-KNIFE-AUTH"] = 80.0
+
+        with patch(
+            "export_orders.AUTHORITATIVE_MARGIN_OVERRIDE_SKUS", {"GIFT-KNIFE-AUTH": 90.0}
+        ):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-AUTHORITATIVE-GIFT",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Sada nozov Roy 3-dielna Lux - darcek",
+                            "ean": "GIFT-KNIFE-AUTH",
+                            "quantity": 1,
+                            "tax_rate": 23,
+                            "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        self.assertEqual("zero_revenue_gift_mapped_cost", rows[0]["expense_source"])
+        self.assertEqual(0.0, rows[0]["total_expense"])
+        self.assertEqual(80.0, rows[0]["purchase_cost_reference_per_item"])
+
+    def test_authoritative_margin_policy_keeps_revenue_cost_profit_identity_after_cent_rounding(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+
+        with patch("export_orders.AUTHORITATIVE_MARGIN_OVERRIDE_SKUS", {"CENT-ROUNDING": 90.0}):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "V-AUTHORITATIVE-ROUNDING",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 0.05, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Half-cent policy cost",
+                            "ean": "CENT-ROUNDING",
+                            "quantity": 1,
+                            "tax_rate": 0,
+                            "price": {"value": 0.05, "currency": {"code": "EUR"}},
+                            "sum": {"value": 0.05, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 0.05, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        row = rows[0]
+        self.assertEqual("authoritative_margin_90_override", row["expense_source"])
+        self.assertEqual(0.05, row["item_total_without_tax"])
+        self.assertEqual(0.01, row["total_expense"])
+        self.assertEqual(0.04, row["profit_before_ads"])
+        self.assertEqual(
+            round(row["item_total_without_tax"] - row["total_expense"], 2),
+            row["profit_before_ads"],
+        )
 
     def test_roy_kirvo_lure_uses_mapped_net_purchase_cost_for_catalog_aliases(self) -> None:
         exporter = make_exporter(project_name="roy")
@@ -1415,6 +1635,102 @@ class ReportingCalculationFixTests(unittest.TestCase):
         for sku in expected_skus:
             with self.subTest(sku=sku):
                 self.assertEqual(35.0, runtime.margin_override_skus[sku])
+
+    def test_authoritative_90_percent_product_policy_is_exact_and_project_scoped(self) -> None:
+        expected_roy_santal = {
+            "H-94491FEF",
+            "H-ACACB998",
+            "H-0AA9298E",
+            "H-1F5ACE52",
+            "H-8D019D16",
+            "H-52688CE6",
+        }
+        expected_vevo = {
+            "H-8F8BF46E",
+            "H-342E0874",
+            *expected_roy_santal,
+            "H-2F04A5AC",
+            "H-E7BCF383",
+            "H-915CBF83",
+            "H-EE1A4022",
+            "H-16C1991F",
+            "H-BA52B2C6",
+            "H-5D0EB348",
+            "H-B20975B2",
+            "H-30B3F588",
+            "H-0D5460DF",
+            "H-C058B14F",
+            "H-DE000F46",
+            "H-CE140D38",
+            "H-BBBB3F83",
+            "H-6AC576C9",
+            "H-89EF3698",
+            "H-8F3366EC",
+            "H-2BDCFEE5",
+            "H-F4A0F819",
+            "H-F864DA7A",
+            "H-E037DF80",
+            "H-8F53B01C",
+            "H-5E073449",
+            "H-601A5754",
+            "H-3FECDEE3",
+            "H-EB753EE3",
+            "H-5C41EC11",
+        }
+
+        runtimes = {}
+        for project_name in ("vevo", "roy"):
+            settings_path = Path(__file__).resolve().parents[1] / "projects" / project_name / "settings.json"
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            runtimes[project_name] = load_project_runtime(
+                project_name,
+                settings=settings,
+                default_packaging_cost_per_order=0.0,
+                default_shipping_subsidy_per_order=0.0,
+                default_fixed_monthly_cost=0.0,
+                default_fixed_daily_cost=0.0,
+            )
+
+        self.assertEqual(expected_vevo, set(runtimes["vevo"].authoritative_margin_override_skus))
+        self.assertEqual(expected_roy_santal, set(runtimes["roy"].authoritative_margin_override_skus))
+        self.assertTrue(
+            all(value == 90.0 for value in runtimes["vevo"].authoritative_margin_override_skus.values())
+        )
+        self.assertTrue(
+            all(value == 90.0 for value in runtimes["roy"].authoritative_margin_override_skus.values())
+        )
+        self.assertEqual(
+            runtimes["vevo"].authoritative_margin_override_skus,
+            runtimes["vevo"].to_dict()["authoritative_margin_override_skus"],
+        )
+        applied_globals = {}
+        apply_project_runtime(runtimes["vevo"], applied_globals)
+        self.assertEqual(
+            runtimes["vevo"].authoritative_margin_override_skus,
+            applied_globals["AUTHORITATIVE_MARGIN_OVERRIDE_SKUS"],
+        )
+
+    def test_authoritative_margin_policy_rejects_invalid_configuration(self) -> None:
+        base_settings = {"biznisweb_api_url": "https://example.com/api/graphql"}
+        invalid_maps = [
+            {"": 90},
+            {"SKU": 100},
+            {"SKU": -1},
+            {"SKU": "nan"},
+            {"sku": 90, "SKU": 90},
+            ["SKU"],
+        ]
+
+        for invalid_map in invalid_maps:
+            with self.subTest(invalid_map=invalid_map), self.assertRaises(ValueError):
+                load_project_runtime(
+                    "vevo",
+                    settings={**base_settings, "authoritative_margin_override_skus": invalid_map},
+                    default_packaging_cost_per_order=0.0,
+                    default_shipping_subsidy_per_order=0.0,
+                    default_fixed_monthly_cost=0.0,
+                    default_fixed_daily_cost=0.0,
+                )
 
     def test_zero_revenue_order_allocates_item_level_overhead(self) -> None:
         exporter = make_exporter()

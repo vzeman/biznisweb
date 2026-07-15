@@ -412,6 +412,37 @@ def assert_roy_fixed_cost_source_of_truth() -> None:
     assert math.isclose(runtime.missing_cost_margin_pct, 35.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
 
 
+def assert_authoritative_margin_policy_source_of_truth() -> None:
+    expected_counts = {"vevo": 35, "roy": 6}
+    shared_santal_skus = {
+        "H-94491FEF",
+        "H-ACACB998",
+        "H-0AA9298E",
+        "H-1F5ACE52",
+        "H-8D019D16",
+        "H-52688CE6",
+    }
+    for project_name, expected_count in expected_counts.items():
+        settings = load_project_settings(project_name)
+        runtime = load_project_runtime(
+            project_name,
+            settings=settings,
+            legacy_product_expenses=PRODUCT_EXPENSES,
+            default_currency_rates=CURRENCY_RATES_TO_EUR,
+            default_packaging_cost_per_order=PACKAGING_COST_PER_ORDER,
+            default_shipping_subsidy_per_order=SHIPPING_SUBSIDY_PER_ORDER,
+            default_fixed_monthly_cost=FIXED_MONTHLY_COST,
+            default_fixed_daily_cost=FIXED_DAILY_COST,
+        )
+        policy = runtime.authoritative_margin_override_skus
+        assert len(policy) == expected_count, (project_name, policy)
+        assert shared_santal_skus.issubset(policy), (project_name, policy)
+        assert all(math.isclose(value, 90.0, rel_tol=0.0, abs_tol=0.0) for value in policy.values()), (
+            project_name,
+            policy,
+        )
+
+
 def assert_daily_runner_fixed_overhead_not_double_subtracted() -> None:
     row_by_date = {
         datetime(2026, 4, 1).date(): {
@@ -465,6 +496,7 @@ def main() -> int:
     assert_dashboard_consistency_payload_mapping()
     assert_daily_profit_loss_payload_and_ui()
     assert_roy_fixed_cost_source_of_truth()
+    assert_authoritative_margin_policy_source_of_truth()
     assert_daily_runner_fixed_overhead_not_double_subtracted()
     print("reporting_qa_smoke.py: OK")
     return 0
