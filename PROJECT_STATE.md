@@ -4642,3 +4642,49 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - future scheduled daily emails now use the image containing the visible creditnote metrics and the output-tag leak fix
 - Next exact step:
   - monitor the next regular morning email for both e-shops; no known code blocker remains for the requested creditnote reporting metrics
+
+### 2026-07-15 (ROY KIRVO purchase cost and full-history production refresh)
+- Repo/branch:
+  - implementation merged through PR `#226` as commit `7a11d6c0df3ab34f1d4a5920aade615720f1fdb0`
+  - production-state handoff branch: `codex/roy-kirvo-deploy-state`
+- Change:
+  - mapped the net purchase cost `1.90 EUR` for active KIRVO lure SKU `H-9D2E0A2C`
+  - mapped the same cost for inactive catalog title alias `H-9400721F`
+  - removed the stale `35%` margin override for `H-9D2E0A2C`, so the known purchase cost wins
+  - added regression coverage for both exact title hashes and known-cost precedence over a legacy margin override
+- Historical KIRVO verification through `2026-07-14`:
+  - `4` rows / `4` units, item-net revenue `36.58 EUR`
+  - immutable export now reports `expense_per_item=1.90` and `expense_source=mapped_product_sku` on all four rows
+  - product cost changed from `23.76 EUR` to `7.60 EUR`
+  - pre-ad product profit changed from `12.82 EUR` to `28.98 EUR`, a `+16.16 EUR` correction
+- Profit reconciliation against the immediately preceding immutable generation:
+  - company profit changed from `21,341.05 EUR` to `20,225.42 EUR` (`-1,115.63 EUR`)
+  - KIRVO contributes `+16.16 EUR` of that change
+  - the same current image also activates the previously requested zero-revenue rule: only configured ROY knife gifts sold for `0 EUR` retain zero cost; `264` non-knife zero-revenue rows now retain their known real purchase costs, adding `1,131.53 EUR` of product cost
+  - Google Ads source data refreshed by `0.26 EUR`; arithmetic reconciliation is `+16.16 - 1,131.53 - 0.26 = -1,115.63 EUR`
+  - `76` configured zero-revenue ROY knife-gift rows remain at zero cost as requested
+- Local/code verification:
+  - full unit suite: `169` tests OK
+  - `python scripts/reporting_qa_smoke.py` passed
+  - Python compile, both modified JSON parses, and `git diff --check` passed
+- Production build and full-history backfill:
+  - ECR build workflow `29445620486` succeeded
+  - exact image digest `sha256:38506ae26d5b490c4d327185062235225a91d8ec0437bdc139d91874bcd4048a`
+  - deploy/backfill workflow `29445783791` succeeded
+  - Fargate hard-gate identity: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.20.19`, service `roy-daily-report-email`, task `95871c05f11f4f0b9dd7ba5f7096a935`, candidate task definition `roy-reporting-daily:48`, runtime gate script `/app/scripts/live_dashboard_refresh_gate.sh`, marker path `http://127.0.0.1:8000/marker.json`
+  - Fargate task stopped normally with container exit code `0`
+  - host checks passed: `LOCALHOST_LIVE_DASHBOARD_OK:roy:periods=7d,30d,90d,full` and `LIVE_ARTIFACT_MARKER_OK` with `kpi_series_days=294`, `inventory_rows=160`, `inventory_alerts=18`
+  - immutable S3 generation `20260715T201821Z` contains exactly eight manifest artifacts under `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/20260715T201821Z/`
+  - scheduler `roy-daily-report-email` is `ENABLED`, `cron(30 1 * * ? *)`, `Europe/Bratislava`, and promoted from task definition `:47` to `:48`
+  - task definition `:48` uses dedicated role `BiznisWebReportingTaskRole-roy` and the exact immutable digest above
+- App Runner and live UI/API verification after the host marker:
+  - instance-id/IP `N/A (AWS App Runner managed service)`, service `biznisweb-roy-operations-dashboard`, path `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy`
+  - App Runner operation `c826bae59ec4481aa672a2bcffae2644` succeeded and the service is `RUNNING` on the exact new digest
+  - public DNS resolved to `3.68.0.57`, `3.74.6.217`, and `3.66.161.94`; `/health` returned HTTP `200` with `ok=true`
+  - authenticated UI returned HTTP `200` with the ROY operations and Executive KPI markers
+  - authenticated full-period API returned HTTP `200`, `project=roy`, `period=full`, company profit `20,225.42 EUR`, `qa_failure_count=0`, and `is_partial=false`
+- Known issues:
+  - one transient BizniWeb `price_elements` failure on order `2677001207` was recovered by the existing fallback; the completed export is not partial
+  - the production Facebook access token appeared in a local ignored `.env` line in tool output during a read-only audit; it was not committed or added to any project artifact, but it must be treated as compromised and rotated in Meta plus the production secret store
+- Next exact step:
+  - rotate the production Facebook access token, update the managed production secret without committing it, then verify the Facebook connection and monitor the next scheduled `roy-daily-report-email` run on task definition `:48`
