@@ -1993,6 +1993,23 @@ class BizniWebExporter:
 
         for column in ("item_quantity", "item_total_without_tax", "profit_before_ads", "expense_per_item"):
             item_df[column] = pd.to_numeric(item_df[column], errors="coerce").fillna(0.0)
+        derived_total_expense = pd.Series(
+            [
+                round(float(expense_per_item) * float(quantity), 2)
+                for expense_per_item, quantity in zip(
+                    item_df["expense_per_item"], item_df["item_quantity"]
+                )
+            ],
+            index=item_df.index,
+            dtype=float,
+        )
+        if "total_expense" in item_df.columns:
+            reported_total_expense = pd.to_numeric(item_df["total_expense"], errors="coerce")
+            item_df["_reported_total_expense"] = reported_total_expense.where(
+                reported_total_expense.notna(), derived_total_expense
+            )
+        else:
+            item_df["_reported_total_expense"] = derived_total_expense
 
         item_df["expense_source"] = item_df["expense_source"].fillna("unknown").astype(str)
         source_mix_df = (
@@ -2035,9 +2052,7 @@ class BizniWebExporter:
         authoritative_rows = int(len(authoritative_df.index))
         authoritative_units = float(authoritative_df["item_quantity"].sum())
         authoritative_revenue = float(authoritative_df["item_total_without_tax"].sum())
-        authoritative_applied_cost = float(
-            (authoritative_df["expense_per_item"] * authoritative_df["item_quantity"]).sum()
-        )
+        authoritative_applied_cost = float(authoritative_df["_reported_total_expense"].sum())
         authoritative_profit = float(authoritative_df["profit_before_ads"].sum())
         authoritative_mapped_reference_rows = 0
         authoritative_mapped_reference_cost = 0.0
@@ -2049,14 +2064,16 @@ class BizniWebExporter:
             mapped_reference_mask = authoritative_df["_purchase_cost_reference_per_item"].notna()
             mapped_reference_df = authoritative_df.loc[mapped_reference_mask]
             authoritative_mapped_reference_rows = int(len(mapped_reference_df.index))
-            authoritative_mapped_reference_cost = float(
-                (
-                    mapped_reference_df["_purchase_cost_reference_per_item"]
-                    * mapped_reference_df["item_quantity"]
-                ).sum()
-            )
+            mapped_reference_total_cost = [
+                round(float(reference_per_item) * float(quantity), 2)
+                for reference_per_item, quantity in zip(
+                    mapped_reference_df["_purchase_cost_reference_per_item"],
+                    mapped_reference_df["item_quantity"],
+                )
+            ]
+            authoritative_mapped_reference_cost = float(sum(mapped_reference_total_cost))
             authoritative_mapped_reference_applied_cost = float(
-                (mapped_reference_df["expense_per_item"] * mapped_reference_df["item_quantity"]).sum()
+                mapped_reference_df["_reported_total_expense"].sum()
             )
             authoritative_profit_delta_vs_mapped_reference = (
                 authoritative_mapped_reference_cost - authoritative_mapped_reference_applied_cost
@@ -2074,13 +2091,9 @@ class BizniWebExporter:
                 )
                 .reset_index()
             )
-            # Pandas named aggregation cannot multiply two columns, so compute policy cost separately.
-            authoritative_df["_authoritative_applied_cost"] = (
-                authoritative_df["expense_per_item"] * authoritative_df["item_quantity"]
-            )
             authoritative_cost_by_product = (
                 authoritative_df.groupby(["product_sku", "item_label"], dropna=False)[
-                    "_authoritative_applied_cost"
+                    "_reported_total_expense"
                 ]
                 .sum()
             )

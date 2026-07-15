@@ -553,6 +553,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
                     "item_total_without_tax": 100.0,
                     "profit_before_ads": 90.0,
                     "expense_per_item": 5.0,
+                    "total_expense": 10.0,
                     "expense_source": "authoritative_margin_90_override",
                     "purchase_cost_reference_per_item": 40.0,
                     "purchase_cost_reference_source": "mapped_product_identifier",
@@ -565,6 +566,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
                     "item_total_without_tax": 50.0,
                     "profit_before_ads": 45.0,
                     "expense_per_item": 5.0,
+                    "total_expense": None,
                     "expense_source": "authoritative_margin_90_override",
                     "purchase_cost_reference_per_item": None,
                     "purchase_cost_reference_source": None,
@@ -900,6 +902,9 @@ class ReportingCalculationFixTests(unittest.TestCase):
             round(row["item_total_without_tax"] - row["total_expense"], 2),
             row["profit_before_ads"],
         )
+        qa = exporter._build_product_expense_coverage_qa(pd.DataFrame(rows))
+        self.assertEqual(0.01, qa["authoritative_margin_applied_cost"])
+        self.assertEqual(0.01, qa["authoritative_margin_items"][0]["applied_cost"])
 
     def test_roy_kirvo_lure_uses_mapped_net_purchase_cost_for_catalog_aliases(self) -> None:
         exporter = make_exporter(project_name="roy")
