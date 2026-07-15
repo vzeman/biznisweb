@@ -7,6 +7,7 @@ import pathlib
 import re
 import sys
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -443,6 +444,57 @@ def assert_authoritative_margin_policy_source_of_truth() -> None:
         )
 
 
+def assert_exported_row_cent_identity() -> None:
+    exporter = make_exporter()
+    with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0), patch(
+        "export_orders.MARGIN_OVERRIDE_SKUS", {"CENT-LEGACY": 35.0}
+    ), patch("export_orders.MARGIN_OVERRIDE_BRANDS", {}), patch(
+        "export_orders.MARGIN_OVERRIDE_LABEL_PATTERNS", {}
+    ):
+        rows = exporter.flatten_order(
+            {
+                "id": "1",
+                "order_num": "QA-CENT-IDENTITY",
+                "pur_date": "2026-07-14 10:00:00",
+                "sum": {"value": 12.20, "currency": {"code": "EUR"}},
+                "customer": {"email": "qa@example.com"},
+                "items": [
+                    {
+                        "item_label": "Unknown cent product",
+                        "ean": "MISSING-CENT",
+                        "quantity": 1,
+                        "tax_rate": 0,
+                        "price": {"value": 6.10, "currency": {"code": "EUR"}},
+                        "sum": {"value": 6.10, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 6.10, "currency": {"code": "EUR"}},
+                    },
+                    {
+                        "item_label": "Legacy cent override",
+                        "ean": "",
+                        "import_code": "CENT-LEGACY",
+                        "quantity": 1,
+                        "tax_rate": 0,
+                        "price": {"value": 6.10, "currency": {"code": "EUR"}},
+                        "sum": {"value": 6.10, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 6.10, "currency": {"code": "EUR"}},
+                    },
+                ],
+            }
+        )
+    assert len(rows) == 2, rows
+    for row in rows:
+        expected_profit = round(
+            float(row["item_total_without_tax"]) - float(row["total_expense"]),
+            2,
+        )
+        assert math.isclose(
+            float(row["profit_before_ads"]),
+            expected_profit,
+            rel_tol=0.0,
+            abs_tol=0.0,
+        ), row
+
+
 def assert_daily_runner_fixed_overhead_not_double_subtracted() -> None:
     row_by_date = {
         datetime(2026, 4, 1).date(): {
@@ -497,6 +549,7 @@ def main() -> int:
     assert_daily_profit_loss_payload_and_ui()
     assert_roy_fixed_cost_source_of_truth()
     assert_authoritative_margin_policy_source_of_truth()
+    assert_exported_row_cent_identity()
     assert_daily_runner_fixed_overhead_not_double_subtracted()
     print("reporting_qa_smoke.py: OK")
     return 0

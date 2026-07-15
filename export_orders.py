@@ -5956,18 +5956,28 @@ class BizniWebExporter:
                                 item_quantity,
                             )
                 total_expense = expense_per_item * item_quantity
+                reported_revenue = round(item_total_without_tax, 2)
                 reported_total_expense = round(total_expense, 2)
+                reported_item_profit_before_ads = round(
+                    reported_revenue - reported_total_expense,
+                    2,
+                )
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
                 # At item level, we only have product expense
                 if authoritative_margin_applied:
-                    # Keep the exported accounting identity exact after cent rounding.
-                    item_profit_before_ads = round(item_total_without_tax, 2) - reported_total_expense
+                    roi_profit_before_ads = reported_item_profit_before_ads
                     roi_expense = reported_total_expense
                 else:
-                    item_profit_before_ads = item_total_without_tax - total_expense
+                    # Preserve the established raw-basis ROI while the exported accounting
+                    # values use one exact cent identity for every expense source.
+                    roi_profit_before_ads = item_total_without_tax - total_expense
                     roi_expense = total_expense
-                item_roi_before_ads = (item_profit_before_ads / roi_expense * 100) if roi_expense > 0 else 0
+                item_roi_before_ads = (
+                    roi_profit_before_ads / roi_expense * 100
+                    if roi_expense > 0
+                    else 0
+                )
                 
                 row = base_data.copy()
                 row.update({
@@ -5989,7 +5999,7 @@ class BizniWebExporter:
                     'item_line_sum_original': item_line_net_original,
                     'item_line_sum_with_tax_original': item_line_gross_original,
                     'item_total_with_tax': round(item_total_with_tax, 2),  # In EUR
-                    'item_total_without_tax': round(item_total_without_tax, 2),  # In EUR
+                    'item_total_without_tax': reported_revenue,  # In EUR
                     'item_tax_amount': round(item_tax_amount, 2),  # In EUR
                     'item_recycle_fee': recycle_fee.get('value'),
                     'expense_per_item': expense_per_item,
@@ -5997,7 +6007,7 @@ class BizniWebExporter:
                     'purchase_cost_reference_per_item': purchase_cost_reference_per_item,
                     'purchase_cost_reference_source': purchase_cost_reference_source,
                     'total_expense': reported_total_expense,
-                    'profit_before_ads': round(item_profit_before_ads, 2),
+                    'profit_before_ads': reported_item_profit_before_ads,
                     'roi_before_ads': round(item_roi_before_ads, 2),
                 })
                 item_rows.append(row)

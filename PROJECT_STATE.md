@@ -4715,3 +4715,21 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - reporting artifacts, scheduler, App Runner service, and correctly authenticated live routes remain healthy
 - Next exact step:
   - pass the focused/full test gates, merge through PR, rebuild the exact image, deploy both App Runner services without refreshing artifacts, then verify malformed auth returns `401` and valid protected live UI/API routes return `200`
+
+### 2026-07-16 (item-level exported cent identity)
+- Audit finding:
+  - ROY immutable generation `20260715T224903Z` had `23` legacy 35% fallback rows where independently rounded `profit_before_ads` differed from exported revenue minus exported cost by `0.01 EUR`
+  - the net item/product-profit overstatement was `0.03 EUR`; company profit was unaffected because company aggregation recomputes profit from summed revenue and costs
+  - VEVO immutable generation `20260715T220511Z` had `0` mismatches across `13,094` item rows, but shared code was susceptible to the same half-cent edge case
+- Fix:
+  - every exported item profit now equals cent-rounded exported revenue minus cent-rounded exported cost
+  - non-authoritative ROI intentionally stays on its established raw-value basis, so the correction does not create unrelated ROI churn
+  - regression and QA smoke fixtures cover both `missing_cost_margin_35_fallback` and `margin_35_override`
+- Local verification:
+  - focused cent-identity and authoritative-margin tests passed
+  - full suite: `178` tests passed
+  - reporting QA smoke, Python compile, and `git diff --check` passed
+- Known separate reporting issue:
+  - standalone ROY 30d/90d payloads do not resolve all creditnoted orders from the full-history context, omitting `0.50/0.75 EUR` of fulfillment cost; the full payload is correct and this needs a separate fix
+- Next exact step:
+  - merge through PR, build the exact ECR image, regenerate the affected ROY history, verify zero row identity mismatches, and synchronize the production App Runner services/scheduled task definitions to the final image
