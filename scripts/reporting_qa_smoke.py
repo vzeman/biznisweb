@@ -408,6 +408,7 @@ def assert_roy_fixed_cost_source_of_truth() -> None:
     )
     assert math.isclose(runtime.fixed_monthly_cost, 6500.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
     assert math.isclose(runtime.fixed_daily_cost, 0.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
+    assert math.isclose(runtime.missing_cost_margin_pct, 35.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
 
 
 def assert_daily_runner_fixed_overhead_not_double_subtracted() -> None:

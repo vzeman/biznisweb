@@ -63,7 +63,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             exporter.convert_to_eur(10.0, "BTC")
 
-    def test_missing_product_cost_uses_zero_margin_fallback(self) -> None:
+    def test_vevo_missing_product_cost_keeps_zero_margin_fallback(self) -> None:
         exporter = make_exporter()
         rows = exporter.flatten_order(
             {
@@ -90,6 +90,71 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(50.0, rows[0]["expense_per_item"])
         self.assertEqual(100.0, rows[0]["total_expense"])
         self.assertEqual(0.0, rows[0]["profit_before_ads"])
+
+    def test_roy_missing_product_cost_uses_configured_35_percent_margin(self) -> None:
+        exporter = make_exporter(project_name="roy")
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-MISSING",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 123.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Unknown ROY product",
+                            "ean": "",
+                            "quantity": 2,
+                            "tax_rate": 23,
+                            "price": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 100.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 123.0, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        self.assertEqual("missing_cost_margin_35_fallback", rows[0]["expense_source"])
+        self.assertEqual(32.5, rows[0]["expense_per_item"])
+        self.assertEqual(65.0, rows[0]["total_expense"])
+        self.assertEqual(35.0, rows[0]["profit_before_ads"])
+
+    def test_roy_mapped_cost_keeps_real_loss_despite_missing_cost_margin(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        exporter.product_expenses_exact["LOSS-SKU"] = 80.0
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0), patch(
+            "export_orders.MARGIN_OVERRIDE_SKUS", {}
+        ), patch("export_orders.MARGIN_OVERRIDE_BRANDS", {}), patch(
+            "export_orders.MARGIN_OVERRIDE_LABEL_PATTERNS", {}
+        ):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-LOSS",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 61.5, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Intentional clearance loss",
+                            "ean": "LOSS-SKU",
+                            "quantity": 1,
+                            "tax_rate": 23,
+                            "price": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 61.5, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        self.assertEqual("mapped_product_identifier", rows[0]["expense_source"])
+        self.assertEqual(80.0, rows[0]["expense_per_item"])
+        self.assertEqual(80.0, rows[0]["total_expense"])
+        self.assertEqual(-30.0, rows[0]["profit_before_ads"])
 
     def test_margin_override_brand_forces_configured_product_margin(self) -> None:
         exporter = make_exporter(project_name="roy")

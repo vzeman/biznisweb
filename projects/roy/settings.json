@@ -68,6 +68,7 @@
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 6500,
+  "missing_cost_margin_pct": 35,
   "invoice_generation": {
     "enabled": true,
     "lookback_days": 7,
