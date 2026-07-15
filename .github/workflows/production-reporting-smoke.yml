@@ -115,20 +115,43 @@ jobs:
               return 0
             fi
             local manifest_file
+            local manifest_response_file
             manifest_file="$(mktemp)"
+            manifest_response_file="$(mktemp)"
             aws ecr batch-get-image \
               --repository-name "${ECR_REPOSITORY}" \
               --image-ids imageDigest="${image_digest}" \
               --region "${AWS_REGION}" \
-              --query 'images[0].imageManifest' \
-              --output text > "${manifest_file}"
+              --output json > "${manifest_response_file}"
+            python - "${manifest_response_file}" "${manifest_file}" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          response = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          images = response.get("images") or []
+          if not images or not images[0].get("imageManifest"):
+              raise SystemExit("ECR batch-get-image did not return an image manifest")
+          pathlib.Path(sys.argv[2]).write_text(images[0]["imageManifest"], encoding="utf-8")
+          PY
             python -m json.tool "${manifest_file}" >/dev/null
             aws ecr put-image \
               --repository-name "${ECR_REPOSITORY}" \
               --image-tag "${protection_tag}" \
               --image-manifest "file://${manifest_file}" \
               --region "${AWS_REGION}" >/dev/null
-            rm -f "${manifest_file}"
+            rm -f "${manifest_file}" "${manifest_response_file}"
+            local protected_digest
+            protected_digest="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag="${protection_tag}" \
+              --region "${AWS_REGION}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text)"
+            if [[ "${protected_digest}" != "${image_digest}" ]]; then
+              echo "ECR protection tag ${protection_tag} resolved to ${protected_digest}, expected ${image_digest}" >&2
+              exit 1
+            fi
             echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:updated"
           }
 

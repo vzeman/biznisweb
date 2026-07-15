@@ -61,17 +61,27 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY missing-purchase-cost fallback is being changed to a permanent `35%` product margin on `2026-07-15`:
-  - branch: `codex/roy-missing-cost-35-margin`
-  - source-of-truth rule: `projects/roy/settings.json` sets `missing_cost_margin_pct = 35`; only rows with no resolvable configured purchase cost use cost `65%` of net item revenue
-  - mapped purchase costs keep precedence in the normal cost-resolution path, including real negative-margin clearance sales; regression coverage preserves a mapped `80 EUR` cost on `50 EUR` net revenue as `-30 EUR` product profit
-  - VEVO remains unchanged because its missing-cost margin defaults to `0%`
-  - bundle components without a resolvable cost use the same project-scoped fallback, and product-expense coverage QA recognizes both direct and bundle missing-cost sources
-  - current ROY data check: `Roy powerbanka 10000mAh` SKU `IS-Q6L` uses mapped source `mapped_legacy_title_hash`, so the new missing-cost fallback does not replace its real loss; SKU overrides and configured product-cost keys currently have `0` intersections
-  - pre-deploy hard-gate: instance-id `N/A (AWS ECS/Fargate)`, no stable task IP before a task starts, service `roy-daily-report-email`, current task definition `roy-reporting-daily:43`, current image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede`, marker path `http://127.0.0.1:8000/marker.json`, stable artifact path `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/`
-  - local verification: `python -m json.tool projects/roy/settings.json`; `python -m py_compile export_orders.py reporting_core/runtime.py scripts/reporting_qa_smoke.py tests/test_reporting_calculation_fixes.py`; `python -m unittest tests.test_reporting_calculation_fixes` (`27` tests OK); `python scripts/reporting_qa_smoke.py`; related reporting suite (`46` tests OK); `git diff --check`
-  - Current status: code and regression coverage are ready for commit/PR; production is not changed yet
-  - Next exact step: commit and push the branch, merge the PR, wait for the ECR image build, then run the guarded production reporting smoke before the full ROY backfill
+- ROY missing-purchase-cost fallback is permanently deployed as a `35%` product margin and full history was regenerated on `2026-07-15`:
+  - code PR `#210` merged as `e178af8`; `projects/roy/settings.json` sets `missing_cost_margin_pct = 35`, so only products without any resolvable purchase cost use expense `65%` of net item revenue and source `missing_cost_margin_35_fallback`
+  - mapped purchase costs keep precedence, including real negative-margin clearance sales; unit coverage preserves a mapped `80 EUR` cost on `50 EUR` net revenue as `-30 EUR` product profit
+  - VEVO calculation remains unchanged at the default `0%` missing-cost margin; the final runtime deploy and smoke are ROY-only
+  - QA metadata follow-up PR `#211` merged as `923f7e9` and now describes the configured `35%` margin / `65%` expense instead of the obsolete zero-margin wording
+  - local verification: reporting calculation suite `28` tests OK, full unit suite `122` tests OK, `scripts/reporting_qa_smoke.py` OK, Python compile OK, workflow YAML parse and extracted Bash syntax OK, `git diff --check` OK
+  - initial production image build `29389383467` published digest `sha256:c23651ebd051bd88cecd9f529e70b5f61f4a891aa7d31d166835783b6807c30b`; production smoke `29389478844` passed for ROY on task `c8d4d19092a74de79c0b74fac789ab32`, private IP `172.31.18.68`, task definition `roy-reporting-daily:44`, `LOCALHOST_MARKER_OK`, then `UI_SMOKE_OK:roy:daily-profit-loss`
+  - stable full-history backfill hard-gate: instance-id `N/A (AWS ECS/Fargate)`, service `roy-daily-report-email`, task `3bc656a3a8d84bdbbb920178a047bbf9`, private IP `172.31.1.160`, task definition `roy-reporting-daily:44`, marker path `http://127.0.0.1:8000/marker.json`, exit code `0`
+  - backfill period `2025-09-24..2026-07-14` published immutable prefix `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/20260715T062500Z/` and refreshed `latest/dashboard_payload_latest.json` plus `latest/report_latest.html` at `2026-07-15T06:25:02Z`
+  - backfill validation: `LOCALHOST_BACKFILL_MARKER_OK` was curled directly on the host before `UI_SMOKE_OK:roy:stable-latest-backfill`; all sources are healthy, `is_partial=false`, `partial_sources=[]`, and QA has `0` failures
+  - full-history fallback result: `59` rows, net revenue `1272.80 EUR`, expense `827.26 EUR`, product profit `445.51 EUR`, margin `35.00%`, max rounding delta `0.005 EUR`, and `0` legacy `missing_cost_zero_margin_fallback` rows
+  - order `2677003496`: main XTAR battery row changed from expense/profit `45.53/0.00 EUR` to `29.59/15.94 EUR`; with `0.16 EUR` zero-cost tip, order profit before ads is `16.10 EUR` on `45.69 EUR` net revenue
+  - intentional losses remain real: `266` mapped negative-margin rows remain; ROY powerbank SKU `IS-Q6L` has `8` mapped loss rows and was not replaced by the fallback
+  - day `2026-07-14` changed from expense/profit-before-ads `581.69/340.17 EUR` to `508.65/413.21 EUR` on unchanged `921.86 EUR` net revenue
+  - final QA image build `29394519821` published digest `sha256:3a944b61c98ab8f60fc8d0118c285fec80a0e6aa047effb8eb3d7aed24ad5115`; ROY schedule now targets `roy-reporting-daily:45` on this exact protected digest, while the VEVO schedule/digest was not changed
+  - final ROY-only production smoke run `29394825661` passed on task `477bf62f133a452a939c044bc503aca0`, private IP `172.31.34.205`, task definition `roy-reporting-daily:45`, `LOCALHOST_MARKER_OK`, then `UI_SMOKE_OK:roy:daily-profit-loss`, and `PRODUCTION_SMOKE_OK:roy`; `send_email=false`
+  - final tagged full-history artifact prefix `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/20260715T071450Z/` confirms corrected QA policy `configured 35% margin estimate (65% of net item revenue is treated as expense)`, `59` fallback rows, `1272.80 EUR` fallback revenue, `445.51 EUR` fallback profit, `is_partial=false`, and `0` QA failures
+  - live App Runner service `biznisweb-roy-operations-dashboard` is `RUNNING`; authenticated `/health`, `/production/roy`, and `/api/operations/roy/live` returned HTTP `200`, HTML marker `roy-operations-dashboard`, and data generated at `2026-07-15T06:26:16Z`
+  - ECR protection follow-up on branch `codex/roy-missing-cost-35-closeout` preserves the exact manifest bytes and verifies the protection tag digest after `put-image`, preventing a formatting-induced digest mismatch
+  - Current status: ROY calculation is deployed, full history and stable latest are regenerated, future ROY schedule is pinned to the final image, and VEVO reporting data/configuration stayed unchanged
+  - Next exact step: merge the closeout workflow/state PR, then monitor the next regular `roy-daily-report-email` run for the same `35%` fallback source and SES delivery
 
 - VEVO daily reporting email outage on `2026-07-09` is fixed and ECR digest protection is being hardened:
   - symptom: the regular `vevo-daily-report-email` run for `2026-07-09 01:00 Europe/Bratislava` did not send a VEVO reporting email; ROY sent normally at `2026-07-09 01:30 Europe/Bratislava`
