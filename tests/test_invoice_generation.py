@@ -71,6 +71,40 @@ class _FakeInvoiceClient:
 
 
 class InvoiceGenerationTests(unittest.TestCase):
+    def test_daily_report_subject_and_body_hard_mark_critical_qa(self) -> None:
+        defaults = {
+            "display_name": "Vevo",
+            "reporting_system_name": "Vevo reporting",
+            "email_subject": "Daily Vevo report",
+        }
+        quality = {
+            "overall_status": "degraded",
+            "qa_status": "critical",
+            "qa_failure_count": 1,
+            "qa_warning_count": 0,
+        }
+
+        subject = daily_runner.build_email_subject(defaults, quality)
+        body = daily_runner.build_email_body(
+            "2026-07-01",
+            "2026-07-14",
+            "summary",
+            defaults,
+            quality,
+        )
+
+        self.assertEqual("[CRITICAL QA] Daily Vevo report", subject)
+        self.assertIn("NEPOUZIVAJTE HO NA RIADENIE ANI ROZHODOVANIE", body)
+
+    def test_daily_report_subject_marks_partial_data(self) -> None:
+        defaults = {"email_subject": "Daily Vevo report"}
+        quality = {"is_partial": True, "qa_status": "warning"}
+
+        self.assertEqual(
+            "[PARTIAL DATA] Daily Vevo report",
+            daily_runner.build_email_subject(defaults, quality),
+        )
+
     def test_invoice_generation_settings_default_zero_total_exclusion(self) -> None:
         settings = resolve_invoice_generation_settings({"invoice_generation": {"enabled": True}})
         self.assertTrue(settings["enabled"])

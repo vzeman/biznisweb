@@ -42,6 +42,13 @@
   "shipping_net_per_order": 0.2,
   "fixed_monthly_cost": 0,
   "fixed_daily_cost": 70,
+  "fixed_cost_reporting": {
+    "mode": "manual_daily_estimate",
+    "actuals_configured": false,
+    "label": "Fixed overhead estimate",
+    "note": "Temporary management estimate; replace with accounting actuals or an approved monthly budget."
+  },
+  "missing_cost_margin_pct": 35,
   "invoice_generation": {
     "enabled": true,
     "lookback_days": 7,

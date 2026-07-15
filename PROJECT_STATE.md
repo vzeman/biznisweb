@@ -61,6 +61,17 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- VEVO decision-safety remediation is implemented on branch `codex/vevo-reporting-decision-safety` and is pending PR/deploy (2026-07-15):
+  - configured the requested `35%` margin fallback only when no mapped purchase cost exists; mapped real costs, intentional below-cost sales, and zero-revenue gift rows retain their existing precedence
+  - product-cost QA now serializes the complete missing-cost product list with SKU, rows, units, net revenue, share of total item revenue, and estimated pre-ad profit; the modern report renders the full list instead of only five products
+  - weekly and cohort CAC now use complete Facebook + Google spend calendars, including spend on zero-order days and spend-only weeks; critical QA emails receive a `[CRITICAL QA]` subject and a do-not-use-for-decisions warning
+  - VEVO now receives the CEO cockpit with 7D/30D/90D/full profit windows, a 30-day profit waterfall, five confidence-aware actions, a real-creditnote versus order-status-proxy view, and an explicit `EUR 70/day` manual fixed-overhead estimate warning
+  - live dashboard full JSON/HTML endpoints now fall back to stable S3 latest artifacts; the App Runner workflow gives VEVO project-scoped S3 access, persists timestamped history + latest, runs the Fargate localhost marker before App Runner/UI smoke, and leaves ROY-only inventory assertions scoped to ROY
+  - pre-change historical evidence through `2026-06-16`: `12` missing-cost products, `40` item rows, `43` units, `EUR 335.85` net revenue, `0.30%` of item revenue, and `EUR 117.55` estimated profit at 35%; a read-only delta refresh through `2026-07-14` is still running and will replace these stale figures before handoff
+  - local verification: Python compile OK; VEVO JSON parse OK; reporting calculations `38` tests OK; dashboard/runner/S3 fallback `25` tests OK; `git diff --check` OK
+  - infra hard-gate before implementation: ECS/Fargate instance-id `N/A`, schedule/service `vevo-daily-report-email`, task definition `vevo-reporting-daily:14`, image digest `sha256:c23651ebd051bd88cecd9f529e70b5f61f4a891aa7d31d166835783b6807c30b`; App Runner instance-id `N/A`, service `biznisweb-vevo-production-board`, URL `https://2mhmsmgq3m.eu-central-1.awsapprunner.com`, paths `/health`, `/production/vevo`, `/api/vevo/latest?period=full`, status `RUNNING`
+  - Next exact step: commit/push the two scoped changesets, open/merge PR, build the digest, dispatch the VEVO deploy/backfill workflow, require localhost `LIVE_ARTIFACT_MARKER_OK` and `VEVO_LIVE_ARTIFACTS_OK`, then verify authenticated accounting JSON/HTML and UI before reporting completion
+
 - ROY Micro SD 64GB cross-shop identity fix is deployed and fully backfilled (2026-07-15):
   - product identity PR `#216` merged to `main` as `5d090621ed359ae99e968e916a158a41efef5d2c`; ECR build run `29424051875` published digest `sha256:7b9bcfa3418d179008b584f92e63e582d13f6223402b7493f30fd52b3c51f18b`
   - live `/api/operations/roy/live?refresh=1` reproduced `H-69235D5B` and the Czech title `Micro SD CARD 64GB s adaptérem` three times; historical reporting had the same 64GB product split across `23942440833`, `H-1DADF217`, `H-69235D5B`, and `H-791A744A`

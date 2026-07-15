@@ -2049,10 +2049,10 @@ class BizniWebExporter:
                 0.0,
             )
 
-        top_fallback_items = []
+        fallback_items: List[Dict[str, Any]] = []
         if not fallback_items_df.empty:
-            for row in fallback_items_df.head(5).to_dict("records"):
-                top_fallback_items.append(
+            for row in fallback_items_df.to_dict("records"):
+                fallback_items.append(
                     {
                         "product_sku": row.get("product_sku"),
                         "item_label": row.get("item_label"),
@@ -2062,8 +2062,13 @@ class BizniWebExporter:
                         "profit_before_ads": round(float(row.get("profit_before_ads") or 0.0), 2),
                         "row_share_pct": round(float(row.get("row_share_pct") or 0.0), 2),
                         "revenue_share_pct": round(float(row.get("revenue_share_pct") or 0.0), 2),
+                        "total_revenue_share_pct": (
+                            round((float(row.get("revenue") or 0.0) / total_revenue) * 100, 4)
+                            if total_revenue > 0 else 0.0
+                        ),
                     }
                 )
+        top_fallback_items = fallback_items[:5]
 
         warnings: List[str] = []
         failures: List[str] = []
@@ -2145,8 +2150,10 @@ class BizniWebExporter:
             "fallback_unit_share_pct": fallback_unit_share_pct,
             "fallback_revenue_share_pct": fallback_revenue_share_pct,
             "fallback_profit_share_pct": fallback_profit_share_pct,
+            "fallback_product_count": len(fallback_items),
             "unknown_source_rows": unknown_source_rows,
             "source_mix": source_mix_rows,
+            "fallback_items": fallback_items,
             "top_fallback_items": top_fallback_items,
         }
 
@@ -5419,6 +5426,7 @@ class BizniWebExporter:
             period_switcher = self._build_period_switcher_bundle(orders, date_from, date_to)
         embedded_period_reports = self._build_embedded_period_reports(period_switcher)
 
+        fixed_cost_reporting = dict((self.project_settings or {}).get("fixed_cost_reporting") or {})
         source_health: Dict[str, Any] = {
             "project": self.project_name,
             "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
@@ -5436,6 +5444,17 @@ class BizniWebExporter:
                     healthy=True,
                     orders=len(orders),
                 ),
+            },
+            "reporting_assumptions": {
+                "missing_cost_margin_pct": float(MISSING_COST_MARGIN_PCT),
+                "fixed_cost": {
+                    "mode": str(fixed_cost_reporting.get("mode") or "configured_overhead"),
+                    "actuals_configured": bool(fixed_cost_reporting.get("actuals_configured", True)),
+                    "label": str(fixed_cost_reporting.get("label") or "Fixed overhead"),
+                    "note": str(fixed_cost_reporting.get("note") or ""),
+                    "daily_eur": float(FIXED_DAILY_COST),
+                    "monthly_eur": float(FIXED_MONTHLY_COST),
+                },
             },
         }
         
@@ -5692,7 +5711,11 @@ class BizniWebExporter:
         returning_customers_analysis = self.analyze_returning_customers(analytics_df)
         
         # Calculate CLV and return time analysis
-        clv_return_time_analysis = self.calculate_clv_and_return_time(analytics_df)
+        clv_return_time_analysis = self.calculate_clv_and_return_time(
+            analytics_df,
+            fb_daily_spend=fb_daily_spend,
+            google_ads_daily_spend=google_ads_daily_spend,
+        )
 
         # Analyze order size distribution
         order_size_distribution = self.analyze_order_size_distribution(analytics_df)
@@ -5704,7 +5727,11 @@ class BizniWebExporter:
         day_of_week_analysis = self.analyze_day_of_week(analytics_df)
         week_of_month_analysis = self.analyze_week_of_month(analytics_df)
         day_of_month_analysis = self.analyze_day_of_month(analytics_df)
-        advanced_dtc_metrics = self.analyze_advanced_dtc_metrics(analytics_df)
+        advanced_dtc_metrics = self.analyze_advanced_dtc_metrics(
+            analytics_df,
+            fb_daily_spend=fb_daily_spend,
+            google_ads_daily_spend=google_ads_daily_spend,
+        )
         day_hour_heatmap = self.analyze_day_hour_heatmap(analytics_df)
         country_analysis, city_analysis = self.analyze_geographic(analytics_df)
         geo_profitability = self.analyze_geo_profitability(analytics_df, fb_campaigns)
@@ -6371,10 +6398,10 @@ class BizniWebExporter:
                 
                 print("\n" + "="*220)
                 print(f"DAILY SUMMARY FOR {month_str.upper()}")
-                print("Fixed Costs = Packaging + Net Shipping + Fixed Daily Cost | AOV = Avg Order Value | FB/Order = Avg FB Cost per Order")
+                print("Fulfill+OH = Packaging + Net Shipping + Fixed Overhead | AOV = Avg Order Value | FB/Order = Avg FB Cost per Order")
                 print("="*220)
                 
-                print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Revenue (â‚¬)':>12} {'AOV (â‚¬)':>8} {'Product (â‚¬)':>12} {'Fixed Costs (â‚¬)':>14} {'FB Ads (â‚¬)':>12} {'Google Ads (â‚¬)':>14} {'Total Cost (â‚¬)':>14} {'Profit (â‚¬)':>12} {'ROI %':>8}")
+                print(f"\n{'Date':<12} {'Orders':>8} {'Items':>8} {'Revenue (â‚¬)':>12} {'AOV (â‚¬)':>8} {'Product (â‚¬)':>12} {'Fulfill+OH (â‚¬)':>14} {'FB Ads (â‚¬)':>12} {'Google Ads (â‚¬)':>14} {'Total Cost (â‚¬)':>14} {'Profit (â‚¬)':>12} {'ROI %':>8}")
                 print("-"*240)
                 
                 month_orders = 0
@@ -6427,7 +6454,7 @@ class BizniWebExporter:
             print("\n" + "="*220)
             print("MONTHLY SUMMARY")
             print("="*220)
-            print(f"\n{'Month':<12} {'Orders':>8} {'Items':>8} {'Revenue (â‚¬)':>12} {'AOV (â‚¬)':>8} {'Product (â‚¬)':>12} {'Fixed Costs (â‚¬)':>14} {'FB Ads (â‚¬)':>12} {'Google Ads (â‚¬)':>14} {'Total Cost (â‚¬)':>14} {'Profit (â‚¬)':>12} {'ROI %':>8}")
+            print(f"\n{'Month':<12} {'Orders':>8} {'Items':>8} {'Revenue (â‚¬)':>12} {'AOV (â‚¬)':>8} {'Product (â‚¬)':>12} {'Fulfill+OH (â‚¬)':>14} {'FB Ads (â‚¬)':>12} {'Google Ads (â‚¬)':>14} {'Total Cost (â‚¬)':>14} {'Profit (â‚¬)':>12} {'ROI %':>8}")
             print("-"*240)
             
             month_total_orders = 0
@@ -8316,7 +8343,92 @@ class BizniWebExporter:
             'summary': summary
         }
 
-    def calculate_clv_and_return_time(self, df: pd.DataFrame) -> pd.DataFrame:
+    @staticmethod
+    def _build_daily_paid_spend_calendar(
+        df: pd.DataFrame,
+        fb_daily_spend: Optional[Dict[Any, Any]] = None,
+        google_ads_daily_spend: Optional[Dict[Any, Any]] = None,
+    ) -> pd.DataFrame:
+        """Build one authoritative paid-spend row per calendar day.
+
+        Explicit channel maps are preferred because they also contain spend from
+        days without an order. When a map is omitted, keep the historical
+        item-frame fallback so direct callers and older tests remain compatible.
+        """
+
+        def normalize_spend_map(raw: Optional[Dict[Any, Any]]) -> Dict[pd.Timestamp, float]:
+            normalized: Dict[pd.Timestamp, float] = {}
+            for raw_date, raw_value in (raw or {}).items():
+                parsed_date = pd.to_datetime(raw_date, errors="coerce")
+                if pd.isna(parsed_date):
+                    continue
+                date_value = pd.Timestamp(parsed_date)
+                if date_value.tzinfo is not None:
+                    date_value = date_value.tz_localize(None)
+                try:
+                    spend_value = float(raw_value or 0.0)
+                except (TypeError, ValueError):
+                    spend_value = 0.0
+                if not np.isfinite(spend_value):
+                    spend_value = 0.0
+                normalized[date_value.normalize()] = spend_value
+            return normalized
+
+        fallback_maps: Dict[str, Dict[pd.Timestamp, float]] = {
+            "fb_ads_daily_spend": {},
+            "google_ads_daily_spend": {},
+        }
+        if "purchase_date" in df.columns and not df.empty:
+            fallback_frame = df.copy()
+            fallback_frame["_spend_date"] = pd.to_datetime(
+                fallback_frame["purchase_date"], errors="coerce"
+            ).dt.normalize()
+            fallback_frame = fallback_frame.dropna(subset=["_spend_date"])
+            for column in fallback_maps:
+                if column not in fallback_frame.columns:
+                    continue
+                fallback_frame[column] = pd.to_numeric(
+                    fallback_frame[column], errors="coerce"
+                ).fillna(0.0)
+                fallback_maps[column] = (
+                    fallback_frame.groupby("_spend_date")[column].first().astype(float).to_dict()
+                )
+
+        fb_map = (
+            normalize_spend_map(fb_daily_spend)
+            if fb_daily_spend is not None
+            else fallback_maps["fb_ads_daily_spend"]
+        )
+        google_map = (
+            normalize_spend_map(google_ads_daily_spend)
+            if google_ads_daily_spend is not None
+            else fallback_maps["google_ads_daily_spend"]
+        )
+        calendar_dates = sorted(set(fb_map) | set(google_map))
+        if not calendar_dates:
+            return pd.DataFrame(
+                columns=[
+                    "date",
+                    "fb_ads_daily_spend",
+                    "google_ads_daily_spend",
+                    "paid_ads_daily_spend",
+                ]
+            )
+
+        calendar = pd.DataFrame({"date": calendar_dates})
+        calendar["fb_ads_daily_spend"] = calendar["date"].map(fb_map).fillna(0.0)
+        calendar["google_ads_daily_spend"] = calendar["date"].map(google_map).fillna(0.0)
+        calendar["paid_ads_daily_spend"] = (
+            calendar["fb_ads_daily_spend"] + calendar["google_ads_daily_spend"]
+        )
+        return calendar.sort_values("date").reset_index(drop=True)
+
+    def calculate_clv_and_return_time(
+        self,
+        df: pd.DataFrame,
+        fb_daily_spend: Optional[Dict[Any, Any]] = None,
+        google_ads_daily_spend: Optional[Dict[Any, Any]] = None,
+    ) -> pd.DataFrame:
         """Calculate Customer Lifetime Value and average return time"""
         print("\nCalculating CLV and customer return time...")
         revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'
@@ -8326,15 +8438,25 @@ class BizniWebExporter:
         df['purchase_date_only'] = df['purchase_datetime'].dt.date
         df['year_week'] = df['purchase_datetime'].dt.to_period('W')
 
-        # One row per day spend table to avoid multiplying daily ad spend by order count
-        daily_spend_df = df.groupby('purchase_date_only').agg({
-            'fb_ads_daily_spend': 'first'
-        }).reset_index()
-        daily_spend_df['year_week'] = pd.to_datetime(daily_spend_df['purchase_date_only']).dt.to_period('W')
-        weekly_fb_spend_map = daily_spend_df.groupby('year_week')['fb_ads_daily_spend'].sum().to_dict()
+        # Use the source calendars so paid spend on zero-order days is retained.
+        # Direct callers without calendars keep the historical item-frame fallback.
+        daily_spend_df = self._build_daily_paid_spend_calendar(
+            df,
+            fb_daily_spend=fb_daily_spend,
+            google_ads_daily_spend=google_ads_daily_spend,
+        )
+        if not daily_spend_df.empty:
+            daily_spend_df['year_week'] = pd.to_datetime(daily_spend_df['date']).dt.to_period('W')
+            weekly_fb_spend_map = daily_spend_df.groupby('year_week')['fb_ads_daily_spend'].sum().to_dict()
+            weekly_google_spend_map = daily_spend_df.groupby('year_week')['google_ads_daily_spend'].sum().to_dict()
+            weekly_paid_spend_map = daily_spend_df.groupby('year_week')['paid_ads_daily_spend'].sum().to_dict()
+        else:
+            weekly_fb_spend_map = {}
+            weekly_google_spend_map = {}
+            weekly_paid_spend_map = {}
         
-        # Get unique orders with customer info and FB ads spend
-        order_cols = ['order_num', 'customer_email', 'purchase_datetime', 'year_week', revenue_col, 'fb_ads_daily_spend']
+        # Get unique orders with customer info. Spend comes from the calendar above.
+        order_cols = ['order_num', 'customer_email', 'purchase_datetime', 'year_week', revenue_col]
         if 'customer_first_purchase_date' in df.columns:
             order_cols.append('customer_first_purchase_date')
         orders_df = df[order_cols].drop_duplicates(subset=['order_num']).copy()
@@ -8366,7 +8488,11 @@ class BizniWebExporter:
         # Calculate weekly aggregations
         weekly_clv_stats = []
         
-        for week in orders_df['year_week'].unique():
+        analysis_weeks = sorted(
+            set(orders_df['year_week'].dropna().tolist())
+            | set(weekly_paid_spend_map.keys())
+        )
+        for week in analysis_weeks:
             week_orders = orders_df[orders_df['year_week'] == week]
             week_customers = week_orders['customer_email'].unique()
             
@@ -8392,10 +8518,12 @@ class BizniWebExporter:
             
             avg_return_time = np.mean(week_return_times) if week_return_times else None
             
-            # Calculate CAC (Customer Acquisition Cost) for the week
-            # CAC = Total Marketing Costs / Number of New Customers
-            week_fb_spend = weekly_fb_spend_map.get(week, 0)
-            cac = round(week_fb_spend / new_customers, 2) if new_customers > 0 else 0
+            # CAC is blended tracked paid spend (Meta + Google) / new customers.
+            week_fb_spend = float(weekly_fb_spend_map.get(week, 0.0))
+            week_google_spend = float(weekly_google_spend_map.get(week, 0.0))
+            week_paid_spend = float(weekly_paid_spend_map.get(week, 0.0))
+            fb_cac = round(week_fb_spend / new_customers, 2) if new_customers > 0 else 0
+            cac = round(week_paid_spend / new_customers, 2) if new_customers > 0 else 0
             
             # Calculate LTV/CAC ratio
             ltv_cac_ratio = round(avg_clv / cac, 2) if cac > 0 else 0
@@ -8410,6 +8538,9 @@ class BizniWebExporter:
                 'avg_return_time_days': round(avg_return_time, 1) if avg_return_time else None,
                 'total_revenue': week_orders[revenue_col].sum(),
                 'fb_ads_spend': round(week_fb_spend, 2),
+                'google_ads_spend': round(week_google_spend, 2),
+                'paid_ads_spend': round(week_paid_spend, 2),
+                'fb_cac': fb_cac,
                 'cac': cac,
                 'ltv_cac_ratio': ltv_cac_ratio
             })
@@ -8432,13 +8563,13 @@ class BizniWebExporter:
 
         # Calculate cumulative CAC (running average of acquisition cost across all time)
         cumulative_cac = []
-        cumulative_fb_spend = 0
+        cumulative_paid_spend = 0
         cumulative_new_customers = 0
 
         for idx, row in weekly_clv_df.iterrows():
-            cumulative_fb_spend += row['fb_ads_spend']
+            cumulative_paid_spend += row.get('paid_ads_spend', row.get('fb_ads_spend', 0.0))
             cumulative_new_customers += row['new_customers']
-            avg_cac = cumulative_fb_spend / cumulative_new_customers if cumulative_new_customers > 0 else 0
+            avg_cac = cumulative_paid_spend / cumulative_new_customers if cumulative_new_customers > 0 else 0
             cumulative_cac.append(round(avg_cac, 2))
 
         weekly_clv_df['cumulative_avg_cac'] = cumulative_cac
@@ -9140,7 +9271,12 @@ class BizniWebExporter:
             "source": "Open-Meteo Historical Weather API",
         }
 
-    def analyze_advanced_dtc_metrics(self, df: pd.DataFrame) -> dict:
+    def analyze_advanced_dtc_metrics(
+        self,
+        df: pd.DataFrame,
+        fb_daily_spend: Optional[Dict[Any, Any]] = None,
+        google_ads_daily_spend: Optional[Dict[Any, Any]] = None,
+    ) -> dict:
         """
         Advanced DTC unit-economics metrics:
         1) First-order contribution margin
@@ -9185,14 +9321,13 @@ class BizniWebExporter:
         total_customers = int(orders_df['customer_email'].nunique())
         contribution_ltv = (total_pre_ad_contribution / total_customers) if total_customers > 0 else 0.0
         new_customers = int(len(first_orders))
-        daily_channel_spend = (
-            df.assign(_d=pd.to_datetime(df['purchase_date']).dt.date)
-            .groupby('_d')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
-            .first()
-            .sum()
+        daily_spend_df = self._build_daily_paid_spend_calendar(
+            df,
+            fb_daily_spend=fb_daily_spend,
+            google_ads_daily_spend=google_ads_daily_spend,
         )
-        paid_spend_fb = float(daily_channel_spend.get('fb_ads_daily_spend', 0.0))
-        paid_spend_google = float(daily_channel_spend.get('google_ads_daily_spend', 0.0))
+        paid_spend_fb = float(daily_spend_df['fb_ads_daily_spend'].sum()) if not daily_spend_df.empty else 0.0
+        paid_spend_google = float(daily_spend_df['google_ads_daily_spend'].sum()) if not daily_spend_df.empty else 0.0
         paid_spend_blended = paid_spend_fb + paid_spend_google
         paid_cac_fb = (paid_spend_fb / new_customers) if new_customers > 0 else 0.0
         paid_cac_blended = (paid_spend_blended / new_customers) if new_customers > 0 else 0.0
@@ -9200,13 +9335,8 @@ class BizniWebExporter:
 
         # ---- 4) cohort payback in days (monthly acquisition cohorts)
         # Cohort CAC is blended tracked paid spend (Meta + Google) / new customers.
-        daily_spend_df = (
-            df.assign(_d=pd.to_datetime(df['purchase_date']).dt.normalize())
-            .groupby('_d')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
-            .first()
-            .reset_index()
-        )
-        daily_spend_df['cohort_month'] = daily_spend_df['_d'].dt.to_period('M').astype(str)
+        daily_spend_df = daily_spend_df.rename(columns={'date': '_d'}).copy()
+        daily_spend_df['cohort_month'] = pd.to_datetime(daily_spend_df['_d']).dt.to_period('M').astype(str)
         monthly_fb_spend = daily_spend_df.groupby('cohort_month')['fb_ads_daily_spend'].sum().to_dict()
         monthly_google_spend = daily_spend_df.groupby('cohort_month')['google_ads_daily_spend'].sum().to_dict()
         monthly_paid_spend = {
@@ -12899,19 +13029,27 @@ class BizniWebExporter:
 
         if clv_return_time_analysis is not None and not clv_return_time_analysis.empty:
             total_new_customers = clv_return_time_analysis['new_customers'].sum() if 'new_customers' in clv_return_time_analysis.columns else 0
-            total_fb_spend = clv_return_time_analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in clv_return_time_analysis.columns else 0
-            cac_expected = (total_fb_spend / total_new_customers) if total_new_customers > 0 else 0
-            cac_reported = financial_metrics.get('current_fb_cac', cac_expected)
+            has_blended_weekly_spend = 'paid_ads_spend' in clv_return_time_analysis.columns
+            spend_column = 'paid_ads_spend' if has_blended_weekly_spend else 'fb_ads_spend'
+            total_cac_spend = clv_return_time_analysis[spend_column].sum() if spend_column in clv_return_time_analysis.columns else 0
+            cac_expected = (total_cac_spend / total_new_customers) if total_new_customers > 0 else 0
+            if has_blended_weekly_spend:
+                cac_reported = financial_metrics.get(
+                    'paid_cac',
+                    financial_metrics.get('blended_cac', cac_expected),
+                )
+            else:
+                cac_reported = financial_metrics.get('current_fb_cac', cac_expected)
             cac_delta = cac_reported - cac_expected
             total_orders = date_agg['unique_orders'].sum() if 'unique_orders' in date_agg.columns else 0
-            cac_if_orders = (total_fb_spend / total_orders) if total_orders > 0 else 0
+            cac_if_orders = (total_cac_spend / total_orders) if total_orders > 0 else 0
             checks['cac_expected'] = round(cac_expected, 4)
             checks['cac_reported'] = round(cac_reported, 4)
             checks['cac_delta'] = round(cac_delta, 4)
-            checks['cac_formula'] = 'fb_ads_spend / new_customers'
+            checks['cac_formula'] = f'{spend_column} / new_customers'
             checks['cac_new_customers'] = int(total_new_customers)
             checks['cac_if_orders_denominator'] = round(cac_if_orders, 4)
-            checks['cac_spend_source'] = 'fb_ads_spend'
+            checks['cac_spend_source'] = spend_column
             checks['cac_ok'] = abs(checks['cac_delta']) <= 0.01
         else:
             checks['cac_expected'] = 0
@@ -13092,10 +13230,10 @@ class BizniWebExporter:
 
     def analyze_refunds(self, df: pd.DataFrame) -> dict:
         """
-        Analyze refund/return rate trend.
+        Build an operational refund/return proxy from final order statuses.
 
-        Current source: order statuses (e.g. Vratene/Vraceno/Returned).
-        Note: explicit credit-note document type is not exposed in current reporting dataset.
+        This is intentionally separate from the real BizniWeb creditnote registry,
+        which is loaded into the creditnote reporting metrics and executive view.
         """
         print("\nAnalyzing refunds/returns...")
         revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'

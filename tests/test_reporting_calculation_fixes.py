@@ -57,16 +57,59 @@ def reporting_order(order_num: str, status_name: str, payment_title: str, paymen
     }
 
 
+def analytics_item_row(
+    order_num: str,
+    customer_email: str,
+    purchase_date: str,
+    *,
+    revenue: float = 100.0,
+    fb_spend: float = 0.0,
+    google_spend: float = 0.0,
+) -> dict:
+    return {
+        "order_num": order_num,
+        "customer_email": customer_email,
+        "purchase_date": purchase_date,
+        "customer_first_purchase_date": purchase_date,
+        "order_total": revenue,
+        "total_items_in_order": 1,
+        "fb_ads_daily_spend": fb_spend,
+        "google_ads_daily_spend": google_spend,
+        "total_expense": 40.0,
+        "product_sku": "TEST-SKU",
+        "item_label": "Test product",
+        "item_quantity": 1,
+        "item_total_without_tax": revenue,
+        "item_total_with_tax": revenue,
+        "item_unit_price": revenue,
+        "item_line_sum_original": revenue,
+        "item_line_sum_with_tax_original": revenue,
+        "item_unit_price_original": revenue,
+    }
+
+
 class ReportingCalculationFixTests(unittest.TestCase):
     def test_unknown_currency_is_not_treated_as_eur(self) -> None:
         exporter = make_exporter()
         with self.assertRaises(ValueError):
             exporter.convert_to_eur(10.0, "BTC")
 
-    def test_vevo_missing_product_cost_keeps_zero_margin_fallback(self) -> None:
+    def test_vevo_missing_product_cost_uses_configured_35_percent_margin(self) -> None:
         exporter = make_exporter()
-        rows = exporter.flatten_order(
-            {
+        settings_path = Path(__file__).resolve().parents[1] / "projects" / "vevo" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        runtime = load_project_runtime(
+            "vevo",
+            settings=settings,
+            default_packaging_cost_per_order=0.0,
+            default_shipping_subsidy_per_order=0.0,
+            default_fixed_monthly_cost=0.0,
+            default_fixed_daily_cost=0.0,
+        )
+        self.assertEqual(35.0, runtime.missing_cost_margin_pct)
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", runtime.missing_cost_margin_pct):
+            rows = exporter.flatten_order({
                 "id": "1",
                 "order_num": "A-1",
                 "pur_date": "2026-04-20 10:00:00",
@@ -83,13 +126,12 @@ class ReportingCalculationFixTests(unittest.TestCase):
                         "sum_with_tax": {"value": 120.0, "currency": {"code": "EUR"}},
                     }
                 ],
-            }
-        )
+            })
 
-        self.assertEqual("missing_cost_zero_margin_fallback", rows[0]["expense_source"])
-        self.assertEqual(50.0, rows[0]["expense_per_item"])
-        self.assertEqual(100.0, rows[0]["total_expense"])
-        self.assertEqual(0.0, rows[0]["profit_before_ads"])
+        self.assertEqual("missing_cost_margin_35_fallback", rows[0]["expense_source"])
+        self.assertEqual(32.5, rows[0]["expense_per_item"])
+        self.assertEqual(65.0, rows[0]["total_expense"])
+        self.assertEqual(35.0, rows[0]["profit_before_ads"])
 
     def test_roy_missing_product_cost_uses_configured_35_percent_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
@@ -143,6 +185,33 @@ class ReportingCalculationFixTests(unittest.TestCase):
             "missing costs use a configured 35% margin estimate (65% of net item revenue is treated as expense)",
             qa["fallback_policy"],
         )
+
+    def test_product_expense_qa_keeps_complete_missing_cost_product_list(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": f"V-{index}",
+                    "item_label": f"Missing product {index}",
+                    "product_sku": f"MISSING-{index}",
+                    "item_quantity": 1,
+                    "item_total_without_tax": float(10 * index),
+                    "profit_before_ads": float(3.5 * index),
+                    "expense_per_item": float(6.5 * index),
+                    "expense_source": "missing_cost_margin_35_fallback",
+                }
+                for index in range(1, 7)
+            ]
+        )
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
+            qa = exporter._build_product_expense_coverage_qa(frame)
+
+        self.assertEqual(6, qa["fallback_product_count"])
+        self.assertEqual(6, len(qa["fallback_items"]))
+        self.assertEqual(5, len(qa["top_fallback_items"]))
+        self.assertEqual("MISSING-6", qa["fallback_items"][0]["product_sku"])
+        self.assertAlmostEqual(28.5714, qa["fallback_items"][0]["total_revenue_share_pct"], places=4)
 
     def test_roy_mapped_cost_keeps_real_loss_despite_missing_cost_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
@@ -445,6 +514,107 @@ class ReportingCalculationFixTests(unittest.TestCase):
             cost_per_order={},
         )
         self.assertEqual(0, qa["shell_parity_failures"])
+
+    def test_weekly_cac_includes_blended_spend_on_days_without_orders(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                analytics_item_row(
+                    "V-1",
+                    "new@example.com",
+                    "2026-07-06 10:00:00",
+                    fb_spend=3.0,
+                    google_spend=2.0,
+                )
+            ]
+        )
+        fb_calendar = {
+            "2026-07-06": 4.0,
+            "2026-07-07": 6.0,  # no order
+            "2026-07-13": 10.0,  # spend-only week
+        }
+        google_calendar = {
+            "2026-07-06": 1.0,
+            "2026-07-07": 2.0,  # no order
+            "2026-07-13": 2.0,  # spend-only week
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exporter.data_dir = Path(tmp)
+            weekly = exporter.calculate_clv_and_return_time(
+                frame,
+                fb_daily_spend=fb_calendar,
+                google_ads_daily_spend=google_calendar,
+            )
+
+        self.assertEqual(2, len(weekly))
+        self.assertEqual([10.0, 10.0], weekly["fb_ads_spend"].tolist())
+        self.assertEqual([3.0, 2.0], weekly["google_ads_spend"].tolist())
+        self.assertEqual([13.0, 12.0], weekly["paid_ads_spend"].tolist())
+        self.assertEqual([13.0, 0.0], weekly["cac"].tolist())
+        self.assertEqual(25.0, weekly.iloc[-1]["cumulative_avg_cac"])
+
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "total_revenue": 100.0,
+                    "fb_ads_spend": 20.0,
+                    "google_ads_spend": 5.0,
+                    "net_profit": 40.0,
+                    "unique_orders": 1,
+                }
+            ]
+        )
+        checks = exporter.validate_metric_consistency(
+            date_agg,
+            {
+                "roas": 4.0,
+                "company_profit_margin_pct": 40.0,
+                "paid_cac": 25.0,
+            },
+            weekly,
+        )
+        self.assertTrue(checks["cac_ok"])
+        self.assertEqual("paid_ads_spend", checks["cac_spend_source"])
+        self.assertEqual("paid_ads_spend / new_customers", checks["cac_formula"])
+
+    def test_advanced_cohort_cac_uses_full_fb_google_calendars(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                analytics_item_row(
+                    "V-1",
+                    "first@example.com",
+                    "2026-07-01 10:00:00",
+                    fb_spend=1.0,
+                    google_spend=1.0,
+                ),
+                analytics_item_row(
+                    "V-2",
+                    "second@example.com",
+                    "2026-07-10 10:00:00",
+                    fb_spend=1.0,
+                    google_spend=1.0,
+                ),
+            ]
+        )
+        fallback_calendar = exporter._build_daily_paid_spend_calendar(frame)
+        self.assertEqual(2.0, fallback_calendar["fb_ads_daily_spend"].sum())
+        self.assertEqual(2.0, fallback_calendar["google_ads_daily_spend"].sum())
+
+        metrics = exporter.analyze_advanced_dtc_metrics(
+            frame,
+            fb_daily_spend={"2026-07-01": 10.0, "2026-07-05": 20.0},
+            google_ads_daily_spend={"2026-07-02": 5.0, "2026-07-10": 5.0},
+        )
+        cohort = metrics["cohort_payback"].iloc[0]
+
+        self.assertEqual(15.0, metrics["summary"]["paid_cac_fb"])
+        self.assertEqual(20.0, metrics["summary"]["paid_cac"])
+        self.assertEqual(30.0, cohort["cohort_fb_spend"])
+        self.assertEqual(10.0, cohort["cohort_google_spend"])
+        self.assertEqual(40.0, cohort["cohort_paid_spend"])
+        self.assertEqual(20.0, cohort["cohort_cac"])
 
     def test_customer_concentration_includes_profit_shares(self) -> None:
         exporter = make_exporter(project_name="roy")

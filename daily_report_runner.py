@@ -385,8 +385,19 @@ def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
     return uploaded_links
 
 
-def build_email_subject(reporting_defaults: Dict[str, Any]) -> str:
-    return os.getenv("REPORT_EMAIL_SUBJECT", reporting_defaults["email_subject"]).strip()
+def build_email_subject(
+    reporting_defaults: Dict[str, Any],
+    data_quality: Optional[Dict[str, Any]] = None,
+) -> str:
+    subject = os.getenv("REPORT_EMAIL_SUBJECT", reporting_defaults["email_subject"]).strip()
+    quality = data_quality or {}
+    qa_failure_count = int(quality.get("qa_failure_count") or 0)
+    qa_status = str(quality.get("qa_status") or "").strip().lower()
+    if qa_failure_count > 0 or qa_status == "critical":
+        return f"[CRITICAL QA] {subject}"
+    if bool(quality.get("is_partial")):
+        return f"[PARTIAL DATA] {subject}"
+    return subject
 
 
 def _to_float(value: str) -> float:
@@ -1131,6 +1142,21 @@ def build_email_body(
         f"Stav dat: {overall_status} / QA {qa_status}",
     ]
 
+    if qa_failure_count > 0 or qa_status == "CRITICAL":
+        lines.extend(
+            [
+                "",
+                "POZOR: REPORT MA KRITICKU QA CHYBU. NEPOUZIVAJTE HO NA RIADENIE ANI ROZHODOVANIE, KYM SA CHYBA NEOPRAVI.",
+            ]
+        )
+    elif is_partial:
+        lines.extend(
+            [
+                "",
+                "POZOR: REPORT OBSAHUJE IBA CIASTOCNE DATA. VYSLEDKY NEPOUZIVAJTE AKO UPLNY FIREMNY OBRAZ.",
+            ]
+        )
+
     if is_partial or qa_failure_count > 0 or qa_warning_count > 0:
         lines.append(
             "Poznamka: report obsahuje datove upozornenia. "
@@ -1307,7 +1333,7 @@ def main() -> None:
     if args.skip_email:
         print("Email sending skipped by flag.")
     else:
-        subject = build_email_subject(reporting_defaults)
+        subject = build_email_subject(reporting_defaults, data_quality)
         summary_text = build_report_summary(output_paths)
         body_text = build_email_body(from_date, to_date, summary_text, reporting_defaults, data_quality)
         message_id = send_email_ses(

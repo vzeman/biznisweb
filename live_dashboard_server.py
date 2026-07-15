@@ -263,6 +263,28 @@ def resolve_period_payload_path(project: str, period_key: Optional[str]) -> Opti
     return None
 
 
+def read_period_dashboard_payload_bytes(project: str, period_key: Optional[str]) -> Optional[bytes]:
+    """Read a generated dashboard payload locally, with a durable S3 fallback for latest/full."""
+    normalized = _normalize_period_key(period_key)
+    payload_path = resolve_period_payload_path(project, normalized)
+    if payload_path is not None and payload_path.exists():
+        return payload_path.read_bytes()
+    if normalized == "full":
+        return _latest_s3_artifact_bytes(project, "dashboard_payload_latest.json")
+    return None
+
+
+def read_period_report_bytes(project: str, period_key: Optional[str]) -> Optional[bytes]:
+    """Read a generated HTML report locally, with a durable S3 fallback for latest/full."""
+    normalized = _normalize_period_key(period_key)
+    report_path = resolve_period_report_path(project, normalized)
+    if report_path is not None and report_path.exists():
+        return report_path.read_bytes()
+    if normalized == "full":
+        return _latest_s3_artifact_bytes(project, "report_latest.html")
+    return None
+
+
 def _json_script_content(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False).replace("<", "\\u003c")
 
@@ -2107,14 +2129,14 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_json({"error": f"Unknown project '{project}'."}, status=404)
                 return
-            payload_path = resolve_period_payload_path(project, requested_period)
-            if payload_path is None or not payload_path.exists():
+            payload_bytes = read_period_dashboard_payload_bytes(project, requested_period)
+            if payload_bytes is None:
                 self._send_json(
                     {"error": f"No dashboard payload found for '{project}' and period '{requested_period}'."},
                     status=404,
                 )
                 return
-            self._send_bytes(payload_path.read_bytes(), content_type="application/json; charset=utf-8")
+            self._send_bytes(payload_bytes, content_type="application/json; charset=utf-8")
             return
 
         if len(parts) == 2 and parts[0] == "dashboard":
@@ -2170,15 +2192,15 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_text(f"Unknown project '{escape(project)}'.", content_type="text/plain; charset=utf-8", status=404)
                 return
-            report_path = resolve_period_report_path(project, requested_period)
-            if report_path is None or not report_path.exists():
+            report_bytes = read_period_report_bytes(project, requested_period)
+            if report_bytes is None:
                 self._send_text(
                     f"No HTML report found for '{escape(project)}' and period '{escape(requested_period)}'.",
                     content_type="text/plain; charset=utf-8",
                     status=404,
                 )
                 return
-            self._send_bytes(report_path.read_bytes(), content_type="text/html; charset=utf-8")
+            self._send_bytes(report_bytes, content_type="text/html; charset=utf-8")
             return
 
         self._send_text("Not found.", content_type="text/plain; charset=utf-8", status=404)

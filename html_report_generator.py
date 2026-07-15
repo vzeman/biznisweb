@@ -1794,9 +1794,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         overall_clv = clv_return_time_analysis['cumulative_avg_clv'].iloc[-1]
         
         # Calculate overall CAC
-        total_fb_spend = clv_return_time_analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in clv_return_time_analysis.columns else 0
+        cac_spend_column = 'paid_ads_spend' if 'paid_ads_spend' in clv_return_time_analysis.columns else 'fb_ads_spend'
+        total_paid_spend = clv_return_time_analysis[cac_spend_column].sum() if cac_spend_column in clv_return_time_analysis.columns else 0
         total_new_customers = clv_return_time_analysis['new_customers'].sum()
-        overall_cac = total_fb_spend / total_new_customers if total_new_customers > 0 else 0
+        overall_cac = total_paid_spend / total_new_customers if total_new_customers > 0 else 0
         
         html_content += f"""
             <div class="card">
@@ -1805,7 +1806,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div style="color: #718096; font-size: 0.8rem;">Realized revenue/customer in selected interval</div>
             </div>
             <div class="card">
-                <div class="card-title">Customer Acq. Cost (FB)</div>
+                <div class="card-title">Customer Acq. Cost (FB + Google)</div>
                 <div class="card-value cost">&#8364;{overall_cac:.2f}</div>
             </div>
             <div class="card">
@@ -3194,7 +3195,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             </div>
             <div class="chart-container">
                 <h2 class="chart-title">Customer Acquisition Cost Trend (Weekly)</h2>
-                <p class="chart-explanation">CAC (Customer Acquisition Cost) = Facebook Ads Spend / Number of New Customers. Measures cost to acquire each new customer. Cumulative = running average across all time</p>
+                <p class="chart-explanation">CAC (Customer Acquisition Cost) = tracked Facebook + Google ad spend / number of new customers, including spend on days without orders. Cumulative = running average across all time.</p>
                 <canvas id="cacChart"></canvas>
             </div>
         </div>
@@ -3273,8 +3274,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         return_time_total = f"{overall_avg_return:.1f}" if pd.notna(overall_avg_return) else "N/A"
         
         # Calculate overall CAC for the total row
-        total_fb_spend_table = clv_return_time_analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in clv_return_time_analysis.columns else 0
-        overall_cac_table = total_fb_spend_table / total_new if total_new > 0 else 0
+        total_paid_spend_table = clv_return_time_analysis[cac_spend_column].sum() if cac_spend_column in clv_return_time_analysis.columns else 0
+        overall_cac_table = total_paid_spend_table / total_new if total_new > 0 else 0
         
         html_content += f"""
                     <tr class="total-row">

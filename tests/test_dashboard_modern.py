@@ -379,6 +379,89 @@ class DashboardModernTests(unittest.TestCase):
         self.assertEqual("Company profit change", payload["waterfall_rows"][-1]["label_en"])
         self.assertEqual(300.0, payload["waterfall_rows"][-1]["profit_effect"])
 
+    def test_vevo_ceo_cockpit_surfaces_recent_profit_cost_risk_and_returns(self) -> None:
+        rows = []
+        for day in range(60):
+            current = day >= 30
+            rows.append(
+                {
+                    "date": pd.Timestamp("2026-05-01") + pd.Timedelta(days=day),
+                    "total_revenue": 120.0 if current else 100.0,
+                    "net_profit": 4.0 if current else 10.0,
+                    "contribution_profit": 74.0 if current else 80.0,
+                    "unique_orders": 1,
+                    "fb_ads_spend": 10.0,
+                    "google_ads_spend": 2.0,
+                    "total_items": 1,
+                    "product_expense": 30.0,
+                    "packaging_cost": 0.3,
+                    "shipping_net_cost": 0.2,
+                    "fixed_daily_cost": 70.0,
+                    "total_cost": 116.0 if current else 90.0,
+                    "pre_ad_contribution_profit": 89.5 if current else 69.5,
+                }
+            )
+        missing_items = [
+            {
+                "product_sku": f"MISSING-{index}",
+                "item_label": f"Missing product {index}",
+                "rows": index,
+                "units": index,
+                "revenue": float(index * 10),
+                "total_revenue_share_pct": float(index) / 10,
+                "profit_before_ads": float(index * 3.5),
+            }
+            for index in range(1, 7)
+        ]
+
+        html = generate_modern_dashboard(
+            pd.DataFrame(rows),
+            pd.DataFrame([{"item_label": "Test", "total_quantity": 60, "total_revenue": 6600.0}]),
+            datetime(2026, 5, 1),
+            datetime(2026, 6, 29),
+            report_title="VEVO CEO test",
+            advanced_dtc_metrics={
+                "creditnotes": {
+                    "summary": {
+                        "available": True,
+                        "all_creditnoted_orders": 12,
+                        "credited_gross_eur": 240.0,
+                        "credited_net_eur": 195.12,
+                    }
+                }
+            },
+            refunds_analysis={
+                "summary": {"refund_orders": 1, "refund_rate_pct": 1.0, "refund_amount": 10.0}
+            },
+            source_health={
+                "project": "vevo",
+                "reporting_assumptions": {
+                    "fixed_cost": {
+                        "mode": "manual_daily_estimate",
+                        "actuals_configured": False,
+                    }
+                },
+                "qa": {
+                    "product_expense_coverage": {
+                        "total_profit_before_ads": 1000.0,
+                        "fallback_profit_before_ads": 73.5,
+                        "fallback_items": missing_items,
+                        "fallback_policy": "missing costs use a configured 35% margin estimate",
+                    }
+                },
+            },
+        )
+
+        payload = extract_embedded_dashboard_payload(html)["ceo_cockpit"]
+        self.assertEqual(5, len(payload["actions"]))
+        self.assertEqual(120.0, payload["window_metrics"]["30"]["profit"])
+        self.assertEqual(12, payload["returns_and_creditnotes"]["creditnoted_orders"])
+        self.assertEqual("manual_daily_estimate", payload["fixed_cost_assumption"]["mode"])
+        self.assertIn("Replace overhead estimate with actuals", html)
+        self.assertIn("Complete missing purchase-cost list", html)
+        self.assertIn("MISSING-6", html)
+        self.assertIn("Order-status refund proxy", html)
+
 
 if __name__ == "__main__":
     unittest.main()
