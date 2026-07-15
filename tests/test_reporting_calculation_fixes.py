@@ -284,6 +284,54 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual([18.0, 42.0, 73.0], [row["expense_per_item"] for row in rows])
         self.assertTrue(all(row["expense_source"] == "mapped_product_identifier" for row in rows))
 
+    def test_roy_64gb_sd_card_alias_uses_canonical_cost_without_merging_32gb(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        exporter.product_expenses_exact.update(
+            {
+                "MICRO-SD-64GB": 3.3,
+                "F_206": 1.8,
+            }
+        )
+
+        rows = exporter.flatten_order(
+            {
+                "id": "1",
+                "order_num": "R-SD-CARD-IDENTITY",
+                "pur_date": "2026-07-14 10:00:00",
+                "sum": {"value": 34.44, "currency": {"code": "EUR"}},
+                "customer": {"email": "a@example.com"},
+                "items": [
+                    {
+                        "item_label": "Micro SD CARD 64GB s adaptérem",
+                        "ean": "",
+                        "quantity": 2,
+                        "tax_rate": 23,
+                        "price": {"value": 10.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 20.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 24.6, "currency": {"code": "EUR"}},
+                    },
+                    {
+                        "item_label": "Micro SD CARD 32GB s adaptérem",
+                        "ean": "23942440833",
+                        "import_code": "F_206",
+                        "quantity": 1,
+                        "tax_rate": 23,
+                        "price": {"value": 8.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 8.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 9.84, "currency": {"code": "EUR"}},
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(["MICRO-SD-64GB", "F_206"], [row["product_sku"] for row in rows])
+        self.assertEqual([3.3, 1.8], [row["expense_per_item"] for row in rows])
+        self.assertEqual(
+            ["mapped_product_sku", "mapped_product_identifier"],
+            [row["expense_source"] for row in rows],
+        )
+        self.assertEqual([6.6, 1.8], [row["total_expense"] for row in rows])
+
     def test_zero_revenue_gift_is_the_only_mapped_cost_exception(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["GIFT-KNIFE"] = 80.0

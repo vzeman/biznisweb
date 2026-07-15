@@ -61,6 +61,15 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY Micro SD 64GB cross-shop identity fix is implemented on `codex/roy-micro-sd-64gb-identity` and awaiting deploy (2026-07-15):
+  - live `/api/operations/roy/live?refresh=1` reproduced `H-69235D5B` and the Czech title `Micro SD CARD 64GB s adaptérem` three times; historical reporting had the same 64GB product split across `23942440833`, `H-1DADF217`, `H-69235D5B`, and `H-791A744A`
+  - ROY now canonicalizes the Slovak, Czech, and Hungarian 64GB names to `Micro SD KARTA 64GB s adaptérom` and the stable reporting SKU `MICRO-SD-64GB`
+  - the mapping is intentionally name-scoped because historical EAN `23942440833` is reused by 32GB rows; all `42` historical 64GB rows / `53` units / `EUR 667.44` revenue merge, while all `396` 32GB rows remain outside the 64GB identity
+  - the canonical SKU has the known `EUR 3.30` purchase cost; `26` hash rows / `31` units move from the `35%` fallback to mapped cost, reducing historical product expense by `EUR 165.16` and increasing product/company profit by the same amount before any later source-data changes
+  - verification: project JSON and Python compile OK; focused reporting/operations/dashboard/auth/mobile suite `92` tests OK; full suite `133` tests OK; `git diff --check` OK
+  - runtime hard-gate before code: App Runner instance-id `N/A`, current DNS IPs `3.126.228.15`, `3.120.216.162`, `3.75.104.192`, service `biznisweb-roy-operations-dashboard`, runtime `python live_dashboard_server.py --host 0.0.0.0 --port 8080`, UI path `/production/roy`, API path `/api/operations/roy/live`, status `RUNNING`, health HTTP `200`
+  - Next exact step: commit/push, merge through PR, build the image, refresh full ROY history, deploy only ROY reporting/App Runner, verify localhost marker first, then confirm the stable payload and live UI contain `MICRO-SD-64GB` with no `H-69235D5B`; VEVO must remain unchanged
+
 - ROY reporting decision-safety remediation is deployed and fully backfilled (2026-07-15):
   - purchase-cost precedence is corrected in the reusable reporting core: a resolved mapped purchase cost now wins over legacy zero-cost, zero-margin, `35%`, and `15%` assumptions
   - the sole mapped-cost exception is an item line genuinely sold for `0 EUR`; it is marked `zero_revenue_gift` and keeps `0 EUR` cost, covering free Lux knife sets / ROY knives without weakening precedence for positively priced rows
