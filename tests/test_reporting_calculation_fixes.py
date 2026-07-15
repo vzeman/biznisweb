@@ -689,6 +689,57 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(65.0, rows[0]["total_expense"])
         self.assertEqual(35.0, rows[0]["profit_before_ads"])
 
+    def test_legacy_35_percent_rows_keep_exported_cent_identity(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        base_item = {
+            "quantity": 1,
+            "tax_rate": 0,
+            "price": {"value": 6.10, "currency": {"code": "EUR"}},
+            "sum": {"value": 6.10, "currency": {"code": "EUR"}},
+            "sum_with_tax": {"value": 6.10, "currency": {"code": "EUR"}},
+        }
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0), patch(
+            "export_orders.MARGIN_OVERRIDE_SKUS", {"CENT-LEGACY": 35.0}
+        ), patch("export_orders.MARGIN_OVERRIDE_BRANDS", {}), patch(
+            "export_orders.MARGIN_OVERRIDE_LABEL_PATTERNS", {}
+        ):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-CENT-IDENTITY",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 12.20, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            **base_item,
+                            "item_label": "Unknown cent product",
+                            "ean": "MISSING-CENT",
+                        },
+                        {
+                            **base_item,
+                            "item_label": "Legacy cent override",
+                            "ean": "",
+                            "import_code": "CENT-LEGACY",
+                        },
+                    ],
+                }
+            )
+
+        self.assertEqual(
+            ["missing_cost_margin_35_fallback", "margin_35_override"],
+            [row["expense_source"] for row in rows],
+        )
+        self.assertEqual([3.96, 3.96], [row["total_expense"] for row in rows])
+        self.assertEqual([2.14, 2.14], [row["profit_before_ads"] for row in rows])
+        self.assertEqual([53.85, 53.85], [row["roi_before_ads"] for row in rows])
+        for row in rows:
+            self.assertEqual(
+                round(row["item_total_without_tax"] - row["total_expense"], 2),
+                row["profit_before_ads"],
+            )
+
     def test_mapped_purchase_cost_wins_over_legacy_overrides(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact.update(
