@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,7 @@ class ProjectRuntime:
     zero_margin_brands: List[str]
     zero_cost_brands: List[str]
     zero_cost_label_patterns: List[str]
+    authoritative_margin_override_skus: Dict[str, float]
     margin_override_skus: Dict[str, float]
     margin_override_brands: Dict[str, float]
     margin_override_label_patterns: Dict[str, float]
@@ -74,6 +76,7 @@ class ProjectRuntime:
             "zero_margin_brands": list(self.zero_margin_brands),
             "zero_cost_brands": list(self.zero_cost_brands),
             "zero_cost_label_patterns": list(self.zero_cost_label_patterns),
+            "authoritative_margin_override_skus": dict(self.authoritative_margin_override_skus),
             "margin_override_skus": dict(self.margin_override_skus),
             "margin_override_brands": dict(self.margin_override_brands),
             "margin_override_label_patterns": dict(self.margin_override_label_patterns),
@@ -105,6 +108,39 @@ def _coerce_margin_override_map(raw: Any) -> Dict[str, float]:
             continue
         if 0.0 <= margin_pct < 100.0:
             result[key_text] = margin_pct
+    return result
+
+
+def _coerce_authoritative_margin_override_map(raw: Any) -> Dict[str, float]:
+    """Strictly validate explicit policies that intentionally replace mapped costs."""
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("authoritative_margin_override_skus must be an object")
+
+    result: Dict[str, float] = {}
+    for key, value in raw.items():
+        key_text = str(key or "").strip()
+        if not key_text or key_text.lower() in {"nan", "none", "null"}:
+            raise ValueError("authoritative_margin_override_skus contains an empty SKU")
+        if key_text.endswith(".0") and key_text[:-2].isdigit():
+            key_text = key_text[:-2]
+        normalized_key = key_text.upper()
+        if normalized_key in result:
+            raise ValueError(
+                f"authoritative_margin_override_skus contains duplicate normalized SKU {normalized_key!r}"
+            )
+        try:
+            margin_pct = float(str(value).strip().rstrip("%"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"authoritative_margin_override_skus[{key_text!r}] must be a number from 0 up to, but not including, 100"
+            ) from exc
+        if not math.isfinite(margin_pct) or not 0.0 <= margin_pct < 100.0:
+            raise ValueError(
+                f"authoritative_margin_override_skus[{key_text!r}] must be from 0 up to, but not including, 100"
+            )
+        result[normalized_key] = margin_pct
     return result
 
 
@@ -199,6 +235,9 @@ def load_project_runtime(
         zero_margin_brands=[str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
         zero_cost_brands=[str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
         zero_cost_label_patterns=[str(v).strip() for v in settings.get("zero_cost_label_patterns", []) if str(v).strip()],
+        authoritative_margin_override_skus=_coerce_authoritative_margin_override_map(
+            settings.get("authoritative_margin_override_skus", {})
+        ),
         margin_override_skus=_coerce_margin_override_map(settings.get("margin_override_skus", {})),
         margin_override_brands=_coerce_margin_override_map(settings.get("margin_override_brands", {})),
         margin_override_label_patterns=_coerce_margin_override_map(settings.get("margin_override_label_patterns", {})),
@@ -241,6 +280,7 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     target_globals["ZERO_MARGIN_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_margin_brands if str(v).strip()]
     target_globals["ZERO_COST_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_cost_brands if str(v).strip()]
     target_globals["ZERO_COST_LABEL_PATTERNS"] = [str(v).strip() for v in runtime.zero_cost_label_patterns if str(v).strip()]
+    target_globals["AUTHORITATIVE_MARGIN_OVERRIDE_SKUS"] = dict(runtime.authoritative_margin_override_skus)
     target_globals["MARGIN_OVERRIDE_SKUS"] = dict(runtime.margin_override_skus)
     target_globals["MARGIN_OVERRIDE_BRANDS"] = dict(runtime.margin_override_brands)
     target_globals["MARGIN_OVERRIDE_LABEL_PATTERNS"] = dict(runtime.margin_override_label_patterns)

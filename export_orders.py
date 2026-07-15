@@ -115,6 +115,7 @@ MISSING_COST_MARGIN_PCT = 0.0  # Product margin used only when no configured pur
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
 ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
+AUTHORITATIVE_MARGIN_OVERRIDE_SKUS: Dict[str, float] = {}  # Exact SKU policy that intentionally replaces mapped cost
 MARGIN_OVERRIDE_SKUS: Dict[str, float] = {}  # Optional product SKU/import code -> product margin percent override
 MARGIN_OVERRIDE_BRANDS: Dict[str, float] = {}  # Optional brand -> product margin percent override
 MARGIN_OVERRIDE_LABEL_PATTERNS: Dict[str, float] = {}  # Optional label pattern -> product margin percent override
@@ -2015,6 +2016,7 @@ class BizniWebExporter:
         fallback_mask = item_df["expense_source"].eq("fallback_default") | item_df["expense_source"].str.contains(
             "missing_cost_", regex=False
         )
+        authoritative_margin_mask = item_df["expense_source"].str.startswith("authoritative_margin_")
         zero_revenue_gift_missing_mask = item_df["expense_source"].eq(
             "zero_revenue_gift_missing_cost"
         )
@@ -2028,6 +2030,77 @@ class BizniWebExporter:
         fallback_revenue_share_pct = round((fallback_revenue / total_revenue) * 100, 2) if total_revenue > 0 else 0.0
         fallback_profit_share_pct = round((fallback_profit / total_profit) * 100, 2) if total_profit > 0 else 0.0
         unknown_source_rows = int((item_df["expense_source"] == "unknown").sum())
+
+        authoritative_df = item_df.loc[authoritative_margin_mask].copy()
+        authoritative_rows = int(len(authoritative_df.index))
+        authoritative_units = float(authoritative_df["item_quantity"].sum())
+        authoritative_revenue = float(authoritative_df["item_total_without_tax"].sum())
+        authoritative_applied_cost = float(
+            (authoritative_df["expense_per_item"] * authoritative_df["item_quantity"]).sum()
+        )
+        authoritative_profit = float(authoritative_df["profit_before_ads"].sum())
+        authoritative_mapped_reference_rows = 0
+        authoritative_mapped_reference_cost = 0.0
+        authoritative_profit_delta_vs_mapped_reference = 0.0
+        if "purchase_cost_reference_per_item" in authoritative_df.columns:
+            authoritative_df["_purchase_cost_reference_per_item"] = pd.to_numeric(
+                authoritative_df["purchase_cost_reference_per_item"], errors="coerce"
+            )
+            mapped_reference_mask = authoritative_df["_purchase_cost_reference_per_item"].notna()
+            mapped_reference_df = authoritative_df.loc[mapped_reference_mask]
+            authoritative_mapped_reference_rows = int(len(mapped_reference_df.index))
+            authoritative_mapped_reference_cost = float(
+                (
+                    mapped_reference_df["_purchase_cost_reference_per_item"]
+                    * mapped_reference_df["item_quantity"]
+                ).sum()
+            )
+            authoritative_mapped_reference_applied_cost = float(
+                (mapped_reference_df["expense_per_item"] * mapped_reference_df["item_quantity"]).sum()
+            )
+            authoritative_profit_delta_vs_mapped_reference = (
+                authoritative_mapped_reference_cost - authoritative_mapped_reference_applied_cost
+            )
+
+        authoritative_items: List[Dict[str, Any]] = []
+        if authoritative_rows > 0:
+            grouped_authoritative = (
+                authoritative_df.groupby(["product_sku", "item_label"], dropna=False)
+                .agg(
+                    rows=("expense_source", "size"),
+                    units=("item_quantity", "sum"),
+                    revenue=("item_total_without_tax", "sum"),
+                    profit_before_ads=("profit_before_ads", "sum"),
+                )
+                .reset_index()
+            )
+            # Pandas named aggregation cannot multiply two columns, so compute policy cost separately.
+            authoritative_df["_authoritative_applied_cost"] = (
+                authoritative_df["expense_per_item"] * authoritative_df["item_quantity"]
+            )
+            authoritative_cost_by_product = (
+                authoritative_df.groupby(["product_sku", "item_label"], dropna=False)[
+                    "_authoritative_applied_cost"
+                ]
+                .sum()
+            )
+            for row in grouped_authoritative.to_dict("records"):
+                key = (row.get("product_sku"), row.get("item_label"))
+                authoritative_items.append(
+                    {
+                        "product_sku": row.get("product_sku"),
+                        "item_label": row.get("item_label"),
+                        "rows": int(row.get("rows") or 0),
+                        "units": round(float(row.get("units") or 0.0), 2),
+                        "revenue": round(float(row.get("revenue") or 0.0), 2),
+                        "applied_cost": round(float(authoritative_cost_by_product.get(key, 0.0)), 2),
+                        "profit_before_ads": round(float(row.get("profit_before_ads") or 0.0), 2),
+                    }
+                )
+            authoritative_items.sort(
+                key=lambda row: (float(row.get("revenue") or 0.0), int(row.get("rows") or 0)),
+                reverse=True,
+            )
 
         recent_30d_total_revenue: Optional[float] = None
         recent_30d_fallback_revenue: Optional[float] = None
@@ -2261,6 +2334,17 @@ class BizniWebExporter:
             "fallback_unit_share_pct": fallback_unit_share_pct,
             "fallback_revenue_share_pct": fallback_revenue_share_pct,
             "fallback_profit_share_pct": fallback_profit_share_pct,
+            "authoritative_margin_rows": authoritative_rows,
+            "authoritative_margin_units": round(authoritative_units, 2),
+            "authoritative_margin_revenue": round(authoritative_revenue, 2),
+            "authoritative_margin_applied_cost": round(authoritative_applied_cost, 2),
+            "authoritative_margin_profit_before_ads": round(authoritative_profit, 2),
+            "authoritative_margin_mapped_reference_rows": authoritative_mapped_reference_rows,
+            "authoritative_margin_mapped_reference_cost": round(authoritative_mapped_reference_cost, 2),
+            "authoritative_margin_profit_delta_vs_mapped_reference": round(
+                authoritative_profit_delta_vs_mapped_reference, 2
+            ),
+            "authoritative_margin_items": authoritative_items,
             "fallback_recent_30d_available": recent_30d_available,
             "fallback_recent_30d_available_days": recent_30d_available_days,
             "fallback_recent_30d_date_from": recent_30d_date_from,
@@ -3487,6 +3571,14 @@ class BizniWebExporter:
                 if cls._normalize_product_identifier(sku) == normalized_sku:
                     return float(margin_pct)
         return cls._margin_override_pct_for_label(label)
+
+    @classmethod
+    def _authoritative_margin_override_pct_for_sku(cls, product_sku: str) -> Optional[float]:
+        normalized_sku = cls._normalize_product_identifier(product_sku)
+        if not normalized_sku:
+            return None
+        margin_pct = AUTHORITATIVE_MARGIN_OVERRIDE_SKUS.get(normalized_sku)
+        return float(margin_pct) if margin_pct is not None else None
 
     @staticmethod
     def _margin_override_source(margin_pct: float) -> str:
@@ -5709,7 +5801,8 @@ class BizniWebExporter:
 
                 item_price_value_original = item_price.get('value', 0) or 0
                 item_price_value = self.convert_to_eur(item_price_value_original, item_currency)
-                item_quantity = item.get('quantity', 1) or 1
+                reported_item_quantity = item.get('quantity', 1)
+                item_quantity = reported_item_quantity or 1
                 item_tax_rate = item.get('tax_rate', 0) or 0
                 tax_multiplier = (1 + item_tax_rate / 100) if item_tax_rate > 0 else 1.0
                 item_line_net_original = item_sum.get('value')
@@ -5762,13 +5855,15 @@ class BizniWebExporter:
                 ):
                     continue
 
-                # A mapped purchase cost is the accounting source of truth. Legacy margin/zero-cost
-                # rules are fallback assumptions only and must never hide a known real cost. The
-                # sole exception is a configured ROY knife line genuinely sold for zero, which is
-                # treated as an order gift. Other zero-revenue products keep any mapped real cost.
+                # A mapped purchase cost is the default accounting source of truth. Legacy
+                # margin/zero-cost rules are fallback assumptions only. Two explicit policies may
+                # replace it: a configured ROY knife genuinely sold for zero as an order gift, and
+                # an exact-SKU authoritative margin policy on positive-revenue product lines.
+                # Reference columns retain the resolved purchase cost for auditability.
                 force_zero_cost = False
                 force_zero_margin = False
                 force_margin_15 = False
+                authoritative_margin_override_pct = self._authoritative_margin_override_pct_for_sku(product_sku)
                 margin_override_pct = self._margin_override_pct_for_item(product_sku, item_label)
                 if (ZERO_COST_BRANDS or ZERO_MARGIN_BRANDS or MARGIN_15_BRANDS) and item_label:
                     label_lc = str(item_label).lower()
@@ -5789,6 +5884,11 @@ class BizniWebExporter:
                 purchase_cost_reference_per_item = resolved_expense_per_item
                 purchase_cost_reference_source = resolved_expense_source
                 is_zero_revenue_line = abs(float(item_total_without_tax or 0.0)) < 1e-9
+                is_positive_revenue_line = float(item_total_without_tax or 0.0) > 0.0
+                try:
+                    has_positive_reported_quantity = float(reported_item_quantity) > 0.0
+                except (TypeError, ValueError):
+                    has_positive_reported_quantity = False
                 zero_revenue_gift_patterns = list(
                     (self.project_settings or {}).get("zero_revenue_gift_label_patterns") or []
                 )
@@ -5798,6 +5898,7 @@ class BizniWebExporter:
                     and bool(zero_revenue_gift_patterns)
                     and self._matches_token_phrase_patterns(item_label, zero_revenue_gift_patterns)
                 )
+                authoritative_margin_applied = False
                 if is_zero_revenue_gift_exception:
                     expense_per_item = 0.0
                     expense_source = (
@@ -5805,6 +5906,15 @@ class BizniWebExporter:
                         if resolved_expense_per_item is not None
                         else "zero_revenue_gift_missing_cost"
                     )
+                elif (
+                    authoritative_margin_override_pct is not None
+                    and is_positive_revenue_line
+                    and has_positive_reported_quantity
+                ):
+                    cost_pct = (100.0 - authoritative_margin_override_pct) / 100.0
+                    expense_per_item = (item_total_without_tax / item_quantity) * cost_pct
+                    expense_source = f"authoritative_{self._margin_override_source(authoritative_margin_override_pct)}"
+                    authoritative_margin_applied = True
                 else:
                     expense_per_item = resolved_expense_per_item
                     expense_source = resolved_expense_source
@@ -5833,11 +5943,18 @@ class BizniWebExporter:
                                 item_quantity,
                             )
                 total_expense = expense_per_item * item_quantity
+                reported_total_expense = round(total_expense, 2)
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)
                 # At item level, we only have product expense
-                item_profit_before_ads = item_total_without_tax - total_expense
-                item_roi_before_ads = (item_profit_before_ads / total_expense * 100) if total_expense > 0 else 0
+                if authoritative_margin_applied:
+                    # Keep the exported accounting identity exact after cent rounding.
+                    item_profit_before_ads = round(item_total_without_tax, 2) - reported_total_expense
+                    roi_expense = reported_total_expense
+                else:
+                    item_profit_before_ads = item_total_without_tax - total_expense
+                    roi_expense = total_expense
+                item_roi_before_ads = (item_profit_before_ads / roi_expense * 100) if roi_expense > 0 else 0
                 
                 row = base_data.copy()
                 row.update({
@@ -5866,7 +5983,7 @@ class BizniWebExporter:
                     'expense_source': expense_source,
                     'purchase_cost_reference_per_item': purchase_cost_reference_per_item,
                     'purchase_cost_reference_source': purchase_cost_reference_source,
-                    'total_expense': round(total_expense, 2),
+                    'total_expense': reported_total_expense,
                     'profit_before_ads': round(item_profit_before_ads, 2),
                     'roi_before_ads': round(item_roi_before_ads, 2),
                 })

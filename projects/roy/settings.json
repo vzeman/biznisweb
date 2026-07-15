@@ -73,6 +73,14 @@
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 6500,
   "missing_cost_margin_pct": 35,
+  "authoritative_margin_override_skus": {
+    "H-94491FEF": 90,
+    "H-ACACB998": 90,
+    "H-0AA9298E": 90,
+    "H-1F5ACE52": 90,
+    "H-8D019D16": 90,
+    "H-52688CE6": 90
+  },
   "zero_revenue_gift_label_patterns": [
     "sada nozov lux",
     "sada nozov roy",
