@@ -358,6 +358,15 @@ class ReportingCalculationFixTests(unittest.TestCase):
             rows[0]["expense_source"],
         )
 
+    def test_vevo_bundle_rules_use_explicit_non_secret_rule_ids(self) -> None:
+        settings_path = Path(__file__).resolve().parents[1] / "projects" / "vevo" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        rules = settings.get("product_cost_bundle_rules") or []
+
+        self.assertTrue(rules)
+        self.assertTrue(all(str(rule.get("rule_id") or "").strip() for rule in rules))
+        self.assertTrue(all("key" not in rule for rule in rules))
+
     def test_homogeneous_bundle_parser_is_narrow_and_keeps_explicit_bundle_cost_precedence(self) -> None:
         exporter = make_exporter(project_name="vevo")
         exporter._rebuild_product_expense_indexes(

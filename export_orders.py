@@ -2981,27 +2981,27 @@ class BizniWebExporter:
             raise ValueError("product_cost_bundle_rules must be a list")
 
         rules_by_label: Dict[str, Dict[str, Any]] = {}
-        seen_rule_keys = set()
+        seen_rule_ids = set()
         for rule_index, raw_rule in enumerate(raw_rules):
             if not isinstance(raw_rule, dict):
                 raise ValueError(f"product_cost_bundle_rules[{rule_index}] must be an object")
-            rule_key = str(raw_rule.get("key") or "").strip()
-            if not rule_key:
-                raise ValueError(f"product_cost_bundle_rules[{rule_index}] requires a non-empty key")
-            if rule_key in seen_rule_keys:
-                raise ValueError(f"Duplicate product_cost_bundle_rules key {rule_key!r}")
-            seen_rule_keys.add(rule_key)
+            rule_id = str(raw_rule.get("rule_id") or "").strip()
+            if not rule_id:
+                raise ValueError(f"product_cost_bundle_rules[{rule_index}] requires a non-empty rule_id")
+            if rule_id in seen_rule_ids:
+                raise ValueError(f"Duplicate product_cost_bundle_rules rule_id {rule_id!r}")
+            seen_rule_ids.add(rule_id)
 
             exact_labels = raw_rule.get("exact_labels") or []
             components = raw_rule.get("components") or []
             shared_component_identifiers = raw_rule.get("shared_component_identifiers") or []
             if not isinstance(exact_labels, list) or not exact_labels:
-                raise ValueError(f"product_cost_bundle_rules[{rule_key}] requires exact_labels")
+                raise ValueError(f"product_cost_bundle_rules[{rule_id}] requires exact_labels")
             if not isinstance(components, list) or not components:
-                raise ValueError(f"product_cost_bundle_rules[{rule_key}] requires components")
+                raise ValueError(f"product_cost_bundle_rules[{rule_id}] requires components")
             if not isinstance(shared_component_identifiers, list):
                 raise ValueError(
-                    f"product_cost_bundle_rules[{rule_key}].shared_component_identifiers must be a list"
+                    f"product_cost_bundle_rules[{rule_id}].shared_component_identifiers must be a list"
                 )
 
             normalized_shared_identifiers = {
@@ -3014,23 +3014,23 @@ class BizniWebExporter:
             for component_index, component in enumerate(components):
                 if not isinstance(component, dict):
                     raise ValueError(
-                        f"product_cost_bundle_rules[{rule_key}].components[{component_index}] must be an object"
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] must be an object"
                     )
                 expense_key = str(component.get("expense_key") or "").strip()
                 if not expense_key:
                     raise ValueError(
-                        f"product_cost_bundle_rules[{rule_key}].components[{component_index}] requires expense_key"
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] requires expense_key"
                     )
                 raw_quantity = component.get("quantity", 1)
                 try:
                     quantity = float(raw_quantity)
                 except (TypeError, ValueError) as exc:
                     raise ValueError(
-                        f"product_cost_bundle_rules[{rule_key}].components[{component_index}] has invalid quantity"
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] has invalid quantity"
                     ) from exc
                 if quantity <= 0 or not quantity.is_integer():
                     raise ValueError(
-                        f"product_cost_bundle_rules[{rule_key}].components[{component_index}] quantity "
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] quantity "
                         "must be a positive integer"
                     )
                 validated_components.append(
@@ -3041,18 +3041,18 @@ class BizniWebExporter:
                 )
 
             indexed_rule = {
-                "key": rule_key,
+                "rule_id": rule_id,
                 "components": validated_components,
                 "shared_component_identifiers": normalized_shared_identifiers,
             }
             for raw_label in exact_labels:
                 label = str(raw_label or "").strip()
                 if not label:
-                    raise ValueError(f"product_cost_bundle_rules[{rule_key}] contains an empty exact label")
+                    raise ValueError(f"product_cost_bundle_rules[{rule_id}] contains an empty exact label")
                 if label in rules_by_label:
-                    previous_key = rules_by_label[label]["key"]
+                    previous_rule_id = rules_by_label[label]["rule_id"]
                     raise ValueError(
-                        f"Bundle label {label!r} is configured by both {previous_key!r} and {rule_key!r}"
+                        f"Bundle label {label!r} is configured by both {previous_rule_id!r} and {rule_id!r}"
                     )
                 rules_by_label[label] = indexed_rule
         return rules_by_label
@@ -3076,21 +3076,21 @@ class BizniWebExporter:
                     if str(key).strip()
                 }
 
-        rules_by_key = {
-            str(rule["key"]): rule
+        rules_by_id = {
+            str(rule["rule_id"]): rule
             for rule in self.product_cost_bundle_rules_by_label.values()
         }
-        for rule_key, rule in rules_by_key.items():
+        for rule_id, rule in rules_by_id.items():
             for component in rule.get("components") or []:
                 expense_key = str(component.get("expense_key") or "")
                 if expense_key not in validation_expenses:
                     raise ValueError(
-                        f"product_cost_bundle_rules[{rule_key}] references missing expense key {expense_key!r}"
+                        f"product_cost_bundle_rules[{rule_id}] references missing expense key {expense_key!r}"
                     )
                 component_cost = float(validation_expenses[expense_key])
                 if not np.isfinite(component_cost) or component_cost < 0:
                     raise ValueError(
-                        f"product_cost_bundle_rules[{rule_key}] references invalid expense {expense_key!r}"
+                        f"product_cost_bundle_rules[{rule_id}] references invalid expense {expense_key!r}"
                     )
 
     def _lookup_unique_normalized_expense(self, candidate: Any) -> Optional[float]:
@@ -3223,20 +3223,20 @@ class BizniWebExporter:
         rule: Dict[str, Any],
     ) -> Tuple[float, str]:
         total_expense = 0.0
-        rule_key = str(rule.get("key") or "unknown")
+        rule_id = str(rule.get("rule_id") or "unknown")
         for component in rule.get("components") or []:
             expense_key = str(component.get("expense_key") or "")
             if expense_key not in self.product_expenses_exact:
                 raise ValueError(
-                    f"product_cost_bundle_rules[{rule_key}] references missing expense key {expense_key!r}"
+                    f"product_cost_bundle_rules[{rule_id}] references missing expense key {expense_key!r}"
                 )
             component_cost = float(self.product_expenses_exact[expense_key])
             if not np.isfinite(component_cost) or component_cost < 0:
                 raise ValueError(
-                    f"product_cost_bundle_rules[{rule_key}] references invalid expense {expense_key!r}"
+                    f"product_cost_bundle_rules[{rule_id}] references invalid expense {expense_key!r}"
                 )
             total_expense += component_cost * int(component.get("quantity") or 0)
-        return round(total_expense, 6), f"bundle_components_configured:{rule_key}"
+        return round(total_expense, 6), f"bundle_components_configured:{rule_id}"
 
     def _resolve_inferred_homogeneous_bundle_expense(
         self,
