@@ -2008,6 +2008,9 @@ def generate_modern_dashboard(
 
     break_even_cac = _maybe_num((financial_metrics or {}).get("break_even_cac"))
     current_fb_cac = _maybe_num((financial_metrics or {}).get("current_fb_cac"))
+    current_paid_cac = _maybe_num((financial_metrics or {}).get("paid_cac"))
+    if current_paid_cac is None:
+        current_paid_cac = current_fb_cac
     shell_pre_ad_per_order = _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_order"))
     shell_payback_orders = _maybe_num((financial_metrics or {}).get("payback_orders"))
     shell_contribution_ltv_cac = _maybe_num((financial_metrics or {}).get("contribution_ltv_cac"))
@@ -2031,12 +2034,12 @@ def generate_modern_dashboard(
     best_cm3_margin_range = str(marketing_decision_summary.get("best_cm3_margin_range") or "N/A")
     cm_taxonomy_note = str((financial_metrics or {}).get("cm_taxonomy_note") or "")
     cac_break_even_ratio = None
-    if break_even_cac not in (None, 0) and current_fb_cac is not None:
-        cac_break_even_ratio = current_fb_cac / break_even_cac
+    if break_even_cac not in (None, 0) and current_paid_cac is not None:
+        cac_break_even_ratio = current_paid_cac / break_even_cac
     roi_total_pct = round((total_profit / total_costs * 100), 1) if total_costs > 0 else None
     revenue_ltv_cac = None
-    if avg_customer_ltv not in (None, 0) and current_fb_cac not in (None, 0):
-        revenue_ltv_cac = avg_customer_ltv / current_fb_cac
+    if avg_customer_ltv not in (None, 0) and current_paid_cac not in (None, 0):
+        revenue_ltv_cac = avg_customer_ltv / current_paid_cac
 
     repeat_purchase_rate = _maybe_num((customer_concentration or {}).get("repeat_purchase_rate"))
     if repeat_purchase_rate is None:
@@ -2103,7 +2106,7 @@ def generate_modern_dashboard(
         {"en": "Break-even CAC", "sk": "Break-even CAC", "value": break_even_cac, "kind": "currency", "tone": "positive"},
         {"en": "Pre-ad contribution / customer", "sk": "Pre-ad contribution / zakaznik", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_customer")), "kind": "currency", "tone": "positive"},
         {"en": "Current FB CAC", "sk": "Aktualne FB CAC", "value": current_fb_cac, "kind": "currency", "tone": "negative"},
-        {"en": "Paid CAC (FB)", "sk": "Paid CAC (FB)", "value": _maybe_num((financial_metrics or {}).get("paid_cac")), "kind": "currency", "tone": "negative"},
+        {"en": "Paid CAC (FB + Google)", "sk": "Paid CAC (FB + Google)", "value": current_paid_cac, "kind": "currency", "tone": "negative"},
         {"en": "Blended CAC (tracked ads)", "sk": "Blended CAC (trackovane ads)", "value": _maybe_num((financial_metrics or {}).get("blended_cac")), "kind": "currency", "tone": "negative", "note_en": "FB + Google", "note_sk": "FB + Google"},
         {"en": "CAC headroom", "sk": "CAC headroom", "value": _maybe_num((financial_metrics or {}).get("cac_headroom")), "kind": "currency", "tone": "positive"},
         {"en": "CAC / break-even", "sk": "CAC / break-even", "value": cac_break_even_ratio, "kind": "multiple", "tone": "neutral"},
@@ -2298,6 +2301,13 @@ def generate_modern_dashboard(
     roy_forecast_horizon_days = max(1, int(round(_num(roy_product_demand_summary.get("forecast_horizon_days"))))) if roy_product_demand_summary else 30
     roy_inventory_cost_value = _num(roy_product_demand_summary.get("inventory_cost_value"))
     roy_inventory_retail_value = _num(roy_product_demand_summary.get("inventory_retail_value"))
+    roy_inventory_gmroi_annualized = _maybe_num(
+        roy_product_demand_summary.get("inventory_gmroi_annualized")
+    )
+    roy_reorder_cash_estimate = _num(roy_product_demand_summary.get("reorder_cash_estimate"))
+    roy_reorder_cash_estimate_costed_rows = int(
+        round(_num(roy_product_demand_summary.get("reorder_cash_estimate_costed_rows")))
+    )
     roy_inventory_available_units = _num(roy_product_demand_summary.get("inventory_available_units"))
     roy_inventory_primary_value_basis = escape(str(roy_product_demand_summary.get("inventory_primary_value_basis") or "cost").upper())
     roy_inventory_secondary_value_basis = escape(str(roy_product_demand_summary.get("inventory_secondary_value_basis") or "retail").upper())
@@ -2414,6 +2424,269 @@ def generate_modern_dashboard(
             '<p class="muted-note"><span class="lang-en">Inventory snapshot is not available for this render.</span>'
             '<span class="lang-sk hidden">Inventory snapshot pre tento render nie je dostupny.</span></p>'
         )
+
+    ceo_cockpit_payload: Dict[str, Any] = {}
+    ceo_cockpit_html = ""
+    ceo_nav_link_html = ""
+    if project_key == "roy":
+        ceo_nav_link_html = (
+            '<a class="nav-link" href="#ceo-cockpit"><span class="nav-dot">CEO</span>'
+            '<span class="lang-en">Decision cockpit</span><span class="lang-sk hidden">Rozhodovaci cockpit</span></a>'
+        )
+        waterfall_rows: List[Dict[str, Any]] = []
+        comparison_note_en = "Previous 30-day comparison is not available in this report range."
+        comparison_note_sk = "Predosle 30-dnove porovnanie nie je v tomto rozsahu dostupne."
+        comparison_frame = date_agg.copy()
+        if not comparison_frame.empty and "date" in comparison_frame.columns:
+            comparison_frame["_decision_date"] = pd.to_datetime(
+                comparison_frame["date"], errors="coerce"
+            ).dt.normalize()
+            comparison_frame = comparison_frame.dropna(subset=["_decision_date"])
+        if not comparison_frame.empty and "_decision_date" in comparison_frame.columns:
+            comparison_end = comparison_frame["_decision_date"].max()
+            current_start = comparison_end - pd.Timedelta(days=29)
+            previous_end = current_start - pd.Timedelta(days=1)
+            previous_start = previous_end - pd.Timedelta(days=29)
+            current_window = comparison_frame.loc[
+                comparison_frame["_decision_date"].between(current_start, comparison_end)
+            ]
+            previous_window = comparison_frame.loc[
+                comparison_frame["_decision_date"].between(previous_start, previous_end)
+            ]
+
+            def _window_sum(frame: pd.DataFrame, column: str) -> float:
+                if column not in frame.columns:
+                    return 0.0
+                return float(pd.to_numeric(frame[column], errors="coerce").fillna(0.0).sum())
+
+            if not current_window.empty and not previous_window.empty:
+                current_revenue = _window_sum(current_window, "total_revenue")
+                previous_revenue = _window_sum(previous_window, "total_revenue")
+                current_product_cost = _window_sum(current_window, "product_expense")
+                previous_product_cost = _window_sum(previous_window, "product_expense")
+                current_ads = _window_sum(current_window, "fb_ads_spend") + _window_sum(current_window, "google_ads_spend")
+                previous_ads = _window_sum(previous_window, "fb_ads_spend") + _window_sum(previous_window, "google_ads_spend")
+                current_fulfillment = _window_sum(current_window, "packaging_cost") + _window_sum(current_window, "shipping_net_cost")
+                previous_fulfillment = _window_sum(previous_window, "packaging_cost") + _window_sum(previous_window, "shipping_net_cost")
+                current_fixed = _window_sum(current_window, "fixed_daily_cost")
+                previous_fixed = _window_sum(previous_window, "fixed_daily_cost")
+                current_window_profit = _window_sum(current_window, "net_profit")
+                previous_window_profit = _window_sum(previous_window, "net_profit")
+                profit_delta = current_window_profit - previous_window_profit
+                driver_specs = [
+                    ("Revenue", "Trzby", current_revenue, previous_revenue, current_revenue - previous_revenue),
+                    ("Product cost", "Nakupne ceny", current_product_cost, previous_product_cost, -(current_product_cost - previous_product_cost)),
+                    ("Paid ads", "Platena reklama", current_ads, previous_ads, -(current_ads - previous_ads)),
+                    ("Fulfillment", "Balenie a doprava", current_fulfillment, previous_fulfillment, -(current_fulfillment - previous_fulfillment)),
+                    ("Fixed overhead", "Fixne naklady", current_fixed, previous_fixed, -(current_fixed - previous_fixed)),
+                ]
+                explained_delta = sum(spec[4] for spec in driver_specs)
+                residual_delta = profit_delta - explained_delta
+                if abs(residual_delta) >= 0.01:
+                    driver_specs.append(("Other / reconciliation", "Ostatne / reconciliacia", 0.0, 0.0, residual_delta))
+                waterfall_rows = [
+                    {
+                        "label_en": label_en,
+                        "label_sk": label_sk,
+                        "current": round(current, 2),
+                        "previous": round(previous, 2),
+                        "profit_effect": round(effect, 2),
+                    }
+                    for label_en, label_sk, current, previous, effect in driver_specs
+                ]
+                waterfall_rows.append(
+                    {
+                        "label_en": "Company profit change",
+                        "label_sk": "Zmena firemneho profitu",
+                        "current": round(current_window_profit, 2),
+                        "previous": round(previous_window_profit, 2),
+                        "profit_effect": round(profit_delta, 2),
+                        "total": True,
+                    }
+                )
+                comparison_note_en = (
+                    f"Current {current_start.strftime('%Y-%m-%d')} to {comparison_end.strftime('%Y-%m-%d')} "
+                    f"versus {previous_start.strftime('%Y-%m-%d')} to {previous_end.strftime('%Y-%m-%d')}."
+                )
+                comparison_note_sk = (
+                    f"Aktualne {current_start.strftime('%Y-%m-%d')} az {comparison_end.strftime('%Y-%m-%d')} "
+                    f"oproti {previous_start.strftime('%Y-%m-%d')} az {previous_end.strftime('%Y-%m-%d')}."
+                )
+
+        product_profit_total = _maybe_num(product_expense_qa.get("total_profit_before_ads"))
+        estimated_fallback_profit = _maybe_num(product_expense_qa.get("fallback_profit_before_ads"))
+        mapped_product_profit = (
+            product_profit_total - (estimated_fallback_profit or 0.0)
+            if product_profit_total is not None else None
+        )
+        company_profit_plan = _maybe_num((financial_metrics or {}).get("company_profit_plan_period"))
+        company_profit_plan_delta = _maybe_num((financial_metrics or {}).get("company_profit_plan_delta"))
+        company_profit_plan_status = str(
+            (financial_metrics or {}).get("company_profit_plan_status") or "not_configured"
+        )
+
+        top_loss = roy_loss_product_rows[0] if roy_loss_product_rows else {}
+        top_missing_cost = (product_expense_qa.get("top_fallback_items") or [{}])[0]
+        if not isinstance(top_missing_cost, dict):
+            top_missing_cost = {}
+        top_restock = roy_alert_rows[0] if roy_alert_rows else {}
+        top_dead_stock = roy_dead_stock_rows[0] if roy_dead_stock_rows else {}
+        marketing_ready = bool(incrementality_primary.get("decision_ready"))
+        marketing_verdict = str(incrementality_primary.get("verdict") or "Experiment required")
+
+        ceo_actions = [
+            {
+                "key": "price",
+                "title_en": "Reprice / stop loss",
+                "title_sk": "Zdvihnut cenu / zastavit stratu",
+                "detail_en": (
+                    f"{top_loss.get('product')}: gross product loss EUR {abs(_num(top_loss.get('gross_profit'))):,.2f}."
+                    if top_loss else "No mapped gross-loss product is visible in this period."
+                ),
+                "detail_sk": (
+                    f"{top_loss.get('product')}: hruba produktova strata EUR {abs(_num(top_loss.get('gross_profit'))):,.2f}."
+                    if top_loss else "V tomto obdobi nie je viditelny produkt s mapovanou hrubou stratou."
+                ),
+                "tone": "negative" if top_loss else "neutral",
+            },
+            {
+                "key": "ads",
+                "title_en": "Marketing decision",
+                "title_sk": "Rozhodnutie o marketingu",
+                "detail_en": (
+                    f"{marketing_verdict}: {incrementality_primary.get('verdict_reason_en') or '-'}"
+                    if marketing_ready else "Run a controlled experiment; the current evidence is blocked from Scale/Cut decisions."
+                ),
+                "detail_sk": (
+                    f"{marketing_verdict}: {incrementality_primary.get('verdict_reason_sk') or '-'}"
+                    if marketing_ready else "Spustit kontrolovany experiment; aktualne data nesmu rozhodnut o Scale/Cut."
+                ),
+                "tone": "positive" if marketing_ready and marketing_verdict == "Scale" else "warning",
+            },
+            {
+                "key": "cost",
+                "title_en": "Fill purchase cost",
+                "title_sk": "Doplnit nakupnu cenu",
+                "detail_en": (
+                    f"{top_missing_cost.get('item_label')}: EUR {_num(top_missing_cost.get('revenue')):,.2f} revenue still uses the 35% estimate."
+                    if top_missing_cost else "No missing-cost fallback item is visible in this period."
+                ),
+                "detail_sk": (
+                    f"{top_missing_cost.get('item_label')}: trzba EUR {_num(top_missing_cost.get('revenue')):,.2f} stale pouziva 35% odhad."
+                    if top_missing_cost else "V tomto obdobi nie je viditelny produkt bez nakupnej ceny."
+                ),
+                "tone": "warning" if top_missing_cost else "neutral",
+            },
+            {
+                "key": "stock",
+                "title_en": "Purchase / stock risk",
+                "title_sk": "Nakup / skladove riziko",
+                "detail_en": (
+                    f"Order {int(round(_num(top_restock.get('suggested_reorder_units'))))} units of {top_restock.get('product')}."
+                    if roy_inventory_recommendation_ready and top_restock
+                    else "Do not order from the model yet; repair inbound, cost coverage, forecast accuracy, and negative stock first."
+                ),
+                "detail_sk": (
+                    f"Objednat {int(round(_num(top_restock.get('suggested_reorder_units'))))} kusov {top_restock.get('product')}."
+                    if roy_inventory_recommendation_ready and top_restock
+                    else "Podla modelu este neobjednavat; najprv opravit inbound, coverage cien, forecast a negativny sklad."
+                ),
+                "tone": "positive" if roy_inventory_recommendation_ready else "warning",
+            },
+            {
+                "key": "clearance",
+                "title_en": "Clear dead stock",
+                "title_sk": "Vypredat dead stock",
+                "detail_en": (
+                    f"{top_dead_stock.get('product')}: EUR {_num(top_dead_stock.get('inventory_cost_value')):,.2f} tied in stock."
+                    if top_dead_stock else "No dead-stock candidate is visible in this period."
+                ),
+                "detail_sk": (
+                    f"{top_dead_stock.get('product')}: EUR {_num(top_dead_stock.get('inventory_cost_value')):,.2f} viazanych v sklade."
+                    if top_dead_stock else "V tomto obdobi nie je viditelny kandidat na dead stock."
+                ),
+                "tone": "warning" if top_dead_stock else "neutral",
+            },
+        ]
+
+        waterfall_rows_html = "".join(
+            (
+                ('<tr class="ceo-waterfall-total">' if row.get('total') else '<tr>')
+                +
+                f"<td><span class=\"lang-en\">{escape(str(row.get('label_en') or '-'))}</span>"
+                f"<span class=\"lang-sk hidden\">{escape(str(row.get('label_sk') or '-'))}</span></td>"
+                f"<td>&euro;{_num(row.get('previous')):,.2f}</td>"
+                f"<td>&euro;{_num(row.get('current')):,.2f}</td>"
+                f"<td class=\"{'positive' if _num(row.get('profit_effect')) >= 0 else 'negative'}\">"
+                f"{_num(row.get('profit_effect')):+,.2f} &euro;</td></tr>"
+            )
+            for row in waterfall_rows
+        ) or (
+            '<tr><td colspan="4"><span class="lang-en">Not enough history for a 30-day change waterfall.</span>'
+            '<span class="lang-sk hidden">Na 30-dnovy waterfall zmien nie je dost historie.</span></td></tr>'
+        )
+        ceo_actions_html = "".join(
+            f'<div class="ceo-action tone-{escape(str(action.get("tone") or "neutral"))}">'
+            f'<small>{index}</small><h3><span class="lang-en">{escape(str(action.get("title_en") or "Action"))}</span>'
+            f'<span class="lang-sk hidden">{escape(str(action.get("title_sk") or "Akcia"))}</span></h3>'
+            f'<p><span class="lang-en">{escape(str(action.get("detail_en") or "-"))}</span>'
+            f'<span class="lang-sk hidden">{escape(str(action.get("detail_sk") or "-"))}</span></p></div>'
+            for index, action in enumerate(ceo_actions, start=1)
+        )
+        profit_plan_value_html = (
+            _format_mini_value_html(company_profit_plan, kind="currency")
+            if company_profit_plan_status == "configured" and company_profit_plan is not None
+            else '<span class="lang-en">Not configured</span><span class="lang-sk hidden">Nenastaveny</span>'
+        )
+        profit_plan_delta_html = (
+            f'<span class="delta {"positive" if company_profit_plan_delta >= 0 else "negative"}">'
+            f'{company_profit_plan_delta:+,.2f} &euro;</span>'
+            if company_profit_plan_delta is not None else ""
+        )
+        ceo_cockpit_payload = {
+            "company_profit": total_profit,
+            "company_profit_plan": company_profit_plan,
+            "company_profit_plan_status": company_profit_plan_status,
+            "mapped_product_profit": mapped_product_profit,
+            "estimated_fallback_profit": estimated_fallback_profit,
+            "inventory_profit_at_risk_30d": roy_profit_at_risk_30d,
+            "inventory_gmroi_annualized": roy_inventory_gmroi_annualized,
+            "reorder_cash_estimate": roy_reorder_cash_estimate,
+            "waterfall_rows": waterfall_rows,
+            "actions": ceo_actions,
+        }
+        ceo_cockpit_html = f"""
+                <section class="section" id="ceo-cockpit">
+                    <div class="section-head">
+                        <h2><span class="lang-en">CEO decision cockpit</span><span class="lang-sk hidden">CEO rozhodovaci cockpit</span></h2>
+                        <p><span class="lang-en">Company result, confidence-aware profit exposure, change drivers and the five next management actions.</span><span class="lang-sk hidden">Firemny vysledok, profit v riziku, dovody zmeny a pat dalsich manazerskych akcii.</span></p>
+                    </div>
+                    <div class="panel kpi-band">
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Company profit</span><span class="lang-sk hidden">Firemny profit</span></small><strong>{_format_mini_value_html(total_profit, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Profit plan for period</span><span class="lang-sk hidden">Plan profitu na obdobie</span></small><strong>{profit_plan_value_html}</strong>{profit_plan_delta_html}</div>
+                            <div class="mini-card"><small><span class="lang-en">Mapped product profit</span><span class="lang-sk hidden">Profit s mapovanou cenou</span></small><strong>{_format_mini_value_html(mapped_product_profit, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Estimated fallback profit</span><span class="lang-sk hidden">Odhadovany fallback profit</span></small><strong>{_format_mini_value_html(estimated_fallback_profit, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Inventory profit at risk 30d</span><span class="lang-sk hidden">Skladovy profit v riziku 30d</span></small><strong>{_format_mini_value_html(roy_profit_at_risk_30d, kind="currency")}</strong></div>
+                            <div class="mini-card"><small>GMROI annualized</small><strong>{_format_mini_value_html(roy_inventory_gmroi_annualized, kind="multiple")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Own inventory cost</span><span class="lang-sk hidden">Vlastny sklad v nakupnych cenach</span></small><strong>{_format_mini_value_html(roy_inventory_cost_value, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Inbound / draft PO cash</span><span class="lang-sk hidden">Inbound / odhad cash na PO</span></small><strong>{roy_inbound_stock_status} / {_format_mini_value_html(roy_reorder_cash_estimate, kind="currency")}</strong><span class="delta neutral">{roy_reorder_cash_estimate_costed_rows} costed rows; estimate only</span></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">30-day profit change waterfall</span><span class="lang-sk hidden">30-dnovy waterfall zmeny profitu</span></h3><p><span class="lang-en">{escape(comparison_note_en)}</span><span class="lang-sk hidden">{escape(comparison_note_sk)}</span></p></div></div>
+                            <table><thead><tr><th><span class="lang-en">Driver</span><span class="lang-sk hidden">Dovod</span></th><th><span class="lang-en">Previous</span><span class="lang-sk hidden">Predtym</span></th><th><span class="lang-en">Current</span><span class="lang-sk hidden">Teraz</span></th><th><span class="lang-en">Profit effect</span><span class="lang-sk hidden">Dopad na profit</span></th></tr></thead><tbody>{waterfall_rows_html}</tbody></table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Five next actions</span><span class="lang-sk hidden">Pat dalsich akcii</span></h3><p><span class="lang-en">Actions are gated by data confidence; blocked models produce a data-fix action, not a false recommendation.</span><span class="lang-sk hidden">Akcie respektuju istotu dat; zablokovany model navrhne opravu dat, nie falosne odporucanie.</span></p></div></div>
+                            <div class="ceo-action-grid">{ceo_actions_html}</div>
+                        </div>
+                    </div>
+                </section>
+        """
+    payload["ceo_cockpit"] = ceo_cockpit_payload
+    payload_json = _json_script_content(payload)
 
     daily_profit_rows_html = "".join(
         _daily_profit_row_html(row)
@@ -3409,6 +3682,17 @@ def generate_modern_dashboard(
         .library-tile-note {{ margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }}
         .library-tile.tone-positive .library-tile-value {{ color: var(--green); }}
         .library-tile.tone-negative .library-tile-value {{ color: var(--red); }}
+        .ceo-action-grid {{ display:grid; gap:10px; }}
+        .ceo-action {{ padding:14px 16px; border:1px solid var(--line); border-radius:16px; background:#fff; }}
+        .ceo-action small {{ display:inline-grid; place-items:center; width:24px; height:24px; border-radius:8px; background:var(--accent-soft); color:var(--accent); font-weight:900; }}
+        .ceo-action h3 {{ display:inline; margin:0 0 0 8px; font-size:15px; }}
+        .ceo-action p {{ margin:8px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }}
+        .ceo-action.tone-negative {{ border-color:rgba(207,80,96,.24); background:rgba(207,80,96,.05); }}
+        .ceo-action.tone-warning {{ border-color:rgba(255,138,31,.24); background:rgba(255,138,31,.05); }}
+        .ceo-action.tone-positive {{ border-color:rgba(31,157,102,.24); background:rgba(31,157,102,.05); }}
+        .ceo-waterfall-total {{ font-weight:900; background:rgba(255,138,31,.06); }}
+        td.positive {{ color:var(--green); font-weight:800; }}
+        td.negative {{ color:var(--red); font-weight:800; }}
         .health-grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }}
         .health-item {{ padding: 16px; border-radius: 18px; background: #fff; border:1px solid var(--line); }}
         .health-title {{ font-weight: 800; margin-bottom: 8px; }}
@@ -3445,6 +3729,7 @@ def generate_modern_dashboard(
             {period_switcher_html}
             <div class="nav-label"><span class="lang-en">Navigate</span><span class="lang-sk hidden">Navigácia</span></div>
             <a class="nav-link active" href="#overview"><span class="nav-dot">01</span><span class="lang-en">Overview</span><span class="lang-sk hidden">Prehľad</span></a>
+            {ceo_nav_link_html}
             <a class="nav-link" href="#sales"><span class="nav-dot">02</span><span class="lang-en">Sales</span><span class="lang-sk hidden">Predaj</span></a>
             <a class="nav-link" href="#economics"><span class="nav-dot">03</span><span class="lang-en">Economics</span><span class="lang-sk hidden">Ekonomika</span></a>
             <a class="nav-link" href="#marketing"><span class="nav-dot">04</span><span class="lang-en">Marketing</span><span class="lang-sk hidden">Marketing</span></a>
@@ -3487,6 +3772,7 @@ def generate_modern_dashboard(
                     </div>
                 </section>
                 {attribution_banner_html}
+                {ceo_cockpit_html}
 
                 <section class="section">
                     <div class="section-head">

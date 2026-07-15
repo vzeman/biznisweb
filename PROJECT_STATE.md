@@ -70,9 +70,11 @@ Bootstrap entrypoints:
   - marketing action verdicts require at least `14` active, control, and comparable days plus `high` confidence; otherwise the result is `Experiment required`, never `Scale` or `Cut`
   - tracked paid CAC and cohort payback now use blended Meta + Google spend; customer concentration now exports real CM3 profit shares; customer segmentation uses the realized-revenue marker instead of one corrupted localized status label
   - dashboard fixes: same-item frequencies preserve labels such as `2x`; missing-cost copy reflects the configured `35%` policy; unsafe exact reorder values render as `Blocked`; ROY inventory shows the gate blockers; the `1280px` navigation collapse was removed and table overflow is contained
-  - focused verification: `test_reporting_calculation_fixes.py` `34` tests OK, `test_roy_inventory_model.py` `12` tests OK, `test_dashboard_modern.py` `6` tests OK, `test_creditnote_export.py` `15` tests OK; Python compile, ROY settings JSON, and `git diff --check` OK
+  - a ROY-only CEO decision cockpit now leads with company profit, optional prorated profit plan (`not configured` until a real target is supplied), mapped versus estimated fallback product profit, inventory profit at risk, annualized GMROI, inventory cash, and inbound/draft-PO cash context
+  - the cockpit explains the latest `30` days versus the prior `30` through revenue, product-cost, ads, fulfillment, fixed-cost, and reconciliation drivers, then emits exactly five confidence-gated actions: reprice, marketing, fill cost, purchase/data repair, and dead-stock clearance
+  - focused verification: `test_reporting_calculation_fixes.py` `34` tests OK, `test_roy_inventory_model.py` `12` tests OK, `test_dashboard_modern.py` `7` tests OK, `test_creditnote_export.py` `15` tests OK; Python compile, ROY settings JSON, and `git diff --check` OK
   - no runtime or historical data has been changed yet; VEVO configuration/data remains untouched
-  - Next exact step: add the focused CEO cockpit decision layer, run the full suite and local browser verification, then open/merge the PR before ROY-only deployment and full-history regeneration
+  - Next exact step: run the full suite and local browser verification, then open/merge the PR before ROY-only deployment and full-history regeneration
 
 - ROY missing-purchase-cost fallback is permanently deployed as a `35%` product margin and full history was regenerated on `2026-07-15`:
   - code PR `#210` merged as `e178af8`; `projects/roy/settings.json` sets `missing_cost_margin_pct = 35`, so only products without any resolvable purchase cost use expense `65%` of net item revenue and source `missing_cost_margin_35_fallback`

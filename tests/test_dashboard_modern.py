@@ -330,6 +330,51 @@ class DashboardModernTests(unittest.TestCase):
         self.assertNotIn("conservative zero-margin fallback", html)
         self.assertNotIn("@media (max-width: 1280px)", html)
         self.assertIn("@media (max-width: 900px)", html)
+        self.assertIn("CEO decision cockpit", html)
+        payload = extract_embedded_dashboard_payload(html)
+        self.assertEqual(5, len(payload["ceo_cockpit"]["actions"]))
+        self.assertEqual("not_configured", payload["ceo_cockpit"]["company_profit_plan_status"])
+
+    def test_roy_ceo_cockpit_explains_30_day_profit_change(self) -> None:
+        rows = []
+        for day in range(60):
+            current = day >= 30
+            rows.append(
+                {
+                    "date": pd.Timestamp("2026-05-01") + pd.Timedelta(days=day),
+                    "total_revenue": 120.0 if current else 100.0,
+                    "net_profit": 20.0 if current else 10.0,
+                    "contribution_profit": 25.0 if current else 15.0,
+                    "unique_orders": 1,
+                    "fb_ads_spend": 10.0,
+                    "google_ads_spend": 0.0,
+                    "total_items": 1,
+                    "product_expense": 60.0 if current else 50.0,
+                    "packaging_cost": 5.0,
+                    "shipping_net_cost": 0.0,
+                    "fixed_daily_cost": 25.0,
+                    "total_cost": 100.0 if current else 90.0,
+                    "pre_ad_contribution_profit": 55.0 if current else 45.0,
+                }
+            )
+        date_agg = pd.DataFrame(rows)
+        items_agg = pd.DataFrame([{"item_label": "Test", "total_quantity": 60, "total_revenue": 6600.0}])
+
+        html = generate_modern_dashboard(
+            date_agg,
+            items_agg,
+            datetime(2026, 5, 1),
+            datetime(2026, 6, 29),
+            report_title="ROY CEO test",
+            advanced_dtc_metrics={"roy_product_demand": {"summary": {"inventory_status": "ok"}}},
+            source_health={"project": "roy"},
+        )
+
+        payload = extract_embedded_dashboard_payload(html)["ceo_cockpit"]
+        self.assertEqual(5, len(payload["actions"]))
+        self.assertEqual(6, len(payload["waterfall_rows"]))
+        self.assertEqual("Company profit change", payload["waterfall_rows"][-1]["label_en"])
+        self.assertEqual(300.0, payload["waterfall_rows"][-1]["profit_effect"])
 
 
 if __name__ == "__main__":

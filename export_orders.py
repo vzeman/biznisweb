@@ -10581,6 +10581,7 @@ class BizniWebExporter:
             .agg(
                 recent_90d_units=("item_quantity", "sum"),
                 recent_90d_revenue=("item_total_without_tax", "sum"),
+                recent_90d_gross_profit=("gross_profit", "sum"),
                 recent_90d_profit_without_fixed=("cm2_profit", "sum"),
                 recent_90d_profit_with_fixed=("cm3_profit", "sum"),
             )
@@ -11123,6 +11124,7 @@ class BizniWebExporter:
                 "recent_30d_profit_with_fixed",
                 "recent_90d_units",
                 "recent_90d_revenue",
+                "recent_90d_gross_profit",
                 "recent_90d_profit_without_fixed",
                 "recent_90d_profit_with_fixed",
                 "forecast_30d_revenue",
@@ -11319,6 +11321,7 @@ class BizniWebExporter:
                                 "recent_30d_profit_with_fixed",
                                 "recent_90d_units",
                                 "recent_90d_revenue",
+                                "recent_90d_gross_profit",
                                 "recent_90d_profit_without_fixed",
                                 "recent_90d_profit_with_fixed",
                                 "forecast_30d_units",
@@ -11908,6 +11911,14 @@ class BizniWebExporter:
                 "inventory_available_units": round(float(inventory_products_df["available_quantity"].sum()), 1) if not inventory_products_df.empty else 0.0,
                 "inventory_cost_value": round(float(inventory_products_df["inventory_cost_value"].sum()), 2) if not inventory_products_df.empty else 0.0,
                 "inventory_retail_value": round(float(inventory_products_df["inventory_retail_value"].sum()), 2) if not inventory_products_df.empty else 0.0,
+                "inventory_gmroi_annualized": round(
+                    (
+                        float(inventory_products_df["recent_90d_gross_profit"].sum())
+                        * (365.0 / 90.0)
+                    )
+                    / float(inventory_products_df["inventory_cost_value"].sum()),
+                    2,
+                ) if not inventory_products_df.empty and float(inventory_products_df["inventory_cost_value"].sum()) > 0 else None,
                 "inventory_primary_value_basis": primary_value_basis,
                 "inventory_secondary_value_basis": secondary_value_basis,
                 "inventory_cost_coverage_units_pct": round(
@@ -11972,6 +11983,18 @@ class BizniWebExporter:
                 "alert_delivery_horizon_days": int(alert_delivery_horizon_days),
                 "alert_delivery_count": int(len(alert_rows_df)),
                 "alert_delivery_hero_count": int(alert_rows_df["strategic_stock_flag"].sum()) if not alert_rows_df.empty else 0,
+                "reorder_cash_estimate": round(
+                    float(
+                        (
+                            alert_rows_df["suggested_reorder_units_estimate"]
+                            * alert_rows_df["cost_per_unit"].fillna(0.0)
+                        ).sum()
+                    ),
+                    2,
+                ) if not alert_rows_df.empty else 0.0,
+                "reorder_cash_estimate_costed_rows": int(
+                    alert_rows_df["cost_per_unit"].notna().sum()
+                ) if not alert_rows_df.empty else 0,
                 "alert_reorder_now_count": int(alert_rows_df["reorder_now_flag"].sum()) if not alert_rows_df.empty else 0,
                 "alert_prepare_po_count": int(alert_rows_df["prepare_po_flag"].sum()) if not alert_rows_df.empty else 0,
                 "alert_attention_count": int(alert_rows_df["reorder_attention_flag"].sum()) if not alert_rows_df.empty else 0,
@@ -12686,6 +12709,26 @@ class BizniWebExporter:
         new_revenue_share_pct = (new_revenue / total_split_revenue * 100) if total_split_revenue > 0 else 0
         returning_revenue_share_pct = (returning_revenue / total_split_revenue * 100) if total_split_revenue > 0 else 0
 
+        management_targets = dict((self.project_settings or {}).get("management_targets") or {})
+        monthly_profit_plan_raw = management_targets.get("monthly_company_profit_eur")
+        monthly_profit_plan = None
+        company_profit_plan_period = None
+        company_profit_plan_delta = None
+        if monthly_profit_plan_raw not in (None, ""):
+            try:
+                monthly_profit_plan = float(monthly_profit_plan_raw)
+            except (TypeError, ValueError):
+                monthly_profit_plan = None
+        purchase_date_values = df['purchase_date'] if 'purchase_date' in df.columns else pd.Series(dtype='object')
+        purchase_dates = pd.to_datetime(purchase_date_values, errors='coerce').dropna()
+        reporting_calendar_days = (
+            int((purchase_dates.max().normalize() - purchase_dates.min().normalize()).days) + 1
+            if not purchase_dates.empty else 0
+        )
+        if monthly_profit_plan is not None and reporting_calendar_days > 0:
+            company_profit_plan_period = monthly_profit_plan * (reporting_calendar_days / 30.4375)
+            company_profit_plan_delta = total_company_profit - company_profit_plan_period
+
         metrics = {
             'roas': round(total_revenue / total_ad_spend, 2) if total_ad_spend > 0 else 0,
             'roas_fb': round(total_revenue / total_fb_spend, 2) if total_fb_spend > 0 else 0,
@@ -12708,6 +12751,11 @@ class BizniWebExporter:
             'contribution_margin_pct': round(total_contribution_profit / total_revenue * 100, 1) if total_revenue > 0 else 0,
             'post_ad_contribution_margin_pct': round(total_contribution_profit / total_revenue * 100, 1) if total_revenue > 0 else 0,
             'company_net_profit': round(total_company_profit, 2),
+            'company_profit_plan_monthly': round(monthly_profit_plan, 2) if monthly_profit_plan is not None else None,
+            'company_profit_plan_period': round(company_profit_plan_period, 2) if company_profit_plan_period is not None else None,
+            'company_profit_plan_delta': round(company_profit_plan_delta, 2) if company_profit_plan_delta is not None else None,
+            'company_profit_plan_status': 'configured' if company_profit_plan_period is not None else 'not_configured',
+            'reporting_calendar_days': reporting_calendar_days,
             'pre_ad_contribution_profit': round(total_pre_ad_contribution, 2),
             'contribution_profit': round(total_contribution_profit, 2),
             'post_ad_contribution_profit': round(total_contribution_profit, 2),
