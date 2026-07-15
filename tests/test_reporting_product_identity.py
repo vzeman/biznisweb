@@ -34,6 +34,7 @@ def reporting_item(
     item_import_code: str,
     revenue: float,
     quantity: float = 1.0,
+    item_ean: str = "",
 ) -> dict:
     return {
         "order_num": order_num,
@@ -42,7 +43,7 @@ def reporting_item(
         "purchase_date_only": "2026-05-01",
         "product_sku": product_sku,
         "item_label": item_label,
-        "item_ean": "",
+        "item_ean": item_ean,
         "item_import_code": item_import_code,
         "item_quantity": quantity,
         "item_total_without_tax": revenue,
@@ -82,6 +83,93 @@ class ReportingProductIdentityTests(unittest.TestCase):
                 self.assertEqual("12474", items_agg.iloc[0]["product_sku"])
                 self.assertEqual(2, int(items_agg.iloc[0]["total_quantity"]))
                 self.assertEqual(30, float(items_agg.iloc[0]["total_revenue"]))
+
+    def test_roy_64gb_sd_card_localizations_share_one_name_sku_and_cost(self) -> None:
+        exporter = ReportingIdentityExporter("roy")
+        item_df = pd.DataFrame(
+            [
+                reporting_item(
+                    "R-SK-OLD",
+                    "23942440833",
+                    "Micro SD KARTA 64GB s adaptérom",
+                    "",
+                    12,
+                    item_ean="23942440833",
+                ),
+                reporting_item(
+                    "R-SK",
+                    "H-1DADF217",
+                    "Micro SD KARTA 64GB s adaptérom",
+                    "",
+                    12,
+                ),
+                reporting_item(
+                    "R-CZ",
+                    "H-69235D5B",
+                    "Micro SD CARD 64GB s adaptérem",
+                    "",
+                    12,
+                ),
+                reporting_item(
+                    "R-HU",
+                    "H-791A744A",
+                    "Micro SD CARD 64GB adapterrel",
+                    "",
+                    12,
+                ),
+                reporting_item(
+                    "R-32-IMPORT",
+                    "F_206",
+                    "Micro SD CARD 32GB s adaptérem",
+                    "F_206",
+                    8,
+                    item_ean="23942440833",
+                ),
+                reporting_item(
+                    "R-32-NO-IMPORT",
+                    "23942440833",
+                    "Micro SD CARD 32GB s adaptérem",
+                    "",
+                    8,
+                    item_ean="23942440833",
+                ),
+            ]
+        )
+
+        canonical_df = exporter.add_reporting_product_identity_columns(item_df)
+        card_64gb = canonical_df[canonical_df["product_sku"] == "MICRO-SD-64GB"]
+        self.assertEqual(4, len(card_64gb))
+        self.assertEqual(
+            {"23942440833", "H-1DADF217", "H-69235D5B", "H-791A744A"},
+            set(card_64gb["raw_product_sku"]),
+        )
+        self.assertEqual(
+            ["Micro SD KARTA 64GB s adaptérom"],
+            card_64gb["item_label"].drop_duplicates().tolist(),
+        )
+        self.assertEqual(
+            {"F_206", "23942440833"},
+            set(canonical_df[canonical_df["item_label"].str.contains("32GB")]["product_sku"]),
+        )
+
+        cost, source = exporter._resolve_product_expense(
+            "MICRO-SD-64GB",
+            "Micro SD KARTA 64GB s adaptérom",
+        )
+        self.assertEqual(3.3, cost)
+        self.assertEqual("mapped_product_sku", source)
+
+        _, _, items_agg, _, _ = exporter.create_aggregated_reports(
+            canonical_df,
+            datetime(2026, 5, 1),
+            datetime(2026, 5, 1),
+            fb_daily_spend={},
+            google_ads_daily_spend={},
+        )
+        aggregated_64gb = items_agg[items_agg["product_sku"] == "MICRO-SD-64GB"]
+        self.assertEqual(1, len(aggregated_64gb))
+        self.assertEqual(4, int(aggregated_64gb.iloc[0]["total_quantity"]))
+        self.assertEqual(48, float(aggregated_64gb.iloc[0]["total_revenue"]))
 
     def test_roy_reporting_expands_maco_stop_large_set_to_components(self) -> None:
         exporter = ReportingIdentityExporter("roy")

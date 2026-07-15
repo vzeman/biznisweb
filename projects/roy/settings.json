@@ -16,8 +16,12 @@
   "live_dashboard": {
     "auth_user": "roy21"
   },
+  "product_name_aliases_file": "product_name_aliases.json",
   "product_identity": {
-    "prefer_import_code": true
+    "prefer_import_code": true,
+    "canonical_skus_by_name": {
+      "Micro SD KARTA 64GB s adaptérom": "MICRO-SD-64GB"
+    }
   },
   "product_component_expansion_rules": [
     {

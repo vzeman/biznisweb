@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
 import pandas as pd
 
@@ -80,6 +81,80 @@ def inventory_row(
 
 
 class RoyInventoryModelTests(unittest.TestCase):
+    def test_live_inventory_uses_canonical_64gb_identity_cost_and_keeps_32gb_separate(self) -> None:
+        exporter = BizniWebExporter(
+            api_url="https://example.test/graphql",
+            api_token="test-token",
+            project_name="roy",
+            output_tag="inventory-identity-test",
+        )
+        exporter.product_expenses_exact.update(
+            {
+                "MICRO-SD-64GB": 3.3,
+                "F_206": 1.8,
+            }
+        )
+        exporter.client.execute = Mock(
+            return_value={
+                "getProductList": {
+                    "data": [
+                        {
+                            "id": "64",
+                            "title": "Micro SD CARD 64GB s adaptérem",
+                            "active": True,
+                            "ean": "",
+                            "import_code": "",
+                            "price": {"value": 10.0, "currency": {"code": "EUR"}},
+                            "final_price": {"value": 10.0, "currency": {"code": "EUR"}},
+                            "warehouse_items": [
+                                {
+                                    "id": "W64",
+                                    "warehouse_number": "",
+                                    "quantity": 20,
+                                    "available_quantity": 20,
+                                    "status": {"id": "1", "name": "Skladom"},
+                                    "price": {"value": 10.0, "currency": {"code": "EUR"}},
+                                    "final_price": {"value": 10.0, "currency": {"code": "EUR"}},
+                                }
+                            ],
+                        },
+                        {
+                            "id": "32",
+                            "title": "Micro SD CARD 32GB s adaptérem",
+                            "active": True,
+                            "ean": "23942440833",
+                            "import_code": "F_206",
+                            "price": {"value": 8.0, "currency": {"code": "EUR"}},
+                            "final_price": {"value": 8.0, "currency": {"code": "EUR"}},
+                            "warehouse_items": [
+                                {
+                                    "id": "W32",
+                                    "warehouse_number": "",
+                                    "quantity": 10,
+                                    "available_quantity": 10,
+                                    "status": {"id": "1", "name": "Skladom"},
+                                    "price": {"value": 8.0, "currency": {"code": "EUR"}},
+                                    "final_price": {"value": 8.0, "currency": {"code": "EUR"}},
+                                }
+                            ],
+                        },
+                    ],
+                    "pageInfo": {"hasNextPage": False, "nextCursor": None},
+                }
+            }
+        )
+
+        snapshot = exporter.fetch_product_inventory_snapshot(lang_code="SK")
+        card_64gb = snapshot[snapshot["reporting_sku"] == "MICRO-SD-64GB"].iloc[0]
+        card_32gb = snapshot[snapshot["reporting_sku"] == "F_206"].iloc[0]
+
+        self.assertEqual("H-69235D5B", card_64gb["raw_product_sku"])
+        self.assertEqual("Micro SD KARTA 64GB s adaptérom", card_64gb["reporting_product"])
+        self.assertEqual(3.3, card_64gb["cost_per_unit"])
+        self.assertEqual(66.0, card_64gb["inventory_cost_value"])
+        self.assertEqual("F_206", card_32gb["reporting_sku"])
+        self.assertEqual(1.8, card_32gb["cost_per_unit"])
+
     def test_roy_reporting_product_identity_prefers_import_code_across_languages(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
         item_df = pd.DataFrame(
