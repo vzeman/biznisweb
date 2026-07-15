@@ -69,8 +69,6 @@
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 6500,
   "missing_cost_margin_pct": 35,
-  "written_off_cost_skus": [],
-  "written_off_cost_label_patterns": [],
   "invoice_generation": {
     "enabled": true,
     "lookback_days": 7,
@@ -383,6 +381,9 @@
       "warranty claim",
       "pozarucny servis",
       "servis",
+      "diagnostika",
+      "praca",
+      "testovanie",
       "darcek",
       "zadarmo",
       "nahradny diel",
@@ -436,7 +437,23 @@
     "inbound_stock": {
       "enabled": false,
       "source": "todo"
+    },
+    "decision_gate": {
+      "enabled": true,
+      "minimum_cost_coverage_retail_pct": 80,
+      "minimum_forecast_backtest_products": 20,
+      "maximum_forecast_wape_pct": 40,
+      "minimum_forecast_median_accuracy_pct": 60,
+      "minimum_forecast_within_20_pct": 40,
+      "require_inbound_stock": true,
+      "maximum_negative_stock_products": 0
     }
+  },
+  "marketing_decision_gate": {
+    "minimum_active_days": 14,
+    "minimum_control_days": 14,
+    "minimum_effective_pair_days": 14,
+    "minimum_confidence": "high"
   },
   "excluded_order_statuses": [
     "Stripe - cancelled",

@@ -265,9 +265,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
         with patch("export_orders.ZERO_COST_LABEL_PATTERNS", ["Zero mapped"]), patch(
             "export_orders.MARGIN_OVERRIDE_SKUS", {"MARGIN-SKU": 35.0}
-        ), patch("export_orders.MARGIN_15_LABEL_PATTERNS", ["Margin 15 mapped"]), patch(
-            "export_orders.WRITTEN_OFF_COST_SKUS", []
-        ), patch("export_orders.WRITTEN_OFF_COST_LABEL_PATTERNS", []):
+        ), patch("export_orders.MARGIN_15_LABEL_PATTERNS", ["Margin 15 mapped"]):
             rows = exporter.flatten_order(
                 {
                     "id": "1",
@@ -286,35 +284,173 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual([18.0, 42.0, 73.0], [row["expense_per_item"] for row in rows])
         self.assertTrue(all(row["expense_source"] == "mapped_product_identifier" for row in rows))
 
-    def test_explicit_written_off_cost_can_override_mapped_cost(self) -> None:
+    def test_zero_revenue_gift_is_the_only_mapped_cost_exception(self) -> None:
         exporter = make_exporter(project_name="roy")
-        exporter.product_expenses_exact["WRITTEN-OFF"] = 80.0
+        exporter.product_expenses_exact["GIFT-KNIFE"] = 80.0
 
-        with patch("export_orders.WRITTEN_OFF_COST_SKUS", ["WRITTEN-OFF"]):
-            rows = exporter.flatten_order(
-                {
-                    "id": "1",
-                    "order_num": "R-WRITTEN-OFF",
-                    "pur_date": "2026-07-14 10:00:00",
-                    "sum": {"value": 61.5, "currency": {"code": "EUR"}},
-                    "customer": {"email": "a@example.com"},
-                    "items": [
-                        {
-                            "item_label": "Explicit accounting write-off",
-                            "ean": "WRITTEN-OFF",
-                            "quantity": 1,
-                            "tax_rate": 23,
-                            "price": {"value": 50.0, "currency": {"code": "EUR"}},
-                            "sum": {"value": 50.0, "currency": {"code": "EUR"}},
-                            "sum_with_tax": {"value": 61.5, "currency": {"code": "EUR"}},
-                        }
-                    ],
-                }
-            )
+        rows = exporter.flatten_order(
+            {
+                "id": "1",
+                "order_num": "R-ZERO-EUR-GIFT",
+                "pur_date": "2026-07-14 10:00:00",
+                "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                "customer": {"email": "a@example.com"},
+                "items": [
+                    {
+                        "item_label": "Sada nozov Roy 3-dielna Lux - darcek",
+                        "ean": "GIFT-KNIFE",
+                        "quantity": 1,
+                        "tax_rate": 23,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    }
+                ],
+            }
+        )
 
-        self.assertEqual("written_off_cost_override", rows[0]["expense_source"])
+        self.assertEqual("zero_revenue_gift", rows[0]["expense_source"])
         self.assertEqual(0.0, rows[0]["total_expense"])
-        self.assertEqual(50.0, rows[0]["profit_before_ads"])
+        self.assertEqual(0.0, rows[0]["profit_before_ads"])
+
+    def test_low_confidence_incrementality_requires_experiment(self) -> None:
+        exporter = make_exporter(project_name="roy")
+
+        decision_ready, blockers = exporter._incrementality_decision_gate(
+            active_days=289,
+            control_days=5,
+            effective_pair_days=5,
+            confidence="low",
+        )
+        verdict, reason, tone = exporter._build_incrementality_verdict(
+            incremental_profit_without_fixed_per_day=50.0,
+            incremental_profit_with_fixed_per_day=20.0,
+            incremental_cac=10.0,
+            break_even_cac=20.0,
+            confidence="low",
+            effective_pair_days=5,
+            decision_ready=decision_ready,
+            decision_blockers=blockers,
+        )
+
+        self.assertFalse(decision_ready)
+        self.assertIn("control days 5/14", blockers)
+        self.assertEqual("Experiment required", verdict)
+        self.assertIn("Do not scale or cut", reason)
+        self.assertEqual("warning", tone)
+
+    def test_financial_paid_cac_uses_meta_and_google_spend(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        item_df = pd.DataFrame(
+            [
+                {
+                    "order_num": "R-1",
+                    "customer_email": "a@example.com",
+                    "purchase_date": "2026-07-01",
+                    "order_total": 100.0,
+                },
+                {
+                    "order_num": "R-2",
+                    "customer_email": "b@example.com",
+                    "purchase_date": "2026-07-02",
+                    "order_total": 100.0,
+                },
+            ]
+        )
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "total_revenue": 200.0,
+                    "unique_orders": 2,
+                    "fb_ads_spend": 10.0,
+                    "google_ads_spend": 20.0,
+                    "product_expense": 100.0,
+                    "packaging_cost": 0.0,
+                    "shipping_net_cost": 0.0,
+                    "fixed_daily_cost": 0.0,
+                    "total_cost": 130.0,
+                    "contribution_cost": 130.0,
+                    "contribution_profit": 70.0,
+                    "net_profit": 70.0,
+                }
+            ]
+        )
+        acquisition = pd.DataFrame([{"new_customers": 2, "avg_return_time_days": 30.0}])
+
+        metrics = exporter.calculate_financial_metrics(item_df, date_agg, acquisition)
+
+        self.assertEqual(5.0, metrics["current_fb_cac"])
+        self.assertEqual(15.0, metrics["paid_cac"])
+        self.assertEqual(15.0, metrics["blended_cac"])
+        self.assertAlmostEqual(3.33, metrics["contribution_ltv_cac"], places=2)
+
+    def test_customer_concentration_includes_profit_shares(self) -> None:
+        exporter = make_exporter(project_name="roy")
+
+        def row(order_num: str, email: str, revenue: float, cost: float) -> dict:
+            return {
+                "order_num": order_num,
+                "customer_email": email,
+                "purchase_date": "2026-07-01",
+                "order_total": revenue,
+                "total_items_in_order": 1,
+                "fb_ads_daily_spend": 0.0,
+                "google_ads_daily_spend": 0.0,
+                "total_expense": cost,
+                "product_sku": order_num,
+                "item_label": order_num,
+                "item_quantity": 1,
+                "item_total_without_tax": revenue,
+                "item_total_with_tax": revenue,
+                "item_unit_price": revenue,
+                "item_line_sum_original": revenue,
+                "item_line_sum_with_tax_original": revenue,
+                "item_unit_price_original": revenue,
+            }
+
+        frame = pd.DataFrame(
+            [
+                row("R-1", "a@example.com", 100.0, 20.0),
+                row("R-2", "b@example.com", 50.0, 20.0),
+                row("R-3", "c@example.com", 25.0, 20.0),
+            ]
+        )
+        with patch("export_orders.PACKAGING_COST_PER_ORDER", 0.0), patch(
+            "export_orders.SHIPPING_NET_PER_ORDER", 0.0
+        ), patch("export_orders.FIXED_MONTHLY_COST", 0.0), patch(
+            "export_orders.FIXED_DAILY_COST", 0.0
+        ):
+            concentration = exporter.analyze_customer_concentration(frame)
+
+        self.assertEqual(69.6, concentration["top_10_pct_profit_share"])
+        self.assertEqual(69.6, concentration["top_20_pct_profit_share"])
+        self.assertEqual(69.6, concentration["top_10_pct_contribution_share"])
+
+    def test_customer_segments_use_realized_marker_not_one_mojibaked_status(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "R-1",
+                    "customer_email": "a@example.com",
+                    "customer_name": "A",
+                    "purchase_date": "2026-06-01",
+                    "status_name": "Elkuldve",
+                    "realized_revenue": True,
+                    "order_total": 100.0,
+                    "item_label": "Test product",
+                    "invoice_city": "Budapest",
+                    "invoice_country": "HU",
+                }
+            ]
+        )
+
+        segments = exporter.analyze_customer_email_segments(frame)
+
+        self.assertEqual(1, segments["one_time_buyers_30_days"]["count"])
+        description = segments["high_value_one_time"]["description_en"].lower()
+        self.assertNotIn("nan", description)
+        self.assertIn("100.00", description)
 
     def test_roy_knife_brand_margin_overrides_cover_requested_brands(self) -> None:
         expected_brands = [

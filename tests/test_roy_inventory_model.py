@@ -243,11 +243,40 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual("Out of stock", alert_row["stock_risk_level"])
         self.assertEqual(5, int(alert_row["lead_time_working_days"]))
         self.assertTrue(bool(alert_row["history_only_inventory_flag"]))
-        self.assertGreater(float(alert_row["suggested_reorder_units"]), 0)
+        self.assertTrue(pd.isna(alert_row["suggested_reorder_units"]))
+        self.assertGreater(float(alert_row["suggested_reorder_units_estimate"]), 0)
+        self.assertFalse(bool(alert_row["recommendation_ready"]))
+        self.assertEqual("Review risk", alert_row["reorder_action_label"])
 
         summary = result["summary"]
         self.assertEqual(1, summary["history_only_inventory_products"])
         self.assertEqual(1, summary["historical_restock_relevant_products"])
+        self.assertEqual("warning_only", summary["inventory_recommendation_status"])
+        self.assertIn("inbound purchase orders are not modeled", summary["inventory_recommendation_blockers"])
+
+    def test_service_work_rows_are_excluded_from_restock_alerts(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        item_df = pd.DataFrame(
+            [
+                item_row("R-1", "SERVICE-1", "Diagnostika / praca / testovanie", "2026-05-01", 1, 100),
+                item_row("R-2", "SERVICE-1", "Diagnostika / praca / testovanie", "2026-05-10", 1, 100),
+                item_row("R-3", "SERVICE-1", "Diagnostika / praca / testovanie", "2026-05-20", 1, 100),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+
+        self.assertNotIn("SERVICE-1", set(result["alert_rows"].get("sku", [])))
+        self.assertNotIn("SERVICE-1", set(result["restock_priority_rows"].get("sku", [])))
+        excluded = result["inventory_rows"]
+        if not excluded.empty and "sku" in excluded.columns:
+            service_rows = excluded.loc[excluded["sku"] == "SERVICE-1"]
+            if not service_rows.empty:
+                self.assertTrue(bool(service_rows.iloc[0]["alert_excluded_flag"]))
 
     def test_maco_stop_large_set_demand_is_shifted_to_components(self) -> None:
         inventory_snapshot = pd.DataFrame(

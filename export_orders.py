@@ -111,8 +111,6 @@ FIXED_DAILY_COST = 0  # EUR per day; when set, overrides monthly fixed-cost spre
 EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
 PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for canonical reporting product names
 MISSING_COST_MARGIN_PCT = 0.0  # Product margin used only when no configured purchase cost can be resolved
-WRITTEN_OFF_COST_SKUS: List[str] = []  # Explicit accounting write-offs allowed to override a known purchase cost
-WRITTEN_OFF_COST_LABEL_PATTERNS: List[str] = []  # Explicit accounting write-offs allowed to override a known cost
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
 ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
@@ -2960,17 +2958,6 @@ class BizniWebExporter:
                     return float(margin_pct)
         return cls._margin_override_pct_for_label(label)
 
-    @classmethod
-    def _is_written_off_cost_item(cls, product_sku: str, label: str) -> bool:
-        normalized_sku = cls._normalize_product_identifier(product_sku)
-        if normalized_sku:
-            if any(
-                cls._normalize_product_identifier(configured_sku) == normalized_sku
-                for configured_sku in WRITTEN_OFF_COST_SKUS
-            ):
-                return True
-        return cls._matches_patterns(label, WRITTEN_OFF_COST_LABEL_PATTERNS)
-
     @staticmethod
     def _margin_override_source(margin_pct: float) -> str:
         token = f"{float(margin_pct):g}".replace(".", "_")
@@ -5243,7 +5230,7 @@ class BizniWebExporter:
 
                 # A mapped purchase cost is the accounting source of truth. Legacy margin/zero-cost
                 # rules are fallback assumptions only and must never hide a known real cost. The
-                # sole exception is an explicit accounting write-off configured separately.
+                # sole exception is a line genuinely sold for zero, which is treated as an order gift.
                 force_zero_cost = False
                 force_zero_margin = False
                 force_margin_15 = False
@@ -5257,9 +5244,9 @@ class BizniWebExporter:
                     force_zero_cost = self._matches_patterns(item_label, ZERO_COST_LABEL_PATTERNS)
                 if item_label and not force_margin_15:
                     force_margin_15 = self._matches_patterns(item_label, MARGIN_15_LABEL_PATTERNS)
-                if self._is_written_off_cost_item(product_sku, item_label):
+                if abs(float(item_total_without_tax or 0.0)) < 1e-9:
                     expense_per_item = 0.0
-                    expense_source = "written_off_cost_override"
+                    expense_source = "zero_revenue_gift"
                 else:
                     expense_per_item, expense_source = self._resolve_product_expense(
                         product_sku,
@@ -9144,17 +9131,21 @@ class BizniWebExporter:
         total_customers = int(orders_df['customer_email'].nunique())
         contribution_ltv = (total_pre_ad_contribution / total_customers) if total_customers > 0 else 0.0
         new_customers = int(len(first_orders))
-        daily_fb_spend = (
+        daily_channel_spend = (
             df.assign(_d=pd.to_datetime(df['purchase_date']).dt.date)
-            .groupby('_d')['fb_ads_daily_spend']
+            .groupby('_d')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
             .first()
             .sum()
         )
-        paid_cac_fb = (daily_fb_spend / new_customers) if new_customers > 0 else 0.0
-        contribution_ltv_cac = (contribution_ltv / paid_cac_fb) if paid_cac_fb > 0 else 0.0
+        paid_spend_fb = float(daily_channel_spend.get('fb_ads_daily_spend', 0.0))
+        paid_spend_google = float(daily_channel_spend.get('google_ads_daily_spend', 0.0))
+        paid_spend_blended = paid_spend_fb + paid_spend_google
+        paid_cac_fb = (paid_spend_fb / new_customers) if new_customers > 0 else 0.0
+        paid_cac_blended = (paid_spend_blended / new_customers) if new_customers > 0 else 0.0
+        contribution_ltv_cac = (contribution_ltv / paid_cac_blended) if paid_cac_blended > 0 else 0.0
 
         # ---- 4) cohort payback in days (monthly acquisition cohorts)
-        # Cohort CAC is estimated as monthly FB spend / new customers acquired in that month.
+        # Cohort CAC is blended tracked paid spend (Meta + Google) / new customers.
         daily_spend_df = (
             df.assign(_d=pd.to_datetime(df['purchase_date']).dt.normalize())
             .groupby('_d')[['fb_ads_daily_spend', 'google_ads_daily_spend']]
@@ -9189,7 +9180,9 @@ class BizniWebExporter:
         for cohort_month, group in first_order_map.groupby('cohort_month'):
             cohort_customers = group.index.tolist()
             cohort_new_customers = len(cohort_customers)
-            cohort_spend = float(monthly_fb_spend.get(cohort_month, 0.0))
+            cohort_fb_spend = float(monthly_fb_spend.get(cohort_month, 0.0))
+            cohort_google_spend = float(monthly_google_spend.get(cohort_month, 0.0))
+            cohort_spend = float(monthly_paid_spend.get(cohort_month, 0.0))
             cohort_cac = (cohort_spend / cohort_new_customers) if cohort_new_customers > 0 else 0.0
 
             payback_days_list = []
@@ -9210,7 +9203,9 @@ class BizniWebExporter:
             cohort_rows.append({
                 'cohort_month': cohort_month,
                 'new_customers': cohort_new_customers,
-                'cohort_fb_spend': round(cohort_spend, 2),
+                'cohort_fb_spend': round(cohort_fb_spend, 2),
+                'cohort_google_spend': round(cohort_google_spend, 2),
+                'cohort_paid_spend': round(cohort_spend, 2),
                 'cohort_cac': round(cohort_cac, 2),
                 'recovered_customers': recovered_customers,
                 'recovery_rate_pct': round(recovery_rate_pct, 1),
@@ -9611,6 +9606,8 @@ class BizniWebExporter:
                 'repeat_order_contribution_per_order': round(repeat_order_contribution_per_order, 2),
                 'contribution_ltv': round(contribution_ltv, 2),
                 'paid_cac_fb': round(paid_cac_fb, 2),
+                'paid_cac': round(paid_cac_blended, 2),
+                'paid_cac_scope': 'tracked_ads_fb_google',
                 'contribution_ltv_cac': round(contribution_ltv_cac, 2),
                 'margin_mean_pct': round(margin_mean, 2),
                 'margin_std_pp': round(margin_std, 2),
@@ -10533,6 +10530,29 @@ class BizniWebExporter:
         inbound_stock_config = inventory_config.get("inbound_stock") or {}
         inbound_stock_enabled = bool(inbound_stock_config.get("enabled"))
         inbound_stock_source = str(inbound_stock_config.get("source") or "").strip() or "not_modeled"
+        inventory_decision_gate = dict(inventory_config.get("decision_gate") or {})
+        inventory_decision_gate_enabled = bool(inventory_decision_gate.get("enabled", False))
+        minimum_cost_coverage_retail_pct = float(
+            inventory_decision_gate.get("minimum_cost_coverage_retail_pct", 80.0) or 80.0
+        )
+        minimum_forecast_backtest_products = max(
+            1,
+            int(inventory_decision_gate.get("minimum_forecast_backtest_products", 20) or 20),
+        )
+        maximum_forecast_wape_pct = float(
+            inventory_decision_gate.get("maximum_forecast_wape_pct", 40.0) or 40.0
+        )
+        minimum_forecast_median_accuracy_pct = float(
+            inventory_decision_gate.get("minimum_forecast_median_accuracy_pct", 60.0) or 60.0
+        )
+        minimum_forecast_within_20_pct = float(
+            inventory_decision_gate.get("minimum_forecast_within_20_pct", 40.0) or 40.0
+        )
+        require_inbound_stock = bool(inventory_decision_gate.get("require_inbound_stock", True))
+        maximum_negative_stock_products = max(
+            0,
+            int(inventory_decision_gate.get("maximum_negative_stock_products", 0) or 0),
+        )
         trend_window_weeks = min(4, max(2, len(week_index) // 2)) if len(week_index) >= 4 else 0
         forecast_horizon_weeks = 4
         growing_rows: List[Dict[str, Any]] = []
@@ -10732,6 +10752,28 @@ class BizniWebExporter:
                     "weeks_used",
                 ]
             )
+        forecast_backtest_products = int(len(forecast_accuracy_rows_df))
+        forecast_backtest_wape_pct = (
+            float(
+                np.abs(
+                    forecast_accuracy_rows_df["forecast_30d_revenue"]
+                    - forecast_accuracy_rows_df["actual_30d_revenue"]
+                ).sum()
+                / float(forecast_accuracy_rows_df["actual_30d_revenue"].sum())
+                * 100.0
+            )
+            if forecast_backtest_products > 0
+            and float(forecast_accuracy_rows_df["actual_30d_revenue"].sum()) > 0
+            else 0.0
+        )
+        forecast_backtest_median_accuracy_pct = (
+            float(forecast_accuracy_rows_df["revenue_accuracy_pct"].median())
+            if forecast_backtest_products > 0 else 0.0
+        )
+        forecast_backtest_within_20_pct = (
+            float((forecast_accuracy_rows_df["revenue_error_abs_pct"] <= 20.0).mean() * 100.0)
+            if forecast_backtest_products > 0 else 0.0
+        )
 
         full_months = pd.PeriodIndex([], freq="M")
         seasonality_rows_df = pd.DataFrame()
@@ -10873,6 +10915,9 @@ class BizniWebExporter:
         inventory_status = "disabled" if not inventory_enabled else "unavailable"
         inventory_fetch_error = None
         matched_bundle_rule_count = 0
+        inventory_recommendation_ready = not inventory_decision_gate_enabled
+        inventory_recommendation_confidence = "not_gated" if not inventory_decision_gate_enabled else "low"
+        inventory_recommendation_blockers: List[str] = []
 
         inventory_frame = pd.DataFrame()
         if inventory_enabled:
@@ -11507,6 +11552,62 @@ class BizniWebExporter:
             ] = "Bundle demand is shifted to configured components"
             inventory_products_df["alert_excluded_flag"] = alert_exclusion_reason != ""
             inventory_products_df["alert_excluded_reason"] = alert_exclusion_reason.replace("", None)
+            inventory_retail_total = float(inventory_products_df["inventory_retail_value"].sum())
+            inventory_mapped_retail_total = float(inventory_products_df["mapped_inventory_retail_value"].sum())
+            inventory_cost_coverage_retail_pct = (
+                inventory_mapped_retail_total / inventory_retail_total * 100.0
+                if inventory_retail_total > 0 else 0.0
+            )
+            negative_stock_products = int((inventory_products_df["available_quantity_raw"] < 0).sum())
+            if inventory_decision_gate_enabled:
+                if inventory_status != "ok":
+                    inventory_recommendation_blockers.append(
+                        f"inventory snapshot status is {inventory_status}"
+                    )
+                if inventory_cost_coverage_retail_pct < minimum_cost_coverage_retail_pct:
+                    inventory_recommendation_blockers.append(
+                        "purchase-cost coverage by retail value "
+                        f"{inventory_cost_coverage_retail_pct:.1f}%/{minimum_cost_coverage_retail_pct:.1f}%"
+                    )
+                if forecast_backtest_products < minimum_forecast_backtest_products:
+                    inventory_recommendation_blockers.append(
+                        f"forecast backtest products {forecast_backtest_products}/{minimum_forecast_backtest_products}"
+                    )
+                if forecast_backtest_wape_pct > maximum_forecast_wape_pct:
+                    inventory_recommendation_blockers.append(
+                        f"forecast WAPE {forecast_backtest_wape_pct:.1f}%/{maximum_forecast_wape_pct:.1f}% max"
+                    )
+                if forecast_backtest_median_accuracy_pct < minimum_forecast_median_accuracy_pct:
+                    inventory_recommendation_blockers.append(
+                        "forecast median accuracy "
+                        f"{forecast_backtest_median_accuracy_pct:.1f}%/{minimum_forecast_median_accuracy_pct:.1f}%"
+                    )
+                if forecast_backtest_within_20_pct < minimum_forecast_within_20_pct:
+                    inventory_recommendation_blockers.append(
+                        "forecasts within 20% error "
+                        f"{forecast_backtest_within_20_pct:.1f}%/{minimum_forecast_within_20_pct:.1f}%"
+                    )
+                if require_inbound_stock and not inbound_stock_enabled:
+                    inventory_recommendation_blockers.append("inbound purchase orders are not modeled")
+                if negative_stock_products > maximum_negative_stock_products:
+                    inventory_recommendation_blockers.append(
+                        f"negative-stock products {negative_stock_products}/{maximum_negative_stock_products} max"
+                    )
+                inventory_recommendation_ready = not inventory_recommendation_blockers
+                inventory_recommendation_confidence = (
+                    "high" if inventory_recommendation_ready
+                    else "medium" if len(inventory_recommendation_blockers) == 1
+                    else "low"
+                )
+            inventory_recommendation_note = (
+                "Exact purchase recommendation is enabled."
+                if inventory_recommendation_ready
+                else "Estimate only; do not place a purchase order. "
+                + "; ".join(inventory_recommendation_blockers)
+            )
+            inventory_products_df["recommendation_ready"] = inventory_recommendation_ready
+            inventory_products_df["recommendation_confidence"] = inventory_recommendation_confidence
+            inventory_products_df["recommendation_note"] = inventory_recommendation_note
             inventory_products_df["lead_time_demand_units"] = (
                 inventory_products_df["daily_units_for_alert"]
                 * inventory_products_df["lead_time_calendar_days"]
@@ -11519,7 +11620,7 @@ class BizniWebExporter:
                     reorder_cover_days,
                 )
             )
-            inventory_products_df["suggested_reorder_units"] = np.ceil(
+            inventory_products_df["suggested_reorder_units_estimate"] = np.ceil(
                 np.maximum(
                     (
                         inventory_products_df["daily_units_for_alert"]
@@ -11528,14 +11629,22 @@ class BizniWebExporter:
                     0.0,
                 )
             )
+            inventory_products_df["suggested_reorder_units"] = (
+                inventory_products_df["suggested_reorder_units_estimate"]
+                if inventory_recommendation_ready else np.nan
+            )
             reorder_by_dt = pd.Series(pd.NaT, index=inventory_products_df.index, dtype="datetime64[ns]")
             reorder_deadline_mask = stockout_dt.notna() & (inventory_products_df["lead_time_working_days"] > 0)
             for idx in inventory_products_df.index[reorder_deadline_mask]:
                 reorder_by_dt.at[idx] = stockout_dt.at[idx] - pd.offsets.BDay(
                     int(inventory_products_df.at[idx, "lead_time_working_days"])
                 )
-            inventory_products_df["reorder_by_date"] = reorder_by_dt.dt.strftime("%Y-%m-%d")
-            inventory_products_df.loc[reorder_by_dt.isna(), "reorder_by_date"] = None
+            inventory_products_df["reorder_by_date_estimate"] = reorder_by_dt.dt.strftime("%Y-%m-%d")
+            inventory_products_df.loc[reorder_by_dt.isna(), "reorder_by_date_estimate"] = None
+            inventory_products_df["reorder_by_date"] = (
+                inventory_products_df["reorder_by_date_estimate"]
+                if inventory_recommendation_ready else None
+            )
             inventory_products_df["days_until_reorder"] = np.where(
                 reorder_by_dt.notna(),
                 (reorder_by_dt.dt.normalize() - snapshot_ts.normalize()).dt.days,
@@ -11546,7 +11655,7 @@ class BizniWebExporter:
                 & inventory_products_df["days_of_cover"].notna()
                 & (inventory_products_df["days_of_cover"] <= inventory_products_df["lead_time_calendar_days"])
             )
-            inventory_products_df["reorder_now_flag"] = (
+            potential_reorder_now_flag = (
                 inventory_products_df["risk_30d_flag"]
                 & (
                     (inventory_products_df["lead_time_working_days"] <= 0)
@@ -11554,21 +11663,29 @@ class BizniWebExporter:
                     | (reorder_by_dt.dt.normalize() <= snapshot_ts.normalize())
                 )
             )
-            inventory_products_df["prepare_po_flag"] = (
+            potential_prepare_po_flag = (
                 inventory_products_df["risk_30d_flag"]
-                & ~inventory_products_df["reorder_now_flag"]
+                & ~potential_reorder_now_flag
                 & inventory_products_df["days_until_reorder"].notna()
                 & (inventory_products_df["days_until_reorder"] <= 7)
+            )
+            inventory_products_df["reorder_attention_flag"] = inventory_products_df["risk_30d_flag"]
+            inventory_products_df["reorder_now_flag"] = (
+                potential_reorder_now_flag if inventory_recommendation_ready else False
+            )
+            inventory_products_df["prepare_po_flag"] = (
+                potential_prepare_po_flag if inventory_recommendation_ready else False
             )
             inventory_products_df["reorder_action_label"] = np.select(
                 [
                     inventory_products_df["alert_excluded_flag"],
+                    inventory_products_df["risk_30d_flag"] & ~inventory_products_df["recommendation_ready"],
                     inventory_products_df["reorder_now_flag"],
                     inventory_products_df["prepare_po_flag"],
                     inventory_products_df["risk_30d_flag"],
                     inventory_products_df["risk_45d_flag"],
                 ],
-                ["Excluded", "Order now", "Prepare PO", "30d alert", "45d watch"],
+                ["Excluded", "Review risk", "Order now", "Prepare PO", "30d alert", "45d watch"],
                 default="Monitor",
             )
 
@@ -11857,6 +11974,7 @@ class BizniWebExporter:
                 "alert_delivery_hero_count": int(alert_rows_df["strategic_stock_flag"].sum()) if not alert_rows_df.empty else 0,
                 "alert_reorder_now_count": int(alert_rows_df["reorder_now_flag"].sum()) if not alert_rows_df.empty else 0,
                 "alert_prepare_po_count": int(alert_rows_df["prepare_po_flag"].sum()) if not alert_rows_df.empty else 0,
+                "alert_attention_count": int(alert_rows_df["reorder_attention_flag"].sum()) if not alert_rows_df.empty else 0,
                 "alert_excluded_count": int(inventory_products_df["alert_excluded_flag"].sum()) if not inventory_products_df.empty else 0,
                 "lead_time_configured_alert_count": int((alert_rows_df["lead_time_working_days"] > 0).sum()) if not alert_rows_df.empty else 0,
                 "bundle_component_rule_count": int(matched_bundle_rule_count),
@@ -11864,28 +11982,19 @@ class BizniWebExporter:
                 "bundle_component_adjustment_90d_units": round(float(inventory_products_df["bundle_component_recent_90d_units"].sum()), 1) if not inventory_products_df.empty else 0.0,
                 "inbound_stock_status": "configured" if inbound_stock_enabled else "not_modeled",
                 "inbound_stock_source": inbound_stock_source,
+                "inventory_recommendation_status": (
+                    "ready" if inventory_recommendation_ready else "warning_only"
+                ),
+                "inventory_recommendation_ready": inventory_recommendation_ready,
+                "inventory_recommendation_confidence": inventory_recommendation_confidence,
+                "inventory_recommendation_blockers": inventory_recommendation_blockers,
+                "inventory_decision_gate_enabled": inventory_decision_gate_enabled,
                 "brand_turn_groups": int(len(brand_turn_rows_df)),
                 "family_turn_groups": int(len(family_turn_rows_df)),
-                "forecast_backtest_products": int(len(forecast_accuracy_rows_df)),
-                "forecast_backtest_wape_pct": round(
-                    float(
-                        np.abs(
-                            forecast_accuracy_rows_df["forecast_30d_revenue"]
-                            - forecast_accuracy_rows_df["actual_30d_revenue"]
-                        ).sum()
-                        / float(forecast_accuracy_rows_df["actual_30d_revenue"].sum())
-                        * 100.0
-                    ),
-                    2,
-                ) if not forecast_accuracy_rows_df.empty and float(forecast_accuracy_rows_df["actual_30d_revenue"].sum()) > 0 else 0.0,
-                "forecast_backtest_median_accuracy_pct": round(
-                    float(forecast_accuracy_rows_df["revenue_accuracy_pct"].median()),
-                    2,
-                ) if not forecast_accuracy_rows_df.empty else 0.0,
-                "forecast_backtest_within_20_pct": round(
-                    float((forecast_accuracy_rows_df["revenue_error_abs_pct"] <= 20.0).mean() * 100.0),
-                    2,
-                ) if not forecast_accuracy_rows_df.empty else 0.0,
+                "forecast_backtest_products": forecast_backtest_products,
+                "forecast_backtest_wape_pct": round(forecast_backtest_wape_pct, 2),
+                "forecast_backtest_median_accuracy_pct": round(forecast_backtest_median_accuracy_pct, 2),
+                "forecast_backtest_within_20_pct": round(forecast_backtest_within_20_pct, 2),
             },
             "growing_rows": growing_rows_df,
             "declining_rows": declining_rows_df,
@@ -11942,7 +12051,9 @@ class BizniWebExporter:
         customer_revenue['profit'] = customer_revenue['profit_with_fixed']
         customer_revenue = customer_revenue.sort_values('revenue', ascending=False)
 
-        total_revenue = customer_revenue['revenue'].sum()
+        total_revenue = float(customer_revenue['revenue'].sum())
+        total_profit_without_fixed = float(customer_revenue['profit_without_fixed'].sum())
+        total_profit_with_fixed = float(customer_revenue['profit_with_fixed'].sum())
         total_customers = len(customer_revenue)
 
         # Calculate concentration metrics for 10%, 20%, 30%, 40%, 50% of customers
@@ -11950,25 +12061,57 @@ class BizniWebExporter:
         level_counts = {}
         level_revenue = {}
         level_revenue_share = {}
+        level_profit_without_fixed = {}
+        level_profit_with_fixed = {}
+        level_profit_without_fixed_share = {}
+        level_profit_with_fixed_share = {}
 
         for level in concentration_levels:
             count = max(1, int(total_customers * level / 100))
             level_counts[level] = count
             level_revenue[level] = customer_revenue.head(count)['revenue'].sum()
             level_revenue_share[level] = round(level_revenue[level] / total_revenue * 100, 1) if total_revenue > 0 else 0
+            level_profit_without_fixed[level] = float(customer_revenue.head(count)['profit_without_fixed'].sum())
+            level_profit_with_fixed[level] = float(customer_revenue.head(count)['profit_with_fixed'].sum())
+            level_profit_without_fixed_share[level] = (
+                round(level_profit_without_fixed[level] / total_profit_without_fixed * 100, 1)
+                if abs(total_profit_without_fixed) > 1e-9 else 0
+            )
+            level_profit_with_fixed_share[level] = (
+                round(level_profit_with_fixed[level] / total_profit_with_fixed * 100, 1)
+                if abs(total_profit_with_fixed) > 1e-9 else 0
+            )
 
         # Top 10 customers by revenue (absolute, not percentage)
         top_10_customers = customer_revenue.head(10).copy()
         top_10_customers['revenue_pct'] = (top_10_customers['revenue'] / total_revenue * 100).round(1)
+        top_10_customers['profit_without_fixed_pct'] = np.where(
+            abs(total_profit_without_fixed) > 1e-9,
+            (top_10_customers['profit_without_fixed'] / total_profit_without_fixed * 100).round(1),
+            0.0,
+        )
+        top_10_customers['profit_with_fixed_pct'] = np.where(
+            abs(total_profit_with_fixed) > 1e-9,
+            (top_10_customers['profit_with_fixed'] / total_profit_with_fixed * 100).round(1),
+            0.0,
+        )
 
         concentration = {
             'total_customers': total_customers,
             'level_counts': level_counts,
             'level_revenue': level_revenue,
             'level_revenue_share': level_revenue_share,
+            'level_profit_without_fixed': level_profit_without_fixed,
+            'level_profit_with_fixed': level_profit_with_fixed,
+            'level_profit_without_fixed_share': level_profit_without_fixed_share,
+            'level_profit_with_fixed_share': level_profit_with_fixed_share,
             # Keep backward compatibility
             'top_10_pct_revenue_share': level_revenue_share.get(10, 0),
             'top_20_pct_revenue_share': level_revenue_share.get(20, 0),
+            'top_10_pct_profit_share': level_profit_with_fixed_share.get(10, 0),
+            'top_20_pct_profit_share': level_profit_with_fixed_share.get(20, 0),
+            'top_10_pct_contribution_share': level_profit_without_fixed_share.get(10, 0),
+            'top_20_pct_contribution_share': level_profit_without_fixed_share.get(20, 0),
             'top_10_customers': top_10_customers,
             'avg_revenue_per_customer': round(total_revenue / total_customers, 2) if total_customers > 0 else 0,
             'median_revenue_per_customer': round(customer_revenue['revenue'].median(), 2)
@@ -12216,6 +12359,37 @@ class BizniWebExporter:
             return "medium", "Medium confidence: useful signal, but still partly mixed by sample size or overlap."
         return "low", "Low confidence: few matched days or heavy channel overlap, so read direction more than exact numbers."
 
+    def _incrementality_decision_gate(
+        self,
+        *,
+        active_days: int,
+        control_days: int,
+        effective_pair_days: int,
+        confidence: str,
+    ) -> tuple[bool, List[str]]:
+        raw = dict((self.project_settings or {}).get("marketing_decision_gate") or {})
+        minimum_active_days = max(1, int(raw.get("minimum_active_days", 14) or 14))
+        minimum_control_days = max(1, int(raw.get("minimum_control_days", 14) or 14))
+        minimum_effective_pair_days = max(
+            1,
+            int(raw.get("minimum_effective_pair_days", 14) or 14),
+        )
+        minimum_confidence = str(raw.get("minimum_confidence", "high") or "high").strip().lower()
+        confidence_rank = {"low": 1, "medium": 2, "high": 3}
+        required_rank = confidence_rank.get(minimum_confidence, 3)
+        actual_rank = confidence_rank.get(str(confidence or "").strip().lower(), 0)
+
+        blockers: List[str] = []
+        if active_days < minimum_active_days:
+            blockers.append(f"active days {active_days}/{minimum_active_days}")
+        if control_days < minimum_control_days:
+            blockers.append(f"control days {control_days}/{minimum_control_days}")
+        if effective_pair_days < minimum_effective_pair_days:
+            blockers.append(f"comparable days {effective_pair_days}/{minimum_effective_pair_days}")
+        if actual_rank < required_rank:
+            blockers.append(f"confidence {confidence or 'unknown'}/{minimum_confidence}")
+        return not blockers, blockers
+
     @staticmethod
     def _build_incrementality_verdict(
         *,
@@ -12225,7 +12399,16 @@ class BizniWebExporter:
         break_even_cac: Optional[float],
         confidence: str,
         effective_pair_days: int,
+        decision_ready: bool = True,
+        decision_blockers: Optional[List[str]] = None,
     ) -> tuple[str, str, str]:
+        if not decision_ready:
+            blocker_text = ", ".join(decision_blockers or ["decision gate not met"])
+            return (
+                "Experiment required",
+                f"Do not scale or cut from this comparison yet ({blocker_text}). Run a cleaner controlled test first.",
+                "warning",
+            )
         if effective_pair_days < 4:
             return (
                 "Insufficient data",
@@ -12363,6 +12546,12 @@ class BizniWebExporter:
             matched_key_count=matched_key_count,
             overlap_rate=overlap_rate,
         )
+        decision_ready, decision_blockers = self._incrementality_decision_gate(
+            active_days=int(len(active_days)),
+            control_days=int(len(control_days)),
+            effective_pair_days=effective_pair_days,
+            confidence=confidence,
+        )
         verdict, verdict_reason, verdict_tone = self._build_incrementality_verdict(
             incremental_profit_without_fixed_per_day=comparison["incremental_profit_without_fixed_per_day"],
             incremental_profit_with_fixed_per_day=comparison["incremental_profit_with_fixed_per_day"],
@@ -12370,6 +12559,8 @@ class BizniWebExporter:
             break_even_cac=break_even_cac,
             confidence=confidence,
             effective_pair_days=effective_pair_days,
+            decision_ready=decision_ready,
+            decision_blockers=decision_blockers,
         )
         return {
             "key": key,
@@ -12384,6 +12575,8 @@ class BizniWebExporter:
             "confidence": confidence,
             "confidence_note_en": confidence_note,
             "confidence_note_sk": confidence_note,
+            "decision_ready": decision_ready,
+            "decision_blockers": decision_blockers,
             "incremental_roas": round(float(incremental_roas), 3) if incremental_roas is not None else None,
             "incremental_profit_per_eur": round(float(incremental_profit_per_eur), 3) if incremental_profit_per_eur is not None else None,
             "incremental_company_profit_per_eur": round(float(incremental_company_profit_per_eur), 3) if incremental_company_profit_per_eur is not None else None,
@@ -12435,9 +12628,9 @@ class BizniWebExporter:
         # Keep units aligned: CAC is per acquired customer, so break-even must also be per customer.
         break_even_cac = pre_ad_contribution_per_customer
         break_even_cac_order_based = pre_ad_contribution_per_order
-        cac_headroom = break_even_cac - current_fb_cac
+        cac_headroom = break_even_cac - blended_cac
         cac_headroom_pct = (cac_headroom / break_even_cac * 100) if break_even_cac != 0 else 0
-        contribution_ltv_cac = (pre_ad_contribution_per_customer / current_fb_cac) if current_fb_cac > 0 else 0
+        contribution_ltv_cac = (pre_ad_contribution_per_customer / blended_cac) if blended_cac > 0 else 0
         avg_return_cycle_days = None
         if clv_return_time_analysis is not None and not clv_return_time_analysis.empty and 'avg_return_time_days' in clv_return_time_analysis.columns:
             valid_return_days = clv_return_time_analysis['avg_return_time_days'].dropna()
@@ -12445,10 +12638,10 @@ class BizniWebExporter:
                 avg_return_cycle_days = float(valid_return_days.mean())
 
         # Estimated payback period:
-        # orders = current FB CAC / pre-ad contribution per order
+        # orders = blended tracked CAC / pre-ad contribution per order
         # days = max(orders - 1, 0) * avg return cycle (if available)
         if pre_ad_contribution_per_order > 0:
-            payback_orders = (current_fb_cac / pre_ad_contribution_per_order) if current_fb_cac > 0 else 0.0
+            payback_orders = (blended_cac / pre_ad_contribution_per_order) if blended_cac > 0 else 0.0
         else:
             payback_orders = None
 
@@ -12461,7 +12654,7 @@ class BizniWebExporter:
         # after ad spend is already included in per-order contribution.
         post_ad_contribution_per_order = (total_contribution_profit / total_orders) if total_orders > 0 else 0
         if post_ad_contribution_per_order > 0:
-            post_ad_payback_orders = (current_fb_cac / post_ad_contribution_per_order) if current_fb_cac > 0 else 0.0
+            post_ad_payback_orders = (blended_cac / post_ad_contribution_per_order) if blended_cac > 0 else 0.0
         else:
             post_ad_payback_orders = None
 
@@ -12538,7 +12731,7 @@ class BizniWebExporter:
             'break_even_cac': round(break_even_cac, 2),
             'break_even_cac_order_based': round(break_even_cac_order_based, 2),
             'current_fb_cac': round(current_fb_cac, 2),
-            'paid_cac': round(current_fb_cac, 2),
+            'paid_cac': round(blended_cac, 2),
             'blended_cac': round(blended_cac, 2),
             'blended_cac_scope': 'tracked_ads_fb_google',
             'cac_headroom': round(cac_headroom, 2),
@@ -13595,11 +13788,22 @@ class BizniWebExporter:
         df['purchase_datetime'] = pd.to_datetime(df['purchase_date'])
 
         # Get unique orders with customer info
-        orders_df = df[['order_num', 'customer_email', 'customer_name', 'purchase_datetime',
-                        'status_name', revenue_col, 'invoice_city', 'invoice_country']].drop_duplicates(subset=['order_num'])
+        order_columns = [
+            'order_num', 'customer_email', 'customer_name', 'purchase_datetime',
+            'status_name', revenue_col, 'invoice_city', 'invoice_country',
+        ]
+        if 'realized_revenue' in df.columns:
+            order_columns.append('realized_revenue')
+        orders_df = df[order_columns].drop_duplicates(subset=['order_num'])
 
-        # Filter to only "OdoslanĂˇ" (shipped) orders for segments 1 and 2
-        shipped_orders = orders_df[orders_df['status_name'] == 'OdoslanĂˇ'].copy()
+        # The reporting frame is already restricted to realized orders. Prefer the explicit
+        # realized marker when present instead of matching one localized, historically mojibaked
+        # status label; that old match produced an empty segment base and EUR NaN descriptions.
+        if 'realized_revenue' in orders_df.columns:
+            realized_mask = orders_df['realized_revenue'].fillna(False).astype(bool)
+            shipped_orders = orders_df.loc[realized_mask].copy()
+        else:
+            shipped_orders = orders_df.copy()
 
         # Calculate per-customer stats from shipped orders
         customer_stats = shipped_orders.groupby('customer_email').agg({
@@ -13729,7 +13933,10 @@ class BizniWebExporter:
         # ==== ADDITIONAL SEGMENTS ====
 
         # Segment 4: High-value one-time buyers (spent above average, haven't returned)
-        avg_order_value = customer_stats['total_revenue'].mean()
+        avg_order_value = (
+            float(customer_stats['total_revenue'].mean())
+            if not customer_stats.empty else 0.0
+        )
         high_value_one_time = customer_stats[
             (customer_stats['order_count'] == 1) &
             (customer_stats['total_revenue'] > avg_order_value) &

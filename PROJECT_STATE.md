@@ -63,11 +63,16 @@ Bootstrap entrypoints:
 
 - ROY reporting decision-safety remediation is in progress on branch `codex/roy-reporting-decision-safety` (2026-07-15):
   - purchase-cost precedence is corrected in the reusable reporting core: a resolved mapped purchase cost now wins over legacy zero-cost, zero-margin, `35%`, and `15%` assumptions
-  - a known purchase cost may be bypassed only through the new explicit accounting write-off settings `written_off_cost_skus` / `written_off_cost_label_patterns`; both are intentionally empty for ROY
+  - the sole mapped-cost exception is an item line genuinely sold for `0 EUR`; it is marked `zero_revenue_gift` and keeps `0 EUR` cost, covering free Lux knife sets / ROY knives without weakening precedence for positively priced rows
   - ROY's `35%` missing-cost margin remains a fallback only when no purchase cost can be resolved, while mapped negative-margin clearance sales remain unchanged
-  - focused verification: `test_reporting_calculation_fixes.py` `30` tests OK, including mapped-cost precedence and explicit write-off regressions; `test_creditnote_export.py` `15` tests OK; ROY settings JSON and `git diff --check` OK
+  - inventory output now has a hard purchase-decision gate: exact quantities/dates are hidden and `Order now` / `Prepare PO` flags are disabled until cost coverage, forecast backtest, inbound purchase orders, and negative-stock thresholds all pass; internal estimates remain available only as warning evidence
+  - `diagnostika`, `praca`, and `testovanie` service lines are excluded from stock alerts
+  - marketing action verdicts require at least `14` active, control, and comparable days plus `high` confidence; otherwise the result is `Experiment required`, never `Scale` or `Cut`
+  - tracked paid CAC and cohort payback now use blended Meta + Google spend; customer concentration now exports real CM3 profit shares; customer segmentation uses the realized-revenue marker instead of one corrupted localized status label
+  - dashboard fixes: same-item frequencies preserve labels such as `2x`; missing-cost copy reflects the configured `35%` policy; unsafe exact reorder values render as `Blocked`; ROY inventory shows the gate blockers; the `1280px` navigation collapse was removed and table overflow is contained
+  - focused verification: `test_reporting_calculation_fixes.py` `34` tests OK, `test_roy_inventory_model.py` `12` tests OK, `test_dashboard_modern.py` `6` tests OK, `test_creditnote_export.py` `15` tests OK; Python compile, ROY settings JSON, and `git diff --check` OK
   - no runtime or historical data has been changed yet; VEVO configuration/data remains untouched
-  - Next exact step: add hard confidence gates for ROY inventory and marketing recommendations, repair the audited dashboard KPI/UI defects, then run the full suite before ROY-only deployment and full-history regeneration
+  - Next exact step: add the focused CEO cockpit decision layer, run the full suite and local browser verification, then open/merge the PR before ROY-only deployment and full-history regeneration
 
 - ROY missing-purchase-cost fallback is permanently deployed as a `35%` product margin and full history was regenerated on `2026-07-15`:
   - code PR `#210` merged as `e178af8`; `projects/roy/settings.json` sets `missing_cost_margin_pct = 35`, so only products without any resolvable purchase cost use expense `65%` of net item revenue and source `missing_cost_margin_35_fallback`

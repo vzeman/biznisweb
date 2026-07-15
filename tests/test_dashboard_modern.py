@@ -248,6 +248,89 @@ class DashboardModernTests(unittest.TestCase):
         self.assertEqual(49.2, payload["creditnotes"]["summary"]["credited_gross_eur"])
         self.assertEqual("Packeta", payload["creditnotes"]["carrier_rows"][0]["carrier"])
 
+    def test_decision_safety_fixes_are_visible_in_roy_dashboard(self) -> None:
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2026-07-14"),
+                    "total_revenue": 100.0,
+                    "net_profit": 20.0,
+                    "contribution_profit": 25.0,
+                    "unique_orders": 1,
+                    "fb_ads_spend": 0.0,
+                    "google_ads_spend": 0.0,
+                    "total_items": 1,
+                    "product_expense": 60.0,
+                    "total_cost": 80.0,
+                    "pre_ad_contribution_profit": 35.0,
+                }
+            ]
+        )
+        items_agg = pd.DataFrame([{"item_label": "Test", "total_quantity": 1, "total_revenue": 100.0}])
+        alert_rows = pd.DataFrame(
+            [
+                {
+                    "sku": "W-1",
+                    "product": "Wachman Discovery",
+                    "strategic_stock_flag": True,
+                    "stock_risk_level": "Critical",
+                    "available_quantity": 1,
+                    "alert_30d_units": 134,
+                    "days_of_cover": 2,
+                    "lead_time_working_days": 30,
+                    "reorder_by_date": None,
+                    "reorder_by_date_estimate": "2026-07-01",
+                    "suggested_reorder_units": None,
+                    "suggested_reorder_units_estimate": 134,
+                    "reorder_action_label": "Review risk",
+                    "alert_30d_revenue": 1000,
+                    "recommendation_ready": False,
+                    "recommendation_confidence": "low",
+                    "recommendation_note": "Estimate only",
+                }
+            ]
+        )
+
+        html = generate_modern_dashboard(
+            date_agg,
+            items_agg,
+            datetime(2026, 7, 14),
+            datetime(2026, 7, 14),
+            advanced_dtc_metrics={
+                "roy_product_demand": {
+                    "summary": {
+                        "inventory_status": "ok",
+                        "inventory_recommendation_ready": False,
+                        "inventory_recommendation_confidence": "low",
+                        "inventory_recommendation_blockers": ["inbound purchase orders are not modeled"],
+                        "alert_attention_count": 1,
+                    },
+                    "alert_rows": alert_rows,
+                }
+            },
+            same_item_repurchase={
+                "customer_item_frequency": pd.DataFrame(
+                    [{"purchase_frequency": "2x", "customer_count": 3, "percentage": 60.0}]
+                )
+            },
+            source_health={
+                "project": "roy",
+                "qa": {
+                    "product_expense_coverage": {
+                        "fallback_policy": "missing costs use a configured 35% margin estimate"
+                    }
+                },
+            },
+        )
+
+        self.assertIn("<tr><td>2x</td><td>3</td><td>60.0%</td></tr>", html)
+        self.assertIn("WARNING ONLY / LOW", html)
+        self.assertIn("<td>Blocked</td>", html)
+        self.assertIn("configured 35% margin estimate", html)
+        self.assertNotIn("conservative zero-margin fallback", html)
+        self.assertNotIn("@media (max-width: 1280px)", html)
+        self.assertIn("@media (max-width: 900px)", html)
+
 
 if __name__ == "__main__":
     unittest.main()

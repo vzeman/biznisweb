@@ -30,8 +30,6 @@ class ProjectRuntime:
     currency_rates_to_eur: Dict[str, float]
     product_expenses: Dict[str, float]
     missing_cost_margin_pct: float
-    written_off_cost_skus: List[str]
-    written_off_cost_label_patterns: List[str]
     zero_margin_brands: List[str]
     zero_cost_brands: List[str]
     zero_cost_label_patterns: List[str]
@@ -73,8 +71,6 @@ class ProjectRuntime:
             "currency_rates_to_eur": dict(self.currency_rates_to_eur),
             "product_expenses": dict(self.product_expenses),
             "missing_cost_margin_pct": self.missing_cost_margin_pct,
-            "written_off_cost_skus": list(self.written_off_cost_skus),
-            "written_off_cost_label_patterns": list(self.written_off_cost_label_patterns),
             "zero_margin_brands": list(self.zero_margin_brands),
             "zero_cost_brands": list(self.zero_cost_brands),
             "zero_cost_label_patterns": list(self.zero_cost_label_patterns),
@@ -200,12 +196,6 @@ def load_project_runtime(
             settings.get("missing_cost_margin_pct"),
             setting_name="missing_cost_margin_pct",
         ),
-        written_off_cost_skus=[
-            str(v).strip() for v in settings.get("written_off_cost_skus", []) if str(v).strip()
-        ],
-        written_off_cost_label_patterns=[
-            str(v).strip() for v in settings.get("written_off_cost_label_patterns", []) if str(v).strip()
-        ],
         zero_margin_brands=[str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
         zero_cost_brands=[str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
         zero_cost_label_patterns=[str(v).strip() for v in settings.get("zero_cost_label_patterns", []) if str(v).strip()],
@@ -248,12 +238,6 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     target_globals["CURRENCY_RATES_TO_EUR"] = dict(runtime.currency_rates_to_eur)
     target_globals["PRODUCT_EXPENSES"] = dict(runtime.product_expenses)
     target_globals["MISSING_COST_MARGIN_PCT"] = float(runtime.missing_cost_margin_pct)
-    target_globals["WRITTEN_OFF_COST_SKUS"] = [
-        str(v).strip() for v in runtime.written_off_cost_skus if str(v).strip()
-    ]
-    target_globals["WRITTEN_OFF_COST_LABEL_PATTERNS"] = [
-        str(v).strip() for v in runtime.written_off_cost_label_patterns if str(v).strip()
-    ]
     target_globals["ZERO_MARGIN_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_margin_brands if str(v).strip()]
     target_globals["ZERO_COST_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_cost_brands if str(v).strip()]
     target_globals["ZERO_COST_LABEL_PATTERNS"] = [str(v).strip() for v in runtime.zero_cost_label_patterns if str(v).strip()]
