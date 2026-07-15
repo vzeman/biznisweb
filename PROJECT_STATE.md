@@ -61,7 +61,8 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY Micro SD 64GB cross-shop identity fix is implemented on `codex/roy-micro-sd-64gb-identity` and awaiting deploy (2026-07-15):
+- ROY Micro SD 64GB cross-shop identity fix is merged and its ROY-only deploy workflow is being hardened before retry (2026-07-15):
+  - product identity PR `#216` merged to `main` as `5d090621ed359ae99e968e916a158a41efef5d2c`; ECR build run `29424051875` published digest `sha256:7b9bcfa3418d179008b584f92e63e582d13f6223402b7493f30fd52b3c51f18b`
   - live `/api/operations/roy/live?refresh=1` reproduced `H-69235D5B` and the Czech title `Micro SD CARD 64GB s adaptérem` three times; historical reporting had the same 64GB product split across `23942440833`, `H-1DADF217`, `H-69235D5B`, and `H-791A744A`
   - ROY now canonicalizes the Slovak, Czech, and Hungarian 64GB names to `Micro SD KARTA 64GB s adaptérom` and the stable reporting SKU `MICRO-SD-64GB`
   - the mapping is intentionally name-scoped because historical EAN `23942440833` is reused by 32GB rows; all `42` historical 64GB rows / `53` units / `EUR 667.44` revenue merge, while all `396` 32GB rows remain outside the 64GB identity
@@ -69,7 +70,9 @@ Bootstrap entrypoints:
   - canonical reporting keeps source auditability in `raw_product_sku`; the Czech row exports `raw_product_sku=H-69235D5B` while cost, aggregation, inventory, and UI use `product_sku=MICRO-SD-64GB`
   - verification: project JSON and Python compile OK; focused reporting/operations/dashboard/auth/mobile suite `92` tests OK; direct live-inventory regression verifies canonical SKU, `EUR 3.30` unit cost, `EUR 66.00` cost value on `20` units, and 32GB separation; full suite `134` tests OK; reporting QA smoke and `git diff --check` OK
   - runtime hard-gate before code: App Runner instance-id `N/A`, current DNS IPs `3.126.228.15`, `3.120.216.162`, `3.75.104.192`, service `biznisweb-roy-operations-dashboard`, runtime `python live_dashboard_server.py --host 0.0.0.0 --port 8080`, UI path `/production/roy`, API path `/api/operations/roy/live`, status `RUNNING`, health HTTP `200`
-  - Next exact step: commit/push, merge through PR, build the image, refresh full ROY history, deploy only ROY reporting/App Runner, verify localhost marker first, then confirm the stable payload and live UI contain `MICRO-SD-64GB` with no `H-69235D5B`; VEVO must remain unchanged
+  - first deploy run `29424476203` stopped before any ROY runtime change because the shared protection loop tried to re-put the existing VEVO protection tag and ECR returned `ImageAlreadyExistsException`; the ROY schedule remains `roy-reporting-daily:46` on `sha256:02f6e63bda9fec7de6345f0426b8151c66c0e0849e027dcca69fc20afe3f777d`, and App Runner remains on `sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede`
+  - deploy hardening branch `codex/roy-deploy-ecr-idempotency` now preserves the exact manifest bytes, verifies the resulting tag digest, and scopes schedule-image protection to `${PROJECT}`; YAML/scope validation, exact ECR manifest digest round-trip, full suite `134` tests, reporting QA smoke, and `git diff --check` pass
+  - Next exact step: merge the deploy hardening through PR, rerun the full ROY artifact refresh/App Runner deploy, verify `LIVE_ARTIFACT_MARKER_OK` on the Fargate host before public checks, then confirm stable payload and live UI contain `MICRO-SD-64GB` with no visible `H-69235D5B`; VEVO runtime must remain unchanged
 
 - ROY reporting decision-safety remediation is deployed and fully backfilled (2026-07-15):
   - purchase-cost precedence is corrected in the reusable reporting core: a resolved mapped purchase cost now wins over legacy zero-cost, zero-margin, `35%`, and `15%` assumptions
