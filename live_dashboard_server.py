@@ -63,7 +63,15 @@ def is_authorized_basic_header(header: Optional[str], credentials: Optional[Tupl
     user, separator, password = decoded.partition(":")
     if not separator:
         return False
-    return hmac.compare_digest(user, expected_user) and hmac.compare_digest(password, expected_password)
+    try:
+        user_matches = hmac.compare_digest(user.encode("utf-8"), expected_user.encode("utf-8"))
+        password_matches = hmac.compare_digest(
+            password.encode("utf-8"),
+            expected_password.encode("utf-8"),
+        )
+    except UnicodeEncodeError:
+        return False
+    return user_matches and password_matches
 
 
 def available_projects() -> List[str]:

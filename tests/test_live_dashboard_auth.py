@@ -29,6 +29,20 @@ class LiveDashboardAuthTests(unittest.TestCase):
 
     @patch.dict(
         os.environ,
+        {"LIVE_DASHBOARD_AUTH_USER": "roy21", "LIVE_DASHBOARD_AUTH_PASSWORD": "tajne-heslo-žľš"},
+        clear=True,
+    )
+    def test_basic_auth_accepts_utf8_credentials(self) -> None:
+        credentials = live_dashboard_auth_credentials()
+        self.assertTrue(
+            is_authorized_basic_header(basic_header("roy21", "tajne-heslo-žľš"), credentials)
+        )
+        self.assertFalse(
+            is_authorized_basic_header(basic_header("roy21", "tajne-heslo-zls"), credentials)
+        )
+
+    @patch.dict(
+        os.environ,
         {"LIVE_DASHBOARD_AUTH_USER": "vevo", "LIVE_DASHBOARD_AUTH_PASSWORD": "secret"},
         clear=True,
     )
@@ -38,6 +52,7 @@ class LiveDashboardAuthTests(unittest.TestCase):
         self.assertFalse(is_authorized_basic_header("Bearer token", credentials))
         self.assertFalse(is_authorized_basic_header("Basic not-base64", credentials))
         self.assertFalse(is_authorized_basic_header(basic_header("vevo", "wrong"), credentials))
+        self.assertFalse(is_authorized_basic_header(basic_header("vevo", "wröng"), credentials))
         self.assertFalse(is_authorized_basic_header(basic_header("other", "secret"), credentials))
 
     @patch.dict(os.environ, {"LIVE_DASHBOARD_AUTH_USER": "vevo"}, clear=True)
