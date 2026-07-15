@@ -761,12 +761,9 @@ class BizniWebExporter:
         self.excluded_status_orders = []  # Track all excluded status orders for lifecycle proxy reporting
         self._creditnote_order_nums_cache: Optional[set[str]] = None
         self._creditnote_status_change_audit_cache: Optional[Dict[str, Any]] = None
-        self.product_expenses_exact = dict(PRODUCT_EXPENSES)
-        self.product_expenses_normalized = {}
-        for key, value in PRODUCT_EXPENSES.items():
-            normalized_key = self._normalize_match_text(key)
-            if normalized_key:
-                self.product_expenses_normalized[normalized_key] = float(value)
+        self._rebuild_product_expense_indexes(PRODUCT_EXPENSES)
+        self.product_cost_bundle_rules_by_label = self._build_product_cost_bundle_rule_index()
+        self._validate_product_cost_bundle_rule_expenses()
         product_name_aliases = dict(PRODUCT_NAME_ALIASES)
         product_name_aliases_file = self.project_settings.get("product_name_aliases_file")
         if product_name_aliases_file:
@@ -2960,6 +2957,300 @@ class BizniWebExporter:
             return ""
         return "||".join(normalized_parts)
 
+    def _rebuild_product_expense_indexes(self, expenses: Dict[Any, Any]) -> None:
+        """Build exact and normalized cost indexes while retaining ambiguity metadata."""
+        self.product_expenses_exact = {}
+        self.product_expenses_normalized = {}
+        self.product_expenses_normalized_costs: Dict[str, set[float]] = {}
+        for raw_key, raw_value in dict(expenses or {}).items():
+            key = str(raw_key or "").strip()
+            if not key:
+                continue
+            value = float(raw_value)
+            self.product_expenses_exact[key] = value
+            normalized_key = self._normalize_match_text(key)
+            if not normalized_key:
+                continue
+            self.product_expenses_normalized[normalized_key] = value
+            self.product_expenses_normalized_costs.setdefault(normalized_key, set()).add(value)
+
+    def _build_product_cost_bundle_rule_index(self) -> Dict[str, Dict[str, Any]]:
+        """Validate exact-label mixed-bundle rules and index them by their raw shop label."""
+        raw_rules = self.project_settings.get("product_cost_bundle_rules") or []
+        if not isinstance(raw_rules, list):
+            raise ValueError("product_cost_bundle_rules must be a list")
+
+        rules_by_label: Dict[str, Dict[str, Any]] = {}
+        seen_rule_ids = set()
+        for rule_index, raw_rule in enumerate(raw_rules):
+            if not isinstance(raw_rule, dict):
+                raise ValueError(f"product_cost_bundle_rules[{rule_index}] must be an object")
+            rule_id = str(raw_rule.get("rule_id") or "").strip()
+            if not rule_id:
+                raise ValueError(f"product_cost_bundle_rules[{rule_index}] requires a non-empty rule_id")
+            if rule_id in seen_rule_ids:
+                raise ValueError(f"Duplicate product_cost_bundle_rules rule_id {rule_id!r}")
+            seen_rule_ids.add(rule_id)
+
+            exact_labels = raw_rule.get("exact_labels") or []
+            components = raw_rule.get("components") or []
+            shared_component_identifiers = raw_rule.get("shared_component_identifiers") or []
+            if not isinstance(exact_labels, list) or not exact_labels:
+                raise ValueError(f"product_cost_bundle_rules[{rule_id}] requires exact_labels")
+            if not isinstance(components, list) or not components:
+                raise ValueError(f"product_cost_bundle_rules[{rule_id}] requires components")
+            if not isinstance(shared_component_identifiers, list):
+                raise ValueError(
+                    f"product_cost_bundle_rules[{rule_id}].shared_component_identifiers must be a list"
+                )
+
+            normalized_shared_identifiers = {
+                self._normalize_product_identifier(identifier)
+                for identifier in shared_component_identifiers
+                if self._normalize_product_identifier(identifier)
+            }
+
+            validated_components: List[Dict[str, Any]] = []
+            for component_index, component in enumerate(components):
+                if not isinstance(component, dict):
+                    raise ValueError(
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] must be an object"
+                    )
+                expense_key = str(component.get("expense_key") or "").strip()
+                if not expense_key:
+                    raise ValueError(
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] requires expense_key"
+                    )
+                raw_quantity = component.get("quantity", 1)
+                try:
+                    quantity = float(raw_quantity)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] has invalid quantity"
+                    ) from exc
+                if quantity <= 0 or not quantity.is_integer():
+                    raise ValueError(
+                        f"product_cost_bundle_rules[{rule_id}].components[{component_index}] quantity "
+                        "must be a positive integer"
+                    )
+                validated_components.append(
+                    {
+                        "expense_key": expense_key,
+                        "quantity": int(quantity),
+                    }
+                )
+
+            indexed_rule = {
+                "rule_id": rule_id,
+                "components": validated_components,
+                "shared_component_identifiers": normalized_shared_identifiers,
+            }
+            for raw_label in exact_labels:
+                label = str(raw_label or "").strip()
+                if not label:
+                    raise ValueError(f"product_cost_bundle_rules[{rule_id}] contains an empty exact label")
+                if label in rules_by_label:
+                    previous_rule_id = rules_by_label[label]["rule_id"]
+                    raise ValueError(
+                        f"Bundle label {label!r} is configured by both {previous_rule_id!r} and {rule_id!r}"
+                    )
+                rules_by_label[label] = indexed_rule
+        return rules_by_label
+
+    def _validate_product_cost_bundle_rule_expenses(self) -> None:
+        """Fail at startup when a configured component key cannot be safely priced."""
+        if not self.product_cost_bundle_rules_by_label:
+            return
+
+        validation_expenses = self.product_expenses_exact
+        product_expenses_file = str(self.project_settings.get("product_expenses_file") or "").strip()
+        if product_expenses_file:
+            product_expenses_path = project_dir(self.project_name) / product_expenses_file
+            if product_expenses_path.exists():
+                raw_expenses = json.loads(product_expenses_path.read_text(encoding="utf-8")) or {}
+                if not isinstance(raw_expenses, dict):
+                    raise ValueError(f"Product expense map {product_expenses_path} must be an object")
+                validation_expenses = {
+                    str(key).strip(): float(value)
+                    for key, value in raw_expenses.items()
+                    if str(key).strip()
+                }
+
+        rules_by_id = {
+            str(rule["rule_id"]): rule
+            for rule in self.product_cost_bundle_rules_by_label.values()
+        }
+        for rule_id, rule in rules_by_id.items():
+            for component in rule.get("components") or []:
+                expense_key = str(component.get("expense_key") or "")
+                if expense_key not in validation_expenses:
+                    raise ValueError(
+                        f"product_cost_bundle_rules[{rule_id}] references missing expense key {expense_key!r}"
+                    )
+                component_cost = float(validation_expenses[expense_key])
+                if not np.isfinite(component_cost) or component_cost < 0:
+                    raise ValueError(
+                        f"product_cost_bundle_rules[{rule_id}] references invalid expense {expense_key!r}"
+                    )
+
+    def _lookup_unique_normalized_expense(self, candidate: Any) -> Optional[float]:
+        normalized_candidate = self._normalize_match_text(candidate)
+        if not normalized_candidate:
+            return None
+        values = self.product_expenses_normalized_costs.get(normalized_candidate) or set()
+        if len(values) != 1:
+            return None
+        return float(next(iter(values)))
+
+    def _resolve_explicit_bundle_expense(
+        self,
+        product_sku: str,
+        item_label: str,
+        import_code: Any = None,
+        warehouse_number: Any = None,
+        ean: Any = None,
+        shared_component_identifiers: Optional[set[str]] = None,
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """Resolve only bundle-scoped mappings, excluding ambiguous shared component identifiers."""
+        title_candidate = str(item_label or "").strip()
+        if not title_candidate:
+            return None, None
+        product_sku_candidate = str(product_sku or "").strip()
+        import_code_candidate = self._normalize_product_identifier(import_code)
+        ean_candidate = self._normalize_product_identifier(ean)
+        warehouse_number_candidate = str(warehouse_number or "").strip()
+        legacy_title_sku_candidate = self.get_product_sku("", title_candidate)
+
+        exact_candidates = [
+            (self._compose_expense_key(title_candidate, warehouse_number_candidate), "mapped_compound_key"),
+            (self._compose_expense_key(title_candidate, import_code_candidate), "mapped_compound_key"),
+            (self._compose_expense_key(title_candidate, ean_candidate), "mapped_compound_key"),
+            (self._compose_expense_key(title_candidate, product_sku_candidate), "mapped_compound_key"),
+            (self._compose_expense_key(title_candidate, legacy_title_sku_candidate), "mapped_compound_key"),
+            (title_candidate, "mapped_item_label"),
+            (legacy_title_sku_candidate, "mapped_legacy_title_hash"),
+        ]
+        shared_identifiers = set(shared_component_identifiers or set())
+        standalone_identifier_candidates = [
+            (warehouse_number_candidate, "mapped_product_identifier"),
+            (import_code_candidate, "mapped_product_identifier"),
+            (ean_candidate, "mapped_product_identifier"),
+            (product_sku_candidate, "mapped_product_sku"),
+        ]
+        exact_candidates.extend(
+            (candidate, source)
+            for candidate, source in standalone_identifier_candidates
+            if candidate and self._normalize_product_identifier(candidate) not in shared_identifiers
+        )
+
+        seen_candidates = set()
+        for candidate, source in exact_candidates:
+            if not candidate or candidate in seen_candidates:
+                continue
+            seen_candidates.add(candidate)
+            if candidate in self.product_expenses_exact:
+                return float(self.product_expenses_exact[candidate]), source
+
+        for candidate, source in exact_candidates:
+            if not candidate:
+                continue
+            resolved = self._lookup_unique_normalized_expense(candidate)
+            if resolved is not None:
+                return resolved, f"{source}_normalized"
+        return None, None
+
+    def _bundle_rule_uses_shared_input_identifier(
+        self,
+        rule: Dict[str, Any],
+        product_sku: Any,
+        import_code: Any = None,
+        warehouse_number: Any = None,
+        ean: Any = None,
+    ) -> bool:
+        shared_identifiers = set(rule.get("shared_component_identifiers") or set())
+        if not shared_identifiers:
+            return False
+        input_identifiers = {
+            self._normalize_product_identifier(identifier)
+            for identifier in (product_sku, import_code, warehouse_number, ean)
+            if self._normalize_product_identifier(identifier)
+        }
+        return bool(shared_identifiers.intersection(input_identifiers))
+
+    @classmethod
+    def _parse_homogeneous_bundle_label(cls, item_label: Any) -> Optional[Tuple[int, str]]:
+        label = str(item_label or "").strip()
+        match = re.match(r"^\s*(\d{1,3})\s*[x×]\s+(.+?)\s*$", label, flags=re.IGNORECASE)
+        if not match:
+            return None
+        multiplier = int(match.group(1))
+        base_label = match.group(2).strip()
+        if multiplier < 2 or not base_label or "+" in base_label:
+            return None
+        if re.search(r"(?:^|\s)\d{1,3}\s*[x×]\s+", base_label, flags=re.IGNORECASE):
+            return None
+        base_tokens = set(cls._normalize_match_text(base_label).split())
+        if base_tokens.intersection({"darcek", "gift", "gratis", "zdarma"}):
+            return None
+        return multiplier, base_label
+
+    def _resolve_label_only_expense(self, item_label: str) -> Tuple[Optional[float], Optional[str]]:
+        """Resolve a base unit by label without inheriting identifiers from its bundle parent."""
+        title_candidate = str(item_label or "").strip()
+        if not title_candidate:
+            return None, None
+        if title_candidate in self.product_expenses_exact:
+            return float(self.product_expenses_exact[title_candidate]), "mapped_item_label"
+
+        legacy_title_sku_candidate = self.get_product_sku("", title_candidate)
+        if legacy_title_sku_candidate in self.product_expenses_exact:
+            return (
+                float(self.product_expenses_exact[legacy_title_sku_candidate]),
+                "mapped_legacy_title_hash",
+            )
+
+        normalized_title_expense = self._lookup_unique_normalized_expense(title_candidate)
+        if normalized_title_expense is not None:
+            return normalized_title_expense, "mapped_item_label_normalized"
+
+        normalized_legacy_expense = self._lookup_unique_normalized_expense(legacy_title_sku_candidate)
+        if normalized_legacy_expense is not None:
+            return normalized_legacy_expense, "mapped_legacy_title_hash_normalized"
+        return None, None
+
+    def _resolve_configured_bundle_expense(
+        self,
+        rule: Dict[str, Any],
+    ) -> Tuple[float, str]:
+        total_expense = 0.0
+        rule_id = str(rule.get("rule_id") or "unknown")
+        for component in rule.get("components") or []:
+            expense_key = str(component.get("expense_key") or "")
+            if expense_key not in self.product_expenses_exact:
+                raise ValueError(
+                    f"product_cost_bundle_rules[{rule_id}] references missing expense key {expense_key!r}"
+                )
+            component_cost = float(self.product_expenses_exact[expense_key])
+            if not np.isfinite(component_cost) or component_cost < 0:
+                raise ValueError(
+                    f"product_cost_bundle_rules[{rule_id}] references invalid expense {expense_key!r}"
+                )
+            total_expense += component_cost * int(component.get("quantity") or 0)
+        return round(total_expense, 6), f"bundle_components_configured:{rule_id}"
+
+    def _resolve_inferred_homogeneous_bundle_expense(
+        self,
+        bundle: Tuple[int, str],
+    ) -> Tuple[Optional[float], Optional[str]]:
+        multiplier, base_label = bundle
+        base_expense, base_source = self._resolve_label_only_expense(base_label)
+        if base_expense is None:
+            return None, None
+        return (
+            round(float(base_expense) * multiplier, 6),
+            f"bundle_components_inferred:x{multiplier}:{base_source or 'unknown'}",
+        )
+
     def _resolve_product_expense(
         self,
         product_sku: str,
@@ -2974,6 +3265,31 @@ class BizniWebExporter:
         warehouse_number_candidate = str(warehouse_number or "").strip()
         title_candidate = str(item_label or "").strip()
         legacy_title_sku_candidate = self.get_product_sku("", title_candidate)
+
+        configured_bundle_rule = self.product_cost_bundle_rules_by_label.get(title_candidate)
+        homogeneous_bundle = self._parse_homogeneous_bundle_label(title_candidate)
+        if configured_bundle_rule is not None or homogeneous_bundle is not None:
+            shared_component_identifiers = set(
+                (configured_bundle_rule or {}).get("shared_component_identifiers") or set()
+            )
+            explicit_bundle_expense = self._resolve_explicit_bundle_expense(
+                product_sku,
+                title_candidate,
+                import_code=import_code,
+                warehouse_number=warehouse_number,
+                ean=ean,
+                shared_component_identifiers=shared_component_identifiers,
+            )
+            if explicit_bundle_expense[0] is not None:
+                return explicit_bundle_expense
+            if configured_bundle_rule is not None and self._bundle_rule_uses_shared_input_identifier(
+                configured_bundle_rule,
+                product_sku,
+                import_code=import_code,
+                warehouse_number=warehouse_number,
+                ean=ean,
+            ):
+                return self._resolve_configured_bundle_expense(configured_bundle_rule)
 
         exact_compound_candidates = [
             (self._compose_expense_key(title_candidate, warehouse_number_candidate), "mapped_compound_key"),
@@ -3036,6 +3352,15 @@ class BizniWebExporter:
         for candidate, source in normalized_candidates:
             if candidate and candidate in self.product_expenses_normalized:
                 return float(self.product_expenses_normalized[candidate]), source
+
+        if configured_bundle_rule is not None:
+            return self._resolve_configured_bundle_expense(configured_bundle_rule)
+        if homogeneous_bundle is not None:
+            inferred_bundle_expense = self._resolve_inferred_homogeneous_bundle_expense(
+                homogeneous_bundle
+            )
+            if inferred_bundle_expense[0] is not None:
+                return inferred_bundle_expense
 
         return None, None
 
