@@ -110,6 +110,7 @@ FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
 FIXED_DAILY_COST = 0  # EUR per day; when set, overrides monthly fixed-cost spreading
 EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
 PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for canonical reporting product names
+MISSING_COST_MARGIN_PCT = 0.0  # Product margin used only when no configured purchase cost can be resolved
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
 ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
@@ -1986,8 +1987,10 @@ class BizniWebExporter:
         total_revenue = float(item_df["item_total_without_tax"].sum())
         total_profit = float(item_df["profit_before_ads"].sum())
 
-        fallback_sources = {"fallback_default", "missing_cost_zero_margin_fallback"}
-        fallback_df = item_df.loc[item_df["expense_source"].isin(fallback_sources)].copy()
+        fallback_mask = item_df["expense_source"].eq("fallback_default") | item_df["expense_source"].str.contains(
+            "missing_cost_", regex=False
+        )
+        fallback_df = item_df.loc[fallback_mask].copy()
         fallback_rows = int(len(fallback_df.index))
         fallback_units = float(fallback_df["item_quantity"].sum())
         fallback_revenue = float(fallback_df["item_total_without_tax"].sum())
@@ -2043,7 +2046,7 @@ class BizniWebExporter:
         failures: List[str] = []
         if fallback_rows > 0:
             warnings.append(
-                f"{fallback_rows} item row(s) ({fallback_row_share_pct:.2f}%) use a missing-cost zero-margin fallback."
+                f"{fallback_rows} item row(s) ({fallback_row_share_pct:.2f}%) use a configured missing-cost fallback."
             )
             if fallback_revenue_share_pct >= 5 or fallback_profit_share_pct >= 5:
                 warnings.append(
@@ -2455,8 +2458,11 @@ class BizniWebExporter:
                 expense_per_item = spec["expense_per_item"]
                 expense_source = spec["expense_source"]
                 if expense_per_item is None:
-                    expense_per_item = (component_revenue / component_units) if component_units else 0.0
-                    expense_source = "bundle_component_missing_cost_zero_margin_fallback"
+                    expense_per_item, expense_source = self._missing_cost_expense(
+                        component_revenue,
+                        component_units,
+                    )
+                    expense_source = f"bundle_component_{expense_source}"
                 component_total_expense = round(float(expense_per_item or 0.0) * component_units, 2)
                 component_profit = round(component_revenue - component_total_expense, 2)
                 component_roi = (
@@ -2953,6 +2959,16 @@ class BizniWebExporter:
     def _margin_override_source(margin_pct: float) -> str:
         token = f"{float(margin_pct):g}".replace(".", "_")
         return f"margin_{token}_override"
+
+    @staticmethod
+    def _missing_cost_expense(net_revenue: float, quantity: float) -> Tuple[float, str]:
+        margin_pct = float(MISSING_COST_MARGIN_PCT)
+        net_unit_revenue = (float(net_revenue) / float(quantity)) if quantity else 0.0
+        expense_per_item = net_unit_revenue * (1 - margin_pct / 100)
+        if margin_pct == 0.0:
+            return expense_per_item, "missing_cost_zero_margin_fallback"
+        token = f"{margin_pct:g}".replace(".", "_")
+        return expense_per_item, f"missing_cost_margin_{token}_fallback"
 
     def _bundle_accessory_config(self) -> Dict[str, Any]:
         config = self.project_settings.get("bundle_accessory_model") or {}
@@ -5245,12 +5261,10 @@ class BizniWebExporter:
                         ean=item_ean,
                     )
                     if expense_per_item is None:
-                        expense_per_item = (
-                            (item_total_without_tax / item_quantity)
-                            if item_quantity and item_total_without_tax > 0
-                            else 0.0
+                        expense_per_item, expense_source = self._missing_cost_expense(
+                            item_total_without_tax,
+                            item_quantity,
                         )
-                        expense_source = "missing_cost_zero_margin_fallback"
                 total_expense = expense_per_item * item_quantity
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)

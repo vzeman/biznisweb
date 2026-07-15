@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-07-09
+Last updated: 2026-07-15
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,18 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY missing-purchase-cost fallback is being changed to a permanent `35%` product margin on `2026-07-15`:
+  - branch: `codex/roy-missing-cost-35-margin`
+  - source-of-truth rule: `projects/roy/settings.json` sets `missing_cost_margin_pct = 35`; only rows with no resolvable configured purchase cost use cost `65%` of net item revenue
+  - mapped purchase costs keep precedence in the normal cost-resolution path, including real negative-margin clearance sales; regression coverage preserves a mapped `80 EUR` cost on `50 EUR` net revenue as `-30 EUR` product profit
+  - VEVO remains unchanged because its missing-cost margin defaults to `0%`
+  - bundle components without a resolvable cost use the same project-scoped fallback, and product-expense coverage QA recognizes both direct and bundle missing-cost sources
+  - current ROY data check: `Roy powerbanka 10000mAh` SKU `IS-Q6L` uses mapped source `mapped_legacy_title_hash`, so the new missing-cost fallback does not replace its real loss; SKU overrides and configured product-cost keys currently have `0` intersections
+  - pre-deploy hard-gate: instance-id `N/A (AWS ECS/Fargate)`, no stable task IP before a task starts, service `roy-daily-report-email`, current task definition `roy-reporting-daily:43`, current image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:c7aa0845f40a773da717c5ddf076de0e7413217a6d8d3ccb9116ca97b866dede`, marker path `http://127.0.0.1:8000/marker.json`, stable artifact path `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/latest/`
+  - local verification: `python -m json.tool projects/roy/settings.json`; `python -m py_compile export_orders.py reporting_core/runtime.py scripts/reporting_qa_smoke.py tests/test_reporting_calculation_fixes.py`; `python -m unittest tests.test_reporting_calculation_fixes` (`27` tests OK); `python scripts/reporting_qa_smoke.py`; related reporting suite (`46` tests OK); `git diff --check`
+  - Current status: code and regression coverage are ready for commit/PR; production is not changed yet
+  - Next exact step: commit and push the branch, merge the PR, wait for the ECR image build, then run the guarded production reporting smoke before the full ROY backfill
 
 - VEVO daily reporting email outage on `2026-07-09` is fixed and ECR digest protection is being hardened:
   - symptom: the regular `vevo-daily-report-email` run for `2026-07-09 01:00 Europe/Bratislava` did not send a VEVO reporting email; ROY sent normally at `2026-07-09 01:30 Europe/Bratislava`

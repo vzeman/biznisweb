@@ -29,6 +29,7 @@ class ProjectRuntime:
     fixed_daily_cost: float
     currency_rates_to_eur: Dict[str, float]
     product_expenses: Dict[str, float]
+    missing_cost_margin_pct: float
     zero_margin_brands: List[str]
     zero_cost_brands: List[str]
     zero_cost_label_patterns: List[str]
@@ -69,6 +70,7 @@ class ProjectRuntime:
             "fixed_daily_cost": self.fixed_daily_cost,
             "currency_rates_to_eur": dict(self.currency_rates_to_eur),
             "product_expenses": dict(self.product_expenses),
+            "missing_cost_margin_pct": self.missing_cost_margin_pct,
             "zero_margin_brands": list(self.zero_margin_brands),
             "zero_cost_brands": list(self.zero_cost_brands),
             "zero_cost_label_patterns": list(self.zero_cost_label_patterns),
@@ -104,6 +106,18 @@ def _coerce_margin_override_map(raw: Any) -> Dict[str, float]:
         if 0.0 <= margin_pct < 100.0:
             result[key_text] = margin_pct
     return result
+
+
+def _coerce_margin_pct(raw: Any, *, setting_name: str, default: float = 0.0) -> float:
+    if raw in (None, ""):
+        return float(default)
+    try:
+        margin_pct = float(str(raw).strip().rstrip("%"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{setting_name} must be a number from 0 up to, but not including, 100") from exc
+    if not 0.0 <= margin_pct < 100.0:
+        raise ValueError(f"{setting_name} must be from 0 up to, but not including, 100")
+    return margin_pct
 
 
 def load_project_runtime(
@@ -178,6 +192,10 @@ def load_project_runtime(
             for k, v in dict(settings.get("currency_rates_to_eur", default_currency_rates or {})).items()
         },
         product_expenses={str(k): float(v) for k, v in product_expenses.items()},
+        missing_cost_margin_pct=_coerce_margin_pct(
+            settings.get("missing_cost_margin_pct"),
+            setting_name="missing_cost_margin_pct",
+        ),
         zero_margin_brands=[str(v).strip() for v in settings.get("zero_margin_brands", []) if str(v).strip()],
         zero_cost_brands=[str(v).strip() for v in settings.get("zero_cost_brands", []) if str(v).strip()],
         zero_cost_label_patterns=[str(v).strip() for v in settings.get("zero_cost_label_patterns", []) if str(v).strip()],
@@ -219,6 +237,7 @@ def apply_project_runtime(runtime: ProjectRuntime, target_globals: Dict[str, Any
     target_globals["FIXED_DAILY_COST"] = float(runtime.fixed_daily_cost)
     target_globals["CURRENCY_RATES_TO_EUR"] = dict(runtime.currency_rates_to_eur)
     target_globals["PRODUCT_EXPENSES"] = dict(runtime.product_expenses)
+    target_globals["MISSING_COST_MARGIN_PCT"] = float(runtime.missing_cost_margin_pct)
     target_globals["ZERO_MARGIN_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_margin_brands if str(v).strip()]
     target_globals["ZERO_COST_BRANDS"] = [str(v).strip().lower() for v in runtime.zero_cost_brands if str(v).strip()]
     target_globals["ZERO_COST_LABEL_PATTERNS"] = [str(v).strip() for v in runtime.zero_cost_label_patterns if str(v).strip()]
