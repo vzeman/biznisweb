@@ -2110,7 +2110,10 @@ class BizniWebExporter:
             "total_units": round(total_units, 2),
             "total_revenue": round(total_revenue, 2),
             "total_profit_before_ads": round(total_profit, 2),
-            "fallback_policy": "missing costs are treated as zero-margin instead of default 1 EUR cost",
+            "fallback_policy": (
+                f"missing costs use a configured {MISSING_COST_MARGIN_PCT:g}% margin estimate "
+                f"({100 - MISSING_COST_MARGIN_PCT:g}% of net item revenue is treated as expense)"
+            ),
             "fallback_rows": fallback_rows,
             "fallback_units": round(fallback_units, 2),
             "fallback_revenue": round(fallback_revenue, 2),

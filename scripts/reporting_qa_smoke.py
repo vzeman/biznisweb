@@ -268,6 +268,7 @@ def assert_product_expense_coverage(exporter: BizniWebExporter) -> None:
         )
     )
     assert risky["status"] == "critical", risky
+    assert "configured 0% margin estimate" in risky["fallback_policy"], risky
     assert risky["fallback_rows"] == 2, risky
     assert risky["fallback_revenue_share_pct"] == 60.0, risky
     assert risky["top_fallback_items"][0]["product_sku"] == "SKU-FALLBACK", risky

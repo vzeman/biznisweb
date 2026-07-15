@@ -121,6 +121,29 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(65.0, rows[0]["total_expense"])
         self.assertEqual(35.0, rows[0]["profit_before_ads"])
 
+    def test_product_expense_qa_describes_configured_missing_cost_margin(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        frame = pd.DataFrame(
+            {
+                "order_num": ["R-MISSING"],
+                "item_label": ["Unknown ROY product"],
+                "product_sku": ["UNKNOWN"],
+                "item_quantity": [1],
+                "item_total_without_tax": [100.0],
+                "profit_before_ads": [35.0],
+                "expense_per_item": [65.0],
+                "expense_source": ["missing_cost_margin_35_fallback"],
+            }
+        )
+
+        with patch("export_orders.MISSING_COST_MARGIN_PCT", 35.0):
+            qa = exporter._build_product_expense_coverage_qa(frame)
+
+        self.assertEqual(
+            "missing costs use a configured 35% margin estimate (65% of net item revenue is treated as expense)",
+            qa["fallback_policy"],
+        )
+
     def test_roy_mapped_cost_keeps_real_loss_despite_missing_cost_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["LOSS-SKU"] = 80.0
