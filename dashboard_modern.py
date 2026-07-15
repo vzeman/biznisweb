@@ -1034,11 +1034,20 @@ def generate_modern_dashboard(
         clv_payload = {
             "labels": clv_return_time_analysis["week_start"].astype(str).tolist(),
             "avg_clv": [round(_num(v), 2) for v in clv_return_time_analysis["avg_clv"].tolist()],
-            "cac": [round(_num(v), 2) for v in clv_return_time_analysis["cac"].tolist()],
-            "ltv_cac_ratio": [round(_num(v), 2) for v in clv_return_time_analysis["ltv_cac_ratio"].tolist()],
+            "cac": [
+                round(value, 2) if (value := _maybe_num(v)) is not None else None
+                for v in clv_return_time_analysis["cac"].tolist()
+            ],
+            "ltv_cac_ratio": [
+                round(value, 2) if (value := _maybe_num(v)) is not None else None
+                for v in clv_return_time_analysis["ltv_cac_ratio"].tolist()
+            ],
             "avg_return_time_days": [round(_num(v), 2) for v in clv_return_time_analysis["avg_return_time_days"].fillna(0).tolist()],
             "cumulative_avg_clv": [round(_num(v), 2) for v in clv_return_time_analysis["cumulative_avg_clv"].tolist()],
-            "cumulative_avg_cac": [round(_num(v), 2) for v in clv_return_time_analysis["cumulative_avg_cac"].tolist()],
+            "cumulative_avg_cac": [
+                round(value, 2) if (value := _maybe_num(v)) is not None else None
+                for v in clv_return_time_analysis["cumulative_avg_cac"].tolist()
+            ],
         }
     else:
         clv_payload = {"labels": [], "avg_clv": [], "cac": [], "ltv_cac_ratio": [], "avg_return_time_days": [], "cumulative_avg_clv": [], "cumulative_avg_cac": []}
@@ -1934,7 +1943,10 @@ def generate_modern_dashboard(
     }
     financial_payload = {
         "payback_weekly_labels": list((financial_metrics or {}).get("payback_weekly_labels") or []),
-        "payback_weekly_orders": [round(_num(v), 2) for v in list((financial_metrics or {}).get("payback_weekly_orders") or [])],
+        "payback_weekly_orders": [
+            round(value, 2) if (value := _maybe_num(v)) is not None else None
+            for v in list((financial_metrics or {}).get("payback_weekly_orders") or [])
+        ],
         "current_fb_cac": _maybe_num((financial_metrics or {}).get("current_fb_cac")),
         "blended_cac": _maybe_num((financial_metrics or {}).get("blended_cac")),
         "avg_customer_ltv": _maybe_num((financial_metrics or {}).get("avg_customer_ltv")),
@@ -3360,14 +3372,23 @@ def generate_modern_dashboard(
         for row in product_expense_source_rows
     ) or '<tr><td colspan="5"><span class="lang-en">No product-cost source mix available.</span><span class="lang-sk hidden">Mix zdrojov nakupnych cien nie je dostupny.</span></td></tr>'
     product_expense_top_rows = list(
-        product_expense_qa.get("fallback_items")
+        product_expense_qa.get("missing_cost_items")
+        or product_expense_qa.get("fallback_items")
         or product_expense_qa.get("top_fallback_items")
         or []
     )
     product_expense_top_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('item_label') or '-'))}</td><td>{escape(str(row.get('product_sku') or '-'))}</td><td>{int(round(_num(row.get('rows'))))}</td><td>{_format_library_tile_value(row.get('units'), kind='number')}</td><td>{_format_library_tile_value(row.get('revenue'), kind='currency')}</td><td>{_format_library_tile_value(row.get('total_revenue_share_pct', row.get('revenue_share_pct')), kind='percent')}</td><td>{_format_library_tile_value(row.get('profit_before_ads'), kind='currency')}</td></tr>"
+        f"<tr><td>{escape(str(row.get('category') or 'fallback_estimate')).replace('_', ' ')}</td><td>{escape(str(row.get('item_label') or '-'))}</td><td>{escape(str(row.get('product_sku') or '-'))}</td><td>{int(round(_num(row.get('rows'))))}</td><td>{_format_library_tile_value(row.get('units'), kind='number')}</td><td>{_format_library_tile_value(row.get('revenue'), kind='currency')}</td><td>{_format_library_tile_value(row.get('total_revenue_share_pct', row.get('revenue_share_pct')), kind='percent')}</td><td>{_format_library_tile_value(row.get('profit_before_ads'), kind='currency')}</td></tr>"
         for row in product_expense_top_rows
-    ) or '<tr><td colspan="7"><span class="lang-en">No missing-cost fallback items for the current report window.</span><span class="lang-sk hidden">V aktualnom okne nie su ziadne produkty s chybajucou nakupnou cenou.</span></td></tr>'
+    ) or '<tr><td colspan="8"><span class="lang-en">No missing purchase-cost items for the current report window.</span><span class="lang-sk hidden">V aktualnom okne nie su ziadne produkty s chybajucou nakupnou cenou.</span></td></tr>'
+    product_expense_recent_30d_available = bool(
+        product_expense_qa.get("fallback_recent_30d_available")
+    )
+    product_expense_recent_30d_note_html = (
+        f'<span class="delta neutral">{_format_mini_value_html(product_expense_qa.get("fallback_recent_30d_revenue"), kind="currency")}</span>'
+        if product_expense_recent_30d_available
+        else '<span class="delta neutral"><span class="lang-en">requires a 30d+ report</span><span class="lang-sk hidden">vyzaduje report aspon 30 dni</span></span>'
+    )
     margin_stability_warning_items = list(margin_stability_qa.get("warnings") or [])
     margin_stability_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in margin_stability_warning_items)
     margin_stability_warning_block_html = (
@@ -4757,7 +4778,7 @@ def generate_modern_dashboard(
                     <div class="mini-grid" style="margin-bottom:18px;">
                         <div class="mini-card"><small><span class="lang-en">ROAS check delta</span><span class="lang-sk hidden">ROAS check delta</span></small><strong>{_num(consistency_payload.get('roas_delta')):+.4f}</strong></div>
                         <div class="mini-card"><small><span class="lang-en">Margin check delta</span><span class="lang-sk hidden">Margin check delta</span></small><strong>{_num(consistency_payload.get('margin_delta')):+.4f}</strong></div>
-                        <div class="mini-card"><small><span class="lang-en">CAC check delta</span><span class="lang-sk hidden">CAC check delta</span></small><strong>{_num(consistency_payload.get('cac_delta')):+.4f}</strong></div>
+                        <div class="mini-card"><small><span class="lang-en">CAC check delta</span><span class="lang-sk hidden">CAC check delta</span></small><strong>{_format_mini_value_html(consistency_payload.get('cac_delta'), kind='delta', decimals=4)}</strong></div>
                         <div class="mini-card"><small><span class="lang-en">Top segment</span><span class="lang-sk hidden">Top segment</span></small><strong>{escape(str(segment_rows[0].get('segment') if segment_rows else 'N/A'))}</strong></div>
                     </div>
                     <div class="panel table-card" style="margin-bottom:18px;">
@@ -4768,8 +4789,9 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Missing-cost rows</span><span class="lang-sk hidden">Riadky bez nakladu</span></small><strong>{_format_mini_value_html(product_expense_qa.get("fallback_row_share_pct"), kind="percent")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Missing-cost units</span><span class="lang-sk hidden">Kusy bez nakladu</span></small><strong>{_format_mini_value_html(product_expense_qa.get("fallback_unit_share_pct"), kind="percent")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Missing-cost revenue share</span><span class="lang-sk hidden">Podiel trzby bez nakladu</span></small><strong>{_format_mini_value_html(product_expense_qa.get("fallback_revenue_share_pct"), kind="percent")}</strong></div>
-                            <div class="mini-card"><small><span class="lang-en">Missing-cost revenue share 30d</span><span class="lang-sk hidden">Podiel trzby bez nakladu 30d</span></small><strong>{_format_mini_value_html(product_expense_qa.get("fallback_recent_30d_revenue_share_pct"), kind="percent")}</strong><span class="delta neutral">{_format_mini_value_html(product_expense_qa.get("fallback_recent_30d_revenue"), kind="currency")}</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Missing-cost revenue share 30d</span><span class="lang-sk hidden">Podiel trzby bez nakladu 30d</span></small><strong>{_format_mini_value_html(product_expense_qa.get("fallback_recent_30d_revenue_share_pct") if product_expense_recent_30d_available else None, kind="percent")}</strong>{product_expense_recent_30d_note_html}</div>
                             <div class="mini-card"><small><span class="lang-en">Missing-cost profit share</span><span class="lang-sk hidden">Podiel zisku bez nakladu</span></small><strong>{_format_mini_value_html(product_expense_qa.get("fallback_profit_share_pct"), kind="percent")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Unmapped zero-revenue gifts</span><span class="lang-sk hidden">Darceky bez ceny a bez trzby</span></small><strong>{int(round(_num(product_expense_qa.get("zero_revenue_gift_missing_cost_product_count"))))}</strong><span class="delta neutral">{int(round(_num(product_expense_qa.get("zero_revenue_gift_missing_cost_rows"))))} rows / EUR 0 fallback profit</span></div>
                         </div>
                         {product_expense_warning_block_html}
                     </div>
@@ -4782,9 +4804,9 @@ def generate_modern_dashboard(
                             </table>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Complete missing purchase-cost list</span><span class="lang-sk hidden">Kompletny zoznam bez nakupnej ceny</span></h3><p><span class="lang-en">Every product using the configured missing-cost margin estimate, sorted by net revenue impact.</span><span class="lang-sk hidden">Vsetky produkty, ktore pouzivaju odhad marze pri chybajucej cene, zoradene podla dopadu na ciste trzby.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Complete missing purchase-cost list</span><span class="lang-sk hidden">Kompletny zoznam bez nakupnej ceny</span></h3><p><span class="lang-en">Revenue-bearing fallback estimates are separated from zero-revenue gifts, which keep zero cost and add no fallback profit.</span><span class="lang-sk hidden">Fallback odhady na predanych produktoch su oddelene od darcekov bez trzby, ktore ponechavaju nulovy naklad a nepridavaju fallback profit.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th>SKU</th><th><span class="lang-en">Rows</span><span class="lang-sk hidden">Riadky</span></th><th><span class="lang-en">Units</span><span class="lang-sk hidden">Kusy</span></th><th><span class="lang-en">Net revenue</span><span class="lang-sk hidden">Ciste trzby</span></th><th><span class="lang-en">Share of all item revenue</span><span class="lang-sk hidden">Podiel na vsetkych item trzbach</span></th><th><span class="lang-en">Estimated pre-ad profit</span><span class="lang-sk hidden">Odhad pre-ad zisku</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Category</span><span class="lang-sk hidden">Kategoria</span></th><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th>SKU</th><th><span class="lang-en">Rows</span><span class="lang-sk hidden">Riadky</span></th><th><span class="lang-en">Units</span><span class="lang-sk hidden">Kusy</span></th><th><span class="lang-en">Net revenue</span><span class="lang-sk hidden">Ciste trzby</span></th><th><span class="lang-en">Share of all item revenue</span><span class="lang-sk hidden">Podiel na vsetkych item trzbach</span></th><th><span class="lang-en">Estimated pre-ad profit</span><span class="lang-sk hidden">Odhad pre-ad zisku</span></th></tr></thead>
                                 <tbody>{product_expense_top_rows_html}</tbody>
                             </table>
                         </div>
@@ -7318,10 +7340,10 @@ def generate_modern_dashboard(
             }}
             if (document.getElementById('opsConsistencyChart')) {{
                 const consistencyRows = [
-                    {{ label: 'ROAS Delta', value: Number(DATA.consistency.roas_delta || 0) }},
-                    {{ label: 'Margin Delta', value: Number(DATA.consistency.margin_delta || 0) }},
-                    {{ label: 'CAC Delta', value: Number(DATA.consistency.cac_delta || 0) }},
-                ];
+                    {{ label: 'ROAS Delta', value: nullableNumber(DATA.consistency.roas_delta) }},
+                    {{ label: 'Margin Delta', value: nullableNumber(DATA.consistency.margin_delta) }},
+                    {{ label: 'CAC Delta', value: nullableNumber(DATA.consistency.cac_delta) }},
+                ].filter(row => row.value !== null);
                 new Chart(document.getElementById('opsConsistencyChart'), {{
                     type: 'bar',
                     data: {{

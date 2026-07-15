@@ -1950,7 +1950,12 @@ class BizniWebExporter:
             "label_row_total": label_row_total,
         }
 
-    def _build_product_expense_coverage_qa(self, export_df: Optional[pd.DataFrame]) -> Dict[str, Any]:
+    def _build_product_expense_coverage_qa(
+        self,
+        export_df: Optional[pd.DataFrame],
+        report_date_from: Optional[Any] = None,
+        report_date_to: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         df = export_df.copy() if isinstance(export_df, pd.DataFrame) else pd.DataFrame()
         required = {
             "item_label",
@@ -2013,6 +2018,9 @@ class BizniWebExporter:
         fallback_mask = item_df["expense_source"].eq("fallback_default") | item_df["expense_source"].str.contains(
             "missing_cost_", regex=False
         )
+        zero_revenue_gift_missing_mask = item_df["expense_source"].eq(
+            "zero_revenue_gift_missing_cost"
+        )
         fallback_df = item_df.loc[fallback_mask].copy()
         fallback_rows = int(len(fallback_df.index))
         fallback_units = float(fallback_df["item_quantity"].sum())
@@ -2024,19 +2032,43 @@ class BizniWebExporter:
         fallback_profit_share_pct = round((fallback_profit / total_profit) * 100, 2) if total_profit > 0 else 0.0
         unknown_source_rows = int((item_df["expense_source"] == "unknown").sum())
 
-        recent_30d_total_revenue = 0.0
-        recent_30d_fallback_revenue = 0.0
-        recent_30d_fallback_profit = 0.0
-        recent_30d_revenue_share_pct = 0.0
+        recent_30d_total_revenue: Optional[float] = None
+        recent_30d_fallback_revenue: Optional[float] = None
+        recent_30d_fallback_profit: Optional[float] = None
+        recent_30d_revenue_share_pct: Optional[float] = None
         recent_30d_date_from: Optional[str] = None
         recent_30d_date_to: Optional[str] = None
+        recent_30d_available = False
+        recent_30d_available_days = 0
         if "purchase_date" in item_df.columns:
             item_df["_expense_purchase_date"] = pd.to_datetime(
                 item_df["purchase_date"], errors="coerce"
             ).dt.normalize()
             valid_dates = item_df["_expense_purchase_date"].dropna()
-            if not valid_dates.empty:
+            configured_report_start = pd.to_datetime(report_date_from, errors="coerce")
+            configured_recent_end = pd.to_datetime(report_date_to, errors="coerce")
+            if pd.notna(configured_recent_end):
+                recent_end = pd.Timestamp(configured_recent_end)
+                if recent_end.tzinfo is not None:
+                    recent_end = recent_end.tz_localize(None)
+                recent_end = recent_end.normalize()
+            elif not valid_dates.empty:
                 recent_end = valid_dates.max()
+            else:
+                recent_end = None
+            if pd.notna(configured_report_start):
+                report_start = pd.Timestamp(configured_report_start)
+                if report_start.tzinfo is not None:
+                    report_start = report_start.tz_localize(None)
+                report_start = report_start.normalize()
+            elif not valid_dates.empty:
+                report_start = valid_dates.min()
+            else:
+                report_start = None
+            if recent_end is not None and report_start is not None:
+                recent_30d_available_days = max((recent_end - report_start).days + 1, 0)
+                recent_30d_available = recent_30d_available_days >= 30
+            if recent_end is not None and recent_30d_available:
                 recent_start = recent_end - pd.Timedelta(days=29)
                 recent_mask = item_df["_expense_purchase_date"].between(recent_start, recent_end)
                 recent_fallback_mask = recent_mask & fallback_mask
@@ -2100,6 +2132,42 @@ class BizniWebExporter:
                 )
         top_fallback_items = fallback_items[:5]
 
+        zero_revenue_gift_missing_items: List[Dict[str, Any]] = []
+        zero_revenue_gift_missing_df = item_df.loc[zero_revenue_gift_missing_mask].copy()
+        if not zero_revenue_gift_missing_df.empty:
+            grouped_gifts = (
+                zero_revenue_gift_missing_df.groupby(["product_sku", "item_label"], dropna=False)
+                .agg(
+                    rows=("order_num", "size"),
+                    units=("item_quantity", "sum"),
+                    revenue=("item_total_without_tax", "sum"),
+                    profit_before_ads=("profit_before_ads", "sum"),
+                )
+                .reset_index()
+                .sort_values(["rows", "units"], ascending=[False, False])
+                .reset_index(drop=True)
+            )
+            for row in grouped_gifts.to_dict("records"):
+                zero_revenue_gift_missing_items.append(
+                    {
+                        "category": "zero_revenue_gift",
+                        "product_sku": row.get("product_sku"),
+                        "item_label": row.get("item_label"),
+                        "rows": int(row.get("rows") or 0),
+                        "units": round(float(row.get("units") or 0.0), 2),
+                        "revenue": round(float(row.get("revenue") or 0.0), 2),
+                        "profit_before_ads": 0.0,
+                        "row_share_pct": 0.0,
+                        "revenue_share_pct": 0.0,
+                        "total_revenue_share_pct": 0.0,
+                    }
+                )
+
+        missing_cost_items = [
+            {"category": "fallback_estimate", **row}
+            for row in fallback_items
+        ] + zero_revenue_gift_missing_items
+
         warnings: List[str] = []
         failures: List[str] = []
         if fallback_rows > 0:
@@ -2110,7 +2178,7 @@ class BizniWebExporter:
                 warnings.append(
                     f"Missing-cost fallback rows represent {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit."
                 )
-            if recent_30d_revenue_share_pct >= 3:
+            if recent_30d_revenue_share_pct is not None and recent_30d_revenue_share_pct >= 3:
                 warnings.append(
                     f"Recent 30-day missing-cost rows represent {recent_30d_revenue_share_pct:.2f}% "
                     f"of item revenue (€{recent_30d_fallback_revenue:,.2f} of €{recent_30d_total_revenue:,.2f})."
@@ -2121,6 +2189,17 @@ class BizniWebExporter:
                     for row in top_fallback_items[:3]
                 )
                 warnings.append(f"Top missing-cost items by revenue: {preview}.")
+
+        zero_revenue_gift_missing_rows = int(zero_revenue_gift_missing_mask.sum())
+        zero_revenue_gift_missing_units = float(
+            item_df.loc[zero_revenue_gift_missing_mask, "item_quantity"].sum()
+        )
+        if zero_revenue_gift_missing_rows > 0:
+            warnings.append(
+                f"{zero_revenue_gift_missing_rows} zero-revenue gift row(s) across "
+                f"{len(zero_revenue_gift_missing_items)} product(s) have no mapped purchase cost; "
+                "they contribute EUR 0 revenue and EUR 0 fallback profit."
+            )
 
         if unknown_source_rows > 0:
             warnings.append(f"{unknown_source_rows} item row(s) are missing expense_source metadata.")
@@ -2185,16 +2264,30 @@ class BizniWebExporter:
             "fallback_unit_share_pct": fallback_unit_share_pct,
             "fallback_revenue_share_pct": fallback_revenue_share_pct,
             "fallback_profit_share_pct": fallback_profit_share_pct,
+            "fallback_recent_30d_available": recent_30d_available,
+            "fallback_recent_30d_available_days": recent_30d_available_days,
             "fallback_recent_30d_date_from": recent_30d_date_from,
             "fallback_recent_30d_date_to": recent_30d_date_to,
-            "fallback_recent_30d_total_revenue": round(recent_30d_total_revenue, 2),
-            "fallback_recent_30d_revenue": round(recent_30d_fallback_revenue, 2),
-            "fallback_recent_30d_profit_before_ads": round(recent_30d_fallback_profit, 2),
+            "fallback_recent_30d_total_revenue": (
+                round(recent_30d_total_revenue, 2) if recent_30d_total_revenue is not None else None
+            ),
+            "fallback_recent_30d_revenue": (
+                round(recent_30d_fallback_revenue, 2) if recent_30d_fallback_revenue is not None else None
+            ),
+            "fallback_recent_30d_profit_before_ads": (
+                round(recent_30d_fallback_profit, 2) if recent_30d_fallback_profit is not None else None
+            ),
             "fallback_recent_30d_revenue_share_pct": recent_30d_revenue_share_pct,
             "fallback_product_count": len(fallback_items),
+            "missing_cost_product_entry_count": len(missing_cost_items),
             "unknown_source_rows": unknown_source_rows,
+            "zero_revenue_gift_missing_cost_rows": zero_revenue_gift_missing_rows,
+            "zero_revenue_gift_missing_cost_units": round(zero_revenue_gift_missing_units, 2),
+            "zero_revenue_gift_missing_cost_product_count": len(zero_revenue_gift_missing_items),
             "source_mix": source_mix_rows,
             "fallback_items": fallback_items,
+            "zero_revenue_gift_missing_cost_items": zero_revenue_gift_missing_items,
+            "missing_cost_items": missing_cost_items,
             "top_fallback_items": top_fallback_items,
         }
 
@@ -3028,6 +3121,21 @@ class BizniWebExporter:
         for pattern in patterns:
             normalized_pattern = cls._normalize_match_text(pattern)
             if normalized_pattern and normalized_pattern in normalized_label:
+                return True
+        return False
+
+    @classmethod
+    def _matches_token_phrase_patterns(cls, label: str, patterns: List[str]) -> bool:
+        """Match normalized phrases on token boundaries, not inside words such as noznice."""
+        if not label or not patterns:
+            return False
+        normalized_label = cls._normalize_match_text(label)
+        for pattern in patterns:
+            normalized_pattern = cls._normalize_match_text(pattern)
+            if normalized_pattern and re.search(
+                rf"(?:^| ){re.escape(normalized_pattern)}(?: |$)",
+                normalized_label,
+            ):
                 return True
         return False
 
@@ -5331,7 +5439,8 @@ class BizniWebExporter:
 
                 # A mapped purchase cost is the accounting source of truth. Legacy margin/zero-cost
                 # rules are fallback assumptions only and must never hide a known real cost. The
-                # sole exception is a line genuinely sold for zero, which is treated as an order gift.
+                # sole exception is a configured ROY knife line genuinely sold for zero, which is
+                # treated as an order gift. Other zero-revenue products keep any mapped real cost.
                 force_zero_cost = False
                 force_zero_margin = False
                 force_margin_15 = False
@@ -5345,19 +5454,42 @@ class BizniWebExporter:
                     force_zero_cost = self._matches_patterns(item_label, ZERO_COST_LABEL_PATTERNS)
                 if item_label and not force_margin_15:
                     force_margin_15 = self._matches_patterns(item_label, MARGIN_15_LABEL_PATTERNS)
-                if abs(float(item_total_without_tax or 0.0)) < 1e-9:
+                resolved_expense_per_item, resolved_expense_source = self._resolve_product_expense(
+                    product_sku,
+                    item_label,
+                    import_code=item_import_code,
+                    warehouse_number=item_warehouse_number,
+                    ean=item_ean,
+                )
+                purchase_cost_reference_per_item = resolved_expense_per_item
+                purchase_cost_reference_source = resolved_expense_source
+                is_zero_revenue_line = abs(float(item_total_without_tax or 0.0)) < 1e-9
+                zero_revenue_gift_patterns = list(
+                    (self.project_settings or {}).get("zero_revenue_gift_label_patterns") or []
+                )
+                is_zero_revenue_gift_exception = (
+                    is_zero_revenue_line
+                    and self.project_name == "roy"
+                    and bool(zero_revenue_gift_patterns)
+                    and self._matches_token_phrase_patterns(item_label, zero_revenue_gift_patterns)
+                )
+                if is_zero_revenue_gift_exception:
                     expense_per_item = 0.0
-                    expense_source = "zero_revenue_gift"
-                else:
-                    expense_per_item, expense_source = self._resolve_product_expense(
-                        product_sku,
-                        item_label,
-                        import_code=item_import_code,
-                        warehouse_number=item_warehouse_number,
-                        ean=item_ean,
+                    expense_source = (
+                        "zero_revenue_gift_mapped_cost"
+                        if resolved_expense_per_item is not None
+                        else "zero_revenue_gift_missing_cost"
                     )
+                else:
+                    expense_per_item = resolved_expense_per_item
+                    expense_source = resolved_expense_source
                     if expense_per_item is None:
-                        if force_zero_cost:
+                        if is_zero_revenue_line:
+                            expense_per_item, expense_source = self._missing_cost_expense(
+                                item_total_without_tax,
+                                item_quantity,
+                            )
+                        elif force_zero_cost:
                             expense_per_item = 0.0
                             expense_source = "zero_cost_override"
                         elif force_zero_margin and item_quantity:
@@ -5407,6 +5539,8 @@ class BizniWebExporter:
                     'item_recycle_fee': recycle_fee.get('value'),
                     'expense_per_item': expense_per_item,
                     'expense_source': expense_source,
+                    'purchase_cost_reference_per_item': purchase_cost_reference_per_item,
+                    'purchase_cost_reference_source': purchase_cost_reference_source,
                     'total_expense': round(total_expense, 2),
                     'profit_before_ads': round(item_profit_before_ads, 2),
                     'roi_before_ads': round(item_roi_before_ads, 2),
@@ -5947,6 +6081,8 @@ class BizniWebExporter:
         )
         source_health.setdefault("qa", {})["product_expense_coverage"] = self._build_product_expense_coverage_qa(
             df,
+            report_date_from=date_from,
+            report_date_to=date_to,
         )
         source_health.setdefault("qa", {})["margin_stability"] = self._build_margin_stability_qa(
             date_agg=date_agg,
@@ -8563,11 +8699,11 @@ class BizniWebExporter:
             week_fb_spend = float(weekly_fb_spend_map.get(week, 0.0))
             week_google_spend = float(weekly_google_spend_map.get(week, 0.0))
             week_paid_spend = float(weekly_paid_spend_map.get(week, 0.0))
-            fb_cac = round(week_fb_spend / new_customers, 2) if new_customers > 0 else 0
-            cac = round(week_paid_spend / new_customers, 2) if new_customers > 0 else 0
+            fb_cac = round(week_fb_spend / new_customers, 2) if new_customers > 0 else None
+            cac = round(week_paid_spend / new_customers, 2) if new_customers > 0 else None
             
             # Calculate LTV/CAC ratio
-            ltv_cac_ratio = round(avg_clv / cac, 2) if cac > 0 else 0
+            ltv_cac_ratio = round(avg_clv / cac, 2) if cac is not None and cac > 0 else None
             
             weekly_clv_stats.append({
                 'week': week,
@@ -8610,8 +8746,8 @@ class BizniWebExporter:
         for idx, row in weekly_clv_df.iterrows():
             cumulative_paid_spend += row.get('paid_ads_spend', row.get('fb_ads_spend', 0.0))
             cumulative_new_customers += row['new_customers']
-            avg_cac = cumulative_paid_spend / cumulative_new_customers if cumulative_new_customers > 0 else 0
-            cumulative_cac.append(round(avg_cac, 2))
+            avg_cac = cumulative_paid_spend / cumulative_new_customers if cumulative_new_customers > 0 else None
+            cumulative_cac.append(round(avg_cac, 2) if avg_cac is not None else None)
 
         weekly_clv_df['cumulative_avg_cac'] = cumulative_cac
 
@@ -9370,9 +9506,13 @@ class BizniWebExporter:
         paid_spend_fb = float(daily_spend_df['fb_ads_daily_spend'].sum()) if not daily_spend_df.empty else 0.0
         paid_spend_google = float(daily_spend_df['google_ads_daily_spend'].sum()) if not daily_spend_df.empty else 0.0
         paid_spend_blended = paid_spend_fb + paid_spend_google
-        paid_cac_fb = (paid_spend_fb / new_customers) if new_customers > 0 else 0.0
-        paid_cac_blended = (paid_spend_blended / new_customers) if new_customers > 0 else 0.0
-        contribution_ltv_cac = (contribution_ltv / paid_cac_blended) if paid_cac_blended > 0 else 0.0
+        paid_cac_fb = (paid_spend_fb / new_customers) if new_customers > 0 else None
+        paid_cac_blended = (paid_spend_blended / new_customers) if new_customers > 0 else None
+        contribution_ltv_cac = (
+            contribution_ltv / paid_cac_blended
+            if paid_cac_blended is not None and paid_cac_blended > 0
+            else None
+        )
 
         # ---- 4) cohort payback in days (monthly acquisition cohorts)
         # Cohort CAC is blended tracked paid spend (Meta + Google) / new customers.
@@ -9830,10 +9970,12 @@ class BizniWebExporter:
                 'first_order_contribution_per_order': round(first_order_contribution_per_order, 2),
                 'repeat_order_contribution_per_order': round(repeat_order_contribution_per_order, 2),
                 'contribution_ltv': round(contribution_ltv, 2),
-                'paid_cac_fb': round(paid_cac_fb, 2),
-                'paid_cac': round(paid_cac_blended, 2),
+                'paid_cac_fb': round(paid_cac_fb, 2) if paid_cac_fb is not None else None,
+                'paid_cac': round(paid_cac_blended, 2) if paid_cac_blended is not None else None,
                 'paid_cac_scope': 'tracked_ads_fb_google',
-                'contribution_ltv_cac': round(contribution_ltv_cac, 2),
+                'contribution_ltv_cac': (
+                    round(contribution_ltv_cac, 2) if contribution_ltv_cac is not None else None
+                ),
                 'margin_mean_pct': round(margin_mean, 2),
                 'margin_std_pp': round(margin_std, 2),
                 'margin_cv_pct': round(margin_cv_pct, 2),
@@ -9858,9 +10000,15 @@ class BizniWebExporter:
             'payday_window': payday_window,
         }
 
+        contribution_ltv_cac_value = result['summary']['contribution_ltv_cac']
+        contribution_ltv_cac_display = (
+            f"{contribution_ltv_cac_value:.2f}x"
+            if contribution_ltv_cac_value is not None
+            else "N/A"
+        )
         print(
             f"Advanced DTC metrics complete: first-order margin={result['summary']['first_order_contribution_margin_pct']:.2f}%, "
-            f"contribution LTV/CAC={result['summary']['contribution_ltv_cac']:.2f}x"
+            f"contribution LTV/CAC={contribution_ltv_cac_display}"
         )
         return result
     def analyze_day_hour_heatmap(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -12871,14 +13019,22 @@ class BizniWebExporter:
         total_new_customers = 0
         if clv_return_time_analysis is not None and not clv_return_time_analysis.empty and 'new_customers' in clv_return_time_analysis.columns:
             total_new_customers = clv_return_time_analysis['new_customers'].sum()
-        current_fb_cac = (total_fb_spend / total_new_customers) if total_new_customers > 0 else 0
-        blended_cac = (total_ad_spend / total_new_customers) if total_new_customers > 0 else 0
+        current_fb_cac = (total_fb_spend / total_new_customers) if total_new_customers > 0 else None
+        blended_cac = (total_ad_spend / total_new_customers) if total_new_customers > 0 else None
         # Keep units aligned: CAC is per acquired customer, so break-even must also be per customer.
         break_even_cac = pre_ad_contribution_per_customer
         break_even_cac_order_based = pre_ad_contribution_per_order
-        cac_headroom = break_even_cac - blended_cac
-        cac_headroom_pct = (cac_headroom / break_even_cac * 100) if break_even_cac != 0 else 0
-        contribution_ltv_cac = (pre_ad_contribution_per_customer / blended_cac) if blended_cac > 0 else 0
+        cac_headroom = break_even_cac - blended_cac if blended_cac is not None else None
+        cac_headroom_pct = (
+            cac_headroom / break_even_cac * 100
+            if cac_headroom is not None and break_even_cac != 0
+            else None
+        )
+        contribution_ltv_cac = (
+            pre_ad_contribution_per_customer / blended_cac
+            if blended_cac is not None and blended_cac > 0
+            else None
+        )
         avg_return_cycle_days = None
         if clv_return_time_analysis is not None and not clv_return_time_analysis.empty and 'avg_return_time_days' in clv_return_time_analysis.columns:
             valid_return_days = clv_return_time_analysis['avg_return_time_days'].dropna()
@@ -12888,8 +13044,8 @@ class BizniWebExporter:
         # Estimated payback period:
         # orders = blended tracked CAC / pre-ad contribution per order
         # days = max(orders - 1, 0) * avg return cycle (if available)
-        if pre_ad_contribution_per_order > 0:
-            payback_orders = (blended_cac / pre_ad_contribution_per_order) if blended_cac > 0 else 0.0
+        if pre_ad_contribution_per_order > 0 and blended_cac is not None:
+            payback_orders = blended_cac / pre_ad_contribution_per_order
         else:
             payback_orders = None
 
@@ -12901,8 +13057,8 @@ class BizniWebExporter:
         # Optional investor-style lens: how many orders to recover CAC
         # after ad spend is already included in per-order contribution.
         post_ad_contribution_per_order = (total_contribution_profit / total_orders) if total_orders > 0 else 0
-        if post_ad_contribution_per_order > 0:
-            post_ad_payback_orders = (blended_cac / post_ad_contribution_per_order) if blended_cac > 0 else 0.0
+        if post_ad_contribution_per_order > 0 and blended_cac is not None:
+            post_ad_payback_orders = blended_cac / post_ad_contribution_per_order
         else:
             post_ad_payback_orders = None
 
@@ -12916,10 +13072,16 @@ class BizniWebExporter:
         if clv_return_time_analysis is not None and not clv_return_time_analysis.empty and 'cac' in clv_return_time_analysis.columns:
             for _, row in clv_return_time_analysis.iterrows():
                 label = str(row['week_start']) if 'week_start' in clv_return_time_analysis.columns else str(row.get('week', ''))
-                cac_week = row.get('cac', 0) or 0
-                weekly_payback = (cac_week / pre_ad_contribution_per_order) if pre_ad_contribution_per_order > 0 else 0
+                cac_week = row.get('cac')
+                weekly_payback = (
+                    float(cac_week) / pre_ad_contribution_per_order
+                    if pd.notna(cac_week) and pre_ad_contribution_per_order > 0
+                    else None
+                )
                 payback_weekly_labels.append(label)
-                payback_weekly_orders.append(round(float(weekly_payback), 2))
+                payback_weekly_orders.append(
+                    round(float(weekly_payback), 2) if weekly_payback is not None else None
+                )
 
         # New vs Returning revenue split (order-level, deduplicated)
         order_cols = ['order_num', 'customer_email', 'purchase_date', revenue_col]
@@ -13003,13 +13165,15 @@ class BizniWebExporter:
             'cm_taxonomy_note': 'CM1 excludes payment fees because the current reporting model does not ingest them separately.',
             'break_even_cac': round(break_even_cac, 2),
             'break_even_cac_order_based': round(break_even_cac_order_based, 2),
-            'current_fb_cac': round(current_fb_cac, 2),
-            'paid_cac': round(blended_cac, 2),
-            'blended_cac': round(blended_cac, 2),
+            'current_fb_cac': round(current_fb_cac, 2) if current_fb_cac is not None else None,
+            'paid_cac': round(blended_cac, 2) if blended_cac is not None else None,
+            'blended_cac': round(blended_cac, 2) if blended_cac is not None else None,
             'blended_cac_scope': 'tracked_ads_fb_google',
-            'cac_headroom': round(cac_headroom, 2),
-            'cac_headroom_pct': round(cac_headroom_pct, 1),
-            'contribution_ltv_cac': round(contribution_ltv_cac, 2),
+            'cac_headroom': round(cac_headroom, 2) if cac_headroom is not None else None,
+            'cac_headroom_pct': round(cac_headroom_pct, 1) if cac_headroom_pct is not None else None,
+            'contribution_ltv_cac': (
+                round(contribution_ltv_cac, 2) if contribution_ltv_cac is not None else None
+            ),
             'payback_orders': round(payback_orders, 2) if payback_orders is not None else None,
             'payback_days_estimated': round(payback_days_estimated, 1) if payback_days_estimated is not None else None,
             'post_ad_payback_orders': round(post_ad_payback_orders, 2) if post_ad_payback_orders is not None else None,
@@ -13073,33 +13237,48 @@ class BizniWebExporter:
             has_blended_weekly_spend = 'paid_ads_spend' in clv_return_time_analysis.columns
             spend_column = 'paid_ads_spend' if has_blended_weekly_spend else 'fb_ads_spend'
             total_cac_spend = clv_return_time_analysis[spend_column].sum() if spend_column in clv_return_time_analysis.columns else 0
-            cac_expected = (total_cac_spend / total_new_customers) if total_new_customers > 0 else 0
-            if has_blended_weekly_spend:
-                cac_reported = financial_metrics.get(
-                    'paid_cac',
-                    financial_metrics.get('blended_cac', cac_expected),
-                )
-            else:
-                cac_reported = financial_metrics.get('current_fb_cac', cac_expected)
-            cac_delta = cac_reported - cac_expected
             total_orders = date_agg['unique_orders'].sum() if 'unique_orders' in date_agg.columns else 0
             cac_if_orders = (total_cac_spend / total_orders) if total_orders > 0 else 0
-            checks['cac_expected'] = round(cac_expected, 4)
-            checks['cac_reported'] = round(cac_reported, 4)
-            checks['cac_delta'] = round(cac_delta, 4)
             checks['cac_formula'] = f'{spend_column} / new_customers'
             checks['cac_new_customers'] = int(total_new_customers)
             checks['cac_if_orders_denominator'] = round(cac_if_orders, 4)
             checks['cac_spend_source'] = spend_column
-            checks['cac_ok'] = abs(checks['cac_delta']) <= 0.01
+            checks['cac_denominator_available'] = bool(total_new_customers > 0)
+            if total_new_customers > 0:
+                cac_expected = total_cac_spend / total_new_customers
+                if has_blended_weekly_spend:
+                    cac_reported = financial_metrics.get(
+                        'paid_cac',
+                        financial_metrics.get('blended_cac', cac_expected),
+                    )
+                else:
+                    cac_reported = financial_metrics.get('current_fb_cac', cac_expected)
+                if cac_reported is None:
+                    cac_delta = None
+                    checks['cac_ok'] = False
+                else:
+                    cac_delta = float(cac_reported) - cac_expected
+                    checks['cac_ok'] = abs(cac_delta) <= 0.01
+                checks['cac_expected'] = round(cac_expected, 4)
+                checks['cac_reported'] = round(float(cac_reported), 4) if cac_reported is not None else None
+                checks['cac_delta'] = round(cac_delta, 4) if cac_delta is not None else None
+                checks['cac_reason'] = 'reconciled' if checks['cac_ok'] else 'reported_cac_missing_or_mismatched'
+            else:
+                checks['cac_expected'] = None
+                checks['cac_reported'] = None
+                checks['cac_delta'] = None
+                checks['cac_ok'] = False
+                checks['cac_reason'] = 'no_new_customer_denominator'
         else:
-            checks['cac_expected'] = 0
-            checks['cac_reported'] = 0
-            checks['cac_delta'] = 0
+            checks['cac_expected'] = None
+            checks['cac_reported'] = None
+            checks['cac_delta'] = None
             checks['cac_formula'] = 'n/a'
             checks['cac_new_customers'] = 0
             checks['cac_if_orders_denominator'] = 0
             checks['cac_spend_source'] = 'n/a'
+            checks['cac_denominator_available'] = False
+            checks['cac_reason'] = 'weekly_acquisition_analysis_unavailable'
             checks['cac_ok'] = False
 
         if not checks['roas_ok']:
@@ -14013,12 +14192,13 @@ class BizniWebExporter:
             week_str = str(row['week'])
             week_start = row['week_start'].strftime('%Y-%m-%d')
             return_time = f"{row['avg_return_time_days']:.1f}" if pd.notna(row['avg_return_time_days']) else "N/A"
-            cac = row.get('cac', 0)
+            cac = row.get('cac')
+            cac_display = f"{cac:.2f}" if pd.notna(cac) else "N/A"
             
             print(f"{week_str:>10} {week_start:>12} {row['unique_customers']:>10} "
                   f"{row['new_customers']:>8} {row['returning_customers']:>10} "
                   f"{row['avg_clv']:>12.2f} {row['cumulative_avg_clv']:>18.2f} "
-                  f"{cac:>10.2f} "
+                  f"{cac_display:>10} "
                   f"{return_time:>16} {row['total_revenue']:>12.2f}")
             
             total_customers += row['unique_customers']
@@ -14033,14 +14213,16 @@ class BizniWebExporter:
         return_time_str = f"{overall_avg_return:.1f}" if pd.notna(overall_avg_return) else "N/A"
         
         # Calculate overall CAC
-        total_fb_spend = analysis['fb_ads_spend'].sum() if 'fb_ads_spend' in analysis.columns else 0
-        overall_cac = total_fb_spend / total_new if total_new > 0 else 0
+        cac_spend_column = 'paid_ads_spend' if 'paid_ads_spend' in analysis.columns else 'fb_ads_spend'
+        total_paid_spend = analysis[cac_spend_column].sum() if cac_spend_column in analysis.columns else 0
+        overall_cac = total_paid_spend / total_new if total_new > 0 else None
+        overall_cac_display = f"{overall_cac:.2f}" if overall_cac is not None else "N/A"
         
         print("-"*160)
         print(f"{'TOTAL':>10} {' ':>12} {total_customers:>10} "
               f"{total_new:>8} {total_returning:>10} "
               f"{overall_avg_clv:>12.2f} {final_cumulative_clv:>18.2f} "
-              f"{overall_cac:>10.2f} "
+              f"{overall_cac_display:>10} "
               f"{return_time_str:>16} {total_revenue:>12.2f}")
         
         print("\n")
