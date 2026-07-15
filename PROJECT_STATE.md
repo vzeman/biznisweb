@@ -61,6 +61,14 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY reporting decision-safety remediation is in progress on branch `codex/roy-reporting-decision-safety` (2026-07-15):
+  - purchase-cost precedence is corrected in the reusable reporting core: a resolved mapped purchase cost now wins over legacy zero-cost, zero-margin, `35%`, and `15%` assumptions
+  - a known purchase cost may be bypassed only through the new explicit accounting write-off settings `written_off_cost_skus` / `written_off_cost_label_patterns`; both are intentionally empty for ROY
+  - ROY's `35%` missing-cost margin remains a fallback only when no purchase cost can be resolved, while mapped negative-margin clearance sales remain unchanged
+  - focused verification: `test_reporting_calculation_fixes.py` `30` tests OK, including mapped-cost precedence and explicit write-off regressions; `test_creditnote_export.py` `15` tests OK; ROY settings JSON and `git diff --check` OK
+  - no runtime or historical data has been changed yet; VEVO configuration/data remains untouched
+  - Next exact step: add hard confidence gates for ROY inventory and marketing recommendations, repair the audited dashboard KPI/UI defects, then run the full suite before ROY-only deployment and full-history regeneration
+
 - ROY missing-purchase-cost fallback is permanently deployed as a `35%` product margin and full history was regenerated on `2026-07-15`:
   - code PR `#210` merged as `e178af8`; `projects/roy/settings.json` sets `missing_cost_margin_pct = 35`, so only products without any resolvable purchase cost use expense `65%` of net item revenue and source `missing_cost_margin_35_fallback`
   - mapped purchase costs keep precedence, including real negative-margin clearance sales; unit coverage preserves a mapped `80 EUR` cost on `50 EUR` net revenue as `-30 EUR` product profit

@@ -246,6 +246,76 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(65.0, rows[0]["total_expense"])
         self.assertEqual(35.0, rows[0]["profit_before_ads"])
 
+    def test_mapped_purchase_cost_wins_over_legacy_overrides(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        exporter.product_expenses_exact.update(
+            {
+                "ZERO-SKU": 18.0,
+                "MARGIN-SKU": 42.0,
+                "MARGIN15-SKU": 73.0,
+            }
+        )
+        base_item = {
+            "quantity": 1,
+            "tax_rate": 23,
+            "price": {"value": 100.0, "currency": {"code": "EUR"}},
+            "sum": {"value": 100.0, "currency": {"code": "EUR"}},
+            "sum_with_tax": {"value": 123.0, "currency": {"code": "EUR"}},
+        }
+
+        with patch("export_orders.ZERO_COST_LABEL_PATTERNS", ["Zero mapped"]), patch(
+            "export_orders.MARGIN_OVERRIDE_SKUS", {"MARGIN-SKU": 35.0}
+        ), patch("export_orders.MARGIN_15_LABEL_PATTERNS", ["Margin 15 mapped"]), patch(
+            "export_orders.WRITTEN_OFF_COST_SKUS", []
+        ), patch("export_orders.WRITTEN_OFF_COST_LABEL_PATTERNS", []):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-MAPPED-PRECEDENCE",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 369.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {**base_item, "item_label": "Zero mapped", "ean": "ZERO-SKU"},
+                        {**base_item, "item_label": "Margin mapped", "ean": "MARGIN-SKU"},
+                        {**base_item, "item_label": "Margin 15 mapped", "ean": "MARGIN15-SKU"},
+                    ],
+                }
+            )
+
+        self.assertEqual([18.0, 42.0, 73.0], [row["expense_per_item"] for row in rows])
+        self.assertTrue(all(row["expense_source"] == "mapped_product_identifier" for row in rows))
+
+    def test_explicit_written_off_cost_can_override_mapped_cost(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        exporter.product_expenses_exact["WRITTEN-OFF"] = 80.0
+
+        with patch("export_orders.WRITTEN_OFF_COST_SKUS", ["WRITTEN-OFF"]):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-WRITTEN-OFF",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 61.5, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Explicit accounting write-off",
+                            "ean": "WRITTEN-OFF",
+                            "quantity": 1,
+                            "tax_rate": 23,
+                            "price": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum": {"value": 50.0, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 61.5, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        self.assertEqual("written_off_cost_override", rows[0]["expense_source"])
+        self.assertEqual(0.0, rows[0]["total_expense"])
+        self.assertEqual(50.0, rows[0]["profit_before_ads"])
+
     def test_roy_knife_brand_margin_overrides_cover_requested_brands(self) -> None:
         expected_brands = [
             "Opinel",

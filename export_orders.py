@@ -111,6 +111,8 @@ FIXED_DAILY_COST = 0  # EUR per day; when set, overrides monthly fixed-cost spre
 EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
 PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for canonical reporting product names
 MISSING_COST_MARGIN_PCT = 0.0  # Product margin used only when no configured purchase cost can be resolved
+WRITTEN_OFF_COST_SKUS: List[str] = []  # Explicit accounting write-offs allowed to override a known purchase cost
+WRITTEN_OFF_COST_LABEL_PATTERNS: List[str] = []  # Explicit accounting write-offs allowed to override a known cost
 ZERO_MARGIN_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product margin
 ZERO_COST_BRANDS: List[str] = []  # Optional list of brands that should always run at 0 product cost
 ZERO_COST_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 0 product cost
@@ -2958,6 +2960,17 @@ class BizniWebExporter:
                     return float(margin_pct)
         return cls._margin_override_pct_for_label(label)
 
+    @classmethod
+    def _is_written_off_cost_item(cls, product_sku: str, label: str) -> bool:
+        normalized_sku = cls._normalize_product_identifier(product_sku)
+        if normalized_sku:
+            if any(
+                cls._normalize_product_identifier(configured_sku) == normalized_sku
+                for configured_sku in WRITTEN_OFF_COST_SKUS
+            ):
+                return True
+        return cls._matches_patterns(label, WRITTEN_OFF_COST_LABEL_PATTERNS)
+
     @staticmethod
     def _margin_override_source(margin_pct: float) -> str:
         token = f"{float(margin_pct):g}".replace(".", "_")
@@ -5228,7 +5241,9 @@ class BizniWebExporter:
                 ):
                     continue
 
-                # Apply explicit cost overrides before falling back to configured product cost maps.
+                # A mapped purchase cost is the accounting source of truth. Legacy margin/zero-cost
+                # rules are fallback assumptions only and must never hide a known real cost. The
+                # sole exception is an explicit accounting write-off configured separately.
                 force_zero_cost = False
                 force_zero_margin = False
                 force_margin_15 = False
@@ -5242,19 +5257,9 @@ class BizniWebExporter:
                     force_zero_cost = self._matches_patterns(item_label, ZERO_COST_LABEL_PATTERNS)
                 if item_label and not force_margin_15:
                     force_margin_15 = self._matches_patterns(item_label, MARGIN_15_LABEL_PATTERNS)
-                if force_zero_cost:
+                if self._is_written_off_cost_item(product_sku, item_label):
                     expense_per_item = 0.0
-                    expense_source = "zero_cost_override"
-                elif force_zero_margin and item_quantity:
-                    expense_per_item = item_total_without_tax / item_quantity
-                    expense_source = "zero_margin_override"
-                elif margin_override_pct is not None and item_quantity:
-                    expense_per_item = (item_total_without_tax / item_quantity) * (1 - margin_override_pct / 100)
-                    expense_source = self._margin_override_source(margin_override_pct)
-                elif force_margin_15 and item_quantity:
-                    # Keep product margin at 15%: cost = 85% of net unit selling price.
-                    expense_per_item = (item_total_without_tax / item_quantity) * 0.85
-                    expense_source = "margin_15_override"
+                    expense_source = "written_off_cost_override"
                 else:
                     expense_per_item, expense_source = self._resolve_product_expense(
                         product_sku,
@@ -5264,10 +5269,24 @@ class BizniWebExporter:
                         ean=item_ean,
                     )
                     if expense_per_item is None:
-                        expense_per_item, expense_source = self._missing_cost_expense(
-                            item_total_without_tax,
-                            item_quantity,
-                        )
+                        if force_zero_cost:
+                            expense_per_item = 0.0
+                            expense_source = "zero_cost_override"
+                        elif force_zero_margin and item_quantity:
+                            expense_per_item = item_total_without_tax / item_quantity
+                            expense_source = "zero_margin_override"
+                        elif margin_override_pct is not None and item_quantity:
+                            expense_per_item = (item_total_without_tax / item_quantity) * (1 - margin_override_pct / 100)
+                            expense_source = self._margin_override_source(margin_override_pct)
+                        elif force_margin_15 and item_quantity:
+                            # Keep product margin at 15% only when no mapped purchase cost exists.
+                            expense_per_item = (item_total_without_tax / item_quantity) * 0.85
+                            expense_source = "margin_15_override"
+                        else:
+                            expense_per_item, expense_source = self._missing_cost_expense(
+                                item_total_without_tax,
+                                item_quantity,
+                            )
                 total_expense = expense_per_item * item_quantity
                 
                 # Calculate profit and ROI (Note: FB ads will be added at aggregation level)

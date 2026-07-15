@@ -69,6 +69,8 @@
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 6500,
   "missing_cost_margin_pct": 35,
+  "written_off_cost_skus": [],
+  "written_off_cost_label_patterns": [],
   "invoice_generation": {
     "enabled": true,
     "lookback_days": 7,
