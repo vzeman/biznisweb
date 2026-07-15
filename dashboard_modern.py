@@ -3567,7 +3567,8 @@ def generate_modern_dashboard(
             color: var(--text);
             background: radial-gradient(circle at top left, rgba(255,138,31,.14), transparent 18%), linear-gradient(180deg, #fbf7f0 0%, #f2ece3 100%);
         }}
-        .layout {{ display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }}
+        .layout {{ display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }}
+        .layout > *, .content, .shell, .panel, .hero, .side-stack, .grid-2 {{ min-width: 0; }}
         .sidebar {{ position: sticky; top: 0; height: 100vh; padding: 26px 18px; background: rgba(255,253,249,.85); border-right: 1px solid var(--line); backdrop-filter: blur(16px); }}
         .brand, .panel {{ background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }}
         .brand {{ border-radius: 18px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }}
@@ -3712,7 +3713,16 @@ def generate_modern_dashboard(
         th, td {{ text-align:left; padding: 11px 8px; border-bottom: 1px solid rgba(234,223,206,.85); font-size: 13px; }}
         th {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .lang-en.hidden, .lang-sk.hidden {{ display:none !important; }}
-        @media (max-width: 900px) {{ .layout {{ grid-template-columns: 1fr; }} .sidebar {{ position: static; height:auto; }} }}
+        @media (max-width: 900px) {{
+            .layout {{ grid-template-columns: minmax(0, 1fr); }}
+            .sidebar {{ position: static; width: 100%; height:auto; padding:16px; overflow:hidden; }}
+            .brand {{ margin-bottom:12px; }}
+            .global-period-panel {{ margin:12px 0; }}
+            .nav-label {{ display:none; }}
+            .sidebar-nav {{ display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; }}
+            .nav-link {{ flex:0 0 auto; margin:0; padding:9px 11px; }}
+            .content {{ width:100%; padding:20px 14px 56px; }}
+        }}
         @media (max-width: 1080px) {{ .hero, .grid-2, .kpi-grid, .health-grid, .mini-grid, .daily-profit-grid, .hero-alert-metrics {{ grid-template-columns: 1fr; }} }}
     </style>
 </head>
@@ -3727,6 +3737,7 @@ def generate_modern_dashboard(
                 </div>
             </div>
             {period_switcher_html}
+            <nav class="sidebar-nav" aria-label="Reporting sections">
             <div class="nav-label"><span class="lang-en">Navigate</span><span class="lang-sk hidden">Navigácia</span></div>
             <a class="nav-link active" href="#overview"><span class="nav-dot">01</span><span class="lang-en">Overview</span><span class="lang-sk hidden">Prehľad</span></a>
             {ceo_nav_link_html}
@@ -3740,6 +3751,7 @@ def generate_modern_dashboard(
             <a class="nav-link" href="#operations"><span class="nav-dot">09</span><span class="lang-en">Operations</span><span class="lang-sk hidden">Operativa</span></a>
             <a class="nav-link" href="#library"><span class="nav-dot">10</span><span class="lang-en">Full library</span><span class="lang-sk hidden">Plna kniznica</span></a>
             <a class="nav-link" href="#health"><span class="nav-dot">11</span><span class="lang-en">Data health</span><span class="lang-sk hidden">Kvalita dát</span></a>
+            </nav>
         </aside>
         <main class="content">
             <div class="shell">

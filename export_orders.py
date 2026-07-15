@@ -1778,10 +1778,14 @@ class BizniWebExporter:
         break_even_cac = self._safe_float(metrics.get("break_even_cac"))
         cm1_per_customer = self._safe_float(metrics.get("cm1_profit_per_customer"))
         payback_orders = self._safe_float(metrics.get("payback_orders"))
-        current_fb_cac = self._safe_float(metrics.get("current_fb_cac"))
+        paid_cac = self._safe_float(metrics.get("paid_cac"))
+        if paid_cac is None:
+            paid_cac = self._safe_float(metrics.get("blended_cac"))
+        if paid_cac is None:
+            paid_cac = self._safe_float(metrics.get("current_fb_cac"))
         expected_payback = None
-        if current_fb_cac is not None and cm1_per_order not in (None, 0):
-            expected_payback = current_fb_cac / cm1_per_order
+        if paid_cac is not None and cm1_per_order not in (None, 0):
+            expected_payback = paid_cac / cm1_per_order
         if shell_pre_ad is not None and cm1_per_order is not None and abs(shell_pre_ad - cm1_per_order) > 0.05:
             shell_parity_failures += 1
         if break_even_cac is not None and cm1_per_customer is not None and abs(break_even_cac - cm1_per_customer) > 0.05:

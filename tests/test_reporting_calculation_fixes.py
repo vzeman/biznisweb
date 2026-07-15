@@ -383,6 +383,19 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(15.0, metrics["paid_cac"])
         self.assertEqual(15.0, metrics["blended_cac"])
         self.assertAlmostEqual(3.33, metrics["contribution_ltv_cac"], places=2)
+        self.assertEqual(0.3, metrics["payback_orders"])
+
+        qa = exporter._build_data_assertions_qa(
+            financial_metrics=metrics,
+            consistency_checks={},
+            refunds_analysis={},
+            day_of_week_analysis=pd.DataFrame(),
+            advanced_dtc_metrics={},
+            country_analysis=pd.DataFrame(),
+            geo_profitability={},
+            cost_per_order={},
+        )
+        self.assertEqual(0, qa["shell_parity_failures"])
 
     def test_customer_concentration_includes_profit_shares(self) -> None:
         exporter = make_exporter(project_name="roy")
