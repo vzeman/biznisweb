@@ -1143,6 +1143,8 @@ def generate_modern_dashboard(
             "confidence",
             "confidence_note_en",
             "confidence_note_sk",
+            "decision_ready",
+            "decision_blockers",
         ],
         limit=12,
     )
@@ -1372,8 +1374,13 @@ def generate_modern_dashboard(
             "projected_stockout_date",
             "stock_risk_level",
             "reorder_by_date",
+            "reorder_by_date_estimate",
             "suggested_reorder_units",
+            "suggested_reorder_units_estimate",
             "reorder_action_label",
+            "recommendation_ready",
+            "recommendation_confidence",
+            "recommendation_note",
         ],
         limit=160,
     )
@@ -1442,12 +1449,18 @@ def generate_modern_dashboard(
             "days_of_cover",
             "lead_time_working_days",
             "reorder_by_date",
+            "reorder_by_date_estimate",
             "suggested_reorder_units",
+            "suggested_reorder_units_estimate",
             "reorder_action_label",
             "alert_30d_revenue",
             "projected_stockout_date",
             "reorder_now_flag",
             "prepare_po_flag",
+            "reorder_attention_flag",
+            "recommendation_ready",
+            "recommendation_confidence",
+            "recommendation_note",
         ],
         limit=120,
     )
@@ -1468,8 +1481,13 @@ def generate_modern_dashboard(
             "cost_coverage_pct",
             "lead_time_working_days",
             "reorder_by_date",
+            "reorder_by_date_estimate",
             "suggested_reorder_units",
+            "suggested_reorder_units_estimate",
             "reorder_action_label",
+            "recommendation_ready",
+            "recommendation_confidence",
+            "recommendation_note",
         ],
         limit=120,
     )
@@ -1990,6 +2008,9 @@ def generate_modern_dashboard(
 
     break_even_cac = _maybe_num((financial_metrics or {}).get("break_even_cac"))
     current_fb_cac = _maybe_num((financial_metrics or {}).get("current_fb_cac"))
+    current_paid_cac = _maybe_num((financial_metrics or {}).get("paid_cac"))
+    if current_paid_cac is None:
+        current_paid_cac = current_fb_cac
     shell_pre_ad_per_order = _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_order"))
     shell_payback_orders = _maybe_num((financial_metrics or {}).get("payback_orders"))
     shell_contribution_ltv_cac = _maybe_num((financial_metrics or {}).get("contribution_ltv_cac"))
@@ -2013,12 +2034,12 @@ def generate_modern_dashboard(
     best_cm3_margin_range = str(marketing_decision_summary.get("best_cm3_margin_range") or "N/A")
     cm_taxonomy_note = str((financial_metrics or {}).get("cm_taxonomy_note") or "")
     cac_break_even_ratio = None
-    if break_even_cac not in (None, 0) and current_fb_cac is not None:
-        cac_break_even_ratio = current_fb_cac / break_even_cac
+    if break_even_cac not in (None, 0) and current_paid_cac is not None:
+        cac_break_even_ratio = current_paid_cac / break_even_cac
     roi_total_pct = round((total_profit / total_costs * 100), 1) if total_costs > 0 else None
     revenue_ltv_cac = None
-    if avg_customer_ltv not in (None, 0) and current_fb_cac not in (None, 0):
-        revenue_ltv_cac = avg_customer_ltv / current_fb_cac
+    if avg_customer_ltv not in (None, 0) and current_paid_cac not in (None, 0):
+        revenue_ltv_cac = avg_customer_ltv / current_paid_cac
 
     repeat_purchase_rate = _maybe_num((customer_concentration or {}).get("repeat_purchase_rate"))
     if repeat_purchase_rate is None:
@@ -2085,7 +2106,7 @@ def generate_modern_dashboard(
         {"en": "Break-even CAC", "sk": "Break-even CAC", "value": break_even_cac, "kind": "currency", "tone": "positive"},
         {"en": "Pre-ad contribution / customer", "sk": "Pre-ad contribution / zakaznik", "value": _maybe_num((financial_metrics or {}).get("pre_ad_contribution_per_customer")), "kind": "currency", "tone": "positive"},
         {"en": "Current FB CAC", "sk": "Aktualne FB CAC", "value": current_fb_cac, "kind": "currency", "tone": "negative"},
-        {"en": "Paid CAC (FB)", "sk": "Paid CAC (FB)", "value": _maybe_num((financial_metrics or {}).get("paid_cac")), "kind": "currency", "tone": "negative"},
+        {"en": "Paid CAC (FB + Google)", "sk": "Paid CAC (FB + Google)", "value": current_paid_cac, "kind": "currency", "tone": "negative"},
         {"en": "Blended CAC (tracked ads)", "sk": "Blended CAC (trackovane ads)", "value": _maybe_num((financial_metrics or {}).get("blended_cac")), "kind": "currency", "tone": "negative", "note_en": "FB + Google", "note_sk": "FB + Google"},
         {"en": "CAC headroom", "sk": "CAC headroom", "value": _maybe_num((financial_metrics or {}).get("cac_headroom")), "kind": "currency", "tone": "positive"},
         {"en": "CAC / break-even", "sk": "CAC / break-even", "value": cac_break_even_ratio, "kind": "multiple", "tone": "neutral"},
@@ -2280,6 +2301,13 @@ def generate_modern_dashboard(
     roy_forecast_horizon_days = max(1, int(round(_num(roy_product_demand_summary.get("forecast_horizon_days"))))) if roy_product_demand_summary else 30
     roy_inventory_cost_value = _num(roy_product_demand_summary.get("inventory_cost_value"))
     roy_inventory_retail_value = _num(roy_product_demand_summary.get("inventory_retail_value"))
+    roy_inventory_gmroi_annualized = _maybe_num(
+        roy_product_demand_summary.get("inventory_gmroi_annualized")
+    )
+    roy_reorder_cash_estimate = _num(roy_product_demand_summary.get("reorder_cash_estimate"))
+    roy_reorder_cash_estimate_costed_rows = int(
+        round(_num(roy_product_demand_summary.get("reorder_cash_estimate_costed_rows")))
+    )
     roy_inventory_available_units = _num(roy_product_demand_summary.get("inventory_available_units"))
     roy_inventory_primary_value_basis = escape(str(roy_product_demand_summary.get("inventory_primary_value_basis") or "cost").upper())
     roy_inventory_secondary_value_basis = escape(str(roy_product_demand_summary.get("inventory_secondary_value_basis") or "retail").upper())
@@ -2306,6 +2334,7 @@ def generate_modern_dashboard(
     roy_alert_delivery_hero_count = int(round(_num(roy_product_demand_summary.get("alert_delivery_hero_count"))))
     roy_alert_reorder_now_count = int(round(_num(roy_product_demand_summary.get("alert_reorder_now_count"))))
     roy_alert_prepare_po_count = int(round(_num(roy_product_demand_summary.get("alert_prepare_po_count"))))
+    roy_alert_attention_count = int(round(_num(roy_product_demand_summary.get("alert_attention_count"))))
     roy_alert_excluded_count = int(round(_num(roy_product_demand_summary.get("alert_excluded_count"))))
     roy_lead_time_configured_alert_count = int(round(_num(roy_product_demand_summary.get("lead_time_configured_alert_count"))))
     roy_bundle_component_rule_count = int(round(_num(roy_product_demand_summary.get("bundle_component_rule_count"))))
@@ -2313,6 +2342,46 @@ def generate_modern_dashboard(
     roy_bundle_component_adjustment_90d_units = _num(roy_product_demand_summary.get("bundle_component_adjustment_90d_units"))
     roy_inbound_stock_status = escape(str(roy_product_demand_summary.get("inbound_stock_status") or "not_modeled").replace("_", " "))
     roy_inbound_stock_source = escape(str(roy_product_demand_summary.get("inbound_stock_source") or "not_modeled"))
+    roy_inventory_recommendation_ready = bool(
+        roy_product_demand_summary.get("inventory_recommendation_ready")
+    )
+    roy_inventory_recommendation_confidence = escape(
+        str(roy_product_demand_summary.get("inventory_recommendation_confidence") or "low").upper()
+    )
+    raw_inventory_recommendation_blockers = (
+        roy_product_demand_summary.get("inventory_recommendation_blockers") or []
+    )
+    if not isinstance(raw_inventory_recommendation_blockers, list):
+        raw_inventory_recommendation_blockers = [str(raw_inventory_recommendation_blockers)]
+    inventory_recommendation_blockers_html = "".join(
+        f"<li>{escape(str(reason))}</li>"
+        for reason in raw_inventory_recommendation_blockers
+        if str(reason).strip()
+    )
+    if roy_inventory_recommendation_ready:
+        roy_inventory_decision_note_html = (
+            '<div class="health-item"><div class="health-title"><span class="lang-en">Purchase recommendation gate</span>'
+            '<span class="lang-sk hidden">Brana odporucania nakupu</span></div>'
+            '<div class="health-status good">READY</div><p><span class="lang-en">Exact reorder quantities passed all configured data-quality gates.</span>'
+            '<span class="lang-sk hidden">Presne mnozstva na doobjednanie presli vsetkymi branami kvality dat.</span></p></div>'
+        )
+        roy_inventory_alert_heading_en = "Actionable inventory alerts"
+        roy_inventory_alert_heading_sk = "Akcne skladove alerty"
+        roy_inventory_alert_description_en = "These rows passed the data-quality gate and can support replenishment decisions."
+        roy_inventory_alert_description_sk = "Tieto riadky presli branou kvality dat a mozu podporit rozhodnutie o doobjednani."
+    else:
+        roy_inventory_decision_note_html = (
+            '<div class="health-item"><div class="health-title"><span class="lang-en">Purchase recommendation gate</span>'
+            '<span class="lang-sk hidden">Brana odporucania nakupu</span></div>'
+            f'<div class="health-status warn">WARNING ONLY / {roy_inventory_recommendation_confidence}</div>'
+            '<p><span class="lang-en">Exact reorder quantities and dates are blocked. Use this section only as a stock-risk watchlist.</span>'
+            '<span class="lang-sk hidden">Presne mnozstva a datumy doobjednania su zablokovane. Sekciu pouzivaj iba ako watchlist skladoveho rizika.</span></p>'
+            f'<ul class="warning-list">{inventory_recommendation_blockers_html}</ul></div>'
+        )
+        roy_inventory_alert_heading_en = "Inventory risk warnings"
+        roy_inventory_alert_heading_sk = "Varovania skladoveho rizika"
+        roy_inventory_alert_description_en = "Risk signals only. Do not place a purchase order from these estimates until the data-quality gate is ready."
+        roy_inventory_alert_description_sk = "Iba signaly rizika. Podla tychto odhadov neobjednavaj, kym brana kvality dat nebude pripravena."
     roy_forecast_backtest_products = int(round(_num(roy_product_demand_summary.get("forecast_backtest_products"))))
     roy_forecast_backtest_wape_pct = _num(roy_product_demand_summary.get("forecast_backtest_wape_pct"))
     roy_forecast_backtest_median_accuracy_pct = _num(roy_product_demand_summary.get("forecast_backtest_median_accuracy_pct"))
@@ -2355,6 +2424,269 @@ def generate_modern_dashboard(
             '<p class="muted-note"><span class="lang-en">Inventory snapshot is not available for this render.</span>'
             '<span class="lang-sk hidden">Inventory snapshot pre tento render nie je dostupny.</span></p>'
         )
+
+    ceo_cockpit_payload: Dict[str, Any] = {}
+    ceo_cockpit_html = ""
+    ceo_nav_link_html = ""
+    if project_key == "roy":
+        ceo_nav_link_html = (
+            '<a class="nav-link" href="#ceo-cockpit"><span class="nav-dot">CEO</span>'
+            '<span class="lang-en">Decision cockpit</span><span class="lang-sk hidden">Rozhodovaci cockpit</span></a>'
+        )
+        waterfall_rows: List[Dict[str, Any]] = []
+        comparison_note_en = "Previous 30-day comparison is not available in this report range."
+        comparison_note_sk = "Predosle 30-dnove porovnanie nie je v tomto rozsahu dostupne."
+        comparison_frame = date_agg.copy()
+        if not comparison_frame.empty and "date" in comparison_frame.columns:
+            comparison_frame["_decision_date"] = pd.to_datetime(
+                comparison_frame["date"], errors="coerce"
+            ).dt.normalize()
+            comparison_frame = comparison_frame.dropna(subset=["_decision_date"])
+        if not comparison_frame.empty and "_decision_date" in comparison_frame.columns:
+            comparison_end = comparison_frame["_decision_date"].max()
+            current_start = comparison_end - pd.Timedelta(days=29)
+            previous_end = current_start - pd.Timedelta(days=1)
+            previous_start = previous_end - pd.Timedelta(days=29)
+            current_window = comparison_frame.loc[
+                comparison_frame["_decision_date"].between(current_start, comparison_end)
+            ]
+            previous_window = comparison_frame.loc[
+                comparison_frame["_decision_date"].between(previous_start, previous_end)
+            ]
+
+            def _window_sum(frame: pd.DataFrame, column: str) -> float:
+                if column not in frame.columns:
+                    return 0.0
+                return float(pd.to_numeric(frame[column], errors="coerce").fillna(0.0).sum())
+
+            if not current_window.empty and not previous_window.empty:
+                current_revenue = _window_sum(current_window, "total_revenue")
+                previous_revenue = _window_sum(previous_window, "total_revenue")
+                current_product_cost = _window_sum(current_window, "product_expense")
+                previous_product_cost = _window_sum(previous_window, "product_expense")
+                current_ads = _window_sum(current_window, "fb_ads_spend") + _window_sum(current_window, "google_ads_spend")
+                previous_ads = _window_sum(previous_window, "fb_ads_spend") + _window_sum(previous_window, "google_ads_spend")
+                current_fulfillment = _window_sum(current_window, "packaging_cost") + _window_sum(current_window, "shipping_net_cost")
+                previous_fulfillment = _window_sum(previous_window, "packaging_cost") + _window_sum(previous_window, "shipping_net_cost")
+                current_fixed = _window_sum(current_window, "fixed_daily_cost")
+                previous_fixed = _window_sum(previous_window, "fixed_daily_cost")
+                current_window_profit = _window_sum(current_window, "net_profit")
+                previous_window_profit = _window_sum(previous_window, "net_profit")
+                profit_delta = current_window_profit - previous_window_profit
+                driver_specs = [
+                    ("Revenue", "Trzby", current_revenue, previous_revenue, current_revenue - previous_revenue),
+                    ("Product cost", "Nakupne ceny", current_product_cost, previous_product_cost, -(current_product_cost - previous_product_cost)),
+                    ("Paid ads", "Platena reklama", current_ads, previous_ads, -(current_ads - previous_ads)),
+                    ("Fulfillment", "Balenie a doprava", current_fulfillment, previous_fulfillment, -(current_fulfillment - previous_fulfillment)),
+                    ("Fixed overhead", "Fixne naklady", current_fixed, previous_fixed, -(current_fixed - previous_fixed)),
+                ]
+                explained_delta = sum(spec[4] for spec in driver_specs)
+                residual_delta = profit_delta - explained_delta
+                if abs(residual_delta) >= 0.01:
+                    driver_specs.append(("Other / reconciliation", "Ostatne / reconciliacia", 0.0, 0.0, residual_delta))
+                waterfall_rows = [
+                    {
+                        "label_en": label_en,
+                        "label_sk": label_sk,
+                        "current": round(current, 2),
+                        "previous": round(previous, 2),
+                        "profit_effect": round(effect, 2),
+                    }
+                    for label_en, label_sk, current, previous, effect in driver_specs
+                ]
+                waterfall_rows.append(
+                    {
+                        "label_en": "Company profit change",
+                        "label_sk": "Zmena firemneho profitu",
+                        "current": round(current_window_profit, 2),
+                        "previous": round(previous_window_profit, 2),
+                        "profit_effect": round(profit_delta, 2),
+                        "total": True,
+                    }
+                )
+                comparison_note_en = (
+                    f"Current {current_start.strftime('%Y-%m-%d')} to {comparison_end.strftime('%Y-%m-%d')} "
+                    f"versus {previous_start.strftime('%Y-%m-%d')} to {previous_end.strftime('%Y-%m-%d')}."
+                )
+                comparison_note_sk = (
+                    f"Aktualne {current_start.strftime('%Y-%m-%d')} az {comparison_end.strftime('%Y-%m-%d')} "
+                    f"oproti {previous_start.strftime('%Y-%m-%d')} az {previous_end.strftime('%Y-%m-%d')}."
+                )
+
+        product_profit_total = _maybe_num(product_expense_qa.get("total_profit_before_ads"))
+        estimated_fallback_profit = _maybe_num(product_expense_qa.get("fallback_profit_before_ads"))
+        mapped_product_profit = (
+            product_profit_total - (estimated_fallback_profit or 0.0)
+            if product_profit_total is not None else None
+        )
+        company_profit_plan = _maybe_num((financial_metrics or {}).get("company_profit_plan_period"))
+        company_profit_plan_delta = _maybe_num((financial_metrics or {}).get("company_profit_plan_delta"))
+        company_profit_plan_status = str(
+            (financial_metrics or {}).get("company_profit_plan_status") or "not_configured"
+        )
+
+        top_loss = roy_loss_product_rows[0] if roy_loss_product_rows else {}
+        top_missing_cost = (product_expense_qa.get("top_fallback_items") or [{}])[0]
+        if not isinstance(top_missing_cost, dict):
+            top_missing_cost = {}
+        top_restock = roy_alert_rows[0] if roy_alert_rows else {}
+        top_dead_stock = roy_dead_stock_rows[0] if roy_dead_stock_rows else {}
+        marketing_ready = bool(incrementality_primary.get("decision_ready"))
+        marketing_verdict = str(incrementality_primary.get("verdict") or "Experiment required")
+
+        ceo_actions = [
+            {
+                "key": "price",
+                "title_en": "Reprice / stop loss",
+                "title_sk": "Zdvihnut cenu / zastavit stratu",
+                "detail_en": (
+                    f"{top_loss.get('product')}: gross product loss EUR {abs(_num(top_loss.get('gross_profit'))):,.2f}."
+                    if top_loss else "No mapped gross-loss product is visible in this period."
+                ),
+                "detail_sk": (
+                    f"{top_loss.get('product')}: hruba produktova strata EUR {abs(_num(top_loss.get('gross_profit'))):,.2f}."
+                    if top_loss else "V tomto obdobi nie je viditelny produkt s mapovanou hrubou stratou."
+                ),
+                "tone": "negative" if top_loss else "neutral",
+            },
+            {
+                "key": "ads",
+                "title_en": "Marketing decision",
+                "title_sk": "Rozhodnutie o marketingu",
+                "detail_en": (
+                    f"{marketing_verdict}: {incrementality_primary.get('verdict_reason_en') or '-'}"
+                    if marketing_ready else "Run a controlled experiment; the current evidence is blocked from Scale/Cut decisions."
+                ),
+                "detail_sk": (
+                    f"{marketing_verdict}: {incrementality_primary.get('verdict_reason_sk') or '-'}"
+                    if marketing_ready else "Spustit kontrolovany experiment; aktualne data nesmu rozhodnut o Scale/Cut."
+                ),
+                "tone": "positive" if marketing_ready and marketing_verdict == "Scale" else "warning",
+            },
+            {
+                "key": "cost",
+                "title_en": "Fill purchase cost",
+                "title_sk": "Doplnit nakupnu cenu",
+                "detail_en": (
+                    f"{top_missing_cost.get('item_label')}: EUR {_num(top_missing_cost.get('revenue')):,.2f} revenue still uses the 35% estimate."
+                    if top_missing_cost else "No missing-cost fallback item is visible in this period."
+                ),
+                "detail_sk": (
+                    f"{top_missing_cost.get('item_label')}: trzba EUR {_num(top_missing_cost.get('revenue')):,.2f} stale pouziva 35% odhad."
+                    if top_missing_cost else "V tomto obdobi nie je viditelny produkt bez nakupnej ceny."
+                ),
+                "tone": "warning" if top_missing_cost else "neutral",
+            },
+            {
+                "key": "stock",
+                "title_en": "Purchase / stock risk",
+                "title_sk": "Nakup / skladove riziko",
+                "detail_en": (
+                    f"Order {int(round(_num(top_restock.get('suggested_reorder_units'))))} units of {top_restock.get('product')}."
+                    if roy_inventory_recommendation_ready and top_restock
+                    else "Do not order from the model yet; repair inbound, cost coverage, forecast accuracy, and negative stock first."
+                ),
+                "detail_sk": (
+                    f"Objednat {int(round(_num(top_restock.get('suggested_reorder_units'))))} kusov {top_restock.get('product')}."
+                    if roy_inventory_recommendation_ready and top_restock
+                    else "Podla modelu este neobjednavat; najprv opravit inbound, coverage cien, forecast a negativny sklad."
+                ),
+                "tone": "positive" if roy_inventory_recommendation_ready else "warning",
+            },
+            {
+                "key": "clearance",
+                "title_en": "Clear dead stock",
+                "title_sk": "Vypredat dead stock",
+                "detail_en": (
+                    f"{top_dead_stock.get('product')}: EUR {_num(top_dead_stock.get('inventory_cost_value')):,.2f} tied in stock."
+                    if top_dead_stock else "No dead-stock candidate is visible in this period."
+                ),
+                "detail_sk": (
+                    f"{top_dead_stock.get('product')}: EUR {_num(top_dead_stock.get('inventory_cost_value')):,.2f} viazanych v sklade."
+                    if top_dead_stock else "V tomto obdobi nie je viditelny kandidat na dead stock."
+                ),
+                "tone": "warning" if top_dead_stock else "neutral",
+            },
+        ]
+
+        waterfall_rows_html = "".join(
+            (
+                ('<tr class="ceo-waterfall-total">' if row.get('total') else '<tr>')
+                +
+                f"<td><span class=\"lang-en\">{escape(str(row.get('label_en') or '-'))}</span>"
+                f"<span class=\"lang-sk hidden\">{escape(str(row.get('label_sk') or '-'))}</span></td>"
+                f"<td>&euro;{_num(row.get('previous')):,.2f}</td>"
+                f"<td>&euro;{_num(row.get('current')):,.2f}</td>"
+                f"<td class=\"{'positive' if _num(row.get('profit_effect')) >= 0 else 'negative'}\">"
+                f"{_num(row.get('profit_effect')):+,.2f} &euro;</td></tr>"
+            )
+            for row in waterfall_rows
+        ) or (
+            '<tr><td colspan="4"><span class="lang-en">Not enough history for a 30-day change waterfall.</span>'
+            '<span class="lang-sk hidden">Na 30-dnovy waterfall zmien nie je dost historie.</span></td></tr>'
+        )
+        ceo_actions_html = "".join(
+            f'<div class="ceo-action tone-{escape(str(action.get("tone") or "neutral"))}">'
+            f'<small>{index}</small><h3><span class="lang-en">{escape(str(action.get("title_en") or "Action"))}</span>'
+            f'<span class="lang-sk hidden">{escape(str(action.get("title_sk") or "Akcia"))}</span></h3>'
+            f'<p><span class="lang-en">{escape(str(action.get("detail_en") or "-"))}</span>'
+            f'<span class="lang-sk hidden">{escape(str(action.get("detail_sk") or "-"))}</span></p></div>'
+            for index, action in enumerate(ceo_actions, start=1)
+        )
+        profit_plan_value_html = (
+            _format_mini_value_html(company_profit_plan, kind="currency")
+            if company_profit_plan_status == "configured" and company_profit_plan is not None
+            else '<span class="lang-en">Not configured</span><span class="lang-sk hidden">Nenastaveny</span>'
+        )
+        profit_plan_delta_html = (
+            f'<span class="delta {"positive" if company_profit_plan_delta >= 0 else "negative"}">'
+            f'{company_profit_plan_delta:+,.2f} &euro;</span>'
+            if company_profit_plan_delta is not None else ""
+        )
+        ceo_cockpit_payload = {
+            "company_profit": total_profit,
+            "company_profit_plan": company_profit_plan,
+            "company_profit_plan_status": company_profit_plan_status,
+            "mapped_product_profit": mapped_product_profit,
+            "estimated_fallback_profit": estimated_fallback_profit,
+            "inventory_profit_at_risk_30d": roy_profit_at_risk_30d,
+            "inventory_gmroi_annualized": roy_inventory_gmroi_annualized,
+            "reorder_cash_estimate": roy_reorder_cash_estimate,
+            "waterfall_rows": waterfall_rows,
+            "actions": ceo_actions,
+        }
+        ceo_cockpit_html = f"""
+                <section class="section" id="ceo-cockpit">
+                    <div class="section-head">
+                        <h2><span class="lang-en">CEO decision cockpit</span><span class="lang-sk hidden">CEO rozhodovaci cockpit</span></h2>
+                        <p><span class="lang-en">Company result, confidence-aware profit exposure, change drivers and the five next management actions.</span><span class="lang-sk hidden">Firemny vysledok, profit v riziku, dovody zmeny a pat dalsich manazerskych akcii.</span></p>
+                    </div>
+                    <div class="panel kpi-band">
+                        <div class="mini-grid">
+                            <div class="mini-card"><small><span class="lang-en">Company profit</span><span class="lang-sk hidden">Firemny profit</span></small><strong>{_format_mini_value_html(total_profit, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Profit plan for period</span><span class="lang-sk hidden">Plan profitu na obdobie</span></small><strong>{profit_plan_value_html}</strong>{profit_plan_delta_html}</div>
+                            <div class="mini-card"><small><span class="lang-en">Mapped product profit</span><span class="lang-sk hidden">Profit s mapovanou cenou</span></small><strong>{_format_mini_value_html(mapped_product_profit, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Estimated fallback profit</span><span class="lang-sk hidden">Odhadovany fallback profit</span></small><strong>{_format_mini_value_html(estimated_fallback_profit, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Inventory profit at risk 30d</span><span class="lang-sk hidden">Skladovy profit v riziku 30d</span></small><strong>{_format_mini_value_html(roy_profit_at_risk_30d, kind="currency")}</strong></div>
+                            <div class="mini-card"><small>GMROI annualized</small><strong>{_format_mini_value_html(roy_inventory_gmroi_annualized, kind="multiple")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Own inventory cost</span><span class="lang-sk hidden">Vlastny sklad v nakupnych cenach</span></small><strong>{_format_mini_value_html(roy_inventory_cost_value, kind="currency")}</strong></div>
+                            <div class="mini-card"><small><span class="lang-en">Inbound / draft PO cash</span><span class="lang-sk hidden">Inbound / odhad cash na PO</span></small><strong>{roy_inbound_stock_status} / {_format_mini_value_html(roy_reorder_cash_estimate, kind="currency")}</strong><span class="delta neutral">{roy_reorder_cash_estimate_costed_rows} costed rows; estimate only</span></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="margin-top:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">30-day profit change waterfall</span><span class="lang-sk hidden">30-dnovy waterfall zmeny profitu</span></h3><p><span class="lang-en">{escape(comparison_note_en)}</span><span class="lang-sk hidden">{escape(comparison_note_sk)}</span></p></div></div>
+                            <table><thead><tr><th><span class="lang-en">Driver</span><span class="lang-sk hidden">Dovod</span></th><th><span class="lang-en">Previous</span><span class="lang-sk hidden">Predtym</span></th><th><span class="lang-en">Current</span><span class="lang-sk hidden">Teraz</span></th><th><span class="lang-en">Profit effect</span><span class="lang-sk hidden">Dopad na profit</span></th></tr></thead><tbody>{waterfall_rows_html}</tbody></table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Five next actions</span><span class="lang-sk hidden">Pat dalsich akcii</span></h3><p><span class="lang-en">Actions are gated by data confidence; blocked models produce a data-fix action, not a false recommendation.</span><span class="lang-sk hidden">Akcie respektuju istotu dat; zablokovany model navrhne opravu dat, nie falosne odporucanie.</span></p></div></div>
+                            <div class="ceo-action-grid">{ceo_actions_html}</div>
+                        </div>
+                    </div>
+                </section>
+        """
+    payload["ceo_cockpit"] = ceo_cockpit_payload
+    payload_json = _json_script_content(payload)
 
     daily_profit_rows_html = "".join(
         _daily_profit_row_html(row)
@@ -2485,7 +2817,7 @@ def generate_modern_dashboard(
             f"<td>{_num(row.get('days_of_cover')):.1f}</td>"
             f"<td>{int(round(_num(row.get('lead_time_working_days'))))}</td>"
             f"<td>{escape(str(row.get('reorder_by_date') or '-'))}</td>"
-            f"<td>{_num(row.get('suggested_reorder_units')):.0f}</td>"
+            f"<td>{int(round(_num(row.get('suggested_reorder_units')))) if bool(row.get('recommendation_ready')) else 'Blocked'}</td>"
             f"<td>{escape(str(row.get('reorder_action_label') or '-'))}</td>"
             f"<td>&euro;{_num(row.get('alert_30d_revenue')):,.2f}</td>"
             "</tr>"
@@ -2682,8 +3014,8 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Critical / OOS</span><span class="lang-sk hidden">Kriticke / vypredane</span></small><strong>{roy_stock_risk_critical_count}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">30d risk count</span><span class="lang-sk hidden">Riziko do 30 dni</span></small><strong>{roy_stock_risk_30d_count}</strong><span class="delta neutral"><span class="lang-en">{roy_out_of_stock_recent_demand_count} already out</span><span class="lang-sk hidden">{roy_out_of_stock_recent_demand_count} uz vypredane</span></span></div>
                             <div class="mini-card"><small><span class="lang-en">45d risk count</span><span class="lang-sk hidden">Riziko do 45 dni</span></small><strong>{roy_stock_risk_45d_count}</strong><span class="delta neutral"><span class="lang-en">{roy_negative_stock_count} negative stock</span><span class="lang-sk hidden">{roy_negative_stock_count} negativny sklad</span></span></div>
-                            <div class="mini-card"><small><span class="lang-en">Actionable alerts</span><span class="lang-sk hidden">Akcne alerty</span></small><strong>{roy_alert_delivery_count}</strong><span class="delta neutral"><span class="lang-en">{roy_alert_delivery_hero_count} hero SKUs</span><span class="lang-sk hidden">{roy_alert_delivery_hero_count} hero SKU</span></span></div>
-                            <div class="mini-card"><small><span class="lang-en">Order now / Prepare PO</span><span class="lang-sk hidden">Objednat teraz / pripravit PO</span></small><strong>{roy_alert_reorder_now_count} / {roy_alert_prepare_po_count}</strong><span class="delta neutral"><span class="lang-en">{roy_lead_time_configured_alert_count} with lead time</span><span class="lang-sk hidden">{roy_lead_time_configured_alert_count} s lead time</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Stock-risk warnings</span><span class="lang-sk hidden">Varovania skladoveho rizika</span></small><strong>{roy_alert_attention_count}</strong><span class="delta neutral"><span class="lang-en">{roy_alert_delivery_hero_count} hero SKUs</span><span class="lang-sk hidden">{roy_alert_delivery_hero_count} hero SKU</span></span></div>
+                            <div class="mini-card"><small><span class="lang-en">Purchase decision mode</span><span class="lang-sk hidden">Rezim rozhodnutia o nakupe</span></small><strong>{'READY' if roy_inventory_recommendation_ready else 'WARNING ONLY'}</strong><span class="delta neutral"><span class="lang-en">Confidence {roy_inventory_recommendation_confidence}</span><span class="lang-sk hidden">Istota {roy_inventory_recommendation_confidence}</span></span></div>
                             <div class="mini-card"><small><span class="lang-en">Excluded alert noise</span><span class="lang-sk hidden">Vyluceny alert noise</span></small><strong>{roy_alert_excluded_count}</strong><span class="delta neutral"><span class="lang-en">{_format_mini_value_html(roy_bundle_component_adjustment_30d_units, kind="number", decimals=1)} bundle units shifted</span><span class="lang-sk hidden">{_format_mini_value_html(roy_bundle_component_adjustment_30d_units, kind="number", decimals=1)} bundle kusov presunutych</span></span></div>
                             <div class="mini-card"><small><span class="lang-en">Revenue at risk 30d</span><span class="lang-sk hidden">Trzby v riziku 30 dni</span></small><strong>{_format_mini_value_html(roy_revenue_at_risk_30d, kind="currency")}</strong><span class="delta neutral">{_format_mini_value_html(roy_profit_at_risk_30d, kind="currency")}</span></div>
                             <div class="mini-card"><small><span class="lang-en">Revenue at risk 45d</span><span class="lang-sk hidden">Trzby v riziku 45 dni</span></small><strong>{_format_mini_value_html(roy_revenue_at_risk_45d, kind="currency")}</strong><span class="delta neutral">{_format_mini_value_html(roy_profit_at_risk_45d, kind="currency")}</span></div>
@@ -2695,10 +3027,11 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Backtested SKUs</span><span class="lang-sk hidden">Backtestovane SKU</span></small><strong>{roy_forecast_backtest_products}</strong><span class="delta neutral">{_format_mini_value_html(roy_forecast_backtest_median_accuracy_pct, kind="percent")}</span></div>
                         </div>
                         {roy_inventory_status_note_html}
+                        <div class="health-grid" style="margin-top:16px;">{roy_inventory_decision_note_html}</div>
                     </div>
                     {roy_inventory_cost_history_chart_html}
                     <div class="panel table-card" style="margin-top:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Actionable inventory alerts</span><span class="lang-sk hidden">Akcne skladove alerty</span></h3><p><span class="lang-en">This is the operational {roy_alert_delivery_horizon_days}-day alert bucket that should drive daily replenishment decisions and morning email alerts.</span><span class="lang-sk hidden">Toto je operativny {roy_alert_delivery_horizon_days}-dnovy alert bucket, ktory ma riadit denny replenishment a ranne emailove upozornenia.</span></p></div></div>
+                        <div class="card-head"><div><h3><span class="lang-en">{roy_inventory_alert_heading_en}</span><span class="lang-sk hidden">{roy_inventory_alert_heading_sk}</span></h3><p><span class="lang-en">{roy_inventory_alert_description_en}</span><span class="lang-sk hidden">{roy_inventory_alert_description_sk}</span></p></div></div>
                         <table>
                             <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Hero</span><span class="lang-sk hidden">Hero</span></th><th><span class="lang-en">Risk</span><span class="lang-sk hidden">Riziko</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">Alert units</span><span class="lang-sk hidden">Alert kusy</span></th><th><span class="lang-en">Days of cover</span><span class="lang-sk hidden">Dni pokrytia</span></th><th><span class="lang-en">Lead time</span><span class="lang-sk hidden">Lead time</span></th><th><span class="lang-en">Reorder by</span><span class="lang-sk hidden">Objednat do</span></th><th><span class="lang-en">Suggested reorder</span><span class="lang-sk hidden">Odporucane doobjednanie</span></th><th><span class="lang-en">Action</span><span class="lang-sk hidden">Akcia</span></th><th><span class="lang-en">Revenue at risk</span><span class="lang-sk hidden">Trzby v riziku</span></th></tr></thead>
                             <tbody>{roy_alert_rows_html}</tbody>
@@ -3035,7 +3368,7 @@ def generate_modern_dashboard(
         for row in same_item_rows
     ) or '<tr><td colspan="5"><span class="lang-en">No same-item repurchase data available.</span><span class="lang-sk hidden">Repurchase rovnakého produktu nie je dostupný.</span></td></tr>'
     same_item_frequency_body_html = "".join(
-        f"<tr><td>{int(round(_num(row.get('purchase_frequency'))))}x</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{_num(row.get('percentage')):.1f}%</td></tr>"
+        f"<tr><td>{escape(str(row.get('purchase_frequency') or '-'))}</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{_num(row.get('percentage')):.1f}%</td></tr>"
         for row in same_item_frequency_rows
     ) or '<tr><td colspan="3"><span class="lang-en">No frequency data available.</span><span class="lang-sk hidden">Frekvencne data nie su dostupne.</span></td></tr>'
     cohort_payback_body_html = "".join(
@@ -3234,7 +3567,8 @@ def generate_modern_dashboard(
             color: var(--text);
             background: radial-gradient(circle at top left, rgba(255,138,31,.14), transparent 18%), linear-gradient(180deg, #fbf7f0 0%, #f2ece3 100%);
         }}
-        .layout {{ display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }}
+        .layout {{ display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }}
+        .layout > *, .content, .shell, .panel, .hero, .side-stack, .grid-2 {{ min-width: 0; }}
         .sidebar {{ position: sticky; top: 0; height: 100vh; padding: 26px 18px; background: rgba(255,253,249,.85); border-right: 1px solid var(--line); backdrop-filter: blur(16px); }}
         .brand, .panel {{ background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }}
         .brand {{ border-radius: 18px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }}
@@ -3311,6 +3645,7 @@ def generate_modern_dashboard(
         .kpi-sparkline {{ height: 44px; }}
         .kpi-sparkline svg {{ display:block; width: 100%; height: 44px; overflow: visible; }}
         .chart-card, .table-card, .health-card {{ padding: 20px; }}
+        .table-card {{ overflow-x:auto; }}
         .card-head {{ display:flex; justify-content:space-between; gap:12px; align-items:start; margin-bottom: 16px; }}
         .card-head h3 {{ margin:0; font-size:18px; }}
         .card-head p {{ margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }}
@@ -3348,6 +3683,17 @@ def generate_modern_dashboard(
         .library-tile-note {{ margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }}
         .library-tile.tone-positive .library-tile-value {{ color: var(--green); }}
         .library-tile.tone-negative .library-tile-value {{ color: var(--red); }}
+        .ceo-action-grid {{ display:grid; gap:10px; }}
+        .ceo-action {{ padding:14px 16px; border:1px solid var(--line); border-radius:16px; background:#fff; }}
+        .ceo-action small {{ display:inline-grid; place-items:center; width:24px; height:24px; border-radius:8px; background:var(--accent-soft); color:var(--accent); font-weight:900; }}
+        .ceo-action h3 {{ display:inline; margin:0 0 0 8px; font-size:15px; }}
+        .ceo-action p {{ margin:8px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }}
+        .ceo-action.tone-negative {{ border-color:rgba(207,80,96,.24); background:rgba(207,80,96,.05); }}
+        .ceo-action.tone-warning {{ border-color:rgba(255,138,31,.24); background:rgba(255,138,31,.05); }}
+        .ceo-action.tone-positive {{ border-color:rgba(31,157,102,.24); background:rgba(31,157,102,.05); }}
+        .ceo-waterfall-total {{ font-weight:900; background:rgba(255,138,31,.06); }}
+        td.positive {{ color:var(--green); font-weight:800; }}
+        td.negative {{ color:var(--red); font-weight:800; }}
         .health-grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }}
         .health-item {{ padding: 16px; border-radius: 18px; background: #fff; border:1px solid var(--line); }}
         .health-title {{ font-weight: 800; margin-bottom: 8px; }}
@@ -3367,7 +3713,16 @@ def generate_modern_dashboard(
         th, td {{ text-align:left; padding: 11px 8px; border-bottom: 1px solid rgba(234,223,206,.85); font-size: 13px; }}
         th {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .lang-en.hidden, .lang-sk.hidden {{ display:none !important; }}
-        @media (max-width: 1280px) {{ .layout {{ grid-template-columns: 1fr; }} .sidebar {{ position: static; height:auto; }} }}
+        @media (max-width: 900px) {{
+            .layout {{ grid-template-columns: minmax(0, 1fr); }}
+            .sidebar {{ position: static; width: 100%; height:auto; padding:16px; overflow:hidden; }}
+            .brand {{ margin-bottom:12px; }}
+            .global-period-panel {{ margin:12px 0; }}
+            .nav-label {{ display:none; }}
+            .sidebar-nav {{ display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; }}
+            .nav-link {{ flex:0 0 auto; margin:0; padding:9px 11px; }}
+            .content {{ width:100%; padding:20px 14px 56px; }}
+        }}
         @media (max-width: 1080px) {{ .hero, .grid-2, .kpi-grid, .health-grid, .mini-grid, .daily-profit-grid, .hero-alert-metrics {{ grid-template-columns: 1fr; }} }}
     </style>
 </head>
@@ -3382,8 +3737,10 @@ def generate_modern_dashboard(
                 </div>
             </div>
             {period_switcher_html}
+            <nav class="sidebar-nav" aria-label="Reporting sections">
             <div class="nav-label"><span class="lang-en">Navigate</span><span class="lang-sk hidden">Navigácia</span></div>
             <a class="nav-link active" href="#overview"><span class="nav-dot">01</span><span class="lang-en">Overview</span><span class="lang-sk hidden">Prehľad</span></a>
+            {ceo_nav_link_html}
             <a class="nav-link" href="#sales"><span class="nav-dot">02</span><span class="lang-en">Sales</span><span class="lang-sk hidden">Predaj</span></a>
             <a class="nav-link" href="#economics"><span class="nav-dot">03</span><span class="lang-en">Economics</span><span class="lang-sk hidden">Ekonomika</span></a>
             <a class="nav-link" href="#marketing"><span class="nav-dot">04</span><span class="lang-en">Marketing</span><span class="lang-sk hidden">Marketing</span></a>
@@ -3394,6 +3751,7 @@ def generate_modern_dashboard(
             <a class="nav-link" href="#operations"><span class="nav-dot">09</span><span class="lang-en">Operations</span><span class="lang-sk hidden">Operativa</span></a>
             <a class="nav-link" href="#library"><span class="nav-dot">10</span><span class="lang-en">Full library</span><span class="lang-sk hidden">Plna kniznica</span></a>
             <a class="nav-link" href="#health"><span class="nav-dot">11</span><span class="lang-en">Data health</span><span class="lang-sk hidden">Kvalita dát</span></a>
+            </nav>
         </aside>
         <main class="content">
             <div class="shell">
@@ -3426,6 +3784,7 @@ def generate_modern_dashboard(
                     </div>
                 </section>
                 {attribution_banner_html}
+                {ceo_cockpit_html}
 
                 <section class="section">
                     <div class="section-head">
@@ -4214,7 +4573,7 @@ def generate_modern_dashboard(
                         <div class="mini-card"><small><span class="lang-en">Top segment</span><span class="lang-sk hidden">Top segment</span></small><strong>{escape(str(segment_rows[0].get('segment') if segment_rows else 'N/A'))}</strong></div>
                     </div>
                     <div class="panel table-card" style="margin-bottom:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Product cost coverage</span><span class="lang-sk hidden">Coverage nakupnych cien</span></h3><p><span class="lang-en">Tracks whether SKU-level profitability is using explicit product-expense mapping or a conservative zero-margin fallback for missing costs.</span><span class="lang-sk hidden">Sleduje, ci SKU profitabilita pouziva explicitne nakupne ceny alebo konzervativny zero-margin fallback pri chybajucich nakladoch.</span></p></div></div>
+                        <div class="card-head"><div><h3><span class="lang-en">Product cost coverage</span><span class="lang-sk hidden">Coverage nakupnych cien</span></h3><p><span class="lang-en">Known purchase costs take precedence. Missing costs follow: {escape(str(product_expense_qa.get('fallback_policy') or 'the configured conservative margin estimate'))}.</span><span class="lang-sk hidden">Znama nakupna cena ma prednost. Chybajuce ceny pouziju pravidlo: {escape(str(product_expense_qa.get('fallback_policy') or 'nakonfigurovany konzervativny odhad marze'))}.</span></p></div></div>
                         <div class="mini-grid">
                             <div class="mini-card"><small><span class="lang-en">Critical failures</span><span class="lang-sk hidden">Kriticke chyby</span></small><strong>{int(round(_num(product_expense_qa.get("failure_count"))))}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Warnings</span><span class="lang-sk hidden">Warningy</span></small><strong>{int(round(_num(product_expense_qa.get("warning_count"))))}</strong></div>
@@ -4234,7 +4593,7 @@ def generate_modern_dashboard(
                             </table>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Top missing-cost items</span><span class="lang-sk hidden">Top produkty bez nakladu</span></h3><p><span class="lang-en">Products with the highest revenue impact among rows using the zero-margin missing-cost fallback.</span><span class="lang-sk hidden">Produkty s najvacsim dopadom na trzbu medzi riadkami, ktore pouzivaju zero-margin fallback pri chybajucom naklade.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Top missing-cost items</span><span class="lang-sk hidden">Top produkty bez nakladu</span></h3><p><span class="lang-en">Products with the highest revenue impact among rows using the configured missing-cost margin estimate.</span><span class="lang-sk hidden">Produkty s najvacsim dopadom na trzbu medzi riadkami, ktore pouzivaju nakonfigurovany odhad marze pri chybajucej cene.</span></p></div></div>
                             <table>
                                 <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th>SKU</th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Pre-ad profit</span><span class="lang-sk hidden">Pre-ad zisk</span></th><th><span class="lang-en">Missing-cost revenue share</span><span class="lang-sk hidden">Podiel trzby bez nakladu</span></th></tr></thead>
                                 <tbody>{product_expense_top_rows_html}</tbody>
@@ -4299,7 +4658,7 @@ def generate_modern_dashboard(
                     <div class="panel table-card" style="margin-top:18px;">
                         <div class="card-head"><div><h3><span class="lang-en">Cohort payback table</span><span class="lang-sk hidden">Kohortna payback tabulka</span></h3><p><span class="lang-en">Acquisition payback by cohort from the advanced DTC block.</span><span class="lang-sk hidden">Payback akvizicie podla kohort z advanced DTC bloku.</span></p></div></div>
                         <table>
-                            <thead><tr><th><span class="lang-en">Cohort</span><span class="lang-sk hidden">Kohorta</span></th><th><span class="lang-en">New customers</span><span class="lang-sk hidden">Novi zakaznici</span></th><th><span class="lang-en">CAC</span><span class="lang-sk hidden">CAC</span></th><th><span class="lang-en">Recovery</span><span class="lang-sk hidden">Recovery</span></th><th><span class="lang-en">Avg payback days</span><span class="lang-sk hidden">Priem. payback dni</span></th><th><span class="lang-en">Median days</span><span class="lang-sk hidden">Median dni</span></th></tr></thead>
+                            <thead><tr><th><span class="lang-en">Cohort</span><span class="lang-sk hidden">Kohorta</span></th><th><span class="lang-en">New customers</span><span class="lang-sk hidden">Novi zakaznici</span></th><th><span class="lang-en">Blended CAC</span><span class="lang-sk hidden">Blended CAC</span></th><th><span class="lang-en">Recovery</span><span class="lang-sk hidden">Recovery</span></th><th><span class="lang-en">Avg payback days</span><span class="lang-sk hidden">Priem. payback dni</span></th><th><span class="lang-en">Median days</span><span class="lang-sk hidden">Median dni</span></th></tr></thead>
                             <tbody>{cohort_payback_body_html}</tbody>
                         </table>
                     </div>
@@ -6539,7 +6898,7 @@ def generate_modern_dashboard(
                         labels: DATA.cohort_payback_rows.map(x => x.cohort_month || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Recovery rate %', data: DATA.cohort_payback_rows.map(x => Number(x.recovery_rate_pct || 0)), backgroundColor: 'rgba(31,157,102,.60)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Cohort CAC', data: DATA.cohort_payback_rows.map(x => Number(x.cohort_cac || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Blended cohort CAC', data: DATA.cohort_payback_rows.map(x => Number(x.cohort_cac || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                             {{ type: 'line', label: 'Avg payback days', data: DATA.cohort_payback_rows.map(x => Number(x.avg_payback_days || 0)), borderColor: '#4766ff', borderDash: [8, 6], tension: .30, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},

@@ -61,6 +61,23 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY reporting decision-safety remediation is in progress on branch `codex/roy-reporting-decision-safety` (2026-07-15):
+  - purchase-cost precedence is corrected in the reusable reporting core: a resolved mapped purchase cost now wins over legacy zero-cost, zero-margin, `35%`, and `15%` assumptions
+  - the sole mapped-cost exception is an item line genuinely sold for `0 EUR`; it is marked `zero_revenue_gift` and keeps `0 EUR` cost, covering free Lux knife sets / ROY knives without weakening precedence for positively priced rows
+  - ROY's `35%` missing-cost margin remains a fallback only when no purchase cost can be resolved, while mapped negative-margin clearance sales remain unchanged
+  - inventory output now has a hard purchase-decision gate: exact quantities/dates are hidden and `Order now` / `Prepare PO` flags are disabled until cost coverage, forecast backtest, inbound purchase orders, and negative-stock thresholds all pass; internal estimates remain available only as warning evidence
+  - `diagnostika`, `praca`, and `testovanie` service lines are excluded from stock alerts
+  - marketing action verdicts require at least `14` active, control, and comparable days plus `high` confidence; otherwise the result is `Experiment required`, never `Scale` or `Cut`
+  - tracked paid CAC and cohort payback now use blended Meta + Google spend; customer concentration now exports real CM3 profit shares; customer segmentation uses the realized-revenue marker instead of one corrupted localized status label
+  - dashboard fixes: same-item frequencies preserve labels such as `2x`; missing-cost copy reflects the configured `35%` policy; unsafe exact reorder values render as `Blocked`; ROY inventory shows the gate blockers; the `1280px` navigation collapse was removed, mobile navigation is compact and horizontally scrollable, grid children can shrink safely, and wide tables remain contained
+  - a ROY-only CEO decision cockpit now leads with company profit, optional prorated profit plan (`not configured` until a real target is supplied), mapped versus estimated fallback product profit, inventory profit at risk, annualized GMROI, inventory cash, and inbound/draft-PO cash context
+  - the cockpit explains the latest `30` days versus the prior `30` through revenue, product-cost, ads, fulfillment, fixed-cost, and reconciliation drivers, then emits exactly five confidence-gated actions: reprice, marketing, fill cost, purchase/data repair, and dead-stock clearance
+  - browser verification on a freshly generated ROY `7d` artifact: at `1280x720` the sidebar remains `240px`, the main cockpit is visible, and document width does not overflow; at `390x844` the page shrinks to the viewport, the sidebar is reduced to a compact header with a horizontal section strip, and no `€nan` label is rendered
+  - browser review found and fixed one stale data assertion: payback now uses blended Meta + Google CAC, so the parity QA check uses `paid_cac` / `blended_cac` too instead of incorrectly comparing against Facebook-only CAC
+  - final local verification: full unit suite `131` tests OK with `1` optional local PDF-text test skipped; focused `test_reporting_calculation_fixes.py` `34` tests OK and `test_dashboard_modern.py` `7` tests OK; `scripts/reporting_qa_smoke.py`, Python compile, ROY settings JSON, browser checks, and `git diff --check` OK
+  - no runtime or historical data has been changed yet; VEVO configuration/data remains untouched
+  - Next exact step: commit/push the final QA fixes, open and merge the PR, then complete the ROY-only deploy hard-gate and regenerate full history through `2026-07-14`
+
 - ROY missing-purchase-cost fallback is permanently deployed as a `35%` product margin and full history was regenerated on `2026-07-15`:
   - code PR `#210` merged as `e178af8`; `projects/roy/settings.json` sets `missing_cost_margin_pct = 35`, so only products without any resolvable purchase cost use expense `65%` of net item revenue and source `missing_cost_margin_35_fallback`
   - mapped purchase costs keep precedence, including real negative-margin clearance sales; unit coverage preserves a mapped `80 EUR` cost on `50 EUR` net revenue as `-30 EUR` product profit
