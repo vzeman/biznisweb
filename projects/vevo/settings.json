@@ -236,6 +236,62 @@
       }
     ]
   },
+  "product_cost_bundle_rules": [
+    {
+      "key": "ylang_absolute_perfume_gel_1_1",
+      "exact_labels": [
+        "Combo Parfum do prania Ylang Absolute 500ml + Prací gél Ylang Absolute 1L"
+      ],
+      "shared_component_identifiers": [
+        "8594201618000"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "8594201618000",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "ylang_absolute_perfume_gel_1_3",
+      "exact_labels": [
+        "Combo 1x Parfum do prania Ylang Absolute 500ml + 3x Prací gél Ylang Absolute 1L"
+      ],
+      "shared_component_identifiers": [
+        "8594201618000"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "8594201618000",
+          "quantity": 3
+        }
+      ]
+    },
+    {
+      "key": "wool_balls_royal_cotton_dryer_fragrance_1_1",
+      "exact_labels": [
+        "Vlnené gule + Vevo Premium No.06 Royal Cotton 10ml"
+      ],
+      "components": [
+        {
+          "expense_key": "Prírodné vlnené gule do sušičky 3 ks",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do sušičky Vevo Premium No.06 Royal Cotton 10ml",
+          "quantity": 1
+        }
+      ]
+    }
+  ],
   "product_expenses_file": "product_expenses.json",
   "currency_rates_to_eur": {
     "EUR": 1.0,
