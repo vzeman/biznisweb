@@ -2273,6 +2273,15 @@ class BizniWebExporter:
 
     def add_product_sku_column(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add a consistent product_sku column to the dataframe."""
+        df['raw_product_sku'] = df.apply(
+            lambda row: self.get_product_sku(
+                row.get('item_ean'),
+                row.get('item_label', 'Unknown'),
+                import_code=row.get('item_import_code'),
+                prefer_import_code=self._prefer_import_code_product_identity(),
+            ),
+            axis=1,
+        )
         df['product_sku'] = df.apply(
             lambda row: self.get_reporting_product_sku(
                 row.get('item_ean'),
@@ -2296,9 +2305,12 @@ class BizniWebExporter:
 
     def add_reporting_product_identity_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Prepare project-scoped canonical product keys for downstream reporting analyses."""
-        df['raw_item_label'] = df.get('item_label', '')
-        df['raw_product_sku'] = df.get('product_sku', '')
-        df['raw_item_import_code'] = df.get('item_import_code', '')
+        if 'raw_item_label' not in df.columns:
+            df['raw_item_label'] = df.get('item_label', '')
+        if 'raw_product_sku' not in df.columns:
+            df['raw_product_sku'] = df.get('product_sku', '')
+        if 'raw_item_import_code' not in df.columns:
+            df['raw_item_import_code'] = df.get('item_import_code', '')
         df['item_label'] = df['item_label'].apply(self.canonicalize_reporting_product_label)
         df['product_sku'] = df.apply(
             lambda row: self.get_reporting_product_sku(
@@ -2402,7 +2414,6 @@ class BizniWebExporter:
             return df
 
         expanded_rows: List[Dict[str, Any]] = []
-        prefer_import_code = self._prefer_import_code_product_identity()
 
         for _, row in df.iterrows():
             matching_rule = None
@@ -2436,11 +2447,10 @@ class BizniWebExporter:
                     continue
                 component_import_code = component.get("item_import_code")
                 component_ean = component.get("item_ean")
-                component_sku = str(component.get("product_sku") or "").strip() or self.get_product_sku(
+                component_sku = str(component.get("product_sku") or "").strip() or self.get_reporting_product_sku(
                     component_ean,
                     component_label,
                     import_code=component_import_code,
-                    prefer_import_code=prefer_import_code,
                 )
                 expense_per_item, expense_source = self._resolve_component_expense(
                     component,
@@ -5251,6 +5261,12 @@ class BizniWebExporter:
                 item_ean = item.get('ean', '')
                 item_import_code = item.get('import_code')
                 item_warehouse_number = item.get('warehouse_number')
+                raw_product_sku = self.get_product_sku(
+                    item_ean,
+                    item_label,
+                    import_code=item_import_code,
+                    prefer_import_code=self._prefer_import_code_product_identity(),
+                )
                 product_sku = self.get_reporting_product_sku(
                     item_ean,
                     item_label,
@@ -5322,6 +5338,7 @@ class BizniWebExporter:
                 row.update({
                     'total_items_in_order': None,
                     'item_number': None,
+                    'raw_product_sku': raw_product_sku,
                     'product_sku': product_sku,
                     'item_label': item.get('item_label'),
                     'item_ean': item.get('ean'),

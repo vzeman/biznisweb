@@ -140,6 +140,10 @@ class ReportingProductIdentityTests(unittest.TestCase):
         card_64gb = canonical_df[canonical_df["product_sku"] == "MICRO-SD-64GB"]
         self.assertEqual(4, len(card_64gb))
         self.assertEqual(
+            {"23942440833", "H-1DADF217", "H-69235D5B", "H-791A744A"},
+            set(card_64gb["raw_product_sku"]),
+        )
+        self.assertEqual(
             ["Micro SD KARTA 64GB s adaptérom"],
             card_64gb["item_label"].drop_duplicates().tolist(),
         )

@@ -325,6 +325,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
 
         self.assertEqual(["MICRO-SD-64GB", "F_206"], [row["product_sku"] for row in rows])
+        self.assertEqual(["H-69235D5B", "F_206"], [row["raw_product_sku"] for row in rows])
         self.assertEqual([3.3, 1.8], [row["expense_per_item"] for row in rows])
         self.assertEqual(
             ["mapped_product_sku", "mapped_product_identifier"],
