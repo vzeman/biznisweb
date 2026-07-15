@@ -79,9 +79,9 @@ Bootstrap entrypoints:
   - final ROY-only production smoke run `29394825661` passed on task `477bf62f133a452a939c044bc503aca0`, private IP `172.31.34.205`, task definition `roy-reporting-daily:45`, `LOCALHOST_MARKER_OK`, then `UI_SMOKE_OK:roy:daily-profit-loss`, and `PRODUCTION_SMOKE_OK:roy`; `send_email=false`
   - final tagged full-history artifact prefix `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/daily-reports/roy-sk/20260715T071450Z/` confirms corrected QA policy `configured 35% margin estimate (65% of net item revenue is treated as expense)`, `59` fallback rows, `1272.80 EUR` fallback revenue, `445.51 EUR` fallback profit, `is_partial=false`, and `0` QA failures
   - live App Runner service `biznisweb-roy-operations-dashboard` is `RUNNING`; authenticated `/health`, `/production/roy`, and `/api/operations/roy/live` returned HTTP `200`, HTML marker `roy-operations-dashboard`, and data generated at `2026-07-15T06:26:16Z`
-  - ECR protection follow-up on branch `codex/roy-missing-cost-35-closeout` preserves the exact manifest bytes and verifies the protection tag digest after `put-image`, preventing a formatting-induced digest mismatch
+  - ECR protection follow-up PR `#212` merged as `e644597`; the workflow preserves exact manifest bytes and verifies the protection tag digest after `put-image`, preventing a formatting-induced digest mismatch
   - Current status: ROY calculation is deployed, full history and stable latest are regenerated, future ROY schedule is pinned to the final image, and VEVO reporting data/configuration stayed unchanged
-  - Next exact step: merge the closeout workflow/state PR, then monitor the next regular `roy-daily-report-email` run for the same `35%` fallback source and SES delivery
+  - Next exact step: monitor the next regular `roy-daily-report-email` run for the same `35%` fallback source and SES delivery
 
 - VEVO daily reporting email outage on `2026-07-09` is fixed and ECR digest protection is being hardened:
   - symptom: the regular `vevo-daily-report-email` run for `2026-07-09 01:00 Europe/Bratislava` did not send a VEVO reporting email; ROY sent normally at `2026-07-09 01:30 Europe/Bratislava`
