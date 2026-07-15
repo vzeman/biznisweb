@@ -4701,3 +4701,17 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - the production Facebook access token appeared in a local ignored `.env` line in tool output during a read-only audit; it was not committed or added to any project artifact, but it must be treated as compromised and rotated in Meta plus the production secret store
 - Next exact step:
   - rotate the production Facebook access token, update the managed production secret without committing it, then verify the Facebook connection and monitor the next scheduled `roy-daily-report-email` run on task definition `:48`
+
+### 2026-07-16 (live dashboard Unicode Basic Auth hardening)
+- Verification false alarm and real robustness bug:
+  - a read-only PowerShell verification pipeline corrupted the ASCII SSM password into a non-ASCII request value; those malformed requests returned HTTP `502`
+  - direct secret loading via boto3 confirmed ROY production stayed healthy: authenticated board/API/PDF routes returned HTTP `200`
+  - the malformed request still exposed a real server bug: string-based `hmac.compare_digest` raises `TypeError` for non-ASCII input instead of rejecting invalid authentication with HTTP `401`
+- Fix in progress:
+  - compare UTF-8 encoded credential bytes in constant time and reject unencodable values safely
+  - add regression tests for valid UTF-8 credentials and malformed non-ASCII input against ASCII production credentials
+- Verified before deploy:
+  - production traceback identifies the failure at `live_dashboard_server.py:66`
+  - reporting artifacts, scheduler, App Runner service, and correctly authenticated live routes remain healthy
+- Next exact step:
+  - pass the focused/full test gates, merge through PR, rebuild the exact image, deploy both App Runner services without refreshing artifacts, then verify malformed auth returns `401` and valid protected live UI/API routes return `200`
