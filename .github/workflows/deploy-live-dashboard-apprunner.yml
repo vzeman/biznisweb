@@ -116,11 +116,33 @@ jobs:
           pathlib.Path(sys.argv[2]).write_text(images[0]["imageManifest"], encoding="utf-8")
           PY
             python -m json.tool "${manifest_file}" >/dev/null
-            aws ecr put-image \
+            local put_output
+            if ! put_output="$(aws ecr put-image \
               --repository-name "${ECR_REPOSITORY}" \
               --image-tag "${protection_tag}" \
               --image-manifest "file://${manifest_file}" \
-              --region "${AWS_REGION}" >/dev/null
+              --region "${AWS_REGION}" 2>&1)"; then
+              if [[ "${put_output}" != *"ImageAlreadyExistsException"* ]]; then
+                echo "${put_output}" >&2
+                rm -f "${manifest_file}" "${manifest_response_file}"
+                return 1
+              fi
+              local raced_digest
+              raced_digest="$(aws ecr describe-images \
+                --repository-name "${ECR_REPOSITORY}" \
+                --image-ids imageTag="${protection_tag}" \
+                --region "${AWS_REGION}" \
+                --query 'imageDetails[0].imageDigest' \
+                --output text)"
+              rm -f "${manifest_file}" "${manifest_response_file}"
+              if [[ "${raced_digest}" != "${image_digest}" ]]; then
+                echo "${put_output}" >&2
+                echo "ECR protection tag ${protection_tag} raced to ${raced_digest}, expected ${image_digest}" >&2
+                return 1
+              fi
+              echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:already-after-race"
+              return 0
+            fi
             rm -f "${manifest_file}" "${manifest_response_file}"
             local protected_digest
             protected_digest="$(aws ecr describe-images \
@@ -189,7 +211,9 @@ jobs:
             protect_ecr_image_tag "${task_image}" "${expected_task_family}-current"
           }
 
-          protect_current_daily_schedule_image "${PROJECT}"
+          for REPORT_PROJECT in vevo roy; do
+            protect_current_daily_schedule_image "${REPORT_PROJECT}"
+          done
 
           REPORT_SCHEDULE_NAME="$(python - "${PROJECT}" <<'PY'
           import json
