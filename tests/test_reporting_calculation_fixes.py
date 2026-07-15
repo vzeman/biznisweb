@@ -681,6 +681,55 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual([18.0, 42.0, 73.0], [row["expense_per_item"] for row in rows])
         self.assertTrue(all(row["expense_source"] == "mapped_product_identifier" for row in rows))
 
+    def test_roy_kirvo_lure_uses_mapped_net_purchase_cost_for_catalog_aliases(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        project_dir = Path(__file__).resolve().parents[1] / "projects" / "roy"
+        cost_map = json.loads((project_dir / "product_expenses.json").read_text(encoding="utf-8"))
+        settings = json.loads((project_dir / "settings.json").read_text(encoding="utf-8"))
+        exporter._rebuild_product_expense_indexes(cost_map)
+        catalog_aliases = {
+            "Univerzálne vnadidlo na divú zver KIRVO aníz 500ml - koncentrát": "H-9D2E0A2C",
+            "Sprej - Univerzálne vnadidlo na divú zver KIRVO aníz 500ml - koncentrát": "H-9400721F",
+        }
+
+        self.assertNotIn("H-9D2E0A2C", settings["margin_override_skus"])
+
+        for label, expected_sku in catalog_aliases.items():
+            with self.subTest(label=label):
+                self.assertEqual(expected_sku, exporter.get_product_sku("", label))
+                cost, source = exporter._resolve_product_expense(expected_sku, label)
+                self.assertEqual(1.9, cost)
+                self.assertEqual("mapped_product_sku", source)
+
+        with patch("export_orders.MARGIN_OVERRIDE_SKUS", {"H-9D2E0A2C": 35.0}):
+            rows = exporter.flatten_order(
+                {
+                    "id": "1",
+                    "order_num": "R-KIRVO-COST",
+                    "pur_date": "2026-07-14 10:00:00",
+                    "sum": {"value": 20.0, "currency": {"code": "EUR"}},
+                    "customer": {"email": "a@example.com"},
+                    "items": [
+                        {
+                            "item_label": "Univerzálne vnadidlo na divú zver KIRVO aníz 500ml - koncentrát",
+                            "ean": "",
+                            "import_code": "",
+                            "quantity": 2,
+                            "tax_rate": 23,
+                            "price": {"value": 8.13, "currency": {"code": "EUR"}},
+                            "sum": {"value": 16.26, "currency": {"code": "EUR"}},
+                            "sum_with_tax": {"value": 20.0, "currency": {"code": "EUR"}},
+                        }
+                    ],
+                }
+            )
+
+        self.assertEqual("H-9D2E0A2C", rows[0]["product_sku"])
+        self.assertEqual("mapped_product_sku", rows[0]["expense_source"])
+        self.assertEqual(1.9, rows[0]["expense_per_item"])
+        self.assertEqual(3.8, rows[0]["total_expense"])
+        self.assertEqual(12.46, rows[0]["profit_before_ads"])
+
     def test_roy_64gb_sd_card_alias_uses_canonical_cost_without_merging_32gb(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact.update(
@@ -1325,7 +1374,6 @@ class ReportingCalculationFixTests(unittest.TestCase):
             "31853L",
             "ZSK001",
             "0-45",
-            "H-9D2E0A2C",
             "1157",
             "F_403",
             "H-52688CE6",
