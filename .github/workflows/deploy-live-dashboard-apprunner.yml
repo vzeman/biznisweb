@@ -24,7 +24,7 @@ on:
         required: false
         default: ""
       skip_artifact_refresh:
-        description: Skip ROY report artifact regeneration and run only a lightweight host marker check
+        description: Skip report artifact regeneration and run only a lightweight host marker check
         required: false
         default: "false"
 
@@ -323,14 +323,14 @@ jobs:
               )"
             fi
           fi
-          if [[ "${PROJECT}" == "roy" && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
+          if [[ ( "${PROJECT}" == "roy" || "${PROJECT}" == "vevo" ) && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
             REPORT_S3_BUCKET_VALUE="biznisweb-reporting-artifacts-${ACCOUNT_ID}-${AWS_REGION}"
           fi
           REPORT_S3_PREFIX_VALUE="${REPORT_S3_PREFIX_VALUE:-daily-reports/${PROJECT}}"
           REPORT_S3_PREFIX_VALUE="${REPORT_S3_PREFIX_VALUE#/}"
           REPORT_S3_PREFIX_VALUE="${REPORT_S3_PREFIX_VALUE%/}"
-          if [[ "${PROJECT}" == "roy" && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
-            echo "ROY App Runner requires REPORT_S3_BUCKET or an input s3_bucket for latest KPI artifacts." >&2
+          if [[ ( "${PROJECT}" == "roy" || "${PROJECT}" == "vevo" ) && -z "${REPORT_S3_BUCKET_VALUE}" ]]; then
+            echo "${PROJECT} App Runner requires REPORT_S3_BUCKET or an input s3_bucket for latest KPI artifacts." >&2
             exit 1
           fi
 
@@ -354,7 +354,7 @@ jobs:
               '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
           fi
 
-          if [[ "${PROJECT}" == "roy" ]]; then
+          if [[ -n "${REPORT_S3_BUCKET_VALUE}" ]]; then
             TASK_ROLE_ARN="$(python - <<'PY'
           import json
           task_def = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
@@ -362,7 +362,7 @@ jobs:
           PY
             )"
             if [[ -z "${TASK_ROLE_ARN}" ]]; then
-              echo "ROY reporting task definition has no taskRoleArn; cannot grant S3 artifact upload access." >&2
+              echo "${PROJECT} reporting task definition has no taskRoleArn; cannot grant S3 artifact upload access." >&2
               exit 1
             fi
             TASK_ROLE_NAME="$(python - "${TASK_ROLE_ARN}" <<'PY'
@@ -397,7 +397,7 @@ jobs:
           JSON
             aws iam put-role-policy \
               --role-name "${TASK_ROLE_NAME}" \
-              --policy-name ReportingLiveDashboardArtifacts \
+              --policy-name "ReportingLiveDashboardArtifacts-${PROJECT}" \
               --policy-document file://reporting-artifacts-policy.json
 
             NEEDS_REPORT_TASK_UPDATE="$(python - "${REPORT_S3_BUCKET_VALUE}" "${REPORT_S3_PREFIX_VALUE}" "${IMAGE_IDENTIFIER}" <<'PY'
@@ -595,7 +595,7 @@ jobs:
           PY
             )"
             if [[ -z "${LOG_GROUP}" || -z "${LOG_PREFIX}" ]]; then
-              echo "ROY reporting task definition needs CloudWatch logs for localhost marker verification." >&2
+              echo "${PROJECT} reporting task definition needs CloudWatch logs for localhost marker verification." >&2
               exit 1
             fi
           REFRESH_SCRIPT="$(cat <<'SH'
@@ -727,7 +727,7 @@ jobs:
               --launch-type "${LAUNCH_TYPE}"
               --network-configuration file://network.json
               --overrides file://refresh-overrides.json
-              --started-by "codex-roy-live-dashboard-refresh"
+              --started-by "codex-${PROJECT}-live-dashboard-refresh"
               --region "${AWS_REGION}"
             )
             if [[ -n "${PLATFORM_VERSION}" ]]; then
@@ -794,7 +794,7 @@ jobs:
               aws ecs stop-task \
                 --cluster "${CLUSTER_ARN}" \
                 --task "${REFRESH_TASK_ARN}" \
-                --reason "ROY live dashboard artifact refresh timed out" \
+                --reason "${PROJECT} live dashboard artifact refresh timed out" \
                 --region "${AWS_REGION}" || true
               exit 1
             fi
@@ -820,7 +820,7 @@ jobs:
             done
             cat refresh-task.log
             if [[ "${REFRESH_EXIT_CODE}" != "0" ]]; then
-              echo "ROY live artifact refresh task ${REFRESH_TASK_ARN} failed with exit code ${REFRESH_EXIT_CODE}" >&2
+              echo "${PROJECT} live artifact refresh task ${REFRESH_TASK_ARN} failed with exit code ${REFRESH_EXIT_CODE}" >&2
               exit 1
             fi
             grep -q "LIVE_ARTIFACT_MARKER_OK" refresh-task.log
@@ -830,11 +830,14 @@ jobs:
               --region "${AWS_REGION}" >/dev/null
             aws s3 cp \
               "s3://${REPORT_S3_BUCKET_VALUE}/${REPORT_S3_PREFIX_VALUE}/latest/dashboard_payload_latest.json" \
-              /tmp/roy-dashboard-payload-latest.json \
+              /tmp/dashboard-payload-latest.json \
               --region "${AWS_REGION}" >/dev/null
-            python - <<'PY'
+            python - "${PROJECT}" <<'PY'
           import json
-          payload = json.load(open("/tmp/roy-dashboard-payload-latest.json", encoding="utf-8"))
+          import sys
+
+          project = sys.argv[1]
+          payload = json.load(open("/tmp/dashboard-payload-latest.json", encoding="utf-8"))
           dashboard = payload.get("dashboard") or {}
           kpis = dashboard.get("kpis") or {}
           series = dashboard.get("series") or {}
@@ -842,8 +845,9 @@ jobs:
           inventory = dashboard.get("roy_operations_inventory") or commercial
           assert kpis.get("windows"), "S3 KPI windows missing"
           assert series.get("dates"), "S3 KPI source series dates missing"
-          assert inventory.get("summary"), "S3 operations inventory summary missing"
-          assert inventory.get("inventory_rows"), "S3 operations inventory rows missing"
+          if project == "roy":
+              assert inventory.get("summary"), "S3 operations inventory summary missing"
+              assert inventory.get("inventory_rows"), "S3 operations inventory rows missing"
           invalid_loss_rows = []
           for row in commercial.get("loss_product_rows") or []:
               if not isinstance(row, dict):
@@ -860,8 +864,9 @@ jobs:
               if gross_profit >= 0:
                   invalid_loss_rows.append(row)
           assert not invalid_loss_rows, "S3 loss products must be based on negative gross profit only"
+          marker_name = "ROY_LIVE_ARTIFACTS_OK" if project == "roy" else f"{project.upper()}_LIVE_ARTIFACTS_OK"
           print(
-              "ROY_LIVE_ARTIFACTS_OK:"
+              f"{marker_name}:"
               f"kpi_series_days={len(series.get('dates') or [])}:"
               f"inventory_alerts={(inventory.get('summary') or {}).get('alert_delivery_count')}:"
               f"inventory_rows={len(inventory.get('inventory_rows') or [])}"
@@ -1258,9 +1263,13 @@ jobs:
             grep -q "productsCards" /tmp/production-board.html
             grep -q "@media (max-width:680px)" /tmp/production-board.html
             curl_with_retry -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/production/vevo/live?refresh=1" -o /tmp/production-board-api.json
+            curl_with_retry -fsS --max-time 240 -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/vevo/latest?period=full" -o /tmp/vevo-accounting-latest.json
+            curl_with_retry -fsS --max-time 240 -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/report/vevo?period=full" -o /tmp/vevo-accounting-latest.html
             python - <<'PY'
           import json
           api = json.load(open("/tmp/production-board-api.json", encoding="utf-8"))
+          accounting = json.load(open("/tmp/vevo-accounting-latest.json", encoding="utf-8"))
+          accounting_html = open("/tmp/vevo-accounting-latest.html", encoding="utf-8-sig").read()
           assert api["project"] == "vevo"
           assert "Čaká na vybavenie" in api["active_order_statuses"]
           assert "Platba online - zaplatené" in api["active_order_statuses"]
@@ -1272,12 +1281,33 @@ jobs:
               for product in api["products"]
               for order in product.get("orders", [])
           )
+          assert accounting["project"] == "vevo"
+          assert accounting.get("date_to"), "VEVO accounting payload date_to missing"
+          source_health = accounting.get("source_health") or {}
+          assumptions = source_health.get("reporting_assumptions") or {}
+          assert assumptions.get("missing_cost_margin_pct") == 35.0, "VEVO 35% missing-cost rule missing"
+          fixed_cost = assumptions.get("fixed_cost") or {}
+          assert fixed_cost.get("mode") == "manual_daily_estimate", "VEVO fixed-cost estimate marker missing"
+          expense_qa = ((source_health.get("qa") or {}).get("product_expense_coverage") or {})
+          assert "fallback_items" in expense_qa, "Complete VEVO missing-cost list missing"
+          cockpit = ((accounting.get("dashboard") or {}).get("ceo_cockpit") or {})
+          assert set((cockpit.get("window_metrics") or {}).keys()) >= {"7", "30", "90", "full"}
+          assert len(cockpit.get("actions") or []) == 5, "VEVO CEO actions missing"
+          assert "CEO decision cockpit" in accounting_html
+          assert "Complete missing purchase-cost list" in accounting_html
           print(
               "APP_RUNNER_PRODUCTION_BOARD_OK:"
               f"active_orders={api['summary'].get('active_orders')}:"
               f"manufacturing_products={api['summary'].get('manufacturing_products')}:"
               f"units_to_make={api['summary'].get('units_to_make')}:"
               f"orders_scanned={api['scan'].get('orders_scanned')}"
+          )
+          print(
+              "APP_RUNNER_VEVO_ACCOUNTING_OK:"
+              f"date_to={accounting.get('date_to')}:"
+              f"missing_cost_products={expense_qa.get('fallback_product_count')}:"
+              f"missing_cost_revenue_share_pct={expense_qa.get('fallback_revenue_share_pct')}:"
+              f"ceo_actions={len(cockpit.get('actions') or [])}"
           )
           PY
           fi
