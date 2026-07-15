@@ -4733,3 +4733,24 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - standalone ROY 30d/90d payloads do not resolve all creditnoted orders from the full-history context, omitting `0.50/0.75 EUR` of fulfillment cost; the full payload is correct and this needs a separate fix
 - Next exact step:
   - merge through PR, build the exact ECR image, regenerate the affected ROY history, verify zero row identity mismatches, and synchronize the production App Runner services/scheduled task definitions to the final image
+
+### 2026-07-16 (period credit-note context parity)
+- Root cause:
+  - the full-history exporter retained excluded/Storno orders, but the child exporters used for the standalone `7d`, `30d`, and `90d` reports received only realized orders
+  - this caused all period credit-note audits to report those orders as `order_not_found` and caused ROY to omit `0.50 EUR` of 30-day and `0.75 EUR` of 90-day retained fulfillment cost
+- Safety action:
+  - replacement VEVO rollout run `29458042558` was cancelled before localhost validation, S3 publication, scheduler promotion, or App Runner deployment
+  - candidate task `c623dcb99cc443c1a858046546709aac` (`172.31.29.81`, task definition `vevo-reporting-daily:20`) stopped with the explicit reason `Cancelled before publish: period creditnote context P1 fix required`
+  - production remained on task definition `:19`, S3 generation `20260715T220511Z`, and healthy digest `sha256:2ac61cc50ae86c9b11052c1a4b2cc9bd2d75c13f2a544c86b8a01ac3bccd7f12`
+- Fix in progress on `codex/reporting-period-creditnote-context`:
+  - each period child now receives deep-copied, range-filtered `excluded_status_orders` and `excluded_orders`
+  - credit-note audits separately receive a shared read-only full-history lookup because a credit note created in the selected period can refer to an older order
+  - carrier denominators remain explicitly period-scoped; the historical lookup cannot inflate lifecycle, CRM, fulfillment, or carrier-rate denominators
+  - regression coverage verifies the `7d`/`30d`/`90d` slices, an in-period credit note for an older order, credit-note audit resolution, CRM/lifecycle boundaries, carrier denominator isolation, and retained fulfillment cost
+- Verified so far:
+  - focused period context regression passed
+  - full suite: `179` tests passed
+  - reporting QA smoke, Python compile, and `git diff --check` passed
+  - independent re-review found no remaining P0/P1 issues and marked the change safe to merge
+- Next exact step:
+  - complete the full test/review gates, merge through PR, build one immutable image, regenerate both VEVO and ROY histories, and verify localhost markers before S3/scheduler/App Runner/UI promotion

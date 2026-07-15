@@ -760,6 +760,7 @@ class BizniWebExporter:
         self.unknown_currencies = set()
         self.excluded_orders = []  # Track orders with failed/excluded statuses for segmentation
         self.excluded_status_orders = []  # Track all excluded status orders for lifecycle proxy reporting
+        self.creditnote_audit_context_orders: Tuple[Dict[str, Any], ...] = ()
         self._creditnote_order_nums_cache: Optional[set[str]] = None
         self._creditnote_status_change_audit_cache: Optional[Dict[str, Any]] = None
         self._rebuild_product_expense_indexes(PRODUCT_EXPENSES)
@@ -1310,6 +1311,9 @@ class BizniWebExporter:
         main_report_path = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
         bundle_root = Path("_periods") / main_report_path.stem
 
+        creditnote_audit_context_orders = (
+            tuple(orders or []) + tuple(self.excluded_status_orders or [])
+        )
         for spec in specs:
             if spec['key'] == 'full':
                 spec['report_path'] = main_report_path
@@ -1333,12 +1337,36 @@ class BizniWebExporter:
             if spec['key'] == 'full':
                 continue
             filtered_orders = self._filter_orders_by_range(orders, spec['date_from'], spec['date_to'])
+            child_exporter = spec['exporter']
+            # Period exporters receive only realized orders as their main input. Keep
+            # the matching excluded-order context as well so credit-note fulfillment,
+            # CRM, and lifecycle metrics reconcile with the same slice of the
+            # full-history report.
+            child_exporter.excluded_status_orders = copy.deepcopy(
+                self._filter_orders_by_range(
+                    self.excluded_status_orders,
+                    spec['date_from'],
+                    spec['date_to'],
+                )
+            )
+            child_exporter.excluded_orders = copy.deepcopy(
+                self._filter_orders_by_range(
+                    self.excluded_orders,
+                    spec['date_from'],
+                    spec['date_to'],
+                )
+            )
+            # Credit notes are selected by their creation date and can reference an
+            # order purchased before the selected report period. Share a read-only
+            # full-history lookup for the audit only; the range-filtered lists above
+            # remain the source for lifecycle, CRM, and fulfillment-cost metrics.
+            child_exporter.creditnote_audit_context_orders = creditnote_audit_context_orders
             switcher_payload = self._build_period_switcher_payload(
                 current_key=spec['key'],
                 current_path=spec['report_path'],
                 specs=specs,
             )
-            spec['exporter'].export_to_csv(
+            child_exporter.export_to_csv(
                 filtered_orders,
                 spec['date_from'],
                 spec['date_to'],
@@ -5258,7 +5286,12 @@ class BizniWebExporter:
         except (TypeError, ValueError):
             return None
 
-    def _build_creditnote_reporting_context(self, orders: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_creditnote_reporting_context(
+        self,
+        orders: List[Dict[str, Any]],
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
         included_by_num = {
             str((order or {}).get("order_num") or "").strip(): order
             for order in orders or []
@@ -5266,12 +5299,26 @@ class BizniWebExporter:
         }
         all_order_map: Dict[str, Dict[str, Any]] = {}
         decision_map: Dict[str, Dict[str, Any]] = {}
-        for order in [*(orders or []), *(self.excluded_status_orders or [])]:
+        audit_context_orders = self.creditnote_audit_context_orders or (
+            tuple(orders or []) + tuple(self.excluded_status_orders or [])
+        )
+        for order in audit_context_orders:
             order_num = str((order or {}).get("order_num") or "").strip()
             if not order_num or order_num in all_order_map:
                 continue
             all_order_map[order_num] = order
-            include, reason = self._realized_revenue_decision(order)
+            purchase_dt = self._order_purchase_datetime(order)
+            outside_period = bool(
+                date_from is not None
+                and date_to is not None
+                and purchase_dt is not None
+                and not (date_from.date() <= purchase_dt.date() <= date_to.date())
+            )
+            if outside_period:
+                include = False
+                reason = "Original order is outside the report purchase-date window"
+            else:
+                include, reason = self._realized_revenue_decision(order)
             decision_map[order_num] = {"included": bool(include), "reason": reason}
         for order_num, order in included_by_num.items():
             all_order_map.setdefault(order_num, order)
@@ -5282,6 +5329,10 @@ class BizniWebExporter:
             "error": "",
             "included_orders": list(included_by_num.values()),
             "all_orders": list(all_order_map.values()),
+            "carrier_denominator_orders": [
+                *(orders or []),
+                *(self.excluded_status_orders or []),
+            ],
             "creditnote_order_decisions": decision_map,
             "creditnote_order_errors": {},
             "status_change_audit": self._creditnote_status_change_audit(),
@@ -5306,7 +5357,7 @@ class BizniWebExporter:
             date_from.date(),
             date_to.date(),
         )
-        context = self._build_creditnote_reporting_context(orders)
+        context = self._build_creditnote_reporting_context(orders, date_from, date_to)
         enriched_rows, carrier_rows, audit = build_creditnote_reporting_audit(
             creditnote_rows,
             {self.project_name: context},
