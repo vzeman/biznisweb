@@ -321,6 +321,226 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(0.0, qa["fallback_recent_30d_revenue"])
         self.assertEqual(0.0, qa["fallback_recent_30d_revenue_share_pct"])
 
+    def test_homogeneous_bundle_uses_known_single_product_cost_for_every_bundle_unit(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter._rebuild_product_expense_indexes(
+            {
+                "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)": 6.14,
+            }
+        )
+
+        rows = exporter.flatten_order(
+            {
+                "id": "1",
+                "order_num": "V-YLANG-2X",
+                "pur_date": "2026-07-14 10:00:00",
+                "sum": {"value": 97.37, "currency": {"code": "EUR"}},
+                "customer": {"email": "a@example.com"},
+                "items": [
+                    {
+                        "item_label": "2x Parfum do prania Vevo Natural No.07 Ylang Absolute 500ml",
+                        "ean": "",
+                        "quantity": 2,
+                        "tax_rate": 20,
+                        "price": {"value": 40.57, "currency": {"code": "EUR"}},
+                        "sum": {"value": 81.14, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 97.37, "currency": {"code": "EUR"}},
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(12.28, rows[0]["expense_per_item"])
+        self.assertEqual(24.56, rows[0]["total_expense"])
+        self.assertEqual(56.58, rows[0]["profit_before_ads"])
+        self.assertEqual(
+            "bundle_components_inferred:x2:mapped_item_label_normalized",
+            rows[0]["expense_source"],
+        )
+
+    def test_vevo_bundle_rules_use_explicit_non_secret_rule_ids(self) -> None:
+        settings_path = Path(__file__).resolve().parents[1] / "projects" / "vevo" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        rules = settings.get("product_cost_bundle_rules") or []
+
+        self.assertTrue(rules)
+        self.assertTrue(all(str(rule.get("rule_id") or "").strip() for rule in rules))
+        self.assertTrue(all("key" not in rule for rule in rules))
+
+    def test_homogeneous_bundle_parser_is_narrow_and_keeps_explicit_bundle_cost_precedence(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter._rebuild_product_expense_indexes(
+            {
+                "Base Product": 4.25,
+                "2x Base Product": 7.5,
+                "Free Product": 0.0,
+            }
+        )
+
+        explicit_cost, explicit_source = exporter._resolve_product_expense("", "2x Base Product")
+        self.assertEqual(7.5, explicit_cost)
+        self.assertEqual("mapped_item_label", explicit_source)
+
+        for label in ("2 x Base Product", "2× Base Product", "3X Base Product"):
+            cost, source = exporter._resolve_product_expense("", label)
+            expected_multiplier = 3 if label.startswith("3") else 2
+            self.assertEqual(4.25 * expected_multiplier, cost)
+            self.assertTrue(
+                str(source).startswith(f"bundle_components_inferred:x{expected_multiplier}:")
+            )
+
+        normalized_explicit_cost, normalized_explicit_source = exporter._resolve_product_expense(
+            "", "2X Base Product"
+        )
+        self.assertEqual(7.5, normalized_explicit_cost)
+        self.assertEqual("mapped_item_label_normalized", normalized_explicit_source)
+
+        zero_cost, zero_source = exporter._resolve_product_expense("", "3x Free Product")
+        self.assertEqual(0.0, zero_cost)
+        self.assertTrue(str(zero_source).startswith("bundle_components_inferred:x3:"))
+
+        unsafe_labels = (
+            "2x Base Product + Other Product",
+            "2x Base Product 3x Other Product",
+            "2x Base Product zdarma",
+            "3x200ml Base Product",
+            "Walther 2x20",
+        )
+        for label in unsafe_labels:
+            self.assertEqual((None, None), exporter._resolve_product_expense("", label))
+
+    def test_homogeneous_bundle_does_not_infer_from_ambiguous_normalized_cost(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter._rebuild_product_expense_indexes(
+            {
+                "Base (Product)": 4.0,
+                "Base Product": 5.0,
+            }
+        )
+
+        self.assertEqual(
+            (None, None),
+            exporter._resolve_product_expense("", "2x Base-Product"),
+        )
+
+    def test_known_bundle_identifier_wins_over_inferred_or_configured_components(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter._rebuild_product_expense_indexes(
+            {
+                "Base Product": 4.0,
+                "BUNDLE-EAN": 7.0,
+                "BUNDLE-SKU": 9.0,
+                "BUNDLE-IMPORT": 10.0,
+            }
+        )
+
+        homogeneous_cost, homogeneous_source = exporter._resolve_product_expense(
+            "BUNDLE-EAN",
+            "2x Base Product",
+            ean="BUNDLE-EAN",
+        )
+        self.assertEqual(7.0, homogeneous_cost)
+        self.assertEqual("mapped_product_identifier", homogeneous_source)
+
+        configured_cost, configured_source = exporter._resolve_product_expense(
+            "BUNDLE-SKU",
+            "Vlnené gule + Vevo Premium No.06 Royal Cotton 10ml",
+        )
+        self.assertEqual(9.0, configured_cost)
+        self.assertEqual("mapped_product_sku", configured_source)
+
+        combo_cost, combo_source = exporter._resolve_product_expense(
+            "BUNDLE-IMPORT",
+            "Combo Parfum do prania Ylang Absolute 500ml + Prací gél Ylang Absolute 1L",
+            import_code="BUNDLE-IMPORT",
+            ean="8594201618000",
+        )
+        self.assertEqual(10.0, combo_cost)
+        self.assertEqual("mapped_product_identifier", combo_source)
+
+    def test_configured_mixed_bundle_costs_override_shared_component_ean(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter._rebuild_product_expense_indexes(
+            {
+                "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)": 6.14,
+                "8594201618000": 2.43,
+                "Prírodné vlnené gule do sušičky 3 ks": 1.60,
+                "Parfum do sušičky Vevo Premium No.06 Royal Cotton 10ml": 0.50,
+            }
+        )
+
+        cases = (
+            (
+                "Combo Parfum do prania Ylang Absolute 500ml + Prací gél Ylang Absolute 1L",
+                "8594201618000",
+                8.57,
+                "bundle_components_configured:ylang_absolute_perfume_gel_1_1",
+            ),
+            (
+                "Combo 1x Parfum do prania Ylang Absolute 500ml + 3x Prací gél Ylang Absolute 1L",
+                "8594201618000",
+                13.43,
+                "bundle_components_configured:ylang_absolute_perfume_gel_1_3",
+            ),
+            (
+                "Vlnené gule + Vevo Premium No.06 Royal Cotton 10ml",
+                "H-C0FBC1FB",
+                2.10,
+                "bundle_components_configured:wool_balls_royal_cotton_dryer_fragrance_1_1",
+            ),
+        )
+        for label, identifier, expected_cost, expected_source in cases:
+            cost, source = exporter._resolve_product_expense(
+                identifier,
+                label,
+                ean=identifier if identifier.isdigit() else "",
+            )
+            self.assertAlmostEqual(expected_cost, cost, places=2)
+            self.assertEqual(expected_source, source)
+
+    def test_configured_bundle_rule_fails_closed_when_component_cost_is_missing(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        exporter._rebuild_product_expense_indexes({"8594201618000": 2.43})
+
+        with self.assertRaisesRegex(ValueError, "references missing expense key"):
+            exporter._resolve_product_expense(
+                "8594201618000",
+                "Combo Parfum do prania Ylang Absolute 500ml + Prací gél Ylang Absolute 1L",
+                ean="8594201618000",
+            )
+
+    def test_bundle_cost_sources_are_not_reported_as_missing_purchase_costs(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "V-BUNDLE-A",
+                    "item_label": "2x Base Product",
+                    "product_sku": "BUNDLE-A",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 20.0,
+                    "profit_before_ads": 12.0,
+                    "expense_per_item": 8.0,
+                    "expense_source": "bundle_components_inferred:x2:mapped_item_label",
+                },
+                {
+                    "order_num": "V-BUNDLE-B",
+                    "item_label": "Base Product + Other Product",
+                    "product_sku": "BUNDLE-B",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 30.0,
+                    "profit_before_ads": 18.0,
+                    "expense_per_item": 12.0,
+                    "expense_source": "bundle_components_configured:test_rule",
+                },
+            ]
+        )
+
+        qa = exporter._build_product_expense_coverage_qa(frame)
+
+        self.assertEqual(0, qa["fallback_rows"])
+        self.assertEqual(0, qa["missing_cost_product_entry_count"])
+
     def test_roy_mapped_cost_keeps_real_loss_despite_missing_cost_margin(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["LOSS-SKU"] = 80.0
