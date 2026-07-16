@@ -1,10 +1,10 @@
-name: Deploy Monthly Creditnote Export
+name: Deploy Monthly Accounting Export
 
 on:
   workflow_dispatch:
     inputs:
       execute_now:
-        description: Run the export after registering the schedule
+        description: Run the host smoke and send only when send_email_now is enabled
         required: false
         default: false
         type: boolean
@@ -18,15 +18,23 @@ on:
       - main
     paths:
       - creditnote_export.py
+      - money_s3_invoice_export.py
       - monthly_creditnote_export_runner.py
       - projects/roy/settings.json
+      - projects/vevo/settings.json
+      - reporting_core/**
+      - http_client.py
+      - Dockerfile
       - requirements.txt
       - .github/workflows/deploy-monthly-creditnote-export.yml
 
 env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: vevo-reporting
-  IMAGE_TAG: latest
+  ECR_CURRENT_TAG: monthly-creditnote-export-current
+  ECR_CANDIDATE_TAG: monthly-creditnote-export-candidate
+  ALERT_TOPIC_NAME: vevo-reporting-alerts-mil-final
+  DLQ_NAME: monthly-creditnote-export-dlq
   OWNER_PROJECT: roy
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -46,6 +54,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Deploy scheduler and run host smoke
         shell: bash
         env:
@@ -59,14 +71,101 @@ jobs:
           set -euo pipefail
 
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          DEPLOY_IMAGE_TAG="monthly-creditnote-export-${GITHUB_SHA}"
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${DEPLOY_IMAGE_TAG}"
+          docker build -t "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
           IMAGE_DIGEST="$(aws ecr describe-images \
             --repository-name "${ECR_REPOSITORY}" \
-            --image-ids imageTag="${IMAGE_TAG}" \
+            --image-ids imageTag="${DEPLOY_IMAGE_TAG}" \
             --region "${AWS_REGION}" \
             --query 'imageDetails[0].imageDigest' \
             --output text)"
           IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+
+          protect_ecr_image_tag() {
+            local image_identifier="$1"
+            local protection_tag="$2"
+            if [[ "${image_identifier}" != *@sha256:* ]]; then
+              echo "Skipping ${protection_tag}; image is not digest-pinned: ${image_identifier}"
+              return 0
+            fi
+            local image_digest="${image_identifier##*@}"
+            local existing_digest
+            existing_digest="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag="${protection_tag}" \
+              --region "${AWS_REGION}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text 2>/dev/null || true)"
+            if [[ "${existing_digest}" == "${image_digest}" ]]; then
+              echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:already"
+              return 0
+            fi
+            local manifest_file
+            local manifest_response_file
+            manifest_file="$(mktemp)"
+            manifest_response_file="$(mktemp)"
+            aws ecr batch-get-image \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageDigest="${image_digest}" \
+              --region "${AWS_REGION}" \
+              --output json > "${manifest_response_file}"
+            python - "${manifest_response_file}" "${manifest_file}" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          response = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          images = response.get("images") or []
+          if not images or not images[0].get("imageManifest"):
+              raise SystemExit("ECR batch-get-image did not return an image manifest")
+          pathlib.Path(sys.argv[2]).write_text(images[0]["imageManifest"], encoding="utf-8")
+          PY
+            python -m json.tool "${manifest_file}" >/dev/null
+            local put_output
+            if ! put_output="$(aws ecr put-image \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-tag "${protection_tag}" \
+              --image-manifest "file://${manifest_file}" \
+              --region "${AWS_REGION}" 2>&1)"; then
+              if [[ "${put_output}" != *"ImageAlreadyExistsException"* ]]; then
+                echo "${put_output}" >&2
+                rm -f "${manifest_file}" "${manifest_response_file}"
+                return 1
+              fi
+              local raced_digest
+              raced_digest="$(aws ecr describe-images \
+                --repository-name "${ECR_REPOSITORY}" \
+                --image-ids imageTag="${protection_tag}" \
+                --region "${AWS_REGION}" \
+                --query 'imageDetails[0].imageDigest' \
+                --output text)"
+              rm -f "${manifest_file}" "${manifest_response_file}"
+              if [[ "${raced_digest}" != "${image_digest}" ]]; then
+                echo "${put_output}" >&2
+                echo "ECR protection tag ${protection_tag} raced to ${raced_digest}, expected ${image_digest}" >&2
+                return 1
+              fi
+              echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:already-after-race"
+              return 0
+            fi
+            rm -f "${manifest_file}" "${manifest_response_file}"
+            local protected_digest
+            protected_digest="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag="${protection_tag}" \
+              --region "${AWS_REGION}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text)"
+            if [[ "${protected_digest}" != "${image_digest}" ]]; then
+              echo "ECR protection tag ${protection_tag} resolved to ${protected_digest}, expected ${image_digest}" >&2
+              return 1
+            fi
+            echo "ECR_IMAGE_PROTECTED:${protection_tag}:${image_digest}:updated"
+          }
+
+          protect_ecr_image_tag "${IMAGE_IDENTIFIER}" "${ECR_CANDIDATE_TAG}"
 
           python - "${OWNER_PROJECT}" <<'PY' > creditnote-settings.env
           import json
@@ -97,6 +196,98 @@ jobs:
           PY
           # shellcheck disable=SC1091
           source creditnote-settings.env
+
+          ALERT_TOPIC_ARN="arn:aws:sns:${AWS_REGION}:${ACCOUNT_ID}:${ALERT_TOPIC_NAME}"
+          aws sns get-topic-attributes \
+            --topic-arn "${ALERT_TOPIC_ARN}" \
+            --region "${AWS_REGION}" >/dev/null
+          DLQ_URL="$(aws sqs get-queue-url \
+            --queue-name "${DLQ_NAME}" \
+            --region "${AWS_REGION}" \
+            --query QueueUrl \
+            --output text 2>/dev/null || aws sqs create-queue \
+              --queue-name "${DLQ_NAME}" \
+              --attributes MessageRetentionPeriod=1209600 \
+              --region "${AWS_REGION}" \
+              --query QueueUrl \
+              --output text)"
+          DLQ_ARN="$(aws sqs get-queue-attributes \
+            --queue-url "${DLQ_URL}" \
+            --attribute-names QueueArn \
+            --region "${AWS_REGION}" \
+            --query 'Attributes.QueueArn' \
+            --output text)"
+          SCHEDULE_ARN="arn:aws:scheduler:${AWS_REGION}:${ACCOUNT_ID}:schedule/default/${SCHEDULE_NAME}"
+          python - "${DLQ_ARN}" "${SCHEDULE_ARN}" <<'PY' > dlq-policy.json
+          import json
+          import sys
+
+          queue_arn, schedule_arn = sys.argv[1:3]
+          print(json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Sid": "AllowMonthlyAccountingScheduler",
+                  "Effect": "Allow",
+                  "Principal": {"Service": "scheduler.amazonaws.com"},
+                  "Action": "sqs:SendMessage",
+                  "Resource": queue_arn,
+                  "Condition": {"ArnEquals": {"aws:SourceArn": schedule_arn}},
+              }],
+          }))
+          PY
+          python - <<'PY' > dlq-attributes.json
+          import json
+          from pathlib import Path
+
+          policy = json.loads(Path("dlq-policy.json").read_text(encoding="utf-8"))
+          print(json.dumps({
+              "MessageRetentionPeriod": "1209600",
+              "Policy": json.dumps(policy, separators=(",", ":")),
+          }))
+          PY
+          aws sqs set-queue-attributes \
+            --queue-url "${DLQ_URL}" \
+            --attributes file://dlq-attributes.json \
+            --region "${AWS_REGION}"
+          aws cloudwatch put-metric-alarm \
+            --alarm-name monthly-creditnote-export-dlq-not-empty \
+            --alarm-description "Monthly accounting scheduler could not invoke its Fargate target" \
+            --namespace AWS/SQS \
+            --metric-name ApproximateNumberOfMessagesVisible \
+            --dimensions Name=QueueName,Value="${DLQ_NAME}" \
+            --statistic Maximum \
+            --period 60 \
+            --evaluation-periods 1 \
+            --datapoints-to-alarm 1 \
+            --threshold 1 \
+            --comparison-operator GreaterThanOrEqualToThreshold \
+            --treat-missing-data notBreaching \
+            --alarm-actions "${ALERT_TOPIC_ARN}" \
+            --ok-actions "${ALERT_TOPIC_ARN}" \
+            --region "${AWS_REGION}"
+
+          if aws scheduler get-schedule \
+            --name "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > current-monthly-schedule.json 2>/dev/null; then
+            CURRENT_MONTHLY_TASK_DEFINITION_ARN="$(python - <<'PY'
+          import json
+          schedule = json.load(open("current-monthly-schedule.json", encoding="utf-8"))
+          print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])
+          PY
+            )"
+            aws ecs describe-task-definition \
+              --task-definition "${CURRENT_MONTHLY_TASK_DEFINITION_ARN}" \
+              --region "${AWS_REGION}" > current-monthly-task-definition.json
+            CURRENT_MONTHLY_IMAGE="$(python - <<'PY'
+          import json
+          task = json.load(open("current-monthly-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          print(task["containerDefinitions"][0].get("image") or "")
+          PY
+            )"
+            if ! protect_ecr_image_tag "${CURRENT_MONTHLY_IMAGE}" "${ECR_CURRENT_TAG}"; then
+              echo "Existing monthly image could not be protected; continuing with candidate recovery: ${CURRENT_MONTHLY_IMAGE}" >&2
+            fi
+          fi
 
           aws scheduler get-schedule \
             --name "${SOURCE_REPORT_SCHEDULE_NAME}" \
@@ -268,6 +459,28 @@ jobs:
             --log-group-name "${LOG_GROUP}" \
             --retention-in-days 30 \
             --region "${AWS_REGION}"
+          aws logs put-metric-filter \
+            --log-group-name "${LOG_GROUP}" \
+            --filter-name monthly-creditnote-export-run-failed \
+            --filter-pattern '"CREDITNOTE_EXPORT_RUN_FAILED"' \
+            --metric-transformations \
+              metricName=MonthlyCreditnoteExportRunFailed,metricNamespace=BiznisWebReporting,metricValue=1,defaultValue=0 \
+            --region "${AWS_REGION}"
+          aws cloudwatch put-metric-alarm \
+            --alarm-name monthly-creditnote-export-run-failed \
+            --alarm-description "Monthly accounting export application failed before sending email" \
+            --namespace BiznisWebReporting \
+            --metric-name MonthlyCreditnoteExportRunFailed \
+            --statistic Sum \
+            --period 60 \
+            --evaluation-periods 1 \
+            --datapoints-to-alarm 1 \
+            --threshold 1 \
+            --comparison-operator GreaterThanOrEqualToThreshold \
+            --treat-missing-data notBreaching \
+            --alarm-actions "${ALERT_TOPIC_ARN}" \
+            --ok-actions "${ALERT_TOPIC_ARN}" \
+            --region "${AWS_REGION}"
 
           python - "${TASK_FAMILY}" "${IMAGE_IDENTIFIER}" "${OWNER_PROJECT}" "${CREDITNOTE_PROJECTS}" "${CREDITNOTE_EMAIL_TO}" "${LOG_GROUP}" "${AWS_REGION}" <<'PY' > task-definition-creditnote.json
           import copy
@@ -425,17 +638,22 @@ jobs:
           print(task_def.get("executionRoleArn") or "")
           PY
             )"
-            python - "${ACCOUNT_ID}" "${AWS_REGION}" "${TASK_FAMILY}" "${TASK_ROLE_ARN}" "${EXECUTION_ROLE_ARN}" <<'PY' > scheduler-role-policy.json
+            python - "${ACCOUNT_ID}" "${AWS_REGION}" "${TASK_FAMILY}" "${TASK_ROLE_ARN}" "${EXECUTION_ROLE_ARN}" "${DLQ_ARN}" <<'PY' > scheduler-role-policy.json
           import json
           import sys
 
-          account_id, region, task_family, task_role_arn, execution_role_arn = sys.argv[1:6]
+          account_id, region, task_family, task_role_arn, execution_role_arn, dlq_arn = sys.argv[1:7]
           pass_roles = [arn for arn in [task_role_arn, execution_role_arn] if arn]
           statements = [
               {
                   "Effect": "Allow",
                   "Action": "ecs:RunTask",
                   "Resource": f"arn:aws:ecs:{region}:{account_id}:task-definition/{task_family}:*",
+              },
+              {
+                  "Effect": "Allow",
+                  "Action": "sqs:SendMessage",
+                  "Resource": dlq_arn,
               }
           ]
           if pass_roles:
@@ -496,12 +714,12 @@ jobs:
             fi
           fi
 
-          python - "${REGISTERED_TASK_DEFINITION_ARN}" <<'PY' > schedule-target.json
+          python - "${REGISTERED_TASK_DEFINITION_ARN}" "${DLQ_ARN}" <<'PY' > schedule-target.json
           import copy
           import json
           import sys
 
-          task_definition_arn = sys.argv[1]
+          task_definition_arn, dlq_arn = sys.argv[1:3]
           schedule = json.load(open("source-schedule.json", encoding="utf-8"))
 
           def clean(value):
@@ -520,30 +738,17 @@ jobs:
           target = clean(copy.deepcopy(schedule["Target"]))
           target.pop("Input", None)
           target["EcsParameters"]["TaskDefinitionArn"] = task_definition_arn
+          target["DeadLetterConfig"] = {"Arn": dlq_arn}
           json.dump(target, sys.stdout)
           PY
           echo '{"Mode":"OFF"}' > flexible-time-window.json
 
-          if aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > existing-schedule.json 2>/dev/null; then
-            aws scheduler update-schedule \
-              --name "${SCHEDULE_NAME}" \
-              --schedule-expression "${SCHEDULE_EXPRESSION}" \
-              --schedule-expression-timezone "${SCHEDULE_TIMEZONE}" \
-              --flexible-time-window file://flexible-time-window.json \
-              --target file://schedule-target.json \
-              --state ENABLED \
-              --region "${AWS_REGION}"
-          else
-            aws scheduler create-schedule \
-              --name "${SCHEDULE_NAME}" \
-              --schedule-expression "${SCHEDULE_EXPRESSION}" \
-              --schedule-expression-timezone "${SCHEDULE_TIMEZONE}" \
-              --flexible-time-window file://flexible-time-window.json \
-              --target file://schedule-target.json \
-              --state ENABLED \
-              --region "${AWS_REGION}"
+          SCHEDULE_EXISTS=false
+          if aws scheduler get-schedule \
+            --name "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > existing-schedule.json 2>/dev/null; then
+            SCHEDULE_EXISTS=true
           fi
-          aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > deployed-schedule.json
 
           python - <<'PY' > network.json
           import json
@@ -565,10 +770,10 @@ jobs:
           PY
           )"
 
-          EMAIL_MODE="--dry-run-email"
+          EMAIL_MODE="dry-run"
           EXPECTED_MARKER="CREDITNOTE_EXPORT_MARKER_OK"
           if [[ "${EXECUTE_NOW}" == "true" && "${SEND_EMAIL_NOW}" == "true" ]]; then
-            EMAIL_MODE=""
+            EMAIL_MODE="send"
             EXPECTED_MARKER="CREDITNOTE_EXPORT_EMAIL_MARKER_OK"
           fi
 
@@ -577,7 +782,7 @@ jobs:
           OWNER_PROJECT="${CREDITNOTE_EXPORT_OWNER_PROJECT:-roy}"
           PROJECTS="${CREDITNOTE_EXPORT_PROJECTS:?CREDITNOTE_EXPORT_PROJECTS missing}"
           EMAIL_TO="${CREDITNOTE_EXPORT_EMAIL_TO:?CREDITNOTE_EXPORT_EMAIL_TO missing}"
-          EMAIL_MODE="${EMAIL_MODE:---dry-run-email}"
+          EMAIL_MODE="${EMAIL_MODE:-dry-run}"
           PIDS=()
           cleanup() {
             for pid in "${PIDS[@]:-}"; do
@@ -644,13 +849,16 @@ jobs:
               print(f"FARGATE_ADMIN_LOGIN_OK project={project} base_url={base_url} arf_present={bool(arf)}")
           PY
           RUN_ARGS=(--owner-project "${OWNER_PROJECT}" --projects "${PROJECTS}" --email-to "${EMAIL_TO}" --output-tag smoke)
-          if [[ -n "${EMAIL_MODE}" ]]; then
-            RUN_ARGS+=("${EMAIL_MODE}")
-          fi
+          case "${EMAIL_MODE}" in
+            dry-run) RUN_ARGS+=(--dry-run-email) ;;
+            send) ;;
+            *) echo "Unsupported EMAIL_MODE: ${EMAIL_MODE}" >&2; exit 1 ;;
+          esac
           python monthly_creditnote_export_runner.py "${RUN_ARGS[@]}" | tee /tmp/creditnote-export.log
           python - <<'PY'
           import json
           import os
+          import xml.etree.ElementTree as ET
           from pathlib import Path
 
           summary_line = ""
@@ -659,11 +867,36 @@ jobs:
                   summary_line = line.split(" ", 1)[1]
           assert summary_line, "missing creditnote export summary"
           summary = json.loads(summary_line)
-          assert summary["projects"] == [item.strip() for item in os.environ["CREDITNOTE_EXPORT_PROJECTS"].split(",") if item.strip()]
-          output_pdf = Path(summary["output_pdf"])
-          assert output_pdf.exists()
-          assert output_pdf.read_bytes()[:5] == b"%PDF-"
+          expected_projects = [
+              item.strip()
+              for item in os.environ["CREDITNOTE_EXPORT_PROJECTS"].split(",")
+              if item.strip()
+          ]
+          expected_project_keys = {project.upper() for project in expected_projects}
+          assert summary["projects"] == expected_projects
+
+          output_pdfs = summary["output_pdfs"]
+          assert set(output_pdfs) == expected_project_keys
+          for project, output_path in output_pdfs.items():
+              path = Path(output_path)
+              assert path.exists(), f"missing {project} credit-note PDF: {path}"
+              assert path.read_bytes()[:5] == b"%PDF-", f"invalid {project} credit-note PDF: {path}"
+
+          assert summary["invoice_export_skipped"] is False
+          invoice_export = summary["invoice_export"]
+          assert invoice_export["format"] == "moneys3"
+          assert invoice_export["date_field"] == "inv_date"
+          assert invoice_export["projects"] == expected_projects
+          assert set(invoice_export["output_files"]) == expected_project_keys
+          for project, output_path in invoice_export["output_files"].items():
+              path = Path(output_path)
+              assert path.exists(), f"missing {project} Money S3 export: {path}"
+              root = ET.parse(path).getroot()
+              assert root.tag.rsplit("}", 1)[-1] == "MoneyData", f"invalid {project} Money S3 XML: {path}"
+
           assert summary["email_to"] == os.environ["CREDITNOTE_EXPORT_EMAIL_TO"]
+          if not summary["email_dry_run"] and not summary["email_skipped"]:
+              assert summary["email_message_id"] not in ("", "dry-run")
           marker_name = "CREDITNOTE_EXPORT_EMAIL_MARKER_OK" if not summary["email_dry_run"] and not summary["email_skipped"] else "CREDITNOTE_EXPORT_MARKER_OK"
           marker_dir = Path("/tmp/creditnote-export-marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
@@ -673,8 +906,12 @@ jobs:
               "date_from": summary["date_from"],
               "date_to": summary["date_to"],
               "exported_rows": summary["exported_rows"],
+              "invoice_export_count": invoice_export["total_invoices"],
+              "output_pdf_count": len(output_pdfs),
+              "attachment_count": len(output_pdfs) + len(invoice_export["output_files"]),
               "email_dry_run": summary["email_dry_run"],
               "email_skipped": summary["email_skipped"],
+              "email_message_id": summary["email_message_id"],
           }
           (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True), encoding="utf-8")
           PY
@@ -702,7 +939,7 @@ jobs:
                           {"name": "CREDITNOTE_EXPORT_OWNER_PROJECT", "value": os.environ["OWNER_PROJECT"]},
                           {"name": "CREDITNOTE_EXPORT_PROJECTS", "value": os.environ["CREDITNOTE_PROJECTS"]},
                           {"name": "CREDITNOTE_EXPORT_EMAIL_TO", "value": os.environ["CREDITNOTE_EMAIL_TO"]},
-                          {"name": "EMAIL_MODE", "value": os.environ.get("EMAIL_MODE", "--dry-run-email")},
+                          {"name": "EMAIL_MODE", "value": os.environ.get("EMAIL_MODE", "dry-run")},
                       ],
                   }
               ]
@@ -816,15 +1053,62 @@ jobs:
           fi
           grep -q "${EXPECTED_MARKER}" smoke-task.log
 
-          python - <<'PY'
+          if [[ "${SCHEDULE_EXISTS}" == "true" ]]; then
+            aws scheduler update-schedule \
+              --name "${SCHEDULE_NAME}" \
+              --schedule-expression "${SCHEDULE_EXPRESSION}" \
+              --schedule-expression-timezone "${SCHEDULE_TIMEZONE}" \
+              --flexible-time-window file://flexible-time-window.json \
+              --target file://schedule-target.json \
+              --state ENABLED \
+              --region "${AWS_REGION}" >/dev/null
+          else
+            aws scheduler create-schedule \
+              --name "${SCHEDULE_NAME}" \
+              --schedule-expression "${SCHEDULE_EXPRESSION}" \
+              --schedule-expression-timezone "${SCHEDULE_TIMEZONE}" \
+              --flexible-time-window file://flexible-time-window.json \
+              --target file://schedule-target.json \
+              --state ENABLED \
+              --region "${AWS_REGION}" >/dev/null
+          fi
+          aws scheduler get-schedule \
+            --name "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > deployed-schedule.json
+          protect_ecr_image_tag "${IMAGE_IDENTIFIER}" "${ECR_CURRENT_TAG}"
+
+          CURRENT_IMAGE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${ECR_CURRENT_TAG}" \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if [[ "${CURRENT_IMAGE_DIGEST}" != "${IMAGE_DIGEST}" ]]; then
+            echo "Current monthly image tag points to ${CURRENT_IMAGE_DIGEST}, expected ${IMAGE_DIGEST}" >&2
+            exit 1
+          fi
+
+          python - "${REGISTERED_TASK_DEFINITION_ARN}" "${DLQ_ARN}" "${SCHEDULE_EXPRESSION}" "${SCHEDULE_TIMEZONE}" <<'PY'
           import json
+          import sys
+
+          expected_task_definition, expected_dlq, expected_expression, expected_timezone = sys.argv[1:5]
           schedule = json.load(open("deployed-schedule.json", encoding="utf-8"))
           target = schedule["Target"]
           assert schedule["State"] == "ENABLED"
-          assert target["EcsParameters"]["TaskDefinitionArn"]
+          assert schedule["ScheduleExpression"] == expected_expression
+          assert schedule["ScheduleExpressionTimezone"] == expected_timezone
+          assert target["EcsParameters"]["TaskDefinitionArn"] == expected_task_definition
+          assert target["DeadLetterConfig"]["Arn"] == expected_dlq
           print(
-              "DEPLOY_MONTHLY_CREDITNOTE_EXPORT_OK "
+              "DEPLOY_MONTHLY_ACCOUNTING_EXPORT_OK "
               f"schedule={schedule['Name']} "
-              f"task_definition={target['EcsParameters']['TaskDefinitionArn']}"
+              f"task_definition={target['EcsParameters']['TaskDefinitionArn']} "
+              f"dlq={target['DeadLetterConfig']['Arn']}"
           )
           PY
+
+          aws ecr batch-delete-image \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${DEPLOY_IMAGE_TAG}" \
+            --region "${AWS_REGION}" >/dev/null
