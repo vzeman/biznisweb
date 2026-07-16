@@ -7,6 +7,7 @@
   "report_from_date": "2025-05-03",
   "report_schedule": {
     "schedule_name": "vevo-daily-report-email",
+    "scheduler_role_name": "vevo-reporting-scheduler-role",
     "schedule_expression": "cron(0 1 * * ? *)",
     "timezone": "Europe/Bratislava",
     "task_family": "vevo-reporting-daily"
