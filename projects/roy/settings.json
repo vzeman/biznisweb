@@ -112,7 +112,10 @@
       "roy",
       "vevo"
     ],
-    "email_to": "mil.terem@gmail.com"
+    "email_to": "mil.terem@gmail.com",
+    "creditnote_pdf_mode": "per_project",
+    "invoice_format": "moneys3",
+    "invoice_date_field": "inv_date"
   },
   "creditnote_storno_guard": {
     "enabled": true,

@@ -3,6 +3,8 @@ import os
 import tempfile
 import unittest
 from datetime import date
+from email import policy
+from email.parser import BytesParser
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,10 +18,13 @@ from creditnote_export import (
 )
 from daily_report_runner import _build_creditnote_summary
 from monthly_creditnote_export_runner import (
+    MonthlyAccountingExportResult,
     build_creditnote_email_body,
     resolve_creditnote_export_window,
     run_creditnote_export_runner,
+    send_creditnote_email_ses,
 )
+from money_s3_invoice_export import MoneyS3InvoiceExportResult
 from reporting_core import resolve_biznisweb_api_url, resolve_project_env_value
 from reporting_core.runtime import load_project_runtime
 
@@ -180,6 +185,63 @@ class CreditnoteExportTests(unittest.TestCase):
             self.assertIn("Dobropisovana suma spolu", body)
             self.assertIn("VEVO €", body)
 
+    @patch("boto3.client")
+    def test_email_attaches_two_pdfs_and_two_money_s3_files(self, boto_client_mock) -> None:
+        boto_client_mock.return_value.send_raw_email.return_value = {"MessageId": "test-message-id"}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            creditnote_results = tuple(
+                write_creditnote_pdf(
+                    export_rows=[],
+                    fetch_totals={project: {"reported_total": 0, "fetched_rows": 0, "exported_rows": 0}},
+                    output_pdf=root / f"dobropisy_{project}.pdf",
+                    date_from=date(2026, 5, 1),
+                    date_to=date(2026, 5, 31),
+                    projects=(project,),
+                )
+                for project in ("roy", "vevo")
+            )
+            invoice_paths = {
+                "ROY": root / "faktury_money_s3_roy.xml",
+                "VEVO": root / "faktury_money_s3_vevo.xml",
+            }
+            for path in invoice_paths.values():
+                path.write_bytes(b"<MoneyData />")
+            result = MonthlyAccountingExportResult(
+                creditnote_results=creditnote_results,
+                invoice_result=MoneyS3InvoiceExportResult(
+                    projects=("roy", "vevo"),
+                    date_from="2026-05-01",
+                    date_to="2026-05-31",
+                    output_files=invoice_paths,
+                    invoice_counts={"ROY": 1, "VEVO": 1},
+                    source_filenames={"ROY": "roy.xml", "VEVO": "vevo.xml"},
+                ),
+            )
+
+            message_id = send_creditnote_email_ses(
+                result=result,
+                subject="Uctovne doklady",
+                body_text=build_creditnote_email_body(result),
+                email_from="reports@example.test",
+                email_to="mil.terem@gmail.com",
+                reporting_defaults={},
+            )
+
+            self.assertEqual("test-message-id", message_id)
+            raw_message = boto_client_mock.return_value.send_raw_email.call_args.kwargs["RawMessage"]["Data"]
+            message = BytesParser(policy=policy.default).parsebytes(raw_message)
+            filenames = sorted(part.get_filename() for part in message.iter_attachments())
+            self.assertEqual(
+                [
+                    "dobropisy_roy.pdf",
+                    "dobropisy_vevo.pdf",
+                    "faktury_money_s3_roy.xml",
+                    "faktury_money_s3_vevo.xml",
+                ],
+                filenames,
+            )
+
     def test_reporting_audit_flags_creditnoted_orders_still_in_revenue_by_carrier(self) -> None:
         export_rows = [
             {
@@ -332,18 +394,39 @@ class CreditnoteExportTests(unittest.TestCase):
         self.assertEqual(("roy", "vevo"), parse_project_list(" ROY, vevo ,,"))
 
     @patch("monthly_creditnote_export_runner.put_metric")
+    @patch("monthly_creditnote_export_runner.run_money_s3_invoice_export")
     @patch("monthly_creditnote_export_runner.run_monthly_creditnote_export")
-    def test_runner_skip_email_uses_previous_month(self, export_mock, put_metric_mock) -> None:
+    def test_runner_skip_email_uses_previous_month(self, export_mock, invoice_mock, put_metric_mock) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            result = write_creditnote_pdf(
+            roy_result = write_creditnote_pdf(
                 export_rows=[],
                 fetch_totals={"roy": {"reported_total": 0, "fetched_rows": 0, "exported_rows": 0}},
-                output_pdf=Path(tmp) / "dobropisy.pdf",
+                output_pdf=Path(tmp) / "dobropisy_roy.pdf",
                 date_from=date(2026, 5, 1),
                 date_to=date(2026, 5, 31),
-                projects=("roy", "vevo"),
+                projects=("roy",),
             )
-            export_mock.return_value = result
+            vevo_result = write_creditnote_pdf(
+                export_rows=[],
+                fetch_totals={"vevo": {"reported_total": 0, "fetched_rows": 0, "exported_rows": 0}},
+                output_pdf=Path(tmp) / "dobropisy_vevo.pdf",
+                date_from=date(2026, 5, 1),
+                date_to=date(2026, 5, 31),
+                projects=("vevo",),
+            )
+            export_mock.side_effect = [roy_result, vevo_result]
+            roy_xml = Path(tmp) / "faktury_roy.xml"
+            vevo_xml = Path(tmp) / "faktury_vevo.xml"
+            roy_xml.write_bytes(b"<MoneyData />")
+            vevo_xml.write_bytes(b"<MoneyData />")
+            invoice_mock.return_value = MoneyS3InvoiceExportResult(
+                projects=("roy", "vevo"),
+                date_from="2026-05-01",
+                date_to="2026-05-31",
+                output_files={"ROY": roy_xml, "VEVO": vevo_xml},
+                invoice_counts={"ROY": 10, "VEVO": 20},
+                source_filenames={"ROY": "roy.xml", "VEVO": "vevo.xml"},
+            )
 
             args = type(
                 "Args",
@@ -362,15 +445,21 @@ class CreditnoteExportTests(unittest.TestCase):
                     "email_to": "mil.terem@gmail.com",
                     "skip_email": True,
                     "dry_run_email": False,
+                    "skip_invoice_export": False,
                 },
             )()
 
             summary = run_creditnote_export_runner(args)
 
-            export_mock.assert_called_once()
-            _, kwargs = export_mock.call_args
-            self.assertEqual("2026-05-01", kwargs["date_from"])
-            self.assertEqual("2026-05-31", kwargs["date_to"])
+            self.assertEqual(2, export_mock.call_count)
+            self.assertEqual(("roy",), export_mock.call_args_list[0].kwargs["projects"])
+            self.assertEqual(("vevo",), export_mock.call_args_list[1].kwargs["projects"])
+            self.assertEqual("2026-05-01", export_mock.call_args_list[0].kwargs["date_from"])
+            self.assertEqual("2026-05-31", export_mock.call_args_list[0].kwargs["date_to"])
+            invoice_mock.assert_called_once()
+            self.assertEqual({"ROY", "VEVO"}, set(summary["output_pdfs"]))
+            self.assertEqual(30, summary["invoice_export"]["total_invoices"])
+            self.assertFalse(summary["invoice_export_skipped"])
             self.assertTrue(summary["email_skipped"])
             self.assertGreaterEqual(put_metric_mock.call_count, 2)
 
@@ -385,6 +474,9 @@ class CreditnoteExportTests(unittest.TestCase):
         self.assertEqual("monthly-creditnote-export", raw["task_family"])
         self.assertEqual(["roy", "vevo"], raw["projects"])
         self.assertEqual("mil.terem@gmail.com", raw["email_to"])
+        self.assertEqual("per_project", raw["creditnote_pdf_mode"])
+        self.assertEqual("moneys3", raw["invoice_format"])
+        self.assertEqual("inv_date", raw["invoice_date_field"])
 
 
 if __name__ == "__main__":

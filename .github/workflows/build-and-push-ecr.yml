@@ -13,6 +13,7 @@ on:
       - invoice_runner.py
       - creditnote_export.py
       - creditnote_storno_guard.py
+      - money_s3_invoice_export.py
       - monthly_creditnote_export_runner.py
       - unpaid_order_cancellation.py
       - unpaid_order_cancellation_runner.py
@@ -66,7 +67,7 @@ jobs:
 
       - name: Invoice automation regression test
         run: |
-          python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_creditnote_export tests.test_creditnote_storno_guard tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_live_dashboard_s3_fallback tests.test_live_dashboard_refresh_gate tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
+          python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_creditnote_export tests.test_money_s3_invoice_export tests.test_monthly_accounting_workflow tests.test_creditnote_storno_guard tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_live_dashboard_s3_fallback tests.test_live_dashboard_refresh_gate tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
