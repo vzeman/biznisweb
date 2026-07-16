@@ -183,6 +183,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
                 pd.DataFrame([{"unique_orders": 1}]),
             )
         self.assertEqual(0, metrics["summary"]["order_not_found"])
+
         self.assertEqual(1, metrics["summary"]["revenue_excluded_orders"])
         audit_row = metrics["revenue_audit_rows"][0]
         self.assertEqual("excluded", audit_row["Reporting revenue"])
@@ -233,6 +234,106 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
         self.assertEqual(1, int(fulfillment["creditnote_fulfillment_orders"].sum()))
         self.assertEqual(0.5, float(fulfillment["creditnote_fulfillment_cost"].sum()))
+
+    def test_roy_period_bundle_fetches_one_inventory_snapshot_and_shares_copies(self) -> None:
+        exporter = BizniWebExporter(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            project_name="roy",
+            output_tag="unit",
+            enable_period_bundle=True,
+        )
+
+        class InventoryClient:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def execute(self, query, variable_values=None):
+                self.calls += 1
+                return {
+                    "getProductList": {
+                        "data": [
+                            {
+                                "id": "P-1",
+                                "title": "Inventory unit-test product",
+                                "active": True,
+                                "ean": "1234567890123",
+                                "import_code": "INV-TEST",
+                                "price": {"value": 10, "currency": {"code": "EUR"}},
+                                "final_price": {"value": 10, "currency": {"code": "EUR"}},
+                                "warehouse_items": [
+                                    {
+                                        "id": "W-1",
+                                        "warehouse_number": "INV-TEST",
+                                        "quantity": 5,
+                                        "available_quantity": 4,
+                                        "status": {"id": "1", "name": "In stock"},
+                                        "price": {"value": 10, "currency": {"code": "EUR"}},
+                                        "final_price": {"value": 10, "currency": {"code": "EUR"}},
+                                    }
+                                ],
+                            }
+                        ],
+                        "pageInfo": {"hasNextPage": False, "nextCursor": None},
+                    }
+                }
+
+        exporter.client = InventoryClient()
+        date_from = datetime(2026, 1, 1)
+        date_to = datetime(2026, 6, 30)
+
+        with patch.object(BizniWebExporter, "export_to_csv", autospec=True) as export_mock:
+            exporter._build_period_switcher_bundle([], date_from, date_to)
+
+        self.assertEqual(1, exporter.client.calls)
+        self.assertIn("SK", exporter._product_inventory_snapshot_cache)
+        child_exporters = [call.args[0] for call in export_mock.call_args_list]
+        self.assertEqual(3, len(child_exporters))
+        for child in child_exporters:
+            self.assertIs(
+                exporter._product_inventory_snapshot_cache,
+                child._product_inventory_snapshot_cache,
+            )
+            child_snapshot = child.fetch_product_inventory_snapshot(lang_code="SK")
+            self.assertEqual(1, len(child_snapshot))
+            child_snapshot.loc[:, "available_quantity"] = 999
+
+        parent_snapshot = exporter.fetch_product_inventory_snapshot(lang_code="SK")
+        self.assertEqual(4.0, float(parent_snapshot.iloc[0]["available_quantity"]))
+        self.assertEqual(1, exporter.client.calls)
+
+    def test_roy_period_bundle_fails_closed_before_children_on_inventory_error_or_empty(self) -> None:
+        date_from = datetime(2026, 1, 1)
+        date_to = datetime(2026, 6, 30)
+        failure_cases = [
+            RuntimeError("inventory API unavailable"),
+            pd.DataFrame(),
+        ]
+
+        for failure_case in failure_cases:
+            with self.subTest(failure_case=type(failure_case).__name__):
+                exporter = BizniWebExporter(
+                    api_url="https://example.com/api/graphql",
+                    api_token="token",
+                    project_name="roy",
+                    output_tag="unit",
+                    enable_period_bundle=True,
+                )
+                side_effect = failure_case if isinstance(failure_case, Exception) else None
+                return_value = failure_case if isinstance(failure_case, pd.DataFrame) else None
+                with (
+                    patch.object(
+                        exporter,
+                        "fetch_product_inventory_snapshot",
+                        side_effect=side_effect,
+                        return_value=return_value,
+                    ),
+                    patch.object(BizniWebExporter, "export_to_csv", autospec=True) as export_mock,
+                    self.assertRaises(RuntimeError),
+                ):
+                    exporter._build_period_switcher_bundle([], date_from, date_to)
+
+                export_mock.assert_not_called()
 
     def test_unknown_currency_is_not_treated_as_eur(self) -> None:
         exporter = make_exporter()

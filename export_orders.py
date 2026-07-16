@@ -771,6 +771,7 @@ class BizniWebExporter:
         self.google_ads_client = GoogleAdsClient()
         self.cache_dir = self.project_root_dir / 'cache'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._product_inventory_snapshot_cache: Dict[str, pd.DataFrame] = {}
         self.weather_settings = copy.deepcopy(WEATHER_SETTINGS)
         self.weather_cache_dir = self.project_root_dir / 'weather_cache'
         self.weather_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1366,6 +1367,25 @@ class BizniWebExporter:
         if len(specs) <= 1:
             return None
 
+        if self.project_name == "roy":
+            inventory_config = self._inventory_model_config()
+            if bool(inventory_config.get("enabled", True)):
+                inventory_lang_code = (
+                    str(inventory_config.get("lang_code", "SK")).strip().upper() or "SK"
+                )
+                inventory_snapshot = self.fetch_product_inventory_snapshot(
+                    lang_code=inventory_lang_code
+                )
+                if inventory_snapshot.empty:
+                    raise RuntimeError(
+                        "ROY period bundle inventory snapshot is empty; refusing to generate "
+                        "inconsistent period reports"
+                    )
+                print(
+                    "PERIOD_BUNDLE_INVENTORY_SNAPSHOT_READY:"
+                    f"lang={inventory_lang_code}:rows={len(inventory_snapshot)}"
+                )
+
         main_report_path = self.output_path(f"report_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.html")
         bundle_root = Path("_periods") / main_report_path.stem
 
@@ -1385,6 +1405,9 @@ class BizniWebExporter:
                 output_tag=self.output_tag,
                 artifact_subdir=artifact_subdir,
                 enable_period_bundle=False,
+            )
+            child_exporter._product_inventory_snapshot_cache = (
+                self._product_inventory_snapshot_cache
             )
             spec['report_path'] = child_exporter.output_path(
                 f"report_{spec['date_from'].strftime('%Y%m%d')}-{spec['date_to'].strftime('%Y%m%d')}.html"
@@ -3791,13 +3814,20 @@ class BizniWebExporter:
 
     def fetch_product_inventory_snapshot(self, lang_code: str = "SK", page_limit: int = 30) -> pd.DataFrame:
         """Fetch current product inventory snapshot from BizniWeb."""
-        print("\nFetching product inventory snapshot...")
-
         def _safe_float(value: Any) -> float:
             parsed = pd.to_numeric(value, errors="coerce")
             return float(parsed) if pd.notna(parsed) else 0.0
 
         normalized_lang_code = str(lang_code or "SK").strip().upper() or "SK"
+        cached_snapshot = self._product_inventory_snapshot_cache.get(normalized_lang_code)
+        if cached_snapshot is not None:
+            print(
+                "\nReusing cached product inventory snapshot: "
+                f"lang={normalized_lang_code}, rows={len(cached_snapshot)}"
+            )
+            return cached_snapshot.copy(deep=True)
+
+        print("\nFetching product inventory snapshot...")
         limit = max(1, min(int(page_limit or 30), 30))
         cursor = None
         has_next_page = True
@@ -3958,6 +3988,7 @@ class BizniWebExporter:
             f"Inventory snapshot fetch complete: {page_count} pages, "
             f"{len(inventory_df)} warehouse rows"
         )
+        self._product_inventory_snapshot_cache[normalized_lang_code] = inventory_df.copy(deep=True)
         return inventory_df
 
     def _build_growth_order_item_frames(
