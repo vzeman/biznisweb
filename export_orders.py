@@ -124,6 +124,8 @@ MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 EXCLUDED_ORDER_STATUSES: List[str] = []  # Legacy status-only exclude list retained for compatibility
 ORDER_CACHE_SCHEMA_VERSION = 4
+PAYMENT_METADATA_MAX_RETRIES = 3
+PAYMENT_METADATA_RETRY_DELAY_SEC = 1
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
 MANUAL_GOOGLE_ADS_TOTAL: Optional[float] = None  # Optional fixed total Google spend for selected report range
 PREFER_MANUAL_ADS_TOTALS = False
@@ -133,6 +135,38 @@ WEATHER_SETTINGS: Dict[str, Any] = {
     "locations": []
 }
 ENABLE_EMAIL_STRATEGY_REPORT = False
+
+
+class PaymentMetadataEnrichmentError(RuntimeError):
+    """Raised when realized-revenue payment metadata cannot be loaded safely."""
+
+    def __init__(
+        self,
+        order_nums: List[str],
+        *,
+        attempts: Optional[int] = None,
+        context: str = "",
+    ) -> None:
+        normalized_order_nums = sorted(
+            {
+                str(order_num or "").strip()
+                for order_num in order_nums
+                if str(order_num or "").strip()
+            }
+        )
+        self.order_nums = tuple(normalized_order_nums)
+        self.attempts = attempts
+        self.context = str(context or "").strip()
+
+        order_num_text = ", ".join(normalized_order_nums) or "<missing order_num>"
+        attempt_text = f" after {attempts} attempts" if attempts is not None else ""
+        context_text = f" ({self.context})" if self.context else ""
+        super().__init__(
+            "Payment metadata unavailable for realized-revenue candidate orders"
+            f"{attempt_text}: {order_num_text}{context_text}"
+        )
+
+
 ROY_INVENTORY_COST_HISTORY_COLUMNS = [
     "date",
     "inventory_cost_value",
@@ -3041,6 +3075,8 @@ class BizniWebExporter:
         if self._has_loaded_price_elements(order):
             return False
         status_norm = self._status_norm(order)
+        if status_norm in self.realized_revenue_settings["paid_statuses_normalized"]:
+            return False
         return (
             status_norm in self.realized_revenue_settings["cod_statuses_normalized"]
             or status_norm in self.realized_revenue_settings["prepaid_fulfilled_statuses_normalized"]
@@ -3071,24 +3107,49 @@ class BizniWebExporter:
         logger.warning(f"Payment metadata missing in getOrder response for order {order_num}")
         return False
 
+    @staticmethod
+    def _payment_metadata_order_num(order: Dict[str, Any]) -> str:
+        order_num = str((order or {}).get("order_num") or "").strip()
+        if order_num:
+            return order_num
+        order_id = str((order or {}).get("id") or "").strip()
+        return f"<missing order_num; id={order_id or 'unknown'}>"
+
     def _enrich_payment_metadata_for_realized_revenue(self, orders: List[Dict[str, Any]]) -> None:
-        candidates = [
+        unresolved = [
             order
             for order in orders
             if self._needs_payment_metadata_for_realized_revenue(order)
         ]
-        if not candidates:
+        if not unresolved:
             return
 
+        candidate_count = len(unresolved)
         success_count = 0
-        for order in candidates:
-            if self._fetch_order_payment_metadata(order):
-                success_count += 1
+        for attempt in range(1, PAYMENT_METADATA_MAX_RETRIES + 1):
+            next_unresolved = []
+            for order in unresolved:
+                if self._fetch_order_payment_metadata(order):
+                    success_count += 1
+                else:
+                    next_unresolved.append(order)
 
-        failed_count = len(candidates) - success_count
-        logger.info(
-            "Payment metadata enrichment for realized revenue: "
-            f"attempted={len(candidates)}, succeeded={success_count}, failed={failed_count}"
+            unresolved = next_unresolved
+            logger.info(
+                "Payment metadata enrichment for realized revenue: "
+                f"attempt={attempt}/{PAYMENT_METADATA_MAX_RETRIES}, "
+                f"candidates={candidate_count}, succeeded={success_count}, "
+                f"unresolved={len(unresolved)}"
+            )
+            if not unresolved:
+                return
+            if attempt < PAYMENT_METADATA_MAX_RETRIES:
+                time.sleep(PAYMENT_METADATA_RETRY_DELAY_SEC)
+
+        raise PaymentMetadataEnrichmentError(
+            [self._payment_metadata_order_num(order) for order in unresolved],
+            attempts=PAYMENT_METADATA_MAX_RETRIES,
+            context="individual getOrder enrichment failed",
         )
 
     def _execute_order_page_with_price_elements_fallback(
@@ -4652,6 +4713,8 @@ class BizniWebExporter:
                     if has_next_page:
                         time.sleep(page_delay)
 
+                except PaymentMetadataEnrichmentError:
+                    raise
                 except Exception as e:
                     retry_count += 1
                     consecutive_errors += 1
@@ -4787,8 +4850,29 @@ class BizniWebExporter:
                         f"(found {schema_version}, need {ORDER_CACHE_SCHEMA_VERSION}); refreshing"
                     )
                     return None
-                print(f"  Loaded {len(data.get('orders', []))} orders from cache for {date.strftime('%Y-%m-%d')}")
-                return data.get('orders', [])
+                orders = data.get('orders', [])
+                unresolved_candidates = [
+                    order
+                    for order in orders
+                    if self._needs_payment_metadata_for_realized_revenue(order)
+                ]
+                if unresolved_candidates:
+                    order_nums = sorted(
+                        self._payment_metadata_order_num(order)
+                        for order in unresolved_candidates
+                    )
+                    logger.warning(
+                        "Invalidating cached order day %s because realized-revenue candidates "
+                        "lack list-valued price_elements: %s",
+                        date.strftime('%Y-%m-%d'),
+                        ", ".join(order_nums),
+                    )
+                    print(
+                        f"  Cache missing payment metadata for {date.strftime('%Y-%m-%d')}; refreshing"
+                    )
+                    return None
+                print(f"  Loaded {len(orders)} orders from cache for {date.strftime('%Y-%m-%d')}")
+                return orders
         except Exception as e:
             print(f"  Error loading cache for {date.strftime('%Y-%m-%d')}: {e}")
             return None
@@ -4909,6 +4993,8 @@ class BizniWebExporter:
                     if has_next_page:
                         time.sleep(page_delay)
 
+                except PaymentMetadataEnrichmentError:
+                    raise
                 except Exception as e:
                     retry_count += 1
                     error_msg = str(e)
@@ -5181,13 +5267,30 @@ class BizniWebExporter:
         # Statuses for failed payment segmentation (subset of excluded)
         failed_payment_statuses = FAILED_PAYMENT_STATUSES
 
+        decisions = []
+        missing_payment_metadata_order_nums = []
+        for order in orders:
+            include_order, reason = self._realized_revenue_decision(order)
+            decisions.append((order, include_order, reason))
+            if reason in {
+                "cod_status_missing_payment_metadata",
+                "fulfilled_status_missing_payment_metadata",
+            }:
+                missing_payment_metadata_order_nums.append(
+                    self._payment_metadata_order_num(order)
+                )
+
+        if missing_payment_metadata_order_nums:
+            raise PaymentMetadataEnrichmentError(
+                missing_payment_metadata_order_nums,
+                context="final realized-revenue filter guard",
+            )
+
         filtered_orders = []
         excluded_counts: Dict[str, int] = {}
-        for order in orders:
+        for order, include_order, reason in decisions:
             status = order.get('status', {}) or {}
             status_name = status.get('name', '')
-            include_order, reason = self._realized_revenue_decision(order)
-
             if include_order:
                 filtered_orders.append(order)
             else:
@@ -5654,6 +5757,8 @@ class BizniWebExporter:
                     print(f"  Successfully fetched {len(week_orders)} orders for week {week_number}")
                 else:
                     print(f"  No orders fetched for week {week_number}")
+            except PaymentMetadataEnrichmentError:
+                raise
             except Exception as e:
                 print(f"  Failed to fetch week {week_number}: {e}")
                 # Try fetching in smaller chunks (3-day periods)
@@ -5667,6 +5772,8 @@ class BizniWebExporter:
                         if chunk_orders:
                             all_orders.extend(chunk_orders)
                             print(f"    Got {len(chunk_orders)} orders")
+                    except PaymentMetadataEnrichmentError:
+                        raise
                     except Exception as e:
                         print(f"    Failed to fetch chunk: {e}")
                     chunk_start = chunk_end + timedelta(days=1)
@@ -5732,6 +5839,8 @@ class BizniWebExporter:
                     if has_next_page:
                         time.sleep(page_delay)
 
+                except PaymentMetadataEnrichmentError:
+                    raise
                 except Exception as e:
                     retry_count += 1
                     consecutive_errors += 1

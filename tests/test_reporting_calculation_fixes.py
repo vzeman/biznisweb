@@ -7,7 +7,11 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from export_orders import ORDER_CACHE_SCHEMA_VERSION, BizniWebExporter
+from export_orders import (
+    ORDER_CACHE_SCHEMA_VERSION,
+    BizniWebExporter,
+    PaymentMetadataEnrichmentError,
+)
 from html_report_generator import generate_html_report
 from reporting_core.cfo_kpis import build_order_records_from_export_df
 from reporting_core.runtime import apply_project_runtime, load_project_runtime
@@ -2814,6 +2818,216 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(["COD-FALLBACK"], [order["order_num"] for order in filtered])
         self.assertEqual("Dobierkou", exporter._price_element_info(orders[0], "payment")["title"])
         self.assertEqual(3, len(exporter.client.calls))
+
+    def test_payment_metadata_enrichment_retries_only_unresolved_candidates(self) -> None:
+        exporter = make_exporter()
+        fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
+        paid_status = exporter.realized_revenue_settings["paid_statuses"][0]
+        orders = [
+            {"id": "SUCCESS-FIRST", "order_num": "SUCCESS-FIRST", "status": {"name": fulfilled_status}},
+            {"id": "SUCCESS-SECOND", "order_num": "SUCCESS-SECOND", "status": {"name": fulfilled_status}},
+            {"id": "PAID-NONCANDIDATE", "order_num": "PAID-NONCANDIDATE", "status": {"name": paid_status}},
+            {"id": "STORNO-NONCANDIDATE", "order_num": "STORNO-NONCANDIDATE", "status": {"name": "Storno"}},
+        ]
+        attempted_order_nums = []
+
+        def fetch_metadata(order):
+            order_num = order["order_num"]
+            attempted_order_nums.append(order_num)
+            if order_num == "SUCCESS-FIRST" or attempted_order_nums.count(order_num) == 2:
+                order["price_elements"] = []
+                return True
+            return False
+
+        with (
+            patch.object(exporter, "_fetch_order_payment_metadata", side_effect=fetch_metadata),
+            patch("export_orders.time.sleep") as sleep_mock,
+        ):
+            exporter._enrich_payment_metadata_for_realized_revenue(orders)
+
+        self.assertEqual(
+            ["SUCCESS-FIRST", "SUCCESS-SECOND", "SUCCESS-SECOND"],
+            attempted_order_nums,
+        )
+        self.assertEqual([], orders[0]["price_elements"])
+        self.assertEqual([], orders[1]["price_elements"])
+        self.assertNotIn("price_elements", orders[2])
+        self.assertNotIn("price_elements", orders[3])
+        sleep_mock.assert_called_once()
+
+    def test_payment_metadata_enrichment_fails_closed_with_exact_order_nums(self) -> None:
+        exporter = make_exporter()
+        fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
+        orders = [
+            {"id": "FAILED-B", "order_num": "FAILED-B", "status": {"name": fulfilled_status}},
+            {"id": "FAILED-A", "order_num": "FAILED-A", "status": {"name": fulfilled_status}},
+        ]
+
+        with (
+            patch.object(exporter, "_fetch_order_payment_metadata", return_value=False) as fetch_mock,
+            patch("export_orders.time.sleep") as sleep_mock,
+            self.assertRaises(PaymentMetadataEnrichmentError) as raised,
+        ):
+            exporter._enrich_payment_metadata_for_realized_revenue(orders)
+
+        self.assertEqual(("FAILED-A", "FAILED-B"), raised.exception.order_nums)
+        self.assertEqual(3, raised.exception.attempts)
+        self.assertIn("FAILED-A, FAILED-B", str(raised.exception))
+        self.assertEqual(6, fetch_mock.call_count)
+        self.assertEqual(2, sleep_mock.call_count)
+
+    def test_bulk_page_retry_does_not_swallow_payment_metadata_failure(self) -> None:
+        exporter = make_exporter()
+        fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
+
+        class PermanentlyBrokenPaymentClient:
+            def __init__(self) -> None:
+                self.list_calls = 0
+                self.payment_calls = 0
+
+            def execute(self, query, variable_values=None):
+                if (variable_values or {}).get("order_num"):
+                    self.payment_calls += 1
+                    raise RuntimeError("payment endpoint unavailable")
+
+                self.list_calls += 1
+                if self.list_calls % 2 == 1:
+                    raise Exception("{'path': ['getOrderList', 'data', 0, 'price_elements']}")
+                return {
+                    "getOrderList": {
+                        "data": [
+                            {
+                                "id": "FAIL-CLOSED",
+                                "order_num": "FAIL-CLOSED",
+                                "pur_date": "2026-06-01 09:00:00",
+                                "status": {"name": fulfilled_status},
+                            }
+                        ],
+                        "pageInfo": {"hasNextPage": False, "nextCursor": None},
+                    }
+                }
+
+        exporter.client = PermanentlyBrokenPaymentClient()
+
+        with (
+            patch("export_orders.time.sleep"),
+            self.assertRaises(PaymentMetadataEnrichmentError) as raised,
+        ):
+            exporter.fetch_all_orders_bulk(max_orders=30)
+
+        self.assertEqual(("FAIL-CLOSED",), raised.exception.order_nums)
+        self.assertEqual(2, exporter.client.list_calls)
+        self.assertEqual(3, exporter.client.payment_calls)
+
+    def test_all_generic_order_page_retry_loops_propagate_payment_metadata_failure(self) -> None:
+        exporter = make_exporter()
+        date_from = datetime(2026, 6, 1)
+        date_to = datetime(2026, 6, 1)
+        fetch_calls = {
+            "month": lambda: exporter.fetch_orders_for_month(date_from, date_to),
+            "bulk": lambda: exporter.fetch_all_orders_bulk(max_orders=30),
+            "period": lambda: exporter.fetch_orders_for_period(date_from, date_to),
+        }
+
+        for fetch_name, fetch_call in fetch_calls.items():
+            with self.subTest(fetch_name=fetch_name):
+                error = PaymentMetadataEnrichmentError(
+                    [f"{fetch_name.upper()}-FAIL"],
+                    attempts=3,
+                )
+                with (
+                    patch.object(
+                        exporter,
+                        "_execute_order_page_with_price_elements_fallback",
+                        side_effect=error,
+                    ),
+                    self.assertRaises(PaymentMetadataEnrichmentError) as raised,
+                ):
+                    fetch_call()
+
+                self.assertEqual((f"{fetch_name.upper()}-FAIL",), raised.exception.order_nums)
+
+    def test_realized_revenue_filter_guards_both_missing_metadata_reasons(self) -> None:
+        exporter = make_exporter()
+        fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
+        cod_status = exporter.realized_revenue_settings["cod_statuses"][0]
+        orders = [
+            {"id": "FULFILLED-MISSING", "order_num": "FULFILLED-MISSING", "status": {"name": fulfilled_status}},
+            {"id": "COD-MISSING", "order_num": "COD-MISSING", "status": {"name": cod_status}},
+        ]
+
+        self.assertEqual(
+            "fulfilled_status_missing_payment_metadata",
+            exporter._realized_revenue_decision(orders[0])[1],
+        )
+        self.assertEqual(
+            "cod_status_missing_payment_metadata",
+            exporter._realized_revenue_decision(orders[1])[1],
+        )
+        with self.assertRaises(PaymentMetadataEnrichmentError) as raised:
+            exporter._filter_by_status(orders)
+
+        self.assertEqual(("COD-MISSING", "FULFILLED-MISSING"), raised.exception.order_nums)
+        self.assertEqual([], exporter.excluded_orders)
+        self.assertEqual([], exporter.excluded_status_orders)
+
+    def test_realized_revenue_filter_allows_paid_and_noncandidate_missing_metadata(self) -> None:
+        exporter = make_exporter()
+        paid_status = exporter.realized_revenue_settings["paid_statuses"][0]
+        orders = [
+            {"id": "PAID-MISSING", "order_num": "PAID-MISSING", "status": {"name": paid_status}},
+            {"id": "STORNO-MISSING", "order_num": "STORNO-MISSING", "status": {"name": "Storno"}},
+        ]
+
+        filtered = exporter._filter_by_status(orders, track_excluded=False)
+
+        self.assertEqual(["PAID-MISSING"], [order["order_num"] for order in filtered])
+
+    def test_cache_invalidates_only_candidates_without_list_price_elements(self) -> None:
+        exporter = make_exporter()
+        fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
+        paid_status = exporter.realized_revenue_settings["paid_statuses"][0]
+        order_date = datetime(2026, 6, 1)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exporter.cache_dir = Path(tmp_dir)
+            exporter.save_to_cache_simple(
+                order_date,
+                [
+                    {
+                        "id": "CACHED-CANDIDATE-MISSING",
+                        "order_num": "CACHED-CANDIDATE-MISSING",
+                        "status": {"name": fulfilled_status},
+                    }
+                ],
+            )
+            self.assertIsNone(exporter.load_from_cache(order_date))
+
+            safely_cached_orders = [
+                {
+                    "id": "CACHED-CANDIDATE-LOADED",
+                    "order_num": "CACHED-CANDIDATE-LOADED",
+                    "status": {"name": fulfilled_status},
+                    "price_elements": [],
+                },
+                {
+                    "id": "CACHED-PAID-MISSING",
+                    "order_num": "CACHED-PAID-MISSING",
+                    "status": {"name": paid_status},
+                },
+                {
+                    "id": "CACHED-STORNO-MISSING",
+                    "order_num": "CACHED-STORNO-MISSING",
+                    "status": {"name": "Storno"},
+                },
+            ]
+            exporter.save_to_cache_simple(order_date, safely_cached_orders)
+            loaded = exporter.load_from_cache(order_date)
+
+        self.assertEqual(
+            [order["order_num"] for order in safely_cached_orders],
+            [order["order_num"] for order in loaded],
+        )
 
     def test_flatten_order_exports_payment_audit_fields(self) -> None:
         exporter = make_exporter()
