@@ -1381,6 +1381,127 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
         self.assertEqual(0, qa["shell_parity_failures"])
 
+    def test_campaign_attributed_cpa_uses_reported_order_estimate(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "purchase_date": "2026-07-15 10:00:00",
+                    "order_num": "V-CPA-1",
+                    "item_total_without_tax": 100.0,
+                    "fb_ads_daily_spend": 1.0,
+                    "google_ads_daily_spend": 0.0,
+                }
+            ]
+        )
+        campaigns = [
+            {
+                "campaign_name": "SK-Sale-VEVO-SandBox-ABO-ACQ",
+                "campaign_id": "target",
+                "spend": 0.28,
+                "clicks": 0.2,
+            },
+            {
+                "campaign_name": "Other campaign",
+                "campaign_id": "other",
+                "spend": 0.72,
+                "clicks": 0.8,
+            },
+        ]
+
+        result = exporter.analyze_cost_per_order(frame, fb_campaigns=campaigns)
+        target = next(
+            row
+            for row in result["campaign_attribution"]
+            if row["campaign_id"] == "target"
+        )
+
+        self.assertEqual(0.232, target["attributed_orders_est"])
+        self.assertEqual(1.21, target["cost_per_attributed_order"])
+        self.assertEqual(
+            round(target["spend"] / target["attributed_orders_est"], 2),
+            target["cost_per_attributed_order"],
+        )
+
+        qa = exporter._build_data_assertions_qa(
+            financial_metrics={"total_orders": 1},
+            consistency_checks={},
+            refunds_analysis={},
+            day_of_week_analysis=pd.DataFrame(),
+            advanced_dtc_metrics={},
+            country_analysis=pd.DataFrame(),
+            geo_profitability={},
+            cost_per_order=result,
+        )
+        self.assertEqual(0, qa["attributed_cpa_mismatches"])
+
+    def test_campaign_attribution_preserves_ranking_near_rounding_boundaries(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "purchase_date": "2026-07-15 10:00:00",
+                    "order_num": "V-CPA-BOUNDARY",
+                    "item_total_without_tax": 100.0,
+                    "fb_ads_daily_spend": 1.0,
+                    "google_ads_daily_spend": 0.0,
+                }
+            ]
+        )
+        campaigns = [
+            {"campaign_name": "A", "campaign_id": "a", "spend": 0.249, "clicks": 0.249},
+            {"campaign_name": "B", "campaign_id": "b", "spend": 0.251, "clicks": 0.251},
+            {"campaign_name": "C", "campaign_id": "c", "spend": 0.5, "clicks": 0.5},
+        ]
+
+        result = exporter.analyze_cost_per_order(frame, fb_campaigns=campaigns)
+        rows = result["campaign_attribution"]
+
+        self.assertEqual(["a", "b", "c"], [row["campaign_id"] for row in rows])
+        self.assertEqual([0.249, 0.251, 0.5], [row["attributed_orders_est"] for row in rows])
+        self.assertEqual([1.0, 1.0, 1.0], [row["cost_per_attributed_order"] for row in rows])
+        self.assertEqual(100.0, sum(row["estimated_revenue"] for row in rows))
+
+    def test_tiny_positive_attribution_never_looks_like_free_acquisition(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "purchase_date": "2026-07-15 10:00:00",
+                    "order_num": "V-CPA-TINY",
+                    "item_total_without_tax": 100.0,
+                    "fb_ads_daily_spend": 1.0,
+                    "google_ads_daily_spend": 0.0,
+                }
+            ]
+        )
+        campaigns = [
+            {"campaign_name": "Tiny", "campaign_id": "tiny", "spend": 0.00001, "clicks": 0.00001},
+            {"campaign_name": "Other", "campaign_id": "other", "spend": 0.99999, "clicks": 0.99999},
+        ]
+
+        result = exporter.analyze_cost_per_order(frame, fb_campaigns=campaigns)
+        tiny = next(row for row in result["campaign_attribution"] if row["campaign_id"] == "tiny")
+
+        self.assertEqual(0, tiny["attributed_orders_est"])
+        self.assertIsNone(tiny["cost_per_attributed_order"])
+        self.assertEqual("insufficient_sample", tiny["attribution_sample_status"])
+        self.assertEqual(0, tiny["estimated_revenue"])
+        self.assertEqual(0, tiny["estimated_roas"])
+
+        qa = exporter._build_data_assertions_qa(
+            financial_metrics={"total_orders": 1},
+            consistency_checks={},
+            refunds_analysis={},
+            day_of_week_analysis=pd.DataFrame(),
+            advanced_dtc_metrics={},
+            country_analysis=pd.DataFrame(),
+            geo_profitability={},
+            cost_per_order=result,
+        )
+        self.assertEqual(0, qa["attributed_cpa_mismatches"])
+        self.assertEqual(1, qa["attributed_cpa_unavailable_rows"])
+
     def test_weekly_cac_includes_blended_spend_on_days_without_orders(self) -> None:
         exporter = make_exporter(project_name="vevo")
         frame = pd.DataFrame(

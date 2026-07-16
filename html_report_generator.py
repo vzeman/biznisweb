@@ -2687,7 +2687,27 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <tbody>"""
 
             for camp in campaign_attribution:
-                cpo_color = '#48bb78' if camp['estimated_cpo'] < fb_cpo else '#f56565'
+                estimated_orders_value = camp.get('estimated_orders')
+                attribution_sample_status = str(camp.get('attribution_sample_status') or '').strip()
+                if (
+                    attribution_sample_status == 'insufficient_sample'
+                    and (estimated_orders_value is None or estimated_orders_value <= 0)
+                ):
+                    estimated_orders_label = '&lt;0.0001'
+                elif estimated_orders_value is None:
+                    estimated_orders_label = 'N/A'
+                elif 0 < estimated_orders_value < 0.0001:
+                    estimated_orders_label = '&lt;0.0001'
+                else:
+                    estimated_orders_label = f"{estimated_orders_value:.4f}".rstrip('0').rstrip('.')
+
+                estimated_cpo_value = camp.get('estimated_cpo')
+                if estimated_cpo_value is None or attribution_sample_status in {'insufficient_sample', 'unavailable'}:
+                    cpo_color = '#718096'
+                    estimated_cpo_label = 'N/A'
+                else:
+                    cpo_color = '#48bb78' if estimated_cpo_value < fb_cpo else '#f56565'
+                    estimated_cpo_label = f"&#8364;{estimated_cpo_value:.2f}"
                 roas_color = '#48bb78' if camp['estimated_roas'] > 1 else '#f56565'
 
                 html_content += f"""
@@ -2697,8 +2717,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <td class="number">{camp['clicks']:,}</td>
                             <td class="number">{camp['ctr']:.2f}%</td>
                             <td class="number">&#8364;{camp['cpc']:.2f}</td>
-                            <td class="number">{camp['estimated_orders']:.1f}</td>
-                            <td class="number" style="color: {cpo_color}; font-weight: bold;">&#8364;{camp['estimated_cpo']:.2f}</td>
+                            <td class="number">{estimated_orders_label}</td>
+                            <td class="number" style="color: {cpo_color}; font-weight: bold;">{estimated_cpo_label}</td>
                             <td class="number">&#8364;{camp['estimated_revenue']:,.2f}</td>
                             <td class="number" style="color: {roas_color}; font-weight: bold;">{camp['estimated_roas']:.2f}x</td>
                             <td class="number">{camp['click_share_pct']:.1f}%</td>
@@ -8758,8 +8778,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     datasets: [{{
                         label: 'Est. CPO (&#8364;)',
                         data: {json.dumps(camp_cpos)},
-                        backgroundColor: {json.dumps(camp_cpos)}.map(v => v < avgCpo ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
-                        borderColor: {json.dumps(camp_cpos)}.map(v => v < avgCpo ? '#48bb78' : '#f56565'),
+                        backgroundColor: {json.dumps(camp_cpos)}.map(v => v == null ? 'rgba(113, 128, 150, 0.5)' : (v < avgCpo ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)')),
+                        borderColor: {json.dumps(camp_cpos)}.map(v => v == null ? '#718096' : (v < avgCpo ? '#48bb78' : '#f56565')),
                         borderWidth: 1,
                         borderRadius: 5
                     }}]
@@ -8774,6 +8794,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
+                                    if (context.parsed.x == null) return 'Est. CPO: N/A';
                                     return 'Est. CPO: &#8364;' + context.parsed.x.toFixed(2);
                                 }}
                             }}

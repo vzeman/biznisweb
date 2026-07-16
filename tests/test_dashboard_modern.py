@@ -5,6 +5,8 @@ import pandas as pd
 
 from dashboard_modern import (
     _build_fb_daily_payload,
+    _format_attributed_cpa,
+    _format_attributed_order_estimate,
     _frame_rows,
     extract_embedded_dashboard_payload,
     generate_modern_dashboard,
@@ -12,6 +14,12 @@ from dashboard_modern import (
 
 
 class DashboardModernTests(unittest.TestCase):
+    def test_attributed_campaign_values_use_adaptive_precision(self) -> None:
+        self.assertEqual("0.232", _format_attributed_order_estimate(0.232, "estimated"))
+        self.assertEqual("&lt;0.0001", _format_attributed_order_estimate(0, "insufficient_sample"))
+        self.assertEqual("&euro;1.21", _format_attributed_cpa(1.21, "estimated"))
+        self.assertEqual("N/A", _format_attributed_cpa(None, "insufficient_sample"))
+
     def test_fb_daily_payload_zero_fills_missing_report_dates(self) -> None:
         payload = _build_fb_daily_payload(
             datetime(2026, 5, 1),
