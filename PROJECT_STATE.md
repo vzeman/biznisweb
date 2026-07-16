@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -61,7 +61,7 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- VEVO/ROY authoritative 90% product-margin policy deployment is in progress; a post-deploy QA rounding follow-up is implementation-complete (2026-07-15):
+- VEVO/ROY authoritative 90% product-margin policy is deployed and both complete histories are regenerated (2026-07-16):
   - added a strict exact-SKU `authoritative_margin_override_skus` policy that intentionally replaces a mapped purchase cost only for positive net revenue and positive reported quantity; the resolved purchase cost remains exported in `purchase_cost_reference_*` for audit, while zero/negative lines and the ROY zero-revenue knife-gift exception retain their existing economics
   - VEVO contains the exact catalog/reporting identities for the measuring cup, all six Santal car-fragrance variants, all six dryer perfumes, the six floor-perfume parents plus their 10/30 ml option identities, and Pure Harmony cleaner including the directly named 2x/3x bundles; mixed wool-ball bundles remain excluded because they have separate component economics
   - ROY contains the same six Santal identities so the same product has consistent economics across shops; invalid policy values, empty SKUs, broad label matching, and project leakage fail closed or are covered by regression tests
@@ -70,9 +70,19 @@ Bootstrap entrypoints:
   - product-cost QA now records authoritative-policy rows, units, revenue, applied cost/profit, mapped reference cost, policy delta, per-product detail, and the separate `authoritative_margin_90_override` source; the normal 35% missing-cost fallback and known-cost precedence for every non-policy product are unchanged
   - the first VEVO generation `20260715T212920Z` correctly exported `1,056` policy rows / `EUR 3,049.00` revenue / `EUR 304.75` cost / `EUR 2,744.25` product profit and exact row arithmetic, but post-deploy comparison caught that the newly added QA `authoritative_margin_applied_cost` field summed unrounded unit costs as `EUR 304.90`; the follow-up now sums exported `total_expense`, rounds mapped reference totals consistently, and regression-checks both aggregate and per-product QA cost
   - verification: final full suite `176` tests OK, focused boundary/config/rounding tests OK, reporting QA smoke, Python compile, both project JSON parses, and `git diff --check` OK; independent catalog, code, and historical-impact reviews found no P0/P1 after the rounding repair, while their normalization-performance P2 was also fixed with strict duplicate-normalized-SKU rejection and O(1) lookup
-  - pre-deploy hard-gate: account/region `919341186960` / `eu-central-1`, ECS cluster `vevo-reporting-cluster`; Fargate instance/IP `N/A` before a task starts. VEVO schedule/service/task/path is `vevo-daily-report-email` / `biznisweb-vevo-production-board` / `vevo-reporting-daily:17` / `/app` with App Runner `https://2mhmsmgq3m.eu-central-1.awsapprunner.com`; ROY is `roy-daily-report-email` / `biznisweb-roy-operations-dashboard` / `roy-reporting-daily:48` / `/app` with `https://qvfzvh82c3.eu-central-1.awsapprunner.com`
-  - protected current digests are VEVO `sha256:e87751ca04c074f8d5410850fb22e755bd3244c8ccc09d18f71b44b3c2ea1dab` and ROY `sha256:38506ae26d5b490c4d327185062235225a91d8ec0437bdc139d91874bcd4048a`; production mutations must wait for merged code and a new immutable candidate digest
-  - Next exact step: finish independent reviews, merge the implementation PR, build one immutable ECR digest, then run VEVO and ROY full-history backfills sequentially; require each Fargate private IP plus localhost dashboard/artifact markers before scheduler promotion and App Runner/UI verification
+  - implementation and safety chain merged through PRs `#228`-`#233`; the final CPA precision PR `#233` merged as `727843b85dea8dc77323bc445aee0b70c4a8ae4b`, after `183` unit tests, `76` focused tests, reporting QA smoke, compile/config checks, CI, and independent no-P0/P1 review
+  - build run `29462077709` published exact digest `sha256:b98c28673113bbf686a481509cbbfabf18282bbe8fa4ac2cc64b3365df9df5d6`; both schedules, both App Runner services, and all ECR protection now use that digest
+  - VEVO deploy/backfill run `29462210962`: Fargate task `b6fbff5a22344f729b6edac8e07d1e76`, private IP `172.31.32.237`, task definition `vevo-reporting-daily:22`, gate `/app/scripts/live_dashboard_refresh_gate.sh`, localhost dashboard/artifact markers, exit `0`; immutable generation `20260716T010224Z` has `13,112` rows and all 8 manifest hashes/sizes verified
+  - VEVO 90% result: full `1,057` rows / `1,153` units / `EUR 3,049.81` revenue / `EUR 304.83` cost / `EUR 2,744.98` product profit; company revenue/profit is `7d EUR 1,328.57 / 305.03`, `30d EUR 5,549.59 / 225.21`, `90d EUR 22,951.93 / 1,948.66`, full `EUR 118,807.61 / 17,875.88`
+  - VEVO CPA is reconciled in production: Sandbox spend `EUR 0.28`, attributed orders `0.2305`, reported CPA `EUR 1.21`; all periods have zero QA failures, `is_partial=false`, zero credit-note `order_not_found`, exact fulfillment parity, and zero cent/policy mismatches
+  - VEVO scheduler is `ENABLED`, `cron(0 1 * * ? *)`, `Europe/Bratislava`, task definition `:22`; App Runner operation `d96d3543d1af4fb898c77591ac014f8d` succeeded and service `biznisweb-vevo-production-board` is `RUNNING` on the exact digest; health, UI, live API, and all report-period APIs returned HTTP `200`
+  - ROY deploy/backfill run `29463490671`: Fargate task `3cc699a80a3f4d8890b4bd138440888b`, private IP `172.31.34.180`, task definition `roy-reporting-daily:50`, the same gate and exact digest, localhost dashboard/artifact markers, exit `0`; immutable generation `20260716T014642Z` has `5,965` rows and all 8 manifest hashes/sizes verified
+  - ROY 90% Santal-only result: full `5` rows / `7` units / `EUR 65.59` revenue / `EUR 6.56` cost / `EUR 59.03` product profit; uplift versus 35% is `7d +EUR 9.35`, `30d/90d +EUR 14.70`, full `+EUR 36.08`; company revenue/profit is `7d EUR 6,480.93 / 570.63`, `30d EUR 28,783.05 / 3,455.03`, `90d EUR 80,876.80 / 8,963.71`, full `EUR 238,565.15 / 20,490.09`
+  - ROY rule audit: KIRVO is `11` units at exactly `EUR 1.90` net each; Micro SD has canonical `MICRO-SD-64GB` on `42` rows / `53` units at `EUR 3.30` each and no visible legacy hash; `76` zero-revenue knife-gift rows keep zero cost; `IS-Q6L` remains deliberately below cost at `EUR 154.47` revenue / `EUR 185.76` cost / `-EUR 31.29` profit; bundle and 35% sources match the prior healthy baseline
+  - ROY has zero QA failures in every period, `is_partial=false`, zero credit-note `order_not_found`, exact fulfillment parity, and zero cent/policy mismatches; inventory remains `3,276` products / `17,396` units / `160` visible rows / `19` alerts
+  - ROY scheduler is `ENABLED`, `cron(30 1 * * ? *)`, `Europe/Bratislava`, task definition `:50`; App Runner operation `cdc9741d14ac43e8b8fc9036c1608f77` succeeded and service `biznisweb-roy-operations-dashboard` is `RUNNING` on the exact digest; direct health/UI/API checks returned `200`, unauthenticated UI returned `401`, and the workflow verified the preview picking-list PDF plus all report APIs
+  - simultaneous `ecommerce.ardanpreston.com` work remained isolated: these deployments touched only reporting ECR, ECS/Fargate, the VEVO/ROY S3 prefixes, reporting schedules, and the two reporting App Runner services; no ecommerce EC2 instance, service, port, process, or filesystem path was changed
+  - Next exact step: verify the next regular VEVO and ROY scheduled runs stay on `:22` / `:50`, create fresh healthy generations, and send their normal reports; separately optimize ROY to reuse one inventory snapshot across the four period reports and replace the remaining `datetime.utcnow()` deprecation without changing accounting behavior
 
 - VEVO bundle component-cost resolver is deployed and the full reporting history is regenerated (2026-07-15):
   - homogeneous bundle labels with a safe leading multiplier such as `2x` or `2×` now derive purchase cost from one unambiguous known single-product cost; direct SKU/EAN/import/warehouse/title costs always retain precedence, and mixed/gift-like or ambiguous labels fail closed to the configured missing-cost fallback
@@ -4742,7 +4752,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - replacement VEVO rollout run `29458042558` was cancelled before localhost validation, S3 publication, scheduler promotion, or App Runner deployment
   - candidate task `c623dcb99cc443c1a858046546709aac` (`172.31.29.81`, task definition `vevo-reporting-daily:20`) stopped with the explicit reason `Cancelled before publish: period creditnote context P1 fix required`
   - production remained on task definition `:19`, S3 generation `20260715T220511Z`, and healthy digest `sha256:2ac61cc50ae86c9b11052c1a4b2cc9bd2d75c13f2a544c86b8a01ac3bccd7f12`
-- Fix in progress on `codex/reporting-period-creditnote-context`:
+- Fix merged through PR `#232` on `codex/reporting-period-creditnote-context`:
   - each period child now receives deep-copied, range-filtered `excluded_status_orders` and `excluded_orders`
   - credit-note audits separately receive a shared read-only full-history lookup because a credit note created in the selected period can refer to an older order
   - carrier denominators remain explicitly period-scoped; the historical lookup cannot inflate lifecycle, CRM, fulfillment, or carrier-rate denominators
@@ -4752,8 +4762,8 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - full suite: `179` tests passed
   - reporting QA smoke, Python compile, and `git diff --check` passed
   - independent re-review found no remaining P0/P1 issues and marked the change safe to merge
-- Next exact step:
-  - complete the full test/review gates, merge through PR, build one immutable image, regenerate both VEVO and ROY histories, and verify localhost markers before S3/scheduler/App Runner/UI promotion
+- Final status:
+  - deployed in the final VEVO/ROY generations above; all period credit-note audits have `order_not_found=0` and fulfillment parity is exact
 
 ### 2026-07-16 (VEVO attributed CPA release gate and rollback)
 - Release blocker:
@@ -4766,7 +4776,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - scheduler `vevo-daily-report-email` was restored and verified `ENABLED`, `cron(0 1 * * ? *)`, `Europe/Bratislava`, task definition `vevo-reporting-daily:19`
   - App Runner rollback operation `0f1d7cef5e7144e9a22d86c8f82a1c9c` completed `SUCCEEDED`; service `biznisweb-vevo-production-board` is `RUNNING` on healthy digest `sha256:2ac61cc50ae86c9b11052c1a4b2cc9bd2d75c13f2a544c86b8a01ac3bccd7f12` and `/health` returns HTTP `200`
   - immutable generation `20260716T001511Z` remains only as audit evidence and is not the live `latest`
-- Fix prepared on `codex/reporting-attributed-cpa-rounding`:
+- Fix merged through PR `#233` on `codex/reporting-attributed-cpa-rounding`:
   - campaign attribution now serializes attributed orders to four decimals and uses that exact denominator consistently for CPA, estimated revenue, ROAS, QA, and campaign ranking
   - a production-shaped replay of the original campaign row now reports `0.2305` attributed orders and `1.21 EUR` CPA; the deterministic unit fixture reports `0.232` and `1.21 EUR`, and both displayed calculations reconcile without the one-decimal distortion
   - ultra-small estimates that round below `0.0001` are marked `insufficient_sample`, expose CPA as `null`/`N/A`, and raise an explicit QA warning instead of looking like free acquisition
@@ -4776,5 +4786,5 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - focused reporting/dashboard suite: `76` tests OK
   - full unit suite: `183` tests OK
   - reporting QA smoke, Python compile, both project settings JSON parses, and `git diff --check` passed
-- Next exact step:
-  - complete independent re-review, merge through PR, build one immutable image, then rerun the full VEVO hard gate and audit before touching ROY
+- Final status:
+  - deployed in VEVO generation `20260716T010224Z`; 7-day QA is `ok`, all four periods have zero failures, and the production UI/API arithmetic reconciles
