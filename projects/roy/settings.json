@@ -139,6 +139,9 @@
     "shipping_cost_per_order": 0.2
   },
   "realized_revenue": {
+    "missing_payment_metadata_non_realized_order_overrides": {
+      "2677001207": "Verified 2026-07-16: EUR 1 internal trademark-license order; invoice 2677001128 is unpaid, pay_date is null, payments are empty, and its payment form is blank."
+    },
     "paid_statuses": [
       "Platba online - zaplatené"
     ],
