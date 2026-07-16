@@ -1903,6 +1903,7 @@ class BizniWebExporter:
 
         platform_cpa_mismatches = 0
         attributed_cpa_mismatches = 0
+        attributed_cpa_unavailable_rows = 0
         for row in campaign_rows:
             spend = self._safe_float(row.get("spend"))
             platform_conversions = self._safe_float(row.get("platform_conversions", row.get("conversions")))
@@ -1914,9 +1915,19 @@ class BizniWebExporter:
 
             attributed_orders = self._safe_float(row.get("attributed_orders_est"))
             attributed_cpa = self._safe_float(row.get("cost_per_attributed_order"))
+            attribution_sample_status = str(row.get("attribution_sample_status") or "").strip()
             if spend is not None and attributed_orders not in (None, 0):
                 expected = spend / attributed_orders
                 if attributed_cpa is None or abs(expected - attributed_cpa) > 0.05:
+                    attributed_cpa_mismatches += 1
+            elif spend is not None and spend > 0:
+                expected_unavailable = (
+                    attribution_sample_status in {"insufficient_sample", "unavailable"}
+                    and attributed_cpa is None
+                )
+                if expected_unavailable:
+                    attributed_cpa_unavailable_rows += 1
+                else:
                     attributed_cpa_mismatches += 1
 
         if platform_cpa_mismatches > 0:
@@ -1926,6 +1937,10 @@ class BizniWebExporter:
         if attributed_cpa_mismatches > 0:
             failures.append(
                 f"{attributed_cpa_mismatches} campaign row(s) have cost_per_attributed_order that does not match spend/attributed_orders_est."
+            )
+        if attributed_cpa_unavailable_rows > 0:
+            warnings.append(
+                f"{attributed_cpa_unavailable_rows} campaign row(s) have too little attributed-order evidence for a meaningful CPA."
             )
 
         attributed_orders_total = self._safe_float(attribution_summary.get("estimated_orders_total"))
@@ -1971,6 +1986,7 @@ class BizniWebExporter:
             "null_label_rate_pct": null_label_rate_pct,
             "platform_cpa_mismatches": platform_cpa_mismatches,
             "attributed_cpa_mismatches": attributed_cpa_mismatches,
+            "attributed_cpa_unavailable_rows": attributed_cpa_unavailable_rows,
             "attributed_orders_ratio": round(attributed_orders_ratio, 4) if attributed_orders_ratio is not None else None,
             "attributed_orders_tolerance_breached": bool(attributed_orders_ratio is not None and attributed_orders_ratio > 1.05),
             "label_row_total": label_row_total,
@@ -14582,12 +14598,31 @@ class BizniWebExporter:
 
                     # Weighted average (60% clicks, 40% spend as clicks are better signal)
                     estimated_orders = estimated_orders_by_clicks * 0.6 + estimated_orders_by_spend * 0.4
+                    reported_estimated_orders = round(estimated_orders, 4)
+                    if estimated_orders <= 0:
+                        attribution_sample_status = 'unavailable'
+                    elif reported_estimated_orders <= 0:
+                        attribution_sample_status = 'insufficient_sample'
+                    else:
+                        attribution_sample_status = 'estimated'
 
-                    # Calculate estimated CPO for campaign
-                    estimated_cpo = spend / estimated_orders if estimated_orders > 0 else 0
+                    # Four decimals preserve campaign ranking and small positive
+                    # estimates while keeping the serialized denominator and CPA
+                    # arithmetically consistent. Ultra-small estimates are marked
+                    # unavailable instead of appearing as zero-cost acquisition.
+                    estimated_cpo = (
+                        spend / reported_estimated_orders
+                        if reported_estimated_orders > 0
+                        else None
+                    )
 
-                    # Calculate estimated revenue share
-                    revenue_share = estimated_orders / total_orders if total_orders > 0 else 0
+                    # Keep revenue and ROAS on the same serialized attribution
+                    # basis as CPA so every value in one campaign row reconciles.
+                    revenue_share = (
+                        reported_estimated_orders / total_orders
+                        if total_orders > 0
+                        else 0
+                    )
                     estimated_revenue = total_revenue * revenue_share
 
                     # ROAS for campaign
@@ -14601,10 +14636,11 @@ class BizniWebExporter:
                         'impressions': campaign.get('impressions', 0),
                         'ctr': campaign.get('ctr', 0),
                         'cpc': campaign.get('cpc', 0),
-                        'estimated_orders': round(estimated_orders, 1),
-                        'attributed_orders_est': round(estimated_orders, 1),
-                        'estimated_cpo': round(estimated_cpo, 2),
-                        'cost_per_attributed_order': round(estimated_cpo, 2),
+                        'estimated_orders': reported_estimated_orders,
+                        'attributed_orders_est': reported_estimated_orders,
+                        'estimated_cpo': round(estimated_cpo, 2) if estimated_cpo is not None else None,
+                        'cost_per_attributed_order': round(estimated_cpo, 2) if estimated_cpo is not None else None,
+                        'attribution_sample_status': attribution_sample_status,
                         'estimated_revenue': round(estimated_revenue, 2),
                         'estimated_roas': round(estimated_roas, 2),
                         'spend_share_pct': round(spend_share * 100, 1),
@@ -14613,7 +14649,13 @@ class BizniWebExporter:
                     })
 
             # Sort by estimated CPO (best first)
-            campaign_attribution.sort(key=lambda x: x['estimated_cpo'] if x['estimated_cpo'] > 0 else float('inf'))
+            campaign_attribution.sort(
+                key=lambda row: (
+                    row['estimated_cpo']
+                    if row.get('estimated_cpo') is not None and row['estimated_cpo'] > 0
+                    else float('inf')
+                )
+            )
             result['campaign_attribution'] = campaign_attribution
             estimated_orders_total = sum(row['estimated_orders'] for row in campaign_attribution)
             result['campaign_attribution_summary'] = {

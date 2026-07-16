@@ -4754,3 +4754,27 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - independent re-review found no remaining P0/P1 issues and marked the change safe to merge
 - Next exact step:
   - complete the full test/review gates, merge through PR, build one immutable image, regenerate both VEVO and ROY histories, and verify localhost markers before S3/scheduler/App Runner/UI promotion
+
+### 2026-07-16 (VEVO attributed CPA release gate and rollback)
+- Release blocker:
+  - immutable VEVO generation `20260716T001511Z` passed all product-accounting, credit-note, cent-identity, and period-parity audits but its 7-day payload had one critical data assertion
+  - campaign `SK-Sale-VEVO-SandBox-ABO-ACQ` reported spend `0.28 EUR`, attributed orders `0.2`, and CPA `1.21 EUR`; the displayed arithmetic requires `1.40 EUR`
+  - root cause: campaign CPA used the raw attributed-order estimate while the payload exposed the estimate rounded to one decimal place
+- Safety action:
+  - deploy run `29459459581` was cancelled as soon as the P1 was identified
+  - because publication/promotion raced immediately ahead of cancellation, S3 `latest` was restored and byte-validated against healthy generation `20260715T220511Z`
+  - scheduler `vevo-daily-report-email` was restored and verified `ENABLED`, `cron(0 1 * * ? *)`, `Europe/Bratislava`, task definition `vevo-reporting-daily:19`
+  - App Runner rollback operation `0f1d7cef5e7144e9a22d86c8f82a1c9c` completed `SUCCEEDED`; service `biznisweb-vevo-production-board` is `RUNNING` on healthy digest `sha256:2ac61cc50ae86c9b11052c1a4b2cc9bd2d75c13f2a544c86b8a01ac3bccd7f12` and `/health` returns HTTP `200`
+  - immutable generation `20260716T001511Z` remains only as audit evidence and is not the live `latest`
+- Fix prepared on `codex/reporting-attributed-cpa-rounding`:
+  - campaign attribution now serializes attributed orders to four decimals and uses that exact denominator consistently for CPA, estimated revenue, ROAS, QA, and campaign ranking
+  - a production-shaped replay of the original campaign row now reports `0.2305` attributed orders and `1.21 EUR` CPA; the deterministic unit fixture reports `0.232` and `1.21 EUR`, and both displayed calculations reconcile without the one-decimal distortion
+  - ultra-small estimates that round below `0.0001` are marked `insufficient_sample`, expose CPA as `null`/`N/A`, and raise an explicit QA warning instead of looking like free acquisition
+  - modern and legacy dashboard tables use adaptive precision; charts preserve a missing CPA as `null` instead of converting it to zero
+  - boundary regressions cover `0.249/0.251/0.500` ranking, the exact production row, and an ultra-small positive attribution
+- Verification:
+  - focused reporting/dashboard suite: `76` tests OK
+  - full unit suite: `183` tests OK
+  - reporting QA smoke, Python compile, both project settings JSON parses, and `git diff --check` passed
+- Next exact step:
+  - complete independent re-review, merge through PR, build one immutable image, then rerun the full VEVO hard gate and audit before touching ROY

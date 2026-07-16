@@ -81,6 +81,26 @@ def _maybe_num(value: Any) -> Optional[float]:
         return None
 
 
+def _format_attributed_order_estimate(value: Any, sample_status: Any = "") -> str:
+    numeric = _maybe_num(value)
+    status = str(sample_status or "").strip()
+    if status == "insufficient_sample" and (numeric is None or numeric <= 0):
+        return "&lt;0.0001"
+    if numeric is None:
+        return "N/A"
+    if 0 < numeric < 0.0001:
+        return "&lt;0.0001"
+    return f"{numeric:.4f}".rstrip("0").rstrip(".")
+
+
+def _format_attributed_cpa(value: Any, sample_status: Any = "") -> str:
+    numeric = _maybe_num(value)
+    status = str(sample_status or "").strip()
+    if numeric is None or status in {"insufficient_sample", "unavailable"}:
+        return "N/A"
+    return f"&euro;{numeric:,.2f}"
+
+
 def _json_default(value: Any) -> Any:
     if isinstance(value, (date, datetime)):
         return value.isoformat()
@@ -1088,7 +1108,7 @@ def generate_modern_dashboard(
 
     cpo_daily = _frame_rows(_to_frame((cost_per_order or {}).get("daily_cpo")), ["date", "orders", "fb_spend", "revenue", "cpo", "roas"], limit=120)
     weekly_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("weekly_cpo")), ["week_start", "orders", "fb_spend", "cpo"], limit=60)
-    campaign_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("campaign_attribution")), ["campaign_name", "spend", "attributed_orders_est", "estimated_orders", "cost_per_attributed_order", "estimated_cpo", "estimated_revenue", "estimated_roas", "attribution_method"], limit=12)
+    campaign_cpo = _frame_rows(_to_frame((cost_per_order or {}).get("campaign_attribution")), ["campaign_name", "spend", "attributed_orders_est", "estimated_orders", "cost_per_attributed_order", "estimated_cpo", "estimated_revenue", "estimated_roas", "attribution_method", "attribution_sample_status"], limit=12)
     hourly_orders = _frame_rows(_to_frame((cost_per_order or {}).get("hourly_orders")), ["hour", "orders", "revenue"], limit=24)
     fb_hourly_payload = _frame_rows(_to_frame(fb_hourly_stats), ["hour", "spend", "clicks", "impressions", "ctr", "cpc"], limit=24)
     fb_dow_payload = _frame_rows(_to_frame(fb_dow_stats), ["day_of_week", "total_spend", "total_clicks", "ctr", "cpc", "cpm"], limit=7)
@@ -3452,7 +3472,7 @@ def generate_modern_dashboard(
         for row in fb_campaign_rows
     ) or '<tr><td colspan="6"><span class="lang-en">No campaign data available.</span><span class="lang-sk hidden">Kampaňové dáta nie sú dostupné.</span></td></tr>'
     campaign_cpo_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_num(row.get('attributed_orders_est', row.get('estimated_orders'))):.1f}</td><td>€{_num(row.get('cost_per_attributed_order', row.get('estimated_cpo'))):,.2f}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>"
+        f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_format_attributed_order_estimate(row.get('attributed_orders_est', row.get('estimated_orders')), row.get('attribution_sample_status'))}</td><td>{_format_attributed_cpa(row.get('cost_per_attributed_order', row.get('estimated_cpo')), row.get('attribution_sample_status'))}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>"
         for row in campaign_cpo
     ) or '<tr><td colspan="6"><span class="lang-en">No campaign attribution data available.</span><span class="lang-sk hidden">Atribucne data kampani nie su dostupne.</span></td></tr>'
 
@@ -6212,7 +6232,7 @@ def generate_modern_dashboard(
                     data: {{
                         labels: DATA.campaign_cpo.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
                         datasets: [
-                            {{ type: 'bar', label: 'Estimated CPO', data: DATA.campaign_cpo.map(x => Number(x.estimated_cpo || 0)), backgroundColor: 'rgba(255,138,31,.65)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Estimated CPO', data: DATA.campaign_cpo.map(x => x.estimated_cpo == null ? null : Number(x.estimated_cpo)), backgroundColor: 'rgba(255,138,31,.65)', borderRadius: 8, yAxisID: 'y' }},
                             {{ type: 'line', label: 'Estimated ROAS', data: DATA.campaign_cpo.map(x => Number(x.estimated_roas || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                             {{ type: 'line', label: 'Spend', data: DATA.campaign_cpo.map(x => Number(x.spend || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
                         ],
@@ -7806,7 +7826,7 @@ def generate_modern_dashboard(
                     type: 'bar',
                     data: {{
                         labels: DATA.campaign_cpo.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
-                        datasets: [{{ label: 'Estimated CPO', data: DATA.campaign_cpo.map(x => Number(x.estimated_cpo || 0)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
+                        datasets: [{{ label: 'Estimated CPO', data: DATA.campaign_cpo.map(x => x.estimated_cpo == null ? null : Number(x.estimated_cpo)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
                     }},
                     options: horizontalBarOptions(),
                 }});
