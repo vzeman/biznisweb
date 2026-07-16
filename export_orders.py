@@ -711,6 +711,9 @@ class BizniWebExporter:
         self.artifact_subdir = normalized_subdir
         self.enable_period_bundle = enable_period_bundle
         self.project_settings = load_project_settings(project_name)
+        self.zero_revenue_gift_product_skus = self._resolve_exact_product_sku_setting(
+            "zero_revenue_gift_product_skus"
+        )
         self.reporting_defaults = resolve_reporting_defaults(project_name, self.project_settings)
         self.realized_revenue_settings = self._resolve_realized_revenue_settings()
         self.project_root_dir = Path("data") / project_name
@@ -801,6 +804,27 @@ class BizniWebExporter:
         if not self.output_tag:
             return path
         return path.with_name(f"{path.stem}__{self.output_tag}{path.suffix}")
+
+    def _resolve_exact_product_sku_setting(self, setting_name: str) -> frozenset[str]:
+        """Load a project SKU allowlist and fail closed on malformed configuration."""
+        raw_values = self.project_settings.get(setting_name, [])
+        if raw_values is None:
+            raw_values = []
+        if not isinstance(raw_values, list):
+            raise ValueError(f"{setting_name} must be a JSON list of exact product SKUs")
+
+        normalized_values: List[str] = []
+        for index, raw_value in enumerate(raw_values):
+            if not isinstance(raw_value, str):
+                raise ValueError(f"{setting_name}[{index}] must be a non-empty string")
+            normalized_value = self._normalize_product_identifier(raw_value)
+            if not normalized_value:
+                raise ValueError(f"{setting_name}[{index}] must be a non-empty product SKU")
+            normalized_values.append(normalized_value)
+
+        if len(normalized_values) != len(set(normalized_values)):
+            raise ValueError(f"{setting_name} contains duplicate normalized product SKUs")
+        return frozenset(normalized_values)
 
     @staticmethod
     def _history_float(value: Any, default: float = 0.0) -> float:
@@ -3591,21 +3615,6 @@ class BizniWebExporter:
         return False
 
     @classmethod
-    def _matches_token_phrase_patterns(cls, label: str, patterns: List[str]) -> bool:
-        """Match normalized phrases on token boundaries, not inside words such as noznice."""
-        if not label or not patterns:
-            return False
-        normalized_label = cls._normalize_match_text(label)
-        for pattern in patterns:
-            normalized_pattern = cls._normalize_match_text(pattern)
-            if normalized_pattern and re.search(
-                rf"(?:^| ){re.escape(normalized_pattern)}(?: |$)",
-                normalized_label,
-            ):
-                return True
-        return False
-
-    @classmethod
     def _margin_override_pct_for_label(cls, label: str) -> Optional[float]:
         if not label:
             return None
@@ -5937,7 +5946,8 @@ class BizniWebExporter:
 
                 # A mapped purchase cost is the default accounting source of truth. Legacy
                 # margin/zero-cost rules are fallback assumptions only. Two explicit policies may
-                # replace it: a configured ROY knife genuinely sold for zero as an order gift, and
+                # replace it: an explicitly allowlisted ROY product genuinely sold for zero as an
+                # order gift, and
                 # an exact-SKU authoritative margin policy on positive-revenue product lines.
                 # Reference columns retain the resolved purchase cost for auditability.
                 force_zero_cost = False
@@ -5969,14 +5979,12 @@ class BizniWebExporter:
                     has_positive_reported_quantity = float(reported_item_quantity) > 0.0
                 except (TypeError, ValueError):
                     has_positive_reported_quantity = False
-                zero_revenue_gift_patterns = list(
-                    (self.project_settings or {}).get("zero_revenue_gift_label_patterns") or []
-                )
+                normalized_product_sku = self._normalize_product_identifier(product_sku)
                 is_zero_revenue_gift_exception = (
                     is_zero_revenue_line
                     and self.project_name == "roy"
-                    and bool(zero_revenue_gift_patterns)
-                    and self._matches_token_phrase_patterns(item_label, zero_revenue_gift_patterns)
+                    and has_positive_reported_quantity
+                    and normalized_product_sku in self.zero_revenue_gift_product_skus
                 )
                 authoritative_margin_applied = False
                 if is_zero_revenue_gift_exception:

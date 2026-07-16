@@ -1030,6 +1030,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
     def test_authoritative_margin_policy_stays_below_roy_zero_revenue_gift_exception(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["GIFT-KNIFE-AUTH"] = 80.0
+        exporter.zero_revenue_gift_product_skus = frozenset({"GIFT-KNIFE-AUTH"})
 
         with patch(
             "export_orders.AUTHORITATIVE_MARGIN_OVERRIDE_SKUS", {"GIFT-KNIFE-AUTH": 90.0}
@@ -1198,6 +1199,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
     def test_zero_revenue_gift_is_the_only_mapped_cost_exception(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["GIFT-KNIFE"] = 80.0
+        exporter.zero_revenue_gift_product_skus = frozenset({"GIFT-KNIFE"})
 
         rows = exporter.flatten_order(
             {
@@ -1225,6 +1227,159 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(0.0, rows[0]["profit_before_ads"])
         self.assertEqual(80.0, rows[0]["purchase_cost_reference_per_item"])
         self.assertEqual("mapped_product_identifier", rows[0]["purchase_cost_reference_source"])
+
+    def test_roy_zero_revenue_gifts_are_limited_to_three_exact_product_skus(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        self.assertEqual(
+            frozenset({"R99003", "11004", "11001"}),
+            exporter.zero_revenue_gift_product_skus,
+        )
+        settings_path = Path(__file__).resolve().parents[1] / "projects" / "roy" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        runtime = load_project_runtime(
+            "roy",
+            settings=settings,
+            default_packaging_cost_per_order=0.0,
+            default_shipping_subsidy_per_order=0.0,
+            default_fixed_monthly_cost=0.0,
+            default_fixed_daily_cost=0.0,
+        )
+        self.assertEqual([], runtime.exclude_zero_price_label_patterns)
+        exporter.product_expenses_exact.update(
+            {"R99003": 16.58, "11004": 4.17, "11001": 4.0, "OTHER-ROY-KNIFE": 9.0}
+        )
+
+        rows = exporter.flatten_order(
+            {
+                "id": "1",
+                "order_num": "R-EXACT-ZERO-EUR-GIFTS",
+                "pur_date": "2026-07-16 10:00:00",
+                "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                "customer": {"email": "a@example.com"},
+                "items": [
+                    {
+                        "item_label": "Sada nožov Roy 3-dielna Lux",
+                        "import_code": "R99003",
+                        "quantity": 1,
+                        "tax_rate": 23,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    },
+                    {
+                        "item_label": "Roy Hunter Knife 11004",
+                        "import_code": "11004",
+                        "quantity": 1,
+                        "tax_rate": 23,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    },
+                    {
+                        "item_label": "Roy Hunter Knife 11001",
+                        "import_code": "11001",
+                        "quantity": 1,
+                        "tax_rate": 23,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    },
+                    {
+                        "item_label": "Handmade Roy knife N05",
+                        "import_code": "OTHER-ROY-KNIFE",
+                        "quantity": 1,
+                        "tax_rate": 23,
+                        "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                        "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(
+            ["R99003", "11004", "11001", "OTHER-ROY-KNIFE"],
+            [row["product_sku"] for row in rows],
+        )
+        self.assertEqual(
+            [
+                "zero_revenue_gift_mapped_cost",
+                "zero_revenue_gift_mapped_cost",
+                "zero_revenue_gift_mapped_cost",
+                "mapped_product_identifier",
+            ],
+            [row["expense_source"] for row in rows],
+        )
+        self.assertEqual([0.0, 0.0, 0.0, 9.0], [row["total_expense"] for row in rows])
+
+    def test_roy_gift_cost_exception_is_applied_per_line_for_each_allowlisted_sku(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        cases = (
+            ("R99003", "Sada nožov Roy 3-dielna Lux", 16.58),
+            ("11004", "Roy Hunter Knife 11004", 4.17),
+            ("11001", "Roy Hunter Knife 11001", 4.0),
+        )
+        exporter.product_expenses_exact.update({sku: cost for sku, _label, cost in cases})
+
+        for sku, label, cost in cases:
+            with self.subTest(sku=sku):
+                rows = exporter.flatten_order(
+                    {
+                        "id": "1",
+                        "order_num": f"R-MIXED-{sku}",
+                        "pur_date": "2026-07-16 10:00:00",
+                        "sum": {"value": 24.6, "currency": {"code": "EUR"}},
+                        "customer": {"email": "a@example.com"},
+                        "items": [
+                            {
+                                "item_label": label,
+                                "import_code": sku,
+                                "quantity": 1,
+                                "tax_rate": 23,
+                                "price": {"value": 0.0, "currency": {"code": "EUR"}},
+                                "sum": {"value": 0.0, "currency": {"code": "EUR"}},
+                                "sum_with_tax": {"value": 0.0, "currency": {"code": "EUR"}},
+                            },
+                            {
+                                "item_label": label,
+                                "import_code": sku,
+                                "quantity": 2,
+                                "tax_rate": 23,
+                                "price": {"value": 10.0, "currency": {"code": "EUR"}},
+                                "sum": {"value": 20.0, "currency": {"code": "EUR"}},
+                                "sum_with_tax": {"value": 24.6, "currency": {"code": "EUR"}},
+                            },
+                        ],
+                    }
+                )
+
+                self.assertEqual(
+                    ["zero_revenue_gift_mapped_cost", "mapped_product_identifier"],
+                    [row["expense_source"] for row in rows],
+                )
+                self.assertEqual([0.0, round(cost * 2, 2)], [row["total_expense"] for row in rows])
+                self.assertEqual(0.0, rows[0]["profit_before_ads"])
+                self.assertEqual(round(20.0 - (cost * 2), 2), rows[1]["profit_before_ads"])
+
+    def test_zero_revenue_gift_sku_configuration_rejects_malformed_values(self) -> None:
+        invalid_values = (
+            "11001",
+            [""],
+            [11001],
+            ["11001", "11001"],
+            ["gift-sku", "GIFT-SKU"],
+        )
+
+        for invalid_value in invalid_values:
+            with (
+                self.subTest(invalid_value=invalid_value),
+                patch(
+                    "export_orders.load_project_settings",
+                    return_value={"zero_revenue_gift_product_skus": invalid_value},
+                ),
+                self.assertRaises(ValueError),
+            ):
+                make_exporter(project_name="roy")
 
     def test_vevo_zero_revenue_rows_keep_known_purchase_costs(self) -> None:
         exporter = make_exporter(project_name="vevo")
