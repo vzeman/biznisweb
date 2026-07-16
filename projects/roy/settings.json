@@ -82,13 +82,10 @@
     "H-8D019D16": 90,
     "H-52688CE6": 90
   },
-  "zero_revenue_gift_label_patterns": [
-    "sada nozov lux",
-    "sada nozov roy",
-    "roy noz",
-    "noz roy",
-    "roy knife",
-    "handmade roy knife"
+  "zero_revenue_gift_product_skus": [
+    "R99003",
+    "11004",
+    "11001"
   ],
   "invoice_generation": {
     "enabled": true,
@@ -506,9 +503,6 @@
       "chart_min_orders": 3
     }
   },
-  "exclude_zero_price_label_patterns": [
-    "Roy Hunter Knife 11004"
-  ],
   "margin_override_brands": {
     "Opinel": 35,
     "Morakniv": 35,
@@ -613,7 +607,6 @@
   ],
   "zero_cost_label_patterns": [
     "Roy Survival Axe 22001",
-    "Sada nožov Roy 3-dielna Lux",
     "Bighorn KANADA 3310 (44)",
     "Atrapa fotopascí",
     "Handmade Roy knife N05",
