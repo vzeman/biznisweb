@@ -229,6 +229,16 @@ jobs:
           print(settings["report_schedule"]["schedule_name"])
           PY
           )"
+          EXPECTED_SCHEDULER_ROLE_NAME="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings_path = pathlib.Path("projects") / project / "settings.json"
+          settings = json.loads(settings_path.read_text(encoding="utf-8"))
+          print(settings["report_schedule"]["scheduler_role_name"])
+          PY
+          )"
           CONFIGURED_AUTH_USER="$(python - "${PROJECT}" <<'PY'
           import json
           import pathlib
@@ -260,6 +270,7 @@ jobs:
             exit 1
           fi
           CURRENT_SCHEDULE_TASK_DEFINITION_ARN="${TASK_DEFINITION_ARN}"
+          CURRENT_SCHEDULE_LAST_MODIFICATION_DATE="$(python -c 'import json; print(json.load(open("schedule.json", encoding="utf-8"))["LastModificationDate"])')"
           aws ecs describe-task-definition \
             --task-definition "${TASK_DEFINITION_ARN}" \
             --region "${AWS_REGION}" > task-definition.json
@@ -935,6 +946,88 @@ jobs:
               f"inventory_rows={len(inventory.get('inventory_rows') or [])}"
           )
           PY
+            aws scheduler get-schedule \
+              --name "${REPORT_SCHEDULE_NAME}" \
+              --region "${AWS_REGION}" > schedule-runtime-current.json
+            aws iam get-role \
+              --role-name "${EXPECTED_SCHEDULER_ROLE_NAME}" \
+              --output json > reporting-scheduler-role.json
+            python scripts/reporting_scheduler_passrole.py \
+              --schedule-json schedule-runtime-current.json \
+              --task-definition-json task-definition.json \
+              --scheduler-role-json reporting-scheduler-role.json \
+              --project-task-role-arn "${PROJECT_TASK_ROLE_ARN}" \
+              --account-id "${ACCOUNT_ID}" \
+              --expected-scheduler-role-name "${EXPECTED_SCHEDULER_ROLE_NAME}" \
+              --policy-output reporting-scheduler-passrole-policy.json \
+              --metadata-output reporting-scheduler-passrole-metadata.json
+            SCHEDULER_ROLE_NAME="$(python -c 'import json; print(json.load(open("reporting-scheduler-passrole-metadata.json", encoding="utf-8"))["scheduler_role_name"])')"
+            SCHEDULER_ROLE_ARN="$(python -c 'import json; print(json.load(open("reporting-scheduler-passrole-metadata.json", encoding="utf-8"))["scheduler_role_arn"])')"
+            PROJECT_EXECUTION_ROLE_ARN="$(python -c 'import json; print(json.load(open("reporting-scheduler-passrole-metadata.json", encoding="utf-8"))["execution_role_arn"])')"
+            SCHEDULER_PASSROLE_POLICY_NAME="ReportingSchedulePassRole-${PROJECT}"
+            aws iam put-role-policy \
+              --role-name "${SCHEDULER_ROLE_NAME}" \
+              --policy-name "${SCHEDULER_PASSROLE_POLICY_NAME}" \
+              --policy-document file://reporting-scheduler-passrole-policy.json
+            aws iam get-role-policy \
+              --role-name "${SCHEDULER_ROLE_NAME}" \
+              --policy-name "${SCHEDULER_PASSROLE_POLICY_NAME}" \
+              --query PolicyDocument \
+              --output json > reporting-scheduler-passrole-installed.json
+            python - <<'PY'
+          import json
+
+          desired = json.load(open("reporting-scheduler-passrole-policy.json", encoding="utf-8"))
+          installed = json.load(open("reporting-scheduler-passrole-installed.json", encoding="utf-8"))
+          if installed != desired:
+              raise SystemExit("Installed reporting scheduler PassRole policy does not match the desired policy")
+          PY
+            PASSROLE_SIMULATION_READY=false
+            for _ in $(seq 1 12); do
+              if aws iam simulate-principal-policy \
+                --policy-source-arn "${SCHEDULER_ROLE_ARN}" \
+                --action-names iam:PassRole \
+                --resource-arns "${PROJECT_TASK_ROLE_ARN}" "${PROJECT_EXECUTION_ROLE_ARN}" \
+                --context-entries ContextKeyName=iam:PassedToService,ContextKeyValues=ecs-tasks.amazonaws.com,ContextKeyType=string \
+                --output json > reporting-scheduler-passrole-simulation.json \
+                && python - <<'PY'
+          import json
+
+          results = json.load(open("reporting-scheduler-passrole-simulation.json", encoding="utf-8")).get("EvaluationResults") or []
+          if len(results) != 2 or any(result.get("EvalDecision") != "allowed" for result in results):
+              raise SystemExit(1)
+          PY
+              then
+                PASSROLE_SIMULATION_READY=true
+                break
+              fi
+              sleep 5
+            done
+            if [[ "${PASSROLE_SIMULATION_READY}" != "true" ]]; then
+              cat reporting-scheduler-passrole-simulation.json >&2 || true
+              echo "Scheduler PassRole policy did not become effective in time." >&2
+              exit 1
+            fi
+            aws scheduler get-schedule \
+              --name "${REPORT_SCHEDULE_NAME}" \
+              --region "${AWS_REGION}" > schedule-passrole-verified.json
+            PASSROLE_VERIFIED_TASK_DEFINITION_ARN="$(python -c 'import json; schedule = json.load(open("schedule-passrole-verified.json", encoding="utf-8")); print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])')"
+            PASSROLE_VERIFIED_SCHEDULER_ROLE_ARN="$(python -c 'import json; schedule = json.load(open("schedule-passrole-verified.json", encoding="utf-8")); print(schedule["Target"]["RoleArn"])')"
+            PASSROLE_VERIFIED_LAST_MODIFICATION_DATE="$(python -c 'import json; print(json.load(open("schedule-passrole-verified.json", encoding="utf-8"))["LastModificationDate"])')"
+            if [[ "${PASSROLE_VERIFIED_TASK_DEFINITION_ARN}" != "${CURRENT_SCHEDULE_TASK_DEFINITION_ARN}" ]]; then
+              echo "Schedule ${REPORT_SCHEDULE_NAME} drifted from ${CURRENT_SCHEDULE_TASK_DEFINITION_ARN} to ${PASSROLE_VERIFIED_TASK_DEFINITION_ARN} while repairing PassRole; refusing to continue." >&2
+              exit 1
+            fi
+            if [[ "${PASSROLE_VERIFIED_SCHEDULER_ROLE_ARN}" != "${SCHEDULER_ROLE_ARN}" ]]; then
+              echo "Schedule ${REPORT_SCHEDULE_NAME} role drifted from ${SCHEDULER_ROLE_ARN} to ${PASSROLE_VERIFIED_SCHEDULER_ROLE_ARN} while repairing PassRole; refusing to continue." >&2
+              exit 1
+            fi
+            if [[ "${PASSROLE_VERIFIED_LAST_MODIFICATION_DATE}" != "${CURRENT_SCHEDULE_LAST_MODIFICATION_DATE}" ]]; then
+              echo "Schedule ${REPORT_SCHEDULE_NAME} changed during PassRole repair (${CURRENT_SCHEDULE_LAST_MODIFICATION_DATE} -> ${PASSROLE_VERIFIED_LAST_MODIFICATION_DATE}); refusing to continue." >&2
+              exit 1
+            fi
+            echo "REPORTING_SCHEDULER_PASSROLE_READY:${REPORT_SCHEDULE_NAME}:${SCHEDULER_ROLE_NAME}:${PROJECT_TASK_ROLE_ARN}"
+
             if [[ "${SKIP_ARTIFACT_REFRESH:-false}" == "true" && "${NEEDS_REPORT_TASK_UPDATE}" == "true" ]]; then
               echo "REPORT_SCHEDULE_PROMOTION_SKIPPED:${REPORT_SCHEDULE_NAME}:${TASK_DEFINITION_ARN}:skip_artifact_refresh=true"
             elif [[ "${NEEDS_REPORT_TASK_UPDATE}" == "true" ]]; then
@@ -942,8 +1035,18 @@ jobs:
                 --name "${REPORT_SCHEDULE_NAME}" \
                 --region "${AWS_REGION}" > schedule-promotion-current.json
               PROMOTION_SOURCE_TASK_DEFINITION_ARN="$(python -c 'import json; schedule = json.load(open("schedule-promotion-current.json", encoding="utf-8")); print(schedule["Target"]["EcsParameters"]["TaskDefinitionArn"])')"
+              PROMOTION_SOURCE_SCHEDULER_ROLE_ARN="$(python -c 'import json; schedule = json.load(open("schedule-promotion-current.json", encoding="utf-8")); print(schedule["Target"]["RoleArn"])')"
+              PROMOTION_SOURCE_LAST_MODIFICATION_DATE="$(python -c 'import json; print(json.load(open("schedule-promotion-current.json", encoding="utf-8"))["LastModificationDate"])')"
               if [[ "${PROMOTION_SOURCE_TASK_DEFINITION_ARN}" != "${CURRENT_SCHEDULE_TASK_DEFINITION_ARN}" ]]; then
                 echo "Schedule ${REPORT_SCHEDULE_NAME} drifted from ${CURRENT_SCHEDULE_TASK_DEFINITION_ARN} to ${PROMOTION_SOURCE_TASK_DEFINITION_ARN}; refusing to overwrite concurrent infrastructure changes." >&2
+                exit 1
+              fi
+              if [[ "${PROMOTION_SOURCE_SCHEDULER_ROLE_ARN}" != "${SCHEDULER_ROLE_ARN}" ]]; then
+                echo "Schedule ${REPORT_SCHEDULE_NAME} role drifted from ${SCHEDULER_ROLE_ARN} to ${PROMOTION_SOURCE_SCHEDULER_ROLE_ARN}; refusing to promote with stale PassRole permissions." >&2
+                exit 1
+              fi
+              if [[ "${PROMOTION_SOURCE_LAST_MODIFICATION_DATE}" != "${CURRENT_SCHEDULE_LAST_MODIFICATION_DATE}" ]]; then
+                echo "Schedule ${REPORT_SCHEDULE_NAME} changed during deployment (${CURRENT_SCHEDULE_LAST_MODIFICATION_DATE} -> ${PROMOTION_SOURCE_LAST_MODIFICATION_DATE}); refusing to overwrite concurrent infrastructure changes." >&2
                 exit 1
               fi
               mv schedule-promotion-current.json schedule.json
