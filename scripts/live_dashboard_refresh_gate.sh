@@ -176,6 +176,34 @@ assert series.get("dates"), "KPI source series dates missing in generated payloa
 if project == "roy":
     assert inventory.get("summary"), "Operations inventory summary missing in generated payload"
     assert inventory.get("inventory_rows"), "Operations inventory rows missing in generated payload"
+    inventory_summary = inventory.get("summary") or {}
+    expected_model_version = "order-aware-tsb-v1"
+    assert inventory_summary.get("demand_model_version") == expected_model_version, (
+        "Unexpected ROY demand model version: "
+        f"{inventory_summary.get('demand_model_version')!r}"
+    )
+    required_smart_fields = {
+        "raw_recent_30d_units",
+        "raw_alert_30d_units",
+        "alert_30d_units",
+        "demand_model",
+        "demand_model_version",
+        "demand_confidence",
+        "alert_reason_code",
+        "alert_reason_label_sk",
+    }
+    invalid_inventory_rows = []
+    for row in inventory.get("inventory_rows") or []:
+        if not isinstance(row, dict):
+            invalid_inventory_rows.append({"sku": None, "missing": ["row_not_object"]})
+            continue
+        missing = sorted(required_smart_fields - set(row))
+        if missing:
+            invalid_inventory_rows.append({"sku": row.get("sku"), "missing": missing})
+    assert not invalid_inventory_rows, (
+        "Smart inventory fields missing: "
+        f"{invalid_inventory_rows[:5]}"
+    )
 invalid_loss_rows = []
 for row in commercial.get("loss_product_rows") or []:
     if not isinstance(row, dict):
@@ -201,6 +229,8 @@ marker = {
     "kpi_series_days": len(series.get("dates") or []),
     "inventory_alerts": (inventory.get("summary") or {}).get("alert_delivery_count"),
     "inventory_rows": len(inventory.get("inventory_rows") or []),
+    "demand_model_version": (inventory.get("summary") or {}).get("demand_model_version"),
+    "demand_anomalies": len(inventory.get("demand_anomaly_rows") or []),
 }
 (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
 PY

@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,15 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY order-aware smart inventory alerts are implemented and locally verified on branch `codex/roy-smart-inventory-alerts`; production deployment is pending (2026-07-17):
+  - replenishment demand now aggregates by SKU and order before forecasting, preserves raw physical sales, caps an unconfirmed large order only in the recurring-demand copy, and leaves the real stock reduction untouched
+  - slow/intermittent SKUs use a TSB occurrence × robust order-size baseline; regular SKUs use a robust 30/90/180-day blend; three large orders across at least two weeks establish a repeat pattern, while ordinary acceleration requires the configured 2-of-3 daily-run persistence state
+  - products with less than 90 days of observed history retain the exact legacy demand floor; zero/negative stock remains an immediate state alert even when the triggering order is classified as one-off
+  - replenishment rows now expose raw demand, adjusted baseline, model/confidence, anomaly adjustment, lead-time stockout probability, service level, and a distinct alert reason; one-off orders also appear in a separate informational collection and live UI table
+  - model/version marker `order-aware-tsb-v1` and required raw/adjusted/reason fields are enforced in the host refresh gate, S3 promotion gate, and authenticated App Runner API/UI gate; the ECR workflow now runs the model and dashboard serialization tests
+  - verification completed locally: the exact reported regression (`1 + 1 + 1` historical units followed by one 40-unit order) changes from a raw `>=40`-unit alert basis to a TSB baseline below `5` units and no false restock alert with 20 units on hand; the same case with zero stock remains `Out of stock` with reason `low_stock_after_large_order`; all `220` CI-equivalent tests, Python compile, settings JSON validation, Bash syntax, and `git diff --check` pass
+  - Next exact step: commit and push the branch, open and merge a reviewed PR, require the exact merge-image build digest, then dispatch `Deploy Live Dashboard App Runner` for `project=roy`; promote only after the Fargate task/IP/service/path hard gate, localhost marker, immutable S3 marker, successful App Runner operation, and authenticated UI/API confirmation of `order-aware-tsb-v1`
 
 - Monthly ROY+VEVO accounting delivery is deployed, recovered, and proven with a real SES send (2026-07-16):
   - root cause of the missed `2026-07-14 06:00 Europe/Bratislava` delivery was an unrecoverable ECR reference: Scheduler did invoke task `95a2e43841c4408d94f02fa8b54b5d23` on task definition `monthly-creditnote-export:12`, but its digest had lost all tags and the repository's seven-day untagged-image lifecycle deleted it; no application log stream or SES attempt was created

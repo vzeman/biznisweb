@@ -922,6 +922,31 @@ jobs:
           if project == "roy":
               assert inventory.get("summary"), "S3 operations inventory summary missing"
               assert inventory.get("inventory_rows"), "S3 operations inventory rows missing"
+              summary = inventory.get("summary") or {}
+              assert summary.get("demand_model_version") == "order-aware-tsb-v1", (
+                  f"Unexpected S3 demand model version: {summary.get('demand_model_version')!r}"
+              )
+              required_smart_fields = {
+                  "raw_recent_30d_units",
+                  "raw_alert_30d_units",
+                  "alert_30d_units",
+                  "demand_model",
+                  "demand_model_version",
+                  "demand_confidence",
+                  "alert_reason_code",
+                  "alert_reason_label_sk",
+              }
+              invalid_inventory_rows = []
+              for row in inventory.get("inventory_rows") or []:
+                  if not isinstance(row, dict):
+                      invalid_inventory_rows.append({"sku": None, "missing": ["row_not_object"]})
+                      continue
+                  missing = sorted(required_smart_fields - set(row))
+                  if missing:
+                      invalid_inventory_rows.append({"sku": row.get("sku"), "missing": missing})
+              assert not invalid_inventory_rows, (
+                  f"S3 smart inventory fields missing: {invalid_inventory_rows[:5]}"
+              )
           invalid_loss_rows = []
           for row in commercial.get("loss_product_rows") or []:
               if not isinstance(row, dict):
@@ -943,7 +968,9 @@ jobs:
               f"{marker_name}:"
               f"kpi_series_days={len(series.get('dates') or [])}:"
               f"inventory_alerts={(inventory.get('summary') or {}).get('alert_delivery_count')}:"
-              f"inventory_rows={len(inventory.get('inventory_rows') or [])}"
+              f"inventory_rows={len(inventory.get('inventory_rows') or [])}:"
+              f"demand_model={(inventory.get('summary') or {}).get('demand_model_version')}:"
+              f"demand_anomalies={len(inventory.get('demand_anomaly_rows') or [])}"
           )
           PY
             aws scheduler get-schedule \
@@ -1497,7 +1524,35 @@ jobs:
           assert len(api["executive_kpis"].get("months") or []) > 0, "Calendar KPI months missing"
           assert api["inventory"].get("summary"), "Inventory summary missing"
           assert api["inventory"].get("inventory_rows"), "Inventory rows missing"
+          inventory_summary = api["inventory"].get("summary") or {}
+          assert inventory_summary.get("demand_model_version") == "order-aware-tsb-v1", (
+              f"Unexpected live demand model version: {inventory_summary.get('demand_model_version')!r}"
+          )
+          assert "demand_anomaly_rows" in api["inventory"], "Demand anomaly rows missing"
+          required_smart_fields = {
+              "raw_recent_30d_units",
+              "raw_alert_30d_units",
+              "alert_30d_units",
+              "demand_model",
+              "demand_model_version",
+              "demand_confidence",
+              "alert_reason_code",
+              "alert_reason_label_sk",
+          }
+          invalid_inventory_rows = []
+          for row in api["inventory"].get("inventory_rows") or []:
+              if not isinstance(row, dict):
+                  invalid_inventory_rows.append({"sku": None, "missing": ["row_not_object"]})
+                  continue
+              missing = sorted(required_smart_fields - set(row))
+              if missing:
+                  invalid_inventory_rows.append({"sku": row.get("sku"), "missing": missing})
+          assert not invalid_inventory_rows, (
+              f"Live smart inventory fields missing: {invalid_inventory_rows[:5]}"
+          )
           assert "/api/operations/roy/picking-lists.pdf" in html, "Picking-list PDF link missing"
+          assert "Raw → baseline" in html, "Smart demand comparison missing in live UI"
+          assert "Neobvykle veľké objednávky" in html, "Demand anomaly panel missing in live UI"
           assert pdf.startswith(b"%PDF-"), "Picking-list download is not a PDF"
           assert len(pdf) > 1000, "Picking-list PDF is unexpectedly small"
           assert "application/pdf" in headers.lower(), "Picking-list content type missing"
@@ -1526,6 +1581,8 @@ jobs:
               f"personal_pickups={api['orders']['summary'].get('personal_pickups')}:"
               f"inventory_alerts={api['inventory']['summary'].get('alert_delivery_count')}:"
               f"inventory_rows={len(api['inventory'].get('inventory_rows') or [])}:"
+              f"demand_model={inventory_summary.get('demand_model_version')}:"
+              f"demand_anomalies={len(api['inventory'].get('demand_anomaly_rows') or [])}:"
               f"kpi_months={len(api['executive_kpis'].get('months') or [])}:"
               f"gross_loss_products={len((api.get('performance') or {}).get('loss_product_rows') or [])}:"
               f"picking_pdf_bytes={os.path.getsize('/tmp/roy-picking-lists.pdf')}"

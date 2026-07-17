@@ -680,6 +680,10 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Osobné odbery", html)
         self.assertIn("visibleInventoryAlertLimit = 100", html)
         self.assertIn("visibleInventoryLimit = 100", html)
+        self.assertIn("Neobvykle veľké objednávky", html)
+        self.assertIn("Raw → baseline", html)
+        self.assertIn("alert_reason_label_sk", html)
+        self.assertIn("demand_model_version", html)
         self.assertIn("Top zna", html)
         self.assertIn("Krajiny", html)
         self.assertIn("countryPerformanceBody", html)
@@ -1114,6 +1118,61 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(1, inventory["summary"]["live_stock_overlay_matched_products"])
         self.assertEqual(20, inventory["inventory_rows"][0]["available_quantity"])
         self.assertEqual("Healthy", inventory["inventory_rows"][0]["stock_risk_level"])
+
+    def test_one_off_anomaly_survives_live_stock_overlay_with_refreshed_reason(self) -> None:
+        smart_row = {
+            "sku": "SPIKE-1",
+            "product": "Slow product",
+            "available_quantity": 0,
+            "available_quantity_raw": 0,
+            "alert_30d_units": 0.8,
+            "raw_recent_30d_units": 40,
+            "raw_alert_30d_units": 42.8,
+            "typical_order_units": 1,
+            "order_rate_per_day": 0.026,
+            "lead_time_working_days": 5,
+            "service_level_target": 0.9,
+            "unusual_large_order_flag": True,
+            "demand_model": "tsb_intermittent",
+            "demand_confidence": "Low",
+            "stock_risk_level": "Out of stock",
+            "reorder_action_label": "Order now",
+        }
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {
+                        "alert_delivery_count": 1,
+                        "demand_model_version": "order-aware-tsb-v1",
+                    },
+                    "alert_rows": [copy.deepcopy(smart_row)],
+                    "stock_risk_rows": [copy.deepcopy(smart_row)],
+                    "inventory_rows": [copy.deepcopy(smart_row)],
+                    "demand_anomaly_rows": [copy.deepcopy(smart_row)],
+                }
+            }
+        }
+
+        inventory, _ = build_inventory_snapshot(
+            payload,
+            project_settings={"inventory_model": {}},
+            current_stock_by_sku={
+                "SPIKE-1": {
+                    "available_quantity": 20,
+                    "available_quantity_raw": 20,
+                    "quantity": 20,
+                    "quantity_raw": 20,
+                    "active": True,
+                }
+            },
+        )
+
+        self.assertEqual([], inventory["alert_rows"])
+        self.assertEqual(1, len(inventory["demand_anomaly_rows"]))
+        anomaly = inventory["demand_anomaly_rows"][0]
+        self.assertEqual("Healthy", anomaly["stock_risk_level"])
+        self.assertEqual("unusual_large_order", anomaly["alert_reason_code"])
+        self.assertIn("Neobvykle veľká objednávka", anomaly["alert_reason_label_sk"])
 
     def test_current_stock_match_prefers_title_when_historical_ean_points_elsewhere(self) -> None:
         target = {"sku": "23942440833", "product": "Micro SD KARTA 64GB s adapterom"}

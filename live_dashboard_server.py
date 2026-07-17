@@ -1237,7 +1237,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Produkt</th><th>Riziko</th><th>Sklad</th><th>Objednané</th><th>30d dopyt</th><th>Cover</th><th>Vypredanie</th><th>Objednať do</th><th>Návrh</th></tr></thead>
+            <thead><tr><th>Produkt</th><th>Riziko</th><th>Dôvod</th><th>Sklad</th><th>Objednané</th><th>Raw → baseline</th><th>Istota</th><th>Cover</th><th>Vypredanie</th><th>Objednať do</th><th>Návrh</th></tr></thead>
             <tbody id="alertRowsBody"></tbody>
           </table>
         </div>
@@ -1327,6 +1327,20 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       </article>
     </section>
     <section id="view-inventory" class="hidden">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Neobvykle veľké objednávky</h2>
+            <p id="demandAnomalyMeta">-</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Produkt</th><th>Objednávka</th><th>Najväčší odber</th><th>Raw 30d</th><th>Baseline 30d</th><th>Odfiltrovaný vplyv</th><th>Skladový stav</th></tr></thead>
+            <tbody id="demandAnomalyRowsBody"></tbody>
+          </table>
+        </div>
+      </article>
       <article class="panel">
         <div class="panel-head">
           <div>
@@ -1783,35 +1797,55 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       el('lossProductBody').querySelectorAll('[data-ack-loss]').forEach((input) => input.addEventListener('change', () => acknowledgeLossProduct(input)));
     }
     function inventoryAlertRow(row) {
+      const rawDemand = row.raw_alert_30d_units ?? row.raw_recent_30d_units ?? row.recent_30d_units;
+      const stockoutProbability = Number(row.lead_time_stockout_probability || 0) * 100;
       return `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
         <td><span class="badge ${badgeClass(row.stock_risk_level || row.reorder_action_label)}">${safe(row.stock_risk_level || row.reorder_action_label)}</span></td>
+        <td><strong>${safe(row.alert_reason_label_sk)}</strong><div class="muted">${safe(row.demand_signal_label_sk)}</div></td>
         <td>${fmtQty(row.available_quantity)} ks</td>
         <td>${inboundControls(row)}</td>
-        <td>${fmtQty(row.alert_30d_units)} ks</td>
+        <td><span class="muted">${fmtQty(rawDemand)}</span> → <strong>${fmtQty(row.alert_30d_units)} ks</strong></td>
+        <td><strong>${safe(row.demand_confidence)}</strong><div class="muted">${safe(row.demand_model)} · LT ${fmtPct(stockoutProbability)}</div></td>
         <td>${row.days_of_cover === null || row.days_of_cover === undefined ? 'N/A' : `${fmtQty(row.days_of_cover)} dní`}</td>
         <td>${safe(row.projected_stockout_date)}</td>
         <td>${safe(row.reorder_by_date)}</td>
         <td><strong>${safe(row.reorder_action_label)}</strong><div class="muted">${fmtQty(row.suggested_reorder_units)} ks · LT ${fmtInt(row.lead_time_working_days)}d</div></td>
       </tr>`;
     }
+    function demandAnomalyRow(row) {
+      const rawDemand = row.raw_recent_30d_units ?? row.raw_alert_30d_units ?? 0;
+      return `<tr>
+        <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
+        <td><strong>${safe(row.largest_unusual_order_num)}</strong><div class="muted">${safe(row.largest_unusual_order_date)}</div></td>
+        <td>${fmtQty(row.largest_order_units_30d)} ks</td>
+        <td>${fmtQty(rawDemand)} ks</td>
+        <td><strong>${fmtQty(row.alert_30d_units)} ks</strong><div class="muted">${safe(row.demand_model)}</div></td>
+        <td>${fmtQty(row.unusual_large_order_adjustment_units_30d)} ks</td>
+        <td><span class="badge ${badgeClass(row.stock_risk_level)}">${safe(row.stock_risk_level)}</span><div class="muted">${safe(row.alert_reason_label_sk)}</div></td>
+      </tr>`;
+    }
     function renderInventory(data) {
       const inv = data.inventory || {};
       const summary = inv.summary || {};
       const alerts = inv.alert_rows || [];
+      const anomalies = inv.demand_anomaly_rows || [];
       const inventoryRows = inv.inventory_rows || [];
       const inboundRows = inv.inbound_order_rows || [];
       const visibleInventoryAlertLimit = 100;
       const visibleInventoryLimit = 100;
-      el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · snapshot ${text(summary.inventory_snapshot_date)}`;
-      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, visibleInventoryAlertLimit).map(inventoryAlertRow).join('') : '<tr><td colspan="9" class="muted">Bez kritických skladových alertov.</td></tr>';
-      el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)}`;
+      el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · ${fmtInt(summary.demand_anomaly_count)} oddelených anomálií · snapshot ${text(summary.inventory_snapshot_date)}`;
+      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, visibleInventoryAlertLimit).map(inventoryAlertRow).join('') : '<tr><td colspan="11" class="muted">Bez kritických skladových alertov.</td></tr>';
+      el('demandAnomalyMeta').textContent = `${fmtInt(anomalies.length)} one-off signálov · model ${text(summary.demand_model_version, 'legacy')}`;
+      el('demandAnomalyRowsBody').innerHTML = anomalies.length ? anomalies.map(demandAnomalyRow).join('') : '<tr><td colspan="7" class="muted">Bez neobvykle veľkých jednorazových objednávok.</td></tr>';
+      el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)} · ${text(summary.demand_model_version, 'legacy')}`;
       el('inventorySummaryGrid').innerHTML = [
         metric('Nákupná hodnota bez DPH', fmtMoney(summary.inventory_cost_value), `${fmtQty(summary.inventory_available_units)} ks skladom`),
         metric('Predajná hodnota bez DPH', fmtMoney(summary.inventory_retail_value), `coverage ${fmtPct(summary.inventory_cost_coverage_retail_pct)}`),
         metric('45d watchlist', fmtInt(summary.stock_risk_45d_count), `${fmtInt(summary.out_of_stock_recent_demand_count)} vypredané s dopytom`),
         metric('Dead stock', fmtMoney(summary.dead_stock_cost_value), `${fmtInt(summary.dead_stock_count)} položiek`),
         metric('Tržby v riziku', fmtMoney(summary.revenue_at_risk_30d), `zisk ${fmtMoney(summary.profit_at_risk_30d)}`),
+        metric('Oddelené one-off objednávky', fmtInt(summary.demand_anomaly_count), `${fmtQty(summary.demand_anomaly_adjustment_units_30d)} ks mimo baseline`),
         metric('Inbound objednávky', fmtQty(summary.inbound_ordered_units), `${fmtInt(summary.inbound_order_count)} položiek · ETA ${text(summary.inbound_next_arrival_date)}`),
       ].join('');
       el('inboundRowsBody').innerHTML = inboundRows.length ? inboundRows.map((row) => `<tr>
