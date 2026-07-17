@@ -85,7 +85,7 @@ Bootstrap entrypoints:
     - the API lower bound is also clamped to `automation_start_date`, so the recurring reconciliation never fetches or considers pre-cutoff history; the per-order filter and mutation-time guard remain independent fail-closed defenses
     - the same purchase-date cutoff is re-read and enforced by the exact pre-create GraphQL guard immediately before any web mutation; missing/invalid purchase dates fail closed
     - frequent runs scan `last_change DESC` rather than purchase date, so an older order is seen when its status changes to `Odoslaná`
-    - the final sweep can run `--reconcile` with a separate `120`-day purchase-date window
+    - the final sweep can run `--reconcile` with a separate inclusive `60`-day purchase-date window; this two-month horizon is the agreed operational limit because accounting catches any remaining miss within two months
     - page reads retry four times and fail closed on GraphQL errors, partial rows, missing critical fields, invalid ISO dates, non-monotonic `DESC` pagination, or broken cursors
     - invoice eligibility now explicitly requires the configured COD payment id/title; missing payment metadata fails closed instead of widening the candidate set
     - just-after-midnight starts use a three-hour rollover grace and remain anchored to the previous local day

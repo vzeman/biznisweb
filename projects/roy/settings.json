@@ -92,7 +92,7 @@
     "automation_start_date": "2026-07-17",
     "lookback_days": 7,
     "status_change_lookback_days": 7,
-    "reconciliation_lookback_days": 120,
+    "reconciliation_lookback_days": 60,
     "include_recent_changes": true,
     "page_retry_attempts": 4,
     "max_pages": 1000,

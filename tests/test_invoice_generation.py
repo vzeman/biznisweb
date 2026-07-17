@@ -418,7 +418,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertTrue(settings["enabled"])
         self.assertEqual(settings["lookback_days"], 7)
         self.assertEqual(settings["status_change_lookback_days"], 7)
-        self.assertEqual(settings["reconciliation_lookback_days"], 120)
+        self.assertEqual(settings["reconciliation_lookback_days"], 60)
         self.assertTrue(settings["include_recent_changes"])
         self.assertEqual(settings["page_retry_attempts"], 3)
         self.assertEqual(settings["max_pages"], 1000)
@@ -508,7 +508,7 @@ class InvoiceGenerationTests(unittest.TestCase):
                 "automation_start_date": "2026-07-17",
                 "lookback_days": 7,
                 "status_change_lookback_days": 7,
-                "reconciliation_lookback_days": 120,
+                "reconciliation_lookback_days": 60,
             }
         }
         from_date, to_date = resolve_invoice_runner_window(
@@ -517,7 +517,7 @@ class InvoiceGenerationTests(unittest.TestCase):
             reference_date="2026-06-30",
             reconcile=True,
         )
-        self.assertEqual(("2026-03-03", "2026-06-30"), (from_date, to_date))
+        self.assertEqual(("2026-05-02", "2026-06-30"), (from_date, to_date))
 
     def test_invoice_runner_midnight_grace_uses_previous_local_day(self) -> None:
         self.assertEqual(
@@ -609,7 +609,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         for project in (vevo, roy):
             invoice_settings = project["invoice_generation"]
             self.assertEqual(7, invoice_settings["status_change_lookback_days"])
-            self.assertEqual(120, invoice_settings["reconciliation_lookback_days"])
+            self.assertEqual(60, invoice_settings["reconciliation_lookback_days"])
             self.assertTrue(invoice_settings["include_recent_changes"])
             self.assertEqual(4, invoice_settings["page_retry_attempts"])
             self.assertEqual(1000, invoice_settings["max_pages"])
@@ -1406,7 +1406,7 @@ class InvoiceGenerationTests(unittest.TestCase):
                 "automation_start_date": "2026-07-17",
                 "lookback_days": 7,
                 "status_change_lookback_days": 7,
-                "reconciliation_lookback_days": 120,
+                "reconciliation_lookback_days": 60,
             }
         },
     )
