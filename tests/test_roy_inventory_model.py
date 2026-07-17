@@ -92,6 +92,25 @@ class RoyInventoryModelTests(unittest.TestCase):
             ]
         )
 
+    def test_signal_history_normalizer_respects_configured_window(self) -> None:
+        normalized = RoyInventoryModelExporter._normalize_roy_demand_signal_history_row(
+            {
+                "sku": "TREND-SKU",
+                "last_check_date": "2026-07-17",
+                "trend_candidate_checks": "0010101",
+                "trend_confirmed_flag": True,
+                "trend_persistence_window": 5,
+                "trend_persistence_required": 4,
+            }
+        )
+
+        self.assertIsNotNone(normalized)
+        self.assertEqual("10101", normalized["trend_candidate_checks"])
+        self.assertEqual(3, normalized["trend_confirmation_count"])
+        self.assertFalse(normalized["trend_confirmed_flag"])
+        self.assertEqual(5, normalized["trend_persistence_window"])
+        self.assertEqual(4, normalized["trend_persistence_required"])
+
     def test_one_off_large_order_does_not_create_false_restock_alert(self) -> None:
         exporter = RoyInventoryModelExporter(
             inventory_snapshot=pd.DataFrame(

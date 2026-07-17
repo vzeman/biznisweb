@@ -1027,27 +1027,33 @@ class BizniWebExporter:
             return None
         sku = str(row.get("sku") or "").strip()
         last_check_date = cls._history_date(row.get("last_check_date"))
+        persistence_window = max(
+            1,
+            cls._history_int(row.get("trend_persistence_window"), 3),
+        )
+        persistence_required = min(
+            persistence_window,
+            max(
+                1,
+                cls._history_int(row.get("trend_persistence_required"), 2),
+            ),
+        )
         checks = "".join(
             character
             for character in str(row.get("trend_candidate_checks") or "")
             if character in {"0", "1"}
-        )[-3:]
+        )[-persistence_window:]
         if not sku or not last_check_date or not checks:
             return None
+        confirmation_count = checks.count("1")
         return {
             "sku": sku,
             "last_check_date": last_check_date,
             "trend_candidate_checks": checks,
-            "trend_confirmation_count": checks.count("1"),
-            "trend_confirmed_flag": bool(row.get("trend_confirmed_flag", checks.count("1") >= 2)),
-            "trend_persistence_window": max(
-                1,
-                cls._history_int(row.get("trend_persistence_window"), 3),
-            ),
-            "trend_persistence_required": max(
-                1,
-                cls._history_int(row.get("trend_persistence_required"), 2),
-            ),
+            "trend_confirmation_count": confirmation_count,
+            "trend_confirmed_flag": confirmation_count >= persistence_required,
+            "trend_persistence_window": persistence_window,
+            "trend_persistence_required": persistence_required,
         }
 
     @classmethod
