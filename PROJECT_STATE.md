@@ -61,6 +61,64 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- VEVO/ROY delayed-shipment invoice gap audit and code-level prevention are implemented locally on `2026-07-17`:
+  - branch: `codex/invoice-gap-prevention`
+  - implementation commits: `6604ec4`, `60c0fab`, `4869f77`, `680fd97`
+  - draft PR: `#246` (`https://github.com/vzeman/biznisweb/pull/246`), mergeable, intentionally not merged because a `main` merge starts the guarded production image/control rollout
+  - affected input: VEVO `23` rows / `18` unique orders (`2602007364` repeated six times); ROY `9` rows / `8` unique orders (`2677002633` repeated twice)
+  - manual-invoice distinction: the replacement invoices are backdated to `2026-06-30`, but admin history records `invoice_created` by user `38` on `2026-07-17`; VEVO invoice numbers are `2602007380..2602007397`, ROY invoice numbers are `2677003251..2677003258`
+  - decisive root cause: invoice automation scanned only a seven-calendar-day inclusive window by `pur_date`; every affected order changed to `Odoslaná` only after its purchase date had left that window
+  - VEVO shipping delay was approximately `6.62..20.56` elapsed days; even the two sub-seven-24h cases bought on `2026-06-05` were excluded by the `2026-06-06..2026-06-12` calendar window
+  - ROY shipping delay was `7..13` calendar days; CloudTrail confirms the next Scheduler `RunTask` launched after every status change, so Scheduler availability was not the cause
+  - decisive retained ROY stream `ecs/reporting/3e1261411f1945ac9fca71d2ac1d9ebf` ran immediately after orders `2677003149/2677003150` became shipped, used window `2026-06-24..2026-06-30`, and returned `matched=0 created=0 failed=0` because both purchases were on `2026-06-22`
+  - decisive VEVO audit snapshot stream `ecs/reporting/9751a49d755d443d82218da9b6a9a7f1` ran after order `2602007729` became shipped, used window `2026-06-09..2026-06-15`, and excluded its `2026-06-06` purchase date
+  - secondary confirmed defect: GraphQL page failures were fail-open; on `2026-07-02` ROY had `36` HTTP `509 Quota exceeded` tasks that returned empty successful summaries, and later partial/non-JSON failures also exited false-green
+  - secondary confirmed defect: ROY final sweep scheduled at `23:59` started after midnight and derived `2026-07-01`, shifting its window to `2026-06-25..2026-07-01`
+  - monitoring gap: both Scheduler targets had `DeadLetterConfig=null`, no CloudWatch alarm name contained `Invoice`, and Scheduler retry only covered target invocation rather than the exit status of an already launched Fargate container
+  - strict read-only `120`-day reconciliation completed after removing unstable payment metadata from the bulk query and moving the COD lookup to eligible candidates only:
+    - VEVO: `orders_fetched=1906`, `pages=64`, `page_retries=2`, `matched=0`
+    - ROY: `orders_fetched=1755`, `pages=59`, `page_retries=1`, `matched=4`, `skipped_zero_total=55`
+  - four additional historical ROY gaps were discovered and verified individually with GraphQL plus authenticated admin history: `2610000007` (`192.90 RON`), `2610000006` (`189.95 RON`), `2678000132` (`920 CZK`), and `2610000004` (`189.95 RON`); all are COD, shipped in May 2026 after a `10..14`-day delay, have no invoice, and have no `invoice_created` history event
+  - explicit no-backfill decision on `2026-07-17`: those four historical ROY gaps and every other order purchased before `2026-07-17` remain intentionally untouched by this automation; no invoice was or will be created for them by the rollout
+  - local prevention now:
+    - enabled invoice automation requires a strict `automation_start_date`; VEVO and ROY are fixed to `2026-07-17`, inclusive, and any eligible order with an earlier `pur_date` is skipped in both regular and reconciliation modes
+    - the API lower bound is also clamped to `automation_start_date`, so the recurring reconciliation never fetches or considers pre-cutoff history; the per-order filter and mutation-time guard remain independent fail-closed defenses
+    - the same purchase-date cutoff is re-read and enforced by the exact pre-create GraphQL guard immediately before any web mutation; missing/invalid purchase dates fail closed
+    - frequent runs scan `last_change DESC` rather than purchase date, so an older order is seen when its status changes to `Odoslaná`
+    - the final sweep can run `--reconcile` with a separate inclusive `60`-day purchase-date window; this two-month horizon is the agreed operational limit because accounting catches any remaining miss within two months
+    - page reads retry four times and fail closed on GraphQL errors, partial rows, missing critical fields, invalid ISO dates, non-monotonic `DESC` pagination, or broken cursors
+    - invoice eligibility now explicitly requires the configured COD payment id/title; missing payment metadata fails closed instead of widening the candidate set
+    - just-after-midnight starts use a three-hour rollover grace and remain anchored to the previous local day
+    - create/email failures no longer emit `InvoiceStandaloneRunSucceeded`
+    - pre-create and post-finalization GraphQL guards verify the exact order identity and complete invoice entries; the pre-create guard additionally rechecks status, total, and COD payment immediately before mutation
+    - `--max-creations` fails before the mutation loop; deployment performs only a read-only regular/reconciliation preflight, never a live bootstrap/backfill, and natural schedules process eligible orders purchased from the cutoff onward
+  - local verification:
+    - final focused invoice/control suite -> `64` tests passed; exact ECR-build regression suite -> `274` tests passed; Python compile and `git diff --check` pass
+    - `python scripts/reporting_qa_smoke.py` -> `OK`
+    - final live read-only reconciliation on `2026-07-17`, with web login and metric writes disabled: VEVO `scan_complete=true`, `orders_fetched=4`, `pages=1`, `page_retries=0`, `matched=0`, `created=0`; ROY `scan_complete=true`, `orders_fetched=9`, `pages=1`, `page_retries=0`, `matched=0`, `created=0`
+    - the prior ROY deep read-only attempt correctly failed closed after `31` complete historical pages on a repeated non-JSON API response; after the scan lower-bound clamp the same verification completed on one page
+  - pre-code Fargate hard-gate:
+    - VEVO latest task `ce601c1d9fed484bb832fb5483a57926`, private IP `172.31.39.42`, service `vevo-daily-invoice-generation`, task definition `vevo-invoice-daily:2`, exit `0`, log path `/ecs/vevo-invoice-daily`
+    - ROY latest task `3541582f01604146baa18b69f6a7787f`, private IP `172.31.32.213`, service `roy-daily-invoice-generation`, task definition `roy-invoice-daily:2`, exit `0`, log path `/ecs/roy-invoice-daily`
+    - scheduled Fargate instance id is `N/A`; production smoke marker path is `http://127.0.0.1:8000/marker.json`
+  - production status: not deployed yet
+  - infra prevention is now codified on the branch:
+    - primary schedules keep explicit regular commands; final schedules run `--reconcile` at VEVO `00:30` and ROY `00:45` in `Europe/Bratislava`, inside the prior-day rollover grace and at least 45 minutes after the last interval
+    - `scripts/deploy_invoice_controls.py` idempotently provisions one encrypted 14-day Scheduler DLQ per project, per-project Scheduler IAM permission, 90-day logs, application-failure/DLQ/reconciliation-heartbeat alarms, and verifies the complete alarm/filter configuration
+    - deferred bootstrap disables and read-backs both primary/final schedules before any task-definition, queue, IAM, or alarm mutation, requests stop for any old PENDING/RUNNING invoice-family task, and requires a further `90` seconds of stable emptiness before continuing
+    - an existing heartbeat alarm stays active; any upstream bootstrap job failure runs an `always()` finalizer that arms the heartbeat alarm for every project left with a disabled invoice schedule
+    - task definitions are cloned with an immutable `repo@sha256` image; account/region/repository/digest existence are verified during apply and read-only verification, digest-tagged equivalent task definitions are reused after partial failures, and the completion phase follows the captured immutable digest even if mutable `latest` advances after mutation has begun
+    - ECR build and invoice-control deploy are one reusable workflow chain under one non-cancelling concurrency group; stale/non-main SHAs fail before `latest` moves or schedules are enabled, and feature-branch manual runs cannot reach production
+    - `.github/workflows/deploy-invoice-controls.yml` uses a global all-project dry-run preflight against the captured immutable digest, explicitly verifies both schedules are still disabled and `automation_start_date=2026-07-17`, performs no live reconciliation, then enables/verifies the 27-hour heartbeat alarm
+    - reusable production smoke verifies both schedules, expressions, timezone, task family, shared project DLQ, exact regular/reconcile command overrides, localhost marker, exit code, required private IP, task ARN, runtime digest, and stops a still-running ECS task when the runner exits
+  - local infra verification:
+    - exact ECR-build regression command -> `274` tests passed; focused invoice/control subset -> `64` tests passed
+    - `python scripts/reporting_qa_smoke.py` -> `OK`
+    - botocore serialization accepted all four live-derived `UpdateSchedule` requests, both cloned `RegisterTaskDefinition` requests, and the new ECS `ListTasks(PENDING/RUNNING)` plus `StopTask` drain requests
+    - actionlint `1.7.12`, YAML parsing, and extracted Bash syntax (`19` scripts) passed all changed GitHub workflows
+    - draft PR checks passed: `env-check`, `secret-scan`, `security-baseline`, and `observability-baseline`
+  - Next exact step: keep draft PR `#246` unmerged until the production rollout is explicitly wanted; merging to `main` starts the serialized guarded image/control deployment, after which verify the first natural VEVO/ROY runs only against orders purchased on or after `2026-07-17`
+
 - ROY order-aware smart inventory alerts are merged, deployed, and live (2026-07-17):
   - PR `#244` merged to `main` as `0f98aaade55f9769b48dad6946c36ab442ef2419`; independent review finished with no P0/P1/P2 findings
   - replenishment demand now aggregates by SKU and order before forecasting, preserves raw physical sales, caps an unconfirmed large order only in the recurring-demand copy, and leaves the real stock reduction untouched

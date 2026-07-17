@@ -16,8 +16,16 @@
   "fixed_daily_cost": 0,
   "invoice_generation": {
     "enabled": false,
+    "automation_start_date": "",
     "lookback_days": 7,
+    "status_change_lookback_days": 7,
+    "reconciliation_lookback_days": 60,
+    "include_recent_changes": true,
+    "page_retry_attempts": 4,
+    "max_pages": 1000,
+    "rollover_grace_hours": 3,
     "exclude_zero_total_orders": true,
+    "require_cod_payment": false,
     "send_invoice_email": true,
     "eligible_statuses": [
       "Odoslaná"

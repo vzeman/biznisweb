@@ -1,6 +1,53 @@
 name: Production Invoice Smoke
 
 on:
+  workflow_call:
+    inputs:
+      project:
+        description: Invoice project to verify
+        required: false
+        default: all
+        type: string
+      marker:
+        description: Marker suffix written into the localhost smoke payload
+        required: false
+        default: invoice-controls
+        type: string
+      execute_reconciliation:
+        description: Run the strict reconciliation live and publish its heartbeat
+        required: false
+        default: false
+        type: boolean
+      verify_controls:
+        description: Verify deployed Scheduler, DLQ, log, and alarm controls first
+        required: false
+        default: true
+        type: boolean
+      expect_final_enabled:
+        description: Require the reconciliation schedule to be enabled
+        required: false
+        default: true
+        type: boolean
+      expect_primary_enabled:
+        description: Require the regular schedule to be enabled
+        required: false
+        default: true
+        type: boolean
+      max_reconciliation_creations:
+        description: Maximum candidates allowed before the optional live reconciliation
+        required: false
+        default: 0
+        type: number
+      source_sha:
+        description: Exact source/image commit to verify
+        required: false
+        default: ""
+        type: string
+      image_digest:
+        description: Exact immutable image digest to verify
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
     inputs:
       project:
@@ -16,20 +63,56 @@ on:
         description: Marker suffix written into the localhost smoke payload
         required: true
         default: invoice-email-dry-run
+      execute_reconciliation:
+        description: Run the strict reconciliation live and publish its heartbeat
+        required: true
+        default: false
+        type: boolean
+      verify_controls:
+        description: Verify deployed Scheduler, DLQ, log, and alarm controls first
+        required: true
+        default: true
+        type: boolean
+      expect_final_enabled:
+        description: Require the reconciliation schedule to be enabled
+        required: true
+        default: true
+        type: boolean
+      expect_primary_enabled:
+        description: Require the regular schedule to be enabled
+        required: true
+        default: true
+        type: boolean
+      max_reconciliation_creations:
+        description: Maximum candidates allowed before the optional live reconciliation
+        required: true
+        default: 0
+        type: number
 
 env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: vevo-reporting
+  EXPECTED_AUTOMATION_START_DATE: "2026-07-17"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   production-invoice-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 110
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install invoice control dependencies
+        run: python -m pip install "boto3>=1.35.0"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -38,11 +121,21 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Run production invoice dry-run host smoke
+      - name: Verify invoice controls
+        if: ${{ inputs.verify_controls }}
+        run: python scripts/deploy_invoice_controls.py --verify --projects vevo roy --region "${AWS_REGION}"
+
+      - name: Run production invoice host smoke
         shell: bash
         env:
           REQUESTED_PROJECT: ${{ inputs.project }}
           MARKER_SUFFIX: ${{ inputs.marker }}
+          EXECUTE_RECONCILIATION: ${{ inputs.execute_reconciliation }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          EXPECT_PRIMARY_ENABLED: ${{ inputs.expect_primary_enabled }}
+          EXPECT_FINAL_ENABLED: ${{ inputs.expect_final_enabled }}
+          MAX_RECONCILIATION_CREATIONS: ${{ inputs.max_reconciliation_creations }}
         run: |
           set -euo pipefail
 
@@ -53,13 +146,65 @@ jobs:
             --region "${AWS_REGION}" \
             --query 'imageDetails[0].imageDigest' \
             --output text)"
-          ECR_LATEST_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:latest"
+          ECR_EXPECTED_DIGEST="${EXPECTED_IMAGE_DIGEST:-${ECR_LATEST_DIGEST}}"
+          if [[ ! "${ECR_EXPECTED_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid expected ECR digest ${ECR_EXPECTED_DIGEST}" >&2
+            exit 1
+          fi
+          ECR_PINNED_IMAGE="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${ECR_EXPECTED_DIGEST}"
+          if [[ -n "${SOURCE_SHA}" ]]; then
+            SOURCE_DIGEST="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag="sha-${SOURCE_SHA}" \
+              --region "${AWS_REGION}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text)"
+            if [[ "${SOURCE_DIGEST}" != "${ECR_EXPECTED_DIGEST}" ]]; then
+              echo "Source ${SOURCE_SHA} digest ${SOURCE_DIGEST} does not match expected ${ECR_EXPECTED_DIGEST}" >&2
+              exit 1
+            fi
+          fi
+          echo "INVOICE_IMAGE_CONTEXT expected=${ECR_EXPECTED_DIGEST} latest=${ECR_LATEST_DIGEST}"
 
           if [[ "${REQUESTED_PROJECT}" == "all" ]]; then
             PROJECTS="vevo roy"
           else
             PROJECTS="${REQUESTED_PROJECT}"
           fi
+
+          CURRENT_CLUSTER_ARN=""
+          CURRENT_TASK_ARN=""
+          cleanup_ecs_task() {
+            if [[ -z "${CURRENT_CLUSTER_ARN}" ]]; then
+              return
+            fi
+            if [[ -z "${CURRENT_TASK_ARN}" && -s run-task.json ]]; then
+              CURRENT_TASK_ARN="$(python - <<'PY' 2>/dev/null || true
+          import json
+          run = json.load(open("run-task.json", encoding="utf-8"))
+          tasks = run.get("tasks") or []
+          print(tasks[0].get("taskArn", "") if tasks else "")
+          PY
+              )"
+            fi
+            if [[ -z "${CURRENT_TASK_ARN}" ]]; then
+              return
+            fi
+            LAST_STATUS="$(aws ecs describe-tasks \
+              --cluster "${CURRENT_CLUSTER_ARN}" \
+              --tasks "${CURRENT_TASK_ARN}" \
+              --region "${AWS_REGION}" \
+              --query 'tasks[0].lastStatus' \
+              --output text 2>/dev/null || true)"
+            if [[ "${LAST_STATUS}" != "STOPPED" ]]; then
+              aws ecs stop-task \
+                --cluster "${CURRENT_CLUSTER_ARN}" \
+                --task "${CURRENT_TASK_ARN}" \
+                --reason "Production invoice smoke job exited before task completion" \
+                --region "${AWS_REGION}" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup_ecs_task EXIT
 
           for PROJECT in ${PROJECTS}; do
             echo "::group::Production invoice smoke for ${PROJECT}"
@@ -70,6 +215,33 @@ jobs:
           project = sys.argv[1]
           settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
           print(settings["invoice_generation"]["schedule_name"])
+          PY
+            )"
+            FINAL_SCHEDULE_NAME="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["invoice_generation"]["final_sweep_schedule_name"])
+          PY
+            )"
+            PRIMARY_SCHEDULE_EXPRESSION="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["invoice_generation"]["schedule_expression"])
+          PY
+            )"
+            FINAL_SCHEDULE_EXPRESSION="$(python - "${PROJECT}" <<'PY'
+          import json
+          import pathlib
+          import sys
+          project = sys.argv[1]
+          settings = json.loads((pathlib.Path("projects") / project / "settings.json").read_text(encoding="utf-8"))
+          print(settings["invoice_generation"]["final_sweep_schedule_expression"])
           PY
             )"
             EXPECTED_TASK_FAMILY="$(python - "${PROJECT}" <<'PY'
@@ -92,6 +264,64 @@ jobs:
             )"
 
             aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > schedule.json
+            aws scheduler get-schedule --name "${FINAL_SCHEDULE_NAME}" --region "${AWS_REGION}" > final-schedule.json
+            python - "${PROJECT}" "${PRIMARY_SCHEDULE_EXPRESSION}" "${FINAL_SCHEDULE_EXPRESSION}" "${PROJECT_TIMEZONE}" "${EXPECT_PRIMARY_ENABLED}" "${EXPECT_FINAL_ENABLED}" <<'PY'
+          import json
+          import sys
+
+          (
+              project,
+              primary_expression,
+              final_expression,
+              timezone,
+              primary_enabled,
+              final_enabled,
+          ) = sys.argv[1:7]
+          expected_primary_state = (
+              "ENABLED"
+              if primary_enabled.strip().lower() in {"1", "true", "yes", "on"}
+              else "DISABLED"
+          )
+          expected_final_state = (
+              "ENABLED"
+              if final_enabled.strip().lower() in {"1", "true", "yes", "on"}
+              else "DISABLED"
+          )
+          primary = json.load(open("schedule.json", encoding="utf-8"))
+          final = json.load(open("final-schedule.json", encoding="utf-8"))
+          expected = [
+              (
+                  primary,
+                  primary_expression,
+                  expected_primary_state,
+                  ["python", "invoice_runner.py", "--project", project],
+              ),
+              (
+                  final,
+                  final_expression,
+                  expected_final_state,
+                  ["python", "invoice_runner.py", "--project", project, "--reconcile"],
+              ),
+          ]
+          dlqs = set()
+          for schedule, expression, expected_state, command in expected:
+              assert schedule["State"] == expected_state, schedule["Name"]
+              assert schedule["ScheduleExpression"] == expression, schedule["Name"]
+              assert schedule["ScheduleExpressionTimezone"] == timezone, schedule["Name"]
+              target = schedule["Target"]
+              dlq = (target.get("DeadLetterConfig") or {}).get("Arn")
+              assert dlq, f"{schedule['Name']} missing DLQ"
+              dlqs.add(dlq)
+              payload = json.loads(target["Input"])
+              overrides = payload["containerOverrides"]
+              assert len(overrides) == 1, schedule["Name"]
+              assert overrides[0]["command"] == command, schedule["Name"]
+          assert len(dlqs) == 1, f"primary/final DLQ mismatch: {dlqs}"
+          print(
+              "INVOICE_SCHEDULE_CONTROLS_OK "
+              f"project={project} primary={primary['Name']} final={final['Name']} dlq={next(iter(dlqs))}"
+          )
+          PY
             CLUSTER_ARN="$(python - <<'PY'
           import json
           schedule = json.load(open("schedule.json", encoding="utf-8"))
@@ -163,8 +393,8 @@ jobs:
           PY
             )"
 
-            if [[ "${TASK_IMAGE}" != "${ECR_LATEST_IMAGE}" ]]; then
-              echo "Invoice task image is ${TASK_IMAGE}, expected ${ECR_LATEST_IMAGE}" >&2
+            if [[ "${TASK_IMAGE}" != "${ECR_PINNED_IMAGE}" ]]; then
+              echo "Invoice task image is ${TASK_IMAGE}, expected ${ECR_PINNED_IMAGE}" >&2
               exit 1
             fi
 
@@ -194,56 +424,157 @@ jobs:
 
           project = os.environ["REPORT_PROJECT"]
           timezone_name = os.environ.get("REPORT_TIMEZONE", "Europe/Bratislava")
+          execute_reconciliation = os.environ.get(
+              "EXECUTE_RECONCILIATION",
+              "false",
+          ).strip().lower() in {"1", "true", "yes", "on"}
+          max_reconciliation_creations = int(
+              os.environ.get("MAX_RECONCILIATION_CREATIONS", "0")
+          )
+          if max_reconciliation_creations < 0:
+              raise ValueError("MAX_RECONCILIATION_CREATIONS cannot be negative")
           settings = load_project_settings(project)
           invoice_settings = resolve_invoice_generation_settings(settings)
           assert invoice_settings["enabled"] is True
           assert invoice_settings["send_invoice_email"] is True
-          args = argparse.Namespace(
-              project=project,
-              reference_date="",
-              from_date="",
-              to_date="",
-              timezone=timezone_name,
-              dry_run=True,
-              no_web_login=False,
+          assert invoice_settings["require_cod_payment"] is True
+          assert (
+              invoice_settings["automation_start_date"]
+              == os.environ["EXPECTED_AUTOMATION_START_DATE"]
           )
-          summary = run_invoice_runner(args)
-          summary["send_invoice_email"] = invoice_settings["send_invoice_email"]
-          summary["eligible_statuses"] = invoice_settings["eligible_statuses"]
-          Path("/tmp/invoice-summary.json").write_text(json.dumps(summary, ensure_ascii=False, sort_keys=True), encoding="utf-8")
-          print("INVOICE_SMOKE_SUMMARY " + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+
+          def run(*, reconcile, dry_run, max_creations=None):
+              return run_invoice_runner(
+                  argparse.Namespace(
+                      project=project,
+                      reference_date="",
+                      from_date="",
+                      to_date="",
+                      timezone=timezone_name,
+                      dry_run=dry_run,
+                      no_web_login=dry_run,
+                      reconcile=reconcile,
+                      max_creations=max_creations,
+                  )
+              )
+
+          regular = run(reconcile=False, dry_run=True)
+          reconciliation_preview = run(reconcile=True, dry_run=True)
+          preview_matches = int(reconciliation_preview["matched_orders"])
+          if (
+              execute_reconciliation
+              and preview_matches > max_reconciliation_creations
+          ):
+              print(
+                  "INVOICE_RUN_FAILED "
+                  f"project={project} "
+                  "scan_mode=reconciliation "
+                  "error_type=CreationSafetyLimitExceeded"
+              )
+              raise RuntimeError(
+                  "Reconciliation creation safety limit exceeded before mutation: "
+                  f"matched={preview_matches}, "
+                  f"max_creations={max_reconciliation_creations}"
+              )
+          reconciliation_live = None
+          if execute_reconciliation:
+              reconciliation_live = run(
+                  reconcile=True,
+                  dry_run=False,
+                  max_creations=max_reconciliation_creations,
+              )
+          reconciliation = reconciliation_live or reconciliation_preview
+          payload = {
+              "project": project,
+              "execute_reconciliation": execute_reconciliation,
+              "max_reconciliation_creations": max_reconciliation_creations,
+              "send_invoice_email": invoice_settings["send_invoice_email"],
+              "require_cod_payment": invoice_settings["require_cod_payment"],
+              "automation_start_date": invoice_settings["automation_start_date"],
+              "eligible_statuses": invoice_settings["eligible_statuses"],
+              "regular": regular,
+              "reconciliation_preview": reconciliation_preview,
+              "reconciliation_live": reconciliation_live,
+              "reconciliation": reconciliation,
+          }
+          Path("/tmp/invoice-summary.json").write_text(
+              json.dumps(payload, ensure_ascii=False, sort_keys=True),
+              encoding="utf-8",
+          )
+          print(
+              "INVOICE_SMOKE_SUMMARY "
+              + json.dumps(payload, ensure_ascii=False, sort_keys=True)
+          )
           PY
           python - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          summary = json.loads(Path("/tmp/invoice-summary.json").read_text(encoding="utf-8"))
-          assert summary["enabled"] is True
-          assert summary["dry_run"] is True
-          assert summary["send_invoice_email"] is True
-          assert int(summary["failed_invoices"]) == 0
-          assert int(summary["failed_invoice_emails"]) == 0
-          assert int(summary["missing_invoice_ids"]) == 0
+          payload = json.loads(
+              Path("/tmp/invoice-summary.json").read_text(encoding="utf-8")
+          )
+          regular = payload["regular"]
+          reconciliation_preview = payload["reconciliation_preview"]
+          reconciliation_live = payload["reconciliation_live"]
+          reconciliation = payload["reconciliation"]
+          assert payload["send_invoice_email"] is True
+          assert payload["require_cod_payment"] is True
+          assert (
+              payload["automation_start_date"]
+              == os.environ["EXPECTED_AUTOMATION_START_DATE"]
+          )
+          assert regular["enabled"] is True
+          assert regular["dry_run"] is True
+          assert regular["scan_mode"] == "regular"
+          assert regular["scan_complete"] is True
+          assert reconciliation_preview["enabled"] is True
+          assert reconciliation_preview["reconcile"] is True
+          assert reconciliation_preview["scan_mode"] == "reconciliation"
+          assert reconciliation_preview["scan_complete"] is True
+          assert reconciliation_preview["dry_run"] is True
+          if payload["execute_reconciliation"]:
+              assert int(reconciliation_preview["matched_orders"]) <= int(
+                  payload["max_reconciliation_creations"]
+              )
+          assert reconciliation["enabled"] is True
+          assert reconciliation["reconcile"] is True
+          assert reconciliation["scan_mode"] == "reconciliation"
+          assert reconciliation["scan_complete"] is True
+          assert reconciliation["dry_run"] is not payload["execute_reconciliation"]
+          if payload["execute_reconciliation"]:
+              assert reconciliation_live is not None
+              assert reconciliation_live["dry_run"] is False
+          else:
+              assert reconciliation_live is None
+          summaries = [regular, reconciliation_preview]
+          if reconciliation_live is not None:
+              summaries.append(reconciliation_live)
+          for summary in summaries:
+              assert int(summary["failed_invoices"]) == 0
+              assert int(summary["failed_invoice_emails"]) == 0
+              assert int(summary["missing_invoice_ids"]) == 0
           marker_dir = Path("/tmp/invoice-marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
           marker = {
               "marker": "INVOICE_SMOKE_MARKER_OK",
-              "project": summary["project"],
-              "from_date": summary["from_date"],
-              "to_date": summary["to_date"],
-              "matched_orders": summary["matched_orders"],
-              "created_invoices": summary["created_invoices"],
-              "failed_invoices": summary["failed_invoices"],
-              "emailed_invoices": summary["emailed_invoices"],
-              "failed_invoice_emails": summary["failed_invoice_emails"],
-              "missing_invoice_ids": summary["missing_invoice_ids"],
-              "skipped_zero_total_orders": summary["skipped_zero_total_orders"],
-              "send_invoice_email": summary["send_invoice_email"],
-              "dry_run": summary["dry_run"],
-              "ecr_latest_digest": os.environ.get("ECR_LATEST_DIGEST", ""),
+              "project": payload["project"],
+              "regular": regular,
+              "reconciliation_preview": reconciliation_preview,
+              "reconciliation": reconciliation,
+              "reconciliation_live": reconciliation_live,
+              "reconciliation_executed": payload["execute_reconciliation"],
+              "max_reconciliation_creations": payload[
+                  "max_reconciliation_creations"
+              ],
+              "send_invoice_email": payload["send_invoice_email"],
+              "require_cod_payment": payload["require_cod_payment"],
+              "ecr_expected_digest": os.environ.get("ECR_EXPECTED_DIGEST", ""),
           }
-          (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+          (marker_dir / "marker.json").write_text(
+              json.dumps(marker, ensure_ascii=False, sort_keys=True),
+              encoding="utf-8",
+          )
           PY
           python -m http.server 8000 --bind 127.0.0.1 --directory /tmp/invoice-marker >/tmp/invoice-marker/http.log 2>&1 &
           PIDS+=("$!")
@@ -255,7 +586,7 @@ jobs:
           SH
             )"
 
-            export CONTAINER_NAME PROJECT MARKER PROJECT_TIMEZONE SMOKE_SCRIPT ECR_LATEST_DIGEST
+            export CONTAINER_NAME PROJECT MARKER PROJECT_TIMEZONE SMOKE_SCRIPT ECR_EXPECTED_DIGEST EXECUTE_RECONCILIATION MAX_RECONCILIATION_CREATIONS EXPECTED_AUTOMATION_START_DATE
             python - <<'PY' > overrides.json
           import json
           import os
@@ -268,7 +599,10 @@ jobs:
                           {"name": "REPORT_PROJECT", "value": os.environ["PROJECT"]},
                           {"name": "REPORT_OUTPUT_TAG", "value": os.environ["MARKER"]},
                           {"name": "REPORT_TIMEZONE", "value": os.environ["PROJECT_TIMEZONE"]},
-                          {"name": "ECR_LATEST_DIGEST", "value": os.environ["ECR_LATEST_DIGEST"]},
+                          {"name": "ECR_EXPECTED_DIGEST", "value": os.environ["ECR_EXPECTED_DIGEST"]},
+                          {"name": "EXECUTE_RECONCILIATION", "value": os.environ["EXECUTE_RECONCILIATION"]},
+                          {"name": "MAX_RECONCILIATION_CREATIONS", "value": os.environ["MAX_RECONCILIATION_CREATIONS"]},
+                          {"name": "EXPECTED_AUTOMATION_START_DATE", "value": os.environ["EXPECTED_AUTOMATION_START_DATE"]},
                       ],
                   }
               ]
@@ -288,6 +622,8 @@ jobs:
               RUN_ARGS+=(--platform-version "${PLATFORM_VERSION}")
             fi
 
+            CURRENT_CLUSTER_ARN="${CLUSTER_ARN}"
+            CURRENT_TASK_ARN=""
             aws ecs run-task "${RUN_ARGS[@]}" > run-task.json
             TASK_ARN="$(python - <<'PY'
           import json
@@ -299,6 +635,7 @@ jobs:
           PY
             )"
             TASK_ID="${TASK_ARN##*/}"
+            CURRENT_TASK_ARN="${TASK_ARN}"
 
             PRIVATE_IP=""
             for _ in $(seq 1 60); do
@@ -318,16 +655,24 @@ jobs:
               sleep 5
             done
 
+            if [[ -z "${PRIVATE_IP}" ]]; then
+              echo "Task ${TASK_ARN} did not expose a private IP for the infrastructure hard gate." >&2
+              exit 1
+            fi
+
             echo "HARD_GATE_CONTEXT project=${PROJECT}"
             echo "instance-id=N/A (scheduled ECS/Fargate task)"
-            echo "private-ip=${PRIVATE_IP:-unavailable-before-stop}"
-            echo "service-name=${SCHEDULE_NAME}"
+            echo "private-ip=${PRIVATE_IP}"
+            echo "service-name-primary=${SCHEDULE_NAME}"
+            echo "service-name-final=${FINAL_SCHEDULE_NAME}"
             echo "task-definition=${TASK_DEFINITION_ARN}"
             echo "task-arn=${TASK_ARN}"
             echo "image-path=${TASK_IMAGE}"
-            echo "ecr-latest-digest=${ECR_LATEST_DIGEST}"
+            echo "ecr-expected-digest=${ECR_EXPECTED_DIGEST}"
             echo "marker-path=http://127.0.0.1:8000/marker.json"
-            echo "automation-command=python invoice_runner.py --project ${PROJECT} --dry-run"
+            echo "automation-command-regular=python invoice_runner.py --project ${PROJECT} --dry-run"
+            echo "automation-command-reconciliation=python invoice_runner.py --project ${PROJECT} --reconcile"
+            echo "execute-reconciliation=${EXECUTE_RECONCILIATION}"
 
             TASK_STOPPED=false
             for attempt in $(seq 1 160); do
@@ -357,11 +702,19 @@ jobs:
                 --region "${AWS_REGION}" || true
               exit 1
             fi
+            CURRENT_CLUSTER_ARN=""
+            CURRENT_TASK_ARN=""
 
             EXIT_CODE="$(python - <<'PY'
           import json
           task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
           print(task["containers"][0].get("exitCode", ""))
+          PY
+            )"
+            RUNTIME_IMAGE_DIGEST="$(python - <<'PY'
+          import json
+          task = json.load(open("describe-stopped.json", encoding="utf-8"))["tasks"][0]
+          print(task["containers"][0].get("imageDigest", ""))
           PY
             )"
 
@@ -380,6 +733,10 @@ jobs:
               echo "Task ${TASK_ARN} failed with exit code ${EXIT_CODE}" >&2
               exit 1
             fi
-            echo "PRODUCTION_INVOICE_SMOKE_OK:${PROJECT}:${TASK_ID}:${PRIVATE_IP:-no-ip}:${ECR_LATEST_DIGEST}"
+            if [[ "${RUNTIME_IMAGE_DIGEST}" != "${ECR_EXPECTED_DIGEST}" ]]; then
+              echo "Task ${TASK_ARN} ran digest ${RUNTIME_IMAGE_DIGEST}, expected ${ECR_EXPECTED_DIGEST}" >&2
+              exit 1
+            fi
+            echo "PRODUCTION_INVOICE_SMOKE_OK:${PROJECT}:${TASK_ID}:${PRIVATE_IP:-no-ip}:${RUNTIME_IMAGE_DIGEST}"
             echo "::endgroup::"
           done

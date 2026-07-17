@@ -1,0 +1,238 @@
+name: Deploy Invoice Controls
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact current main commit whose image must be deployed
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: vevo-reporting
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  apply-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      short_sha: ${{ steps.source.outputs.short_sha }}
+      image_digest: ${{ steps.image.outputs.image_digest }}
+
+    steps:
+      - name: Resolve exact source commit
+        id: source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOURCE_SHA}" ]]; then
+            echo "Missing required source SHA." >&2
+            exit 1
+          fi
+          echo "source_sha=${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=${SOURCE_SHA:0:12}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout exact source commit
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ steps.source.outputs.source_sha }}
+
+      - name: Require the current main source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if [[ "${SOURCE_SHA}" != "$(git rev-parse origin/main)" ]]; then
+            echo "Refusing to deploy stale or non-main source ${SOURCE_SHA}." >&2
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install invoice control dependencies
+        run: python -m pip install "boto3>=1.35.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve and lock the source image digest
+        id: image
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          SOURCE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="sha-${SOURCE_SHA}" \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          LATEST_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag=latest \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if [[ -z "${SOURCE_DIGEST}" || "${SOURCE_DIGEST}" == "None" ]]; then
+            echo "Missing immutable ECR tag sha-${SOURCE_SHA}" >&2
+            exit 1
+          fi
+          if [[ "${SOURCE_DIGEST}" != "${LATEST_DIGEST}" ]]; then
+            echo "ECR latest moved to ${LATEST_DIGEST}; source ${SOURCE_SHA} is ${SOURCE_DIGEST}. A newer deployment must win." >&2
+            exit 1
+          fi
+          echo "image_digest=${SOURCE_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "INVOICE_SOURCE_IMAGE_LOCKED source_sha=${SOURCE_SHA} digest=${SOURCE_DIGEST}"
+
+      - name: Apply controls with heartbeat alarm deferred
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.image_digest }}
+        run: >-
+          python scripts/deploy_invoice_controls.py
+          --apply
+          --projects vevo roy
+          --region "${AWS_REGION}"
+          --image-digest "${IMAGE_DIGEST}"
+          --defer-heartbeat-alarm
+
+  preflight-reconciliation:
+    needs: apply-controls
+    uses: ./.github/workflows/production-invoice-smoke.yml
+    with:
+      project: all
+      marker: invoice-controls-preflight-${{ needs.apply-controls.outputs.short_sha }}
+      execute_reconciliation: false
+      verify_controls: false
+      expect_primary_enabled: false
+      expect_final_enabled: false
+      max_reconciliation_creations: 0
+      source_sha: ${{ needs.apply-controls.outputs.source_sha }}
+      image_digest: ${{ needs.apply-controls.outputs.image_digest }}
+    secrets: inherit
+
+  enable-heartbeat-and-verify:
+    needs:
+      - apply-controls
+      - preflight-reconciliation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ needs.apply-controls.outputs.source_sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install invoice control dependencies
+        run: python -m pip install "boto3>=1.35.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Revalidate the source image lock
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.apply-controls.outputs.source_sha }}
+          IMAGE_DIGEST: ${{ needs.apply-controls.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          SOURCE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="sha-${SOURCE_SHA}" \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if [[ "${SOURCE_DIGEST}" != "${IMAGE_DIGEST}" ]]; then
+            echo "Immutable invoice image lock moved: source=${SOURCE_DIGEST} expected=${IMAGE_DIGEST}" >&2
+            exit 1
+          fi
+
+      - name: Enable heartbeat alarm and verify complete controls
+        env:
+          IMAGE_DIGEST: ${{ needs.apply-controls.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          python scripts/deploy_invoice_controls.py \
+            --apply \
+            --projects vevo roy \
+            --region "${AWS_REGION}" \
+            --image-digest "${IMAGE_DIGEST}" \
+            --resume-deferred-bootstrap
+          python scripts/deploy_invoice_controls.py \
+            --verify \
+            --projects vevo roy \
+            --region "${AWS_REGION}" \
+            --image-digest "${IMAGE_DIGEST}"
+          echo "DEPLOY_INVOICE_CONTROLS_OK source_sha=${{ needs.apply-controls.outputs.source_sha }} digest=${IMAGE_DIGEST}"
+
+  arm-failed-bootstrap-alert:
+    if: >-
+      ${{
+        always() &&
+        (
+          needs.apply-controls.result != 'success' ||
+          needs.preflight-reconciliation.result != 'success' ||
+          needs.enable-heartbeat-and-verify.result != 'success'
+        )
+      }}
+    needs:
+      - apply-controls
+      - preflight-reconciliation
+      - enable-heartbeat-and-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout intended source commit
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.source_sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install invoice control dependencies
+        run: python -m pip install "boto3>=1.35.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Arm alarms for any schedules left disabled
+        run: >-
+          python scripts/deploy_invoice_controls.py
+          --arm-bootstrap-failure-alerts
+          --projects vevo roy
+          --region "${AWS_REGION}"

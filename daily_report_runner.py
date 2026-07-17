@@ -207,6 +207,12 @@ def maybe_run_invoice_automation(
 
     put_metric("InvoiceAutomationMatchedOrders", summary.matched_orders, project, reporting_defaults)
     put_metric("InvoiceAutomationSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
+    put_metric(
+        "InvoiceAutomationSkippedBeforeAutomationStart",
+        summary.skipped_before_automation_start,
+        project,
+        reporting_defaults,
+    )
     put_metric("InvoiceAutomationCreated", summary.created_invoices, project, reporting_defaults)
     put_metric("InvoiceAutomationCreateFailures", summary.failed_invoices, project, reporting_defaults)
     put_metric("InvoiceAutomationEmailed", summary.emailed_invoices, project, reporting_defaults)
@@ -233,6 +239,7 @@ def maybe_run_invoice_automation(
         "failed_invoice_emails": summary.failed_invoice_emails,
         "missing_invoice_ids": summary.missing_invoice_ids,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
+        "skipped_before_automation_start": summary.skipped_before_automation_start,
         "dry_run": summary.dry_run,
     }
 
