@@ -61,17 +61,11 @@ class RobustInventoryDemandModelTests(unittest.TestCase):
         self.assertEqual(365, int(row["history_observation_days"]))
         self.assertLess(row["robust_baseline_30d_units"], 5.0)
 
-    def test_two_similar_bulk_orders_are_not_capped_by_portfolio_threshold(self):
+    def test_two_similar_bulk_orders_are_not_capped(self):
         rows = [
-            self._row(f"small-{index}", index + 1, 1, sku="SMALL-SKU")
-            for index in range(20)
+            self._row("bulk-old", 120, 40, sku="BULK-SKU"),
+            self._row("bulk-new", 0, 40, sku="BULK-SKU"),
         ]
-        rows.extend(
-            [
-                self._row("bulk-old", 120, 40, sku="BULK-SKU"),
-                self._row("bulk-new", 0, 40, sku="BULK-SKU"),
-            ]
-        )
 
         result = build_robust_demand_summary(pd.DataFrame(rows), self.anchor)
         row = result.loc[result["product_sku"] == "BULK-SKU"].iloc[0]
@@ -83,15 +77,9 @@ class RobustInventoryDemandModelTests(unittest.TestCase):
 
     def test_two_sparse_orders_still_detect_clear_size_jump(self):
         rows = [
-            self._row(f"small-{index}", index + 1, 1, sku="SMALL-SKU")
-            for index in range(20)
+            self._row("target-old", 120, 1, sku="TARGET-SKU"),
+            self._row("target-spike", 0, 40, sku="TARGET-SKU"),
         ]
-        rows.extend(
-            [
-                self._row("target-old", 120, 1, sku="TARGET-SKU"),
-                self._row("target-spike", 0, 40, sku="TARGET-SKU"),
-            ]
-        )
 
         result = build_robust_demand_summary(pd.DataFrame(rows), self.anchor)
         row = result.loc[result["product_sku"] == "TARGET-SKU"].iloc[0]

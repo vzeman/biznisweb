@@ -66,7 +66,6 @@ def _positive_int(value: Any, default: int) -> int:
 def _order_size_threshold(
     quantities: np.ndarray,
     *,
-    global_threshold: float,
     minimum_history_orders: int,
     iqr_multiplier: float,
     median_multiplier: float,
@@ -93,19 +92,13 @@ def _order_size_threshold(
 
     if values.size == 2:
         # Two similar orders are the only available evidence for a naturally
-        # bulk SKU and must not both be capped by a cross-SKU threshold. When
-        # the second order is materially larger, use the smaller order as the
-        # SKU baseline while allowing the portfolio threshold to protect
-        # globally ordinary order sizes.
-        smaller, larger = np.sort(values)
-        sku_relative_threshold = max(
+        # bulk SKU and must not both be capped. A materially larger second
+        # order is judged only against this SKU's smaller observed order so
+        # classification cannot change when unrelated products are added.
+        smaller = float(np.min(values))
+        return max(
             float(smaller) * sparse_median_multiplier,
             minimum_outlier_units,
-        )
-        portfolio_threshold = max(global_threshold, minimum_outlier_units)
-        return max(
-            sku_relative_threshold,
-            min(portfolio_threshold, float(larger)),
         )
 
     # A single order cannot establish an order-size anomaly for a new SKU.
@@ -249,15 +242,6 @@ def build_robust_demand_summary(
     if order_demand_all.empty:
         return pd.DataFrame(columns=ROBUST_DEMAND_COLUMNS)
 
-    global_quantities = order_demand_all["raw_order_units"].to_numpy(dtype=float)
-    global_median = float(np.median(global_quantities))
-    global_q1, global_q3 = np.quantile(global_quantities, [0.25, 0.75])
-    global_threshold = max(
-        float(global_q3) + iqr_multiplier * max(float(global_q3 - global_q1), 0.0),
-        global_median * median_multiplier,
-        minimum_outlier_units,
-    )
-
     recent_30d_cutoff = anchor - pd.Timedelta(days=29)
     recent_90d_cutoff = anchor - pd.Timedelta(days=89)
     recent_180d_cutoff = anchor - pd.Timedelta(days=179)
@@ -270,7 +254,6 @@ def build_robust_demand_summary(
         quantities = sku_all_orders["raw_order_units"].to_numpy(dtype=float)
         threshold = _order_size_threshold(
             quantities,
-            global_threshold=global_threshold,
             minimum_history_orders=minimum_history_orders,
             iqr_multiplier=iqr_multiplier,
             median_multiplier=median_multiplier,
