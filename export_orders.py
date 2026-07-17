@@ -12,6 +12,7 @@ import copy
 import traceback
 import hashlib
 import base64
+import math
 import re
 import shutil
 import unicodedata
@@ -82,6 +83,11 @@ except ImportError:
 
 from dashboard_modern import extract_embedded_dashboard_payload
 from html_report_generator import generate_html_report, generate_email_strategy_report
+from inventory_demand_model import (
+    build_robust_demand_summary,
+    poisson_tail_probability,
+    update_m_of_n_signal_history,
+)
 
 # Load base environment variables from repo root .env (if present).
 # Accept UTF-8 BOM so local PowerShell rewrites do not break the first key.
@@ -1011,6 +1017,121 @@ class BizniWebExporter:
         rows.extend(self._load_roy_inventory_cost_history_rows_from_payload_path(self.output_path("dashboard_payload_latest.json")))
         rows.extend(self._load_roy_inventory_cost_history_rows_from_s3())
         return rows
+
+    @classmethod
+    def _normalize_roy_demand_signal_history_row(
+        cls,
+        row: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(row, dict):
+            return None
+        sku = str(row.get("sku") or "").strip()
+        last_check_date = cls._history_date(row.get("last_check_date"))
+        persistence_window = max(
+            1,
+            cls._history_int(row.get("trend_persistence_window"), 3),
+        )
+        persistence_required = min(
+            persistence_window,
+            max(
+                1,
+                cls._history_int(row.get("trend_persistence_required"), 2),
+            ),
+        )
+        checks = "".join(
+            character
+            for character in str(row.get("trend_candidate_checks") or "")
+            if character in {"0", "1"}
+        )[-persistence_window:]
+        if not sku or not last_check_date or not checks:
+            return None
+        confirmation_count = checks.count("1")
+        return {
+            "sku": sku,
+            "last_check_date": last_check_date,
+            "trend_candidate_checks": checks,
+            "trend_confirmation_count": confirmation_count,
+            "trend_confirmed_flag": confirmation_count >= persistence_required,
+            "trend_persistence_window": persistence_window,
+            "trend_persistence_required": persistence_required,
+        }
+
+    @classmethod
+    def _extract_roy_demand_signal_history_rows_from_snapshot(
+        cls,
+        snapshot: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        if not isinstance(snapshot, dict):
+            return []
+        dashboard = snapshot.get("dashboard") if isinstance(snapshot.get("dashboard"), dict) else snapshot
+        roy_payload = dashboard.get("roy_product_demand") if isinstance(dashboard, dict) else {}
+        if not isinstance(roy_payload, dict):
+            return []
+        raw_rows = roy_payload.get("demand_signal_history_rows")
+        if not isinstance(raw_rows, list):
+            return []
+        return [
+            normalized
+            for normalized in (
+                cls._normalize_roy_demand_signal_history_row(row)
+                for row in raw_rows
+            )
+            if normalized
+        ]
+
+    @classmethod
+    def _load_roy_demand_signal_history_rows_from_payload_path(
+        cls,
+        path: Path,
+    ) -> List[Dict[str, Any]]:
+        if not path.exists():
+            return []
+        try:
+            snapshot = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Previous Roy demand signal payload is unreadable: %s", exc)
+            return []
+        return cls._extract_roy_demand_signal_history_rows_from_snapshot(snapshot)
+
+    def _load_roy_demand_signal_history_rows_from_s3(self) -> List[Dict[str, Any]]:
+        if self.project_name != "roy" or self.output_tag:
+            return []
+        bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
+        if not bucket:
+            return []
+        prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/") or f"daily-reports/{self.project_name}"
+        region = os.getenv("AWS_REGION", "eu-central-1").strip()
+        try:
+            import boto3  # type: ignore
+        except ImportError:
+            logger.info("boto3 unavailable; skipping previous Roy demand signal S3 load.")
+            return []
+        key = f"{prefix}/latest/dashboard_payload_latest.json"
+        try:
+            body = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)["Body"].read()
+            text = body.decode("utf-8-sig") if isinstance(body, bytes) else str(body)
+            snapshot = json.loads(text)
+        except Exception as exc:
+            logger.info("Previous Roy demand signal S3 payload unavailable: %s", exc)
+            return []
+        return self._extract_roy_demand_signal_history_rows_from_snapshot(snapshot)
+
+    def _load_previous_roy_demand_signal_history_rows(self) -> List[Dict[str, Any]]:
+        if self.project_name != "roy":
+            return []
+        rows = self._load_roy_demand_signal_history_rows_from_payload_path(
+            self.output_path("dashboard_payload_latest.json")
+        )
+        rows.extend(self._load_roy_demand_signal_history_rows_from_s3())
+        by_sku: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            normalized = self._normalize_roy_demand_signal_history_row(row)
+            if not normalized:
+                continue
+            current = by_sku.get(normalized["sku"])
+            if current is None or normalized["last_check_date"] >= current["last_check_date"]:
+                by_sku[normalized["sku"]] = normalized
+        return list(by_sku.values())
 
     @classmethod
     def _merge_roy_inventory_cost_history_rows(
@@ -11188,6 +11309,8 @@ class BizniWebExporter:
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
                 "alert_rows": pd.DataFrame(),
+                "demand_anomaly_rows": pd.DataFrame(),
+                "demand_signal_history_rows": pd.DataFrame(),
                 "restock_priority_rows": pd.DataFrame(),
                 "revenue_at_risk_rows": pd.DataFrame(),
                 "brand_turn_rows": pd.DataFrame(),
@@ -11217,6 +11340,8 @@ class BizniWebExporter:
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
                 "alert_rows": pd.DataFrame(),
+                "demand_anomaly_rows": pd.DataFrame(),
+                "demand_signal_history_rows": pd.DataFrame(),
                 "restock_priority_rows": pd.DataFrame(),
                 "revenue_at_risk_rows": pd.DataFrame(),
                 "brand_turn_rows": pd.DataFrame(),
@@ -11244,6 +11369,8 @@ class BizniWebExporter:
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
                 "alert_rows": pd.DataFrame(),
+                "demand_anomaly_rows": pd.DataFrame(),
+                "demand_signal_history_rows": pd.DataFrame(),
                 "restock_priority_rows": pd.DataFrame(),
                 "revenue_at_risk_rows": pd.DataFrame(),
                 "brand_turn_rows": pd.DataFrame(),
@@ -11613,6 +11740,41 @@ class BizniWebExporter:
         ]
         bundle_component_rules = inventory_config.get("bundle_component_rules") or []
         bundle_component_rules = bundle_component_rules if isinstance(bundle_component_rules, list) else []
+        robust_demand_config = inventory_config.get("robust_demand") or {}
+        robust_demand_config = robust_demand_config if isinstance(robust_demand_config, dict) else {}
+        robust_demand_enabled = bool(robust_demand_config.get("enabled", True))
+        robust_demand_model_version = str(
+            robust_demand_config.get("model_version") or "order-aware-tsb-v1"
+        ).strip()
+        robust_minimum_history_days = max(
+            1,
+            int(robust_demand_config.get("minimum_history_days", 90) or 90),
+        )
+        persistence_window_runs = max(
+            1,
+            int(robust_demand_config.get("persistence_window_runs", 3) or 3),
+        )
+        persistence_required_runs = min(
+            persistence_window_runs,
+            max(
+                1,
+                int(robust_demand_config.get("persistence_required_runs", 2) or 2),
+            ),
+        )
+        service_levels = robust_demand_config.get("service_levels") or {}
+        service_levels = service_levels if isinstance(service_levels, dict) else {}
+        service_level_standard = min(
+            max(float(service_levels.get("standard", 0.95) or 0.95), 0.50),
+            0.999,
+        )
+        service_level_strategic = min(
+            max(float(service_levels.get("strategic", 0.98) or 0.98), service_level_standard),
+            0.999,
+        )
+        service_level_intermittent = min(
+            max(float(service_levels.get("intermittent", 0.90) or 0.90), 0.50),
+            service_level_standard,
+        )
         inbound_stock_config = inventory_config.get("inbound_stock") or {}
         inbound_stock_enabled = bool(inbound_stock_config.get("enabled"))
         inbound_stock_source = str(inbound_stock_config.get("source") or "").strip() or "not_modeled"
@@ -11673,6 +11835,54 @@ class BizniWebExporter:
             )
             .reset_index()
         )
+        robust_demand_summary_df = pd.DataFrame()
+        demand_signal_history_rows_df = pd.DataFrame()
+        if robust_demand_enabled:
+            robust_demand_summary_df = build_robust_demand_summary(
+                demand_df,
+                demand_anchor,
+                robust_demand_config,
+            )
+            if not robust_demand_summary_df.empty:
+                previous_signal_rows = self._load_previous_roy_demand_signal_history_rows()
+                demand_signal_history_rows_df = update_m_of_n_signal_history(
+                    previous_signal_rows,
+                    {
+                        str(row.product_sku): bool(row.trend_candidate_flag)
+                        for row in robust_demand_summary_df.itertuples(index=False)
+                    },
+                    check_date=snapshot_ts,
+                    window_runs=persistence_window_runs,
+                    required_runs=persistence_required_runs,
+                )
+                robust_demand_summary_df = robust_demand_summary_df.merge(
+                    demand_signal_history_rows_df[
+                        [
+                            "sku",
+                            "trend_candidate_checks",
+                            "trend_confirmation_count",
+                            "trend_confirmed_flag",
+                        ]
+                    ],
+                    left_on="product_sku",
+                    right_on="sku",
+                    how="left",
+                ).drop(columns=["sku"], errors="ignore")
+                robust_demand_summary_df["trend_confirmed_flag"] = (
+                    robust_demand_summary_df["trend_confirmed_flag"].fillna(False).astype(bool)
+                )
+                confirmed_trend_mask = (
+                    robust_demand_summary_df["trend_confirmed_flag"]
+                    & ~robust_demand_summary_df["unusual_large_order_flag"]
+                )
+                robust_demand_summary_df.loc[
+                    confirmed_trend_mask,
+                    "demand_signal_code",
+                ] = "confirmed_demand_acceleration"
+                robust_demand_summary_df.loc[
+                    confirmed_trend_mask,
+                    "demand_signal_label",
+                ] = "Recurring demand acceleration confirmed (2 of 3 runs)"
 
         if trend_window_weeks >= 2 and len(week_index) >= trend_window_weeks * 2:
             for row in product_summary.itertuples(index=False):
@@ -11994,6 +12204,7 @@ class BizniWebExporter:
         stock_risk_rows_df = pd.DataFrame()
         dead_stock_rows_df = pd.DataFrame()
         alert_rows_df = pd.DataFrame()
+        demand_anomaly_rows_df = pd.DataFrame()
         restock_priority_rows_df = pd.DataFrame()
         revenue_at_risk_rows_df = pd.DataFrame()
         brand_turn_rows_df = pd.DataFrame()
@@ -12197,6 +12408,13 @@ class BizniWebExporter:
                 on="sku",
                 how="left",
             )
+            if not robust_demand_summary_df.empty:
+                inventory_products_df = inventory_products_df.merge(
+                    robust_demand_summary_df,
+                    left_on="sku",
+                    right_on="product_sku",
+                    how="left",
+                ).drop(columns=["product_sku"], errors="ignore")
 
             for column in (
                 "orders",
@@ -12216,11 +12434,67 @@ class BizniWebExporter:
                 "forecast_30d_revenue",
                 "forecast_30d_units",
                 "forecast_delta_pct",
+                "raw_recent_30d_units",
+                "adjusted_recent_30d_units",
+                "adjusted_recent_90d_units",
+                "adjusted_recent_180d_units",
+                "robust_baseline_30d_units",
+                "unusual_large_order_count_30d",
+                "unusual_large_order_units_30d",
+                "unusual_large_order_adjustment_units_30d",
+                "largest_order_units_30d",
+                "largest_order_share_30d_pct",
+                "order_count_30d",
+                "customer_count_30d",
+                "active_weeks_30d",
+                "positive_order_count_history",
+                "history_observation_days",
+                "typical_order_units",
+                "outlier_threshold_units",
+                "order_rate_per_day",
+                "weekly_zero_share_pct",
+                "trend_confirmation_count",
+                "trend_growth_ratio",
             ):
+                if column not in inventory_products_df.columns:
+                    inventory_products_df[column] = 0.0
                 inventory_products_df[column] = pd.to_numeric(
                     inventory_products_df[column],
                     errors="coerce",
                 ).fillna(0.0)
+
+            for column in (
+                "unusual_large_order_flag",
+                "trend_candidate_flag",
+                "trend_confirmed_flag",
+                "confirmed_repeated_bulk_flag",
+            ):
+                if column not in inventory_products_df.columns:
+                    inventory_products_df[column] = False
+                inventory_products_df[column] = inventory_products_df[column].fillna(False).astype(bool)
+            for column, default in (
+                ("demand_model", "legacy_recent_demand"),
+                ("demand_confidence", "Low"),
+                ("demand_signal_code", "legacy_recent_demand"),
+                ("demand_signal_label", "Legacy recent-demand baseline"),
+                ("trend_candidate_checks", ""),
+            ):
+                if column not in inventory_products_df.columns:
+                    inventory_products_df[column] = default
+                inventory_products_df[column] = (
+                    inventory_products_df[column]
+                    .fillna(default)
+                    .astype(str)
+                    .replace({"nan": default})
+                )
+            inventory_products_df["robust_model_applied_flag"] = (
+                robust_demand_enabled
+                & (inventory_products_df["history_observation_days"] >= robust_minimum_history_days)
+            )
+            inventory_products_df["demand_model_version"] = (
+                robust_demand_model_version if robust_demand_enabled else "legacy"
+            )
+            inventory_products_df = inventory_products_df.copy()
 
             inventory_products_df["historical_restock_relevant_flag"] = (
                 (inventory_products_df["orders"] >= historical_restock_min_orders)
@@ -12285,6 +12559,10 @@ class BizniWebExporter:
             inventory_products_df["bundle_component_recent_30d_units"] = 0.0
             inventory_products_df["bundle_component_recent_90d_units"] = 0.0
             inventory_products_df["bundle_component_forecast_30d_units"] = 0.0
+            inventory_products_df["bundle_component_adjusted_recent_30d_units"] = 0.0
+            inventory_products_df["bundle_component_adjusted_recent_90d_units"] = 0.0
+            inventory_products_df["bundle_component_robust_baseline_30d_units"] = 0.0
+            inventory_products_df["bundle_component_unusual_large_order_units_30d"] = 0.0
             inventory_products_df["bundle_component_order_count"] = 0.0
             inventory_products_df["bundle_component_total_units"] = 0.0
             inventory_products_df["bundle_component_source_revenue"] = 0.0
@@ -12325,6 +12603,21 @@ class BizniWebExporter:
                     )
                     bundle_forecast_30d_units = float(
                         inventory_products_df.loc[bundle_mask, "forecast_30d_units"].sum()
+                    )
+                    bundle_robust_model_mask = (
+                        bundle_mask & inventory_products_df["robust_model_applied_flag"]
+                    )
+                    bundle_adjusted_recent_30d_units = float(
+                        inventory_products_df.loc[bundle_robust_model_mask, "adjusted_recent_30d_units"].sum()
+                    )
+                    bundle_adjusted_recent_90d_units = float(
+                        inventory_products_df.loc[bundle_robust_model_mask, "adjusted_recent_90d_units"].sum()
+                    )
+                    bundle_robust_baseline_30d_units = float(
+                        inventory_products_df.loc[bundle_robust_model_mask, "robust_baseline_30d_units"].sum()
+                    )
+                    bundle_unusual_large_order_units_30d = float(
+                        inventory_products_df.loc[bundle_mask, "unusual_large_order_units_30d"].sum()
                     )
                     bundle_first_sale = pd.to_datetime(
                         inventory_products_df.loc[bundle_mask, "first_sale"],
@@ -12374,6 +12667,22 @@ class BizniWebExporter:
                             component_mask,
                             "bundle_component_forecast_30d_units",
                         ] += bundle_forecast_30d_units * component_qty
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_adjusted_recent_30d_units",
+                        ] += bundle_adjusted_recent_30d_units * component_qty
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_adjusted_recent_90d_units",
+                        ] += bundle_adjusted_recent_90d_units * component_qty
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_robust_baseline_30d_units",
+                        ] += bundle_robust_baseline_30d_units * component_qty
+                        inventory_products_df.loc[
+                            component_mask,
+                            "bundle_component_unusual_large_order_units_30d",
+                        ] += bundle_unusual_large_order_units_30d * component_qty
                         if pd.notna(bundle_first_sale):
                             current_first_sale = pd.to_datetime(
                                 inventory_products_df.loc[component_mask, "first_sale"],
@@ -12412,6 +12721,12 @@ class BizniWebExporter:
                                 "recent_90d_profit_with_fixed",
                                 "forecast_30d_units",
                                 "forecast_30d_revenue",
+                                "raw_recent_30d_units",
+                                "adjusted_recent_30d_units",
+                                "adjusted_recent_90d_units",
+                                "adjusted_recent_180d_units",
+                                "robust_baseline_30d_units",
+                                "unusual_large_order_units_30d",
                             ],
                         ] = 0.0
                         inventory_products_df.loc[bundle_mask, ["first_sale", "last_sale"]] = pd.NaT
@@ -12428,6 +12743,7 @@ class BizniWebExporter:
                     & (inventory_products_df["bundle_component_source_revenue"] >= historical_restock_min_revenue)
                 )
             )
+            inventory_products_df = inventory_products_df.copy()
 
             inventory_products_df["margin_without_fixed_pct"] = np.where(
                 inventory_products_df["revenue"] != 0,
@@ -12466,6 +12782,32 @@ class BizniWebExporter:
                 inventory_products_df["forecast_30d_units"]
                 + inventory_products_df["bundle_component_forecast_30d_units"]
             )
+            inventory_products_df["effective_adjusted_recent_30d_units"] = (
+                inventory_products_df["adjusted_recent_30d_units"]
+                + inventory_products_df["bundle_component_adjusted_recent_30d_units"]
+            )
+            inventory_products_df["effective_adjusted_recent_90d_units"] = (
+                inventory_products_df["adjusted_recent_90d_units"]
+                + inventory_products_df["bundle_component_adjusted_recent_90d_units"]
+            )
+            inventory_products_df["effective_robust_baseline_30d_units"] = (
+                inventory_products_df["robust_baseline_30d_units"]
+                + inventory_products_df["bundle_component_robust_baseline_30d_units"]
+            )
+            inventory_products_df["raw_recent_30d_units"] = inventory_products_df[
+                "effective_recent_30d_units"
+            ]
+            inventory_products_df["unusual_large_order_units_30d"] = (
+                inventory_products_df["unusual_large_order_units_30d"]
+                + inventory_products_df["bundle_component_unusual_large_order_units_30d"]
+            )
+            inventory_products_df["unusual_large_order_adjustment_units_30d"] = (
+                inventory_products_df["unusual_large_order_units_30d"]
+            )
+            inventory_products_df["unusual_large_order_flag"] = (
+                inventory_products_df["unusual_large_order_flag"]
+                | (inventory_products_df["bundle_component_unusual_large_order_units_30d"] > 0)
+            )
             inventory_products_df["forecast_uplift_weight"] = (
                 inventory_products_df["forecast_confidence"]
                 .astype(str)
@@ -12479,24 +12821,60 @@ class BizniWebExporter:
                 - inventory_products_df["effective_recent_30d_units"],
                 0.0,
             )
-            inventory_products_df["alert_30d_units"] = (
+            inventory_products_df["raw_alert_30d_units"] = (
                 inventory_products_df["effective_recent_30d_units"]
                 + positive_unit_uplift * inventory_products_df["forecast_uplift_weight"]
             )
             no_recent_units_mask = inventory_products_df["effective_recent_30d_units"] <= 0
-            inventory_products_df.loc[no_recent_units_mask, "alert_30d_units"] = (
+            inventory_products_df.loc[no_recent_units_mask, "raw_alert_30d_units"] = (
                 inventory_products_df.loc[no_recent_units_mask, "effective_forecast_30d_units"]
                 * inventory_products_df.loc[no_recent_units_mask, "forecast_uplift_weight"]
             )
             historical_unit_fallback_mask = (
                 inventory_products_df["historical_restock_relevant_flag"]
-                & (inventory_products_df["alert_30d_units"] <= 0)
+                & (inventory_products_df["raw_alert_30d_units"] <= 0)
                 & (inventory_products_df["effective_recent_90d_units"] > 0)
             )
-            inventory_products_df.loc[historical_unit_fallback_mask, "alert_30d_units"] = (
+            inventory_products_df.loc[historical_unit_fallback_mask, "raw_alert_30d_units"] = (
                 inventory_products_df.loc[historical_unit_fallback_mask, "effective_recent_90d_units"]
                 * (30.0 / 90.0)
             )
+            robust_component_mask = (
+                inventory_products_df["bundle_component_robust_baseline_30d_units"] > 0
+            )
+            smart_model_mask = (
+                inventory_products_df["robust_model_applied_flag"]
+                | robust_component_mask
+            )
+            confirmed_trend_mask = (
+                inventory_products_df["trend_confirmed_flag"]
+                | inventory_products_df["confirmed_repeated_bulk_flag"]
+            )
+            confirmed_forecast_uplift = np.maximum(
+                inventory_products_df["effective_forecast_30d_units"]
+                - inventory_products_df["effective_robust_baseline_30d_units"],
+                0.0,
+            )
+            inventory_products_df["alert_30d_units"] = inventory_products_df[
+                "raw_alert_30d_units"
+            ]
+            inventory_products_df.loc[smart_model_mask, "alert_30d_units"] = (
+                inventory_products_df.loc[
+                    smart_model_mask,
+                    "effective_robust_baseline_30d_units",
+                ]
+                + (
+                    confirmed_forecast_uplift.loc[smart_model_mask]
+                    * inventory_products_df.loc[smart_model_mask, "forecast_uplift_weight"]
+                    * confirmed_trend_mask.loc[smart_model_mask].astype(float)
+                )
+            )
+            inventory_products_df["demand_adjustment_units_30d"] = np.maximum(
+                inventory_products_df["raw_alert_30d_units"]
+                - inventory_products_df["alert_30d_units"],
+                0.0,
+            )
+            inventory_products_df["smart_demand_model_active"] = smart_model_mask
             inventory_products_df["daily_units_for_alert"] = inventory_products_df["alert_30d_units"] / 30.0
             inventory_products_df["days_of_cover"] = np.where(
                 inventory_products_df["daily_units_for_alert"] > 0,
@@ -12507,23 +12885,36 @@ class BizniWebExporter:
                 inventory_products_df["forecast_30d_revenue"] - inventory_products_df["recent_30d_revenue"],
                 0.0,
             )
-            inventory_products_df["alert_30d_revenue"] = (
+            inventory_products_df["raw_alert_30d_revenue"] = (
                 inventory_products_df["recent_30d_revenue"]
                 + positive_revenue_uplift * inventory_products_df["forecast_uplift_weight"]
             )
             no_recent_revenue_mask = inventory_products_df["recent_30d_revenue"] <= 0
-            inventory_products_df.loc[no_recent_revenue_mask, "alert_30d_revenue"] = (
+            inventory_products_df.loc[no_recent_revenue_mask, "raw_alert_30d_revenue"] = (
                 inventory_products_df.loc[no_recent_revenue_mask, "forecast_30d_revenue"]
                 * inventory_products_df.loc[no_recent_revenue_mask, "forecast_uplift_weight"]
             )
             historical_revenue_fallback_mask = (
                 inventory_products_df["historical_restock_relevant_flag"]
-                & (inventory_products_df["alert_30d_revenue"] <= 0)
+                & (inventory_products_df["raw_alert_30d_revenue"] <= 0)
                 & (inventory_products_df["recent_90d_revenue"] > 0)
             )
-            inventory_products_df.loc[historical_revenue_fallback_mask, "alert_30d_revenue"] = (
+            inventory_products_df.loc[historical_revenue_fallback_mask, "raw_alert_30d_revenue"] = (
                 inventory_products_df.loc[historical_revenue_fallback_mask, "recent_90d_revenue"]
                 * (30.0 / 90.0)
+            )
+            inventory_products_df["alert_30d_revenue"] = inventory_products_df[
+                "raw_alert_30d_revenue"
+            ]
+            smart_demand_ratio = np.where(
+                inventory_products_df["raw_alert_30d_units"] > 0,
+                inventory_products_df["alert_30d_units"]
+                / inventory_products_df["raw_alert_30d_units"],
+                1.0,
+            )
+            inventory_products_df.loc[smart_model_mask, "alert_30d_revenue"] = (
+                inventory_products_df.loc[smart_model_mask, "raw_alert_30d_revenue"]
+                * smart_demand_ratio[smart_model_mask]
             )
             inventory_products_df["alert_30d_profit_estimate"] = (
                 inventory_products_df["alert_30d_revenue"] * inventory_products_df["recent_margin_with_fixed_pct"] / 100.0
@@ -12568,6 +12959,68 @@ class BizniWebExporter:
                     | (inventory_products_df["effective_recent_90d_units"] <= 0)
                 )
             )
+            inventory_products_df["service_level_target"] = np.select(
+                [
+                    inventory_products_df["strategic_stock_flag"],
+                    inventory_products_df["demand_model"].eq("tsb_intermittent"),
+                ],
+                [service_level_strategic, service_level_intermittent],
+                default=service_level_standard,
+            )
+            typical_units_for_risk = inventory_products_df["typical_order_units"].where(
+                inventory_products_df["typical_order_units"] > 0,
+                np.minimum(
+                    np.maximum(inventory_products_df["alert_30d_units"], 1.0),
+                    5.0,
+                ),
+            )
+            order_rate_for_risk = inventory_products_df["order_rate_per_day"].where(
+                inventory_products_df["order_rate_per_day"] > 0,
+                np.where(
+                    typical_units_for_risk > 0,
+                    inventory_products_df["daily_units_for_alert"] / typical_units_for_risk,
+                    0.0,
+                ),
+            )
+            inventory_products_df["lead_time_expected_orders"] = (
+                order_rate_for_risk * inventory_products_df["lead_time_calendar_days"]
+            )
+
+            def _lead_time_stockout_probability(row: pd.Series) -> float:
+                demand_30d = float(row.get("alert_30d_units") or 0.0)
+                lead_time_days = int(row.get("lead_time_calendar_days") or 0)
+                if demand_30d <= 0 or lead_time_days <= 0:
+                    return 0.0
+                if float(row.get("available_quantity_raw") or 0.0) <= 0:
+                    return 1.0
+                typical_units = max(float(row.get("_typical_units_for_risk") or 0.0), 1e-9)
+                available_units = max(float(row.get("net_available_quantity") or 0.0), 0.0)
+                required_orders = math.floor(available_units / typical_units) + 1
+                return poisson_tail_probability(
+                    row.get("lead_time_expected_orders"),
+                    required_orders,
+                )
+
+            inventory_products_df["_typical_units_for_risk"] = typical_units_for_risk
+            inventory_products_df["lead_time_stockout_probability"] = pd.Series(
+                [
+                    _lead_time_stockout_probability(row)
+                    for _, row in inventory_products_df.iterrows()
+                ],
+                index=inventory_products_df.index,
+                dtype=float,
+            )
+            inventory_products_df = inventory_products_df.drop(
+                columns=["_typical_units_for_risk"],
+                errors="ignore",
+            )
+            inventory_products_df["lead_time_stockout_risk_flag"] = (
+                (inventory_products_df["alert_30d_units"] > 0)
+                & (
+                    inventory_products_df["lead_time_stockout_probability"]
+                    > (1.0 - inventory_products_df["service_level_target"])
+                )
+            )
 
             def _inventory_risk_label(row: pd.Series) -> str:
                 available_raw = float(row.get("available_quantity_raw") or 0.0)
@@ -12582,9 +13035,13 @@ class BizniWebExporter:
                         return "Critical"
                     if days_of_cover <= warning_days_of_cover:
                         return "Low"
+                    if bool(row.get("lead_time_stockout_risk_flag")):
+                        return "Lead time risk"
                     if days_of_cover <= watch_days_of_cover:
                         return "Watch"
                     return "Healthy"
+                if bool(row.get("lead_time_stockout_risk_flag")):
+                    return "Lead time risk"
                 if float(row.get("available_quantity") or 0.0) > 0:
                     return "Dormant"
                 return "No demand signal"
@@ -12594,10 +13051,11 @@ class BizniWebExporter:
                 "Out of stock": 1,
                 "Critical": 2,
                 "Low": 3,
-                "Watch": 4,
-                "Dormant": 5,
-                "Healthy": 6,
-                "No demand signal": 7,
+                "Lead time risk": 4,
+                "Watch": 5,
+                "Dormant": 6,
+                "Healthy": 7,
+                "No demand signal": 8,
             }
             inventory_products_df["stock_risk_level"] = inventory_products_df.apply(_inventory_risk_label, axis=1)
             inventory_products_df["stock_risk_rank"] = inventory_products_df["stock_risk_level"].map(risk_rank).fillna(99).astype(int)
@@ -12607,13 +13065,74 @@ class BizniWebExporter:
                 0.0,
             )
             inventory_products_df["risk_30d_flag"] = inventory_products_df["stock_risk_level"].isin(
-                ["Negative stock", "Out of stock", "Critical", "Low"]
+                ["Negative stock", "Out of stock", "Critical", "Low", "Lead time risk"]
             )
             inventory_products_df["risk_45d_flag"] = inventory_products_df["stock_risk_level"].isin(
-                ["Negative stock", "Out of stock", "Critical", "Low", "Watch"]
+                ["Negative stock", "Out of stock", "Critical", "Low", "Lead time risk", "Watch"]
             )
             inventory_products_df["critical_flag"] = inventory_products_df["stock_risk_level"].isin(
                 ["Negative stock", "Out of stock", "Critical"]
+            )
+
+            def _inventory_alert_reason(row: pd.Series) -> pd.Series:
+                risk_level = str(row.get("stock_risk_level") or "")
+                unusual_order = bool(row.get("unusual_large_order_flag"))
+                confirmed_acceleration = bool(
+                    row.get("trend_confirmed_flag")
+                    or row.get("confirmed_repeated_bulk_flag")
+                )
+                if risk_level == "Negative stock":
+                    code = "negative_stock"
+                    label = "Záporný fyzický stav skladu"
+                elif unusual_order and risk_level in {
+                    "Out of stock",
+                    "Critical",
+                    "Low",
+                    "Lead time risk",
+                    "Watch",
+                }:
+                    code = "low_stock_after_large_order"
+                    label = "Nízky sklad po neobvykle veľkej objednávke"
+                elif risk_level == "Out of stock":
+                    code = "out_of_stock"
+                    label = "Vypredané pri opakovanom dopyte"
+                elif risk_level == "Lead time risk":
+                    code = "lead_time_stockout_risk"
+                    label = "Riziko vypredania počas dodacej lehoty"
+                elif confirmed_acceleration and risk_level in {"Critical", "Low", "Watch"}:
+                    code = "confirmed_demand_acceleration"
+                    label = "Potvrdené opakované zrýchlenie dopytu"
+                elif risk_level in {"Critical", "Low", "Watch"}:
+                    code = "low_stock_robust_baseline"
+                    label = "Nízky sklad podľa robustného opakovaného dopytu"
+                elif unusual_order:
+                    code = "unusual_large_order"
+                    label = "Neobvykle veľká objednávka bez potvrdenia trendu"
+                else:
+                    code = "monitor_robust_baseline"
+                    label = "Monitorovať robustný opakovaný dopyt"
+                return pd.Series([code, label])
+
+            if inventory_products_df.empty:
+                inventory_products_df["alert_reason_code"] = pd.Series(dtype="object")
+                inventory_products_df["alert_reason_label_sk"] = pd.Series(dtype="object")
+            else:
+                inventory_products_df[
+                    ["alert_reason_code", "alert_reason_label_sk"]
+                ] = inventory_products_df.apply(_inventory_alert_reason, axis=1)
+            inventory_products_df["demand_signal_label_sk"] = np.select(
+                [
+                    inventory_products_df["unusual_large_order_flag"],
+                    inventory_products_df["trend_confirmed_flag"]
+                    | inventory_products_df["confirmed_repeated_bulk_flag"],
+                    inventory_products_df["demand_model"].eq("tsb_intermittent"),
+                ],
+                [
+                    "Jednorazová veľká objednávka; baseline je chránený",
+                    "Opakované zrýchlenie dopytu je potvrdené",
+                    "Prerušovaný dopyt; TSB occurrence × typická objednávka",
+                ],
+                default="Robustný priemer za 30/90/180 dní",
             )
             inventory_products_df["dead_stock_cost_component"] = np.where(
                 inventory_products_df["dead_stock_flag"],
@@ -12814,6 +13333,7 @@ class BizniWebExporter:
                     "Out of stock": 0.18,
                     "Critical": 0.10,
                     "Low": 0.05,
+                    "Lead time risk": 0.05,
                     "Watch": 0.02,
                 }
             ).fillna(0.0)
@@ -12854,7 +13374,7 @@ class BizniWebExporter:
             stock_risk_rows_df = (
                 inventory_products_df.loc[
                     inventory_products_df["stock_risk_level"].isin(
-                        ["Negative stock", "Out of stock", "Critical", "Low", "Watch"]
+                        ["Negative stock", "Out of stock", "Critical", "Low", "Lead time risk", "Watch"]
                     )
                 ]
                 .sort_values(["stock_risk_rank", "days_of_cover", "inventory_cost_value"], ascending=[True, True, False])
@@ -12881,6 +13401,21 @@ class BizniWebExporter:
                         "alert_30d_revenue",
                     ],
                     ascending=[False, False, True, False, False],
+                )
+                .reset_index(drop=True)
+            )
+            demand_anomaly_rows_df = (
+                inventory_products_df.loc[
+                    inventory_products_df["unusual_large_order_flag"]
+                    & ~inventory_products_df["alert_excluded_flag"]
+                ]
+                .sort_values(
+                    [
+                        "risk_30d_flag",
+                        "unusual_large_order_adjustment_units_30d",
+                        "largest_order_units_30d",
+                    ],
+                    ascending=[False, False, False],
                 )
                 .reset_index(drop=True)
             )
@@ -12967,6 +13502,19 @@ class BizniWebExporter:
                             "projected_stockout_date",
                             "stock_risk_level",
                             "cost_coverage_pct",
+                            "raw_recent_30d_units",
+                            "raw_alert_30d_units",
+                            "alert_30d_units",
+                            "demand_adjustment_units_30d",
+                            "unusual_large_order_flag",
+                            "demand_model",
+                            "demand_model_version",
+                            "demand_confidence",
+                            "demand_signal_code",
+                            "demand_signal_label_sk",
+                            "lead_time_stockout_probability",
+                            "alert_reason_code",
+                            "alert_reason_label_sk",
                         ]
                     ],
                     on="sku",
@@ -13019,10 +13567,14 @@ class BizniWebExporter:
                     inventory_products_df["stock_risk_level"].isin(["Negative stock", "Out of stock", "Critical"]).sum()
                 ) if not inventory_products_df.empty else 0,
                 "stock_risk_30d_count": int(
-                    inventory_products_df["stock_risk_level"].isin(["Negative stock", "Out of stock", "Critical", "Low"]).sum()
+                    inventory_products_df["stock_risk_level"].isin(
+                        ["Negative stock", "Out of stock", "Critical", "Low", "Lead time risk"]
+                    ).sum()
                 ) if not inventory_products_df.empty else 0,
                 "stock_risk_45d_count": int(
-                    inventory_products_df["stock_risk_level"].isin(["Negative stock", "Out of stock", "Critical", "Low", "Watch"]).sum()
+                    inventory_products_df["stock_risk_level"].isin(
+                        ["Negative stock", "Out of stock", "Critical", "Low", "Lead time risk", "Watch"]
+                    ).sum()
                 ) if not inventory_products_df.empty else 0,
                 "out_of_stock_recent_demand_count": int(
                     (inventory_products_df["stock_risk_level"] == "Out of stock").sum()
@@ -13068,6 +13620,38 @@ class BizniWebExporter:
                 ) if not restock_priority_rows_df.empty else 0,
                 "alert_delivery_horizon_days": int(alert_delivery_horizon_days),
                 "alert_delivery_count": int(len(alert_rows_df)),
+                "demand_model_version": robust_demand_model_version if robust_demand_enabled else "legacy",
+                "robust_demand_model_enabled": robust_demand_enabled,
+                "robust_demand_model_applied_count": int(
+                    inventory_products_df["smart_demand_model_active"].sum()
+                ) if not inventory_products_df.empty else 0,
+                "intermittent_demand_product_count": int(
+                    inventory_products_df["demand_model"].eq("tsb_intermittent").sum()
+                ) if not inventory_products_df.empty else 0,
+                "demand_anomaly_count": int(len(demand_anomaly_rows_df)),
+                "demand_anomaly_order_count": int(
+                    inventory_products_df["unusual_large_order_count_30d"].sum()
+                ) if not inventory_products_df.empty else 0,
+                "demand_anomaly_adjustment_units_30d": round(
+                    float(inventory_products_df["unusual_large_order_adjustment_units_30d"].sum()),
+                    1,
+                ) if not inventory_products_df.empty else 0.0,
+                "confirmed_demand_acceleration_count": int(
+                    (
+                        inventory_products_df["trend_confirmed_flag"]
+                        | inventory_products_df["confirmed_repeated_bulk_flag"]
+                    ).sum()
+                ) if not inventory_products_df.empty else 0,
+                "lead_time_stockout_risk_count": int(
+                    inventory_products_df["lead_time_stockout_risk_flag"].sum()
+                ) if not inventory_products_df.empty else 0,
+                "alerts_after_large_order_count": int(
+                    (
+                        alert_rows_df["unusual_large_order_flag"]
+                        if not alert_rows_df.empty
+                        else pd.Series(dtype=bool)
+                    ).sum()
+                ),
                 "alert_delivery_hero_count": int(alert_rows_df["strategic_stock_flag"].sum()) if not alert_rows_df.empty else 0,
                 "reorder_cash_estimate": round(
                     float(
@@ -13113,6 +13697,8 @@ class BizniWebExporter:
             "stock_risk_rows": stock_risk_rows_df,
             "dead_stock_rows": dead_stock_rows_df,
             "alert_rows": alert_rows_df,
+            "demand_anomaly_rows": demand_anomaly_rows_df,
+            "demand_signal_history_rows": demand_signal_history_rows_df,
             "restock_priority_rows": restock_priority_rows_df,
             "revenue_at_risk_rows": revenue_at_risk_rows_df,
             "brand_turn_rows": brand_turn_rows_df,

@@ -378,6 +378,32 @@
       "medium": 0.3,
       "low": 0.15
     },
+    "robust_demand": {
+      "enabled": true,
+      "model_version": "order-aware-tsb-v1",
+      "minimum_history_days": 90,
+      "lookback_days": 365,
+      "minimum_history_orders": 12,
+      "iqr_multiplier": 1.5,
+      "median_multiplier": 3,
+      "sparse_median_multiplier": 4,
+      "minimum_outlier_units": 5,
+      "intermittent_zero_week_threshold": 0.5,
+      "tsb_size_alpha": 0.05,
+      "tsb_occurrence_beta": 0.05,
+      "trend_window_days": 45,
+      "trend_confirmation_min_orders": 3,
+      "trend_confirmation_min_active_weeks": 2,
+      "trend_growth_ratio": 1.5,
+      "trend_min_units_30d": 4,
+      "persistence_window_runs": 3,
+      "persistence_required_runs": 2,
+      "service_levels": {
+        "strategic": 0.98,
+        "standard": 0.95,
+        "intermittent": 0.9
+      }
+    },
     "reorder_cover_days": 30,
     "hero_reorder_cover_days": 45,
     "default_lead_time_working_days": 5,

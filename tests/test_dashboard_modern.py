@@ -183,6 +183,91 @@ class DashboardModernTests(unittest.TestCase):
             payload["roy_product_demand"]["inventory_cost_history_rows"][-1]["inventory_cost_value"],
         )
 
+    def test_smart_inventory_fields_and_persistence_survive_payload_roundtrip(self) -> None:
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2026-07-17"),
+                    "total_revenue": 100.0,
+                    "net_profit": 20.0,
+                    "contribution_profit": 25.0,
+                    "unique_orders": 1,
+                    "fb_ads_spend": 0.0,
+                    "google_ads_spend": 0.0,
+                    "total_items": 1,
+                    "product_expense": 60.0,
+                    "total_cost": 80.0,
+                    "pre_ad_contribution_profit": 35.0,
+                }
+            ]
+        )
+        items_agg = pd.DataFrame(
+            [{"item_label": "Test", "total_quantity": 1, "total_revenue": 100.0}]
+        )
+        smart_row = {
+            "sku": "SPIKE-1",
+            "product": "Slow product",
+            "available_quantity": 20,
+            "stock_risk_level": "Healthy",
+            "raw_recent_30d_units": 40,
+            "raw_alert_30d_units": 42.8,
+            "alert_30d_units": 0.8,
+            "demand_adjustment_units_30d": 42.0,
+            "unusual_large_order_flag": True,
+            "unusual_large_order_adjustment_units_30d": 35,
+            "largest_order_units_30d": 40,
+            "demand_model": "tsb_intermittent",
+            "demand_model_version": "order-aware-tsb-v1",
+            "demand_confidence": "Low",
+            "demand_signal_code": "one_off_large_order",
+            "demand_signal_label_sk": "Jednorazová veľká objednávka",
+            "lead_time_stockout_probability": 0.01,
+            "alert_reason_code": "unusual_large_order",
+            "alert_reason_label_sk": "Neobvykle veľká objednávka bez potvrdenia trendu",
+        }
+
+        html = generate_modern_dashboard(
+            date_agg,
+            items_agg,
+            datetime(2026, 7, 17),
+            datetime(2026, 7, 17),
+            advanced_dtc_metrics={
+                "roy_product_demand": {
+                    "summary": {
+                        "inventory_status": "ok",
+                        "demand_model_version": "order-aware-tsb-v1",
+                    },
+                    "inventory_rows": pd.DataFrame([smart_row]),
+                    "demand_anomaly_rows": pd.DataFrame([smart_row]),
+                    "demand_signal_history_rows": pd.DataFrame(
+                        [
+                            {
+                                "sku": "SPIKE-1",
+                                "last_check_date": "2026-07-17",
+                                "trend_candidate_checks": "010",
+                                "trend_confirmation_count": 1,
+                                "trend_confirmed_flag": False,
+                                "trend_persistence_window": 3,
+                                "trend_persistence_required": 2,
+                            }
+                        ]
+                    ),
+                }
+            },
+            source_health={"project": "roy"},
+        )
+
+        payload = extract_embedded_dashboard_payload(html)["roy_product_demand"]
+        self.assertEqual(40, payload["inventory_rows"][0]["raw_recent_30d_units"])
+        self.assertEqual(
+            "one_off_large_order",
+            payload["demand_anomaly_rows"][0]["demand_signal_code"],
+        )
+        self.assertEqual(
+            "010",
+            payload["demand_signal_history_rows"][0]["trend_candidate_checks"],
+        )
+
     def test_creditnote_metrics_are_visible_in_modern_dashboard(self) -> None:
         date_agg = pd.DataFrame(
             [

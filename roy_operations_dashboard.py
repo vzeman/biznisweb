@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 
+from inventory_demand_model import poisson_tail_probability
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
 
 
@@ -1652,6 +1653,7 @@ def _inventory_row_collections(inventory: Dict[str, Any]) -> Iterable[Tuple[str,
         "restock_priority_rows",
         "revenue_at_risk_rows",
         "forecast_rows",
+        "demand_anomaly_rows",
     ):
         rows = inventory.get(key)
         if isinstance(rows, list):
@@ -1672,8 +1674,8 @@ def _current_availability_by_sku(inventory: Dict[str, Any]) -> Dict[str, float]:
 
 
 def _stock_risk_sets() -> Tuple[set[str], set[str]]:
-    risk_30d = {"Negative stock", "Out of stock", "Critical", "Low"}
-    risk_45d = {"Negative stock", "Out of stock", "Critical", "Low", "Watch"}
+    risk_30d = {"Negative stock", "Out of stock", "Critical", "Low", "Lead time risk"}
+    risk_45d = {"Negative stock", "Out of stock", "Critical", "Low", "Lead time risk", "Watch"}
     return risk_30d, risk_45d
 
 
@@ -1968,6 +1970,80 @@ def fetch_current_stock_for_inventory_alerts(
     return current_stock, diagnostics
 
 
+def _smart_lead_time_stockout_risk(
+    row: Dict[str, Any],
+    *,
+    available: float,
+    available_raw: float,
+    demand_30d: float,
+    lead_time_calendar_days: int,
+) -> Tuple[float, bool]:
+    if demand_30d <= 0 or lead_time_calendar_days <= 0:
+        return 0.0, False
+    if available_raw <= 0:
+        return 1.0, True
+    typical_units = _to_float(row.get("typical_order_units"))
+    if typical_units <= 0:
+        typical_units = min(max(demand_30d, 1.0), 5.0)
+    order_rate = _to_float(row.get("order_rate_per_day"))
+    if order_rate <= 0:
+        order_rate = (demand_30d / 30.0) / typical_units
+    expected_orders = max(order_rate * lead_time_calendar_days, 0.0)
+    required_orders = math.floor(max(available, 0.0) / typical_units) + 1
+    probability = poisson_tail_probability(expected_orders, required_orders)
+    service_level = _to_float(row.get("service_level_target")) or 0.95
+    service_level = min(max(service_level, 0.50), 0.999)
+    return probability, probability > (1.0 - service_level)
+
+
+def _refresh_inventory_alert_reason(row: Dict[str, Any]) -> None:
+    risk_level = str(row.get("stock_risk_level") or "")
+    unusual_order = bool(row.get("unusual_large_order_flag"))
+    confirmed_acceleration = bool(
+        row.get("trend_confirmed_flag")
+        or row.get("confirmed_repeated_bulk_flag")
+    )
+    if risk_level == "Negative stock":
+        code, label = "negative_stock", "Záporný fyzický stav skladu"
+    elif unusual_order and risk_level in {
+        "Out of stock",
+        "Critical",
+        "Low",
+        "Lead time risk",
+        "Watch",
+    }:
+        code, label = (
+            "low_stock_after_large_order",
+            "Nízky sklad po neobvykle veľkej objednávke",
+        )
+    elif risk_level == "Out of stock":
+        code, label = "out_of_stock", "Vypredané pri opakovanom dopyte"
+    elif risk_level == "Lead time risk":
+        code, label = (
+            "lead_time_stockout_risk",
+            "Riziko vypredania počas dodacej lehoty",
+        )
+    elif confirmed_acceleration and risk_level in {"Critical", "Low", "Watch"}:
+        code, label = (
+            "confirmed_demand_acceleration",
+            "Potvrdené opakované zrýchlenie dopytu",
+        )
+    elif risk_level in {"Critical", "Low", "Watch"}:
+        code, label = (
+            "low_stock_robust_baseline",
+            "Nízky sklad podľa robustného opakovaného dopytu",
+        )
+    elif unusual_order:
+        code, label = (
+            "unusual_large_order",
+            "Neobvykle veľká objednávka bez potvrdenia trendu",
+        )
+    else:
+        code, label = "monitor_robust_baseline", "Monitorovať robustný opakovaný dopyt"
+    row["alert_reason_code"] = code
+    row["alert_reason_label_sk"] = label
+
+
 def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_settings: Dict[str, Any]) -> None:
     thresholds = _stock_model_thresholds(project_settings)
     available = _to_float(row.get("available_quantity"))
@@ -1978,6 +2054,15 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
     daily_units = alert_30d_units / 30.0 if alert_30d_units > 0 else 0.0
     days_of_cover: Optional[float] = None
     current_risk = str(row.get("stock_risk_level") or "")
+    lead_time_working = int(round(_to_float(row.get("lead_time_working_days"))))
+    lead_time_calendar = int(math.ceil(max(0, lead_time_working) * (7.0 / 5.0)))
+    lead_time_probability, lead_time_risk = _smart_lead_time_stockout_risk(
+        row,
+        available=available,
+        available_raw=available_raw,
+        demand_30d=alert_30d_units,
+        lead_time_calendar_days=lead_time_calendar,
+    )
     if daily_units > 0:
         days_of_cover = available / daily_units
         if available_raw < 0:
@@ -1988,6 +2073,8 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
             current_risk = "Critical"
         elif days_of_cover <= thresholds["warning_days"]:
             current_risk = "Low"
+        elif lead_time_risk:
+            current_risk = "Lead time risk"
         elif days_of_cover <= thresholds["watch_days"]:
             current_risk = "Watch"
         else:
@@ -1995,8 +2082,6 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
     elif available > 0:
         current_risk = "Healthy"
 
-    lead_time_working = int(round(_to_float(row.get("lead_time_working_days"))))
-    lead_time_calendar = int(math.ceil(max(0, lead_time_working) * (7.0 / 5.0)))
     target_cover = lead_time_calendar + (
         thresholds["hero_cover_days"] if bool(row.get("strategic_stock_flag")) else thresholds["reorder_cover_days"]
     )
@@ -2019,16 +2104,19 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
             "suggested_reorder_units": round(suggested, 1),
             "reorder_now_flag": current_risk in {"Negative stock", "Out of stock", "Critical"},
             "prepare_po_flag": current_risk == "Watch",
+            "lead_time_stockout_probability": round(lead_time_probability, 6),
+            "lead_time_stockout_risk_flag": lead_time_risk,
         }
     )
     if current_risk in {"Negative stock", "Out of stock", "Critical"}:
         row["reorder_action_label"] = "Order now"
-    elif current_risk == "Low":
+    elif current_risk in {"Low", "Lead time risk"}:
         row["reorder_action_label"] = "30d alert"
     elif current_risk == "Watch":
         row["reorder_action_label"] = "Prepare PO"
     elif str(row.get("reorder_action_label") or "") in {"Order now", "30d alert", "Prepare PO"}:
         row["reorder_action_label"] = "OK"
+    _refresh_inventory_alert_reason(row)
 
 
 def _apply_current_stock_to_inventory(
@@ -2108,6 +2196,12 @@ def _finalize_inventory_alert_rows(inventory: Dict[str, Any]) -> None:
             "restock_priority_high_count": sum(
                 1 for row in restock_rows if 60 <= _to_float(row.get("restock_priority_score")) < 80
             ),
+            "demand_anomaly_count": len(inventory.get("demand_anomaly_rows", [])),
+            "lead_time_stockout_risk_count": sum(
+                1
+                for row in stock_risk_rows
+                if bool(row.get("lead_time_stockout_risk_flag"))
+            ),
         }
     )
 
@@ -2183,6 +2277,14 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         days_of_cover = (net_available / daily_units) if daily_units > 0 else None
         lead_time_working = int(round(_to_float(row.get("lead_time_working_days"))))
         lead_time_calendar = int(math.ceil(max(0, lead_time_working) * (7.0 / 5.0)))
+        available_raw = _to_float(row.get("available_quantity_raw", available))
+        lead_time_probability, lead_time_risk = _smart_lead_time_stockout_risk(
+            row,
+            available=net_available,
+            available_raw=available_raw + ordered_units,
+            demand_30d=alert_30d_units,
+            lead_time_calendar_days=lead_time_calendar,
+        )
         target_cover = lead_time_calendar + (hero_cover_days if bool(row.get("strategic_stock_flag")) else reorder_cover_days)
 
         existing_suggested = _to_float(row.get("suggested_reorder_units"))
@@ -2192,7 +2294,6 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
             suggested = max(existing_suggested - ordered_units, 0.0)
 
         current_risk = str(row.get("stock_risk_level") or "")
-        available_raw = _to_float(row.get("available_quantity_raw", available))
         if daily_units > 0:
             if available_raw < 0 and net_available < 0:
                 current_risk = "Negative stock"
@@ -2202,6 +2303,8 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
                 current_risk = "Critical"
             elif days_of_cover is not None and days_of_cover <= warning_days:
                 current_risk = "Low"
+            elif lead_time_risk:
+                current_risk = "Lead time risk"
             elif days_of_cover is not None and days_of_cover <= watch_days:
                 current_risk = "Watch"
             else:
@@ -2230,6 +2333,8 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
                 "projected_stockout_date": projected_stockout_date,
                 "suggested_reorder_units": round(suggested, 1),
                 "inbound_covers_reorder_flag": inbound_covers,
+                "lead_time_stockout_probability": round(lead_time_probability, 6),
+                "lead_time_stockout_risk_flag": lead_time_risk,
             }
         )
         if inbound_covers:
@@ -2238,6 +2343,7 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
             row["prepare_po_flag"] = False
         elif ordered_units > 0 and str(row.get("reorder_action_label") or "") in {"Order now", "Prepare PO", "30d alert"}:
             row["reorder_action_label"] = "Partially ordered"
+        _refresh_inventory_alert_reason(row)
 
     for _, rows in _inventory_row_collections(inventory):
         for row in rows:
@@ -2325,6 +2431,7 @@ def build_inventory_snapshot(
         "restock_priority_rows": list(roy_inventory.get("restock_priority_rows") or [])[:120],
         "revenue_at_risk_rows": list(roy_inventory.get("revenue_at_risk_rows") or [])[:120],
         "forecast_rows": list(roy_inventory.get("forecast_rows") or [])[:80],
+        "demand_anomaly_rows": list(roy_inventory.get("demand_anomaly_rows") or [])[:120],
         "inbound_order_rows": [],
     }
     if live_stock_diagnostics:
