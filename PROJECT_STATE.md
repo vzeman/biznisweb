@@ -63,6 +63,8 @@ Bootstrap entrypoints:
 
 - VEVO/ROY delayed-shipment invoice gap audit and code-level prevention are implemented locally on `2026-07-17`:
   - branch: `codex/invoice-gap-prevention`
+  - implementation commits: `6604ec4`, `60c0fab`, `4869f77`, `680fd97`
+  - draft PR: `#246` (`https://github.com/vzeman/biznisweb/pull/246`), mergeable, intentionally not merged because a `main` merge starts the guarded production image/control rollout
   - affected input: VEVO `23` rows / `18` unique orders (`2602007364` repeated six times); ROY `9` rows / `8` unique orders (`2677002633` repeated twice)
   - manual-invoice distinction: the replacement invoices are backdated to `2026-06-30`, but admin history records `invoice_created` by user `38` on `2026-07-17`; VEVO invoice numbers are `2602007380..2602007397`, ROY invoice numbers are `2677003251..2677003258`
   - decisive root cause: invoice automation scanned only a seven-calendar-day inclusive window by `pur_date`; every affected order changed to `Odoslaná` only after its purchase date had left that window
@@ -114,7 +116,8 @@ Bootstrap entrypoints:
     - `python scripts/reporting_qa_smoke.py` -> `OK`
     - botocore serialization accepted all four live-derived `UpdateSchedule` requests, both cloned `RegisterTaskDefinition` requests, and the new ECS `ListTasks(PENDING/RUNNING)` plus `StopTask` drain requests
     - actionlint `1.7.12`, YAML parsing, and extracted Bash syntax (`19` scripts) passed all changed GitHub workflows
-  - Next exact step: finish local/read-only validation, commit and push the no-backfill cutoff plus controls, and open a draft PR; do not deploy from this branch, and after a reviewed merge verify the first natural VEVO/ROY runs only against orders purchased on or after `2026-07-17`
+    - draft PR checks passed: `env-check`, `secret-scan`, `security-baseline`, and `observability-baseline`
+  - Next exact step: keep draft PR `#246` unmerged until the production rollout is explicitly wanted; merging to `main` starts the serialized guarded image/control deployment, after which verify the first natural VEVO/ROY runs only against orders purchased on or after `2026-07-17`
 
 - ROY order-aware smart inventory alerts are merged, deployed, and live (2026-07-17):
   - PR `#244` merged to `main` as `0f98aaade55f9769b48dad6946c36ab442ef2419`; independent review finished with no P0/P1/P2 findings
