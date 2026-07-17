@@ -9,6 +9,7 @@ on:
       - Dockerfile
       - requirements.txt
       - export_orders.py
+      - inventory_demand_model.py
       - generate_invoices.py
       - invoice_runner.py
       - creditnote_export.py

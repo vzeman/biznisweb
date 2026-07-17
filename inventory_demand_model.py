@@ -91,15 +91,25 @@ def _order_size_threshold(
     if values.size >= 3:
         return max(median * sparse_median_multiplier, minimum_outlier_units)
 
-    # With only two observations, the lower half distinguishes [1, 40] from
-    # [40, 40] without pretending that one observation establishes a pattern.
-    lower_half = values[values <= median]
-    sparse_reference = float(np.median(lower_half)) if lower_half.size else median
-    sparse_threshold = max(sparse_reference * sparse_median_multiplier, minimum_outlier_units)
-    return min(max(global_threshold, minimum_outlier_units), sparse_threshold) if values.size > 1 else max(
-        sparse_threshold,
-        minimum_outlier_units,
-    )
+    if values.size == 2:
+        # Two similar orders are the only available evidence for a naturally
+        # bulk SKU and must not both be capped by a cross-SKU threshold. When
+        # the second order is materially larger, use the smaller order as the
+        # SKU baseline while allowing the portfolio threshold to protect
+        # globally ordinary order sizes.
+        smaller, larger = np.sort(values)
+        sku_relative_threshold = max(
+            float(smaller) * sparse_median_multiplier,
+            minimum_outlier_units,
+        )
+        portfolio_threshold = max(global_threshold, minimum_outlier_units)
+        return max(
+            sku_relative_threshold,
+            min(portfolio_threshold, float(larger)),
+        )
+
+    # A single order cannot establish an order-size anomaly for a new SKU.
+    return max(median * sparse_median_multiplier, minimum_outlier_units)
 
 
 def _tsb_weekly_forecast(values: np.ndarray, *, size_alpha: float, occurrence_beta: float) -> float:
@@ -215,7 +225,7 @@ def build_robust_demand_summary(
         lambda row_index: f"__missing_order_{row_index}"
     )
 
-    order_demand = (
+    order_demand_all = (
         source.groupby(["product_sku", "_model_order_num"], dropna=False)
         .agg(
             product=("item_label", "first"),
@@ -226,18 +236,20 @@ def build_robust_demand_summary(
         .reset_index()
         .rename(columns={"_model_order_num": "order_num"})
     )
-    order_demand["order_datetime"] = pd.to_datetime(order_demand["order_datetime"], errors="coerce")
-    order_demand = order_demand.loc[
-        order_demand["order_datetime"].notna()
-        & (order_demand["raw_order_units"] > 0)
-        & (order_demand["order_datetime"].dt.normalize() <= anchor)
+    order_demand_all["order_datetime"] = pd.to_datetime(
+        order_demand_all["order_datetime"],
+        errors="coerce",
+    )
+    order_demand_all = order_demand_all.loc[
+        order_demand_all["order_datetime"].notna()
+        & (order_demand_all["raw_order_units"] > 0)
+        & (order_demand_all["order_datetime"].dt.normalize() <= anchor)
     ].copy()
     lookback_cutoff = anchor - pd.Timedelta(days=lookback_days - 1)
-    order_demand = order_demand.loc[order_demand["order_datetime"].dt.normalize() >= lookback_cutoff].copy()
-    if order_demand.empty:
+    if order_demand_all.empty:
         return pd.DataFrame(columns=ROBUST_DEMAND_COLUMNS)
 
-    global_quantities = order_demand["raw_order_units"].to_numpy(dtype=float)
+    global_quantities = order_demand_all["raw_order_units"].to_numpy(dtype=float)
     global_median = float(np.median(global_quantities))
     global_q1, global_q3 = np.quantile(global_quantities, [0.25, 0.75])
     global_threshold = max(
@@ -253,9 +265,9 @@ def build_robust_demand_summary(
     prior_trend_cutoff = anchor - pd.Timedelta(days=119)
     rows: List[Dict[str, Any]] = []
 
-    for sku, sku_orders in order_demand.groupby("product_sku", sort=False):
-        sku_orders = sku_orders.sort_values("order_datetime").copy()
-        quantities = sku_orders["raw_order_units"].to_numpy(dtype=float)
+    for sku, sku_all_orders in order_demand_all.groupby("product_sku", sort=False):
+        sku_all_orders = sku_all_orders.sort_values("order_datetime").copy()
+        quantities = sku_all_orders["raw_order_units"].to_numpy(dtype=float)
         threshold = _order_size_threshold(
             quantities,
             global_threshold=global_threshold,
@@ -265,26 +277,37 @@ def build_robust_demand_summary(
             sparse_median_multiplier=sparse_median_multiplier,
             minimum_outlier_units=minimum_outlier_units,
         )
-        sku_orders["outlier_candidate"] = sku_orders["raw_order_units"] > (threshold + 1e-9)
-        sku_orders["week_start"] = sku_orders["order_datetime"].dt.to_period("W").dt.start_time
+        sku_all_orders["outlier_candidate"] = (
+            sku_all_orders["raw_order_units"] > (threshold + 1e-9)
+        )
+        sku_all_orders["week_start"] = (
+            sku_all_orders["order_datetime"].dt.to_period("W").dt.start_time
+        )
 
-        trend_orders = sku_orders.loc[sku_orders["order_datetime"].dt.normalize() >= trend_cutoff]
+        trend_orders = sku_all_orders.loc[
+            sku_all_orders["order_datetime"].dt.normalize() >= trend_cutoff
+        ]
         recent_outlier_orders = trend_orders.loc[trend_orders["outlier_candidate"]]
         confirmed_repeated_bulk = bool(
             recent_outlier_orders["order_num"].nunique() >= trend_confirmation_min_orders
             and recent_outlier_orders["week_start"].nunique() >= trend_confirmation_min_active_weeks
         )
         confirmed_bulk_mask = (
-            sku_orders["outlier_candidate"]
-            & (sku_orders["order_datetime"].dt.normalize() >= recent_90d_cutoff)
+            sku_all_orders["outlier_candidate"]
+            & (sku_all_orders["order_datetime"].dt.normalize() >= recent_90d_cutoff)
             & confirmed_repeated_bulk
         )
-        sku_orders["adjusted_order_units"] = np.where(
-            sku_orders["outlier_candidate"] & ~confirmed_bulk_mask,
-            np.minimum(sku_orders["raw_order_units"], threshold),
-            sku_orders["raw_order_units"],
+        sku_all_orders["adjusted_order_units"] = np.where(
+            sku_all_orders["outlier_candidate"] & ~confirmed_bulk_mask,
+            np.minimum(sku_all_orders["raw_order_units"], threshold),
+            sku_all_orders["raw_order_units"],
         )
-        sku_orders["unconfirmed_outlier"] = sku_orders["outlier_candidate"] & ~confirmed_bulk_mask
+        sku_all_orders["unconfirmed_outlier"] = (
+            sku_all_orders["outlier_candidate"] & ~confirmed_bulk_mask
+        )
+        sku_orders = sku_all_orders.loc[
+            sku_all_orders["order_datetime"].dt.normalize() >= lookback_cutoff
+        ].copy()
 
         recent_30 = sku_orders.loc[
             sku_orders["order_datetime"].dt.normalize() >= recent_30d_cutoff
@@ -304,7 +327,7 @@ def build_robust_demand_summary(
             cutoff=recent_180d_cutoff,
         )
 
-        first_order_date = pd.Timestamp(sku_orders["order_datetime"].min()).normalize()
+        first_order_date = pd.Timestamp(sku_all_orders["order_datetime"].min()).normalize()
         observation_start = max(first_order_date, lookback_cutoff)
         observation_days = max((anchor - observation_start).days + 1, 1)
         weekly_start = observation_start.to_period("W").start_time
@@ -342,8 +365,8 @@ def build_robust_demand_summary(
         )
         tsb_30d = tsb_weekly * (30.0 / 7.0)
 
-        positive_adjusted_sizes = sku_orders.loc[
-            sku_orders["adjusted_order_units"] > 0,
+        positive_adjusted_sizes = sku_all_orders.loc[
+            sku_all_orders["adjusted_order_units"] > 0,
             "adjusted_order_units",
         ]
         typical_order_units = (
@@ -406,9 +429,9 @@ def build_robust_demand_summary(
             demand_signal_code = "stable_baseline"
             demand_signal_label = "Robust multi-horizon baseline"
 
-        if len(sku_orders) >= minimum_history_orders and not unconfirmed_recent_anomaly:
+        if len(sku_all_orders) >= minimum_history_orders and not unconfirmed_recent_anomaly:
             confidence = "High" if not intermittent else "Medium"
-        elif len(sku_orders) >= 4:
+        elif len(sku_all_orders) >= 4:
             confidence = "Medium" if not unconfirmed_recent_anomaly else "Low"
         else:
             confidence = "Low"
@@ -453,7 +476,7 @@ def build_robust_demand_summary(
                     .nunique()
                 ),
                 "active_weeks_30d": active_weeks_30d,
-                "positive_order_count_history": int(len(sku_orders)),
+                "positive_order_count_history": int(len(sku_all_orders)),
                 "history_observation_days": int(observation_days),
                 "typical_order_units": round(typical_order_units, 3),
                 "outlier_threshold_units": round(threshold, 3),

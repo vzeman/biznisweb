@@ -118,6 +118,37 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertIn("SPIKE-SKU", set(result["demand_anomaly_rows"]["sku"]))
         self.assertEqual("order-aware-tsb-v1", result["summary"]["demand_model_version"])
 
+    def test_old_sales_outside_forecast_lookback_still_prevent_false_alert(self) -> None:
+        exporter = RoyInventoryModelExporter(
+            inventory_snapshot=pd.DataFrame(
+                [inventory_row("OLD-SPIKE-SKU", "Very Slow Product", 20, 100, 300)]
+            )
+        )
+        item_df = pd.DataFrame(
+            [
+                item_row("R-OLD-1", "OLD-SPIKE-SKU", "Very Slow Product", "2023-01-10", 1, 10),
+                item_row("R-OLD-2", "OLD-SPIKE-SKU", "Very Slow Product", "2023-10-10", 1, 10),
+                item_row("R-OLD-3", "OLD-SPIKE-SKU", "Very Slow Product", "2024-07-10", 1, 10),
+                item_row("R-SPIKE", "OLD-SPIKE-SKU", "Very Slow Product", "2026-07-01", 40, 400),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+
+        row = result["inventory_rows"].loc[
+            result["inventory_rows"]["sku"] == "OLD-SPIKE-SKU"
+        ].iloc[0]
+        self.assertTrue(bool(row["smart_demand_model_active"]))
+        self.assertTrue(bool(row["unusual_large_order_flag"]))
+        self.assertEqual(40.0, float(row["raw_recent_30d_units"]))
+        self.assertLess(float(row["alert_30d_units"]), 5.0)
+        self.assertEqual("Healthy", row["stock_risk_level"])
+        self.assertNotIn("OLD-SPIKE-SKU", set(result["alert_rows"].get("sku", [])))
+
     def test_zero_stock_after_one_off_order_remains_visible_as_state_alert(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
 
