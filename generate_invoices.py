@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Iterable, Optional, Tuple, Union
 import json
 import re
+import time
 import unicodedata
 
 from dotenv import load_dotenv
@@ -35,7 +36,11 @@ WEB_TIMEOUT = resolve_timeout(os.getenv('BIZNISWEB_WEB_TIMEOUT_SEC'))
 logger = get_logger('generate_invoices')
 
 DEFAULT_INVOICE_LOOKBACK_DAYS = 7
+DEFAULT_INVOICE_STATUS_CHANGE_LOOKBACK_DAYS = 7
+DEFAULT_INVOICE_RECONCILIATION_LOOKBACK_DAYS = 120
+DEFAULT_INVOICE_PAGE_RETRY_ATTEMPTS = 3
 DEFAULT_INVOICE_ELIGIBLE_STATUSES = ("Odoslaná",)
+SUPPORTED_INVOICE_SCAN_DATE_FIELDS = ("pur_date", "last_change")
 
 # GraphQL query to fetch orders with specific criteria
 ORDER_QUERY = gql("""
@@ -44,55 +49,21 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
     data {
       id
       order_num
-      external_ref
       pur_date
-      var_symb
       last_change
       status {
         id
         name
         color
       }
-      customer {
-        ... on Company {
-          company_name
-          company_id
-          vat_id
-          vat_id2
-          name
-          surname
-          phone
-          email
-        }
-        ... on Person {
-          name
-          surname
-          phone
-          email
-        }
-        ... on UnauthenticatedEmail {
-          name
-          surname
-          phone
-          email
-        }
+      price_elements {
+        type
+        title
+        reference_id
       }
       invoices {
         id
         invoice_num
-      }
-      items {
-        item_label
-        quantity
-        price {
-          value
-          formatted
-          is_net_price
-          currency {
-            symbol
-            code
-          }
-        }
       }
       sum {
         value
@@ -128,6 +99,32 @@ query GetOrderInvoices($order_num: String!) {
 }
 """)
 
+ORDER_INVOICE_GUARD_QUERY = gql("""
+query GetOrderInvoiceGuard($order_num: String!) {
+  getOrder(order_num: $order_num) {
+    id
+    order_num
+    status {
+      id
+      name
+    }
+    price_elements {
+      type
+      title
+      reference_id
+    }
+    invoices {
+      id
+      invoice_num
+    }
+    sum {
+      value
+      formatted
+    }
+  }
+}
+""")
+
 
 @dataclass
 class InvoiceRunSummary:
@@ -142,8 +139,17 @@ class InvoiceRunSummary:
     emailed_invoices: int = 0
     failed_invoice_emails: int = 0
     missing_invoice_ids: int = 0
+    already_present_invoices: int = 0
+    skipped_stale_orders: int = 0
     skipped_zero_total_orders: int = 0
+    skipped_non_cod_orders: int = 0
     total_amount: float = 0.0
+    scan_mode: str = "regular"
+    scan_complete: bool = True
+    purchase_date_orders_fetched: int = 0
+    recent_change_orders_fetched: int = 0
+    pages_fetched: int = 0
+    page_retry_count: int = 0
 
 
 @dataclass
@@ -154,18 +160,60 @@ class InvoiceCreationResult:
     email_required: bool = True
     email_sent: bool = False
     email_error: str = ""
+    already_present: bool = False
+    skipped_stale: bool = False
 
     def __bool__(self) -> bool:
         return self.created and (not self.email_required or self.email_sent)
 
 
+class IncompleteInvoiceScanError(RuntimeError):
+    """Raised when an invoice run cannot prove that every requested order page was scanned."""
+
+
 def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dict[str, Any]:
     raw_settings = project_settings.get("invoice_generation") or {}
+    realized_revenue_settings = project_settings.get("realized_revenue") or {}
     raw_lookback_days = raw_settings.get("lookback_days", DEFAULT_INVOICE_LOOKBACK_DAYS)
     try:
         lookback_days = int(raw_lookback_days)
     except (TypeError, ValueError):
         lookback_days = DEFAULT_INVOICE_LOOKBACK_DAYS
+    lookback_days = max(1, lookback_days)
+
+    raw_status_change_lookback_days = raw_settings.get(
+        "status_change_lookback_days",
+        DEFAULT_INVOICE_STATUS_CHANGE_LOOKBACK_DAYS,
+    )
+    try:
+        status_change_lookback_days = int(raw_status_change_lookback_days)
+    except (TypeError, ValueError):
+        status_change_lookback_days = DEFAULT_INVOICE_STATUS_CHANGE_LOOKBACK_DAYS
+    status_change_lookback_days = max(lookback_days, status_change_lookback_days)
+
+    raw_reconciliation_lookback_days = raw_settings.get(
+        "reconciliation_lookback_days",
+        DEFAULT_INVOICE_RECONCILIATION_LOOKBACK_DAYS,
+    )
+    try:
+        reconciliation_lookback_days = int(raw_reconciliation_lookback_days)
+    except (TypeError, ValueError):
+        reconciliation_lookback_days = DEFAULT_INVOICE_RECONCILIATION_LOOKBACK_DAYS
+    reconciliation_lookback_days = max(lookback_days, reconciliation_lookback_days)
+
+    raw_page_retry_attempts = raw_settings.get(
+        "page_retry_attempts",
+        DEFAULT_INVOICE_PAGE_RETRY_ATTEMPTS,
+    )
+    try:
+        page_retry_attempts = int(raw_page_retry_attempts)
+    except (TypeError, ValueError):
+        page_retry_attempts = DEFAULT_INVOICE_PAGE_RETRY_ATTEMPTS
+
+    try:
+        rollover_grace_hours = int(raw_settings.get("rollover_grace_hours", 3))
+    except (TypeError, ValueError):
+        rollover_grace_hours = 3
 
     raw_statuses = raw_settings.get("eligible_statuses", DEFAULT_INVOICE_ELIGIBLE_STATUSES)
     if isinstance(raw_statuses, str):
@@ -178,10 +226,37 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
     if not eligible_statuses:
         eligible_statuses = list(DEFAULT_INVOICE_ELIGIBLE_STATUSES)
 
+    raw_cod_payment_ids = raw_settings.get(
+        "cod_payment_ids",
+        realized_revenue_settings.get("cod_payment_ids", []),
+    )
+    raw_cod_payment_patterns = raw_settings.get(
+        "cod_payment_patterns",
+        realized_revenue_settings.get("cod_payment_patterns", []),
+    )
+    cod_payment_ids = [
+        str(value).strip()
+        for value in (raw_cod_payment_ids or [])
+        if str(value or "").strip()
+    ]
+    cod_payment_patterns = [
+        str(value).strip()
+        for value in (raw_cod_payment_patterns or [])
+        if str(value or "").strip()
+    ]
+
     return {
         "enabled": bool(raw_settings.get("enabled", False)),
-        "lookback_days": max(1, lookback_days),
+        "lookback_days": lookback_days,
+        "status_change_lookback_days": status_change_lookback_days,
+        "reconciliation_lookback_days": reconciliation_lookback_days,
+        "include_recent_changes": bool(raw_settings.get("include_recent_changes", True)),
+        "page_retry_attempts": max(1, min(page_retry_attempts, 10)),
+        "rollover_grace_hours": max(0, min(rollover_grace_hours, 12)),
         "exclude_zero_total_orders": bool(raw_settings.get("exclude_zero_total_orders", True)),
+        "require_cod_payment": bool(raw_settings.get("require_cod_payment", False)),
+        "cod_payment_ids": cod_payment_ids,
+        "cod_payment_patterns": cod_payment_patterns,
         "eligible_statuses": eligible_statuses,
         "send_invoice_email": bool(raw_settings.get("send_invoice_email", True)),
     }
@@ -198,7 +273,7 @@ def resolve_invoice_date_window(reference_date: Union[str, datetime], lookback_d
     return from_date.strftime("%Y-%m-%d"), to_date.strftime("%Y-%m-%d")
 
 
-def _coerce_order_total_value(order: Dict[str, Any]) -> float:
+def _parse_order_total_value(order: Dict[str, Any]) -> Optional[float]:
     order_sum = order.get("sum", {}) or {}
     raw_value = order_sum.get("value")
     if raw_value not in (None, ""):
@@ -209,9 +284,11 @@ def _coerce_order_total_value(order: Dict[str, Any]) -> float:
 
     formatted = str(order_sum.get("formatted") or "").strip()
     if not formatted:
-        return 0.0
+        return None
 
     normalized = re.sub(r"[^0-9,.\-]", "", formatted)
+    if not normalized:
+        return None
     if "," in normalized and "." in normalized:
         if normalized.rfind(",") > normalized.rfind("."):
             normalized = normalized.replace(".", "").replace(",", ".")
@@ -223,7 +300,12 @@ def _coerce_order_total_value(order: Dict[str, Any]) -> float:
     try:
         return float(normalized)
     except ValueError:
-        return 0.0
+        return None
+
+
+def _coerce_order_total_value(order: Dict[str, Any]) -> float:
+    parsed = _parse_order_total_value(order)
+    return 0.0 if parsed is None else parsed
 
 
 def _normalize_status_text(status_name: str) -> str:
@@ -246,19 +328,50 @@ def _status_matches_invoice_generation(status_name: str, eligible_statuses: Opti
     return normalized in allowed_statuses
 
 
-def _order_purchase_date(order: Dict[str, Any]) -> str:
-    pur_date = str(order.get("pur_date") or "")
-    if " " in pur_date:
-        pur_date = pur_date.split(" ", 1)[0]
-    return pur_date
+def _payment_elements(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_elements = order.get("price_elements")
+    if not isinstance(raw_elements, list):
+        return []
+    return [
+        element
+        for element in raw_elements
+        if isinstance(element, dict)
+        and _normalize_status_text(str(element.get("type") or "")) == "payment"
+    ]
 
 
-def _redact_headers(headers: Dict[str, Any]) -> Dict[str, Any]:
-    sanitized = dict(headers)
-    for key in list(sanitized.keys()):
-        if key.lower() in {"bw-api-key", "authorization", "x-api-key"}:
-            sanitized[key] = "[redacted]"
-    return sanitized
+def _payment_matches_cod(
+    order: Dict[str, Any],
+    cod_payment_ids: Iterable[str],
+    cod_payment_patterns: Iterable[str],
+) -> bool:
+    configured_ids = {
+        str(value).strip()
+        for value in cod_payment_ids
+        if str(value or "").strip()
+    }
+    normalized_patterns = {
+        _normalize_status_text(str(value))
+        for value in cod_payment_patterns
+        if _normalize_status_text(str(value))
+    }
+    for element in _payment_elements(order):
+        reference_id = str(element.get("reference_id") or "").strip()
+        if reference_id and reference_id in configured_ids:
+            return True
+        title = _normalize_status_text(str(element.get("title") or ""))
+        if any(pattern in title for pattern in normalized_patterns):
+            return True
+    return False
+
+
+def _order_scan_date(order: Dict[str, Any], date_field: str) -> str:
+    if date_field not in SUPPORTED_INVOICE_SCAN_DATE_FIELDS:
+        raise ValueError(f"Unsupported invoice scan date field: {date_field}")
+    raw_date = str(order.get(date_field) or "")
+    if " " in raw_date:
+        raw_date = raw_date.split(" ", 1)[0]
+    return raw_date
 
 
 def _extract_invoice_id_from_payload(payload: Any) -> Optional[str]:
@@ -341,6 +454,10 @@ class InvoiceGenerator:
         exclude_zero_total_orders: bool = True,
         eligible_statuses: Optional[Iterable[str]] = None,
         send_invoice_email: bool = True,
+        page_retry_attempts: int = DEFAULT_INVOICE_PAGE_RETRY_ATTEMPTS,
+        require_cod_payment: bool = False,
+        cod_payment_ids: Optional[Iterable[str]] = None,
+        cod_payment_patterns: Optional[Iterable[str]] = None,
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
@@ -362,6 +479,19 @@ class InvoiceGenerator:
         self.exclude_zero_total_orders = exclude_zero_total_orders
         self.eligible_statuses = tuple(eligible_statuses or DEFAULT_INVOICE_ELIGIBLE_STATUSES)
         self.send_invoice_email_enabled = bool(send_invoice_email)
+        self.page_retry_attempts = max(1, min(int(page_retry_attempts), 10))
+        self.require_cod_payment = bool(require_cod_payment)
+        self.cod_payment_ids = tuple(
+            str(value).strip()
+            for value in (cod_payment_ids or [])
+            if str(value or "").strip()
+        )
+        self.cod_payment_patterns = tuple(
+            str(value).strip()
+            for value in (cod_payment_patterns or [])
+            if str(value or "").strip()
+        )
+        self.last_fetch_stats: Dict[str, Any] = {}
         
         # Initialize web session if credentials provided
         if username and password:
@@ -376,7 +506,7 @@ class InvoiceGenerator:
             else:
                 logger.error("âś— Failed to login to web session - invoice creation will not be available")
                 self.web_session = None
-    
+
     def login_web_session(self, username: str, password: str) -> bool:
         """Login to BizniWeb web interface to get session cookies"""
         try:
@@ -661,200 +791,328 @@ class InvoiceGenerator:
             logger.error(f"âś— Error validating web session: {e}")
             return False
     
-    def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        """Fetch all orders and filter client-side (API filter requires partner token)"""
-        all_orders = []
-        has_next_page = True
-        cursor = None
+    def fetch_orders(
+        self,
+        date_from: datetime,
+        date_to: datetime,
+        *,
+        date_field: str = "pur_date",
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch a complete descending order scan and filter it client-side.
+
+        BizniWeb's date filter requires a partner token, so this scan stops only
+        after a fully validated page crosses the requested boundary. A page
+        error, a partial GraphQL row, or a broken cursor makes the whole scan
+        fail closed; returning a partial list would incorrectly mark the invoice
+        run as successful.
+        """
+        if date_field not in SUPPORTED_INVOICE_SCAN_DATE_FIELDS:
+            raise ValueError(f"Unsupported invoice scan date field: {date_field}")
+
+        all_orders: List[Dict[str, Any]] = []
+        cursor: Any = None
+        seen_cursors: set[Tuple[str, str]] = set()
         date_from_str = date_from.strftime("%Y-%m-%d")
         date_to_str = date_to.strftime("%Y-%m-%d")
+        pages_fetched = 0
+        page_retry_count = 0
+        exhausted_history = False
+        crossed_start_boundary = False
 
-        logger.info("Note: Fetching orders in descending purchase-date order due to API filter limitations")
-        logger.info("Pagination will stop once the export reaches orders older than %s", date_from_str)
+        logger.info(
+            "Fetching orders by %s DESC; pagination stops after a complete page crosses %s",
+            date_field,
+            date_from_str,
+        )
 
-        while has_next_page:
-            # Remove the filter param as it requires partner token
-            # We'll filter by date on the client side instead
+        while True:
             variables = {
-                'params': {
-                    'limit': 30,  # API max limit is 30
-                    'order_by': 'pur_date',
-                    'sort': 'DESC'
+                "params": {
+                    "limit": 30,
+                    "order_by": date_field,
+                    "sort": "DESC",
                 }
             }
-
             if cursor is not None:
-                variables['params']['cursor'] = cursor
+                variables["params"]["cursor"] = cursor
 
-            try:
-                logger.debug(f"Executing query with variables: {json.dumps(variables, indent=2)}")
-                result = self.client.execute(ORDER_QUERY, variable_values=variables)
-                orders_data = result.get('getOrderList', {})
-                orders = orders_data.get('data', [])
-
-                # Filter out None values (orders that failed to fetch)
-                valid_orders = [o for o in orders if o is not None]
-                all_orders.extend(valid_orders)
-
-                page_info = orders_data.get('pageInfo', {})
-                has_next_page = page_info.get('hasNextPage', False)
-                cursor = page_info.get('nextCursor')
-
-                skipped = len(orders) - len(valid_orders)
-                if skipped > 0:
-                    logger.warning(f"Skipped {skipped} orders with errors in this batch")
-                batch_dates = [pur_date for pur_date in (_order_purchase_date(order) for order in valid_orders) if pur_date]
-                if batch_dates:
-                    logger.info(
-                        "Fetched %s orders (total: %s) covering %s..%s",
-                        len(valid_orders),
-                        len(all_orders),
-                        min(batch_dates),
-                        max(batch_dates),
-                    )
-                    if min(batch_dates) < date_from_str:
-                        logger.info("Reached orders older than requested from-date %s; stopping pagination", date_from_str)
-                        has_next_page = False
-                else:
-                    logger.info(f"Fetched {len(valid_orders)} orders (total: {len(all_orders)})")
-
-            except Exception as e:
-                error_str = str(e)
-                logger.error(f"Error fetching orders: {e}")
-                logger.error(f"Full error details: {type(e).__name__}: {error_str}")
-
-                # Check if this is a GraphQL error with partial data
-                # The gql library might have partial results even with errors
-                partial_data = None
-                if hasattr(e, 'data') and e.data:
-                    partial_data = e.data
-                    logger.info("Error contains partial data, attempting to use it...")
-                    try:
-                        orders_data = partial_data.get('getOrderList', {})
-                        orders = orders_data.get('data', [])
-
-                        # Filter out None values and orders with errors
-                        valid_orders = [o for o in orders if o is not None]
-                        all_orders.extend(valid_orders)
-
-                        page_info = orders_data.get('pageInfo', {})
-                        has_next_page = page_info.get('hasNextPage', False)
-                        cursor = page_info.get('nextCursor')
-
-                        logger.info(f"Retrieved {len(valid_orders)} valid orders from partial response")
-                        skipped = len(orders) - len(valid_orders)
-                        if skipped > 0:
-                            logger.warning(f"Skipped {skipped} problematic orders in this batch")
-
-                        batch_dates = [pur_date for pur_date in (_order_purchase_date(order) for order in valid_orders) if pur_date]
-                        if batch_dates and min(batch_dates) < date_from_str:
-                            logger.info("Reached orders older than requested from-date %s; stopping pagination", date_from_str)
-                            has_next_page = False
-
-                        # Continue to next page
-                        continue
-                    except Exception as parse_error:
-                        logger.error(f"Failed to parse partial data: {parse_error}")
-
-                # If we can't recover from the error, check if we should continue
-                if "Internal server error" in error_str and "price_elements" in error_str:
-                    logger.warning("Encountered server error on price_elements field")
-                    logger.warning("This is a BizniWeb API issue with a specific order's data")
-                    # Skip to next page if we have a cursor
-                    if cursor:
-                        logger.info("Skipping to next page...")
-                        continue
-
-                # Try to get the underlying HTTP response from the GQL exception
-                response = None
-
-                # Check for response in the exception itself
-                if hasattr(e, 'response'):
-                    response = e.response
-                # Check for response in the cause
-                elif hasattr(e, '__cause__'):
-                    cause = e.__cause__
-                    if hasattr(cause, 'response'):
-                        response = cause.response
-                    # For requests.HTTPError, the response is in args
-                    elif hasattr(cause, 'args') and len(cause.args) > 0:
-                        if hasattr(cause.args[0], 'response'):
-                            response = cause.args[0].response
-
-                # Try to extract response from transport layer
-                if not response and hasattr(self.client, 'transport'):
-                    transport = self.client.transport
-                    if hasattr(transport, 'response_headers'):
-                        logger.error(f"Transport response headers: {transport.response_headers}")
-
-                if response:
-                    logger.error(f"HTTP Response Status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
-                    logger.error(f"HTTP Response Headers: {dict(response.headers) if hasattr(response, 'headers') else 'N/A'}")
-                    try:
-                        response_body = response.text if hasattr(response, 'text') else str(response.content if hasattr(response, 'content') else 'N/A')
-                        logger.error(f"HTTP Response Body: {response_body}")
-                    except Exception as body_err:
-                        logger.error(f"Could not read response body: {body_err}")
-                else:
-                    logger.error("No HTTP response object found in exception")
-
-                # Try making a raw request to see what we get
-                logger.error("Attempting to make a raw HTTP request to diagnose the issue...")
+            page_orders: Optional[List[Dict[str, Any]]] = None
+            page_info: Optional[Dict[str, Any]] = None
+            last_error: Optional[Exception] = None
+            for attempt in range(1, self.page_retry_attempts + 1):
                 try:
-                    import requests
-                    headers = {'BW-API-Key': f'Token {self.api_token}', 'Content-Type': 'application/json'}
+                    logger.debug("Executing invoice order query with variables: %s", variables)
+                    result = self.client.execute(ORDER_QUERY, variable_values=variables)
+                    orders_data = result.get("getOrderList")
+                    if not isinstance(orders_data, dict):
+                        raise ValueError("GraphQL response is missing getOrderList")
 
-                    # Convert GQL DocumentNode to string properly
-                    query_string = """
-query GetOrders($filter: OrderFilter, $params: OrderParams) {
-  getOrderList(filter: $filter, params: $params) {
-    data {
-      id
-      order_num
-      status {
-        name
-      }
-    }
-    pageInfo {
-      hasNextPage
-    }
-  }
-}
-"""
-                    payload = {
-                        'query': query_string,
-                        'variables': variables
-                    }
-                    logger.error(f"Making raw request to: {self.client.transport.url}")
-                    logger.error(f"With headers: {_redact_headers(headers)}")
-                    raw_response = requests.post(
-                        self.client.transport.url,
-                        json=payload,
-                        headers=headers,
-                        timeout=10
+                    raw_orders = orders_data.get("data")
+                    if not isinstance(raw_orders, list):
+                        raise ValueError("GraphQL response is missing getOrderList.data")
+                    if any(order is None or not isinstance(order, dict) for order in raw_orders):
+                        raise ValueError("GraphQL returned one or more incomplete order rows")
+
+                    raw_page_info = orders_data.get("pageInfo")
+                    if not isinstance(raw_page_info, dict):
+                        raise ValueError("GraphQL response is missing getOrderList.pageInfo")
+                    if (
+                        "hasNextPage" not in raw_page_info
+                        or not isinstance(raw_page_info.get("hasNextPage"), bool)
+                    ):
+                        raise ValueError(
+                            "GraphQL response is missing a boolean pageInfo.hasNextPage"
+                        )
+
+                    missing_dates = [
+                        str(order.get("order_num") or order.get("id") or "unknown")
+                        for order in raw_orders
+                        if not _order_scan_date(order, date_field)
+                    ]
+                    if missing_dates:
+                        raise ValueError(
+                            f"GraphQL returned orders without {date_field}: {missing_dates[:5]}"
+                        )
+                    for order in raw_orders:
+                        order_num = str(order.get("order_num") or "").strip()
+                        status = order.get("status")
+                        invoices = order.get("invoices")
+                        if not order_num:
+                            raise ValueError("GraphQL returned an order without order_num")
+                        if not isinstance(status, dict) or not str(status.get("name") or "").strip():
+                            raise ValueError(
+                                f"GraphQL returned order {order_num} without a complete status"
+                            )
+                        if invoices is None:
+                            order["invoices"] = []
+                        elif not isinstance(invoices, list):
+                            raise ValueError(
+                                f"GraphQL returned order {order_num} without a complete invoices list"
+                            )
+
+                    page_orders = raw_orders
+                    page_info = raw_page_info
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    if attempt >= self.page_retry_attempts:
+                        break
+                    page_retry_count += 1
+                    delay_seconds = min(2 ** (attempt - 1), 5)
+                    logger.warning(
+                        "Invoice order page failed for %s (attempt %s/%s): %s; retrying in %ss",
+                        date_field,
+                        attempt,
+                        self.page_retry_attempts,
+                        exc,
+                        delay_seconds,
                     )
-                    logger.error(f"Raw request status: {raw_response.status_code}")
-                    logger.error(f"Raw request headers: {dict(raw_response.headers)}")
-                    logger.error(f"Raw request body: {raw_response.text}")
-                except Exception as raw_err:
-                    logger.error(f"Raw request also failed: {raw_err}")
+                    time.sleep(delay_seconds)
 
+            if page_orders is None or page_info is None:
+                self.last_fetch_stats = {
+                    "date_field": date_field,
+                    "pages_fetched": pages_fetched,
+                    "page_retry_count": page_retry_count,
+                    "scan_complete": False,
+                }
+                raise IncompleteInvoiceScanError(
+                    f"Incomplete {date_field} invoice scan after {pages_fetched} complete pages"
+                ) from last_error
+
+            pages_fetched += 1
+            all_orders.extend(page_orders)
+            batch_dates = [_order_scan_date(order, date_field) for order in page_orders]
+            if batch_dates:
+                logger.info(
+                    "Fetched %s orders by %s (total: %s) covering %s..%s",
+                    len(page_orders),
+                    date_field,
+                    len(all_orders),
+                    min(batch_dates),
+                    max(batch_dates),
+                )
+
+            if batch_dates and min(batch_dates) < date_from_str:
+                crossed_start_boundary = True
+                logger.info(
+                    "Reached orders older than requested %s from-date %s; stopping pagination",
+                    date_field,
+                    date_from_str,
+                )
                 break
 
-        # Filter orders by date client-side
-        if all_orders:
-            filtered_orders = []
+            has_next_page = bool(page_info.get("hasNextPage", False))
+            if not has_next_page:
+                exhausted_history = True
+                break
 
-            for order in all_orders:
-                pur_date = _order_purchase_date(order)
+            next_cursor = page_info.get("nextCursor")
+            if next_cursor is None or (
+                isinstance(next_cursor, str) and not next_cursor.strip()
+            ):
+                raise IncompleteInvoiceScanError(
+                    f"Incomplete {date_field} invoice scan: hasNextPage=true without nextCursor"
+                )
+            cursor_key = (type(next_cursor).__name__, str(next_cursor))
+            if cursor_key in seen_cursors:
+                raise IncompleteInvoiceScanError(
+                    f"Incomplete {date_field} invoice scan: repeated cursor {next_cursor!r}"
+                )
+            seen_cursors.add(cursor_key)
+            cursor = next_cursor
 
-                if date_from_str <= pur_date <= date_to_str:
-                    filtered_orders.append(order)
+        filtered_orders = [
+            order
+            for order in all_orders
+            if date_from_str <= _order_scan_date(order, date_field) <= date_to_str
+        ]
+        self.last_fetch_stats = {
+            "date_field": date_field,
+            "pages_fetched": pages_fetched,
+            "page_retry_count": page_retry_count,
+            "scan_complete": bool(crossed_start_boundary or exhausted_history),
+            "orders_fetched": len(filtered_orders),
+        }
+        if not self.last_fetch_stats["scan_complete"]:
+            raise IncompleteInvoiceScanError(
+                f"Incomplete {date_field} invoice scan: requested boundary was not proven"
+            )
 
-            logger.info(f"Filtered {len(filtered_orders)} orders within date range {date_from_str} to {date_to_str}")
-            return filtered_orders
+        logger.info(
+            "Filtered %s orders by %s within %s..%s",
+            len(filtered_orders),
+            date_field,
+            date_from_str,
+            date_to_str,
+        )
+        return filtered_orders
 
-        return all_orders
+    def fetch_orders_for_invoice_scan(
+        self,
+        date_from: datetime,
+        date_to: datetime,
+        *,
+        include_purchase_dates: bool = True,
+        include_recent_changes: bool,
+        recent_change_date_from: Optional[datetime] = None,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        Return a complete de-duplicated invoice scan.
+
+        The purchase-date pass preserves the original rolling window. The
+        last-change pass catches old orders when they are shipped after that
+        window, which is the failure mode that left delayed VEVO/ROY orders
+        permanently invisible.
+        """
+        if not include_purchase_dates and not include_recent_changes:
+            raise ValueError("Invoice scan must include at least one date basis")
+
+        purchase_orders: List[Dict[str, Any]] = []
+        purchase_stats: Dict[str, Any] = {
+            "pages_fetched": 0,
+            "page_retry_count": 0,
+            "scan_complete": True,
+            "orders_fetched": 0,
+        }
+        if include_purchase_dates:
+            purchase_orders = self.fetch_orders(
+                date_from,
+                date_to,
+                date_field="pur_date",
+            )
+            purchase_stats = dict(self.last_fetch_stats)
+        recent_change_orders: List[Dict[str, Any]] = []
+        recent_change_stats: Dict[str, Any] = {
+            "pages_fetched": 0,
+            "page_retry_count": 0,
+            "scan_complete": True,
+            "orders_fetched": 0,
+        }
+        if include_recent_changes:
+            recent_change_orders = self.fetch_orders(
+                recent_change_date_from or date_from,
+                date_to,
+                date_field="last_change",
+            )
+            recent_change_stats = dict(self.last_fetch_stats)
+
+        unique_orders: Dict[str, Dict[str, Any]] = {}
+        for order in purchase_orders + recent_change_orders:
+            identity = str(order.get("order_num") or order.get("id") or "").strip()
+            if not identity:
+                raise IncompleteInvoiceScanError(
+                    "Invoice scan returned an order without order_num or id"
+                )
+            unique_orders[identity] = order
+
+        stats = {
+            "scan_complete": bool(
+                purchase_stats.get("scan_complete")
+                and recent_change_stats.get("scan_complete")
+            ),
+            "purchase_date_orders_fetched": len(purchase_orders),
+            "recent_change_orders_fetched": len(recent_change_orders),
+            "deduplicated_orders_fetched": len(unique_orders),
+            "pages_fetched": int(purchase_stats.get("pages_fetched", 0))
+            + int(recent_change_stats.get("pages_fetched", 0)),
+            "page_retry_count": int(purchase_stats.get("page_retry_count", 0))
+            + int(recent_change_stats.get("page_retry_count", 0)),
+        }
+        if not stats["scan_complete"]:
+            raise IncompleteInvoiceScanError("Combined invoice scan did not complete")
+        return list(unique_orders.values()), stats
+
+    def fetch_order_invoice_guard(self, order_num: Any) -> Optional[Dict[str, Any]]:
+        """Re-read one candidate immediately before mutation to prevent duplicate invoices."""
+        normalized_order_num = str(order_num or "").strip()
+        if not normalized_order_num:
+            return None
+        try:
+            result = self.client.execute(
+                ORDER_INVOICE_GUARD_QUERY,
+                variable_values={"order_num": normalized_order_num},
+            )
+            order = result.get("getOrder")
+            if not isinstance(order, dict):
+                logger.error(
+                    "Pre-create guard did not return order %s",
+                    normalized_order_num,
+                )
+                return None
+            if order.get("invoices") is None:
+                order["invoices"] = []
+            elif not isinstance(order.get("invoices"), list):
+                logger.error(
+                    "Pre-create guard returned an incomplete invoices list for order %s",
+                    normalized_order_num,
+                )
+                return None
+            status = order.get("status")
+            if not isinstance(status, dict) or not str(status.get("name") or "").strip():
+                logger.error(
+                    "Pre-create guard returned an incomplete status for order %s",
+                    normalized_order_num,
+                )
+                return None
+            if self.require_cod_payment and not isinstance(
+                order.get("price_elements"),
+                list,
+            ):
+                logger.error(
+                    "Pre-create guard returned incomplete payment metadata for order %s",
+                    normalized_order_num,
+                )
+                return None
+            return order
+        except Exception as exc:
+            logger.error(
+                "Pre-create guard failed for order %s: %s",
+                normalized_order_num,
+                exc,
+            )
+            return None
 
     def fetch_latest_invoice_for_order(self, order_num: Any) -> Tuple[Optional[str], Optional[str]]:
         """Read the order again after invoice finalization and return its invoice id/number."""
@@ -894,6 +1152,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         filtered_orders = []
         stats = {
             "skipped_zero_total_orders": 0,
+            "skipped_non_cod_orders": 0,
         }
 
         for order in orders:
@@ -901,7 +1160,16 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             status_name = status.get("name", "").lower()
             invoices = order.get("invoices", []) or []
             has_invoice = len(invoices) > 0
-            order_total_value = _coerce_order_total_value(order)
+            parsed_order_total = _parse_order_total_value(order)
+            if (
+                parsed_order_total is None
+                and _status_matches_invoice_generation(status_name, self.eligible_statuses)
+                and not has_invoice
+            ):
+                raise IncompleteInvoiceScanError(
+                    f"Eligible order {order.get('order_num')} has an unknown total"
+                )
+            order_total_value = 0.0 if parsed_order_total is None else parsed_order_total
 
             if self.exclude_zero_total_orders and order_total_value <= 0:
                 stats["skipped_zero_total_orders"] += 1
@@ -911,6 +1179,27 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                     order_total_value,
                 )
                 continue
+
+            if (
+                self.require_cod_payment
+                and _status_matches_invoice_generation(status_name, self.eligible_statuses)
+                and not has_invoice
+            ):
+                if not _payment_elements(order):
+                    raise IncompleteInvoiceScanError(
+                        f"Eligible order {order.get('order_num')} has no payment metadata"
+                    )
+                if not _payment_matches_cod(
+                    order,
+                    self.cod_payment_ids,
+                    self.cod_payment_patterns,
+                ):
+                    stats["skipped_non_cod_orders"] += 1
+                    logger.info(
+                        "Order %s skipped - payment is not cash on delivery",
+                        order.get("order_num"),
+                    )
+                    continue
 
             if _status_matches_invoice_generation(status_name, self.eligible_statuses) and not has_invoice:
                 filtered_orders.append(order)
@@ -934,6 +1223,72 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         """Create invoice for the order"""
         order_num = order.get('order_num')
         creation_result = InvoiceCreationResult(email_required=self.send_invoice_email_enabled)
+        guard_order = self.fetch_order_invoice_guard(order_num)
+        if guard_order is None:
+            logger.error("  Invoice pre-create guard failed for order %s", order_num)
+            return creation_result
+
+        guard_invoices = guard_order.get("invoices") or []
+        if guard_invoices:
+            latest_invoice = guard_invoices[-1] or {}
+            creation_result.already_present = True
+            creation_result.email_required = False
+            creation_result.invoice_id = (
+                str(latest_invoice.get("id"))
+                if latest_invoice.get("id") not in (None, "")
+                else None
+            )
+            creation_result.invoice_num = (
+                str(latest_invoice.get("invoice_num"))
+                if latest_invoice.get("invoice_num") not in (None, "")
+                else None
+            )
+            logger.info(
+                "  Invoice already exists for order %s; mutation skipped",
+                order_num,
+            )
+            return creation_result
+
+        guard_status_name = str((guard_order.get("status") or {}).get("name") or "")
+        guard_total = _parse_order_total_value(guard_order)
+        if guard_total is None:
+            logger.error("  Invoice pre-create guard returned unknown total for order %s", order_num)
+            return creation_result
+        if self.require_cod_payment:
+            if not _payment_elements(guard_order):
+                logger.error(
+                    "  Invoice pre-create guard returned no payment metadata for order %s",
+                    order_num,
+                )
+                return creation_result
+            if not _payment_matches_cod(
+                guard_order,
+                self.cod_payment_ids,
+                self.cod_payment_patterns,
+            ):
+                creation_result.skipped_stale = True
+                creation_result.email_required = False
+                logger.info(
+                    "  Order %s is no longer cash on delivery; skipped",
+                    order_num,
+                )
+                return creation_result
+        if (
+            not _status_matches_invoice_generation(
+                guard_status_name,
+                self.eligible_statuses,
+            )
+            or (self.exclude_zero_total_orders and guard_total <= 0)
+        ):
+            creation_result.skipped_stale = True
+            creation_result.email_required = False
+            logger.info(
+                "  Order %s is no longer invoice-eligible at mutation time; skipped",
+                order_num,
+            )
+            return creation_result
+
+        order = {**order, **guard_order}
         customer = order.get('customer', {})
         customer_name = customer.get('company_name', '')
         if not customer_name:
@@ -948,7 +1303,6 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         logger.info(f"  Status: {order.get('status', {}).get('name', 'N/A')}")
         
         try:
-            import time
             timestamp = int(time.time() * 1000)
 
             order_id = order.get('id')
@@ -1156,7 +1510,11 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         
         # Fetch orders using GraphQL API
         logger.info("Fetching orders from GraphQL API...")
-        orders = self.fetch_orders(date_from, date_to)
+        orders, _scan_stats = self.fetch_orders_for_invoice_scan(
+            date_from,
+            date_to,
+            include_recent_changes=True,
+        )
         logger.info(f"Total orders fetched: {len(orders)}")
         
         # Filter orders that need invoices
@@ -1199,7 +1557,14 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             customer_email = customer.get('email', 'N/A')
             
             result = self.create_invoice(order)
-            if result.created:
+            if result.already_present or result.skipped_stale:
+                logger.info(
+                    "Order %s completed as idempotent no-op (already_present=%s skipped_stale=%s)",
+                    order_num,
+                    result.already_present,
+                    result.skipped_stale,
+                )
+            elif result.created:
                 success_count += 1
                 # Try to extract numeric value from formatted amount
                 order_sum = order.get('sum', {}).get('value', 0)
@@ -1240,6 +1605,7 @@ def run_invoice_generation(
     date_to: Union[str, datetime],
     dry_run: bool = False,
     no_web_login: bool = False,
+    reconcile: bool = False,
 ) -> InvoiceRunSummary:
     project_name = (project_name or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
     os.environ["REPORT_PROJECT"] = project_name
@@ -1271,6 +1637,10 @@ def run_invoice_generation(
         exclude_zero_total_orders=invoice_settings["exclude_zero_total_orders"],
         eligible_statuses=invoice_settings["eligible_statuses"],
         send_invoice_email=invoice_settings["send_invoice_email"],
+        page_retry_attempts=invoice_settings["page_retry_attempts"],
+        require_cod_payment=invoice_settings["require_cod_payment"],
+        cod_payment_ids=invoice_settings["cod_payment_ids"],
+        cod_payment_patterns=invoice_settings["cod_payment_patterns"],
     )
 
     summary = InvoiceRunSummary(
@@ -1278,6 +1648,7 @@ def run_invoice_generation(
         date_from=from_dt.strftime("%Y-%m-%d"),
         date_to=to_dt.strftime("%Y-%m-%d"),
         dry_run=dry_run,
+        scan_mode="reconciliation" if reconcile else "regular",
     )
 
     if not generator.web_session and not dry_run:
@@ -1291,13 +1662,31 @@ def run_invoice_generation(
             raise RuntimeError(f"BiznisWeb web session validation failed for project '{project_name}'")
 
     logger.info("Fetching orders from GraphQL API...")
-    orders = generator.fetch_orders(from_dt, to_dt)
+    orders, scan_stats = generator.fetch_orders_for_invoice_scan(
+        from_dt,
+        to_dt,
+        include_purchase_dates=reconcile,
+        include_recent_changes=(
+            invoice_settings["include_recent_changes"] and not reconcile
+        ),
+        recent_change_date_from=from_dt,
+    )
     summary.total_orders_fetched = len(orders)
+    summary.scan_complete = bool(scan_stats["scan_complete"])
+    summary.purchase_date_orders_fetched = int(
+        scan_stats["purchase_date_orders_fetched"]
+    )
+    summary.recent_change_orders_fetched = int(
+        scan_stats["recent_change_orders_fetched"]
+    )
+    summary.pages_fetched = int(scan_stats["pages_fetched"])
+    summary.page_retry_count = int(scan_stats["page_retry_count"])
     logger.info("Total orders fetched: %s", summary.total_orders_fetched)
 
     orders_for_invoice, filter_stats = generator.filter_orders_for_invoice(orders)
     summary.matched_orders = len(orders_for_invoice)
     summary.skipped_zero_total_orders = filter_stats.get("skipped_zero_total_orders", 0)
+    summary.skipped_non_cod_orders = filter_stats.get("skipped_non_cod_orders", 0)
     logger.info("Orders matching criteria: %s", summary.matched_orders)
 
     if dry_run:
@@ -1312,7 +1701,11 @@ def run_invoice_generation(
 
     for order in orders_for_invoice:
         result = generator.create_invoice(order)
-        if result.created:
+        if result.already_present:
+            summary.already_present_invoices += 1
+        elif result.skipped_stale:
+            summary.skipped_stale_orders += 1
+        elif result.created:
             summary.created_invoices += 1
             summary.total_amount += _coerce_order_total_value(order)
             if result.email_required:
@@ -1329,6 +1722,9 @@ def run_invoice_generation(
         (
             "Invoice run summary - project=%s matched=%s created=%s failed=%s "
             "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s total_amount=%.2f"
+            " already_present=%s skipped_stale=%s"
+            " scan_mode=%s scan_complete=%s purchase_fetched=%s recent_change_fetched=%s"
+            " skipped_non_cod=%s pages_fetched=%s page_retries=%s"
         ),
         summary.project,
         summary.matched_orders,
@@ -1339,6 +1735,15 @@ def run_invoice_generation(
         summary.missing_invoice_ids,
         summary.skipped_zero_total_orders,
         summary.total_amount,
+        summary.already_present_invoices,
+        summary.skipped_stale_orders,
+        summary.scan_mode,
+        summary.scan_complete,
+        summary.purchase_date_orders_fetched,
+        summary.recent_change_orders_fetched,
+        summary.skipped_non_cod_orders,
+        summary.pages_fetched,
+        summary.page_retry_count,
     )
     return summary
 

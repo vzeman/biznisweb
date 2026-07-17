@@ -1,9 +1,11 @@
+import argparse
 import hashlib
 import json
 import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -11,13 +13,18 @@ from unittest.mock import patch
 import daily_report_runner as daily_runner
 from daily_report_runner import maybe_run_invoice_automation, parse_args as parse_daily_report_args
 from generate_invoices import (
+    IncompleteInvoiceScanError,
     InvoiceGenerator,
     InvoiceRunSummary,
     _status_matches_invoice_generation,
     resolve_invoice_date_window,
     resolve_invoice_generation_settings,
 )
-from invoice_runner import resolve_invoice_runner_window
+from invoice_runner import (
+    resolve_default_invoice_reference_date,
+    resolve_invoice_runner_window,
+    run_invoice_runner,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -63,14 +70,82 @@ class _FakeInvoiceWebSession:
 class _FakeInvoiceClient:
     def __init__(self, invoices: list[dict]) -> None:
         self.invoices = invoices
+        self.execute_count = 0
 
     def execute(self, query, variable_values=None):
+        self.execute_count += 1
         return {
             "getOrder": {
                 "order_num": (variable_values or {}).get("order_num"),
-                "invoices": self.invoices,
+                "status": {"id": "4", "name": "Odoslaná"},
+                "sum": {"value": 12.5, "formatted": "12.50 EUR"},
+                "invoices": [] if self.execute_count == 1 else self.invoices,
             }
         }
+
+
+class _FakeOrderListClient:
+    def __init__(self, responses: list[dict | Exception]) -> None:
+        self.responses = list(responses)
+        self.variables: list[dict] = []
+
+    def execute(self, query, variable_values=None):
+        self.variables.append(variable_values or {})
+        if not self.responses:
+            raise AssertionError("Unexpected extra GraphQL request")
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def _invoice_order(
+    order_num: str,
+    *,
+    pur_date: str,
+    last_change: str,
+    total: float | None = 12.5,
+    invoices: list[dict] | None = None,
+    payment_reference_id: str | None = "7",
+    payment_title: str | None = "Dobierkou",
+) -> dict:
+    return {
+        "id": f"id-{order_num}",
+        "order_num": order_num,
+        "pur_date": pur_date,
+        "last_change": last_change,
+        "price_elements": (
+            [
+                {
+                    "type": "payment",
+                    "title": payment_title,
+                    "reference_id": payment_reference_id,
+                }
+            ]
+            if payment_reference_id is not None or payment_title is not None
+            else []
+        ),
+        "status": {"id": "4", "name": "Odoslaná"},
+        "invoices": [] if invoices is None else invoices,
+        "sum": {"value": total, "formatted": "" if total is None else str(total)},
+    }
+
+
+def _order_page(
+    orders: list[dict | None],
+    *,
+    has_next: bool = False,
+    next_cursor: str | None = None,
+) -> dict:
+    return {
+        "getOrderList": {
+            "data": orders,
+            "pageInfo": {
+                "hasNextPage": has_next,
+                "nextCursor": next_cursor,
+            },
+        }
+    }
 
 
 class InvoiceGenerationTests(unittest.TestCase):
@@ -231,7 +306,13 @@ class InvoiceGenerationTests(unittest.TestCase):
         settings = resolve_invoice_generation_settings({"invoice_generation": {"enabled": True}})
         self.assertTrue(settings["enabled"])
         self.assertEqual(settings["lookback_days"], 7)
+        self.assertEqual(settings["status_change_lookback_days"], 7)
+        self.assertEqual(settings["reconciliation_lookback_days"], 120)
+        self.assertTrue(settings["include_recent_changes"])
+        self.assertEqual(settings["page_retry_attempts"], 3)
+        self.assertEqual(settings["rollover_grace_hours"], 3)
         self.assertTrue(settings["exclude_zero_total_orders"])
+        self.assertFalse(settings["require_cod_payment"])
         self.assertTrue(settings["send_invoice_email"])
         self.assertEqual(["Odoslan\u00e1"], settings["eligible_statuses"])
 
@@ -254,13 +335,46 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertFalse(_status_matches_invoice_generation("Platba online - platnos\u0165 vypr\u0161ala"))
 
     def test_invoice_runner_uses_current_day_reference_window(self) -> None:
-        settings = {"invoice_generation": {"enabled": True, "lookback_days": 7}}
+        settings = {
+            "invoice_generation": {
+                "enabled": True,
+                "lookback_days": 7,
+                "status_change_lookback_days": 7,
+            }
+        }
         from_date, to_date = resolve_invoice_runner_window(
             settings,
             timezone_name="Europe/Bratislava",
             reference_date="2026-04-28",
         )
         self.assertEqual(("2026-04-22", "2026-04-28"), (from_date, to_date))
+
+    def test_invoice_runner_reconciliation_uses_extended_window(self) -> None:
+        settings = {
+            "invoice_generation": {
+                "enabled": True,
+                "lookback_days": 7,
+                "status_change_lookback_days": 7,
+                "reconciliation_lookback_days": 120,
+            }
+        }
+        from_date, to_date = resolve_invoice_runner_window(
+            settings,
+            timezone_name="Europe/Bratislava",
+            reference_date="2026-06-30",
+            reconcile=True,
+        )
+        self.assertEqual(("2026-03-03", "2026-06-30"), (from_date, to_date))
+
+    def test_invoice_runner_midnight_grace_uses_previous_local_day(self) -> None:
+        self.assertEqual(
+            "2026-06-30",
+            resolve_default_invoice_reference_date(
+                "Europe/Bratislava",
+                3,
+                current_datetime=datetime.fromisoformat("2026-07-01T00:00:17+02:00"),
+            ),
+        )
 
     def test_daily_report_runner_skips_invoices_by_default(self) -> None:
         args = parse_daily_report_args([])
@@ -339,6 +453,16 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual(["Odoslan\u00e1"], roy["invoice_generation"]["eligible_statuses"])
         self.assertTrue(vevo["invoice_generation"]["send_invoice_email"])
         self.assertTrue(roy["invoice_generation"]["send_invoice_email"])
+        for project in (vevo, roy):
+            invoice_settings = project["invoice_generation"]
+            self.assertEqual(7, invoice_settings["status_change_lookback_days"])
+            self.assertEqual(120, invoice_settings["reconciliation_lookback_days"])
+            self.assertTrue(invoice_settings["include_recent_changes"])
+            self.assertEqual(4, invoice_settings["page_retry_attempts"])
+            self.assertEqual(3, invoice_settings["rollover_grace_hours"])
+            self.assertTrue(invoice_settings["require_cod_payment"])
+            resolved = resolve_invoice_generation_settings(project)
+            self.assertIn("7", resolved["cod_payment_ids"])
 
         self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
         self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])
@@ -375,6 +499,235 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
         self.assertEqual(["A-2"], [order["order_num"] for order in filtered])
         self.assertEqual(1, stats["skipped_zero_total_orders"])
+
+    def test_filter_requires_cash_on_delivery_when_configured(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            require_cod_payment=True,
+            cod_payment_ids=["7"],
+            cod_payment_patterns=["cash on delivery"],
+        )
+        filtered, stats = generator.filter_orders_for_invoice(
+            [
+                _invoice_order(
+                    "COD-ID",
+                    pur_date="2026-06-30 10:00:00",
+                    last_change="2026-06-30 10:01:00",
+                ),
+                _invoice_order(
+                    "PREPAID",
+                    pur_date="2026-06-30 10:00:00",
+                    last_change="2026-06-30 10:01:00",
+                    payment_reference_id="6",
+                    payment_title="Bankovym prevodom",
+                ),
+                _invoice_order(
+                    "COD-TITLE",
+                    pur_date="2026-06-30 10:00:00",
+                    last_change="2026-06-30 10:01:00",
+                    payment_reference_id="999",
+                    payment_title="Cash on delivery",
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            ["COD-ID", "COD-TITLE"],
+            [order["order_num"] for order in filtered],
+        )
+        self.assertEqual(1, stats["skipped_non_cod_orders"])
+
+    def test_filter_fails_closed_when_cod_payment_metadata_is_missing(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            require_cod_payment=True,
+            cod_payment_ids=["7"],
+        )
+        order = _invoice_order(
+            "PAYMENT-UNKNOWN",
+            pur_date="2026-06-30 10:00:00",
+            last_change="2026-06-30 10:01:00",
+            payment_reference_id=None,
+            payment_title=None,
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.filter_orders_for_invoice([order])
+
+    def test_status_change_scan_finds_old_purchase_changed_recently(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        generator.client = _FakeOrderListClient(
+            [
+                _order_page(
+                    [
+                        _invoice_order(
+                            "OLD-1",
+                            pur_date="2026-05-17 13:48:02",
+                            last_change="2026-06-02 11:46:10",
+                        )
+                    ]
+                )
+            ]
+        )
+
+        orders, stats = generator.fetch_orders_for_invoice_scan(
+            datetime(2026, 5, 27),
+            datetime(2026, 6, 2),
+            include_purchase_dates=False,
+            include_recent_changes=True,
+        )
+
+        self.assertEqual(["OLD-1"], [order["order_num"] for order in orders])
+        self.assertEqual(0, stats["purchase_date_orders_fetched"])
+        self.assertEqual(1, stats["recent_change_orders_fetched"])
+        self.assertEqual("last_change", generator.client.variables[0]["params"]["order_by"])
+
+    @patch("generate_invoices.time.sleep", return_value=None)
+    def test_strict_scan_raises_on_first_page_failure(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=2,
+        )
+        generator.client = _FakeOrderListClient(
+            [RuntimeError("quota exceeded"), RuntimeError("quota exceeded")]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+        self.assertEqual(2, len(generator.client.variables))
+        self.assertFalse(generator.last_fetch_stats["scan_complete"])
+
+    @patch("generate_invoices.time.sleep", return_value=None)
+    def test_strict_scan_raises_on_later_page_failure(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=2,
+        )
+        generator.client = _FakeOrderListClient(
+            [
+                _order_page(
+                    [
+                        _invoice_order(
+                            "RECENT-1",
+                            pur_date="2026-06-30 10:00:00",
+                            last_change="2026-06-30 10:01:00",
+                        )
+                    ],
+                    has_next=True,
+                    next_cursor="cursor-2",
+                ),
+                RuntimeError("non-json response"),
+                RuntimeError("non-json response"),
+            ]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+        self.assertEqual(3, len(generator.client.variables))
+        self.assertEqual("cursor-2", generator.client.variables[1]["params"]["cursor"])
+
+    @patch("generate_invoices.time.sleep", return_value=None)
+    def test_strict_scan_rejects_partial_graphql_rows(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        generator.client = _FakeOrderListClient(
+            [
+                _order_page(
+                    [
+                        None,
+                        _invoice_order(
+                            "VALID-1",
+                            pur_date="2026-06-30 10:00:00",
+                            last_change="2026-06-30 10:01:00",
+                        ),
+                    ]
+                )
+            ]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+    @patch("generate_invoices.time.sleep", return_value=None)
+    def test_strict_scan_rejects_missing_has_next_page(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        generator.client = _FakeOrderListClient(
+            [
+                {
+                    "getOrderList": {
+                        "data": [
+                            _invoice_order(
+                                "VALID-1",
+                                pur_date="2026-06-30 10:00:00",
+                                last_change="2026-06-30 10:01:00",
+                            )
+                        ],
+                        "pageInfo": {},
+                    }
+                }
+            ]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+    def test_eligible_order_with_unknown_total_fails_closed(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+        )
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.filter_orders_for_invoice(
+                [
+                    _invoice_order(
+                        "UNKNOWN-TOTAL",
+                        pur_date="2026-06-30 10:00:00",
+                        last_change="2026-06-30 10:01:00",
+                        total=None,
+                    )
+                ]
+            )
 
     @patch("time.sleep", return_value=None)
     def test_create_invoice_sends_email_using_graphql_invoice_fallback(self, _sleep_mock) -> None:
@@ -430,6 +783,80 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertTrue(result.created)
         self.assertFalse(result.email_sent)
         self.assertEqual("missing_invoice_id", result.email_error)
+
+    def test_create_invoice_is_idempotent_when_guard_finds_existing_invoice(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            send_invoice_email=True,
+        )
+        generator.web_session = _FakeInvoiceWebSession()
+        generator.client = _FakeInvoiceClient([{"id": "INV-EXISTING", "invoice_num": "FV-EXISTING"}])
+        generator.client.execute_count = 1
+
+        result = generator.create_invoice(
+            {
+                "id": "ORDER-ID",
+                "order_num": "1001",
+                "status": {"name": "Odoslaná"},
+                "sum": {"value": 12.5, "formatted": "12.50 EUR"},
+            }
+        )
+
+        self.assertTrue(result.already_present)
+        self.assertFalse(result.created)
+        self.assertEqual("INV-EXISTING", result.invoice_id)
+        self.assertEqual([], generator.web_session.post_urls)
+
+    @patch("invoice_runner.put_metric")
+    @patch("invoice_runner.run_invoice_generation")
+    @patch("invoice_runner.resolve_reporting_defaults", return_value={"cloudwatch_namespace": "Test"})
+    @patch(
+        "invoice_runner.load_project_settings",
+        return_value={
+            "invoice_generation": {
+                "enabled": True,
+                "lookback_days": 7,
+                "status_change_lookback_days": 7,
+                "reconciliation_lookback_days": 120,
+            }
+        },
+    )
+    @patch("invoice_runner.load_project_env")
+    def test_failed_summary_emits_failed_without_succeeded(
+        self,
+        _load_env_mock,
+        _load_settings_mock,
+        _resolve_defaults_mock,
+        run_generation_mock,
+        put_metric_mock,
+    ) -> None:
+        run_generation_mock.return_value = InvoiceRunSummary(
+            project="vevo",
+            date_from="2026-06-24",
+            date_to="2026-06-30",
+            matched_orders=1,
+            failed_invoices=1,
+            scan_complete=True,
+        )
+        args = argparse.Namespace(
+            project="vevo",
+            reference_date="2026-06-30",
+            from_date="",
+            to_date="",
+            timezone="Europe/Bratislava",
+            dry_run=False,
+            no_web_login=False,
+            reconcile=False,
+        )
+
+        with self.assertRaises(RuntimeError):
+            run_invoice_runner(args)
+
+        metric_names = [call.args[0] for call in put_metric_mock.call_args_list]
+        self.assertIn("InvoiceStandaloneRunFailed", metric_names)
+        self.assertNotIn("InvoiceStandaloneRunSucceeded", metric_names)
 
     @patch("daily_report_runner.put_metric")
     @patch("daily_report_runner.run_invoice_generation")
