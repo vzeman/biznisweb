@@ -204,6 +204,12 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
 
     put_metric("InvoiceStandaloneMatchedOrders", summary.matched_orders, project, reporting_defaults)
     put_metric("InvoiceStandaloneSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
+    put_metric(
+        "InvoiceStandaloneSkippedBeforeAutomationStart",
+        summary.skipped_before_automation_start,
+        project,
+        reporting_defaults,
+    )
     put_metric("InvoiceStandaloneCreated", summary.created_invoices, project, reporting_defaults)
     put_metric("InvoiceStandaloneCreateFailures", summary.failed_invoices, project, reporting_defaults)
     put_metric("InvoiceStandaloneEmailed", summary.emailed_invoices, project, reporting_defaults)
@@ -241,6 +247,7 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         f"email_failed={summary.failed_invoice_emails} "
         f"missing_invoice_ids={summary.missing_invoice_ids} "
         f"skipped_zero_total={summary.skipped_zero_total_orders} "
+        f"skipped_before_automation_start={summary.skipped_before_automation_start} "
         f"already_present={summary.already_present_invoices} "
         f"skipped_stale={summary.skipped_stale_orders} "
         f"skipped_non_cod={summary.skipped_non_cod_orders} "
@@ -298,6 +305,7 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         "already_present_invoices": summary.already_present_invoices,
         "skipped_stale_orders": summary.skipped_stale_orders,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
+        "skipped_before_automation_start": summary.skipped_before_automation_start,
         "skipped_non_cod_orders": summary.skipped_non_cod_orders,
         "scan_mode": summary.scan_mode,
         "scan_complete": summary.scan_complete,

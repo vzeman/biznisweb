@@ -89,11 +89,13 @@
   ],
   "invoice_generation": {
     "enabled": true,
+    "automation_start_date": "2026-07-17",
     "lookback_days": 7,
     "status_change_lookback_days": 7,
     "reconciliation_lookback_days": 120,
     "include_recent_changes": true,
     "page_retry_attempts": 4,
+    "max_pages": 1000,
     "rollover_grace_hours": 3,
     "exclude_zero_total_orders": true,
     "require_cod_payment": true,
@@ -104,7 +106,7 @@
     "schedule_name": "roy-daily-invoice-generation",
     "schedule_expression": "cron(5/15 6-23 * * ? *)",
     "final_sweep_schedule_name": "roy-same-day-invoice-sweep",
-    "final_sweep_schedule_expression": "cron(59 23 * * ? *)",
+    "final_sweep_schedule_expression": "cron(45 0 * * ? *)",
     "timezone": "Europe/Bratislava",
     "task_family": "roy-invoice-daily"
   },

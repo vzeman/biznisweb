@@ -196,6 +196,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         return_value={
             "invoice_generation": {
                 "enabled": True,
+                "automation_start_date": "2026-07-17",
                 "eligible_statuses": ["odoslaná"],
                 "send_invoice_email": True,
             }
@@ -247,6 +248,10 @@ class InvoiceGenerationTests(unittest.TestCase):
             )
 
         generator.create_invoice.assert_not_called()
+        self.assertEqual(
+            "2026-07-17",
+            generator_class_mock.call_args.kwargs["automation_start_date"],
+        )
 
     def test_daily_report_s3_upload_publishes_each_period_under_exact_stable_key(self) -> None:
         class FakeS3:
@@ -402,7 +407,14 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
 
     def test_invoice_generation_settings_default_zero_total_exclusion(self) -> None:
-        settings = resolve_invoice_generation_settings({"invoice_generation": {"enabled": True}})
+        settings = resolve_invoice_generation_settings(
+            {
+                "invoice_generation": {
+                    "enabled": True,
+                    "automation_start_date": "2026-07-17",
+                }
+            }
+        )
         self.assertTrue(settings["enabled"])
         self.assertEqual(settings["lookback_days"], 7)
         self.assertEqual(settings["status_change_lookback_days"], 7)
@@ -414,11 +426,50 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertTrue(settings["exclude_zero_total_orders"])
         self.assertFalse(settings["require_cod_payment"])
         self.assertTrue(settings["send_invoice_email"])
+        self.assertEqual("2026-07-17", settings["automation_start_date"])
         self.assertEqual(["Odoslan\u00e1"], settings["eligible_statuses"])
+
+    def test_invoice_generation_settings_validate_automation_start_date(self) -> None:
+        settings = resolve_invoice_generation_settings(
+            {
+                "invoice_generation": {
+                    "enabled": True,
+                    "automation_start_date": "2026-07-17",
+                }
+            }
+        )
+        self.assertEqual("2026-07-17", settings["automation_start_date"])
+
+        for invalid_value in ("2026-7-17", "2026-02-30", "17.07.2026"):
+            with self.subTest(invalid_value=invalid_value), self.assertRaises(ValueError):
+                resolve_invoice_generation_settings(
+                    {
+                        "invoice_generation": {
+                            "enabled": True,
+                            "automation_start_date": invalid_value,
+                        }
+                    }
+                )
+
+        with self.assertRaisesRegex(ValueError, "is required when"):
+            resolve_invoice_generation_settings(
+                {"invoice_generation": {"enabled": True}}
+            )
+
+        disabled = resolve_invoice_generation_settings(
+            {"invoice_generation": {"enabled": False}}
+        )
+        self.assertEqual("", disabled["automation_start_date"])
 
     def test_invoice_generation_settings_can_disable_invoice_email(self) -> None:
         settings = resolve_invoice_generation_settings(
-            {"invoice_generation": {"enabled": True, "send_invoice_email": False}}
+            {
+                "invoice_generation": {
+                    "enabled": True,
+                    "automation_start_date": "2026-07-17",
+                    "send_invoice_email": False,
+                }
+            }
         )
         self.assertFalse(settings["send_invoice_email"])
 
@@ -438,6 +489,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         settings = {
             "invoice_generation": {
                 "enabled": True,
+                "automation_start_date": "2026-07-17",
                 "lookback_days": 7,
                 "status_change_lookback_days": 7,
             }
@@ -453,6 +505,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         settings = {
             "invoice_generation": {
                 "enabled": True,
+                "automation_start_date": "2026-07-17",
                 "lookback_days": 7,
                 "status_change_lookback_days": 7,
                 "reconciliation_lookback_days": 120,
@@ -562,8 +615,10 @@ class InvoiceGenerationTests(unittest.TestCase):
             self.assertEqual(1000, invoice_settings["max_pages"])
             self.assertEqual(3, invoice_settings["rollover_grace_hours"])
             self.assertTrue(invoice_settings["require_cod_payment"])
+            self.assertEqual("2026-07-17", invoice_settings["automation_start_date"])
             resolved = resolve_invoice_generation_settings(project)
             self.assertIn("7", resolved["cod_payment_ids"])
+            self.assertEqual("2026-07-17", resolved["automation_start_date"])
 
         self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
         self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])
@@ -600,6 +655,133 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
         self.assertEqual(["A-2"], [order["order_num"] for order in filtered])
         self.assertEqual(1, stats["skipped_zero_total_orders"])
+
+    def test_filter_excludes_orders_purchased_before_automation_start(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            automation_start_date="2026-07-17",
+        )
+        filtered, stats = generator.filter_orders_for_invoice(
+            [
+                _invoice_order(
+                    "OLD",
+                    pur_date="2026-07-16 23:59:59",
+                    last_change="2026-07-17 08:00:00",
+                ),
+                _invoice_order(
+                    "START",
+                    pur_date="2026-07-17 00:00:00",
+                    last_change="2026-07-17 08:00:00",
+                ),
+                _invoice_order(
+                    "NEW",
+                    pur_date="2026-07-18 09:00:00",
+                    last_change="2026-07-18 09:01:00",
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            ["START", "NEW"],
+            [order["order_num"] for order in filtered],
+        )
+        self.assertEqual(1, stats["skipped_before_automation_start"])
+
+    def test_filter_fails_closed_on_invalid_purchase_date_with_cutoff(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            automation_start_date="2026-07-17",
+        )
+        for invalid_value in ("", "2026/07/17", "2026-02-30"):
+            order = _invoice_order(
+                f"INVALID-{invalid_value}",
+                pur_date=invalid_value,
+                last_change="2026-07-17 08:00:00",
+            )
+            with self.subTest(invalid_value=invalid_value), self.assertRaisesRegex(
+                ValueError,
+                "Invalid pur_date",
+            ):
+                generator.filter_orders_for_invoice([order])
+
+    def test_regular_and_reconciliation_runs_apply_automation_start_cutoff(self) -> None:
+        old_order = _invoice_order(
+            "OLD-IN-BOTH-MODES",
+            pur_date="2026-07-16 23:59:59",
+            last_change="2026-07-17 08:00:00",
+        )
+        scan_stats = {
+            "scan_complete": True,
+            "purchase_date_orders_fetched": 1,
+            "recent_change_orders_fetched": 1,
+            "pages_fetched": 1,
+            "page_retry_count": 0,
+        }
+        settings = {
+            "invoice_generation": {
+                "enabled": True,
+                "automation_start_date": "2026-07-17",
+                "require_cod_payment": False,
+            }
+        }
+
+        with (
+            patch("generate_invoices.load_project_env"),
+            patch("generate_invoices.load_project_settings", return_value=settings),
+            patch(
+                "generate_invoices.resolve_biznisweb_api_url",
+                return_value="https://example.com/api/graphql",
+            ),
+            patch.object(
+                InvoiceGenerator,
+                "fetch_orders_for_invoice_scan",
+                return_value=([old_order], scan_stats),
+            ) as fetch_mock,
+            patch.dict(os.environ, {"BIZNISWEB_API_TOKEN": "token"}, clear=False),
+        ):
+            for reconcile in (False, True):
+                with self.subTest(reconcile=reconcile):
+                    summary = run_invoice_generation(
+                        "vevo",
+                        "2026-06-01",
+                        "2026-07-17",
+                        dry_run=True,
+                        no_web_login=True,
+                        reconcile=reconcile,
+                    )
+                    self.assertEqual(0, summary.matched_orders)
+                    self.assertEqual(1, summary.skipped_before_automation_start)
+            self.assertEqual(2, fetch_mock.call_count)
+            for call in fetch_mock.call_args_list:
+                self.assertEqual(
+                    datetime(2026, 7, 17),
+                    call.args[0],
+                )
+
+    def test_pre_create_guard_blocks_order_before_automation_start(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            automation_start_date="2026-07-17",
+        )
+        old_order = _invoice_order(
+            "OLD-GUARD",
+            pur_date="2026-07-16 23:59:59",
+            last_change="2026-07-17 08:00:00",
+        )
+        generator.client = _StaticOrderGuardClient(old_order)
+        generator.web_session = _FakeInvoiceWebSession()
+
+        result = generator.create_invoice(old_order)
+
+        self.assertTrue(result.skipped_before_automation_start)
+        self.assertFalse(result.created)
+        self.assertEqual([], generator.web_session.post_urls)
 
     def test_filter_requires_cash_on_delivery_when_configured(self) -> None:
         generator = InvoiceGenerator(
@@ -1221,6 +1403,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         return_value={
             "invoice_generation": {
                 "enabled": True,
+                "automation_start_date": "2026-07-17",
                 "lookback_days": 7,
                 "status_change_lookback_days": 7,
                 "reconciliation_lookback_days": 120,
@@ -1274,6 +1457,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         load_project_settings_mock.return_value = {
             "invoice_generation": {
                 "enabled": True,
+                "automation_start_date": "2026-07-17",
                 "lookback_days": 7,
                 "exclude_zero_total_orders": True,
             }
@@ -1285,6 +1469,7 @@ class InvoiceGenerationTests(unittest.TestCase):
             dry_run=True,
             matched_orders=3,
             skipped_zero_total_orders=2,
+            skipped_before_automation_start=4,
         )
 
         result = maybe_run_invoice_automation(
@@ -1311,11 +1496,12 @@ class InvoiceGenerationTests(unittest.TestCase):
                 "failed_invoice_emails": 0,
                 "missing_invoice_ids": 0,
                 "skipped_zero_total_orders": 2,
+                "skipped_before_automation_start": 4,
                 "dry_run": True,
             },
             result,
         )
-        self.assertEqual(8, put_metric_mock.call_count)
+        self.assertEqual(9, put_metric_mock.call_count)
 
 
 if __name__ == "__main__":

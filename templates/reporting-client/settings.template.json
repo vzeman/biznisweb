@@ -16,6 +16,7 @@
   "fixed_daily_cost": 0,
   "invoice_generation": {
     "enabled": false,
+    "automation_start_date": "",
     "lookback_days": 7,
     "status_change_lookback_days": 7,
     "reconciliation_lookback_days": 120,

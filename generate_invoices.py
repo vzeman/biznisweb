@@ -100,6 +100,7 @@ query GetOrderInvoiceGuard($order_num: String!) {
   getOrder(order_num: $order_num) {
     id
     order_num
+    pur_date
     status {
       id
       name
@@ -139,6 +140,7 @@ class InvoiceRunSummary:
     skipped_stale_orders: int = 0
     skipped_zero_total_orders: int = 0
     skipped_non_cod_orders: int = 0
+    skipped_before_automation_start: int = 0
     total_amount: float = 0.0
     scan_mode: str = "regular"
     scan_complete: bool = True
@@ -158,6 +160,7 @@ class InvoiceCreationResult:
     email_error: str = ""
     already_present: bool = False
     skipped_stale: bool = False
+    skipped_before_automation_start: bool = False
 
     def __bool__(self) -> bool:
         return self.created and (not self.email_required or self.email_sent)
@@ -167,9 +170,32 @@ class IncompleteInvoiceScanError(RuntimeError):
     """Raised when an invoice run cannot prove that every requested order page was scanned."""
 
 
+def _normalize_optional_invoice_date(value: Any, *, field_name: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", normalized):
+        raise ValueError(f"{field_name} must use YYYY-MM-DD format")
+    try:
+        parsed = datetime.strptime(normalized, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid calendar date") from exc
+    return parsed.strftime("%Y-%m-%d")
+
+
 def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dict[str, Any]:
     raw_settings = project_settings.get("invoice_generation") or {}
     realized_revenue_settings = project_settings.get("realized_revenue") or {}
+    enabled = bool(raw_settings.get("enabled", False))
+    automation_start_date = _normalize_optional_invoice_date(
+        raw_settings.get("automation_start_date"),
+        field_name="invoice_generation.automation_start_date",
+    )
+    if enabled and not automation_start_date:
+        raise ValueError(
+            "invoice_generation.automation_start_date is required when "
+            "invoice generation is enabled"
+        )
     raw_lookback_days = raw_settings.get("lookback_days", DEFAULT_INVOICE_LOOKBACK_DAYS)
     try:
         lookback_days = int(raw_lookback_days)
@@ -248,7 +274,7 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
     ]
 
     return {
-        "enabled": bool(raw_settings.get("enabled", False)),
+        "enabled": enabled,
         "lookback_days": lookback_days,
         "status_change_lookback_days": status_change_lookback_days,
         "reconciliation_lookback_days": reconciliation_lookback_days,
@@ -262,6 +288,7 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
         "cod_payment_patterns": cod_payment_patterns,
         "eligible_statuses": eligible_statuses,
         "send_invoice_email": bool(raw_settings.get("send_invoice_email", True)),
+        "automation_start_date": automation_start_date,
     }
 
 
@@ -509,6 +536,7 @@ class InvoiceGenerator:
         cod_payment_ids: Optional[Iterable[str]] = None,
         cod_payment_patterns: Optional[Iterable[str]] = None,
         max_pages: int = DEFAULT_INVOICE_MAX_PAGES,
+        automation_start_date: str = "",
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
@@ -543,6 +571,10 @@ class InvoiceGenerator:
             if str(value or "").strip()
         )
         self.max_pages = max(1, min(int(max_pages), 10_000))
+        self.automation_start_date = _normalize_optional_invoice_date(
+            automation_start_date,
+            field_name="automation_start_date",
+        )
         self.last_fetch_stats: Dict[str, Any] = {}
         
         # Initialize web session if credentials provided
@@ -1268,6 +1300,7 @@ class InvoiceGenerator:
         stats = {
             "skipped_zero_total_orders": 0,
             "skipped_non_cod_orders": 0,
+            "skipped_before_automation_start": 0,
         }
 
         for order in orders:
@@ -1280,6 +1313,22 @@ class InvoiceGenerator:
                 status_name,
                 self.eligible_statuses,
             )
+            if (
+                self.automation_start_date
+                and status_matches
+                and not has_invoice
+            ):
+                purchase_date = _order_scan_date(order, "pur_date")
+                if purchase_date < self.automation_start_date:
+                    stats["skipped_before_automation_start"] += 1
+                    logger.info(
+                        "Order %s skipped - purchase date %s is before "
+                        "automation start %s",
+                        order.get("order_num"),
+                        purchase_date,
+                        self.automation_start_date,
+                    )
+                    continue
             if (
                 parsed_order_total is None
                 and status_matches
@@ -1411,6 +1460,20 @@ class InvoiceGenerator:
                 order_num,
             )
             return creation_result
+
+        if self.automation_start_date:
+            guard_purchase_date = _order_scan_date(guard_order, "pur_date")
+            if guard_purchase_date < self.automation_start_date:
+                creation_result.skipped_before_automation_start = True
+                creation_result.email_required = False
+                logger.info(
+                    "  Order %s purchase date %s is before automation start %s; "
+                    "mutation skipped",
+                    order_num,
+                    guard_purchase_date,
+                    self.automation_start_date,
+                )
+                return creation_result
 
         guard_status_name = str((guard_order.get("status") or {}).get("name") or "")
         guard_total = _parse_order_total_value(guard_order)
@@ -1700,6 +1763,10 @@ class InvoiceGenerator:
             total = sum(_coerce_order_total_value(order) for order in orders_for_invoice)
             logger.info(f"  Total amount: â‚¬{total:.2f}")
             logger.info(f"  Skipped zero-total orders: {filter_stats.get('skipped_zero_total_orders', 0)}")
+            logger.info(
+                "  Skipped before automation start: %s",
+                filter_stats.get("skipped_before_automation_start", 0),
+            )
             if self.web_session:
                 logger.info("  Web session: Available (invoices would be created)")
             else:
@@ -1720,12 +1787,19 @@ class InvoiceGenerator:
             customer_email = customer.get('email', 'N/A')
             
             result = self.create_invoice(order)
-            if result.already_present or result.skipped_stale:
+            if (
+                result.already_present
+                or result.skipped_stale
+                or result.skipped_before_automation_start
+            ):
                 logger.info(
-                    "Order %s completed as idempotent no-op (already_present=%s skipped_stale=%s)",
+                    "Order %s completed as idempotent no-op "
+                    "(already_present=%s skipped_stale=%s "
+                    "skipped_before_automation_start=%s)",
                     order_num,
                     result.already_present,
                     result.skipped_stale,
+                    result.skipped_before_automation_start,
                 )
             elif result.created:
                 success_count += 1
@@ -1752,6 +1826,10 @@ class InvoiceGenerator:
         if email_failed_count > 0:
             logger.info(f"  âś— Invoice emails failed: {email_failed_count}")
         logger.info(f"  Skipped zero-total orders: {filter_stats.get('skipped_zero_total_orders', 0)}")
+        logger.info(
+            "  Skipped before automation start: %s",
+            filter_stats.get("skipped_before_automation_start", 0),
+        )
         logger.info(f"  Total amount: â‚¬{total_amount:.2f}")
         logger.info("=" * 60)
         
@@ -1806,6 +1884,7 @@ def run_invoice_generation(
         cod_payment_ids=invoice_settings["cod_payment_ids"],
         cod_payment_patterns=invoice_settings["cod_payment_patterns"],
         max_pages=invoice_settings["max_pages"],
+        automation_start_date=invoice_settings["automation_start_date"],
     )
 
     summary = InvoiceRunSummary(
@@ -1827,15 +1906,50 @@ def run_invoice_generation(
             raise RuntimeError(f"BiznisWeb web session validation failed for project '{project_name}'")
 
     logger.info("Fetching orders from GraphQL API...")
-    orders, scan_stats = generator.fetch_orders_for_invoice_scan(
-        from_dt,
-        to_dt,
-        include_purchase_dates=reconcile,
-        include_recent_changes=(
-            invoice_settings["include_recent_changes"] and not reconcile
-        ),
-        recent_change_date_from=from_dt,
-    )
+    scan_from_dt = from_dt
+    if invoice_settings["automation_start_date"]:
+        automation_start_dt = datetime.strptime(
+            invoice_settings["automation_start_date"],
+            "%Y-%m-%d",
+        )
+        if from_dt.tzinfo is not None:
+            automation_start_dt = automation_start_dt.replace(
+                tzinfo=from_dt.tzinfo,
+            )
+        if scan_from_dt < automation_start_dt:
+            scan_from_dt = automation_start_dt
+            logger.info(
+                "Invoice scan lower bound clamped from %s to automation start %s",
+                from_dt.strftime("%Y-%m-%d"),
+                invoice_settings["automation_start_date"],
+            )
+
+    if scan_from_dt > to_dt:
+        logger.info(
+            "Invoice scan skipped because requested end %s is before "
+            "automation start %s",
+            to_dt.strftime("%Y-%m-%d"),
+            invoice_settings["automation_start_date"],
+        )
+        orders = []
+        scan_stats = {
+            "scan_complete": True,
+            "purchase_date_orders_fetched": 0,
+            "recent_change_orders_fetched": 0,
+            "deduplicated_orders_fetched": 0,
+            "pages_fetched": 0,
+            "page_retry_count": 0,
+        }
+    else:
+        orders, scan_stats = generator.fetch_orders_for_invoice_scan(
+            scan_from_dt,
+            to_dt,
+            include_purchase_dates=reconcile,
+            include_recent_changes=(
+                invoice_settings["include_recent_changes"] and not reconcile
+            ),
+            recent_change_date_from=scan_from_dt,
+        )
     summary.total_orders_fetched = len(orders)
     summary.scan_complete = bool(scan_stats["scan_complete"])
     summary.purchase_date_orders_fetched = int(
@@ -1852,6 +1966,10 @@ def run_invoice_generation(
     summary.matched_orders = len(orders_for_invoice)
     summary.skipped_zero_total_orders = filter_stats.get("skipped_zero_total_orders", 0)
     summary.skipped_non_cod_orders = filter_stats.get("skipped_non_cod_orders", 0)
+    summary.skipped_before_automation_start = filter_stats.get(
+        "skipped_before_automation_start",
+        0,
+    )
     logger.info("Orders matching criteria: %s", summary.matched_orders)
     validate_invoice_creation_limit(
         summary.matched_orders,
@@ -1862,10 +1980,12 @@ def run_invoice_generation(
     if dry_run:
         summary.total_amount = sum(_coerce_order_total_value(order) for order in orders_for_invoice)
         logger.info(
-            "DRY RUN summary - matched=%s total_amount=%.2f skipped_zero_total=%s",
+            "DRY RUN summary - matched=%s total_amount=%.2f skipped_zero_total=%s "
+            "skipped_before_automation_start=%s",
             summary.matched_orders,
             summary.total_amount,
             summary.skipped_zero_total_orders,
+            summary.skipped_before_automation_start,
         )
         return summary
 
@@ -1873,6 +1993,8 @@ def run_invoice_generation(
         result = generator.create_invoice(order)
         if result.already_present:
             summary.already_present_invoices += 1
+        elif result.skipped_before_automation_start:
+            summary.skipped_before_automation_start += 1
         elif result.skipped_stale:
             summary.skipped_stale_orders += 1
         elif result.created:
@@ -1894,7 +2016,8 @@ def run_invoice_generation(
             "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s total_amount=%.2f"
             " already_present=%s skipped_stale=%s"
             " scan_mode=%s scan_complete=%s purchase_fetched=%s recent_change_fetched=%s"
-            " skipped_non_cod=%s pages_fetched=%s page_retries=%s"
+            " skipped_non_cod=%s skipped_before_automation_start=%s "
+            "pages_fetched=%s page_retries=%s"
         ),
         summary.project,
         summary.matched_orders,
@@ -1912,6 +2035,7 @@ def run_invoice_generation(
         summary.purchase_date_orders_fetched,
         summary.recent_change_orders_fetched,
         summary.skipped_non_cod_orders,
+        summary.skipped_before_automation_start,
         summary.pages_fetched,
         summary.page_retry_count,
     )
@@ -1973,7 +2097,8 @@ def main():
     logger.info(
         (
             "Invoice run summary - project=%s matched=%s created=%s failed=%s "
-            "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s"
+            "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s "
+            "skipped_before_automation_start=%s"
         ),
         summary.project,
         summary.matched_orders,
@@ -1983,6 +2108,7 @@ def main():
         summary.failed_invoice_emails,
         summary.missing_invoice_ids,
         summary.skipped_zero_total_orders,
+        summary.skipped_before_automation_start,
     )
     if not args.dry_run and (summary.failed_invoices or summary.failed_invoice_emails):
         raise SystemExit(1)
