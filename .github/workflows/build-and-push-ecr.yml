@@ -35,8 +35,16 @@ on:
       - templates/**
       - tests/**
       - scripts/reporting_qa_smoke.py
+      - scripts/deploy_invoice_controls.py
       - scripts/live_dashboard_refresh_gate.sh
+      - tests/test_invoice_controls.py
       - .github/workflows/build-and-push-ecr.yml
+      - .github/workflows/deploy-invoice-controls.yml
+      - .github/workflows/production-invoice-smoke.yml
+
+concurrency:
+  group: reporting-production-image-and-invoice-controls
+  cancel-in-progress: false
 
 env:
   AWS_REGION: eu-central-1
@@ -46,11 +54,24 @@ env:
 
 jobs:
   build-and-push:
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
+
+      - name: Require the current main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+            echo "Refusing to publish a stale or non-main production image." >&2
+            exit 1
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -68,7 +89,7 @@ jobs:
 
       - name: Invoice automation regression test
         run: |
-          python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_creditnote_export tests.test_money_s3_invoice_export tests.test_monthly_accounting_workflow tests.test_creditnote_storno_guard tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_live_dashboard_s3_fallback tests.test_live_dashboard_refresh_gate tests.test_dashboard_modern tests.test_inventory_demand_model tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
+          python -m unittest tests.test_invoice_controls tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_creditnote_export tests.test_money_s3_invoice_export tests.test_monthly_accounting_workflow tests.test_creditnote_storno_guard tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_live_dashboard_s3_fallback tests.test_live_dashboard_refresh_gate tests.test_dashboard_modern tests.test_inventory_demand_model tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -85,14 +106,48 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
+          set -euo pipefail
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          echo "Building $IMAGE_URI"
-          docker build -t "$IMAGE_URI" .
+          SHA_IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:sha-${GITHUB_SHA}"
+          echo "Building $IMAGE_URI and immutable source tag $SHA_IMAGE_URI"
+          docker build -t "$IMAGE_URI" -t "$SHA_IMAGE_URI" .
+          git fetch origin main
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+            echo "Main advanced during the image build; refusing to move production latest." >&2
+            exit 1
+          fi
+          docker push "$SHA_IMAGE_URI"
           docker push "$IMAGE_URI"
 
       - name: Verify image in ECR
+        shell: bash
         run: |
-          aws ecr describe-images \
+          set -euo pipefail
+          SOURCE_DIGEST="$(aws ecr describe-images \
             --repository-name "$ECR_REPOSITORY" \
             --region "$AWS_REGION" \
-            --query 'imageDetails[].imageTags'
+            --image-ids imageTag="sha-${GITHUB_SHA}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          LATEST_DIGEST="$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --region "$AWS_REGION" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if [[ -z "${SOURCE_DIGEST}" || "${SOURCE_DIGEST}" == "None" ]]; then
+            echo "Immutable sha-${GITHUB_SHA} tag is missing." >&2
+            exit 1
+          fi
+          if [[ "${SOURCE_DIGEST}" != "${LATEST_DIGEST}" ]]; then
+            echo "ECR tag mismatch: sha=${SOURCE_DIGEST} latest=${LATEST_DIGEST}" >&2
+            exit 1
+          fi
+          echo "ECR_IMAGE_VERIFIED source_sha=${GITHUB_SHA} digest=${SOURCE_DIGEST}"
+
+  deploy-invoice-controls:
+    needs: build-and-push
+    uses: ./.github/workflows/deploy-invoice-controls.yml
+    with:
+      source_sha: ${{ github.sha }}
+    secrets: inherit
