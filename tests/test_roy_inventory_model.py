@@ -81,6 +81,84 @@ def inventory_row(
 
 
 class RoyInventoryModelTests(unittest.TestCase):
+    @staticmethod
+    def _one_off_spike_rows() -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                item_row("R-OLD-1", "SPIKE-SKU", "Slow Product", "2025-07-10", 1, 10),
+                item_row("R-OLD-2", "SPIKE-SKU", "Slow Product", "2025-10-10", 1, 10),
+                item_row("R-OLD-3", "SPIKE-SKU", "Slow Product", "2026-02-10", 1, 10),
+                item_row("R-SPIKE", "SPIKE-SKU", "Slow Product", "2026-07-01", 40, 400),
+            ]
+        )
+
+    def test_one_off_large_order_does_not_create_false_restock_alert(self) -> None:
+        exporter = RoyInventoryModelExporter(
+            inventory_snapshot=pd.DataFrame(
+                [inventory_row("SPIKE-SKU", "Slow Product", 20, 100, 300)]
+            )
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=self._one_off_spike_rows(),
+        )
+
+        row = result["inventory_rows"].loc[
+            result["inventory_rows"]["sku"] == "SPIKE-SKU"
+        ].iloc[0]
+        self.assertEqual(40.0, float(row["raw_recent_30d_units"]))
+        self.assertGreaterEqual(float(row["raw_alert_30d_units"]), 40.0)
+        self.assertLess(float(row["alert_30d_units"]), 5.0)
+        self.assertEqual("Healthy", row["stock_risk_level"])
+        self.assertTrue(bool(row["unusual_large_order_flag"]))
+        self.assertEqual("one_off_large_order", row["demand_signal_code"])
+        self.assertNotIn("SPIKE-SKU", set(result["alert_rows"].get("sku", [])))
+        self.assertIn("SPIKE-SKU", set(result["demand_anomaly_rows"]["sku"]))
+        self.assertEqual("order-aware-tsb-v1", result["summary"]["demand_model_version"])
+
+    def test_zero_stock_after_one_off_order_remains_visible_as_state_alert(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=self._one_off_spike_rows(),
+        )
+
+        row = result["alert_rows"].loc[result["alert_rows"]["sku"] == "SPIKE-SKU"].iloc[0]
+        self.assertEqual("Out of stock", row["stock_risk_level"])
+        self.assertEqual("low_stock_after_large_order", row["alert_reason_code"])
+        self.assertLess(float(row["alert_30d_units"]), 5.0)
+
+    def test_short_history_keeps_legacy_demand_floor(self) -> None:
+        exporter = RoyInventoryModelExporter(
+            inventory_snapshot=pd.DataFrame(
+                [inventory_row("NEW-SKU", "New Product", 20, 100, 300)]
+            )
+        )
+        item_df = pd.DataFrame(
+            [
+                item_row("R-1", "NEW-SKU", "New Product", "2026-06-10", 1, 10),
+                item_row("R-2", "NEW-SKU", "New Product", "2026-06-15", 1, 10),
+                item_row("R-3", "NEW-SKU", "New Product", "2026-06-20", 1, 10),
+                item_row("R-4", "NEW-SKU", "New Product", "2026-07-01", 40, 400),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+        row = result["inventory_rows"].loc[
+            result["inventory_rows"]["sku"] == "NEW-SKU"
+        ].iloc[0]
+
+        self.assertFalse(bool(row["smart_demand_model_active"]))
+        self.assertGreaterEqual(float(row["alert_30d_units"]), 40.0)
+
     def test_live_inventory_uses_canonical_64gb_identity_cost_and_keeps_32gb_separate(self) -> None:
         exporter = BizniWebExporter(
             api_url="https://example.test/graphql",
