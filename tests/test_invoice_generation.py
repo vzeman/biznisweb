@@ -8,7 +8,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import daily_report_runner as daily_runner
 from daily_report_runner import maybe_run_invoice_automation, parse_args as parse_daily_report_args
@@ -16,9 +16,12 @@ from generate_invoices import (
     IncompleteInvoiceScanError,
     InvoiceGenerator,
     InvoiceRunSummary,
+    ORDER_QUERY,
     _status_matches_invoice_generation,
     resolve_invoice_date_window,
     resolve_invoice_generation_settings,
+    run_invoice_generation,
+    validate_invoice_creation_limit,
 )
 from invoice_runner import (
     resolve_default_invoice_reference_date,
@@ -77,6 +80,13 @@ class _FakeInvoiceClient:
         return {
             "getOrder": {
                 "order_num": (variable_values or {}).get("order_num"),
+                "price_elements": [
+                    {
+                        "type": "payment",
+                        "title": "Dobierkou",
+                        "reference_id": "7",
+                    }
+                ],
                 "status": {"id": "4", "name": "Odoslaná"},
                 "sum": {"value": 12.5, "formatted": "12.50 EUR"},
                 "invoices": [] if self.execute_count == 1 else self.invoices,
@@ -97,6 +107,16 @@ class _FakeOrderListClient:
         if isinstance(response, Exception):
             raise response
         return response
+
+
+class _StaticOrderGuardClient:
+    def __init__(self, order: dict) -> None:
+        self.order = order
+        self.execute_count = 0
+
+    def execute(self, query, variable_values=None):
+        self.execute_count += 1
+        return {"getOrder": self.order}
 
 
 def _invoice_order(
@@ -135,7 +155,7 @@ def _order_page(
     orders: list[dict | None],
     *,
     has_next: bool = False,
-    next_cursor: str | None = None,
+    next_cursor: str | int | None = None,
 ) -> dict:
     return {
         "getOrderList": {
@@ -149,6 +169,85 @@ def _order_page(
 
 
 class InvoiceGenerationTests(unittest.TestCase):
+    def test_invoice_creation_limit_allows_dry_run_preview_above_limit(self) -> None:
+        validate_invoice_creation_limit(4, 0, dry_run=True)
+
+    def test_invoice_creation_limit_allows_live_run_at_limit(self) -> None:
+        validate_invoice_creation_limit(4, 4, dry_run=False)
+
+    def test_invoice_creation_limit_blocks_live_run_before_mutation(self) -> None:
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "matched=4, max_creations=0",
+        ):
+            validate_invoice_creation_limit(4, 0, dry_run=False)
+
+    def test_invoice_creation_limit_rejects_negative_limit(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be negative"):
+            validate_invoice_creation_limit(0, -1, dry_run=True)
+
+    @patch("generate_invoices.InvoiceGenerator")
+    @patch(
+        "generate_invoices.resolve_biznisweb_api_url",
+        return_value="https://example.com/api/graphql",
+    )
+    @patch(
+        "generate_invoices.load_project_settings",
+        return_value={
+            "invoice_generation": {
+                "enabled": True,
+                "eligible_statuses": ["odoslaná"],
+                "send_invoice_email": True,
+            }
+        },
+    )
+    @patch("generate_invoices.load_project_env")
+    def test_live_creation_limit_blocks_before_create_loop(
+        self,
+        _load_env_mock,
+        _load_settings_mock,
+        _resolve_api_mock,
+        generator_class_mock,
+    ) -> None:
+        generator = MagicMock()
+        generator.web_session = object()
+        generator.validate_session.return_value = True
+        generator.fetch_orders_for_invoice_scan.return_value = (
+            [{"order_num": "A"}, {"order_num": "B"}],
+            {
+                "scan_complete": True,
+                "purchase_date_orders_fetched": 2,
+                "recent_change_orders_fetched": 0,
+                "pages_fetched": 1,
+                "page_retry_count": 0,
+            },
+        )
+        generator.filter_orders_for_invoice.return_value = (
+            [{"order_num": "A"}, {"order_num": "B"}],
+            {
+                "skipped_zero_total_orders": 0,
+                "skipped_non_cod_orders": 0,
+            },
+        )
+        generator_class_mock.return_value = generator
+
+        with patch.dict(
+            os.environ,
+            {"BIZNISWEB_API_TOKEN": "token"},
+            clear=False,
+        ), self.assertRaisesRegex(
+            RuntimeError,
+            "matched=2, max_creations=0",
+        ):
+            run_invoice_generation(
+                "vevo",
+                "2026-07-17",
+                "2026-07-17",
+                max_creations=0,
+            )
+
+        generator.create_invoice.assert_not_called()
+
     def test_daily_report_s3_upload_publishes_each_period_under_exact_stable_key(self) -> None:
         class FakeS3:
             def __init__(self) -> None:
@@ -310,6 +409,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual(settings["reconciliation_lookback_days"], 120)
         self.assertTrue(settings["include_recent_changes"])
         self.assertEqual(settings["page_retry_attempts"], 3)
+        self.assertEqual(settings["max_pages"], 1000)
         self.assertEqual(settings["rollover_grace_hours"], 3)
         self.assertTrue(settings["exclude_zero_total_orders"])
         self.assertFalse(settings["require_cod_payment"])
@@ -447,8 +547,8 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual("cron(5/15 6-23 * * ? *)", roy["invoice_generation"]["schedule_expression"])
         self.assertEqual("vevo-same-day-invoice-sweep", vevo["invoice_generation"]["final_sweep_schedule_name"])
         self.assertEqual("roy-same-day-invoice-sweep", roy["invoice_generation"]["final_sweep_schedule_name"])
-        self.assertEqual("cron(58 23 * * ? *)", vevo["invoice_generation"]["final_sweep_schedule_expression"])
-        self.assertEqual("cron(59 23 * * ? *)", roy["invoice_generation"]["final_sweep_schedule_expression"])
+        self.assertEqual("cron(30 0 * * ? *)", vevo["invoice_generation"]["final_sweep_schedule_expression"])
+        self.assertEqual("cron(45 0 * * ? *)", roy["invoice_generation"]["final_sweep_schedule_expression"])
         self.assertEqual(["Odoslan\u00e1"], vevo["invoice_generation"]["eligible_statuses"])
         self.assertEqual(["Odoslan\u00e1"], roy["invoice_generation"]["eligible_statuses"])
         self.assertTrue(vevo["invoice_generation"]["send_invoice_email"])
@@ -459,6 +559,7 @@ class InvoiceGenerationTests(unittest.TestCase):
             self.assertEqual(120, invoice_settings["reconciliation_lookback_days"])
             self.assertTrue(invoice_settings["include_recent_changes"])
             self.assertEqual(4, invoice_settings["page_retry_attempts"])
+            self.assertEqual(1000, invoice_settings["max_pages"])
             self.assertEqual(3, invoice_settings["rollover_grace_hours"])
             self.assertTrue(invoice_settings["require_cod_payment"])
             resolved = resolve_invoice_generation_settings(project)
@@ -557,6 +658,105 @@ class InvoiceGenerationTests(unittest.TestCase):
 
         with self.assertRaises(IncompleteInvoiceScanError):
             generator.filter_orders_for_invoice([order])
+
+    def test_filter_fetches_cod_detail_only_for_an_eligible_candidate(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            require_cod_payment=True,
+            cod_payment_ids=["7"],
+        )
+        generator.client = _FakeInvoiceClient([])
+        order = _invoice_order(
+            "COD-DETAIL",
+            pur_date="2026-06-30 10:00:00",
+            last_change="2026-06-30 10:01:00",
+        )
+        del order["price_elements"]
+
+        filtered, stats = generator.filter_orders_for_invoice([order])
+
+        self.assertEqual(["COD-DETAIL"], [item["order_num"] for item in filtered])
+        self.assertEqual(0, stats["skipped_non_cod_orders"])
+        self.assertEqual(1, generator.client.execute_count)
+
+    def test_filter_does_not_fetch_payment_detail_for_ineligible_orders(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            require_cod_payment=True,
+            cod_payment_ids=["7"],
+        )
+        generator.client = _FakeOrderListClient([])
+        wrong_status = _invoice_order(
+            "WRONG-STATUS",
+            pur_date="2026-06-30 10:00:00",
+            last_change="2026-06-30 10:01:00",
+        )
+        wrong_status["status"] = {"id": "1", "name": "Nová"}
+        already_invoiced = _invoice_order(
+            "INVOICED",
+            pur_date="2026-06-30 10:00:00",
+            last_change="2026-06-30 10:01:00",
+            invoices=[{"id": "INV-1"}],
+        )
+        zero_total = _invoice_order(
+            "ZERO",
+            pur_date="2026-06-30 10:00:00",
+            last_change="2026-06-30 10:01:00",
+            total=0,
+        )
+        for order in (wrong_status, already_invoiced, zero_total):
+            del order["price_elements"]
+
+        filtered, stats = generator.filter_orders_for_invoice(
+            [wrong_status, already_invoiced, zero_total]
+        )
+
+        self.assertEqual([], filtered)
+        self.assertEqual(1, stats["skipped_zero_total_orders"])
+        self.assertEqual(0, len(generator.client.variables))
+
+    def test_filter_skips_candidate_when_detail_refresh_finds_invoice(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            require_cod_payment=True,
+            cod_payment_ids=["7"],
+            page_retry_attempts=1,
+        )
+        generator.client = _StaticOrderGuardClient(
+            {
+                "order_num": "RACE",
+                "price_elements": [
+                    {
+                        "type": "payment",
+                        "title": "Dobierkou",
+                        "reference_id": "7",
+                    }
+                ],
+                "status": {"id": "4", "name": "Odoslaná"},
+                "sum": {"value": 12.5, "formatted": "12.50 EUR"},
+                "invoices": [{"id": "INV-RACE"}],
+            }
+        )
+        order = _invoice_order(
+            "RACE",
+            pur_date="2026-06-30 10:00:00",
+            last_change="2026-06-30 10:01:00",
+        )
+        del order["price_elements"]
+
+        filtered, _stats = generator.filter_orders_for_invoice([order])
+
+        self.assertEqual([], filtered)
+        self.assertEqual(1, generator.client.execute_count)
+
+    def test_bulk_invoice_scan_does_not_request_payment_metadata(self) -> None:
+        self.assertNotIn("price_elements", str(ORDER_QUERY))
 
     def test_status_change_scan_finds_old_purchase_changed_recently(self) -> None:
         generator = InvoiceGenerator(
@@ -680,6 +880,179 @@ class InvoiceGenerationTests(unittest.TestCase):
             )
 
     @patch("generate_invoices.time.sleep", return_value=None)
+    def test_strict_scan_rejects_incomplete_invoice_entries(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        generator.client = _FakeOrderListClient(
+            [
+                _order_page(
+                    [
+                        _invoice_order(
+                            "INVALID-INVOICE",
+                            pur_date="2026-06-30 10:00:00",
+                            last_change="2026-06-30 10:01:00",
+                            invoices=[{}],
+                        )
+                    ]
+                )
+            ]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+    def test_pre_create_guard_rejects_mismatched_order_identity(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        generator.client = _StaticOrderGuardClient(
+            {
+                "order_num": "WRONG",
+                "status": {"name": "Odoslaná"},
+                "sum": {"value": 12.5},
+                "invoices": [],
+            }
+        )
+
+        self.assertIsNone(generator.fetch_order_invoice_guard("EXPECTED"))
+        self.assertEqual(1, generator.client.execute_count)
+
+    def test_pre_create_guard_rejects_incomplete_invoice_entries(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        generator.client = _StaticOrderGuardClient(
+            {
+                "order_num": "EXPECTED",
+                "status": {"name": "Odoslaná"},
+                "sum": {"value": 12.5},
+                "invoices": [None],
+            }
+        )
+
+        self.assertIsNone(generator.fetch_order_invoice_guard("EXPECTED"))
+        self.assertEqual(1, generator.client.execute_count)
+
+    def test_invoice_fallback_rejects_mismatched_order_identity(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+        )
+        generator.client = _StaticOrderGuardClient(
+            {
+                "order_num": "WRONG",
+                "invoices": [{"id": "INV-WRONG"}],
+            }
+        )
+
+        self.assertEqual(
+            (None, None),
+            generator.fetch_latest_invoice_for_order("EXPECTED"),
+        )
+
+    @patch("generate_invoices.time.sleep", return_value=None)
+    def test_strict_scan_rejects_malformed_boundary_date(self, _sleep_mock) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        malformed = _invoice_order(
+            "MALFORMED",
+            pur_date="2026-06-30 10:00:00",
+            last_change="2026-06-30 10:01:00",
+        )
+        malformed["pur_date"] = "0000"
+        generator.client = _FakeOrderListClient(
+            [
+                _order_page(
+                    [malformed],
+                    has_next=True,
+                    next_cursor="cursor-2",
+                ),
+                _order_page(
+                    [
+                        _invoice_order(
+                            "HIDDEN",
+                            pur_date="2026-06-29 10:00:00",
+                            last_change="2026-06-29 10:01:00",
+                        )
+                    ]
+                ),
+            ]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+        self.assertEqual(1, len(generator.client.variables))
+
+    @patch("generate_invoices.time.sleep", return_value=None)
+    def test_strict_scan_rejects_desc_order_drift_between_pages(
+        self,
+        _sleep_mock,
+    ) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+        )
+        generator.client = _FakeOrderListClient(
+            [
+                _order_page(
+                    [
+                        _invoice_order(
+                            "PAGE-1",
+                            pur_date="2026-06-29 10:00:00",
+                            last_change="2026-06-29 10:01:00",
+                        )
+                    ],
+                    has_next=True,
+                    next_cursor="cursor-2",
+                ),
+                _order_page(
+                    [
+                        _invoice_order(
+                            "PAGE-2-NEWER",
+                            pur_date="2026-06-30 10:00:00",
+                            last_change="2026-06-30 10:01:00",
+                        )
+                    ]
+                ),
+            ]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+        self.assertEqual(2, len(generator.client.variables))
+
+    @patch("generate_invoices.time.sleep", return_value=None)
     def test_strict_scan_rejects_missing_has_next_page(self, _sleep_mock) -> None:
         generator = InvoiceGenerator(
             api_url="https://example.com/api/graphql",
@@ -701,6 +1074,37 @@ class InvoiceGenerationTests(unittest.TestCase):
                         "pageInfo": {},
                     }
                 }
+            ]
+        )
+
+        with self.assertRaises(IncompleteInvoiceScanError):
+            generator.fetch_orders(
+                datetime(2026, 6, 24),
+                datetime(2026, 6, 30),
+                date_field="pur_date",
+            )
+
+    def test_strict_scan_fails_closed_at_max_pages(self) -> None:
+        generator = InvoiceGenerator(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            base_url="https://example.com",
+            page_retry_attempts=1,
+            max_pages=1,
+        )
+        generator.client = _FakeOrderListClient(
+            [
+                _order_page(
+                    [
+                        _invoice_order(
+                            "RECENT-1",
+                            pur_date="2026-06-30 10:00:00",
+                            last_change="2026-06-30 10:01:00",
+                        )
+                    ],
+                    has_next=True,
+                    next_cursor=30,
+                )
             ]
         )
 

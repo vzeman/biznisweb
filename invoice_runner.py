@@ -70,6 +70,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=_env_bool("REPORT_INVOICE_RECONCILE", False),
         help="Use the extended reconciliation window instead of the frequent rolling window.",
     )
+    parser.add_argument(
+        "--max-creations",
+        type=int,
+        default=None,
+        help="Fail before mutation when more than this many invoice candidates match.",
+    )
     return parser.parse_args(argv)
 
 
@@ -182,6 +188,7 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
             dry_run=args.dry_run,
             no_web_login=args.no_web_login,
             reconcile=reconcile,
+            max_creations=getattr(args, "max_creations", None),
         )
     except IncompleteInvoiceScanError:
         put_metric("InvoiceStandaloneScanIncomplete", 1, project, reporting_defaults)
