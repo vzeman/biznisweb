@@ -61,14 +61,21 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY individual picking-list reprint control is implemented locally on `codex/roy-individual-picking-print` (2026-07-22):
+- ROY individual picking-list reprint control is merged, deployed, and live (2026-07-22):
   - incident diagnosis for order `2677003601` confirmed that BizniWeb still exposed the order as paid and fulfillable, while the ROY operations state already marked it printed in batch `picking-20260720123200`; the default picking PDF therefore excluded it even though a preview PDF could still render it
   - every fulfillable order row now renders its own read-only `Vytlačiť` action; already marked rows render `Vytlačiť znova`
   - the individual action requests only that order number with `include_printed=1`, so an intentional reprint bypasses the historical print-state filter without clearing or mutating S3 operations state
   - the existing batch PDF and explicit `Označiť vytlačené` flow remain unchanged
   - local verification: Python compile passed; ROY operations/PDF/auth/maintenance focused suite passed (`67` tests); full suite passed (`267` tests); reporting QA, security CI, environment contract, workflow YAML, generated inline JavaScript, and `git diff --check` passed
-  - deployment is not complete yet
-  - Next exact step: complete review and broader checks, merge through PR, build the exact merge image, deploy ROY with `skip_artifact_refresh=true`, require the maintenance/Fargate localhost marker chain before App Runner UI/API verification, then prove both a new-order `Vytlačiť` link and printed-order `Vytlačiť znova` link generate a one-order PDF
+  - implementation PR `#252` merged to `main` as `2bae90fb792c941015e2fead93147137ec03ae0f`; all PR checks passed
+  - exact-merge ECR build run `29918754814` succeeded and published digest `sha256:04cc74ac93d9b74bdc0a8a5b813d65dec14c6338399fd1de2b7f44c8bcecb420`
+  - protected deploy run `29918944128` succeeded with `skip_artifact_refresh=true`; Fargate task `bb8667aa3b0e4f359064cc2ae6498537`, private IP `172.31.7.111`, and candidate task definition `roy-reporting-daily:59` proved the exact digest at `http://127.0.0.1:8000/marker.json`, then exited `0`; Scheduler promotion was correctly skipped
+  - the ordered maintenance/Fargate/App Runner chain passed: current-live maintenance active, S3 owner active, localhost maintenance/dashboard/artifact markers, live artifact checks, new-live maintenance active, write blocked with HTTP `423`, authenticated ROY operations/PDF smoke, maintenance inactive, restock sentinel restored, and `APP_RUNNER_DEPLOY_OK`
+  - App Runner operation `67e5a42558704e668cb1d1ad986f30ff` finished `SUCCEEDED`; service `biznisweb-roy-operations-dashboard` is `RUNNING` on the exact digest above
+  - independent production verification returned `/health=200`, inactive maintenance, authenticated dashboard HTML with the individual-print contract, and live order `2677003601` with `picking_printed=true`; its individual endpoint returned HTTP `200`, a one-page/one-order `89,146` byte PDF containing the order, while the unchanged batch filter returned a zero-order PDF and the S3 operations-state ETag remained identical
+  - one concurrent forced refresh briefly received BizniWeb's upstream non-JSON error page; the deployment's bounded retries recovered, the final release gate and independent retry both passed, and no persistent runtime failure remained
+  - the Codex in-app browser locally blocked the App Runner hostname with `ERR_BLOCKED_BY_CLIENT`; it was not used as a success signal, and the authenticated production HTML/API/PDF checks are the release proof
+  - Next exact step: no release action is pending; use `Vytlačiť` or `Vytlačiť znova` on the required order row, and retain the existing explicit batch `Označiť vytlačené` flow for batch state changes
 
 - ROY blocking dashboard maintenance mode is merged, deployed, and live (2026-07-22):
   - `/production/roy` now renders a server-side full-screen Slovak maintenance overlay before first paint, marks the dashboard root `inert`/`aria-hidden`, prevents pointer and keyboard use, and polls the authenticated same-origin status every 5 seconds; a 4-second request timeout and visibility/focus rechecks fail closed for already-open tabs
