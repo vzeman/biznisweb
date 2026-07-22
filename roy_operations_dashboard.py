@@ -19,7 +19,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 
-from inventory_demand_model import poisson_tail_probability
+from inventory_demand_model import (
+    poisson_tail_probability,
+    resolve_typical_order_units,
+    stockout_business_impact,
+)
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
 
 
@@ -255,9 +259,10 @@ ROY_PRODUCT_STOCK_SEARCH_FIELDS = """
 
 _CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 _CACHE_LOCK = threading.RLock()
+_OPERATIONS_STATE_MUTATION_LOCK = threading.RLock()
 _BACKGROUND_REFRESH: Dict[str, Dict[str, Any]] = {}
 _CACHE_TOKENS: Dict[str, int] = {}
-STATE_VERSION = 1
+STATE_VERSION = 2
 
 
 def _clear_operations_cache(project: str) -> None:
@@ -272,6 +277,7 @@ def _empty_operations_state() -> Dict[str, Any]:
         "version": STATE_VERSION,
         "loss_acknowledgements": {},
         "inbound_orders": {},
+        "inventory_restock_exclusions": {},
         "auto_cleared_inbound_orders": [],
         "printed_picking_orders": {},
         "picking_print_batches": [],
@@ -329,8 +335,13 @@ def _normalize_operations_state(raw: Any) -> Dict[str, Any]:
     state = _empty_operations_state()
     if not isinstance(raw, dict):
         return state
-    state["version"] = int(raw.get("version") or STATE_VERSION)
-    for section in ("loss_acknowledgements", "inbound_orders", "printed_picking_orders"):
+    state["version"] = STATE_VERSION
+    for section in (
+        "loss_acknowledgements",
+        "inbound_orders",
+        "inventory_restock_exclusions",
+        "printed_picking_orders",
+    ):
         values = raw.get(section) if isinstance(raw.get(section), dict) else {}
         state[section] = {
             str(key).strip(): value
@@ -368,10 +379,16 @@ def load_roy_operations_state(
             import boto3  # type: ignore
 
             response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
-            return _normalize_operations_state(json.loads(response["Body"].read().decode("utf-8")))
+            state = _normalize_operations_state(json.loads(response["Body"].read().decode("utf-8")))
+            state["_storage_etag"] = str(response.get("ETag") or "").strip()
+            return state
         except Exception as exc:
             if require_configured_remote and _s3_error_code(exc) not in {"NoSuchKey", "404"}:
                 raise RuntimeError(f"Failed to load configured ROY operations state from s3://{bucket}/{key}: {exc}")
+            if _s3_error_code(exc) in {"NoSuchKey", "404"}:
+                state = _empty_operations_state()
+                state["_storage_object_absent"] = True
+                return state
             pass
 
     path = _local_state_path(project)
@@ -390,6 +407,8 @@ def save_roy_operations_state(
 ) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
     project_settings = project_settings or load_project_settings(project)
+    expected_etag = str(state.get("_storage_etag") or "").strip()
+    storage_object_absent = bool(state.get("_storage_object_absent"))
     normalized = _normalize_operations_state(state)
     body = json.dumps(normalized, ensure_ascii=False, indent=2).encode("utf-8")
     location = _state_s3_location(project, project_settings)
@@ -397,13 +416,29 @@ def save_roy_operations_state(
         bucket, key, region = location
         import boto3  # type: ignore
 
-        boto3.client("s3", region_name=region).put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=body,
-            ContentType="application/json; charset=utf-8",
-            ServerSideEncryption="AES256",
-        )
+        put_args: Dict[str, Any] = {
+            "Bucket": bucket,
+            "Key": key,
+            "Body": body,
+            "ContentType": "application/json; charset=utf-8",
+            "ServerSideEncryption": "AES256",
+        }
+        if expected_etag:
+            put_args["IfMatch"] = expected_etag
+        elif storage_object_absent:
+            put_args["IfNoneMatch"] = "*"
+        else:
+            raise RuntimeError(
+                "Refusing to overwrite configured ROY operations state without a verified S3 revision."
+            )
+        try:
+            boto3.client("s3", region_name=region).put_object(**put_args)
+        except Exception as exc:
+            if _s3_error_code(exc) in {"PreconditionFailed", "412", "ConditionalRequestConflict", "409"}:
+                raise RuntimeError(
+                    "ROY operations state changed concurrently; reload the dashboard and retry the action."
+                ) from exc
+            raise
         return {"storage": "s3", "bucket": bucket, "key": key}
 
     path = _local_state_path(project)
@@ -549,7 +584,11 @@ def acknowledge_loss_product(project: str, sku: str, product: str = "") -> Dict[
     if not sku:
         raise ValueError("Missing product SKU.")
     project_settings = load_project_settings(project)
-    state = load_roy_operations_state(project, project_settings)
+    state = load_roy_operations_state(
+        project,
+        project_settings,
+        require_configured_remote=True,
+    )
     state.setdefault("loss_acknowledgements", {})[sku] = {
         "sku": sku,
         "product": str(product or "").strip(),
@@ -580,7 +619,11 @@ def set_inbound_stock_order(
         raise ValueError("Ordered units must be greater than zero.")
     eta = _validate_eta_date(expected_arrival_date)
     project_settings = load_project_settings(project)
-    state = load_roy_operations_state(project, project_settings)
+    state = load_roy_operations_state(
+        project,
+        project_settings,
+        require_configured_remote=True,
+    )
     existing = (state.get("inbound_orders") or {}).get(sku) or {}
     now = _state_now_iso()
     state.setdefault("inbound_orders", {})[sku] = {
@@ -605,11 +648,94 @@ def clear_inbound_stock_order(project: str, sku: str) -> Dict[str, Any]:
     if not sku:
         raise ValueError("Missing product SKU.")
     project_settings = load_project_settings(project)
-    state = load_roy_operations_state(project, project_settings)
+    state = load_roy_operations_state(
+        project,
+        project_settings,
+        require_configured_remote=True,
+    )
     removed = (state.get("inbound_orders") or {}).pop(sku, None)
     storage = save_roy_operations_state(project, state, project_settings)
     _clear_operations_cache(project)
     return {"ok": True, "project": project, "sku": sku, "removed": bool(removed), "storage": storage}
+
+
+def _inventory_restock_exclusion_key(value: Any) -> str:
+    return unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
+
+
+def _validated_inventory_restock_sku(value: Any) -> str:
+    sku = unicodedata.normalize("NFKC", str(value or "")).strip()
+    if not sku:
+        raise ValueError("Missing product SKU.")
+    if len(sku) > 160:
+        raise ValueError("Product SKU is too long.")
+    if any(ord(character) < 32 or ord(character) == 127 for character in sku):
+        raise ValueError("Product SKU contains control characters.")
+    return sku
+
+
+def exclude_inventory_restock_alert(project: str, sku: str, product: str = "") -> Dict[str, Any]:
+    project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    if project != "roy":
+        raise ValueError("Inventory restock exclusions are only enabled for project 'roy'.")
+    sku = _validated_inventory_restock_sku(sku)
+    key = _inventory_restock_exclusion_key(sku)
+    project_settings = load_project_settings(project)
+    with _OPERATIONS_STATE_MUTATION_LOCK:
+        state = load_roy_operations_state(
+            project,
+            project_settings,
+            require_configured_remote=True,
+        )
+        exclusions = state.setdefault("inventory_restock_exclusions", {})
+        existing = exclusions.get(key) if isinstance(exclusions.get(key), dict) else {}
+        now = _state_now_iso()
+        exclusions[key] = {
+            "sku": sku,
+            "product": str(product or existing.get("product") or "").strip(),
+            "reason": "do_not_restock",
+            "excluded_at": existing.get("excluded_at") or now,
+            "updated_at": now,
+            "actor": os.getenv("LIVE_DASHBOARD_AUTH_USER", "authenticated-dashboard-user").strip()
+            or "authenticated-dashboard-user",
+        }
+        storage = save_roy_operations_state(project, state, project_settings)
+    _clear_operations_cache(project)
+    return {
+        "ok": True,
+        "project": project,
+        "sku": sku,
+        "excluded": True,
+        "storage": storage,
+        "exclusion": exclusions[key],
+    }
+
+
+def restore_inventory_restock_alert(project: str, sku: str) -> Dict[str, Any]:
+    project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    if project != "roy":
+        raise ValueError("Inventory restock exclusions are only enabled for project 'roy'.")
+    sku = _validated_inventory_restock_sku(sku)
+    key = _inventory_restock_exclusion_key(sku)
+    project_settings = load_project_settings(project)
+    with _OPERATIONS_STATE_MUTATION_LOCK:
+        state = load_roy_operations_state(
+            project,
+            project_settings,
+            require_configured_remote=True,
+        )
+        exclusions = state.setdefault("inventory_restock_exclusions", {})
+        removed = exclusions.pop(key, None)
+        storage = save_roy_operations_state(project, state, project_settings)
+    _clear_operations_cache(project)
+    return {
+        "ok": True,
+        "project": project,
+        "sku": sku,
+        "excluded": False,
+        "removed": bool(removed),
+        "storage": storage,
+    }
 
 
 def _normalize_text(value: Any) -> str:
@@ -1679,6 +1805,77 @@ def _stock_risk_sets() -> Tuple[set[str], set[str]]:
     return risk_30d, risk_45d
 
 
+STOCK_RISK_RANK = {
+    "Negative stock": 0,
+    "Out of stock": 1,
+    "Critical": 2,
+    "Low": 3,
+    "Lead time risk": 4,
+    "Watch": 5,
+    "Dormant": 6,
+    "Healthy": 7,
+    "No demand signal": 8,
+}
+
+
+def _refresh_stockout_business_impact(row: Dict[str, Any]) -> None:
+    impact = stockout_business_impact(
+        expected_orders=row.get("lead_time_expected_orders"),
+        available_units=row.get("net_available_quantity", row.get("available_quantity")),
+        typical_order_units=row.get("combined_typical_order_units", row.get("typical_order_units")),
+        alert_units=row.get("alert_30d_units"),
+        alert_revenue=row.get("stockout_revenue_basis_30d", row.get("alert_30d_revenue")),
+        alert_contribution=row.get(
+            "stockout_contribution_basis_30d",
+            row.get(
+                "alert_30d_contribution_estimate",
+                row.get("alert_30d_profit_estimate"),
+            ),
+        ),
+    )
+    row.update(
+        {
+            "lead_time_expected_shortage_units": round(
+                impact["lead_time_expected_shortage_units"],
+                3,
+            ),
+            "stockout_contribution_at_risk": round(
+                impact["stockout_contribution_at_risk"],
+                2,
+            ),
+            "stockout_revenue_at_risk": round(
+                impact["stockout_revenue_at_risk"],
+                2,
+            ),
+            "stock_risk_rank": STOCK_RISK_RANK.get(
+                str(row.get("stock_risk_level") or ""),
+                99,
+            ),
+            "stockout_priority_model_version": "expected-shortage-cm2-v1",
+        }
+    )
+
+
+def _stockout_priority_sort_key(row: Dict[str, Any]) -> Tuple[Any, ...]:
+    days_of_cover = _optional_float(row.get("days_of_cover"))
+    if days_of_cover is not None and not math.isfinite(days_of_cover):
+        days_of_cover = None
+    raw_risk_rank = _optional_float(row.get("stock_risk_rank"))
+    risk_rank = (
+        int(raw_risk_rank)
+        if raw_risk_rank is not None and math.isfinite(raw_risk_rank)
+        else STOCK_RISK_RANK.get(str(row.get("stock_risk_level") or ""), 99)
+    )
+    return (
+        -_to_float(row.get("stockout_contribution_at_risk")),
+        -_to_float(row.get("stockout_revenue_at_risk")),
+        risk_rank,
+        -int(bool(row.get("strategic_stock_flag"))),
+        days_of_cover if days_of_cover is not None else float("inf"),
+        str(row.get("sku") or "").casefold(),
+    )
+
+
 def _stock_model_thresholds(project_settings: Dict[str, Any]) -> Dict[str, int]:
     model = project_settings.get("inventory_model") or {}
     critical_days = max(1, int(model.get("critical_days_of_cover", 14) or 14))
@@ -1977,23 +2174,26 @@ def _smart_lead_time_stockout_risk(
     available_raw: float,
     demand_30d: float,
     lead_time_calendar_days: int,
-) -> Tuple[float, bool]:
+) -> Tuple[float, bool, float]:
     if demand_30d <= 0 or lead_time_calendar_days <= 0:
-        return 0.0, False
-    if available_raw <= 0:
-        return 1.0, True
-    typical_units = _to_float(row.get("typical_order_units"))
-    if typical_units <= 0:
-        typical_units = min(max(demand_30d, 1.0), 5.0)
-    order_rate = _to_float(row.get("order_rate_per_day"))
-    if order_rate <= 0:
-        order_rate = (demand_30d / 30.0) / typical_units
+        return 0.0, False, 0.0
+    typical_units = resolve_typical_order_units(
+        row.get("combined_typical_order_units", row.get("typical_order_units")),
+        demand_30d,
+    )
+    implied_order_rate = (demand_30d / 30.0) / typical_units
+    order_rate = max(
+        _to_float(row.get("combined_order_rate_per_day", row.get("order_rate_per_day"))),
+        implied_order_rate,
+    )
     expected_orders = max(order_rate * lead_time_calendar_days, 0.0)
+    if available_raw <= 0:
+        return 1.0, True, expected_orders
     required_orders = math.floor(max(available, 0.0) / typical_units) + 1
     probability = poisson_tail_probability(expected_orders, required_orders)
     service_level = _to_float(row.get("service_level_target")) or 0.95
     service_level = min(max(service_level, 0.50), 0.999)
-    return probability, probability > (1.0 - service_level)
+    return probability, probability > (1.0 - service_level), expected_orders
 
 
 def _refresh_inventory_alert_reason(row: Dict[str, Any]) -> None:
@@ -2056,7 +2256,7 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
     current_risk = str(row.get("stock_risk_level") or "")
     lead_time_working = int(round(_to_float(row.get("lead_time_working_days"))))
     lead_time_calendar = int(math.ceil(max(0, lead_time_working) * (7.0 / 5.0)))
-    lead_time_probability, lead_time_risk = _smart_lead_time_stockout_risk(
+    lead_time_probability, lead_time_risk, lead_time_expected_orders = _smart_lead_time_stockout_risk(
         row,
         available=available,
         available_raw=available_raw,
@@ -2099,6 +2299,7 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
     row.update(
         {
             "stock_risk_level": current_risk,
+            "net_available_quantity": round(available, 2),
             "days_of_cover": round(days_of_cover, 1) if days_of_cover is not None else row.get("days_of_cover"),
             "projected_stockout_date": projected_stockout_date,
             "suggested_reorder_units": round(suggested, 1),
@@ -2106,6 +2307,7 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
             "prepare_po_flag": current_risk == "Watch",
             "lead_time_stockout_probability": round(lead_time_probability, 6),
             "lead_time_stockout_risk_flag": lead_time_risk,
+            "lead_time_expected_orders": round(lead_time_expected_orders, 6),
         }
     )
     if current_risk in {"Negative stock", "Out of stock", "Critical"}:
@@ -2117,6 +2319,7 @@ def _recalculate_inventory_row_after_stock_update(row: Dict[str, Any], project_s
     elif str(row.get("reorder_action_label") or "") in {"Order now", "30d alert", "Prepare PO"}:
         row["reorder_action_label"] = "OK"
     _refresh_inventory_alert_reason(row)
+    _refresh_stockout_business_impact(row)
 
 
 def _apply_current_stock_to_inventory(
@@ -2175,6 +2378,12 @@ def _finalize_inventory_alert_rows(inventory: Dict[str, Any]) -> None:
     inventory["revenue_at_risk_rows"] = [row for row in inventory.get("revenue_at_risk_rows", []) if keep_45d(row)]
     inventory["stock_risk_rows"] = [row for row in inventory.get("stock_risk_rows", []) if keep_45d(row)]
 
+    for key in ("alert_rows", "restock_priority_rows", "revenue_at_risk_rows", "stock_risk_rows"):
+        rows = inventory.get(key, [])
+        for row in rows:
+            _refresh_stockout_business_impact(row)
+        rows.sort(key=_stockout_priority_sort_key)
+
     summary = inventory.setdefault("summary", {})
     alert_rows = inventory.get("alert_rows", [])
     restock_rows = inventory.get("restock_priority_rows", [])
@@ -2202,7 +2411,77 @@ def _finalize_inventory_alert_rows(inventory: Dict[str, Any]) -> None:
                 for row in stock_risk_rows
                 if bool(row.get("lead_time_stockout_risk_flag"))
             ),
+            "stockout_priority_model_version": "expected-shortage-cm2-v1",
         }
+    )
+
+
+def _apply_inventory_restock_exclusions(inventory: Dict[str, Any], state: Dict[str, Any]) -> None:
+    raw_exclusions = state.get("inventory_restock_exclusions")
+    exclusions = raw_exclusions if isinstance(raw_exclusions, dict) else {}
+    candidate_keys = (
+        "alert_rows",
+        "restock_priority_rows",
+        "revenue_at_risk_rows",
+        "stock_risk_rows",
+    )
+    source_by_key: Dict[str, Dict[str, Any]] = {}
+    active_candidate_keys: set[str] = set()
+    for collection_key in (*candidate_keys, "inventory_rows"):
+        for row in inventory.get(collection_key, []) or []:
+            if not isinstance(row, dict):
+                continue
+            key = _inventory_restock_exclusion_key(row.get("sku"))
+            if not key:
+                continue
+            source_by_key.setdefault(key, row)
+            if collection_key in candidate_keys:
+                active_candidate_keys.add(key)
+
+    excluded_keys: set[str] = set()
+    excluded_rows: List[Dict[str, Any]] = []
+    for stored_key, raw_record in exclusions.items():
+        record = raw_record if isinstance(raw_record, dict) else {}
+        key = _inventory_restock_exclusion_key(record.get("sku") or stored_key)
+        if not key:
+            continue
+        excluded_keys.add(key)
+        source = dict(source_by_key.get(key) or {})
+        sku = str(record.get("sku") or source.get("sku") or stored_key).strip()
+        product = str(record.get("product") or source.get("product") or "").strip()
+        source.update(
+            {
+                "sku": sku,
+                "product": product,
+                "restock_exclusion_reason": str(record.get("reason") or "do_not_restock"),
+                "restock_excluded_at": record.get("excluded_at"),
+                "restock_exclusion_updated_at": record.get("updated_at"),
+                "currently_alerting": key in active_candidate_keys,
+            }
+        )
+        excluded_rows.append(source)
+
+    if excluded_keys:
+        for collection_key in candidate_keys:
+            inventory[collection_key] = [
+                row
+                for row in inventory.get(collection_key, []) or []
+                if _inventory_restock_exclusion_key(row.get("sku")) not in excluded_keys
+            ]
+
+    excluded_rows.sort(
+        key=lambda row: (
+            -int(bool(row.get("currently_alerting"))),
+            str(row.get("product") or "").casefold(),
+            str(row.get("sku") or "").casefold(),
+        )
+    )
+    inventory["excluded_restock_rows"] = excluded_rows
+    _finalize_inventory_alert_rows(inventory)
+    summary = inventory.setdefault("summary", {})
+    summary["inventory_restock_excluded_count"] = len(excluded_rows)
+    summary["inventory_restock_excluded_active_count"] = sum(
+        1 for row in excluded_rows if bool(row.get("currently_alerting"))
     )
 
 
@@ -2278,7 +2557,7 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         lead_time_working = int(round(_to_float(row.get("lead_time_working_days"))))
         lead_time_calendar = int(math.ceil(max(0, lead_time_working) * (7.0 / 5.0)))
         available_raw = _to_float(row.get("available_quantity_raw", available))
-        lead_time_probability, lead_time_risk = _smart_lead_time_stockout_risk(
+        lead_time_probability, lead_time_risk, lead_time_expected_orders = _smart_lead_time_stockout_risk(
             row,
             available=net_available,
             available_raw=available_raw + ordered_units,
@@ -2335,6 +2614,7 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
                 "inbound_covers_reorder_flag": inbound_covers,
                 "lead_time_stockout_probability": round(lead_time_probability, 6),
                 "lead_time_stockout_risk_flag": lead_time_risk,
+                "lead_time_expected_orders": round(lead_time_expected_orders, 6),
             }
         )
         if inbound_covers:
@@ -2344,6 +2624,7 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         elif ordered_units > 0 and str(row.get("reorder_action_label") or "") in {"Order now", "Prepare PO", "30d alert"}:
             row["reorder_action_label"] = "Partially ordered"
         _refresh_inventory_alert_reason(row)
+        _refresh_stockout_business_impact(row)
 
     for _, rows in _inventory_row_collections(inventory):
         for row in rows:
@@ -2443,6 +2724,7 @@ def build_inventory_snapshot(
         state_changed = _auto_clear_restocked_inbound_orders(state, inventory)
         if project_settings is not None:
             _apply_inbound_to_inventory(inventory, state, project_settings)
+        _apply_inventory_restock_exclusions(inventory, state)
     elif project_settings is not None:
         _finalize_inventory_alert_rows(inventory)
     return inventory, state_changed
@@ -2459,7 +2741,11 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
     orders, scan = fetch_open_orders_for_roy_operations(project, settings)
     order_snapshot = build_roy_orders_snapshot(project=project, orders=orders, settings=settings, scan=scan)
     payload = report_payload or {}
-    operations_state = load_roy_operations_state(project, project_settings)
+    operations_state = load_roy_operations_state(
+        project,
+        project_settings,
+        require_configured_remote=True,
+    )
     annotate_picking_print_state(order_snapshot, operations_state)
     base_inventory, _ = build_inventory_snapshot(payload, project_settings=project_settings)
     try:
@@ -2500,6 +2786,9 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
         "performance": build_commercial_snapshot(payload, operations_state),
         "operations_state": {
             "inbound_order_count": len(operations_state.get("inbound_orders") or {}),
+            "inventory_restock_excluded_count": len(
+                operations_state.get("inventory_restock_exclusions") or {}
+            ),
             "acknowledged_loss_product_count": len(operations_state.get("loss_acknowledgements") or {}),
             "auto_cleared_inbound_order_count": len(operations_state.get("auto_cleared_inbound_orders") or []),
             "printed_picking_order_count": len(operations_state.get("printed_picking_orders") or {}),

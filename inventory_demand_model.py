@@ -502,6 +502,104 @@ def poisson_tail_probability(expected_events: Any, required_events: Any) -> floa
     return min(max(1.0 - cumulative, 0.0), 1.0)
 
 
+def poisson_expected_shortage_units(
+    expected_orders: Any,
+    available_units: Any,
+    typical_order_units: Any,
+) -> float:
+    """Return expected unfulfilled units during lead time.
+
+    Demand occurrences follow the same Poisson assumption used by the
+    lead-time stockout probability. Stock is converted to the number of whole
+    typical orders that can be fulfilled, then ``E[(N-c)+]`` is evaluated
+    without SciPy.
+    """
+
+    try:
+        lam = max(float(expected_orders), 0.0)
+        available = max(float(available_units), 0.0)
+        typical = float(typical_order_units)
+    except (TypeError, ValueError):
+        return 0.0
+    if not all(math.isfinite(value) for value in (lam, available, typical)):
+        return 0.0
+    if lam <= 0 or typical <= 0:
+        return 0.0
+
+    fulfillable_orders = int(math.floor(available / typical))
+    shortage_orders = (
+        lam * poisson_tail_probability(lam, fulfillable_orders)
+        - fulfillable_orders * poisson_tail_probability(lam, fulfillable_orders + 1)
+    )
+    return max(shortage_orders * typical, 0.0)
+
+
+def resolve_typical_order_units(typical_order_units: Any, demand_30d: Any) -> float:
+    """Return the shared order-size fallback used by stockout calculations."""
+
+    try:
+        typical = float(typical_order_units)
+    except (TypeError, ValueError):
+        typical = 0.0
+    if math.isfinite(typical) and typical > 0:
+        return typical
+
+    try:
+        demand = float(demand_30d)
+    except (TypeError, ValueError):
+        demand = 0.0
+    if not math.isfinite(demand):
+        demand = 0.0
+    return min(max(demand, 1.0), 5.0)
+
+
+def stockout_business_impact(
+    *,
+    expected_orders: Any,
+    available_units: Any,
+    typical_order_units: Any,
+    alert_units: Any,
+    alert_revenue: Any,
+    alert_contribution: Any,
+) -> Dict[str, float]:
+    """Calculate interpretable lead-time stockout impact for one SKU.
+
+    Contribution uses CM2 before fixed costs because a stockout does not make
+    allocated fixed costs disappear. Negative contribution is deliberately
+    clipped to zero so loss-making volume cannot outrank profitable products;
+    revenue at risk remains available as the secondary ranking signal.
+    """
+
+    def finite_nonnegative(value: Any) -> float:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return parsed if math.isfinite(parsed) and parsed > 0 else 0.0
+
+    units = finite_nonnegative(alert_units)
+    typical = resolve_typical_order_units(typical_order_units, units)
+    expected_shortage_units = poisson_expected_shortage_units(
+        expected_orders,
+        available_units,
+        typical,
+    )
+    if units <= 0 or expected_shortage_units <= 0:
+        return {
+            "lead_time_expected_shortage_units": 0.0,
+            "stockout_contribution_at_risk": 0.0,
+            "stockout_revenue_at_risk": 0.0,
+        }
+
+    unit_revenue = finite_nonnegative(alert_revenue) / units
+    unit_contribution = finite_nonnegative(alert_contribution) / units
+    return {
+        "lead_time_expected_shortage_units": expected_shortage_units,
+        "stockout_contribution_at_risk": expected_shortage_units * unit_contribution,
+        "stockout_revenue_at_risk": expected_shortage_units * unit_revenue,
+    }
+
+
 def update_m_of_n_signal_history(
     previous_rows: Iterable[Mapping[str, Any]],
     current_candidates: Mapping[str, Any],

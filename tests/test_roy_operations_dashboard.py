@@ -1,4 +1,5 @@
 import copy
+import io
 import json
 import shutil
 import unittest
@@ -684,6 +685,11 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Raw → baseline", html)
         self.assertIn("alert_reason_label_sk", html)
         self.assertIn("demand_model_version", html)
+        self.assertIn("expected-shortage-cm2-v1", html)
+        self.assertIn("stockout_contribution_at_risk", html)
+        self.assertIn("data-restock-enabled", html)
+        self.assertIn("inventory-restock-preference", html)
+        self.assertIn("excludedRestockRowsBody", html)
         self.assertIn("Top zna", html)
         self.assertIn("Krajiny", html)
         self.assertIn("countryPerformanceBody", html)
@@ -791,6 +797,28 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                 rod._CACHE_TOKENS.clear()
                 rod._CACHE_TOKENS.update(previous_tokens)
 
+    def test_snapshot_fails_closed_when_configured_remote_state_is_unavailable(self) -> None:
+        settings = make_project_settings()
+        with (
+            patch("roy_operations_dashboard.load_project_env"),
+            patch("roy_operations_dashboard.load_project_settings", return_value=settings),
+            patch("roy_operations_dashboard.resolve_roy_operations_settings", return_value={}),
+            patch("roy_operations_dashboard.fetch_open_orders_for_roy_operations", return_value=([], {})),
+            patch("roy_operations_dashboard.build_roy_orders_snapshot", return_value={}),
+            patch(
+                "roy_operations_dashboard.load_roy_operations_state",
+                side_effect=RuntimeError("configured state unavailable"),
+            ) as load_state,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "configured state unavailable"):
+                rod.generate_roy_operations_snapshot("roy", report_payload={})
+
+        load_state.assert_called_once_with(
+            "roy",
+            settings,
+            require_configured_remote=True,
+        )
+
     def test_inbound_order_units_suppress_covered_stock_alert_until_restock(self) -> None:
         payload = {
             "dashboard": {
@@ -886,6 +914,269 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(1, inventory["summary"]["inbound_order_count"])
         self.assertEqual(20, inventory["inbound_order_rows"][0]["ordered_units"])
         self.assertEqual("Inbound ordered", inventory["inventory_rows"][0]["reorder_action_label"])
+
+    def test_stock_alerts_are_ranked_by_expected_cm2_loss_before_severity(self) -> None:
+        high_impact = {
+            "sku": "HIGH-CM2",
+            "product": "High contribution product",
+            "stock_risk_level": "Low",
+            "stock_risk_rank": 3,
+            "available_quantity": 0,
+            "net_available_quantity": 0,
+            "alert_30d_units": 30,
+            "alert_30d_revenue": 3000,
+            "alert_30d_contribution_estimate": 900,
+            "typical_order_units": 1,
+            "lead_time_expected_orders": 3,
+            "days_of_cover": 10,
+        }
+        severe_low_impact = {
+            "sku": "LOW-CM2",
+            "product": "Low contribution product",
+            "stock_risk_level": "Out of stock",
+            "stock_risk_rank": 1,
+            "available_quantity": 0,
+            "net_available_quantity": 0,
+            "alert_30d_units": 30,
+            "alert_30d_revenue": 60,
+            "alert_30d_contribution_estimate": 30,
+            "typical_order_units": 1,
+            "lead_time_expected_orders": 10,
+            "days_of_cover": 0,
+        }
+        rows = [severe_low_impact, high_impact]
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {},
+                    "alert_rows": copy.deepcopy(rows),
+                    "restock_priority_rows": copy.deepcopy(rows),
+                    "revenue_at_risk_rows": copy.deepcopy(rows),
+                    "stock_risk_rows": copy.deepcopy(rows),
+                    "inventory_rows": copy.deepcopy(rows),
+                }
+            }
+        }
+
+        inventory, _ = build_inventory_snapshot(payload, project_settings={"inventory_model": {}})
+
+        self.assertEqual(["HIGH-CM2", "LOW-CM2"], [row["sku"] for row in inventory["alert_rows"]])
+        self.assertGreater(
+            inventory["alert_rows"][0]["stockout_contribution_at_risk"],
+            inventory["alert_rows"][1]["stockout_contribution_at_risk"],
+        )
+        self.assertEqual(
+            "expected-shortage-cm2-v1",
+            inventory["summary"]["stockout_priority_model_version"],
+        )
+
+    def test_live_stockout_refresh_uses_total_demand_and_bundle_blocking_basis(self) -> None:
+        row = {
+            "sku": "BUNDLE-COMPONENT",
+            "available_quantity": 0,
+            "net_available_quantity": 0,
+            "alert_30d_units": 6,
+            "alert_30d_revenue": 0,
+            "alert_30d_contribution_estimate": 0,
+            "stockout_revenue_basis_30d": 360,
+            "stockout_contribution_basis_30d": 144,
+            "typical_order_units": 1,
+            "combined_typical_order_units": 1,
+            "combined_order_rate_per_day": 0.2,
+            "order_rate_per_day": 0.05,
+            "lead_time_expected_orders": 0.5,
+            "stock_risk_level": "Out of stock",
+        }
+
+        probability, is_risk, expected_orders = rod._smart_lead_time_stockout_risk(
+            row,
+            available=0,
+            available_raw=0,
+            demand_30d=6,
+            lead_time_calendar_days=10,
+        )
+        row["lead_time_expected_orders"] = expected_orders
+        rod._refresh_stockout_business_impact(row)
+
+        self.assertEqual(1.0, probability)
+        self.assertTrue(is_risk)
+        self.assertAlmostEqual(2.0, expected_orders, places=6)
+        self.assertGreater(row["stockout_revenue_at_risk"], 0)
+        self.assertGreater(row["stockout_contribution_at_risk"], 0)
+
+    def test_bundle_component_partial_stock_uses_bundle_order_size(self) -> None:
+        row = {
+            "sku": "BUNDLE-COMPONENT",
+            "net_available_quantity": 2,
+            "alert_30d_units": 3,
+            "stockout_revenue_basis_30d": 300,
+            "stockout_contribution_basis_30d": 120,
+            "typical_order_units": 0,
+            "combined_typical_order_units": 1,
+            "combined_order_rate_per_day": 0.1,
+            "lead_time_expected_orders": 1.4,
+            "stock_risk_level": "Low",
+        }
+
+        rod._refresh_stockout_business_impact(row)
+
+        self.assertAlmostEqual(0.2384, row["lead_time_expected_shortage_units"], places=3)
+        self.assertLess(row["lead_time_expected_shortage_units"], 0.3)
+
+    def test_restock_exclusion_filters_alert_collections_but_keeps_inventory_audit(self) -> None:
+        keep = {
+            "sku": "KEEP-1",
+            "product": "Keep product",
+            "stock_risk_level": "Low",
+            "available_quantity": 2,
+            "alert_30d_units": 10,
+            "alert_30d_revenue": 300,
+            "alert_30d_profit_estimate": 90,
+            "typical_order_units": 1,
+            "lead_time_expected_orders": 2,
+        }
+        excluded = {
+            "sku": "DROP-1",
+            "product": "Do not restock",
+            "stock_risk_level": "Out of stock",
+            "available_quantity": 0,
+            "alert_30d_units": 20,
+            "alert_30d_revenue": 500,
+            "alert_30d_profit_estimate": 150,
+            "typical_order_units": 1,
+            "lead_time_expected_orders": 4,
+        }
+        rows = [excluded, keep]
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {},
+                    "alert_rows": copy.deepcopy(rows),
+                    "restock_priority_rows": copy.deepcopy(rows),
+                    "revenue_at_risk_rows": copy.deepcopy(rows),
+                    "stock_risk_rows": copy.deepcopy(rows),
+                    "inventory_rows": copy.deepcopy(rows),
+                    "demand_anomaly_rows": [copy.deepcopy(excluded)],
+                }
+            }
+        }
+        state = {
+            "inventory_restock_exclusions": {
+                "drop-1": {
+                    "sku": "DROP-1",
+                    "product": "Do not restock",
+                    "reason": "do_not_restock",
+                    "excluded_at": "2026-07-22T07:00:00Z",
+                }
+            },
+            "inbound_orders": {},
+        }
+
+        inventory, _ = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={"inventory_model": {}},
+        )
+
+        for collection in (
+            "alert_rows",
+            "restock_priority_rows",
+            "revenue_at_risk_rows",
+            "stock_risk_rows",
+        ):
+            self.assertEqual(["KEEP-1"], [row["sku"] for row in inventory[collection]])
+        self.assertEqual({"DROP-1", "KEEP-1"}, {row["sku"] for row in inventory["inventory_rows"]})
+        self.assertEqual(["DROP-1"], [row["sku"] for row in inventory["demand_anomaly_rows"]])
+        self.assertEqual(["DROP-1"], [row["sku"] for row in inventory["excluded_restock_rows"]])
+        self.assertTrue(inventory["excluded_restock_rows"][0]["currently_alerting"])
+        self.assertEqual(1, inventory["summary"]["alert_delivery_count"])
+        self.assertEqual(1, inventory["summary"]["inventory_restock_excluded_count"])
+        self.assertEqual(1, inventory["summary"]["inventory_restock_excluded_active_count"])
+
+    def test_restock_exclusion_mutations_are_persistent_idempotent_and_roy_only(self) -> None:
+        normalized = rod._normalize_operations_state(
+            {
+                "version": 1,
+                "inventory_restock_exclusions": {
+                    "sku-1": {"sku": "SKU-1", "reason": "do_not_restock"}
+                },
+            }
+        )
+        self.assertEqual(rod.STATE_VERSION, normalized["version"])
+        self.assertIn("sku-1", normalized["inventory_restock_exclusions"])
+        state = rod._empty_operations_state()
+        with (
+            patch("roy_operations_dashboard.load_project_settings", return_value={}),
+            patch("roy_operations_dashboard.load_roy_operations_state", return_value=state) as load_state,
+            patch(
+                "roy_operations_dashboard.save_roy_operations_state",
+                return_value={"storage": "s3", "bucket": "test", "key": "operations/state.json"},
+            ) as save_state,
+            patch("roy_operations_dashboard._clear_operations_cache"),
+            patch(
+                "roy_operations_dashboard._state_now_iso",
+                side_effect=["2026-07-22T07:00:00Z", "2026-07-22T08:00:00Z"],
+            ),
+        ):
+            first = rod.exclude_inventory_restock_alert("roy", " SKU-1 ", "Product")
+            second = rod.exclude_inventory_restock_alert("roy", "sku-1", "Product renamed")
+            restored = rod.restore_inventory_restock_alert("roy", "SKU-1")
+
+        self.assertTrue(first["excluded"])
+        self.assertTrue(second["excluded"])
+        self.assertEqual("2026-07-22T07:00:00Z", second["exclusion"]["excluded_at"])
+        self.assertEqual("2026-07-22T08:00:00Z", second["exclusion"]["updated_at"])
+        self.assertEqual("Product renamed", second["exclusion"]["product"])
+        self.assertFalse(restored["excluded"])
+        self.assertTrue(restored["removed"])
+        self.assertEqual({}, state["inventory_restock_exclusions"])
+        self.assertEqual(3, save_state.call_count)
+        for call in load_state.call_args_list:
+            self.assertTrue(call.kwargs["require_configured_remote"])
+        with self.assertRaises(ValueError):
+            rod.exclude_inventory_restock_alert("vevo", "SKU-1", "Product")
+
+    def test_remote_operations_state_write_uses_verified_s3_revision(self) -> None:
+        class FakeS3:
+            def __init__(self) -> None:
+                self.put_calls = []
+
+            def get_object(self, **_kwargs):
+                return {
+                    "Body": io.BytesIO(json.dumps(rod._empty_operations_state()).encode("utf-8")),
+                    "ETag": '"state-etag"',
+                }
+
+            def put_object(self, **kwargs):
+                self.put_calls.append(kwargs)
+                return {"ETag": '"next-etag"'}
+
+        fake_s3 = FakeS3()
+        settings = {"live_dashboard_artifacts": {}}
+        with (
+            patch(
+                "roy_operations_dashboard._state_s3_location",
+                return_value=("bucket", "daily-reports/roy-sk/operations/state.json", "eu-central-1"),
+            ),
+            patch("boto3.client", return_value=fake_s3),
+        ):
+            state = rod.load_roy_operations_state(
+                "roy",
+                settings,
+                require_configured_remote=True,
+            )
+            state["inventory_restock_exclusions"]["sku-1"] = {
+                "sku": "SKU-1",
+                "reason": "do_not_restock",
+            }
+            rod.save_roy_operations_state("roy", state, settings)
+            with self.assertRaisesRegex(RuntimeError, "verified S3 revision"):
+                rod.save_roy_operations_state("roy", rod._empty_operations_state(), settings)
+
+        self.assertEqual('"state-etag"', fake_s3.put_calls[0]["IfMatch"])
+        persisted = json.loads(fake_s3.put_calls[0]["Body"].decode("utf-8"))
+        self.assertNotIn("_storage_etag", persisted)
+        self.assertIn("sku-1", persisted["inventory_restock_exclusions"])
 
     def test_inventory_snapshot_prefers_operations_inventory_payload(self) -> None:
         payload = {

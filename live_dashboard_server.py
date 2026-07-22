@@ -19,12 +19,14 @@ from production_board import get_cached_production_board_snapshot, resolve_produ
 from roy_operations_dashboard import (
     acknowledge_loss_product,
     clear_inbound_stock_order,
+    exclude_inventory_restock_alert,
     get_cached_roy_operations_snapshot,
     load_roy_operations_state,
     mark_picking_orders_printed,
     mark_personal_pickup_ready,
     mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
+    restore_inventory_restock_alert,
     save_roy_operations_state,
     select_picking_orders_for_print,
     set_inbound_stock_order,
@@ -72,6 +74,35 @@ def is_authorized_basic_header(header: Optional[str], credentials: Optional[Tupl
     except UnicodeEncodeError:
         return False
     return user_matches and password_matches
+
+
+def is_trusted_roy_operations_action_request(
+    *,
+    content_type: Optional[str],
+    action_header: Optional[str],
+    sec_fetch_site: Optional[str] = None,
+    origin: Optional[str] = None,
+    host: Optional[str] = None,
+) -> bool:
+    media_type = str(content_type or "").split(";", 1)[0].strip().lower()
+    if media_type != "application/json":
+        return False
+    if not hmac.compare_digest(
+        str(action_header or ""),
+        "inventory-restock-preference",
+    ):
+        return False
+    fetch_site = str(sec_fetch_site or "").strip().lower()
+    if fetch_site and fetch_site not in {"same-origin", "none"}:
+        return False
+    raw_origin = str(origin or "").strip()
+    if raw_origin:
+        parsed_origin = urlparse(raw_origin)
+        if parsed_origin.scheme not in {"http", "https"}:
+            return False
+        if not host or parsed_origin.netloc.casefold() != str(host).strip().casefold():
+            return False
+    return True
 
 
 def available_projects() -> List[str]:
@@ -1233,14 +1264,25 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
           <div>
             <h2>Skladové upozornenia</h2>
             <p id="inventoryAlertMeta">-</p>
+            <p class="muted">Poradie: očakávaná strata CM2 počas dodacej lehoty · model expected-shortage-cm2-v1</p>
           </div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Produkt</th><th>Riziko</th><th>Dôvod</th><th>Sklad</th><th>Objednané</th><th>Raw → baseline</th><th>Istota</th><th>Cover</th><th>Vypredanie</th><th>Objednať do</th><th>Návrh</th></tr></thead>
+            <thead><tr><th>Produkt</th><th>Dopad vypredania</th><th>Riziko</th><th>Dôvod</th><th>Sklad</th><th>Objednané</th><th>Raw → baseline</th><th>Istota</th><th>Cover</th><th>Vypredanie</th><th>Objednať do</th><th>Návrh</th><th>Dokladňovať</th></tr></thead>
             <tbody id="alertRowsBody"></tbody>
           </table>
         </div>
+        <details class="panel-body" id="excludedRestockPanel">
+          <summary id="excludedRestockMeta">Vyradené z dokladňovania</summary>
+          <p class="muted">Tieto produkty zostávajú v skladových dátach, ale nezobrazujú sa v upozorneniach. Zaškrtnutím ich vrátiš späť.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Produkt</th><th>Vyradené</th><th>Aktuálny stav</th><th>Znovu dokladňovať</th></tr></thead>
+              <tbody id="excludedRestockRowsBody"></tbody>
+            </table>
+          </div>
+        </details>
       </article>
       <article class="panel">
         <div class="panel-head">
@@ -1801,6 +1843,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const stockoutProbability = Number(row.lead_time_stockout_probability || 0) * 100;
       return `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
+        <td><strong>${fmtMoney(row.stockout_contribution_at_risk)} CM2</strong><div class="muted">${fmtMoney(row.stockout_revenue_at_risk)} tržby · ${fmtQty(row.lead_time_expected_shortage_units)} ks počas LT</div></td>
         <td><span class="badge ${badgeClass(row.stock_risk_level || row.reorder_action_label)}">${safe(row.stock_risk_level || row.reorder_action_label)}</span></td>
         <td><strong>${safe(row.alert_reason_label_sk)}</strong><div class="muted">${safe(row.demand_signal_label_sk)}</div></td>
         <td>${fmtQty(row.available_quantity)} ks</td>
@@ -1811,6 +1854,15 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         <td>${safe(row.projected_stockout_date)}</td>
         <td>${safe(row.reorder_by_date)}</td>
         <td><strong>${safe(row.reorder_action_label)}</strong><div class="muted">${fmtQty(row.suggested_reorder_units)} ks · LT ${fmtInt(row.lead_time_working_days)}d</div></td>
+        <td><label><input type="checkbox" checked data-restock-enabled="${safe(row.sku)}" data-product="${safe(row.product)}" aria-label="Dokladňovať ${safe(row.product)}"> Áno</label></td>
+      </tr>`;
+    }
+    function excludedRestockRow(row) {
+      return `<tr>
+        <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
+        <td>${safe(row.restock_excluded_at)}</td>
+        <td>${row.currently_alerting ? '<span class="badge warn">Aktuálne riziko</span>' : '<span class="muted">Bez aktívneho alertu</span>'}</td>
+        <td><label><input type="checkbox" data-restock-enabled="${safe(row.sku)}" data-product="${safe(row.product)}" aria-label="Znovu dokladňovať ${safe(row.product)}"> Vrátiť</label></td>
       </tr>`;
     }
     function demandAnomalyRow(row) {
@@ -1829,13 +1881,16 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       const inv = data.inventory || {};
       const summary = inv.summary || {};
       const alerts = inv.alert_rows || [];
+      const excludedRestockRows = inv.excluded_restock_rows || [];
       const anomalies = inv.demand_anomaly_rows || [];
       const inventoryRows = inv.inventory_rows || [];
       const inboundRows = inv.inbound_order_rows || [];
       const visibleInventoryAlertLimit = 100;
       const visibleInventoryLimit = 100;
-      el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · ${fmtInt(summary.demand_anomaly_count)} oddelených anomálií · snapshot ${text(summary.inventory_snapshot_date)}`;
-      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, visibleInventoryAlertLimit).map(inventoryAlertRow).join('') : '<tr><td colspan="11" class="muted">Bez kritických skladových alertov.</td></tr>';
+      el('inventoryAlertMeta').textContent = `${fmtInt(summary.alert_delivery_count)} alertov · ${fmtInt(summary.inventory_restock_excluded_count)} vyradených · ${fmtInt(summary.demand_anomaly_count)} oddelených anomálií · snapshot ${text(summary.inventory_snapshot_date)}`;
+      el('alertRowsBody').innerHTML = alerts.length ? alerts.slice(0, visibleInventoryAlertLimit).map(inventoryAlertRow).join('') : '<tr><td colspan="13" class="muted">Bez kritických skladových alertov.</td></tr>';
+      el('excludedRestockMeta').textContent = `Vyradené z dokladňovania (${fmtInt(excludedRestockRows.length)})`;
+      el('excludedRestockRowsBody').innerHTML = excludedRestockRows.length ? excludedRestockRows.map(excludedRestockRow).join('') : '<tr><td colspan="4" class="muted">Žiadne produkty nie sú vyradené.</td></tr>';
       el('demandAnomalyMeta').textContent = `${fmtInt(anomalies.length)} one-off signálov · model ${text(summary.demand_model_version, 'legacy')}`;
       el('demandAnomalyRowsBody').innerHTML = anomalies.length ? anomalies.map(demandAnomalyRow).join('') : '<tr><td colspan="7" class="muted">Bez neobvykle veľkých jednorazových objednávok.</td></tr>';
       el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)} · ${text(summary.demand_model_version, 'legacy')}`;
@@ -1869,6 +1924,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       </tr>`).join('') : '<tr><td colspan="9" class="muted">Skladový payload zatiaľ nie je dostupný.</td></tr>';
       document.querySelectorAll('[data-save-inbound]').forEach((button) => button.addEventListener('click', () => saveInboundOrder(button)));
       document.querySelectorAll('[data-clear-inbound]').forEach((button) => button.addEventListener('click', () => clearInboundOrder(button)));
+      document.querySelectorAll('[data-restock-enabled]').forEach((input) => input.addEventListener('change', () => setInventoryRestockPreference(input)));
     }
     function showMessage(message, ok=false) {
       el('messageBox').className = ok ? 'ok' : 'error';
@@ -1990,6 +2046,43 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         showMessage(error instanceof Error ? error.message : String(error));
       } finally {
         button.disabled = false;
+      }
+    }
+    async function setInventoryRestockPreference(input) {
+      const sku = input.dataset.restockEnabled;
+      const restore = input.checked;
+      const action = restore ? 'restore' : 'exclude';
+      const confirmation = restore
+        ? `Vrátiť produkt ${sku} späť do skladových alertov?`
+        : `Vyradiť produkt ${sku} zo skladových alertov, pretože ho už nechcete dokladňovať?`;
+      if (!window.confirm(confirmation)) {
+        input.checked = !restore;
+        return;
+      }
+      input.disabled = true;
+      try {
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/inventory-restock/${encodeURIComponent(sku)}/${action}`, {
+          method:'POST',
+          cache:'no-store',
+          headers:{
+            'Content-Type':'application/json',
+            'X-ROY-Operations-Action':'inventory-restock-preference',
+          },
+          body: JSON.stringify({ product: input.dataset.product || '' }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        showMessage(
+          restore
+            ? `Produkt ${sku} sa znova zobrazí v skladových alertoch, keď bude rizikový.`
+            : `Produkt ${sku} je trvalo vyradený zo skladových alertov.`,
+          true,
+        );
+        await loadDashboard(true);
+      } catch (error) {
+        input.checked = !restore;
+        input.disabled = false;
+        showMessage(error instanceof Error ? error.message : String(error));
       }
     }
     async function markPickingPrinted() {
@@ -2417,6 +2510,52 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     self._send_json(mark_personal_pickup_ready(project, order_num))
                 else:
                     self._send_json(mark_personal_pickup_shipped(project, order_num))
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
+        if (
+            len(parts) == 6
+            and parts[0] == "api"
+            and parts[1] == "operations"
+            and parts[3] == "inventory-restock"
+            and parts[5] in {"exclude", "restore"}
+        ):
+            project = parts[2]
+            sku = unquote(parts[4])
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            if project != "roy":
+                self._send_json(
+                    {"error": f"Inventory restock preferences are not enabled for '{project}'."},
+                    status=404,
+                )
+                return
+            try:
+                body = self._read_json_body()
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+                return
+            if not is_trusted_roy_operations_action_request(
+                content_type=self.headers.get("Content-Type"),
+                action_header=self.headers.get("X-ROY-Operations-Action"),
+                sec_fetch_site=self.headers.get("Sec-Fetch-Site"),
+                origin=self.headers.get("Origin"),
+                host=self.headers.get("Host"),
+            ):
+                self._send_json({"error": "Untrusted inventory restock action request."}, status=403)
+                return
+            try:
+                if parts[5] == "exclude":
+                    result = exclude_inventory_restock_alert(
+                        project,
+                        sku,
+                        product=str(body.get("product") or ""),
+                    )
+                else:
+                    result = restore_inventory_restock_alert(project, sku)
+                self._send_json(result)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
             return

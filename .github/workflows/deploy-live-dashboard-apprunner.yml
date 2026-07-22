@@ -1528,7 +1528,11 @@ jobs:
           assert inventory_summary.get("demand_model_version") == "order-aware-tsb-v1", (
               f"Unexpected live demand model version: {inventory_summary.get('demand_model_version')!r}"
           )
+          assert inventory_summary.get("stockout_priority_model_version") == "expected-shortage-cm2-v1", (
+              f"Unexpected live stockout priority model: {inventory_summary.get('stockout_priority_model_version')!r}"
+          )
           assert "demand_anomaly_rows" in api["inventory"], "Demand anomaly rows missing"
+          assert "excluded_restock_rows" in api["inventory"], "Restock exclusion audit rows missing"
           required_smart_fields = {
               "raw_recent_30d_units",
               "raw_alert_30d_units",
@@ -1538,6 +1542,11 @@ jobs:
               "demand_confidence",
               "alert_reason_code",
               "alert_reason_label_sk",
+              "combined_typical_order_units",
+              "combined_order_rate_per_day",
+              "lead_time_expected_shortage_units",
+              "stockout_contribution_at_risk",
+              "stockout_revenue_at_risk",
           }
           invalid_inventory_rows = []
           for row in api["inventory"].get("inventory_rows") or []:
@@ -1550,7 +1559,18 @@ jobs:
           assert not invalid_inventory_rows, (
               f"Live smart inventory fields missing: {invalid_inventory_rows[:5]}"
           )
+          alert_rows = api["inventory"].get("alert_rows") or []
+          priority_pairs = [
+              (
+                  float(row.get("stockout_contribution_at_risk") or 0),
+                  float(row.get("stockout_revenue_at_risk") or 0),
+              )
+              for row in alert_rows
+          ]
+          assert priority_pairs == sorted(priority_pairs, reverse=True), "Live stock alerts are not impact-sorted"
           assert "/api/operations/roy/picking-lists.pdf" in html, "Picking-list PDF link missing"
+          assert "data-restock-enabled" in html, "Restock preference checkbox missing in live UI"
+          assert "inventory-restock-preference" in html, "Restock preference action marker missing in live UI"
           assert "Raw → baseline" in html, "Smart demand comparison missing in live UI"
           assert "Neobvykle veľké objednávky" in html, "Demand anomaly panel missing in live UI"
           assert pdf.startswith(b"%PDF-"), "Picking-list download is not a PDF"
@@ -1582,7 +1602,9 @@ jobs:
               f"inventory_alerts={api['inventory']['summary'].get('alert_delivery_count')}:"
               f"inventory_rows={len(api['inventory'].get('inventory_rows') or [])}:"
               f"demand_model={inventory_summary.get('demand_model_version')}:"
+              f"stockout_priority_model={inventory_summary.get('stockout_priority_model_version')}:"
               f"demand_anomalies={len(api['inventory'].get('demand_anomaly_rows') or [])}:"
+              f"restock_excluded={inventory_summary.get('inventory_restock_excluded_count')}:"
               f"kpi_months={len(api['executive_kpis'].get('months') or [])}:"
               f"gross_loss_products={len((api.get('performance') or {}).get('loss_product_rows') or [])}:"
               f"picking_pdf_bytes={os.path.getsize('/tmp/roy-picking-lists.pdf')}"

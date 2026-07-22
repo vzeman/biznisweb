@@ -1,9 +1,17 @@
 import base64
+import http.client
 import os
+import threading
 import unittest
+from http.server import ThreadingHTTPServer
 from unittest.mock import patch
 
-from live_dashboard_server import is_authorized_basic_header, live_dashboard_auth_credentials
+from live_dashboard_server import (
+    LiveDashboardHandler,
+    is_authorized_basic_header,
+    is_trusted_roy_operations_action_request,
+    live_dashboard_auth_credentials,
+)
 
 
 def basic_header(user: str, password: str) -> str:
@@ -60,6 +68,88 @@ class LiveDashboardAuthTests(unittest.TestCase):
         credentials = live_dashboard_auth_credentials()
         self.assertEqual(("", ""), credentials)
         self.assertFalse(is_authorized_basic_header(basic_header("vevo", "anything"), credentials))
+
+    def test_inventory_restock_write_requires_json_and_same_origin_action_header(self) -> None:
+        trusted = {
+            "content_type": "application/json; charset=utf-8",
+            "action_header": "inventory-restock-preference",
+            "sec_fetch_site": "same-origin",
+            "origin": "https://dashboard.example.test",
+            "host": "dashboard.example.test",
+        }
+
+        self.assertTrue(is_trusted_roy_operations_action_request(**trusted))
+        self.assertFalse(
+            is_trusted_roy_operations_action_request(
+                **{**trusted, "content_type": "application/x-www-form-urlencoded"}
+            )
+        )
+        self.assertFalse(
+            is_trusted_roy_operations_action_request(
+                **{**trusted, "action_header": ""}
+            )
+        )
+        self.assertFalse(
+            is_trusted_roy_operations_action_request(
+                **{**trusted, "sec_fetch_site": "cross-site"}
+            )
+        )
+        self.assertFalse(
+            is_trusted_roy_operations_action_request(
+                **{**trusted, "origin": "https://evil.example", "host": "dashboard.example.test"}
+            )
+        )
+
+    def test_inventory_restock_route_rejects_untrusted_request_and_calls_action(self) -> None:
+        class QuietHandler(LiveDashboardHandler):
+            def log_message(self, _format, *_args) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            with (
+                patch("live_dashboard_server.available_projects", return_value=["roy"]),
+                patch("live_dashboard_server.live_dashboard_auth_credentials", return_value=None),
+                patch(
+                    "live_dashboard_server.exclude_inventory_restock_alert",
+                    return_value={"ok": True, "project": "roy", "sku": "SKU-1", "excluded": True},
+                ) as exclude,
+            ):
+                connection = http.client.HTTPConnection(host, port, timeout=5)
+                connection.request(
+                    "POST",
+                    "/api/operations/roy/inventory-restock/SKU-1/exclude",
+                    body='{"product":"Test"}',
+                    headers={"Content-Type": "application/json"},
+                )
+                rejected = connection.getresponse()
+                rejected.read()
+                self.assertEqual(403, rejected.status)
+                exclude.assert_not_called()
+
+                connection.request(
+                    "POST",
+                    "/api/operations/roy/inventory-restock/SKU-1/exclude",
+                    body='{"product":"Test"}',
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-ROY-Operations-Action": "inventory-restock-preference",
+                        "Sec-Fetch-Site": "same-origin",
+                    },
+                )
+                accepted = connection.getresponse()
+                accepted_payload = accepted.read().decode("utf-8")
+                self.assertEqual(200, accepted.status)
+                self.assertIn('"excluded": true', accepted_payload)
+                exclude.assert_called_once_with("roy", "SKU-1", product="Test")
+                connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
 
 if __name__ == "__main__":

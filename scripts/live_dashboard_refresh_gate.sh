@@ -92,6 +92,13 @@ production_api = json.load(open("/tmp/local-production-board-api.json", encoding
 expected_board_marker = "roy-operations-dashboard" if project == "roy" else f"{project}-production-board"
 assert expected_board_marker in production_html, f"Local production board marker missing for {project}"
 assert production_api.get("project") == project, f"Local production API served the wrong project for {project}"
+if project == "roy":
+    inventory = production_api.get("inventory") or {}
+    inventory_summary = inventory.get("summary") or {}
+    assert inventory_summary.get("stockout_priority_model_version") == "expected-shortage-cm2-v1"
+    assert "excluded_restock_rows" in inventory, "Restock exclusion audit rows missing"
+    assert "data-restock-enabled" in production_html, "Restock preference checkbox missing"
+    assert "inventory-restock-preference" in production_html, "Restock preference action marker missing"
 
 for period in ("7d", "30d", "90d", "full"):
     payload = json.load(open(f"/tmp/local-accounting-{period}.json", encoding="utf-8"))
@@ -191,6 +198,11 @@ if project == "roy":
         "demand_confidence",
         "alert_reason_code",
         "alert_reason_label_sk",
+        "combined_typical_order_units",
+        "combined_order_rate_per_day",
+        "lead_time_expected_shortage_units",
+        "stockout_contribution_at_risk",
+        "stockout_revenue_at_risk",
     }
     invalid_inventory_rows = []
     for row in inventory.get("inventory_rows") or []:
@@ -204,6 +216,18 @@ if project == "roy":
         "Smart inventory fields missing: "
         f"{invalid_inventory_rows[:5]}"
     )
+    assert inventory_summary.get("stockout_priority_model_version") == "expected-shortage-cm2-v1", (
+        f"Unexpected stockout priority model: {inventory_summary.get('stockout_priority_model_version')!r}"
+    )
+    alert_rows = inventory.get("alert_rows") or []
+    priority_pairs = [
+        (
+            float(row.get("stockout_contribution_at_risk") or 0),
+            float(row.get("stockout_revenue_at_risk") or 0),
+        )
+        for row in alert_rows
+    ]
+    assert priority_pairs == sorted(priority_pairs, reverse=True), "Stock alerts are not impact-sorted"
 invalid_loss_rows = []
 for row in commercial.get("loss_product_rows") or []:
     if not isinstance(row, dict):
@@ -231,6 +255,8 @@ marker = {
     "inventory_rows": len(inventory.get("inventory_rows") or []),
     "demand_model_version": (inventory.get("summary") or {}).get("demand_model_version"),
     "demand_anomalies": len(inventory.get("demand_anomaly_rows") or []),
+    "stockout_priority_model_version": (inventory.get("summary") or {}).get("stockout_priority_model_version"),
+    "inventory_restock_excluded_count": (inventory.get("summary") or {}).get("inventory_restock_excluded_count"),
 }
 (marker_dir / "marker.json").write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
 PY
