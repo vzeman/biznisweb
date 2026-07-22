@@ -9,12 +9,20 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
+from live_dashboard_maintenance import (
+    DEFAULT_MAINTENANCE_MESSAGE,
+    MAINTENANCE_MARKER,
+    load_dashboard_maintenance_state,
+    maintenance_fail_closed_status,
+    public_maintenance_status,
+)
 from production_board import get_cached_production_board_snapshot, resolve_production_board_settings
 from roy_operations_dashboard import (
     acknowledge_loss_product,
@@ -424,6 +432,14 @@ def inject_live_period_href_map(report_bytes: bytes, project: str) -> bytes:
 
 def _json_script_content(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False).replace("<", "\\u003c")
+
+
+def _replace_placeholders_once(template: str, replacements: Dict[str, str]) -> str:
+    missing = [key for key in replacements if template.count(key) != 1]
+    if missing:
+        raise ValueError(f"HTML template placeholders must occur exactly once: {missing}")
+    pattern = re.compile("|".join(re.escape(key) for key in sorted(replacements, key=len, reverse=True)))
+    return pattern.sub(lambda match: replacements[match.group(0)], template)
 
 
 def build_index_html(projects: List[str]) -> str:
@@ -1095,8 +1111,46 @@ def build_production_board_html(project: str) -> str:
     return html.replace("__BOOTSTRAP_JSON__", bootstrap_json)
 
 
-def build_roy_operations_dashboard_html(project: str = "roy") -> str:
-    bootstrap_json = _json_script_content({"project": project})
+def get_live_dashboard_maintenance_status(
+    project: str,
+    *,
+    fail_closed: bool = False,
+) -> Dict[str, Any]:
+    try:
+        state = load_dashboard_maintenance_state(
+            project,
+            load_project_settings(project),
+            require_configured_remote=True,
+        )
+        return public_maintenance_status(state, project=project)
+    except Exception as exc:
+        if fail_closed:
+            return maintenance_fail_closed_status(project, exc)
+        raise
+
+
+def build_roy_operations_dashboard_html(
+    project: str = "roy",
+    maintenance_status: Optional[Dict[str, Any]] = None,
+) -> str:
+    if maintenance_status is None:
+        maintenance_status = maintenance_fail_closed_status(project, "Maintenance status is being checked.")
+        maintenance_status["status_error"] = False
+        maintenance_status["checking"] = True
+        maintenance_status["message"] = "Overujeme, či na dashboarde práve neprebiehajú úpravy."
+    elif maintenance_status.get("marker") == MAINTENANCE_MARKER:
+        maintenance_status = dict(maintenance_status)
+    else:
+        maintenance_status = public_maintenance_status(maintenance_status, project=project)
+    maintenance_locked = bool(
+        maintenance_status.get("active")
+        or maintenance_status.get("status_error")
+        or maintenance_status.get("checking")
+    )
+    bootstrap_json = _json_script_content({"project": project, "maintenance": maintenance_status})
+    maintenance_message = escape(
+        str(maintenance_status.get("message") or DEFAULT_MAINTENANCE_MESSAGE)
+    )
     html = """<!doctype html>
 <html lang="sk">
 <head>
@@ -1112,6 +1166,17 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font-family:Arial,Helvetica,sans-serif; }
+    body.maintenance-active { overflow:hidden; }
+    [hidden] { display:none !important; }
+    .maintenance-overlay { position:fixed; inset:0; z-index:2147483647; display:grid; place-items:center; padding:24px; background:rgba(20,33,27,.96); color:#fff; pointer-events:auto; }
+    .maintenance-card { width:min(760px,100%); border:2px solid rgba(255,255,255,.35); border-radius:18px; padding:clamp(28px,6vw,58px); text-align:center; background:#1d2d25; box-shadow:0 28px 90px rgba(0,0,0,.48); }
+    .maintenance-pulse { width:74px; height:74px; margin:0 auto 24px; border-radius:50%; background:#f6c453; box-shadow:0 0 0 0 rgba(246,196,83,.7); animation:maintenancePulse 1.8s infinite; }
+    .maintenance-card h1 { color:#fff; font-size:clamp(30px,5vw,52px); line-height:1.05; margin:0 0 18px; }
+    .maintenance-card p { color:#f1f5f2; font-size:clamp(18px,2.5vw,24px); line-height:1.5; }
+    .maintenance-meta { margin-top:20px; color:#c8d3cd; font-size:14px; font-weight:700; }
+    body.maintenance-active main { pointer-events:none; user-select:none; }
+    @keyframes maintenancePulse { 0% { box-shadow:0 0 0 0 rgba(246,196,83,.65); } 70% { box-shadow:0 0 0 24px rgba(246,196,83,0); } 100% { box-shadow:0 0 0 0 rgba(246,196,83,0); } }
+    @media (prefers-reduced-motion:reduce) { .maintenance-pulse { animation:none; } }
     main { width:min(1500px,calc(100vw - 24px)); margin:0 auto; padding:14px 0 34px; }
     header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; padding:12px 0 14px; }
     h1 { margin:0; font-size:29px; line-height:1.12; letter-spacing:0; }
@@ -1195,8 +1260,16 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     }
   </style>
 </head>
-<body>
-  <main data-marker="roy-operations-dashboard">
+<body class="__MAINTENANCE_BODY_CLASS__" data-maintenance-active="__MAINTENANCE_ACTIVE__">
+  <div id="maintenanceOverlay" class="maintenance-overlay" data-marker="roy-maintenance-overlay" role="alertdialog" aria-modal="true" aria-labelledby="maintenanceTitle" aria-describedby="maintenanceMessage" tabindex="-1" __MAINTENANCE_HIDDEN__>
+    <div class="maintenance-card">
+      <div class="maintenance-pulse" aria-hidden="true"></div>
+      <h1 id="maintenanceTitle">Na dashboarde prebiehajú úpravy</h1>
+      <p id="maintenanceMessage">__MAINTENANCE_MESSAGE__</p>
+      <div id="maintenanceMeta" class="maintenance-meta">Po dokončení sa dashboard odblokuje automaticky.</div>
+    </div>
+  </div>
+  <main id="dashboardRoot" data-marker="roy-operations-dashboard" __MAINTENANCE_INERT__>
     <header>
       <div>
         <h1>ROY operations dashboard</h1>
@@ -1433,6 +1506,154 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
     let seenFulfillableOrderKeys = new Set();
     const orderSoundStorageKey = `roy:${project}:new-order-sound`;
     const ORDER_ALERT_SOUND_VERSION = 'loud-two-tone-v2';
+    const MAINTENANCE_MARKER = 'dashboard-maintenance-v1';
+    const MAINTENANCE_POLL_MS = 5000;
+    let maintenanceStatus = BOOTSTRAP.maintenance || {
+      marker:MAINTENANCE_MARKER,
+      active:true,
+      checking:true,
+      message:'Overujeme, či na dashboarde práve neprebiehajú úpravy.',
+    };
+    let maintenanceLastValidStatus = (!maintenanceStatus.status_error && !maintenanceStatus.checking)
+      ? maintenanceStatus
+      : null;
+    let maintenanceErrorLockExpiresAt = maintenanceStatus.ui_lock_expires_at || '';
+    function maintenanceTimestamp(value) {
+      const parsed = value ? new Date(value) : null;
+      return parsed && !Number.isNaN(parsed.getTime()) ? parsed.getTime() : null;
+    }
+    function statusErrorLocksDashboard(status) {
+      if (!status.status_error) return false;
+      const deadline = maintenanceTimestamp(status.ui_lock_expires_at || maintenanceErrorLockExpiresAt);
+      return deadline !== null && Date.now() < deadline;
+    }
+    function boundedStatusErrorDeadline() {
+      if (maintenanceErrorLockExpiresAt) return maintenanceErrorLockExpiresAt;
+      const lastLeaseDeadline = maintenanceLastValidStatus && maintenanceLastValidStatus.active
+        ? maintenanceTimestamp(maintenanceLastValidStatus.expires_at)
+        : null;
+      const deadline = lastLeaseDeadline !== null
+        ? lastLeaseDeadline
+        : Date.now() + (15 * 60 * 1000);
+      maintenanceErrorLockExpiresAt = new Date(deadline).toISOString();
+      return maintenanceErrorLockExpiresAt;
+    }
+    let maintenanceLocked = Boolean(
+      maintenanceStatus.active
+      || maintenanceStatus.checking
+      || statusErrorLocksDashboard(maintenanceStatus)
+    );
+    let maintenancePollTimer = null;
+    let maintenancePollInFlight = false;
+    let dashboardLoadStarted = false;
+
+    function maintenancePhaseLabel(status) {
+      if (status.status_error) return 'Bezpečnostné uzamknutie · kontrolu automaticky zopakujeme';
+      if (status.checking) return 'Kontrolujeme stav údržby';
+      const labels = {
+        starting:'Pripravujeme aktualizáciu',
+        refreshing:'Aktualizujeme dáta',
+        deploying:'Nasadzujeme úpravy',
+        verifying:'Overujeme novú verziu',
+        failed:'Údržba sa predĺžila',
+      };
+      const phase = labels[status.phase] || 'Prebieha plánovaná údržba';
+      const expires = status.expires_at ? new Date(status.expires_at) : null;
+      const deadline = expires && !Number.isNaN(expires.getTime())
+        ? ` · automatické odblokovanie najneskôr ${expires.toLocaleTimeString('sk-SK', {hour:'2-digit', minute:'2-digit'})}`
+        : '';
+      return `${phase}${deadline}`;
+    }
+    function applyMaintenanceStatus(status) {
+      const next = status && typeof status === 'object' ? {...status} : {};
+      if (!next.status_error && !next.checking && next.marker === MAINTENANCE_MARKER) {
+        maintenanceLastValidStatus = next;
+        maintenanceErrorLockExpiresAt = '';
+      } else if (next.status_error) {
+        if (!maintenanceErrorLockExpiresAt) {
+          maintenanceErrorLockExpiresAt = next.ui_lock_expires_at || boundedStatusErrorDeadline();
+        }
+        next.ui_lock_expires_at = maintenanceErrorLockExpiresAt;
+      }
+      const locked = Boolean(
+        next.active
+        || next.checking
+        || statusErrorLocksDashboard(next)
+      );
+      const wasLocked = maintenanceLocked;
+      maintenanceStatus = next;
+      maintenanceLocked = locked;
+      const overlay = el('maintenanceOverlay');
+      const root = el('dashboardRoot');
+      document.body.classList.toggle('maintenance-active', locked);
+      document.body.dataset.maintenanceActive = locked ? 'true' : 'false';
+      overlay.hidden = !locked;
+      overlay.setAttribute('aria-hidden', locked ? 'false' : 'true');
+      root.inert = locked;
+      if (locked) root.setAttribute('aria-hidden', 'true');
+      else root.removeAttribute('aria-hidden');
+      if (locked) {
+        el('maintenanceTitle').textContent = next.status_error
+          ? 'Dashboard je dočasne uzamknutý'
+          : (next.checking ? 'Overujeme stav dashboardu' : 'Na dashboarde prebiehajú úpravy');
+        el('maintenanceMessage').textContent = next.message || 'Prosíme o strpenie a dashboard zatiaľ nepoužívajte.';
+        el('maintenanceMeta').textContent = maintenancePhaseLabel(next);
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+        if (document.activeElement !== overlay) overlay.focus({preventScroll:true});
+        return;
+      }
+      if (!dashboardLoadStarted) {
+        dashboardLoadStarted = true;
+        loadDashboard(false);
+      } else if (wasLocked) {
+        loadDashboard(true);
+      }
+    }
+    function scheduleMaintenancePoll(delay=MAINTENANCE_POLL_MS) {
+      if (maintenancePollTimer) clearTimeout(maintenancePollTimer);
+      maintenancePollTimer = setTimeout(() => pollMaintenanceStatus(), delay);
+    }
+    async function pollMaintenanceStatus() {
+      if (maintenancePollInFlight) {
+        scheduleMaintenancePoll(1000);
+        return;
+      }
+      maintenancePollInFlight = true;
+      const controller = new AbortController();
+      const requestTimeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/maintenance`, {
+          cache:'no-store',
+          signal:controller.signal,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        if (data.marker !== MAINTENANCE_MARKER) throw new Error('Neplatná odpoveď maintenance statusu.');
+        applyMaintenanceStatus(data);
+      } catch (_error) {
+        applyMaintenanceStatus({
+          marker:MAINTENANCE_MARKER,
+          active:false,
+          status_error:true,
+          phase:'failed',
+          ui_lock_expires_at:boundedStatusErrorDeadline(),
+          expires_at:(maintenanceLastValidStatus && maintenanceLastValidStatus.expires_at) || '',
+          operation_id:(maintenanceLastValidStatus && maintenanceLastValidStatus.operation_id) || '',
+          message:'Stav dashboardu sa momentálne nedá bezpečne overiť. Prosíme, dashboard zatiaľ nepoužívajte; kontrolu automaticky zopakujeme.',
+        });
+      } finally {
+        clearTimeout(requestTimeout);
+        maintenancePollInFlight = false;
+        scheduleMaintenancePoll();
+      }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) scheduleMaintenancePoll(0);
+    });
+    window.addEventListener('focus', () => scheduleMaintenancePoll(0));
 
     const metricDefsFallback = [
       { key:'revenue', label_en:'Revenue (net)' },
@@ -1946,6 +2167,7 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       notifyAboutNewFulfillableOrders(data);
     }
     async function loadDashboard(force=false) {
+      if (maintenanceLocked) return;
       el('refreshBtn').disabled = true;
       try {
         const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`, { cache:'no-store' });
@@ -1954,7 +2176,9 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
         clearMessage();
         render(data);
         if (refreshTimer) clearInterval(refreshTimer);
-        refreshTimer = setInterval(() => loadDashboard(false), Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000);
+        if (!maintenanceLocked) {
+          refreshTimer = setInterval(() => loadDashboard(false), Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         showMessage(latestData ? `Live refresh zlyhal, zobrazujem posledné načítané dáta: ${message}` : message);
@@ -2144,11 +2368,22 @@ def build_roy_operations_dashboard_html(project: str = "roy") -> str:
       document.querySelectorAll('[data-view]').forEach((btn) => btn.classList.toggle('active', btn === button));
       ['overview','orders','inventory'].forEach((view) => el(`view-${view}`).classList.toggle('hidden', button.dataset.view !== view));
     }));
-    loadDashboard(false);
+    applyMaintenanceStatus(maintenanceStatus);
+    pollMaintenanceStatus();
   </script>
 </body>
 </html>"""
-    return html.replace("__BOOTSTRAP_JSON__", bootstrap_json)
+    return _replace_placeholders_once(
+        html,
+        {
+            "__BOOTSTRAP_JSON__": bootstrap_json,
+            "__MAINTENANCE_BODY_CLASS__": "maintenance-active" if maintenance_locked else "",
+            "__MAINTENANCE_ACTIVE__": "true" if maintenance_locked else "false",
+            "__MAINTENANCE_HIDDEN__": "" if maintenance_locked else "hidden",
+            "__MAINTENANCE_INERT__": 'inert aria-hidden="true"' if maintenance_locked else "",
+            "__MAINTENANCE_MESSAGE__": maintenance_message,
+        },
+    )
 
 
 class LiveDashboardHandler(BaseHTTPRequestHandler):
@@ -2186,16 +2421,21 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
         self._send_bytes(text.encode("utf-8"), content_type=content_type, status=status)
 
     def _read_json_body(self) -> Dict[str, Any]:
+        cached = getattr(self, "_cached_json_body", None)
+        if isinstance(cached, dict):
+            return cached
         length = int(self.headers.get("Content-Length") or "0")
         if length <= 0:
-            return {}
+            self._cached_json_body = {}
+            return self._cached_json_body
         if length > 32_768:
             raise ValueError("Request body is too large.")
         raw = self.rfile.read(length)
         payload = json.loads(raw.decode("utf-8"))
         if not isinstance(payload, dict):
             raise ValueError("JSON request body must be an object.")
-        return payload
+        self._cached_json_body = payload
+        return self._cached_json_body
 
     def _send_auth_required(self) -> None:
         body = b"Authentication required."
@@ -2235,6 +2475,20 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             return
 
         parts = [part for part in path.split("/") if part]
+
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "operations" and parts[3] == "maintenance":
+            project = parts[2]
+            if project not in projects:
+                self._send_json({"error": f"Unknown project '{project}'."}, status=404)
+                return
+            if project != "roy":
+                self._send_json({"error": f"Maintenance status is not enabled for '{project}'."}, status=404)
+                return
+            try:
+                self._send_json(get_live_dashboard_maintenance_status(project))
+            except Exception:
+                self._send_json(maintenance_fail_closed_status(project), status=503)
+            return
 
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "operations" and parts[3] == "live":
             project = parts[2]
@@ -2388,6 +2642,25 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_text(f"Unknown project '{escape(project)}'.", content_type="text/plain; charset=utf-8", status=404)
                 return
+            if project == "roy":
+                try:
+                    operations_settings = resolve_roy_operations_settings(load_project_settings(project))
+                except Exception as exc:
+                    self._send_text(
+                        f"Failed to load ROY operations settings: {escape(str(exc))}",
+                        content_type="text/plain; charset=utf-8",
+                        status=500,
+                    )
+                    return
+                if operations_settings["enabled"]:
+                    self._send_text(
+                        build_roy_operations_dashboard_html(
+                            project,
+                            maintenance_status=get_live_dashboard_maintenance_status(project, fail_closed=True),
+                        ),
+                        content_type="text/html; charset=utf-8",
+                    )
+                    return
             try:
                 board_settings = resolve_production_board_settings(load_project_settings(project))
             except Exception as exc:
@@ -2398,19 +2671,6 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 )
                 return
             if not board_settings["enabled"]:
-                if project == "roy":
-                    try:
-                        operations_settings = resolve_roy_operations_settings(load_project_settings(project))
-                    except Exception as exc:
-                        self._send_text(
-                            f"Failed to load ROY operations settings: {escape(str(exc))}",
-                            content_type="text/plain; charset=utf-8",
-                            status=500,
-                        )
-                        return
-                    if operations_settings["enabled"]:
-                        self._send_text(build_roy_operations_dashboard_html(project), content_type="text/html; charset=utf-8")
-                        return
                 self._send_text(
                     f"Production board is not enabled for '{escape(project)}'.",
                     content_type="text/plain; charset=utf-8",
@@ -2453,6 +2713,32 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
 
         projects = available_projects()
         parts = [part for part in path.split("/") if part]
+        if len(parts) >= 3 and parts[0] == "api" and parts[1] == "operations" and parts[2] == "roy":
+            try:
+                self._read_json_body()
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+                return
+            try:
+                maintenance = get_live_dashboard_maintenance_status("roy")
+            except Exception:
+                self._send_json(
+                    {
+                        "error": "Dashboard maintenance status is unavailable; write actions are temporarily blocked.",
+                        "maintenance": maintenance_fail_closed_status("roy"),
+                    },
+                    status=503,
+                )
+                return
+            if maintenance.get("active"):
+                self._send_json(
+                    {
+                        "error": "Dashboard maintenance is active; write actions are temporarily blocked.",
+                        "maintenance": maintenance,
+                    },
+                    status=423,
+                )
+                return
         if (
             len(parts) == 5
             and parts[0] == "api"

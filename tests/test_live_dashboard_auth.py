@@ -1,5 +1,6 @@
 import base64
 import http.client
+import json
 import os
 import threading
 import unittest
@@ -114,6 +115,10 @@ class LiveDashboardAuthTests(unittest.TestCase):
                 patch("live_dashboard_server.available_projects", return_value=["roy"]),
                 patch("live_dashboard_server.live_dashboard_auth_credentials", return_value=None),
                 patch(
+                    "live_dashboard_server.get_live_dashboard_maintenance_status",
+                    return_value={"active": False, "status_error": False},
+                ),
+                patch(
                     "live_dashboard_server.exclude_inventory_restock_alert",
                     return_value={"ok": True, "project": "roy", "sku": "SKU-1", "excluded": True},
                 ) as exclude,
@@ -145,6 +150,162 @@ class LiveDashboardAuthTests(unittest.TestCase):
                 self.assertEqual(200, accepted.status)
                 self.assertIn('"excluded": true', accepted_payload)
                 exclude.assert_called_once_with("roy", "SKU-1", product="Test")
+                connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_maintenance_status_route_requires_authentication_and_returns_status(self) -> None:
+        class QuietHandler(LiveDashboardHandler):
+            def log_message(self, _format, *_args) -> None:
+                return
+
+        maintenance = {
+            "marker": "dashboard-maintenance-v1",
+            "version": 1,
+            "project": "roy",
+            "active": True,
+            "status_error": False,
+            "operation_id": "gh-123-1",
+            "reason_code": "deployment",
+            "phase": "deploying",
+            "message": "Nasadzujeme aktualizáciu.",
+            "expires_at": "2026-07-22T12:15:00Z",
+            "remaining_seconds": 600,
+        }
+        server = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            with (
+                patch("live_dashboard_server.available_projects", return_value=["roy"]),
+                patch(
+                    "live_dashboard_server.live_dashboard_auth_credentials",
+                    return_value=("roy21", "secret"),
+                ),
+                patch(
+                    "live_dashboard_server.get_live_dashboard_maintenance_status",
+                    return_value=maintenance,
+                ) as get_status,
+            ):
+                unauthorized_connection = http.client.HTTPConnection(host, port, timeout=5)
+                unauthorized_connection.request("GET", "/api/operations/roy/maintenance")
+                unauthorized = unauthorized_connection.getresponse()
+                unauthorized.read()
+                self.assertEqual(401, unauthorized.status)
+                self.assertIn("Basic", unauthorized.getheader("WWW-Authenticate") or "")
+                get_status.assert_not_called()
+                unauthorized_connection.close()
+
+                authorized_connection = http.client.HTTPConnection(host, port, timeout=5)
+                authorized_connection.request(
+                    "GET",
+                    "/api/operations/roy/maintenance",
+                    headers={"Authorization": basic_header("roy21", "secret")},
+                )
+                accepted = authorized_connection.getresponse()
+                payload = json.loads(accepted.read().decode("utf-8"))
+                self.assertEqual(200, accepted.status)
+                self.assertEqual("dashboard-maintenance-v1", payload["marker"])
+                self.assertTrue(payload["active"])
+                self.assertEqual("gh-123-1", payload["operation_id"])
+                get_status.assert_called_once_with("roy")
+                authorized_connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_active_maintenance_blocks_roy_post_before_action(self) -> None:
+        class QuietHandler(LiveDashboardHandler):
+            def log_message(self, _format, *_args) -> None:
+                return
+
+        maintenance = {
+            "marker": "dashboard-maintenance-v1",
+            "project": "roy",
+            "active": True,
+            "status_error": False,
+            "operation_id": "gh-123-1",
+            "phase": "deploying",
+            "message": "Nasadzujeme aktualizáciu.",
+            "remaining_seconds": 600,
+        }
+        server = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            with (
+                patch("live_dashboard_server.available_projects", return_value=["roy"]),
+                patch("live_dashboard_server.live_dashboard_auth_credentials", return_value=None),
+                patch(
+                    "live_dashboard_server.get_live_dashboard_maintenance_status",
+                    return_value=maintenance,
+                ),
+                patch("live_dashboard_server.exclude_inventory_restock_alert") as exclude,
+            ):
+                connection = http.client.HTTPConnection(host, port, timeout=5)
+                connection.request(
+                    "POST",
+                    "/api/operations/roy/inventory-restock/SKU-1/exclude",
+                    body='{"product":"Test"}',
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-ROY-Operations-Action": "inventory-restock-preference",
+                        "Sec-Fetch-Site": "same-origin",
+                    },
+                )
+                response = connection.getresponse()
+                payload = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(423, response.status)
+                self.assertEqual("gh-123-1", payload["maintenance"]["operation_id"])
+                self.assertIn("maintenance is active", payload["error"])
+                exclude.assert_not_called()
+                connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_maintenance_state_failure_blocks_roy_post_before_action(self) -> None:
+        class QuietHandler(LiveDashboardHandler):
+            def log_message(self, _format, *_args) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            with (
+                patch("live_dashboard_server.available_projects", return_value=["roy"]),
+                patch("live_dashboard_server.live_dashboard_auth_credentials", return_value=None),
+                patch(
+                    "live_dashboard_server.get_live_dashboard_maintenance_status",
+                    side_effect=RuntimeError("S3 unavailable"),
+                ),
+                patch("live_dashboard_server.exclude_inventory_restock_alert") as exclude,
+            ):
+                connection = http.client.HTTPConnection(host, port, timeout=5)
+                connection.request(
+                    "POST",
+                    "/api/operations/roy/inventory-restock/SKU-1/exclude",
+                    body='{"product":"Test"}',
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-ROY-Operations-Action": "inventory-restock-preference",
+                        "Sec-Fetch-Site": "same-origin",
+                    },
+                )
+                response = connection.getresponse()
+                payload = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(503, response.status)
+                self.assertTrue(payload["maintenance"]["status_error"])
+                self.assertIn("status is unavailable", payload["error"])
+                exclude.assert_not_called()
                 connection.close()
         finally:
             server.shutdown()

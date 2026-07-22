@@ -70,6 +70,86 @@ jobs:
           PROJECT="$(printf '%s' "${PROJECT}" | tr '[:upper:]' '[:lower:]')"
           TASK_FAMILY="${PROJECT}-reporting-daily"
 
+          DASHBOARD_MAINTENANCE_OPERATION_ID=""
+          DASHBOARD_MAINTENANCE_KEY=""
+          DASHBOARD_MAINTENANCE_CAPABILITY_KEY=""
+          DASHBOARD_MAINTENANCE_ACTIVE=false
+          DASHBOARD_MAINTENANCE_HEARTBEAT_PID=""
+          DASHBOARD_MAINTENANCE_PARENT_PID="${BASHPID}"
+          RESTOCK_CLEANUP_REQUIRED=false
+          RESTOCK_ACTION_URL=""
+          RESTOCK_SENTINEL=""
+          AUTH_PASSWORD=""
+
+          maintenance_controller() {
+            local command="$1"
+            shift
+            python scripts/dashboard_maintenance_state.py "${command}" \
+              --project "${PROJECT}" \
+              --bucket "${REPORT_S3_BUCKET_VALUE}" \
+              --key "${DASHBOARD_MAINTENANCE_KEY}" \
+              --region "${AWS_REGION}" \
+              "$@"
+          }
+
+          cleanup_restock_sentinel() {
+            if [[ "${RESTOCK_CLEANUP_REQUIRED:-false}" != "true" || -z "${RESTOCK_ACTION_URL:-}" ]]; then
+              return 0
+            fi
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if curl -fsS --max-time 120 \
+                -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+                -H 'Content-Type: application/json' \
+                -H 'X-ROY-Operations-Action: inventory-restock-preference' \
+                --data '{}' \
+                "${RESTOCK_ACTION_URL}/restore" \
+                -o /tmp/roy-restock-restore.json; then
+                RESTOCK_CLEANUP_REQUIRED=false
+                return 0
+              fi
+              sleep $((attempt * 3))
+            done
+            echo "Failed to restore production restock sentinel ${RESTOCK_SENTINEL}" >&2
+            return 1
+          }
+
+          stop_dashboard_maintenance_heartbeat() {
+            if [[ -n "${DASHBOARD_MAINTENANCE_HEARTBEAT_PID:-}" ]]; then
+              kill "${DASHBOARD_MAINTENANCE_HEARTBEAT_PID}" >/dev/null 2>&1 || true
+              wait "${DASHBOARD_MAINTENANCE_HEARTBEAT_PID}" >/dev/null 2>&1 || true
+              DASHBOARD_MAINTENANCE_HEARTBEAT_PID=""
+            fi
+          }
+
+          cleanup_dashboard_deploy() {
+            local exit_code=$?
+            trap - EXIT INT TERM
+            set +e
+            stop_dashboard_maintenance_heartbeat
+            if [[ "${DASHBOARD_MAINTENANCE_ACTIVE:-false}" == "true" ]]; then
+              local outcome="failed"
+              [[ "${exit_code}" -ne 0 ]] || outcome="complete"
+              if ! maintenance_controller stop \
+                --operation-id "${DASHBOARD_MAINTENANCE_OPERATION_ID}" \
+                --outcome "${outcome}" \
+                --actor "github-actions:${GITHUB_ACTOR}"; then
+                echo "Failed to clear ROY dashboard maintenance lease; its finite TTL remains the safety net." >&2
+                [[ "${exit_code}" -ne 0 ]] || exit_code=1
+              else
+                DASHBOARD_MAINTENANCE_ACTIVE=false
+              fi
+            fi
+            if ! cleanup_restock_sentinel; then
+              [[ "${exit_code}" -ne 0 ]] || exit_code=1
+            fi
+            exit "${exit_code}"
+          }
+
+          trap cleanup_dashboard_deploy EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
           IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
           IMAGE_DIGEST="$(aws ecr describe-images \
@@ -370,6 +450,176 @@ jobs:
               '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
           fi
 
+          if [[ "${PROJECT}" == "roy" ]]; then
+            DASHBOARD_MAINTENANCE_OPERATION_ID="gha:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
+            DASHBOARD_MAINTENANCE_KEY="${REPORT_S3_PREFIX_VALUE}/operations/maintenance.json"
+            DASHBOARD_MAINTENANCE_CAPABILITY_KEY="${REPORT_S3_PREFIX_VALUE}/operations/maintenance-capability-v1.json"
+            MAINTENANCE_CAPABILITY_PRESENT=false
+            if aws s3api get-object \
+              --bucket "${REPORT_S3_BUCKET_VALUE}" \
+              --key "${DASHBOARD_MAINTENANCE_CAPABILITY_KEY}" \
+              --region "${AWS_REGION}" \
+              /tmp/roy-maintenance-capability.json \
+              >/tmp/roy-maintenance-capability-metadata.json 2>/tmp/roy-maintenance-capability-error.log; then
+              python - <<'PY'
+          import json
+
+          capability = json.load(open("/tmp/roy-maintenance-capability.json", encoding="utf-8"))
+          assert capability.get("marker") == "dashboard-maintenance-capability-v1"
+          assert capability.get("project") == "roy"
+          PY
+              MAINTENANCE_CAPABILITY_PRESENT=true
+            elif grep -Eqi '(NoSuchKey|Not Found|404)' /tmp/roy-maintenance-capability-error.log; then
+              echo "ROY_DASHBOARD_MAINTENANCE_CAPABILITY:bootstrap-required"
+            else
+              cat /tmp/roy-maintenance-capability-error.log >&2
+              echo "Unable to determine ROY maintenance capability state safely." >&2
+              exit 1
+            fi
+
+            CURRENT_MAINTENANCE_SERVICE_ARN="$(aws apprunner list-services \
+              --region "${AWS_REGION}" \
+              --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn | [0]" \
+              --output text)"
+            CURRENT_MAINTENANCE_SERVICE_URL=""
+            CURRENT_MAINTENANCE_AUTH_USER="${AUTH_USER}"
+            if [[ "${CURRENT_MAINTENANCE_SERVICE_ARN}" != "None" && -n "${CURRENT_MAINTENANCE_SERVICE_ARN}" ]]; then
+              CURRENT_MAINTENANCE_SERVICE_URL="https://$(aws apprunner describe-service \
+                --service-arn "${CURRENT_MAINTENANCE_SERVICE_ARN}" \
+                --region "${AWS_REGION}" \
+                --query 'Service.ServiceUrl' \
+                --output text)"
+              RESOLVED_MAINTENANCE_AUTH_USER="$(aws apprunner describe-service \
+                --service-arn "${CURRENT_MAINTENANCE_SERVICE_ARN}" \
+                --region "${AWS_REGION}" \
+                --query 'Service.SourceConfiguration.ImageRepository.ImageConfiguration.RuntimeEnvironmentVariables.LIVE_DASHBOARD_AUTH_USER' \
+                --output text)"
+              if [[ -n "${RESOLVED_MAINTENANCE_AUTH_USER}" && "${RESOLVED_MAINTENANCE_AUTH_USER}" != "None" ]]; then
+                CURRENT_MAINTENANCE_AUTH_USER="${RESOLVED_MAINTENANCE_AUTH_USER}"
+              fi
+            fi
+            MAINTENANCE_AUTH_PASSWORD="$(aws ssm get-parameter \
+              --name "/biznisweb/live-dashboard/roy/basic-auth-password" \
+              --with-decryption \
+              --region "${AWS_REGION}" \
+              --query 'Parameter.Value' \
+              --output text 2>/dev/null || true)"
+            if [[ -n "${MAINTENANCE_AUTH_PASSWORD}" ]]; then
+              echo "::add-mask::${MAINTENANCE_AUTH_PASSWORD}"
+            fi
+
+            echo "MAINTENANCE_PRE_DEPLOY_HARD_GATE_CONTEXT project=${PROJECT}"
+            echo "instance-id=N/A (AWS App Runner managed service; Fargate task not started yet)"
+            echo "private-ip=N/A (AWS App Runner managed service; Fargate task not started yet)"
+            echo "service-name=${SERVICE_NAME}"
+            echo "service-arn=${CURRENT_MAINTENANCE_SERVICE_ARN:-pending-create}"
+            echo "maintenance-state-path=s3://${REPORT_S3_BUCKET_VALUE}/${DASHBOARD_MAINTENANCE_KEY}"
+            echo "maintenance-status-path=${CURRENT_MAINTENANCE_SERVICE_URL:-pending-service-url}/api/operations/roy/maintenance"
+            echo "production-board-path=${CURRENT_MAINTENANCE_SERVICE_URL:-pending-service-url}/production/roy"
+
+            if [[ "${MAINTENANCE_CAPABILITY_PRESENT}" != "true" && "${SKIP_ARTIFACT_REFRESH:-false}" != "true" ]]; then
+              echo "The one-time ROY maintenance bootstrap must use skip_artifact_refresh=true before a normal protected deploy." >&2
+              exit 1
+            fi
+            DASHBOARD_MAINTENANCE_ACTIVE=true
+            if maintenance_controller start \
+              --operation-id "${DASHBOARD_MAINTENANCE_OPERATION_ID}" \
+              --reason-code deployment \
+              --phase starting \
+              --actor "github-actions:${GITHUB_ACTOR}" \
+              --ttl-seconds 900 \
+              --max-lifetime-seconds 9000 \
+              --source-sha "${GITHUB_SHA}" \
+              --image-digest "${IMAGE_DIGEST}" \
+              --message "Na dashboarde prebiehajú úpravy. Práve nasadzujeme alebo aktualizujeme dashboard. Prosíme o strpenie a dočasne ho nepoužívajte. Stránka sa odblokuje automaticky po dokončení." \
+              >/tmp/roy-maintenance-start.json; then
+              echo "ROY_DASHBOARD_MAINTENANCE_LEASE_ACQUIRED:${DASHBOARD_MAINTENANCE_OPERATION_ID}"
+            else
+              echo "Failed to acquire the ROY dashboard maintenance lease." >&2
+              exit 1
+            fi
+            python - "${DASHBOARD_MAINTENANCE_OPERATION_ID}" <<'PY'
+          import json
+          import sys
+
+          expected_owner = sys.argv[1]
+          state = json.load(open("/tmp/roy-maintenance-start.json", encoding="utf-8"))
+          assert state.get("marker") == "dashboard-maintenance-v1"
+          assert state.get("active") is True
+          assert state.get("operation_id") == expected_owner
+          assert int(state.get("remaining_seconds") or 0) > 0
+          print(f"ROY_DASHBOARD_MAINTENANCE_S3_ACTIVE_OK:{expected_owner}")
+          PY
+
+            dashboard_maintenance_heartbeat() {
+              local failures=0
+              while sleep 180; do
+                if maintenance_controller renew \
+                  --operation-id "${DASHBOARD_MAINTENANCE_OPERATION_ID}" \
+                  --phase deploying \
+                  --actor "github-actions:${GITHUB_ACTOR}" \
+                  --ttl-seconds 900 \
+                  >/tmp/roy-maintenance-heartbeat.json; then
+                  failures=0
+                  echo "ROY_DASHBOARD_MAINTENANCE_HEARTBEAT_OK:${DASHBOARD_MAINTENANCE_OPERATION_ID}"
+                else
+                  failures=$((failures + 1))
+                  echo "ROY dashboard maintenance heartbeat failed (${failures}/2)." >&2
+                  if (( failures >= 2 )); then
+                    kill -TERM "${DASHBOARD_MAINTENANCE_PARENT_PID}" >/dev/null 2>&1 || true
+                    return 1
+                  fi
+                fi
+              done
+            }
+            dashboard_maintenance_heartbeat &
+            DASHBOARD_MAINTENANCE_HEARTBEAT_PID=$!
+
+            if [[ "${MAINTENANCE_CAPABILITY_PRESENT}" == "true" ]]; then
+              if [[ -z "${CURRENT_MAINTENANCE_SERVICE_URL}" || -z "${MAINTENANCE_AUTH_PASSWORD}" ]]; then
+                echo "Existing ROY maintenance-capable service or its Basic Auth secret could not be resolved." >&2
+                exit 1
+              fi
+              MAINTENANCE_LIVE_READY=false
+              for _ in $(seq 1 12); do
+                if curl -fsS --max-time 60 \
+                    -u "${CURRENT_MAINTENANCE_AUTH_USER}:${MAINTENANCE_AUTH_PASSWORD}" \
+                    "${CURRENT_MAINTENANCE_SERVICE_URL}/api/operations/roy/maintenance" \
+                    -o /tmp/roy-current-maintenance.json \
+                  && curl -fsS --max-time 60 \
+                    -u "${CURRENT_MAINTENANCE_AUTH_USER}:${MAINTENANCE_AUTH_PASSWORD}" \
+                    "${CURRENT_MAINTENANCE_SERVICE_URL}/production/roy" \
+                    -o /tmp/roy-current-maintenance.html \
+                  && python - "${DASHBOARD_MAINTENANCE_OPERATION_ID}" <<'PY'
+          import json
+          import sys
+
+          expected_owner = sys.argv[1]
+          state = json.load(open("/tmp/roy-current-maintenance.json", encoding="utf-8"))
+          assert state.get("marker") == "dashboard-maintenance-v1"
+          assert state.get("active") is True
+          assert state.get("operation_id") == expected_owner
+          PY
+                then
+                  if grep -q 'data-marker="roy-maintenance-overlay"' /tmp/roy-current-maintenance.html \
+                    && grep -q 'data-maintenance-active="true"' /tmp/roy-current-maintenance.html \
+                    && grep -q 'inert aria-hidden="true"' /tmp/roy-current-maintenance.html; then
+                    MAINTENANCE_LIVE_READY=true
+                    break
+                  fi
+                fi
+                sleep 5
+              done
+              if [[ "${MAINTENANCE_LIVE_READY}" != "true" ]]; then
+                echo "The current ROY runtime did not prove its blocking maintenance overlay; refusing runtime mutation." >&2
+                exit 1
+              fi
+              echo "CURRENT_APP_RUNNER_MAINTENANCE_ACTIVE_OK:${DASHBOARD_MAINTENANCE_OPERATION_ID}:${CURRENT_MAINTENANCE_SERVICE_URL}"
+            else
+              echo "CURRENT_APP_RUNNER_MAINTENANCE_BOOTSTRAP_ALLOWED:skip_artifact_refresh=true"
+            fi
+          fi
+
           if [[ -n "${REPORT_S3_BUCKET_VALUE}" ]]; then
             SOURCE_TASK_ROLE_ARN="$(python - <<'PY'
           import json
@@ -628,6 +878,7 @@ jobs:
               exit 1
             fi
             export CONTAINER_NAME PROJECT REPORT_S3_BUCKET_VALUE REPORT_S3_PREFIX_VALUE
+            export DASHBOARD_MAINTENANCE_OPERATION_ID
             python - <<'PY' > refresh-overrides.json
           import json
           import os
@@ -642,6 +893,7 @@ jobs:
                           {"name": "REPORT_S3_PREFIX", "value": os.environ["REPORT_S3_PREFIX_VALUE"]},
                           {"name": "REPORT_SKIP_INVOICES", "value": "true"},
                           {"name": "SKIP_ARTIFACT_REFRESH", "value": os.environ.get("SKIP_ARTIFACT_REFRESH", "false")},
+                          {"name": "EXPECTED_DASHBOARD_MAINTENANCE_OPERATION_ID", "value": os.environ.get("DASHBOARD_MAINTENANCE_OPERATION_ID", "")},
                       ],
                   }
               ]
@@ -666,6 +918,14 @@ jobs:
               RUN_ARGS+=(--platform-version "${PLATFORM_VERSION}")
             fi
             REFRESH_STARTED_EPOCH="$(date -u +%s)"
+            if [[ "${PROJECT}" == "roy" ]]; then
+              maintenance_controller renew \
+                --operation-id "${DASHBOARD_MAINTENANCE_OPERATION_ID}" \
+                --phase refreshing \
+                --actor "github-actions:${GITHUB_ACTOR}" \
+                --ttl-seconds 900 \
+                >/tmp/roy-maintenance-refreshing.json
+            fi
             echo "LIVE_ARTIFACT_GENERATION_GATE_START:${PROJECT}:${REFRESH_STARTED_EPOCH}"
             aws ecs run-task "${RUN_ARGS[@]}" > refresh-run-task.json
             REFRESH_TASK_ARN="$(python - <<'PY'
@@ -754,7 +1014,8 @@ jobs:
                 --region "${AWS_REGION}" \
                 --query 'events[].message' \
                 --output text > refresh-task.log || true
-              if grep -q "LIVE_ARTIFACT_MARKER_OK" refresh-task.log; then
+              if grep -q "LIVE_ARTIFACT_MARKER_OK" refresh-task.log \
+                && { [[ "${PROJECT}" != "roy" ]] || grep -q "LOCALHOST_DASHBOARD_MAINTENANCE_OK:roy:active=true:owner=${DASHBOARD_MAINTENANCE_OPERATION_ID}" refresh-task.log; }; then
                 break
               fi
               sleep 5
@@ -765,6 +1026,9 @@ jobs:
               exit 1
             fi
             grep -q "LIVE_ARTIFACT_MARKER_OK" refresh-task.log
+            if [[ "${PROJECT}" == "roy" ]]; then
+              grep -q "LOCALHOST_DASHBOARD_MAINTENANCE_OK:roy:active=true:owner=${DASHBOARD_MAINTENANCE_OPERATION_ID}" refresh-task.log
+            fi
             LIVE_ARTIFACT_FILENAMES=(
               report_latest.html
               dashboard_payload_latest.json
@@ -1363,6 +1627,15 @@ jobs:
           echo "accounting-api-path=https://${CURRENT_SERVICE_URL:-pending-service-url}/api/${PROJECT}/latest?period=full"
           echo "accounting-report-path=https://${CURRENT_SERVICE_URL:-pending-service-url}/report/${PROJECT}?period=full"
 
+          if [[ "${PROJECT}" == "roy" ]]; then
+            maintenance_controller renew \
+              --operation-id "${DASHBOARD_MAINTENANCE_OPERATION_ID}" \
+              --phase deploying \
+              --actor "github-actions:${GITHUB_ACTOR}" \
+              --ttl-seconds 900 \
+              >/tmp/roy-maintenance-deploying.json
+          fi
+
           if [[ "${SERVICE_ARN}" == "None" || -z "${SERVICE_ARN}" ]]; then
             cat > create-service.json <<JSON
           {
@@ -1497,12 +1770,108 @@ jobs:
             curl "$@"
           }
 
+          if [[ "${PROJECT}" == "roy" ]]; then
+            maintenance_controller renew \
+              --operation-id "${DASHBOARD_MAINTENANCE_OPERATION_ID}" \
+              --phase verifying \
+              --actor "github-actions:${GITHUB_ACTOR}" \
+              --ttl-seconds 900 \
+              >/tmp/roy-maintenance-verifying.json
+            curl_with_retry -fsS --max-time 60 \
+              -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+              "${SERVICE_URL}/api/operations/roy/maintenance" \
+              -o /tmp/roy-maintenance-live-active.json
+          fi
           curl_with_retry -fsS "${SERVICE_URL}/health" > /tmp/health.json
           curl_with_retry -fsS -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/production/${PROJECT}" -o /tmp/production-board.html
           if [[ "${PROJECT}" == "roy" ]]; then
             grep -q "roy-operations-dashboard" /tmp/production-board.html
             grep -q "Executive KPI deck" /tmp/production-board.html
             grep -q "Vysklad. PDF" /tmp/production-board.html
+            grep -q 'data-marker="roy-maintenance-overlay"' /tmp/production-board.html
+            grep -q 'data-maintenance-active="true"' /tmp/production-board.html
+            grep -q 'inert aria-hidden="true"' /tmp/production-board.html
+            python - "${DASHBOARD_MAINTENANCE_OPERATION_ID}" <<'PY'
+          import json
+          import sys
+
+          expected_owner = sys.argv[1]
+          state = json.load(open("/tmp/roy-maintenance-live-active.json", encoding="utf-8"))
+          assert state.get("marker") == "dashboard-maintenance-v1"
+          assert state.get("active") is True
+          assert state.get("status_error") is False
+          assert state.get("operation_id") == expected_owner
+          assert int(state.get("remaining_seconds") or 0) > 0
+          print(f"APP_RUNNER_MAINTENANCE_ACTIVE_OK:{expected_owner}")
+          PY
+            MAINTENANCE_BLOCK_TEST_SKU="CODEX-MAINTENANCE-BLOCK-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            MAINTENANCE_BLOCK_STATUS="$(curl -sS --max-time 60 \
+              -o /tmp/roy-maintenance-blocked-post.json \
+              -w '%{http_code}' \
+              -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+              -H 'Content-Type: application/json' \
+              -H 'X-ROY-Operations-Action: inventory-restock-preference' \
+              --data "{\"product\":\"${MAINTENANCE_BLOCK_TEST_SKU}\"}" \
+              "${SERVICE_URL}/api/operations/roy/inventory-restock/${MAINTENANCE_BLOCK_TEST_SKU}/exclude")"
+            if [[ "${MAINTENANCE_BLOCK_STATUS}" != "423" ]]; then
+              cat /tmp/roy-maintenance-blocked-post.json >&2
+              echo "ROY maintenance mutation guard returned HTTP ${MAINTENANCE_BLOCK_STATUS}, expected 423." >&2
+              exit 1
+            fi
+            python - <<'PY'
+          import json
+
+          payload = json.load(open("/tmp/roy-maintenance-blocked-post.json", encoding="utf-8"))
+          assert payload.get("maintenance", {}).get("active") is True
+          print("APP_RUNNER_MAINTENANCE_WRITE_BLOCK_OK:http=423")
+          PY
+
+            if [[ "${MAINTENANCE_CAPABILITY_PRESENT}" != "true" ]]; then
+              python - "${GITHUB_SHA}" "${IMAGE_DIGEST}" <<'PY' > /tmp/roy-maintenance-capability-new.json
+          import datetime as dt
+          import json
+          import sys
+
+          source_sha, image_digest = sys.argv[1:]
+          print(json.dumps({
+              "marker": "dashboard-maintenance-capability-v1",
+              "version": 1,
+              "project": "roy",
+              "enabled_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "source_sha": source_sha,
+              "image_digest": image_digest,
+          }, ensure_ascii=False, indent=2))
+          PY
+              if aws s3api put-object \
+                --bucket "${REPORT_S3_BUCKET_VALUE}" \
+                --key "${DASHBOARD_MAINTENANCE_CAPABILITY_KEY}" \
+                --body /tmp/roy-maintenance-capability-new.json \
+                --content-type 'application/json; charset=utf-8' \
+                --server-side-encryption AES256 \
+                --if-none-match '*' \
+                --region "${AWS_REGION}" \
+                >/tmp/roy-maintenance-capability-put.json 2>/tmp/roy-maintenance-capability-put-error.log; then
+                echo "ROY_DASHBOARD_MAINTENANCE_CAPABILITY_ENABLED:${DASHBOARD_MAINTENANCE_CAPABILITY_KEY}"
+              elif grep -Eqi '(PreconditionFailed|ConditionalRequestConflict|409|412)' /tmp/roy-maintenance-capability-put-error.log; then
+                aws s3api get-object \
+                  --bucket "${REPORT_S3_BUCKET_VALUE}" \
+                  --key "${DASHBOARD_MAINTENANCE_CAPABILITY_KEY}" \
+                  --region "${AWS_REGION}" \
+                  /tmp/roy-maintenance-capability-raced.json \
+                  >/tmp/roy-maintenance-capability-raced-metadata.json
+                python - <<'PY'
+          import json
+
+          capability = json.load(open("/tmp/roy-maintenance-capability-raced.json", encoding="utf-8"))
+          assert capability.get("marker") == "dashboard-maintenance-capability-v1"
+          assert capability.get("project") == "roy"
+          PY
+                echo "ROY_DASHBOARD_MAINTENANCE_CAPABILITY_ENABLED:${DASHBOARD_MAINTENANCE_CAPABILITY_KEY}:already"
+              else
+                cat /tmp/roy-maintenance-capability-put-error.log >&2
+                exit 1
+              fi
+            fi
             curl_with_retry -fsS --max-time 240 -u "${AUTH_USER}:${AUTH_PASSWORD}" "${SERVICE_URL}/api/operations/roy/live?refresh=1" -o /tmp/production-board-api.json
             curl_with_retry -fsS --max-time 240 -D /tmp/roy-picking-lists.headers \
               -u "${AUTH_USER}:${AUTH_PASSWORD}" \
@@ -1610,28 +1979,53 @@ jobs:
               f"picking_pdf_bytes={os.path.getsize('/tmp/roy-picking-lists.pdf')}"
           )
           PY
+            stop_dashboard_maintenance_heartbeat
+            maintenance_controller stop \
+              --operation-id "${DASHBOARD_MAINTENANCE_OPERATION_ID}" \
+              --outcome complete \
+              --actor "github-actions:${GITHUB_ACTOR}" \
+              >/tmp/roy-maintenance-stop.json
+            MAINTENANCE_LIVE_INACTIVE=false
+            for _ in $(seq 1 12); do
+              if curl -fsS --max-time 60 \
+                  -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+                  "${SERVICE_URL}/api/operations/roy/maintenance" \
+                  -o /tmp/roy-maintenance-live-inactive.json \
+                && curl -fsS --max-time 60 \
+                  -u "${AUTH_USER}:${AUTH_PASSWORD}" \
+                  "${SERVICE_URL}/production/roy" \
+                  -o /tmp/roy-maintenance-inactive.html \
+                && python - "${DASHBOARD_MAINTENANCE_OPERATION_ID}" <<'PY'
+          import json
+          import sys
+
+          expected_owner = sys.argv[1]
+          state = json.load(open("/tmp/roy-maintenance-live-inactive.json", encoding="utf-8"))
+          assert state.get("marker") == "dashboard-maintenance-v1"
+          assert state.get("active") is False
+          assert state.get("status_error") is False
+          assert state.get("operation_id") == expected_owner
+          PY
+              then
+                if grep -q 'data-marker="roy-maintenance-overlay"' /tmp/roy-maintenance-inactive.html \
+                  && grep -q 'data-maintenance-active="false"' /tmp/roy-maintenance-inactive.html \
+                  && grep -q 'id="maintenanceOverlay".* hidden' /tmp/roy-maintenance-inactive.html; then
+                  MAINTENANCE_LIVE_INACTIVE=true
+                  break
+                fi
+              fi
+              sleep 5
+            done
+            if [[ "${MAINTENANCE_LIVE_INACTIVE}" != "true" ]]; then
+              echo "The ROY runtime did not prove that maintenance was cleared safely." >&2
+              exit 1
+            fi
+            DASHBOARD_MAINTENANCE_ACTIVE=false
+            echo "APP_RUNNER_MAINTENANCE_INACTIVE_OK:${DASHBOARD_MAINTENANCE_OPERATION_ID}"
+
             RESTOCK_SENTINEL="CODEX-RESTOCK-SMOKE-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             RESTOCK_ACTION_URL="${SERVICE_URL}/api/operations/roy/inventory-restock/${RESTOCK_SENTINEL}"
-
-            cleanup_restock_sentinel() {
-              local attempt
-              for attempt in 1 2 3 4 5; do
-                if curl -fsS --max-time 120 \
-                  -u "${AUTH_USER}:${AUTH_PASSWORD}" \
-                  -H 'Content-Type: application/json' \
-                  -H 'X-ROY-Operations-Action: inventory-restock-preference' \
-                  --data '{}' \
-                  "${RESTOCK_ACTION_URL}/restore" \
-                  -o /tmp/roy-restock-restore.json; then
-                  return 0
-                fi
-                sleep $((attempt * 3))
-              done
-              echo "Failed to restore production restock sentinel ${RESTOCK_SENTINEL}" >&2
-              return 1
-            }
-
-            trap 'cleanup_restock_sentinel || true' EXIT
+            RESTOCK_CLEANUP_REQUIRED=true
             curl_with_retry -fsS --max-time 120 \
               -u "${AUTH_USER}:${AUTH_PASSWORD}" \
               -H 'Content-Type: application/json' \
@@ -1655,7 +2049,6 @@ jobs:
           )
           PY
             cleanup_restock_sentinel
-            trap - EXIT
             curl_with_retry -fsS --max-time 240 \
               -u "${AUTH_USER}:${AUTH_PASSWORD}" \
               "${SERVICE_URL}/api/operations/roy/live" \
