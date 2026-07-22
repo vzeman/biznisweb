@@ -60,6 +60,10 @@ PY
     -o /tmp/local-production-board.html
   if [[ "${PROJECT}" == "roy" ]]; then
     production_api_path="/api/operations/roy/live?refresh=1"
+    curl -fsS --max-time 60 \
+      -u "${local_auth_user}:${local_auth_password}" \
+      "http://127.0.0.1:8080/api/operations/roy/maintenance" \
+      -o /tmp/local-dashboard-maintenance.json
   else
     production_api_path="/api/production/${PROJECT}/live?refresh=1"
   fi
@@ -80,6 +84,7 @@ PY
 
   python - "${PROJECT}" <<'PY'
 import json
+import os
 import sys
 
 project = sys.argv[1]
@@ -93,6 +98,23 @@ expected_board_marker = "roy-operations-dashboard" if project == "roy" else f"{p
 assert expected_board_marker in production_html, f"Local production board marker missing for {project}"
 assert production_api.get("project") == project, f"Local production API served the wrong project for {project}"
 if project == "roy":
+    maintenance = json.load(open("/tmp/local-dashboard-maintenance.json", encoding="utf-8"))
+    assert maintenance.get("marker") == "dashboard-maintenance-v1", "Maintenance marker missing"
+    assert isinstance(maintenance.get("active"), bool), "Maintenance active flag missing"
+    assert "roy-maintenance-overlay" in production_html, "Maintenance overlay missing"
+    assert "dashboard-maintenance-v1" in production_html, "Maintenance polling marker missing"
+    assert 'id="dashboardRoot"' in production_html, "Maintenance inert root missing"
+    expected_operation_id = os.getenv("EXPECTED_DASHBOARD_MAINTENANCE_OPERATION_ID", "").strip()
+    if expected_operation_id:
+        assert maintenance.get("active") is True, "Maintenance lease is not active on the candidate host"
+        assert maintenance.get("operation_id") == expected_operation_id, "Candidate host sees the wrong maintenance owner"
+        assert 'data-maintenance-active="true"' in production_html, "Candidate HTML is not locked on first paint"
+        assert 'inert aria-hidden="true"' in production_html, "Candidate dashboard root is not inert"
+    print(
+        "LOCALHOST_DASHBOARD_MAINTENANCE_OK:"
+        f"{project}:active={str(bool(maintenance.get('active'))).lower()}:"
+        f"owner={maintenance.get('operation_id') or 'none'}"
+    )
     inventory = production_api.get("inventory") or {}
     inventory_summary = inventory.get("summary") or {}
     assert inventory_summary.get("stockout_priority_model_version") == "expected-shortage-cm2-v1"

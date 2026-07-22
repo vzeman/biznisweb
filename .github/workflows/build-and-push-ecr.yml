@@ -22,6 +22,7 @@ on:
       - daily_report_runner.py
       - dashboard_modern.py
       - live_dashboard_server.py
+      - live_dashboard_maintenance.py
       - production_board.py
       - roy_operations_dashboard.py
       - roy_picking_lists_pdf.py
@@ -36,6 +37,7 @@ on:
       - tests/**
       - scripts/reporting_qa_smoke.py
       - scripts/live_dashboard_refresh_gate.sh
+      - scripts/dashboard_maintenance_state.py
       - .github/workflows/build-and-push-ecr.yml
 
 env:
@@ -68,7 +70,7 @@ jobs:
 
       - name: Invoice automation regression test
         run: |
-          python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_creditnote_export tests.test_money_s3_invoice_export tests.test_monthly_accounting_workflow tests.test_creditnote_storno_guard tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_live_dashboard_s3_fallback tests.test_live_dashboard_refresh_gate tests.test_dashboard_modern tests.test_inventory_demand_model tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
+          python -m unittest tests.test_invoice_generation tests.test_unpaid_order_cancellation tests.test_creditnote_export tests.test_money_s3_invoice_export tests.test_monthly_accounting_workflow tests.test_creditnote_storno_guard tests.test_roy_picking_lists_pdf tests.test_reporting_calculation_fixes tests.test_production_board tests.test_live_dashboard_auth tests.test_live_dashboard_mobile tests.test_live_dashboard_s3_fallback tests.test_live_dashboard_refresh_gate tests.test_live_dashboard_maintenance tests.test_dashboard_modern tests.test_inventory_demand_model tests.test_roy_operations_dashboard tests.test_roy_inventory_model tests.test_reporting_product_identity
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
