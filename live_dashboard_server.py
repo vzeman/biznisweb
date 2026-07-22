@@ -1211,6 +1211,8 @@ def build_roy_operations_dashboard_html(
     .badge.warn { color:var(--amber); background:var(--amber-bg); }
     .badge.bad { color:var(--red); background:var(--red-bg); }
     .badge.info { color:var(--blue); background:var(--blue-bg); }
+    .print-cell { display:grid; gap:6px; justify-items:start; min-width:132px; }
+    a.order-print-button { padding:0 8px; font-size:12px; white-space:nowrap; }
     .table-wrap { overflow:auto; }
     table { width:100%; min-width:980px; border-collapse:collapse; }
     th,td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:13px; }
@@ -1934,11 +1936,25 @@ def build_roy_operations_dashboard_html(
       const printedAt = text(order.picking_printed_at, '');
       return `<span class="badge warn">vytlačené</span>${printedAt ? `<div class="muted">${safe(printedAt)}</div>` : ''}`;
     }
+    function individualPickingPrintLink(order) {
+      const orderNum = String(order.order_num || order.id || '').trim();
+      if (!orderNum) return '';
+      const pdfUrl = new URL(`/api/operations/${encodeURIComponent(project)}/picking-lists.pdf`, window.location.origin);
+      pdfUrl.searchParams.set('refresh', '1');
+      pdfUrl.searchParams.set('include_printed', '1');
+      pdfUrl.searchParams.set('order_num', orderNum);
+      const label = order.picking_printed ? 'Vytlačiť znova' : 'Vytlačiť';
+      const href = `${pdfUrl.pathname}${pdfUrl.search}`;
+      return `<a class="button order-print-button" data-print-order="${safe(orderNum)}" href="${safe(href)}" target="_blank" rel="noopener" aria-label="${safe(`${label} objednávku ${orderNum}`)}">${safe(label)}</a>`;
+    }
+    function pickingPrintCell(order) {
+      return `<div class="print-cell">${pickingPrintBadge(order)}${individualPickingPrintLink(order)}</div>`;
+    }
     function orderRow(order, includeDate=false) {
       return `<tr>
         <td><strong class="mono">${safe(order.order_num)}</strong>${includeDate ? `<div class="muted">${safe(order.purchase_at)}</div>` : ''}</td>
         <td><span class="badge ${order.fulfillment_reason === 'paid_online' ? 'good' : 'warn'}">${safe(order.status)}</span></td>
-        <td>${pickingPrintBadge(order)}</td>
+        <td>${pickingPrintCell(order)}</td>
         <td>${safe((order.payment || {}).title)}</td>
         <td>${safe((order.shipping || {}).title)}</td>
         <td>${safe(order.sum)}</td>

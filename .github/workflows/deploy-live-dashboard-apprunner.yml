@@ -1938,6 +1938,8 @@ jobs:
           ]
           assert priority_pairs == sorted(priority_pairs, reverse=True), "Live stock alerts are not impact-sorted"
           assert "/api/operations/roy/picking-lists.pdf" in html, "Picking-list PDF link missing"
+          assert "data-print-order" in html, "Individual picking-list print action missing in live UI"
+          assert "include_printed" in html, "Individual picking-list reprint mode missing in live UI"
           assert "data-restock-enabled" in html, "Restock preference checkbox missing in live UI"
           assert "inventory-restock-preference" in html, "Restock preference action marker missing in live UI"
           assert "Raw → baseline" in html, "Smart demand comparison missing in live UI"
