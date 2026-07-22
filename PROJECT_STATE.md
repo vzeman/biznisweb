@@ -61,6 +61,15 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY individual picking-list reprint control is implemented locally on `codex/roy-individual-picking-print` (2026-07-22):
+  - incident diagnosis for order `2677003601` confirmed that BizniWeb still exposed the order as paid and fulfillable, while the ROY operations state already marked it printed in batch `picking-20260720123200`; the default picking PDF therefore excluded it even though a preview PDF could still render it
+  - every fulfillable order row now renders its own read-only `Vytlačiť` action; already marked rows render `Vytlačiť znova`
+  - the individual action requests only that order number with `include_printed=1`, so an intentional reprint bypasses the historical print-state filter without clearing or mutating S3 operations state
+  - the existing batch PDF and explicit `Označiť vytlačené` flow remain unchanged
+  - local verification: Python compile passed; ROY operations/PDF/auth/maintenance focused suite passed (`67` tests); full suite passed (`267` tests); reporting QA, security CI, environment contract, workflow YAML, generated inline JavaScript, and `git diff --check` passed
+  - deployment is not complete yet
+  - Next exact step: complete review and broader checks, merge through PR, build the exact merge image, deploy ROY with `skip_artifact_refresh=true`, require the maintenance/Fargate localhost marker chain before App Runner UI/API verification, then prove both a new-order `Vytlačiť` link and printed-order `Vytlačiť znova` link generate a one-order PDF
+
 - ROY blocking dashboard maintenance mode is merged, deployed, and live (2026-07-22):
   - `/production/roy` now renders a server-side full-screen Slovak maintenance overlay before first paint, marks the dashboard root `inert`/`aria-hidden`, prevents pointer and keyboard use, and polls the authenticated same-origin status every 5 seconds; a 4-second request timeout and visibility/focus rechecks fail closed for already-open tabs
   - the maintenance source of truth is the separate `daily-reports/roy-sk/operations/maintenance.json` S3 object, isolated from business operations state; active leases require a versioned marker, owner, reason, phase, valid timestamps, a maximum 15-minute renewable TTL, and a 150-minute absolute lifetime

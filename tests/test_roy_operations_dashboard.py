@@ -548,11 +548,19 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                 "R-1": {"order_num": "R-1", "printed_at": "2026-05-28T10:00:00Z"},
             },
         }
+        state_before = copy.deepcopy(state)
 
         selected = select_picking_orders_for_print(orders, state, order_nums=["R-1", "R-2", "R-3"])
+        individual_reprint = select_picking_orders_for_print(
+            orders,
+            state,
+            order_nums=["R-1"],
+            include_printed=True,
+        )
 
         self.assertEqual(["R-2", "R-3"], [row["order_num"] for row in selected])
-        self.assertEqual({"R-1"}, set(state["printed_picking_orders"]))
+        self.assertEqual(["R-1"], [row["order_num"] for row in individual_reprint])
+        self.assertEqual(state_before, state)
 
     def test_operations_snapshot_marks_active_printed_orders(self) -> None:
         order_snapshot = {
@@ -584,6 +592,16 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("/api/operations/roy/picking-lists.pdf", html)
         self.assertIn("/api/operations/${encodeURIComponent(project)}/picking-lists/printed", html)
         self.assertIn("Označiť vytlačené", html)
+
+    def test_operations_dashboard_has_individual_reprint_action_for_each_order(self) -> None:
+        html = build_roy_operations_dashboard_html("roy")
+
+        self.assertIn("function individualPickingPrintLink(order)", html)
+        self.assertIn("pdfUrl.searchParams.set('include_printed', '1');", html)
+        self.assertIn("pdfUrl.searchParams.set('order_num', orderNum);", html)
+        self.assertIn('data-print-order="${safe(orderNum)}"', html)
+        self.assertIn("Vytlačiť znova", html)
+        self.assertIn("pickingPrintCell(order)", html)
 
     def test_snapshot_expands_bundle_order_items_to_pickable_components(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
