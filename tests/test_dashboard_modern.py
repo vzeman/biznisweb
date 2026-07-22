@@ -221,7 +221,20 @@ class DashboardModernTests(unittest.TestCase):
             "demand_confidence": "Low",
             "demand_signal_code": "one_off_large_order",
             "demand_signal_label_sk": "Jednorazová veľká objednávka",
+            "net_available_quantity": 20,
+            "lead_time_calendar_days": 7,
+            "combined_typical_order_units": 1.25,
+            "combined_order_rate_per_day": 0.16,
+            "lead_time_expected_orders": 0.2,
+            "lead_time_expected_shortage_units": 0.01,
             "lead_time_stockout_probability": 0.01,
+            "alert_30d_contribution_estimate": 8.0,
+            "stockout_contribution_basis_30d": 9.0,
+            "stockout_revenue_basis_30d": 22.0,
+            "stockout_contribution_at_risk": 0.1,
+            "stockout_revenue_at_risk": 0.2,
+            "stockout_pain_score": 2.5,
+            "stock_risk_rank": 7,
             "alert_reason_code": "unusual_large_order",
             "alert_reason_label_sk": "Neobvykle veľká objednávka bez potvrdenia trendu",
         }
@@ -259,6 +272,12 @@ class DashboardModernTests(unittest.TestCase):
 
         payload = extract_embedded_dashboard_payload(html)["roy_product_demand"]
         self.assertEqual(40, payload["inventory_rows"][0]["raw_recent_30d_units"])
+        self.assertEqual(1.25, payload["inventory_rows"][0]["combined_typical_order_units"])
+        self.assertEqual(0.16, payload["inventory_rows"][0]["combined_order_rate_per_day"])
+        self.assertEqual(9.0, payload["inventory_rows"][0]["stockout_contribution_basis_30d"])
+        self.assertEqual(22.0, payload["inventory_rows"][0]["stockout_revenue_basis_30d"])
+        self.assertEqual(0.1, payload["inventory_rows"][0]["stockout_contribution_at_risk"])
+        self.assertEqual(2.5, payload["inventory_rows"][0]["stockout_pain_score"])
         self.assertEqual(
             "one_off_large_order",
             payload["demand_anomaly_rows"][0]["demand_signal_code"],

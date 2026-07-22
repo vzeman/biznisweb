@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-07-17
+Last updated: 2026-07-22
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,16 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY business-impact stock-alert priority and permanent no-restock controls are release-ready on `codex/roy-stock-alert-priority-optout` (2026-07-22):
+  - alert order now uses model marker `expected-shortage-cm2-v1`: expected positive CM2 lost during supplier lead time is primary, expected blocked revenue is secondary, and risk severity/strategic flag/cover/SKU are deterministic tie-breakers
+  - expected shortage is calculated from the existing robust order-aware demand model with a Poisson order process; direct and bundle demand keep separate anomaly protection, economics, order rates, and typical order sizes before being combined, so one large set order cannot inflate component priority or erase stable direct demand
+  - bundle-component blocking economics remain per-SKU marginal impact and are kept separate from additive revenue KPIs, preventing the same set revenue from being multiplied across its components
+  - the ROY live dashboard exposes CM2, revenue, and expected shortage impact per alert; each row has a `Dokladňovať` checkbox, and excluded SKUs have a restore/audit panel while remaining visible in inventory and anomaly data
+  - permanent exclusions are stored in the existing `daily-reports/roy-sk/operations/state.json` source of truth with state version `2`, normalized SKU identity, ETag/`If-Match` compare-and-swap writes, fail-closed configured S3 reads, Basic Auth, JSON-only writes, and a same-origin custom action header
+  - local and App Runner release gates require the new model, combined order-shape fields, impact fields, sorted alert order, exclusion collection, and UI action markers
+  - verification passed: `246` full unit tests, `68` focused final-review tests, reporting QA smoke, security CI, environment contract, Python compile, all project JSON/workflow YAML, all workflow Python/Bash blocks, generated ROY inline JavaScript, and `git diff --check`; two independent read-only reviews report no remaining material finding
+  - Next exact step: commit/push, merge through a reviewed PR, wait for the exact merge image digest, then run the ROY hard-gated full artifact refresh and App Runner deployment; require Fargate localhost markers before authenticated API/UI checks and perform a reversible production exclusion roundtrip with no sentinel left in state
 
 - ROY order-aware smart inventory alerts are merged, deployed, and live (2026-07-17):
   - PR `#244` merged to `main` as `0f98aaade55f9769b48dad6946c36ab442ef2419`; independent review finished with no P0/P1/P2 findings

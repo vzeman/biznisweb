@@ -457,6 +457,36 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual("warning_only", summary["inventory_recommendation_status"])
         self.assertIn("inbound purchase orders are not modeled", summary["inventory_recommendation_blockers"])
 
+    def test_export_orders_stock_alerts_by_expected_cm2_loss(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        item_df = pd.DataFrame(
+            [
+                item_row("H-1", "HIGH-VALUE", "High value product", "2026-05-01", 2, 1200),
+                item_row("H-2", "HIGH-VALUE", "High value product", "2026-05-10", 2, 1200),
+                item_row("H-3", "HIGH-VALUE", "High value product", "2026-05-20", 2, 1200),
+                item_row("L-1", "LOW-VALUE", "Low value product", "2026-05-01", 2, 120),
+                item_row("L-2", "LOW-VALUE", "Low value product", "2026-05-10", 2, 120),
+                item_row("L-3", "LOW-VALUE", "Low value product", "2026-05-20", 2, 120),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+
+        alert_rows = result["alert_rows"]
+        self.assertEqual(["HIGH-VALUE", "LOW-VALUE"], list(alert_rows["sku"]))
+        self.assertGreater(
+            float(alert_rows.iloc[0]["stockout_contribution_at_risk"]),
+            float(alert_rows.iloc[1]["stockout_contribution_at_risk"]),
+        )
+        self.assertEqual(
+            "expected-shortage-cm2-v1",
+            result["summary"]["stockout_priority_model_version"],
+        )
+
     def test_service_work_rows_are_excluded_from_restock_alerts(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
         item_df = pd.DataFrame(
@@ -527,12 +557,165 @@ class RoyInventoryModelTests(unittest.TestCase):
             self.assertEqual("Out of stock", row["stock_risk_level"])
             self.assertEqual(3.0, float(row["bundle_component_recent_30d_units"]))
             self.assertEqual(3.0, float(row["alert_30d_units"]))
+            self.assertAlmostEqual(1.0, float(row["combined_typical_order_units"]), places=6)
+            self.assertAlmostEqual(0.1, float(row["combined_order_rate_per_day"]), places=6)
             self.assertTrue(bool(row["historical_restock_relevant_flag"]))
+            self.assertGreater(float(row["stockout_revenue_basis_30d"]), 0.0)
+            self.assertGreater(float(row["stockout_contribution_basis_30d"]), 0.0)
+            self.assertGreater(float(row["stockout_revenue_at_risk"]), 0.0)
+            self.assertGreater(float(row["stockout_contribution_at_risk"]), 0.0)
+
+        # Blocking impact is per component and non-additive; one bundle's
+        # commercial opportunity must not be multiplied in revenue totals.
+        self.assertLessEqual(float(alert_rows["alert_30d_revenue"].sum()), 360.0)
 
         summary = result["summary"]
         self.assertEqual(1, summary["bundle_component_rule_count"])
         self.assertEqual(9.0, float(summary["bundle_component_adjustment_30d_units"]))
         self.assertGreaterEqual(summary["historical_restock_relevant_products"], 3)
+
+    def test_one_off_bundle_spike_does_not_inflate_component_blocking_economics(self) -> None:
+        component_product = "Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla"
+        inventory_snapshot = pd.DataFrame(
+            [
+                inventory_row("MACO-EXTREME-300", component_product),
+                inventory_row("MACO-HOLSTER-300", "Puzdro MACO STOP na sprej 300ml"),
+                inventory_row("BEAR-BELL", "Zvonček na medvede, plašič medveďov"),
+            ]
+        )
+        exporter = RoyInventoryModelExporter(inventory_snapshot=inventory_snapshot)
+        direct_dates = [
+            "2025-09-01",
+            "2025-10-01",
+            "2025-11-01",
+            "2025-12-01",
+            "2026-01-01",
+            "2026-02-01",
+            "2026-03-01",
+            "2026-04-01",
+            "2026-05-01",
+            "2026-06-01",
+            "2026-07-01",
+        ]
+        rows = [
+            item_row(
+                f"DIRECT-{index}",
+                "MACO-EXTREME-300",
+                component_product,
+                date,
+                1,
+                10,
+                cm2_profit=1,
+            )
+            for index, date in enumerate(direct_dates, start=1)
+        ]
+        rows.extend(
+            [
+                item_row("SET-OLD-1", "SET-MACO-LARGE", "Set MACO STOP VEĽKÝ", "2025-10-10", 1, 100, cm2_profit=80),
+                item_row("SET-OLD-2", "SET-MACO-LARGE", "Set MACO STOP VEĽKÝ", "2026-02-10", 1, 100, cm2_profit=80),
+                item_row("SET-SPIKE", "SET-MACO-LARGE", "Set MACO STOP VEĽKÝ", "2026-07-02", 40, 4000, cm2_profit=3200),
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=pd.DataFrame(rows),
+        )
+
+        row = result["alert_rows"].loc[
+            result["alert_rows"]["sku"] == "MACO-EXTREME-300"
+        ].iloc[0]
+        robust_bundle_units = float(row["bundle_component_robust_baseline_30d_units"])
+        bundle_revenue_estimate = float(row["bundle_component_alert_30d_revenue_estimate"])
+        bundle_contribution_estimate = float(
+            row["bundle_component_alert_30d_contribution_estimate"]
+        )
+
+        self.assertEqual(40.0, float(row["bundle_component_recent_30d_units"]))
+        self.assertFalse(bool(row["bundle_component_confirmed_trend_flag"]))
+        self.assertAlmostEqual(
+            float(row["alert_30d_units"]),
+            float(row["direct_alert_30d_units"])
+            + float(row["bundle_component_economic_demand_units_30d"]),
+            places=6,
+        )
+        self.assertAlmostEqual(robust_bundle_units, bundle_revenue_estimate / 100.0, places=6)
+        self.assertAlmostEqual(robust_bundle_units, bundle_contribution_estimate / 80.0, places=6)
+        self.assertLess(bundle_revenue_estimate, float(row["alert_30d_units"]) * 100.0)
+        direct_robust_units = float(row["robust_baseline_30d_units"])
+        self.assertAlmostEqual(direct_robust_units * 10.0, float(row["alert_30d_revenue"]), places=2)
+        self.assertAlmostEqual(
+            direct_robust_units,
+            float(row["alert_30d_contribution_estimate"]),
+            places=2,
+        )
+        implied_lead_time_orders = (
+            float(row["alert_30d_units"])
+            / 30.0
+            / float(row["combined_typical_order_units"])
+            * float(row["lead_time_calendar_days"])
+        )
+        self.assertGreaterEqual(
+            float(row["lead_time_expected_orders"]) + 1e-6,
+            implied_lead_time_orders,
+        )
+
+    def test_confirmed_bundle_uplift_reaches_component_alert_demand(self) -> None:
+        inventory_snapshot = pd.DataFrame(
+            [
+                inventory_row("MACO-EXTREME-300", "maco stop extreme 300ml hmla"),
+                inventory_row("MACO-HOLSTER-300", "puzdro maco stop na sprej 300ml"),
+                inventory_row("BEAR-BELL", "zvoncek na medvede plasic medvedov"),
+            ]
+        )
+        exporter = RoyInventoryModelExporter(inventory_snapshot=inventory_snapshot)
+        anchor = pd.Timestamp("2026-07-02")
+        rows = [
+            item_row(
+                f"SET-OLD-{index}",
+                "SET-MACO-LARGE",
+                "set maco stop velky",
+                (anchor - pd.Timedelta(days=350 - index * 20)).strftime("%Y-%m-%d"),
+                1,
+                100,
+                cm2_profit=40,
+            )
+            for index in range(12)
+        ]
+        rows.extend(
+            item_row(
+                f"SET-BULK-{index}",
+                "SET-MACO-LARGE",
+                "set maco stop velky",
+                (anchor - pd.Timedelta(days=days_ago)).strftime("%Y-%m-%d"),
+                40,
+                4000,
+                cm2_profit=1600,
+            )
+            for index, days_ago in enumerate((28, 14, 0), start=1)
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=pd.DataFrame(rows),
+        )
+        row = result["alert_rows"].loc[
+            result["alert_rows"]["sku"] == "MACO-EXTREME-300"
+        ].iloc[0]
+
+        self.assertTrue(bool(row["bundle_component_confirmed_trend_flag"]))
+        self.assertGreater(
+            float(row["bundle_component_economic_demand_units_30d"]),
+            float(row["bundle_component_robust_baseline_30d_units"]),
+        )
+        self.assertAlmostEqual(
+            float(row["alert_30d_units"]),
+            float(row["direct_alert_30d_units"])
+            + float(row["bundle_component_economic_demand_units_30d"]),
+            places=6,
+        )
 
     def test_roy_demand_outputs_top_products_and_loss_products(self) -> None:
         exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())

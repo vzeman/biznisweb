@@ -4,7 +4,10 @@ import pandas as pd
 
 from inventory_demand_model import (
     build_robust_demand_summary,
+    poisson_expected_shortage_units,
     poisson_tail_probability,
+    resolve_typical_order_units,
+    stockout_business_impact,
     update_m_of_n_signal_history,
 )
 
@@ -170,6 +173,59 @@ class RobustInventoryDemandModelTests(unittest.TestCase):
         self.assertGreaterEqual(low, 0.0)
         self.assertLessEqual(high, 1.0)
         self.assertGreater(high, low)
+
+    def test_poisson_expected_shortage_decreases_with_available_stock(self):
+        no_stock = poisson_expected_shortage_units(3.0, 0, 2)
+        one_order_covered = poisson_expected_shortage_units(3.0, 2, 2)
+        two_orders_covered = poisson_expected_shortage_units(3.0, 4, 2)
+
+        self.assertAlmostEqual(6.0, no_stock, places=6)
+        self.assertGreater(no_stock, one_order_covered)
+        self.assertGreater(one_order_covered, two_orders_covered)
+        self.assertGreaterEqual(two_orders_covered, 0.0)
+
+    def test_stockout_business_impact_uses_positive_cm2_and_revenue(self):
+        impact = stockout_business_impact(
+            expected_orders=2.0,
+            available_units=0,
+            typical_order_units=3,
+            alert_units=12,
+            alert_revenue=120,
+            alert_contribution=48,
+        )
+
+        self.assertAlmostEqual(6.0, impact["lead_time_expected_shortage_units"], places=6)
+        self.assertAlmostEqual(60.0, impact["stockout_revenue_at_risk"], places=6)
+        self.assertAlmostEqual(24.0, impact["stockout_contribution_at_risk"], places=6)
+
+    def test_stockout_business_impact_does_not_reward_negative_contribution(self):
+        impact = stockout_business_impact(
+            expected_orders=1.0,
+            available_units=0,
+            typical_order_units=1,
+            alert_units=10,
+            alert_revenue=100,
+            alert_contribution=-20,
+        )
+
+        self.assertEqual(0.0, impact["stockout_contribution_at_risk"])
+        self.assertGreater(impact["stockout_revenue_at_risk"], 0.0)
+
+    def test_stockout_business_impact_uses_shared_typical_order_fallback(self):
+        self.assertEqual(5.0, resolve_typical_order_units(None, 20))
+
+        impact = stockout_business_impact(
+            expected_orders=1.0,
+            available_units=0,
+            typical_order_units=None,
+            alert_units=20,
+            alert_revenue=200,
+            alert_contribution=80,
+        )
+
+        self.assertAlmostEqual(5.0, impact["lead_time_expected_shortage_units"], places=6)
+        self.assertAlmostEqual(50.0, impact["stockout_revenue_at_risk"], places=6)
+        self.assertAlmostEqual(20.0, impact["stockout_contribution_at_risk"], places=6)
 
 
 if __name__ == "__main__":
