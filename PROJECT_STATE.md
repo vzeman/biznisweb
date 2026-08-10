@@ -61,16 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY inbound inventory valuation deploy follow-up is in progress on `2026-08-10`:
-  - branch: `codex/fix-scheduler-passrole-gate`
-  - inventory valuation PR `#257` merged as `6079020cd25ea2df851c339c160c41effd956033`; exact ECR build `31410114494` succeeded with digest `sha256:c896fc3c9993218326c6d3f2fa3fbf620a1482e6543fded142f59faae518188a`
-  - full deploy `31410363837` completed the Fargate artifact refresh and published source timestamp `2026-08-10T17:12:56Z`, but the workflow later failed before App Runner promotion
-  - skip-refresh deploy `31413627782` proved the exact candidate image directly in Fargate (`a2716936951646f4b9448100d51ad4f3`, private IP `172.31.41.195`, service `roy-daily-report-email`, localhost marker `LIVE_ARTIFACT_MARKER_OK`) and then reproduced the blocker
-  - root cause: IAM correctly returns one top-level result per simulated action with the two role decisions nested under `ResourceSpecificResults`; the deploy gate incorrectly required two top-level results and rejected an otherwise fully `allowed` response
-  - fix: validate exactly one `iam:PassRole` action plus the exact expected task/execution role ARN set, while continuing to fail closed on a missing, duplicate, extra, or non-allowed resource decision
-  - Next exact step: pass focused/full validation, merge through PR, build the exact image, rerun the protected skip-refresh deploy, verify the Fargate localhost marker and App Runner host markers, then verify the combined inbound valuation in the production Chrome UI
+- ROY inbound inventory valuation is merged, deployed, and live on `2026-08-10`:
+  - inventory valuation PR `#257` merged as `6079020cd25ea2df851c339c160c41effd956033`; deploy-gate fix PR `#258` merged as `c2b996a161c41a9f524b6a14b16c92496a0b4355`
+  - the first full deploy `31410363837` successfully refreshed the production artifact but was blocked before promotion by a pre-existing IAM simulation parser bug; skip-refresh run `31413627782` reproduced that blocker after a successful localhost candidate marker
+  - root cause: AWS returns one top-level result per simulated action and places the exact task/execution-role decisions under `ResourceSpecificResults`; the old gate incorrectly required two top-level results
+  - the fixed gate now requires exactly one `iam:PassRole` action and the exact expected role ARN set, failing closed on missing, duplicate, extra, or non-allowed resource decisions; focused regression tests and the full `275`-test suite passed with reporting QA, security CI, workflow YAML parsing, the environment contract, and `git diff --check`
+  - exact build run `31414400660` published merge tag `git-c2b996a161c41a9f524b6a14b16c92496a0b4355` and digest `sha256:161e1348815dd3c3d40cfc8d0eaa754bfb78ca87fba335af27ec6c5f82c8f6a4`, with `latest` verified on the same digest
+  - protected full deploy `31414611250` succeeded: service `roy-daily-report-email`, Fargate task `8e8fee17605245bbb48e5f5dacfa7ef6`, private IP `172.31.33.78`, candidate task definition `roy-reporting-daily:62`, exact digest above, and localhost path `http://127.0.0.1:8000/marker.json`
+  - host hard gates emitted `LOCALHOST_DASHBOARD_MAINTENANCE_OK`, `LOCALHOST_LIVE_DASHBOARD_OK`, and `LIVE_ARTIFACT_MARKER_OK`; the exact PassRole gate passed and scheduler `roy-daily-report-email` was promoted from task definition `:58` to `:62`
+  - the new App Runner runtime passed active-maintenance and HTTP `423` write-block checks, authenticated ROY operations/API/PDF smoke, inactive-maintenance cleanup, reversible restock-state cleanup, and `APP_RUNNER_DEPLOY_OK`; public `/health` returned `ok=true`
+  - automated visual reload in the selected Chrome/Comet tab was blocked locally with `ERR_BLOCKED_BY_CLIENT`; this was not used as a production failure signal because the host and authenticated live HTML/API release gates passed, but a manual browser reload is still useful for visual confirmation of the combined value
+  - Next exact step: monitor the next natural `roy-daily-report-email` run on task definition `:62`; no code or deployment action remains for this change
 
-- ROY inbound inventory valuation is implemented locally on `2026-08-10`:
+- ROY inbound inventory valuation implementation details (`2026-08-10`):
   - branch: `codex/roy-inbound-inventory-value`
   - root cause: the operations dashboard used only the current on-hand purchase-cost total; manually recorded inbound units affected stock-risk coverage but contributed no value to the inventory KPI
   - the reporting inventory model now preserves a known mapped purchase cost and retail unit price even when the product currently has zero stock, while conflicting or missing unit values remain unpriced instead of being guessed
@@ -78,8 +81,7 @@ Bootstrap entrypoints:
   - the ROY UI now shows `Hodnota skladu` and both detailed valuation cards as `skladom + na ceste`; each inbound row shows its purchase value, and products without a mapped purchase cost are visibly marked `chýba nákupná cena`
   - local verification passed: Python compile; focused ROY inventory/operations suite (`61` tests); live auth/mobile/modern dashboard suite (`21` tests); full suite (`273` tests); reporting QA smoke; security CI; generated ROY inline JavaScript syntax; and `git diff --check`
   - local `scripts/check_env.ps1` was not applicable in the isolated clean worktree because `.env` is intentionally absent and secrets were not copied
-  - Known issue: the change is not deployed yet; existing production artifacts do not contain the zero-stock unit-value fields required to value every current inbound product
-  - Next exact step: commit and push the branch, merge through PR, build the exact image, deploy ROY with an artifact refresh, verify the Fargate localhost marker and combined inbound valuation fields, and only then verify the production dashboard UI
+  - production deployment and scheduler promotion are complete as documented above
 
 - ROY unpaid-order Stripe-expiry reconciliation is merged, deployed, and live (2026-08-10):
   - root cause: Stripe can overwrite an already fulfilled order back to `Stripe - expired` after an operator has matched an alternative bank transfer, issued the final invoice, and moved the order through the paid/sent states; the existing cancellation job inspected only the current status/payment and could later cancel that genuinely paid order
