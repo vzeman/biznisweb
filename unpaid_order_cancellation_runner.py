@@ -97,6 +97,10 @@ def run_unpaid_cancellation_runner(args: argparse.Namespace) -> Dict[str, Any]:
     put_metric("UnpaidCancellationOrdersScanned", summary.total_orders_scanned, project, reporting_defaults)
     put_metric("UnpaidCancellationEligibleOrders", summary.eligible_orders, project, reporting_defaults)
     put_metric("UnpaidCancellationUpdatedOrders", summary.updated_orders, project, reporting_defaults)
+    put_metric("UnpaidCancellationRecoveryCandidates", summary.recovery_candidates, project, reporting_defaults)
+    put_metric("UnpaidCancellationRecoveredOrders", summary.recovered_orders, project, reporting_defaults)
+    put_metric("UnpaidCancellationRecoveryFailedOrders", summary.recovery_failed_orders, project, reporting_defaults)
+    put_metric("UnpaidCancellationRecheckedOrders", summary.rechecked_orders, project, reporting_defaults)
     put_metric("UnpaidCancellationFailedOrders", summary.failed_orders, project, reporting_defaults)
     put_metric("UnpaidCancellationRunSucceeded", 1, project, reporting_defaults)
 

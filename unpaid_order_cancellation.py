@@ -7,7 +7,7 @@ import os
 import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from gql import Client, gql
@@ -20,6 +20,7 @@ from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_
 logger = get_logger("unpaid_order_cancellation")
 
 DEFAULT_TARGET_STATUS_NAME = "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka"
+DEFAULT_RECOVERY_TARGET_STATUS_NAME = "Odoslan\u00e1"
 DEFAULT_AGE_DAYS = 14
 DEFAULT_SCAN_MAX_PAGES = 200
 DEFAULT_PAGE_LIMIT = 30
@@ -78,12 +79,20 @@ DEFAULT_EXCLUDED_STATUSES = (
     "Vr\u00e1ten\u00e9",
     "Dobropis",
 )
+DEFAULT_RECOVERY_SOURCE_STATUSES = ("Stripe - expired",)
+DEFAULT_RECOVERY_PAYMENT_REFERENCE_IDS = ("6",)
+DEFAULT_RECOVERY_PAYMENT_TITLE_PATTERNS = (
+    "bankovym prevodom",
+    "bankovni prevod",
+    "bankovy prevod",
+    "bank transfer",
+)
 
 
 UNPAID_ORDER_QUERY = gql(
     """
-query GetOrdersForUnpaidCancellation($params: OrderParams) {
-  getOrderList(params: $params) {
+query GetOrdersForUnpaidCancellation($status: Int, $params: OrderParams) {
+  getOrderList(status: $status, params: $params) {
     data {
       id
       order_num
@@ -113,6 +122,45 @@ query GetOrdersForUnpaidCancellation($params: OrderParams) {
       nextCursor
       pageIndex
       totalPages
+    }
+  }
+}
+"""
+)
+
+
+ORDER_RECHECK_QUERY = gql(
+    """
+query GetOrderForUnpaidCancellationRecheck($order_num: String!) {
+  getOrder(order_num: $order_num) {
+    id
+    order_num
+    pur_date
+    last_change
+    status {
+      id
+      name
+    }
+    invoices {
+      id
+      invoice_num
+      created
+      paid
+      pay_date
+    }
+    price_elements {
+      type
+      title
+      value
+      reference_id
+      price {
+        value
+        formatted
+      }
+    }
+    sum {
+      value
+      formatted
     }
   }
 }
@@ -154,6 +202,12 @@ class UnpaidCancellationSettings:
     age_days: int = DEFAULT_AGE_DAYS
     target_status_name: str = DEFAULT_TARGET_STATUS_NAME
     target_status_id: Optional[int] = None
+    recovery_enabled: bool = False
+    recovery_target_status_name: str = DEFAULT_RECOVERY_TARGET_STATUS_NAME
+    recovery_target_status_id: Optional[int] = None
+    recovery_source_statuses: Tuple[str, ...] = DEFAULT_RECOVERY_SOURCE_STATUSES
+    recovery_payment_reference_ids: Tuple[str, ...] = DEFAULT_RECOVERY_PAYMENT_REFERENCE_IDS
+    recovery_payment_title_patterns: Tuple[str, ...] = DEFAULT_RECOVERY_PAYMENT_TITLE_PATTERNS
     lang_code: str = DEFAULT_LANG_CODE
     payment_reference_ids: Tuple[str, ...] = DEFAULT_PAYMENT_REFERENCE_IDS
     payment_title_patterns: Tuple[str, ...] = DEFAULT_PAYMENT_TITLE_PATTERNS
@@ -166,12 +220,34 @@ class UnpaidCancellationSettings:
     timezone: str = "Europe/Bratislava"
     task_family: str = ""
     normalized_target_status_name: str = field(init=False)
+    normalized_recovery_target_status_name: str = field(init=False)
+    normalized_recovery_source_statuses: Tuple[str, ...] = field(init=False)
+    normalized_recovery_payment_title_patterns: Tuple[str, ...] = field(init=False)
     normalized_payment_title_patterns: Tuple[str, ...] = field(init=False)
     normalized_candidate_statuses: Tuple[str, ...] = field(init=False)
     normalized_excluded_statuses: Tuple[str, ...] = field(init=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "normalized_target_status_name", normalize_text(self.target_status_name))
+        object.__setattr__(
+            self,
+            "normalized_recovery_target_status_name",
+            normalize_text(self.recovery_target_status_name),
+        )
+        object.__setattr__(
+            self,
+            "normalized_recovery_source_statuses",
+            tuple(normalize_text(value) for value in self.recovery_source_statuses if normalize_text(value)),
+        )
+        object.__setattr__(
+            self,
+            "normalized_recovery_payment_title_patterns",
+            tuple(
+                normalize_text(value)
+                for value in self.recovery_payment_title_patterns
+                if normalize_text(value)
+            ),
+        )
         object.__setattr__(
             self,
             "normalized_payment_title_patterns",
@@ -198,17 +274,29 @@ class UnpaidCancellationSummary:
     cutoff_date: str
     target_status_name: str
     target_status_id: Optional[int] = None
+    recovery_enabled: bool = False
+    recovery_target_status_name: str = ""
+    recovery_target_status_id: Optional[int] = None
     total_orders_scanned: int = 0
     pages_scanned: int = 0
     eligible_orders: int = 0
     updated_orders: int = 0
+    recovery_candidates: int = 0
+    recovered_orders: int = 0
+    recovery_failed_orders: int = 0
+    rechecked_orders: int = 0
     failed_orders: int = 0
     scan_limit_reached: bool = False
     scan_stop_reason: str = ""
     oldest_order_date: str = ""
     skipped_by_reason: Dict[str, int] = field(default_factory=dict)
+    recovery_skipped_by_reason: Dict[str, int] = field(default_factory=dict)
+    recheck_skipped_by_reason: Dict[str, int] = field(default_factory=dict)
     eligible_order_nums: List[str] = field(default_factory=list)
     updated_order_nums: List[str] = field(default_factory=list)
+    recovery_candidate_order_nums: List[str] = field(default_factory=list)
+    recovered_order_nums: List[str] = field(default_factory=list)
+    recovery_failed_order_nums: List[str] = field(default_factory=list)
     failed_order_nums: List[str] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
@@ -242,6 +330,12 @@ def resolve_unpaid_cancellation_settings(project_settings: Dict[str, Any]) -> Un
     else:
         parsed_target_status_id = int(target_status_id)
 
+    recovery_target_status_id = raw.get("recovery_target_status_id")
+    if recovery_target_status_id in ("", None):
+        parsed_recovery_target_status_id: Optional[int] = None
+    else:
+        parsed_recovery_target_status_id = int(recovery_target_status_id)
+
     age_days = max(1, int(raw.get("age_days", DEFAULT_AGE_DAYS)))
     scan_max_pages = max(1, int(raw.get("scan_max_pages", DEFAULT_SCAN_MAX_PAGES)))
     page_limit = max(1, min(DEFAULT_PAGE_LIMIT, int(raw.get("page_limit", DEFAULT_PAGE_LIMIT))))
@@ -250,6 +344,23 @@ def resolve_unpaid_cancellation_settings(project_settings: Dict[str, Any]) -> Un
         age_days=age_days,
         target_status_name=str(raw.get("target_status_name") or DEFAULT_TARGET_STATUS_NAME),
         target_status_id=parsed_target_status_id,
+        recovery_enabled=bool(raw.get("recovery_enabled", False)),
+        recovery_target_status_name=str(
+            raw.get("recovery_target_status_name") or DEFAULT_RECOVERY_TARGET_STATUS_NAME
+        ),
+        recovery_target_status_id=parsed_recovery_target_status_id,
+        recovery_source_statuses=_tuple_from_settings(
+            raw.get("recovery_source_statuses"),
+            DEFAULT_RECOVERY_SOURCE_STATUSES,
+        ),
+        recovery_payment_reference_ids=_tuple_from_settings(
+            raw.get("recovery_payment_reference_ids"),
+            DEFAULT_RECOVERY_PAYMENT_REFERENCE_IDS,
+        ),
+        recovery_payment_title_patterns=_tuple_from_settings(
+            raw.get("recovery_payment_title_patterns"),
+            DEFAULT_RECOVERY_PAYMENT_TITLE_PATTERNS,
+        ),
         lang_code=str(raw.get("lang_code") or DEFAULT_LANG_CODE),
         payment_reference_ids=_tuple_from_settings(raw.get("payment_reference_ids"), DEFAULT_PAYMENT_REFERENCE_IDS),
         payment_title_patterns=_tuple_from_settings(raw.get("payment_title_patterns"), DEFAULT_PAYMENT_TITLE_PATTERNS),
@@ -313,16 +424,89 @@ def _payment_elements(order: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-def payment_matches(order: Dict[str, Any], settings: UnpaidCancellationSettings) -> bool:
-    configured_ids = {str(value).strip() for value in settings.payment_reference_ids if str(value).strip()}
+def _payment_matches_values(
+    order: Dict[str, Any],
+    reference_ids: Sequence[str],
+    normalized_title_patterns: Sequence[str],
+) -> bool:
+    configured_ids = {str(value).strip() for value in reference_ids if str(value).strip()}
     for element in _payment_elements(order):
         reference_id = str(element.get("reference_id") or "").strip()
         if reference_id and reference_id in configured_ids:
             return True
         normalized_title = normalize_text(element.get("title"))
-        if any(pattern and pattern in normalized_title for pattern in settings.normalized_payment_title_patterns):
+        if any(pattern and pattern in normalized_title for pattern in normalized_title_patterns):
             return True
     return False
+
+
+def payment_matches(order: Dict[str, Any], settings: UnpaidCancellationSettings) -> bool:
+    return _payment_matches_values(
+        order,
+        settings.payment_reference_ids,
+        settings.normalized_payment_title_patterns,
+    )
+
+
+def recovery_payment_matches(order: Dict[str, Any], settings: UnpaidCancellationSettings) -> bool:
+    return _payment_matches_values(
+        order,
+        settings.recovery_payment_reference_ids,
+        settings.normalized_recovery_payment_title_patterns,
+    )
+
+
+def _final_invoices(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [invoice for invoice in (order.get("invoices") or []) if invoice and invoice.get("id")]
+
+
+def has_final_invoice(order: Dict[str, Any]) -> bool:
+    return bool(_final_invoices(order))
+
+
+def has_paid_final_invoice(order: Dict[str, Any]) -> bool:
+    return any(invoice.get("paid") is True for invoice in _final_invoices(order))
+
+
+def _parse_api_datetime(value: Any) -> Optional[datetime]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def final_invoice_predates_last_change(order: Dict[str, Any]) -> bool:
+    last_change = _parse_api_datetime(order.get("last_change"))
+    if last_change is None:
+        return False
+    return any(
+        (created := _parse_api_datetime(invoice.get("created"))) is not None and created <= last_change
+        for invoice in _final_invoices(order)
+    )
+
+
+def recovery_eligibility_reason(order: Dict[str, Any], settings: UnpaidCancellationSettings) -> str:
+    if not settings.recovery_enabled:
+        return "recovery_disabled"
+
+    status = normalize_text(_status_name(order))
+    if not status:
+        return "missing_status"
+    if status not in settings.normalized_recovery_source_statuses:
+        return "not_recovery_status"
+    if not has_final_invoice(order):
+        return "missing_final_invoice"
+    if not final_invoice_predates_last_change(order):
+        return "final_invoice_not_preexisting"
+    if not (has_paid_final_invoice(order) or recovery_payment_matches(order, settings)):
+        return "missing_payment_resolution_evidence"
+    return "eligible"
 
 
 def cancellation_eligibility_reason(
@@ -343,6 +527,8 @@ def cancellation_eligibility_reason(
         return "already_target_status"
     if status in settings.normalized_excluded_statuses:
         return "excluded_status"
+    if has_final_invoice(order):
+        return "final_invoice_present"
     if settings.normalized_candidate_statuses and status not in settings.normalized_candidate_statuses:
         return "not_candidate_status"
     if not payment_matches(order, settings):
@@ -363,76 +549,135 @@ def list_order_statuses(client: Client, settings: UnpaidCancellationSettings) ->
     return [row for row in (result.get("listOrderStatuses") or []) if row]
 
 
-def resolve_target_status_id(client: Client, settings: UnpaidCancellationSettings) -> int:
-    statuses = list_order_statuses(client, settings)
-    target_norm = settings.normalized_target_status_name
+def _resolve_status_id(
+    statuses: Sequence[Dict[str, Any]],
+    target_status_name: str,
+    configured_status_id: Optional[int],
+) -> int:
+    target_norm = normalize_text(target_status_name)
     for row in statuses:
         row_id = int(row.get("id") or 0)
         row_name_norm = normalize_text(row.get("name"))
-        if settings.target_status_id and row_id == settings.target_status_id:
+        if configured_status_id and row_id == configured_status_id:
             if row_name_norm != target_norm:
                 raise RuntimeError(
-                    f"Configured target_status_id={settings.target_status_id} resolves to "
-                    f"'{row.get('name')}', expected '{settings.target_status_name}'."
+                    f"Configured status_id={configured_status_id} resolves to "
+                    f"'{row.get('name')}', expected '{target_status_name}'."
                 )
             return row_id
-        if not settings.target_status_id and row_name_norm == target_norm:
+        if not configured_status_id and row_name_norm == target_norm:
             return row_id
-    raise RuntimeError(f"Target status '{settings.target_status_name}' not found in BizniWeb.")
+    raise RuntimeError(f"Target status '{target_status_name}' not found in BizniWeb.")
+
+
+def resolve_target_status_id(client: Client, settings: UnpaidCancellationSettings) -> int:
+    return _resolve_status_id(
+        list_order_statuses(client, settings),
+        settings.target_status_name,
+        settings.target_status_id,
+    )
+
+
+def resolve_recovery_target_status_id(client: Client, settings: UnpaidCancellationSettings) -> int:
+    return _resolve_status_id(
+        list_order_statuses(client, settings),
+        settings.recovery_target_status_name,
+        settings.recovery_target_status_id,
+    )
+
+
+def resolve_candidate_status_ids(
+    statuses: Sequence[Dict[str, Any]],
+    settings: UnpaidCancellationSettings,
+) -> List[int]:
+    configured_names = set(settings.normalized_candidate_statuses)
+    if settings.recovery_enabled:
+        configured_names.update(settings.normalized_recovery_source_statuses)
+    resolved = [
+        int(row.get("id") or 0)
+        for row in statuses
+        if int(row.get("id") or 0) > 0 and normalize_text(row.get("name")) in configured_names
+    ]
+    if not resolved:
+        raise RuntimeError("No active BizniWeb order statuses match the configured cancellation candidates.")
+    return resolved
+
+
+def fetch_order_for_recheck(client: Client, order_num: str) -> Dict[str, Any]:
+    result = client.execute(
+        ORDER_RECHECK_QUERY,
+        variable_values={"order_num": str(order_num)},
+    )
+    return result.get("getOrder") or {}
 
 
 def fetch_orders_for_cancellation(
     client: Client,
     settings: UnpaidCancellationSettings,
+    status_ids: Sequence[int],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     orders: List[Dict[str, Any]] = []
-    cursor: Any = None
-    has_next_page = True
     page_count = 0
     oldest_order_date = ""
     stop_reason = "api_exhausted"
 
-    while has_next_page and page_count < settings.scan_max_pages:
-        params: Dict[str, Any] = {
-            "limit": settings.page_limit,
-            "order_by": "pur_date",
-            "sort": "DESC",
-        }
-        if cursor not in ("", None):
-            params["cursor"] = cursor
+    scan_limit_reached = False
+    for status_id in status_ids:
+        cursor: Any = None
+        has_next_page = True
+        status_page_count = 0
+        while has_next_page and page_count < settings.scan_max_pages:
+            params: Dict[str, Any] = {
+                "limit": settings.page_limit,
+                "order_by": "pur_date",
+                "sort": "DESC",
+            }
+            if cursor not in ("", None):
+                params["cursor"] = cursor
 
-        try:
-            result = client.execute(UNPAID_ORDER_QUERY, variable_values={"params": params})
-        except Exception as exc:
-            partial_data = getattr(exc, "data", None)
-            if not partial_data:
-                if page_count == 0:
-                    raise
-                stop_reason = "api_error_after_partial_scan"
-                logger.warning("Stopping order-list scan after BizniWeb API error on page %s: %s", page_count + 1, exc)
+            try:
+                result = client.execute(
+                    UNPAID_ORDER_QUERY,
+                    variable_values={"status": int(status_id), "params": params},
+                )
+            except Exception as exc:
+                partial_data = getattr(exc, "data", None)
+                if not partial_data:
+                    if status_page_count == 0:
+                        raise
+                    stop_reason = "api_error_after_partial_scan"
+                    logger.warning(
+                        "Stopping order-list scan for status_id=%s after BizniWeb API error on page %s: %s",
+                        status_id,
+                        status_page_count + 1,
+                        exc,
+                    )
+                    break
+                logger.warning("Using partial order-list response after BizniWeb API error: %s", exc)
+                result = partial_data
+            payload = result.get("getOrderList") or {}
+            page_orders = [order for order in (payload.get("data") or []) if order]
+            orders.extend(page_orders)
+            page_count += 1
+            status_page_count += 1
+
+            for order in page_orders:
+                purchased_at = order_purchase_date(order)
+                if purchased_at:
+                    text = purchased_at.strftime("%Y-%m-%d")
+                    if not oldest_order_date or text < oldest_order_date:
+                        oldest_order_date = text
+
+            page_info = payload.get("pageInfo") or {}
+            has_next_page = bool(page_info.get("hasNextPage"))
+            cursor = page_info.get("nextCursor")
+            if cursor in ("", None):
                 has_next_page = False
-                break
-            logger.warning("Using partial order-list response after BizniWeb API error: %s", exc)
-            result = partial_data
-        payload = result.get("getOrderList") or {}
-        page_orders = [order for order in (payload.get("data") or []) if order]
-        orders.extend(page_orders)
-        page_count += 1
 
-        for order in page_orders:
-            purchased_at = order_purchase_date(order)
-            if purchased_at:
-                text = purchased_at.strftime("%Y-%m-%d")
-                if not oldest_order_date or text < oldest_order_date:
-                    oldest_order_date = text
+        if has_next_page and page_count >= settings.scan_max_pages:
+            scan_limit_reached = True
+            break
 
-        page_info = payload.get("pageInfo") or {}
-        has_next_page = bool(page_info.get("hasNextPage"))
-        cursor = page_info.get("nextCursor")
-        if cursor in ("", None):
-            has_next_page = False
-
-    scan_limit_reached = bool(has_next_page and page_count >= settings.scan_max_pages)
     if scan_limit_reached:
         stop_reason = "scan_max_pages"
 
@@ -477,6 +722,8 @@ def run_unpaid_order_cancellation(
         reference_date=ref_date.strftime("%Y-%m-%d"),
         cutoff_date=cutoff_date.strftime("%Y-%m-%d"),
         target_status_name=settings.target_status_name,
+        recovery_enabled=settings.recovery_enabled,
+        recovery_target_status_name=(settings.recovery_target_status_name if settings.recovery_enabled else ""),
     )
     if not settings.enabled:
         logger.info("Unpaid order cancellation disabled for project=%s", project)
@@ -487,55 +734,180 @@ def run_unpaid_order_cancellation(
             load_project_env(project, logger=logger)
         client = build_client(project, project_settings)
 
-    target_status_id = resolve_target_status_id(client, settings)
+    statuses = list_order_statuses(client, settings)
+    target_status_id = _resolve_status_id(
+        statuses,
+        settings.target_status_name,
+        settings.target_status_id,
+    )
     summary.target_status_id = target_status_id
+    recovery_target_status_id: Optional[int] = None
+    if settings.recovery_enabled:
+        recovery_target_status_id = _resolve_status_id(
+            statuses,
+            settings.recovery_target_status_name,
+            settings.recovery_target_status_id,
+        )
+        summary.recovery_target_status_id = recovery_target_status_id
 
-    orders, scan = fetch_orders_for_cancellation(client, settings)
+    candidate_status_ids = resolve_candidate_status_ids(statuses, settings)
+    orders, scan = fetch_orders_for_cancellation(client, settings, candidate_status_ids)
     summary.total_orders_scanned = len(orders)
     summary.pages_scanned = int(scan.get("pages_scanned") or 0)
     summary.scan_limit_reached = bool(scan.get("scan_limit_reached"))
     summary.scan_stop_reason = str(scan.get("scan_stop_reason") or "")
     summary.oldest_order_date = str(scan.get("oldest_order_date") or "")
 
-    eligible_orders: List[Dict[str, Any]] = []
+    def record_failure(order_num: str, recovery: bool) -> None:
+        summary.failed_orders += 1
+        summary.failed_order_nums.append(order_num)
+        if recovery:
+            summary.recovery_failed_orders += 1
+            summary.recovery_failed_order_nums.append(order_num)
+
+    provisional_orders: List[Dict[str, Any]] = []
     skipped: Dict[str, int] = {}
     for order in orders:
+        status = normalize_text(_status_name(order))
+        if settings.recovery_enabled and status in settings.normalized_recovery_source_statuses:
+            provisional_orders.append(order)
+            continue
+
         reason = cancellation_eligibility_reason(order, settings, cutoff_date)
         if reason == "eligible":
-            eligible_orders.append(order)
+            provisional_orders.append(order)
+        else:
+            skipped[reason] = skipped.get(reason, 0) + 1
+
+    recovery_candidates: List[Dict[str, Any]] = []
+    eligible_orders: List[Dict[str, Any]] = []
+    recovery_skipped: Dict[str, int] = {}
+    for order in provisional_orders:
+        order_num = str(order.get("order_num") or "").strip()
+        listed_status = normalize_text(_status_name(order))
+        if not order_num:
+            record_failure("", recovery=listed_status in settings.normalized_recovery_source_statuses)
+            continue
+        try:
+            checked_order = fetch_order_for_recheck(client, order_num)
+            summary.rechecked_orders += 1
+        except Exception as exc:  # pragma: no cover - API failure path
+            record_failure(
+                order_num,
+                recovery=listed_status in settings.normalized_recovery_source_statuses,
+            )
+            logger.error("Failed to inspect candidate order %s: %s", order_num, exc)
+            continue
+        if not checked_order:
+            record_failure(
+                order_num,
+                recovery=listed_status in settings.normalized_recovery_source_statuses,
+            )
+            logger.error("Candidate order %s was not returned by the detail recheck", order_num)
+            continue
+
+        recovery_reason = recovery_eligibility_reason(checked_order, settings)
+        checked_status = normalize_text(_status_name(checked_order))
+        if recovery_reason == "eligible":
+            recovery_candidates.append(checked_order)
+            continue
+        if settings.recovery_enabled and checked_status in settings.normalized_recovery_source_statuses:
+            recovery_skipped[recovery_reason] = recovery_skipped.get(recovery_reason, 0) + 1
+
+        reason = cancellation_eligibility_reason(checked_order, settings, cutoff_date)
+        if reason == "eligible":
+            eligible_orders.append(checked_order)
         else:
             skipped[reason] = skipped.get(reason, 0) + 1
 
     summary.eligible_orders = len(eligible_orders)
+    summary.recovery_candidates = len(recovery_candidates)
     summary.skipped_by_reason = dict(sorted(skipped.items()))
+    summary.recovery_skipped_by_reason = dict(sorted(recovery_skipped.items()))
     summary.eligible_order_nums = [str(order.get("order_num") or "") for order in eligible_orders]
+    summary.recovery_candidate_order_nums = [
+        str(order.get("order_num") or "") for order in recovery_candidates
+    ]
 
     logger.info(
-        "Unpaid order cancellation scan project=%s cutoff=%s scanned=%s eligible=%s dry_run=%s",
+        "Unpaid order cancellation scan project=%s cutoff=%s scanned=%s eligible=%s "
+        "recovery_candidates=%s dry_run=%s",
         project,
         summary.cutoff_date,
         summary.total_orders_scanned,
         summary.eligible_orders,
+        summary.recovery_candidates,
         dry_run,
     )
 
     if dry_run:
         return summary
 
-    for order in eligible_orders:
+    planned_orders = [("recover", order) for order in recovery_candidates]
+    planned_orders.extend(("cancel", order) for order in eligible_orders)
+    recheck_skipped: Dict[str, int] = {}
+
+    for planned_action, order in planned_orders:
         order_num = str(order.get("order_num") or "").strip()
         if not order_num:
-            summary.failed_orders += 1
-            summary.failed_order_nums.append("")
+            record_failure("", recovery=planned_action == "recover")
             continue
+
         try:
-            change_order_status(client, order_num, target_status_id)
-            summary.updated_orders += 1
-            summary.updated_order_nums.append(order_num)
-            logger.info("Changed order %s to status_id=%s", order_num, target_status_id)
+            live_order = fetch_order_for_recheck(client, order_num)
+            summary.rechecked_orders += 1
         except Exception as exc:  # pragma: no cover - API failure path
-            summary.failed_orders += 1
-            summary.failed_order_nums.append(order_num)
-            logger.error("Failed to change order %s: %s", order_num, exc)
+            record_failure(order_num, recovery=planned_action == "recover")
+            logger.error("Failed to re-read order %s before status change: %s", order_num, exc)
+            continue
+
+        if not live_order:
+            record_failure(order_num, recovery=planned_action == "recover")
+            logger.error("Order %s was not returned by the live pre-mutation recheck", order_num)
+            continue
+
+        live_recovery_reason = recovery_eligibility_reason(live_order, settings)
+        if live_recovery_reason == "eligible":
+            action = "recover"
+            action_status_id = recovery_target_status_id
+        elif planned_action == "recover":
+            reason = f"recovery_{live_recovery_reason}"
+            recheck_skipped[reason] = recheck_skipped.get(reason, 0) + 1
+            logger.info("Skipped recovery for order %s after live recheck: %s", order_num, live_recovery_reason)
+            continue
+        else:
+            live_cancellation_reason = cancellation_eligibility_reason(live_order, settings, cutoff_date)
+            if live_cancellation_reason != "eligible":
+                reason = f"cancellation_{live_cancellation_reason}"
+                recheck_skipped[reason] = recheck_skipped.get(reason, 0) + 1
+                logger.info(
+                    "Skipped cancellation for order %s after live recheck: %s",
+                    order_num,
+                    live_cancellation_reason,
+                )
+                continue
+            action = "cancel"
+            action_status_id = target_status_id
+
+        if action_status_id is None:
+            record_failure(order_num, recovery=action == "recover")
+            logger.error("Missing target status id for action=%s order=%s", action, order_num)
+            continue
+
+        try:
+            change_order_status(client, order_num, action_status_id)
+            if action == "recover":
+                summary.recovered_orders += 1
+                summary.recovered_order_nums.append(order_num)
+                logger.info("Recovered order %s to status_id=%s", order_num, action_status_id)
+            else:
+                summary.updated_orders += 1
+                summary.updated_order_nums.append(order_num)
+                logger.info("Cancelled unpaid order %s with status_id=%s", order_num, action_status_id)
+        except Exception as exc:  # pragma: no cover - API failure path
+            record_failure(order_num, recovery=action == "recover")
+            logger.error("Failed action=%s for order %s: %s", action, order_num, exc)
+
+    summary.recheck_skipped_by_reason = dict(sorted(recheck_skipped.items()))
 
     return summary
