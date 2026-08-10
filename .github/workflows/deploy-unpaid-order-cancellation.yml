@@ -24,7 +24,7 @@ on:
 env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: vevo-reporting
-  IMAGE_TAG: latest
+  COMMIT_IMAGE_TAG_PREFIX: git-
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
@@ -53,14 +53,31 @@ jobs:
 
           PROJECT="$(printf '%s' "${PROJECT}" | tr '[:upper:]' '[:lower:]')"
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          IMAGE_TAG="${COMMIT_IMAGE_TAG_PREFIX}${GITHUB_SHA}"
           IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
-          IMAGE_DIGEST="$(aws ecr describe-images \
-            --repository-name "${ECR_REPOSITORY}" \
-            --image-ids imageTag="${IMAGE_TAG}" \
-            --region "${AWS_REGION}" \
-            --query 'imageDetails[0].imageDigest' \
-            --output text)"
+          IMAGE_DIGEST=""
+          for attempt in $(seq 1 60); do
+            if IMAGE_DIGEST="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag="${IMAGE_TAG}" \
+              --region "${AWS_REGION}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text 2>/dev/null)" && [[ "${IMAGE_DIGEST}" == sha256:* ]]; then
+              break
+            fi
+            IMAGE_DIGEST=""
+            if (( attempt % 6 == 0 )); then
+              echo "Waiting for exact ECR image tag ${IMAGE_TAG} ($((attempt * 10))s)"
+            fi
+            sleep 10
+          done
+          if [[ "${IMAGE_DIGEST}" != sha256:* ]]; then
+            echo "Exact ECR image tag ${IMAGE_TAG} was not published within 10 minutes." >&2
+            echo "Run the Build and Push ECR workflow for commit ${GITHUB_SHA}, then retry this deploy." >&2
+            exit 1
+          fi
           IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+          echo "ECR_EXACT_IMAGE_RESOLVED tag=${IMAGE_TAG} digest=${IMAGE_DIGEST}"
 
           python - "${PROJECT}" <<'PY' > unpaid-settings.env
           import json
