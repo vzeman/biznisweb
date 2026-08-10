@@ -220,6 +220,20 @@
     "age_days": 14,
     "target_status_name": "Nezaplatená - zrušená objednávka",
     "target_status_id": 74,
+    "recovery_enabled": true,
+    "recovery_source_statuses": [
+      "Stripe - expired"
+    ],
+    "recovery_target_status_name": "Odoslaná",
+    "recovery_target_status_id": 4,
+    "recovery_payment_reference_ids": [
+      "6"
+    ],
+    "recovery_payment_title_patterns": [
+      "Bankovým prevodom",
+      "Bankovní převod",
+      "Bank transfer"
+    ],
     "lang_code": "SK",
     "payment_reference_ids": [
       "6",
@@ -238,6 +252,7 @@
       "card"
     ],
     "candidate_statuses": [
+      "Čaká na vybavenie",
       "Čaká na úhradu",
       "Platba online - platnosť vypršala",
       "Platba online - platba zamietnutá",
@@ -270,7 +285,6 @@
       "Nezaplatená - zrušená objednávka",
       "Platba online - zaplatené",
       "Prijatá platba / uhradené",
-      "Čaká na vybavenie",
       "Pripravené k odberu",
       "Odoslaná",
       "Storno",

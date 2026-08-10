@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-07-22
+Last updated: 2026-08-10
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,17 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY unpaid-order Stripe-expiry reconciliation is implemented and locally verified on branch `codex/stripe-expired-reconciliation` (2026-08-10; deployment pending):
+  - root cause: Stripe can overwrite an already fulfilled order back to `Stripe - expired` after an operator has matched an alternative bank transfer, issued the final invoice, and moved the order through the paid/sent states; the existing cancellation job inspected only the current status/payment and could later cancel that genuinely paid order
+  - every prospective cancellation now loads the current order detail before planning and again immediately before mutation; any final invoice is a hard cancellation stop, so the job fails safe if invoice evidence appears between the scan and write
+  - recovery is deliberately narrow: current status must be `Stripe - expired`, a final invoice must predate the current last-change timestamp, and payment resolution must be evidenced by either the invoice API `paid=true` flag or the configured bank-transfer payment identity; eligible orders are restored to `Odoslaná` (`status_id=4`) instead of cancelled
+  - the cancellation scan now queries only configured candidate/recovery status IDs through BizniWeb's official status filter, avoiding the previous broad all-status scan; `Čaká na vybavenie` is an explicit ROY candidate so stale bank-transfer orders can be cancelled while COD remains excluded by the payment guard
+  - CloudWatch and Fargate smoke summaries now include recovery candidates, successful/failed recoveries, pre-mutation rechecks, and the resolved recovery target status
+  - live API work was read-only: order `2677002988` is currently `Odoslaná` after the operator's manual 2026-08-10 correction and is therefore outside the candidate set; its final invoice exists but BizniWeb exposes `paid=false`, which is why bank-transfer identity is an intentional second recovery proof; order `2677003434` is still `Čaká na vybavenie`, bank transfer, older than 14 days, and has no final invoice, so it is eligible for cancellation
+  - the final read-only dry-run completed without API errors: `51` candidate-status rows scanned across `29` pages, `35` cancellation candidates, `0` recovery candidates because `2677002988` was already manually restored, and all `35` cancellation candidates had zero final invoices
+  - local verification passed: `265` CI-equivalent tests, reporting QA smoke, security CI, Python compile, ROY settings JSON, deploy workflow YAML, and `git diff --check`
+  - Next exact step: publish the branch through a draft PR, merge after CI, then run the protected unpaid-cancellation deploy in dry-run mode and require the Fargate instance/IP/service/path hard gate plus localhost marker before any UI verification; do not use `execute_now=true` merely as a smoke because it would send real cancellation emails for the audited backlog
 
 - ROY individual picking-list reprint control is merged, deployed, and live (2026-07-22):
   - incident diagnosis for order `2677003601` confirmed that BizniWeb still exposed the order as paid and fulfillable, while the ROY operations state already marked it printed in batch `picking-20260720123200`; the default picking PDF therefore excluded it even though a preview PDF could still render it

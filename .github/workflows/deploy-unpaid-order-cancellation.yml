@@ -73,6 +73,8 @@ jobs:
           if not raw.get("enabled"):
               raise SystemExit(f"unpaid_order_cancellation is disabled for project={project}")
           required = ["schedule_name", "schedule_expression", "task_family", "target_status_name"]
+          if raw.get("recovery_enabled"):
+              required.append("recovery_target_status_name")
           missing = [key for key in required if not str(raw.get(key) or "").strip()]
           if missing:
               raise SystemExit(f"Missing unpaid_order_cancellation settings: {missing}")
@@ -88,6 +90,9 @@ jobs:
           emit("TASK_FAMILY", raw["task_family"])
           emit("TARGET_STATUS_NAME", raw["target_status_name"])
           emit("TARGET_STATUS_ID", raw.get("target_status_id") or "")
+          emit("RECOVERY_ENABLED", str(bool(raw.get("recovery_enabled"))).lower())
+          emit("RECOVERY_TARGET_STATUS_NAME", raw.get("recovery_target_status_name") or "")
+          emit("RECOVERY_TARGET_STATUS_ID", raw.get("recovery_target_status_id") or "")
           PY
           # shellcheck disable=SC1091
           source unpaid-settings.env
@@ -320,6 +325,9 @@ jobs:
           PROJECT="${REPORT_PROJECT:?REPORT_PROJECT missing}"
           TARGET_STATUS_NAME="${TARGET_STATUS_NAME:?TARGET_STATUS_NAME missing}"
           TARGET_STATUS_ID="${TARGET_STATUS_ID:-}"
+          RECOVERY_ENABLED="${RECOVERY_ENABLED:-false}"
+          RECOVERY_TARGET_STATUS_NAME="${RECOVERY_TARGET_STATUS_NAME:-}"
+          RECOVERY_TARGET_STATUS_ID="${RECOVERY_TARGET_STATUS_ID:-}"
           EXECUTE_NOW="${EXECUTE_NOW:-false}"
           PIDS=()
           cleanup() {
@@ -348,11 +356,18 @@ jobs:
           assert summary["enabled"] is True
           assert summary["dry_run"] is (not execute_now)
           assert summary["target_status_name"] == os.environ["TARGET_STATUS_NAME"]
+          recovery_enabled = os.environ.get("RECOVERY_ENABLED", "false").lower() == "true"
+          assert summary["recovery_enabled"] is recovery_enabled
+          if recovery_enabled:
+              assert summary["recovery_target_status_name"] == os.environ["RECOVERY_TARGET_STATUS_NAME"]
           if execute_now:
               assert int(summary["failed_orders"]) == 0
           expected_id = os.environ.get("TARGET_STATUS_ID") or ""
           if expected_id:
               assert int(summary["target_status_id"]) == int(expected_id)
+          expected_recovery_id = os.environ.get("RECOVERY_TARGET_STATUS_ID") or ""
+          if expected_recovery_id:
+              assert int(summary["recovery_target_status_id"]) == int(expected_recovery_id)
           marker_name = "UNPAID_CANCELLATION_EXECUTE_MARKER_OK" if execute_now else "UNPAID_CANCELLATION_MARKER_OK"
           marker_dir = Path("/tmp/unpaid-cancellation-marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
@@ -363,6 +378,9 @@ jobs:
               "orders_scanned": summary["total_orders_scanned"],
               "eligible_orders": summary["eligible_orders"],
               "updated_orders": summary["updated_orders"],
+              "recovery_candidates": summary["recovery_candidates"],
+              "recovered_orders": summary["recovered_orders"],
+              "recovery_target_status_id": summary["recovery_target_status_id"],
               "target_status_id": summary["target_status_id"],
               "dry_run": summary["dry_run"],
           }
@@ -377,7 +395,8 @@ jobs:
           echo "UNPAID_CANCELLATION_MARKER_END"
           SH
           )"
-          export CONTAINER_NAME PROJECT SMOKE_SCRIPT TARGET_STATUS_NAME TARGET_STATUS_ID EXECUTE_NOW
+          export CONTAINER_NAME PROJECT SMOKE_SCRIPT TARGET_STATUS_NAME TARGET_STATUS_ID RECOVERY_ENABLED
+          export RECOVERY_TARGET_STATUS_NAME RECOVERY_TARGET_STATUS_ID EXECUTE_NOW
           python - <<'PY' > smoke-overrides.json
           import json
           import os
@@ -390,6 +409,15 @@ jobs:
                           {"name": "REPORT_PROJECT", "value": os.environ["PROJECT"]},
                           {"name": "TARGET_STATUS_NAME", "value": os.environ["TARGET_STATUS_NAME"]},
                           {"name": "TARGET_STATUS_ID", "value": os.environ.get("TARGET_STATUS_ID", "")},
+                          {"name": "RECOVERY_ENABLED", "value": os.environ.get("RECOVERY_ENABLED", "false")},
+                          {
+                              "name": "RECOVERY_TARGET_STATUS_NAME",
+                              "value": os.environ.get("RECOVERY_TARGET_STATUS_NAME", ""),
+                          },
+                          {
+                              "name": "RECOVERY_TARGET_STATUS_ID",
+                              "value": os.environ.get("RECOVERY_TARGET_STATUS_ID", ""),
+                          },
                           {"name": "EXECUTE_NOW", "value": os.environ.get("EXECUTE_NOW", "false")},
                       ],
                   }
