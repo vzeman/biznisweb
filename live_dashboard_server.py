@@ -1469,7 +1469,7 @@ def build_roy_operations_dashboard_html(
           <div class="alert-grid" id="inventorySummaryGrid"></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Objednaný produkt</th><th>Objednané kusy</th><th>ETA</th><th>Sklad pri zadaní</th><th>Aktuálny sklad</th><th>Akcia</th></tr></thead>
+              <thead><tr><th>Objednaný produkt</th><th>Objednané kusy</th><th>Nákupná hodnota</th><th>ETA</th><th>Sklad pri zadaní</th><th>Aktuálny sklad</th><th>Akcia</th></tr></thead>
               <tbody id="inboundRowsBody"></tbody>
             </table>
           </div>
@@ -1903,7 +1903,11 @@ def build_roy_operations_dashboard_html(
         metric('Kritický sklad', fmtInt(inv.stock_risk_critical_count), `${fmtInt(inv.stock_risk_30d_count)} položiek v 30d riziku`),
         metric('Objednať teraz', fmtInt(inv.alert_reorder_now_count), `${fmtInt(inv.alert_prepare_po_count)} pripraviť PO`),
         metric('Objednané na ceste', fmtQty(inv.inbound_ordered_units), `${fmtInt(inv.inbound_order_count)} položiek · ETA ${text(inv.inbound_next_arrival_date)}`),
-        metric('Hodnota skladu', fmtMoney(inv.inventory_cost_value), `predajná ${fmtMoney(inv.inventory_retail_value)}`),
+        metric(
+          'Hodnota skladu',
+          fmtMoney(inv.inventory_cost_value_including_inbound ?? inv.inventory_cost_value),
+          `${fmtMoney(inv.inventory_cost_value)} skladom + ${fmtMoney(inv.inbound_cost_value)} na ceste${Number(inv.inbound_unpriced_order_count || 0) ? ` · ${fmtInt(inv.inbound_unpriced_order_count)} bez ceny` : ''}`,
+        ),
       ].join('');
     }
     function orderItemsHtml(order) {
@@ -2132,8 +2136,16 @@ def build_roy_operations_dashboard_html(
       el('demandAnomalyRowsBody').innerHTML = anomalies.length ? anomalies.map(demandAnomalyRow).join('') : '<tr><td colspan="7" class="muted">Bez neobvykle veľkých jednorazových objednávok.</td></tr>';
       el('inventoryMeta').textContent = `${fmtInt(summary.inventory_products_with_stock)} produktov so skladom · coverage ${fmtPct(summary.inventory_cost_coverage_units_pct)} · ${text(summary.demand_model_version, 'legacy')}`;
       el('inventorySummaryGrid').innerHTML = [
-        metric('Nákupná hodnota bez DPH', fmtMoney(summary.inventory_cost_value), `${fmtQty(summary.inventory_available_units)} ks skladom`),
-        metric('Predajná hodnota bez DPH', fmtMoney(summary.inventory_retail_value), `coverage ${fmtPct(summary.inventory_cost_coverage_retail_pct)}`),
+        metric(
+          'Nákupná hodnota bez DPH',
+          fmtMoney(summary.inventory_cost_value_including_inbound ?? summary.inventory_cost_value),
+          `${fmtMoney(summary.inventory_cost_value)} skladom + ${fmtMoney(summary.inbound_cost_value)} na ceste${Number(summary.inbound_unpriced_order_count || 0) ? ` · ${fmtInt(summary.inbound_unpriced_order_count)} bez ceny` : ''}`,
+        ),
+        metric(
+          'Predajná hodnota bez DPH',
+          fmtMoney(summary.inventory_retail_value_including_inbound ?? summary.inventory_retail_value),
+          `${fmtMoney(summary.inventory_retail_value)} skladom + ${fmtMoney(summary.inbound_retail_value)} na ceste`,
+        ),
         metric('45d watchlist', fmtInt(summary.stock_risk_45d_count), `${fmtInt(summary.out_of_stock_recent_demand_count)} vypredané s dopytom`),
         metric('Dead stock', fmtMoney(summary.dead_stock_cost_value), `${fmtInt(summary.dead_stock_count)} položiek`),
         metric('Tržby v riziku', fmtMoney(summary.revenue_at_risk_30d), `zisk ${fmtMoney(summary.profit_at_risk_30d)}`),
@@ -2143,11 +2155,12 @@ def build_roy_operations_dashboard_html(
       el('inboundRowsBody').innerHTML = inboundRows.length ? inboundRows.map((row) => `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
         <td>${fmtQty(row.ordered_units)} ks</td>
+        <td>${row.inbound_cost_value === null || row.inbound_cost_value === undefined ? '<span class="muted">chýba nákupná cena</span>' : `<strong>${fmtMoney(row.inbound_cost_value)}</strong><div class="muted">${fmtMoney(row.cost_per_unit)} / ks</div>`}</td>
         <td>${safe(row.expected_arrival_date)}</td>
         <td>${fmtQty(row.baseline_available_quantity)} ks</td>
         <td>${fmtQty(row.current_available_quantity)} ks</td>
         <td><button type="button" data-clear-inbound="${safe(row.sku)}">Zrušiť</button></td>
-      </tr>`).join('') : '<tr><td colspan="6" class="muted">Žiadne ručne zadané inbound objednávky.</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="7" class="muted">Žiadne ručne zadané inbound objednávky.</td></tr>';
       el('inventoryRowsBody').innerHTML = inventoryRows.length ? inventoryRows.slice(0, visibleInventoryLimit).map((row) => `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
         <td>${fmtQty(row.available_quantity)} ks</td>

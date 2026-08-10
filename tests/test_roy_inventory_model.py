@@ -64,7 +64,13 @@ def inventory_row(
     available_quantity: float = 0.0,
     inventory_cost_value: float = 0.0,
     inventory_retail_value: float = 0.0,
+    cost_per_unit: float | None = None,
+    retail_unit_price: float | None = None,
 ) -> dict:
+    if cost_per_unit is None and available_quantity > 0 and inventory_cost_value:
+        cost_per_unit = inventory_cost_value / available_quantity
+    if retail_unit_price is None and available_quantity > 0:
+        retail_unit_price = inventory_retail_value / available_quantity
     return {
         "reporting_sku": sku,
         "reporting_product": product,
@@ -77,6 +83,8 @@ def inventory_row(
         "inventory_cost_value": inventory_cost_value,
         "inventory_retail_value": inventory_retail_value,
         "mapped_inventory_retail_value": inventory_retail_value if inventory_cost_value else 0.0,
+        "cost_per_unit": cost_per_unit,
+        "retail_unit_price_eur": retail_unit_price or 0.0,
     }
 
 
@@ -181,6 +189,32 @@ class RoyInventoryModelTests(unittest.TestCase):
         self.assertEqual("Out of stock", row["stock_risk_level"])
         self.assertEqual("low_stock_after_large_order", row["alert_reason_code"])
         self.assertLess(float(row["alert_30d_units"]), 5.0)
+
+    def test_zero_stock_row_keeps_known_unit_values_for_inbound_valuation(self) -> None:
+        exporter = RoyInventoryModelExporter(
+            inventory_snapshot=pd.DataFrame(
+                [
+                    inventory_row(
+                        "SPIKE-SKU",
+                        "Slow Product",
+                        cost_per_unit=2.5,
+                        retail_unit_price=10.0,
+                    )
+                ]
+            )
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=self._one_off_spike_rows(),
+        )
+
+        row = result["stock_risk_rows"].loc[
+            result["stock_risk_rows"]["sku"] == "SPIKE-SKU"
+        ].iloc[0]
+        self.assertEqual(2.5, float(row["cost_per_unit"]))
+        self.assertEqual(10.0, float(row["retail_unit_price"]))
 
     def test_short_history_keeps_legacy_demand_floor(self) -> None:
         exporter = RoyInventoryModelExporter(
