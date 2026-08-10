@@ -520,6 +520,26 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertIn("\u010cak\u00e1 na vybavenie", settings.candidate_statuses)
         self.assertNotIn("\u010cak\u00e1 na vybavenie", settings.excluded_statuses)
 
+    def test_deploy_waits_for_the_exact_merge_image(self) -> None:
+        build_workflow = (
+            ROOT_DIR / ".github" / "workflows" / "build-and-push-ecr.yml"
+        ).read_text(encoding="utf-8")
+        deploy_workflow = (
+            ROOT_DIR / ".github" / "workflows" / "deploy-unpaid-order-cancellation.yml"
+        ).read_text(encoding="utf-8")
+
+        exact_tag = 'COMMIT_IMAGE_TAG="${COMMIT_IMAGE_TAG_PREFIX}${GITHUB_SHA}"'
+        self.assertIn(exact_tag, build_workflow)
+        self.assertIn('docker push "$COMMIT_IMAGE_URI"', build_workflow)
+        self.assertIn("ECR_EXACT_IMAGE_OK", build_workflow)
+        self.assertIn('IMAGE_TAG="${COMMIT_IMAGE_TAG_PREFIX}${GITHUB_SHA}"', deploy_workflow)
+        self.assertIn("Waiting for exact ECR image tag", deploy_workflow)
+        self.assertIn("ECR_EXACT_IMAGE_RESOLVED", deploy_workflow)
+        self.assertLess(
+            deploy_workflow.index("ECR_EXACT_IMAGE_RESOLVED"),
+            deploy_workflow.index("aws ecs register-task-definition"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
