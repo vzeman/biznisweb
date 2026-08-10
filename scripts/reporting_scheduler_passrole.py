@@ -13,7 +13,7 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Iterable, Tuple
 
 
 ROLE_ARN_RE = re.compile(
@@ -44,6 +44,61 @@ def validate_role_arn(role_arn: str, account_id: str) -> Tuple[str, str]:
     if "*" in role_path or role_path.endswith("/"):
         raise ValueError(f"IAM role ARN must identify one exact role: {role_arn!r}")
     return match.group("partition"), role_path.rsplit("/", 1)[-1]
+
+
+def validate_passrole_simulation(
+    simulation: Dict[str, Any], expected_resource_arns: Iterable[str]
+) -> None:
+    """Require an allowed ``iam:PassRole`` result for every exact role ARN.
+
+    IAM returns one top-level evaluation per simulated action. When multiple
+    resources are supplied for that action, their decisions live in
+    ``ResourceSpecificResults`` rather than separate top-level results.
+    """
+
+    expected_resources = list(dict.fromkeys(expected_resource_arns))
+    if not expected_resources:
+        raise ValueError("PassRole simulation needs at least one expected resource")
+
+    results = simulation.get("EvaluationResults")
+    if not isinstance(results, list) or len(results) != 1:
+        raise ValueError("PassRole simulation must contain one action result")
+    action_result = results[0]
+    if not isinstance(action_result, dict):
+        raise ValueError("PassRole action result is invalid")
+    if action_result.get("EvalActionName") != "iam:PassRole":
+        raise ValueError("PassRole simulation returned an unexpected action")
+    if action_result.get("EvalDecision") != "allowed":
+        raise ValueError("PassRole action is not allowed")
+
+    resource_results = action_result.get("ResourceSpecificResults")
+    if not isinstance(resource_results, list):
+        raise ValueError("PassRole resource-specific results are missing")
+    decisions: Dict[str, str] = {}
+    for resource_result in resource_results:
+        if not isinstance(resource_result, dict):
+            raise ValueError("PassRole resource result is invalid")
+        resource_arn = str(resource_result.get("EvalResourceName") or "")
+        if not resource_arn or resource_arn in decisions:
+            raise ValueError(
+                "PassRole resource results contain a missing or duplicate ARN"
+            )
+        decisions[resource_arn] = str(
+            resource_result.get("EvalResourceDecision") or ""
+        )
+
+    if set(decisions) != set(expected_resources):
+        raise ValueError("PassRole simulation resources do not match the expected roles")
+    denied_resources = sorted(
+        resource_arn
+        for resource_arn, decision in decisions.items()
+        if decision != "allowed"
+    )
+    if denied_resources:
+        raise ValueError(
+            "PassRole is not allowed for expected roles: "
+            + ", ".join(denied_resources)
+        )
 
 
 def build_passrole_documents(

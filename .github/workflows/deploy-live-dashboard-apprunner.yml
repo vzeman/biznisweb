@@ -1281,12 +1281,14 @@ jobs:
                 --resource-arns "${PROJECT_TASK_ROLE_ARN}" "${PROJECT_EXECUTION_ROLE_ARN}" \
                 --context-entries ContextKeyName=iam:PassedToService,ContextKeyValues=ecs-tasks.amazonaws.com,ContextKeyType=string \
                 --output json > reporting-scheduler-passrole-simulation.json \
-                && python - <<'PY'
+                && python - "${PROJECT_TASK_ROLE_ARN}" "${PROJECT_EXECUTION_ROLE_ARN}" <<'PY'
           import json
+          import sys
 
-          results = json.load(open("reporting-scheduler-passrole-simulation.json", encoding="utf-8")).get("EvaluationResults") or []
-          if len(results) != 2 or any(result.get("EvalDecision") != "allowed" for result in results):
-              raise SystemExit(1)
+          from scripts.reporting_scheduler_passrole import validate_passrole_simulation
+
+          simulation = json.load(open("reporting-scheduler-passrole-simulation.json", encoding="utf-8"))
+          validate_passrole_simulation(simulation, sys.argv[1:])
           PY
               then
                 PASSROLE_SIMULATION_READY=true
