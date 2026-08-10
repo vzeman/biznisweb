@@ -88,6 +88,9 @@ class LiveDashboardRefreshGateTests(unittest.TestCase):
         self.assertIn("aws iam put-role-policy", workflow)
         self.assertIn("aws iam get-role-policy", workflow)
         self.assertIn("aws iam simulate-principal-policy", workflow)
+        self.assertIn(
+            "validate_passrole_simulation(simulation, sys.argv[1:])", workflow
+        )
         self.assertIn("role drifted from", workflow)
         self.assertIn("changed during deployment", workflow)
         unconditional_verify = "schedule-passrole-verified.json"

@@ -3,6 +3,7 @@ import unittest
 
 from scripts.reporting_scheduler_passrole import (
     build_passrole_documents,
+    validate_passrole_simulation,
     validate_role_arn,
 )
 
@@ -33,6 +34,62 @@ SCHEDULER_ROLE_DOCUMENT = {
 
 
 class ReportingSchedulerPassRoleTests(unittest.TestCase):
+    def test_accepts_one_action_with_two_allowed_resource_results(self) -> None:
+        simulation = {
+            "EvaluationResults": [
+                {
+                    "EvalActionName": "iam:PassRole",
+                    "EvalResourceName": "arn:aws:iam::${Account}:role/${RoleName}",
+                    "EvalDecision": "allowed",
+                    "ResourceSpecificResults": [
+                        {
+                            "EvalResourceName": TASK_ROLE_ARN,
+                            "EvalResourceDecision": "allowed",
+                        },
+                        {
+                            "EvalResourceName": EXECUTION_ROLE_ARN,
+                            "EvalResourceDecision": "allowed",
+                        },
+                    ],
+                }
+            ]
+        }
+
+        validate_passrole_simulation(
+            simulation, [TASK_ROLE_ARN, EXECUTION_ROLE_ARN]
+        )
+
+    def test_rejects_denied_or_missing_passrole_resource(self) -> None:
+        denied = {
+            "EvaluationResults": [
+                {
+                    "EvalActionName": "iam:PassRole",
+                    "EvalDecision": "allowed",
+                    "ResourceSpecificResults": [
+                        {
+                            "EvalResourceName": TASK_ROLE_ARN,
+                            "EvalResourceDecision": "allowed",
+                        },
+                        {
+                            "EvalResourceName": EXECUTION_ROLE_ARN,
+                            "EvalResourceDecision": "implicitDeny",
+                        },
+                    ],
+                }
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, "not allowed for expected roles"):
+            validate_passrole_simulation(
+                denied, [TASK_ROLE_ARN, EXECUTION_ROLE_ARN]
+            )
+
+        missing = json.loads(json.dumps(denied))
+        missing["EvaluationResults"][0]["ResourceSpecificResults"].pop()
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            validate_passrole_simulation(
+                missing, [TASK_ROLE_ARN, EXECUTION_ROLE_ARN]
+            )
+
     def test_builds_exact_account_local_ecs_passrole_policy(self) -> None:
         schedule = {"Target": {"RoleArn": SCHEDULER_ROLE_ARN}}
         task_definition = {

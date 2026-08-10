@@ -61,6 +61,15 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY inbound inventory valuation deploy follow-up is in progress on `2026-08-10`:
+  - branch: `codex/fix-scheduler-passrole-gate`
+  - inventory valuation PR `#257` merged as `6079020cd25ea2df851c339c160c41effd956033`; exact ECR build `31410114494` succeeded with digest `sha256:c896fc3c9993218326c6d3f2fa3fbf620a1482e6543fded142f59faae518188a`
+  - full deploy `31410363837` completed the Fargate artifact refresh and published source timestamp `2026-08-10T17:12:56Z`, but the workflow later failed before App Runner promotion
+  - skip-refresh deploy `31413627782` proved the exact candidate image directly in Fargate (`a2716936951646f4b9448100d51ad4f3`, private IP `172.31.41.195`, service `roy-daily-report-email`, localhost marker `LIVE_ARTIFACT_MARKER_OK`) and then reproduced the blocker
+  - root cause: IAM correctly returns one top-level result per simulated action with the two role decisions nested under `ResourceSpecificResults`; the deploy gate incorrectly required two top-level results and rejected an otherwise fully `allowed` response
+  - fix: validate exactly one `iam:PassRole` action plus the exact expected task/execution role ARN set, while continuing to fail closed on a missing, duplicate, extra, or non-allowed resource decision
+  - Next exact step: pass focused/full validation, merge through PR, build the exact image, rerun the protected skip-refresh deploy, verify the Fargate localhost marker and App Runner host markers, then verify the combined inbound valuation in the production Chrome UI
+
 - ROY inbound inventory valuation is implemented locally on `2026-08-10`:
   - branch: `codex/roy-inbound-inventory-value`
   - root cause: the operations dashboard used only the current on-hand purchase-cost total; manually recorded inbound units affected stock-risk coverage but contributed no value to the inventory KPI
