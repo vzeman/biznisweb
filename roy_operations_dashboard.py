@@ -1799,6 +1799,46 @@ def _current_availability_by_sku(inventory: Dict[str, Any]) -> Dict[str, float]:
     return availability
 
 
+def _finite_nonnegative_float(value: Any) -> Optional[float]:
+    parsed = _optional_float(value)
+    if parsed is None or not math.isfinite(parsed) or parsed < 0:
+        return None
+    return parsed
+
+
+def _inventory_unit_values_by_sku(inventory: Dict[str, Any]) -> Dict[str, Dict[str, Optional[float]]]:
+    values_by_sku: Dict[str, Dict[str, Optional[float]]] = {}
+    for _, rows in _inventory_row_collections(inventory):
+        for row in rows:
+            sku = str(row.get("sku") or "").strip()
+            if not sku:
+                continue
+
+            cost_per_unit = _finite_nonnegative_float(row.get("cost_per_unit"))
+            if cost_per_unit is None:
+                mapped_units = _finite_nonnegative_float(row.get("mapped_available_quantity"))
+                cost_value = _finite_nonnegative_float(row.get("inventory_cost_value"))
+                if mapped_units and cost_value is not None:
+                    cost_per_unit = cost_value / mapped_units
+
+            retail_per_unit = _finite_nonnegative_float(row.get("retail_unit_price"))
+            if retail_per_unit is None:
+                available_units = _finite_nonnegative_float(row.get("available_quantity"))
+                retail_value = _finite_nonnegative_float(row.get("inventory_retail_value"))
+                if available_units and retail_value is not None:
+                    retail_per_unit = retail_value / available_units
+
+            current = values_by_sku.setdefault(
+                sku,
+                {"cost_per_unit": None, "retail_per_unit": None},
+            )
+            if current["cost_per_unit"] is None and cost_per_unit is not None:
+                current["cost_per_unit"] = cost_per_unit
+            if current["retail_per_unit"] is None and retail_per_unit is not None:
+                current["retail_per_unit"] = retail_per_unit
+    return values_by_sku
+
+
 def _stock_risk_sets() -> Tuple[set[str], set[str]]:
     risk_30d = {"Negative stock", "Out of stock", "Critical", "Low", "Lead time risk"}
     risk_45d = {"Negative stock", "Out of stock", "Critical", "Low", "Lead time risk", "Watch"}
@@ -2521,9 +2561,26 @@ def _auto_clear_restocked_inbound_orders(state: Dict[str, Any], inventory: Dict[
 
 def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any], project_settings: Dict[str, Any]) -> None:
     inbound = state.get("inbound_orders") if isinstance(state.get("inbound_orders"), dict) else {}
+    summary = inventory.setdefault("summary", {})
+    inventory_cost_value = _to_float(summary.get("inventory_cost_value"))
+    inventory_retail_value = _to_float(summary.get("inventory_retail_value"))
+    inventory_available_units = _to_float(summary.get("inventory_available_units"))
+    unit_values_by_sku = _inventory_unit_values_by_sku(inventory)
     if not inbound:
-        inventory.setdefault("summary", {})["inbound_order_count"] = 0
-        inventory.setdefault("summary", {})["inbound_ordered_units"] = 0.0
+        summary.update(
+            {
+                "inbound_order_count": 0,
+                "inbound_ordered_units": 0.0,
+                "inbound_costed_order_count": 0,
+                "inbound_unpriced_order_count": 0,
+                "inbound_costed_units": 0.0,
+                "inbound_cost_value": 0.0,
+                "inbound_retail_value": 0.0,
+                "inventory_cost_value_including_inbound": round(inventory_cost_value, 2),
+                "inventory_retail_value_including_inbound": round(inventory_retail_value, 2),
+                "inventory_units_including_inbound": round(inventory_available_units, 1),
+            }
+        )
         inventory["inbound_order_rows"] = []
         _finalize_inventory_alert_rows(inventory)
         return
@@ -2599,9 +2656,17 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
 
         expected_arrival_date = str(record.get("expected_arrival_date") or "").strip()
         inbound_covers = bool(ordered_units > 0 and (suggested <= 0 or current_risk not in risk_30d))
+        unit_values = unit_values_by_sku.get(sku) or {}
+        cost_per_unit = unit_values.get("cost_per_unit")
+        retail_per_unit = unit_values.get("retail_per_unit")
         row.update(
             {
                 "inbound_ordered_units": round(ordered_units, 2),
+                "inbound_cost_per_unit": round(cost_per_unit, 4) if cost_per_unit is not None else None,
+                "inbound_retail_per_unit": round(retail_per_unit, 4) if retail_per_unit is not None else None,
+                "inbound_cost_value": round(ordered_units * cost_per_unit, 2) if cost_per_unit is not None else None,
+                "inbound_retail_value": round(ordered_units * retail_per_unit, 2) if retail_per_unit is not None else None,
+                "inbound_valuation_status": "costed" if cost_per_unit is not None else "missing_cost",
                 "inbound_expected_arrival_date": expected_arrival_date,
                 "inbound_created_at": record.get("created_at"),
                 "inbound_updated_at": record.get("updated_at"),
@@ -2645,26 +2710,50 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
     inventory["revenue_at_risk_rows"] = [row for row in inventory.get("revenue_at_risk_rows", []) if keep_45d(row)]
     inventory["stock_risk_rows"] = [row for row in inventory.get("stock_risk_rows", []) if keep_45d(row)]
 
-    summary = inventory.setdefault("summary", {})
-    active_inbound = [record for record in inbound.values() if _to_float(record.get("ordered_units")) > 0]
-    next_eta = min((str(record.get("expected_arrival_date")) for record in active_inbound if record.get("expected_arrival_date")), default=None)
     availability = _current_availability_by_sku(inventory)
-    inventory["inbound_order_rows"] = sorted(
-        [
+    active_inbound_rows: List[Dict[str, Any]] = []
+    for stored_sku, record in inbound.items():
+        ordered_units = _to_float(record.get("ordered_units"))
+        if ordered_units <= 0:
+            continue
+        sku = str(record.get("sku") or stored_sku)
+        unit_values = unit_values_by_sku.get(sku) or {}
+        cost_per_unit = unit_values.get("cost_per_unit")
+        retail_per_unit = unit_values.get("retail_per_unit")
+        active_inbound_rows.append(
             {
-                "sku": str(record.get("sku") or sku),
+                "sku": sku,
                 "product": str(record.get("product") or ""),
-                "ordered_units": round(_to_float(record.get("ordered_units")), 2),
+                "ordered_units": round(ordered_units, 2),
                 "expected_arrival_date": record.get("expected_arrival_date"),
                 "baseline_available_quantity": _to_float(record.get("baseline_available_quantity")),
-                "current_available_quantity": round(availability.get(str(sku), _to_float(record.get("baseline_available_quantity"))), 2),
+                "current_available_quantity": round(
+                    availability.get(sku, _to_float(record.get("baseline_available_quantity"))),
+                    2,
+                ),
+                "cost_per_unit": round(cost_per_unit, 4) if cost_per_unit is not None else None,
+                "retail_per_unit": round(retail_per_unit, 4) if retail_per_unit is not None else None,
+                "inbound_cost_value": round(ordered_units * cost_per_unit, 2) if cost_per_unit is not None else None,
+                "inbound_retail_value": round(ordered_units * retail_per_unit, 2) if retail_per_unit is not None else None,
+                "valuation_status": "costed" if cost_per_unit is not None else "missing_cost",
                 "created_at": record.get("created_at"),
                 "updated_at": record.get("updated_at"),
             }
-            for sku, record in inbound.items()
-            if _to_float(record.get("ordered_units")) > 0
-        ],
+        )
+    inventory["inbound_order_rows"] = sorted(
+        active_inbound_rows,
         key=lambda row: (str(row.get("expected_arrival_date") or "9999-99-99"), str(row.get("sku") or "")),
+    )
+    active_inbound = inventory["inbound_order_rows"]
+    next_eta = min(
+        (str(row.get("expected_arrival_date")) for row in active_inbound if row.get("expected_arrival_date")),
+        default=None,
+    )
+    costed_inbound = [row for row in active_inbound if row.get("inbound_cost_value") is not None]
+    inbound_cost_value = round(sum(_to_float(row.get("inbound_cost_value")) for row in costed_inbound), 2)
+    inbound_retail_value = round(
+        sum(_to_float(row.get("inbound_retail_value")) for row in active_inbound if row.get("inbound_retail_value") is not None),
+        2,
     )
     alert_rows = inventory.get("alert_rows", [])
     restock_rows = inventory.get("restock_priority_rows", [])
@@ -2673,8 +2762,19 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
     summary.update(
         {
             "inbound_order_count": len(active_inbound),
-            "inbound_ordered_units": round(sum(_to_float(record.get("ordered_units")) for record in active_inbound), 1),
+            "inbound_ordered_units": round(sum(_to_float(row.get("ordered_units")) for row in active_inbound), 1),
             "inbound_next_arrival_date": next_eta,
+            "inbound_costed_order_count": len(costed_inbound),
+            "inbound_unpriced_order_count": len(active_inbound) - len(costed_inbound),
+            "inbound_costed_units": round(sum(_to_float(row.get("ordered_units")) for row in costed_inbound), 1),
+            "inbound_cost_value": inbound_cost_value,
+            "inbound_retail_value": inbound_retail_value,
+            "inventory_cost_value_including_inbound": round(inventory_cost_value + inbound_cost_value, 2),
+            "inventory_retail_value_including_inbound": round(inventory_retail_value + inbound_retail_value, 2),
+            "inventory_units_including_inbound": round(
+                inventory_available_units + sum(_to_float(row.get("ordered_units")) for row in active_inbound),
+                1,
+            ),
             "alert_delivery_count": len(alert_rows),
             "alert_reorder_now_count": sum(1 for row in alert_rows if str(row.get("reorder_action_label") or "") == "Order now"),
             "alert_prepare_po_count": sum(1 for row in alert_rows if str(row.get("reorder_action_label") or "") == "Prepare PO"),

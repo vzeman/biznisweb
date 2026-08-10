@@ -715,6 +715,9 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("Hrubý zisk/strata", html)
         self.assertNotIn("Zisk s fixom", html)
         self.assertIn("data-save-inbound", html)
+        self.assertIn("inventory_cost_value_including_inbound", html)
+        self.assertIn("inbound_cost_value", html)
+        self.assertIn("chýba nákupná cena", html)
         self.assertIn("soundToggleBtn", html)
         self.assertIn("playNewOrderSound", html)
         self.assertIn("loud-two-tone-v2", html)
@@ -844,6 +847,9 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                     "summary": {
                         "alert_delivery_count": 1,
                         "stock_risk_30d_count": 1,
+                        "inventory_available_units": 10,
+                        "inventory_cost_value": 100,
+                        "inventory_retail_value": 250,
                     },
                     "alert_rows": [
                         {
@@ -871,6 +877,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                             "suggested_reorder_units": 8,
                             "stock_risk_level": "Out of stock",
                             "reorder_action_label": "Order now",
+                            "cost_per_unit": 4,
+                            "retail_unit_price": 10,
                         }
                     ],
                     "restock_priority_rows": [
@@ -931,7 +939,63 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual([], inventory["restock_priority_rows"])
         self.assertEqual(1, inventory["summary"]["inbound_order_count"])
         self.assertEqual(20, inventory["inbound_order_rows"][0]["ordered_units"])
+        self.assertEqual(80, inventory["summary"]["inbound_cost_value"])
+        self.assertEqual(180, inventory["summary"]["inventory_cost_value_including_inbound"])
+        self.assertEqual(200, inventory["summary"]["inbound_retail_value"])
+        self.assertEqual(450, inventory["summary"]["inventory_retail_value_including_inbound"])
+        self.assertEqual(30, inventory["summary"]["inventory_units_including_inbound"])
+        self.assertEqual(4, inventory["inbound_order_rows"][0]["cost_per_unit"])
+        self.assertEqual(80, inventory["inbound_order_rows"][0]["inbound_cost_value"])
         self.assertEqual("Inbound ordered", inventory["inventory_rows"][0]["reorder_action_label"])
+
+    def test_inbound_inventory_value_reports_missing_purchase_cost_without_guessing(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {
+                        "inventory_available_units": 5,
+                        "inventory_cost_value": 50,
+                        "inventory_retail_value": 100,
+                    },
+                    "inventory_rows": [
+                        {
+                            "sku": "NO-COST",
+                            "product": "Unpriced inbound product",
+                            "available_quantity": 0,
+                            "stock_risk_level": "Out of stock",
+                        }
+                    ],
+                }
+            }
+        }
+        state = {
+            "version": 1,
+            "loss_acknowledgements": {},
+            "inbound_orders": {
+                "NO-COST": {
+                    "sku": "NO-COST",
+                    "product": "Unpriced inbound product",
+                    "ordered_units": 7,
+                    "expected_arrival_date": "2026-08-20",
+                    "baseline_available_quantity": 0,
+                }
+            },
+            "auto_cleared_inbound_orders": [],
+        }
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={"inventory_model": {}},
+        )
+
+        self.assertFalse(state_changed)
+        self.assertEqual(0, inventory["summary"]["inbound_cost_value"])
+        self.assertEqual(50, inventory["summary"]["inventory_cost_value_including_inbound"])
+        self.assertEqual(0, inventory["summary"]["inbound_costed_order_count"])
+        self.assertEqual(1, inventory["summary"]["inbound_unpriced_order_count"])
+        self.assertIsNone(inventory["inbound_order_rows"][0]["inbound_cost_value"])
+        self.assertEqual("missing_cost", inventory["inbound_order_rows"][0]["valuation_status"])
 
     def test_stock_alerts_are_ranked_by_expected_cm2_loss_before_severity(self) -> None:
         high_impact = {

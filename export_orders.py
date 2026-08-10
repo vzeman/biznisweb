@@ -12243,6 +12243,8 @@ class BizniWebExporter:
             "inventory_cost_value",
             "inventory_retail_value",
             "mapped_inventory_retail_value",
+            "known_cost_per_unit",
+            "known_retail_unit_price",
             "history_only_inventory_flag",
         ]
 
@@ -12280,6 +12282,33 @@ class BizniWebExporter:
                     inventory_frame["mapped_available_quantity"],
                     errors="coerce",
                 ).fillna(0.0)
+                if "cost_per_unit" not in inventory_frame.columns:
+                    inventory_frame["cost_per_unit"] = np.where(
+                        inventory_frame["mapped_available_quantity"] > 0,
+                        inventory_frame["inventory_cost_value"] / inventory_frame["mapped_available_quantity"],
+                        np.nan,
+                    )
+                else:
+                    inventory_frame["cost_per_unit"] = pd.to_numeric(
+                        inventory_frame["cost_per_unit"],
+                        errors="coerce",
+                    )
+                if "retail_unit_price_eur" not in inventory_frame.columns:
+                    inventory_frame["retail_unit_price_eur"] = np.where(
+                        inventory_frame["available_quantity"] > 0,
+                        inventory_frame["inventory_retail_value"] / inventory_frame["available_quantity"],
+                        0.0,
+                    )
+                else:
+                    inventory_frame["retail_unit_price_eur"] = pd.to_numeric(
+                        inventory_frame["retail_unit_price_eur"],
+                        errors="coerce",
+                    ).fillna(0.0)
+
+                def _single_known_unit_value(values: pd.Series) -> float:
+                    numeric = pd.to_numeric(values, errors="coerce")
+                    finite_values = numeric.loc[np.isfinite(numeric)].unique()
+                    return float(finite_values[0]) if len(finite_values) == 1 else np.nan
 
                 inventory_products_df = (
                     inventory_frame.groupby("reporting_sku")
@@ -12295,6 +12324,8 @@ class BizniWebExporter:
                         inventory_cost_value=("inventory_cost_value", "sum"),
                         inventory_retail_value=("inventory_retail_value", "sum"),
                         mapped_inventory_retail_value=("mapped_inventory_retail_value", "sum"),
+                        known_cost_per_unit=("cost_per_unit", _single_known_unit_value),
+                        known_retail_unit_price=("retail_unit_price_eur", _single_known_unit_value),
                     )
                     .reset_index()
                     .rename(columns={"reporting_sku": "sku"})
@@ -12329,6 +12360,8 @@ class BizniWebExporter:
                                 "inventory_cost_value": 0.0,
                                 "inventory_retail_value": 0.0,
                                 "mapped_inventory_retail_value": 0.0,
+                                "known_cost_per_unit": np.nan,
+                                "known_retail_unit_price": 0.0,
                                 "history_only_inventory_flag": True,
                             }
                         )
@@ -12347,16 +12380,26 @@ class BizniWebExporter:
                 "inventory_cost_value",
                 "inventory_retail_value",
                 "mapped_inventory_retail_value",
+                "known_retail_unit_price",
             ):
                 inventory_products_df[column] = pd.to_numeric(
                     inventory_products_df[column],
                     errors="coerce",
                 ).fillna(0.0)
+            inventory_products_df["known_cost_per_unit"] = pd.to_numeric(
+                inventory_products_df["known_cost_per_unit"],
+                errors="coerce",
+            )
 
             inventory_products_df["cost_per_unit"] = np.where(
                 inventory_products_df["mapped_available_quantity"] > 0,
                 inventory_products_df["inventory_cost_value"] / inventory_products_df["mapped_available_quantity"],
-                np.nan,
+                inventory_products_df["known_cost_per_unit"],
+            )
+            inventory_products_df["retail_unit_price"] = np.where(
+                inventory_products_df["available_quantity"] > 0,
+                inventory_products_df["inventory_retail_value"] / inventory_products_df["available_quantity"],
+                inventory_products_df["known_retail_unit_price"],
             )
             inventory_products_df["cost_coverage_pct"] = np.where(
                 inventory_products_df["available_quantity"] > 0,

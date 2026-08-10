@@ -61,6 +61,17 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY inbound inventory valuation is implemented locally on `2026-08-10`:
+  - branch: `codex/roy-inbound-inventory-value`
+  - root cause: the operations dashboard used only the current on-hand purchase-cost total; manually recorded inbound units affected stock-risk coverage but contributed no value to the inventory KPI
+  - the reporting inventory model now preserves a known mapped purchase cost and retail unit price even when the product currently has zero stock, while conflicting or missing unit values remain unpriced instead of being guessed
+  - the live operations snapshot now exposes on-hand value, inbound value, and the combined owned-inventory value separately; inbound rows include unit cost, extended cost, retail value, and an explicit `costed` / `missing_cost` status
+  - the ROY UI now shows `Hodnota skladu` and both detailed valuation cards as `skladom + na ceste`; each inbound row shows its purchase value, and products without a mapped purchase cost are visibly marked `chýba nákupná cena`
+  - local verification passed: Python compile; focused ROY inventory/operations suite (`61` tests); live auth/mobile/modern dashboard suite (`21` tests); full suite (`273` tests); reporting QA smoke; security CI; generated ROY inline JavaScript syntax; and `git diff --check`
+  - local `scripts/check_env.ps1` was not applicable in the isolated clean worktree because `.env` is intentionally absent and secrets were not copied
+  - Known issue: the change is not deployed yet; existing production artifacts do not contain the zero-stock unit-value fields required to value every current inbound product
+  - Next exact step: commit and push the branch, merge through PR, build the exact image, deploy ROY with an artifact refresh, verify the Fargate localhost marker and combined inbound valuation fields, and only then verify the production dashboard UI
+
 - ROY unpaid-order Stripe-expiry reconciliation is merged, deployed, and live (2026-08-10):
   - root cause: Stripe can overwrite an already fulfilled order back to `Stripe - expired` after an operator has matched an alternative bank transfer, issued the final invoice, and moved the order through the paid/sent states; the existing cancellation job inspected only the current status/payment and could later cancel that genuinely paid order
   - every prospective cancellation now loads the current order detail before planning and again immediately before mutation; any final invoice is a hard cancellation stop, so the job fails safe if invoice evidence appears between the scan and write
