@@ -47,6 +47,8 @@ def reporting_item(
         "item_import_code": item_import_code,
         "item_quantity": quantity,
         "item_total_without_tax": revenue,
+        "expense_per_item": (revenue * 0.4) / quantity,
+        "expense_source": "missing_cost_fallback",
         "total_expense": revenue * 0.4,
         "profit_before_ads": revenue * 0.6,
         "fb_ads_daily_spend": 0.0,
@@ -250,6 +252,14 @@ class ReportingProductIdentityTests(unittest.TestCase):
         )
         self.assertEqual({"14832", "12840", "F_482"}, set(items_agg["product_sku"]))
         self.assertAlmostEqual(300.0, float(items_agg["total_revenue"].sum()), places=2)
+
+        expense_qa = exporter._build_product_expense_coverage_qa(
+            canonical_df,
+            report_date_from="2026-05-01",
+            report_date_to="2026-05-01",
+        )
+        self.assertEqual(0, expense_qa["fallback_rows"])
+        self.assertEqual([], expense_qa["fallback_items"])
 
     def test_roy_reporting_expands_wachman_rio_solar_to_components(self) -> None:
         exporter = ReportingIdentityExporter("roy")

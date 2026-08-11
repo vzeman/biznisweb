@@ -61,14 +61,16 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY large bear-set product identity is ready for review on `2026-08-11`:
-  - branch: `agent/roy-merge-large-bear-sets`
-  - `Velký set proti medvědům`, `Set against bears LARGE`, and `Set proti medvědům VEĽKÝ (miesto malého)` now use the existing `maco_stop_large_set` component expansion together with `Set MACO STOP VEĽKÝ`
-  - all localized parent labels are therefore excluded as standalone reporting products and their revenue, demand, and purchase cost are assigned to the same known-cost components (`14832`, `12840`, `F_482`)
-  - the live pre-change report showed the three newly covered aliases among missing-cost rows (`EUR 191.22`, `EUR 56.06`, and `EUR 29.26` net revenue respectively); they are bundle aliases, not genuine products with missing purchase prices
-  - local verification passed: JSON validation, Python compile, focused ROY product-identity/inventory/dashboard suite (`65` tests), full suite (`275` tests), reporting QA smoke, security CI, and `git diff --check`
+- ROY large bear-set product identity and missing-cost QA fix are ready for review on `2026-08-11`:
+  - identity PR `#260` merged as `05d8a1ee69218af1d89d6b3dfb9071e5e8562c3f`; build run `31458161047` published exact digest `sha256:0dcef0dc1e4390b28f15399b48cee85925c515a53a9b9adb81e6bfbbff392c8d`
+  - protected deploy `31458279053` succeeded on Fargate task `4f77bcbcd8a94eaca6cda16e42b5127c`, private IP `172.31.31.40`, candidate task definition `roy-reporting-daily:63`, and localhost marker path `http://127.0.0.1:8000/marker.json`; App Runner service `biznisweb-roy-operations-dashboard` also passed its release gates
+  - post-deploy Chrome verification loaded generation `2026-08-11 04:40:48` and exposed a remaining data-path bug: product analyses used canonical `analytics_df`, but `_build_product_expense_coverage_qa` still received raw `df`, so bundle aliases remained in the missing-cost table
+  - fix branch: `agent/roy-missing-cost-canonical-input`; purchase-cost QA now receives `analytics_df`, matching every downstream product analysis
+  - `Velký set proti medvědům`, `Set against bears LARGE`, and `Set proti medvědům VEĽKÝ (miesto malého)` use the existing `maco_stop_large_set` expansion together with `Set MACO STOP VEĽKÝ`; revenue, demand, and purchase cost are assigned to known-cost components `14832`, `12840`, and `F_482`
+  - the regression starts parent rows with a missing-cost fallback and requires zero fallback rows after canonical component expansion
+  - local verification passed: Python compile, focused identity/calculation/dashboard suite (`126` tests), full suite (`275` tests), reporting QA smoke, security CI, and `git diff --check`
   - no local server, worker, watcher, or tunnel was started
-  - Next exact step: open and merge the PR, deploy the exact merge image through the protected ROY workflow, require its ECS localhost marker and App Runner gates, then verify the production report no longer lists any localized large-set parent as a missing-cost product
+  - Next exact step: merge the QA-input fix PR, build and deploy the exact merge image, require the ECS localhost/App Runner gates, then verify in Chrome that all three parent aliases are absent from the production missing-cost table
 
 - ROY inbound inventory valuation is merged, deployed, and live on `2026-08-10`:
   - inventory valuation PR `#257` merged as `6079020cd25ea2df851c339c160c41effd956033`; deploy-gate fix PR `#258` merged as `c2b996a161c41a9f524b6a14b16c92496a0b4355`
