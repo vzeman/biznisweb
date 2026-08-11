@@ -6916,7 +6916,7 @@ class BizniWebExporter:
             cost_per_order=cost_per_order,
         )
         source_health.setdefault("qa", {})["product_expense_coverage"] = self._build_product_expense_coverage_qa(
-            df,
+            analytics_df,
             report_date_from=date_from,
             report_date_to=date_to,
         )
