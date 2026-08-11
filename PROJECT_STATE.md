@@ -61,16 +61,17 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY large bear-set product identity and missing-cost QA fix are ready for review on `2026-08-11`:
-  - identity PR `#260` merged as `05d8a1ee69218af1d89d6b3dfb9071e5e8562c3f`; build run `31458161047` published exact digest `sha256:0dcef0dc1e4390b28f15399b48cee85925c515a53a9b9adb81e6bfbbff392c8d`
-  - protected deploy `31458279053` succeeded on Fargate task `4f77bcbcd8a94eaca6cda16e42b5127c`, private IP `172.31.31.40`, candidate task definition `roy-reporting-daily:63`, and localhost marker path `http://127.0.0.1:8000/marker.json`; App Runner service `biznisweb-roy-operations-dashboard` also passed its release gates
-  - post-deploy Chrome verification loaded generation `2026-08-11 04:40:48` and exposed a remaining data-path bug: product analyses used canonical `analytics_df`, but `_build_product_expense_coverage_qa` still received raw `df`, so bundle aliases remained in the missing-cost table
-  - fix branch: `agent/roy-missing-cost-canonical-input`; purchase-cost QA now receives `analytics_df`, matching every downstream product analysis
-  - `Velký set proti medvědům`, `Set against bears LARGE`, and `Set proti medvědům VEĽKÝ (miesto malého)` use the existing `maco_stop_large_set` expansion together with `Set MACO STOP VEĽKÝ`; revenue, demand, and purchase cost are assigned to known-cost components `14832`, `12840`, and `F_482`
-  - the regression starts parent rows with a missing-cost fallback and requires zero fallback rows after canonical component expansion
+- ROY large bear-set product identity and missing-cost QA fix are merged, deployed, and live on `2026-08-11`:
+  - identity PR `#260` merged as `05d8a1ee69218af1d89d6b3dfb9071e5e8562c3f`; QA-input PR `#261` merged as `dbcd65bfe054cedf16c5e8dc08d2f2be4b40a2bd`
+  - `Velký set proti medvědům`, `Set against bears LARGE`, and `Set proti medvědům VEĽKÝ (miesto malého)` now use the existing `maco_stop_large_set` expansion together with `Set MACO STOP VEĽKÝ`; revenue, demand, and purchase cost are assigned to known-cost components `14832`, `12840`, and `F_482`
+  - root cause of the initial post-deploy miss: product analyses used canonical `analytics_df`, but `_build_product_expense_coverage_qa` still received raw `df`; PR `#261` routes the same canonical frame into the purchase-cost QA and its regression requires zero fallback rows after component expansion
   - local verification passed: Python compile, focused identity/calculation/dashboard suite (`126` tests), full suite (`275` tests), reporting QA smoke, security CI, and `git diff --check`
-  - no local server, worker, watcher, or tunnel was started
-  - Next exact step: merge the QA-input fix PR, build and deploy the exact merge image, require the ECS localhost/App Runner gates, then verify in Chrome that all three parent aliases are absent from the production missing-cost table
+  - exact merge-image build run `31461615820` published tag `git-dbcd65bfe054cedf16c5e8dc08d2f2be4b40a2bd` and digest `sha256:27f2017d29454a0ed297ac3da8cbc1aa0434ed526be4e773a97691b32a1f5f8b`
+  - protected deploy `31461773028` succeeded for service `roy-daily-report-email` on Fargate task `4319a0992abe4c459ddf8c1904aaaa1b`, private IP `172.31.31.4`, candidate/promoted task definition `roy-reporting-daily:64`, exact digest above, and localhost marker path `http://127.0.0.1:8000/marker.json`; App Runner service `biznisweb-roy-operations-dashboard` completed its release gates
+  - post-deploy Chrome verification loaded generation `2026-08-11 05:45:41`; all three parent aliases are absent globally and from the missing-cost table, while the canonical `Set MACO STOP VEĽKÝ` row contains `9` units
+  - missing-cost coverage improved from `109` to `104` rows; recent 30-day fallback revenue fell from `€1,514.48` (`4.74%`) to `€1,267.20` (`3.96%`)
+  - no local server, worker, watcher, or tunnel was started; two obsolete ROY API browser tabs were closed and the selected ROY report tab was retained for the user
+  - Next exact step: add real purchase costs for the eight material fallback products (full-history net item revenue at least `€100`), starting with Holosun HS407C X2, XTAR AA 4150 mWh / 2500 mAh 4ks, and Box na Wachman Discovery
 
 - ROY inbound inventory valuation is merged, deployed, and live on `2026-08-10`:
   - inventory valuation PR `#257` merged as `6079020cd25ea2df851c339c160c41effd956033`; deploy-gate fix PR `#258` merged as `c2b996a161c41a9f524b6a14b16c92496a0b4355`
