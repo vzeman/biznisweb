@@ -30,7 +30,10 @@
       "bundle_patterns": [
         "Set MACO STOP VEĽKÝ",
         "Set proti medveďom VEĽKÝ",
-        "Set proti medveďom veľký (miesto malého)"
+        "Set proti medveďom veľký (miesto malého)",
+        "Velký set proti medvědům",
+        "Set against bears LARGE",
+        "Set proti medvědům VEĽKÝ (miesto malého)"
       ],
       "components": [
         {
@@ -468,7 +471,10 @@
           "set proti medvedom velky",
           "set proti medvedom",
           "set sprej na medveda 300ml s kapsickou",
-          "set proti medvedom velky (miesto maleho)"
+          "set proti medvedom velky (miesto maleho)",
+          "velky set proti medvedum",
+          "set against bears large",
+          "set proti medvedum velky (miesto maleho)"
         ],
         "exclude_bundle_from_alerts": true,
         "components": [

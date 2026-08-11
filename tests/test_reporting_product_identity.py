@@ -183,23 +183,63 @@ class ReportingProductIdentityTests(unittest.TestCase):
                     120.0,
                     quantity=2,
                 ),
+                reporting_item(
+                    "R-MACO-CZ",
+                    "H-906556E0",
+                    "Velký set proti medvědům",
+                    "",
+                    60.0,
+                ),
+                reporting_item(
+                    "R-MACO-EN",
+                    "H-FED33077",
+                    "Set against bears LARGE",
+                    "",
+                    60.0,
+                ),
+                reporting_item(
+                    "R-MACO-CZ-SUB",
+                    "13365",
+                    "Set proti medvědům VEĽKÝ (miesto malého)",
+                    "",
+                    60.0,
+                ),
             ]
         )
 
         canonical_df = exporter.add_reporting_product_identity_columns(item_df)
 
-        self.assertNotIn("H-226DA29F", set(canonical_df["product_sku"]))
-        self.assertNotIn("Set MACO STOP VEĽKÝ", set(canonical_df["item_label"]))
+        self.assertTrue(
+            {"H-226DA29F", "H-906556E0", "H-FED33077", "13365"}.isdisjoint(
+                set(canonical_df["product_sku"])
+            )
+        )
+        self.assertTrue(
+            {
+                "Set MACO STOP VEĽKÝ",
+                "Velký set proti medvědům",
+                "Set against bears LARGE",
+                "Set proti medvědům VEĽKÝ (miesto malého)",
+            }.isdisjoint(set(canonical_df["item_label"]))
+        )
         self.assertEqual({"14832", "12840", "F_482"}, set(canonical_df["product_sku"]))
         self.assertTrue(canonical_df["bundle_component_flag"].all())
-        self.assertEqual({"Set MACO STOP VEĽKÝ"}, set(canonical_df["bundle_parent_item_label"]))
-        self.assertAlmostEqual(120.0, float(canonical_df["item_total_without_tax"].sum()), places=2)
-        self.assertAlmostEqual(52.02, float(canonical_df["total_expense"].sum()), places=2)
+        self.assertEqual(
+            {
+                "Set MACO STOP VEĽKÝ",
+                "Velký set proti medvědům",
+                "Set against bears LARGE",
+                "Set proti medvědům VEĽKÝ (miesto malého)",
+            },
+            set(canonical_df["bundle_parent_item_label"]),
+        )
+        self.assertAlmostEqual(300.0, float(canonical_df["item_total_without_tax"].sum()), places=2)
+        self.assertAlmostEqual(130.05, float(canonical_df["total_expense"].sum()), places=2)
 
-        quantity_by_sku = canonical_df.set_index("product_sku")["item_quantity"].to_dict()
-        self.assertEqual(2, int(quantity_by_sku["14832"]))
-        self.assertEqual(2, int(quantity_by_sku["12840"]))
-        self.assertEqual(2, int(quantity_by_sku["F_482"]))
+        quantity_by_sku = canonical_df.groupby("product_sku")["item_quantity"].sum().to_dict()
+        self.assertEqual(5, int(quantity_by_sku["14832"]))
+        self.assertEqual(5, int(quantity_by_sku["12840"]))
+        self.assertEqual(5, int(quantity_by_sku["F_482"]))
 
         _, _, items_agg, _, _ = exporter.create_aggregated_reports(
             canonical_df,
@@ -209,7 +249,7 @@ class ReportingProductIdentityTests(unittest.TestCase):
             google_ads_daily_spend={},
         )
         self.assertEqual({"14832", "12840", "F_482"}, set(items_agg["product_sku"]))
-        self.assertAlmostEqual(120.0, float(items_agg["total_revenue"].sum()), places=2)
+        self.assertAlmostEqual(300.0, float(items_agg["total_revenue"].sum()), places=2)
 
     def test_roy_reporting_expands_wachman_rio_solar_to_components(self) -> None:
         exporter = ReportingIdentityExporter("roy")

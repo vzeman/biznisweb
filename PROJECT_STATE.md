@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,15 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- ROY large bear-set product identity is ready for review on `2026-08-11`:
+  - branch: `agent/roy-merge-large-bear-sets`
+  - `Velký set proti medvědům`, `Set against bears LARGE`, and `Set proti medvědům VEĽKÝ (miesto malého)` now use the existing `maco_stop_large_set` component expansion together with `Set MACO STOP VEĽKÝ`
+  - all localized parent labels are therefore excluded as standalone reporting products and their revenue, demand, and purchase cost are assigned to the same known-cost components (`14832`, `12840`, `F_482`)
+  - the live pre-change report showed the three newly covered aliases among missing-cost rows (`EUR 191.22`, `EUR 56.06`, and `EUR 29.26` net revenue respectively); they are bundle aliases, not genuine products with missing purchase prices
+  - local verification passed: JSON validation, Python compile, focused ROY product-identity/inventory/dashboard suite (`65` tests), full suite (`275` tests), reporting QA smoke, security CI, and `git diff --check`
+  - no local server, worker, watcher, or tunnel was started
+  - Next exact step: open and merge the PR, deploy the exact merge image through the protected ROY workflow, require its ECS localhost marker and App Runner gates, then verify the production report no longer lists any localized large-set parent as a missing-cost product
 
 - ROY inbound inventory valuation is merged, deployed, and live on `2026-08-10`:
   - inventory valuation PR `#257` merged as `6079020cd25ea2df851c339c160c41effd956033`; deploy-gate fix PR `#258` merged as `c2b996a161c41a9f524b6a14b16c92496a0b4355`
