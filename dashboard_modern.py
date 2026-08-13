@@ -949,6 +949,31 @@ def generate_modern_dashboard(
         ["cohort", "cohort_age_days", "retention_2nd_pct", "retention_3rd_pct", "retention_4th_pct", "retention_5th_pct"],
         limit=12,
     )
+    cohort_ltv_source = (cohort_analysis or {}).get("cohort_ltv") or {}
+    cohort_ltv_month_columns = [
+        str(column)
+        for column in list(cohort_ltv_source.get("month_columns") or [])
+        if re.fullmatch(r"M\d+", str(column))
+    ]
+    cohort_ltv_row_columns = [
+        "cohort",
+        "new_customers",
+        "repeat_customers",
+        "repeat_rate_pct",
+        "first_order_ltv",
+        "observed_months",
+        *cohort_ltv_month_columns,
+    ]
+    cohort_ltv_rows = _frame_rows(
+        cohort_ltv_source.get("rows"),
+        cohort_ltv_row_columns,
+        limit=60,
+    )
+    cohort_ltv_average = {
+        key: _json_safe(value)
+        for key, value in dict(cohort_ltv_source.get("average") or {}).items()
+        if key in cohort_ltv_row_columns
+    }
 
     customer_daily = (new_vs_returning_revenue or {}).get("daily")
     if customer_daily is not None and not getattr(customer_daily, "empty", True):
@@ -2323,6 +2348,15 @@ def generate_modern_dashboard(
         "cohort_time_to_nth_rows": cohort_time_to_nth_rows,
         "cohort_revenue_by_order_rows": cohort_revenue_by_order_rows,
         "mature_cohort_rows": mature_cohort_rows,
+        "cohort_ltv": {
+            "available": bool(cohort_ltv_source.get("available") and cohort_ltv_rows),
+            "revenue_basis": str(cohort_ltv_source.get("revenue_basis") or ""),
+            "analysis_end_month": _json_safe(cohort_ltv_source.get("analysis_end_month")),
+            "excluded_prior_customers": int(_num(cohort_ltv_source.get("excluded_prior_customers"))),
+            "month_columns": cohort_ltv_month_columns,
+            "rows": cohort_ltv_rows,
+            "average": cohort_ltv_average,
+        },
         "refund_rate": _maybe_num(refund_summary.get("refund_rate_pct")),
         "returning_customers": returning_payload,
         "clv": clv_payload,
@@ -3539,6 +3573,121 @@ def generate_modern_dashboard(
     ) or '<tr><td colspan="5"><span class="lang-en">No cohort retention data available.</span><span class="lang-sk hidden">Kohortná retencia nie je dostupná.</span></td></tr>'
 
 
+    def _cohort_ltv_sparkline(values: List[Any]) -> str:
+        numbers = [number for number in (_maybe_num(value) for value in values) if number is not None]
+        if not numbers:
+            return '<span class="cohort-ltv-empty-mark">&mdash;</span>'
+        width = 88.0
+        height = 28.0
+        padding = 2.0
+        minimum = min(numbers)
+        maximum = max(numbers)
+        spread = maximum - minimum
+        points = []
+        for index, number in enumerate(numbers):
+            x = padding if len(numbers) == 1 else padding + index * (width - 2 * padding) / (len(numbers) - 1)
+            y = height / 2 if spread <= 0 else height - padding - ((number - minimum) / spread) * (height - 2 * padding)
+            points.append((x, y))
+        point_text = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+        last_x, last_y = points[-1]
+        return (
+            f'<svg class="cohort-ltv-sparkline" viewBox="0 0 {width:.0f} {height:.0f}" '
+            f'preserveAspectRatio="none" aria-hidden="true"><polyline points="{point_text}" />'
+            f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="2.4" /></svg>'
+        )
+
+    def _cohort_month_label(value: Any) -> str:
+        match = re.fullmatch(r"(\d{4})-(\d{2})", str(value or ""))
+        if not match:
+            return escape(str(value or "-"))
+        month_names = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        year = int(match.group(1))
+        month = int(match.group(2))
+        if month < 1 or month > 12:
+            return escape(str(value or "-"))
+        return f"{month_names[month - 1]} {year % 100:02d}"
+
+    cohort_ltv_max_value = max(
+        (
+            number
+            for row in cohort_ltv_rows
+            for number in (_maybe_num(row.get(column)) for column in cohort_ltv_month_columns)
+            if number is not None
+        ),
+        default=0.0,
+    )
+
+    def _cohort_ltv_value_cell(value: Any) -> str:
+        number = _maybe_num(value)
+        if number is None:
+            return '<td class="cohort-ltv-empty"><span aria-label="not observed">&mdash;</span></td>'
+        ratio = max(0.0, min(number / cohort_ltv_max_value, 1.0)) if cohort_ltv_max_value > 0 else 0.0
+        alpha = 0.08 + ratio * 0.78
+        text_color = "#ffffff" if ratio >= 0.54 else "#241f19"
+        return (
+            f'<td class="cohort-ltv-value" style="background:rgba(71,102,255,{alpha:.3f});color:{text_color}">'
+            f'&euro;{number:,.2f}</td>'
+        )
+
+    def _cohort_ltv_row_html(row: Dict[str, Any], *, average: bool = False) -> str:
+        trend_values = [row.get(column) for column in cohort_ltv_month_columns]
+        cohort_label = (
+            '<span class="lang-en">Average</span><span class="lang-sk hidden">Priemer</span>'
+            if average
+            else _cohort_month_label(row.get("cohort"))
+        )
+        cells = "".join(_cohort_ltv_value_cell(row.get(column)) for column in cohort_ltv_month_columns)
+        row_class = ' class="cohort-ltv-average"' if average else ""
+        return (
+            f"<tr{row_class}>"
+            f'<td class="cohort-ltv-cohort">{cohort_label}</td>'
+            f'<td class="number">{int(round(_num(row.get("new_customers")))):,}</td>'
+            f'<td class="number">{_num(row.get("repeat_rate_pct")):.1f}%</td>'
+            f'<td class="cohort-ltv-trend">{_cohort_ltv_sparkline(trend_values)}</td>'
+            f'<td class="cohort-ltv-first">&euro;{_num(row.get("first_order_ltv")):,.2f}</td>'
+            f"{cells}</tr>"
+        )
+
+    cohort_ltv_header_cells_html = "".join(
+        f'<th class="number">{escape(column)}</th>' for column in cohort_ltv_month_columns
+    )
+    cohort_ltv_rows_html = "".join(_cohort_ltv_row_html(row) for row in cohort_ltv_rows)
+    if cohort_ltv_average:
+        cohort_ltv_rows_html += _cohort_ltv_row_html(cohort_ltv_average, average=True)
+    cohort_ltv_exclusion_note_html = ""
+    if int(_num(cohort_ltv_source.get("excluded_prior_customers"))) > 0:
+        excluded_prior_customers = int(_num(cohort_ltv_source.get("excluded_prior_customers")))
+        cohort_ltv_exclusion_note_html = (
+            f'<p class="muted-note"><span class="lang-en">Excluded {excluded_prior_customers:,} customers acquired before this report history.</span>'
+            f'<span class="lang-sk hidden">Vylucenych {excluded_prior_customers:,} zakaznikov ziskanych pred historiou tohto reportu.</span></p>'
+        )
+    cohort_ltv_section_html = ""
+    if cohort_ltv_rows and cohort_ltv_month_columns:
+        cohort_ltv_section_html = f"""
+                    <div class="panel table-card cohort-ltv-card" style="margin-top:18px;">
+                        <div class="card-head">
+                            <div>
+                                <h3><span class="lang-en">Cohort LTV</span><span class="lang-sk hidden">Kohortne LTV</span></h3>
+                                <p><span class="lang-en">Cumulative net revenue per acquired customer. M0 is the acquisition calendar month; R-% is the observed repeat-purchase rate.</span><span class="lang-sk hidden">Kumulativna cista trzba na ziskaneho zakaznika. M0 je kalendarny mesiac akvizicie; R-% je pozorovana miera opakovaneho nakupu.</span></p>
+                            </div>
+                        </div>
+                        {cohort_ltv_exclusion_note_html}
+                        <div class="cohort-ltv-scroll" role="region" aria-label="Cohort lifetime value matrix" tabindex="0">
+                            <table class="cohort-ltv-table">
+                                <thead><tr>
+                                    <th><span class="lang-en">Cohort</span><span class="lang-sk hidden">Kohorta</span></th>
+                                    <th class="number"><span class="lang-en">New</span><span class="lang-sk hidden">Novi</span></th>
+                                    <th class="number">R-%</th>
+                                    <th><span class="lang-en">Trend</span><span class="lang-sk hidden">Trend</span></th>
+                                    <th class="number"><span class="lang-en">First order</span><span class="lang-sk hidden">Prva objednavka</span></th>
+                                    {cohort_ltv_header_cells_html}
+                                </tr></thead>
+                                <tbody>{cohort_ltv_rows_html}</tbody>
+                            </table>
+                        </div>
+                    </div>
+        """
+
     order_frequency_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('frequency') or '-'))}</td><td>{int(round(_num(row.get('customer_count'))))}</td><td>{int(round(_num(row.get('total_orders'))))}</td><td>{_num(row.get('customer_pct')):.1f}%</td><td>{_num(row.get('orders_pct')):.1f}%</td></tr>"
         for row in cohort_order_frequency_rows
@@ -3977,6 +4126,24 @@ def generate_modern_dashboard(
         .kpi-sparkline svg {{ display:block; width: 100%; height: 44px; overflow: visible; }}
         .chart-card, .table-card, .health-card {{ padding: 20px; }}
         .table-card {{ overflow-x:auto; }}
+        .cohort-ltv-card {{ overflow:hidden; }}
+        .cohort-ltv-scroll {{ width:100%; overflow:auto; border:1px solid var(--line); border-radius:18px; background:#fff; }}
+        .cohort-ltv-scroll:focus {{ outline:3px solid rgba(71,102,255,.22); outline-offset:2px; }}
+        .cohort-ltv-table {{ width:max-content; min-width:100%; font-variant-numeric:tabular-nums; }}
+        .cohort-ltv-table th, .cohort-ltv-table td {{ min-width:82px; padding:12px 10px; text-align:center; white-space:nowrap; }}
+        .cohort-ltv-table th {{ background:#fffdfa; }}
+        .cohort-ltv-table th:first-child, .cohort-ltv-table td:first-child {{ position:sticky; left:0; min-width:92px; text-align:left; z-index:2; background:#fff; box-shadow:8px 0 16px rgba(36,31,25,.05); }}
+        .cohort-ltv-table thead th:first-child {{ z-index:3; background:#fffdfa; }}
+        .cohort-ltv-table .cohort-ltv-trend {{ min-width:108px; }}
+        .cohort-ltv-table .cohort-ltv-first {{ min-width:108px; font-weight:800; }}
+        .cohort-ltv-value {{ border:2px solid #fff; font-weight:850; }}
+        .cohort-ltv-empty {{ color:#b8afa5; background:repeating-linear-gradient(135deg, #fbf8f3, #fbf8f3 6px, #f5f0e9 6px, #f5f0e9 12px); }}
+        .cohort-ltv-average td {{ border-top:2px solid rgba(71,102,255,.32); font-weight:900; }}
+        .cohort-ltv-average td:first-child {{ background:#f3f5ff; }}
+        .cohort-ltv-sparkline {{ display:block; width:88px; height:28px; margin:0 auto; overflow:visible; }}
+        .cohort-ltv-sparkline polyline {{ fill:none; stroke:#4766ff; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }}
+        .cohort-ltv-sparkline circle {{ fill:#4766ff; }}
+        .cohort-ltv-empty-mark {{ color:#b8afa5; }}
         .card-head {{ display:flex; justify-content:space-between; gap:12px; align-items:start; margin-bottom: 16px; }}
         .card-head h3 {{ margin:0; font-size:18px; }}
         .card-head p {{ margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }}
@@ -4511,6 +4678,7 @@ def generate_modern_dashboard(
                         </div>
                     </div>
                     {sample_funnel_section_html}
+                    {cohort_ltv_section_html}
                     <div class="grid-2">
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">Refill cohort timing</span><span class="lang-sk hidden">Casovanie refill kohort</span></h3><p><span class="lang-en">Second-order refill speed by first-order entry bucket so refill timing is measured by cohort, not only global repeat rate.</span><span class="lang-sk hidden">Rychlost druhej objednavky podla vstupneho bucketu prvej objednavky, aby sa refill meral kohortne a nie len globalnym repeat rate.</span></p></div></div>
