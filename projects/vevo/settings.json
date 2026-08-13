@@ -163,7 +163,10 @@
       "17",
       "18",
       "20"
-    ]
+    ],
+    "missing_payment_metadata_realized_order_overrides": {
+      "2602007112": "Verified in VEVO administration on 2026-08-13: shipped damage-compensation order for Slovak Parcel Service, 21.15 EUR net, intentionally has no delivery or payment method."
+    }
   },
   "excluded_order_statuses": [
     "madfrog stara odoslana"
