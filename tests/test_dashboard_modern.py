@@ -38,6 +38,94 @@ class DashboardModernTests(unittest.TestCase):
         self.assertEqual([80.0, 0.0, 120.0, 0.0], payload["clicks"])
         self.assertEqual([3924.0, 0.0, 5630.0, 0.0], payload["impressions"])
 
+    def test_cohort_ltv_heatmap_is_visible_and_preserves_null_future_months(self) -> None:
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2026-02-28"),
+                    "total_revenue": 300.0,
+                    "net_profit": 80.0,
+                    "contribution_profit": 100.0,
+                    "unique_orders": 3,
+                    "fb_ads_spend": 20.0,
+                    "google_ads_spend": 5.0,
+                    "total_items": 3,
+                    "product_expense": 120.0,
+                    "total_cost": 220.0,
+                    "pre_ad_contribution_profit": 125.0,
+                }
+            ]
+        )
+        items_agg = pd.DataFrame(
+            [{"item_label": "Test", "total_quantity": 3, "total_revenue": 300.0}]
+        )
+        cohort_rows = pd.DataFrame(
+            [
+                {
+                    "cohort": "2026-01",
+                    "new_customers": 2,
+                    "repeat_customers": 1,
+                    "repeat_rate_pct": 50.0,
+                    "first_order_ltv": 75.0,
+                    "observed_months": 1,
+                    "M0": 85.0,
+                    "M1": 100.0,
+                },
+                {
+                    "cohort": "2026-02",
+                    "new_customers": 1,
+                    "repeat_customers": 0,
+                    "repeat_rate_pct": 0.0,
+                    "first_order_ltv": 80.0,
+                    "observed_months": 0,
+                    "M0": 80.0,
+                    "M1": None,
+                },
+            ]
+        )
+        cohort_average = {
+            "cohort": "Average",
+            "new_customers": 2,
+            "repeat_customers": 1,
+            "repeat_rate_pct": 33.3,
+            "first_order_ltv": 76.67,
+            "observed_months": 1,
+            "M0": 83.33,
+            "M1": 100.0,
+        }
+
+        html = generate_modern_dashboard(
+            date_agg,
+            items_agg,
+            datetime(2026, 1, 1),
+            datetime(2026, 2, 28),
+            report_title="VEVO cohort test",
+            cohort_analysis={
+                "summary": {"total_customers": 3, "repeat_customers": 1, "repeat_rate_pct": 33.3},
+                "cohort_ltv": {
+                    "available": True,
+                    "revenue_basis": "order_revenue_net",
+                    "analysis_end_month": "2026-02",
+                    "excluded_prior_customers": 4,
+                    "month_columns": ["M0", "M1"],
+                    "rows": cohort_rows,
+                    "average": cohort_average,
+                },
+            },
+            source_health={"project": "vevo"},
+        )
+
+        self.assertIn("Cohort LTV", html)
+        self.assertIn("Cumulative net revenue per acquired customer", html)
+        self.assertIn('class="cohort-ltv-value"', html)
+        self.assertIn('class="cohort-ltv-average"', html)
+        self.assertIn("Excluded 4 customers acquired before this report history", html)
+        payload = extract_embedded_dashboard_payload(html)["cohort_ltv"]
+        self.assertEqual(["M0", "M1"], payload["month_columns"])
+        self.assertEqual(100.0, payload["rows"][0]["M1"])
+        self.assertIsNone(payload["rows"][1]["M1"])
+        self.assertEqual(83.33, payload["average"]["M0"])
+
     def test_frame_rows_serializes_nested_country_top_products(self) -> None:
         rows = _frame_rows(
             pd.DataFrame(

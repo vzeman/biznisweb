@@ -61,6 +61,13 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- VEVO monthly Cohort LTV heatmap implementation is in progress on `codex/vevo-cohort-ltv-heatmap` (`2026-08-13`):
+  - reusable cohort analytics now calculate cumulative net revenue LTV per acquired customer for calendar months `M0..Mn`, together with cohort size, observed repeat rate, first-order LTV, and customer-weighted averages
+  - customers whose known first purchase predates the visible report history are excluded from the matrix so rolling period slices cannot fabricate acquisition cohorts from returning customers
+  - the modern customer dashboard now renders a responsive, horizontally scrollable heatmap with a sticky cohort column, `New`, `R-%`, a per-cohort trend sparkline, first-order LTV, cumulative `M0..Mn` values, explicit future-month blanks, and a customer-weighted average row
+  - focused and full relevant verification passes: `96` dashboard/reporting-calculation tests, Python compile, payload null-preservation regression, and `git diff --check`
+  - Next exact step: generate a fresh full-history VEVO report, run reporting QA plus visual inspection, and record the exact artifact and cohort totals
+
 - ROY large bear-set product identity and missing-cost QA fix are merged, deployed, and live on `2026-08-11`:
   - identity PR `#260` merged as `05d8a1ee69218af1d89d6b3dfb9071e5e8562c3f`; QA-input PR `#261` merged as `dbcd65bfe054cedf16c5e8dc08d2f2be4b40a2bd`
   - `Velký set proti medvědům`, `Set against bears LARGE`, and `Set proti medvědům VEĽKÝ (miesto malého)` now use the existing `maco_stop_large_set` expansion together with `Set MACO STOP VEĽKÝ`; revenue, demand, and purchase cost are assigned to known-cost components `14832`, `12840`, and `F_482`
