@@ -1859,6 +1859,110 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertTrue(pd.isna(weekly.iloc[0]["cumulative_avg_cac"]))
         self.assertEqual(16.0, weekly.iloc[1]["cumulative_avg_cac"])
 
+    def test_monthly_cohort_ltv_is_cumulative_and_customer_weighted(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "A-1",
+                    "customer_email": "a@example.com",
+                    "purchase_date": "2026-01-05 10:00:00",
+                    "customer_first_purchase_date": "2026-01-05 10:00:00",
+                    "order_revenue_net": 100.0,
+                },
+                {
+                    "order_num": "A-2",
+                    "customer_email": "a@example.com",
+                    "purchase_date": "2026-01-20 10:00:00",
+                    "customer_first_purchase_date": "2026-01-05 10:00:00",
+                    "order_revenue_net": 20.0,
+                },
+                {
+                    "order_num": "A-3",
+                    "customer_email": "a@example.com",
+                    "purchase_date": "2026-02-05 10:00:00",
+                    "customer_first_purchase_date": "2026-01-05 10:00:00",
+                    "order_revenue_net": 30.0,
+                },
+                {
+                    "order_num": "B-1",
+                    "customer_email": "b@example.com",
+                    "purchase_date": "2026-01-10 10:00:00",
+                    "customer_first_purchase_date": "2026-01-10 10:00:00",
+                    "order_revenue_net": 50.0,
+                },
+                {
+                    "order_num": "B-2",
+                    "customer_email": "b@example.com",
+                    "purchase_date": "2026-03-01 10:00:00",
+                    "customer_first_purchase_date": "2026-01-10 10:00:00",
+                    "order_revenue_net": 50.0,
+                },
+                {
+                    "order_num": "C-1",
+                    "customer_email": "c@example.com",
+                    "purchase_date": "2026-02-02 10:00:00",
+                    "customer_first_purchase_date": "2026-02-02 10:00:00",
+                    "order_revenue_net": 80.0,
+                },
+                {
+                    "order_num": "C-2",
+                    "customer_email": "c@example.com",
+                    "purchase_date": "2026-03-02 10:00:00",
+                    "customer_first_purchase_date": "2026-02-02 10:00:00",
+                    "order_revenue_net": 20.0,
+                },
+            ]
+        )
+
+        result = exporter._build_monthly_cohort_ltv(frame, "order_revenue_net")
+
+        self.assertTrue(result["available"])
+        self.assertEqual(["M0", "M1", "M2"], result["month_columns"])
+        january = result["rows"].iloc[0]
+        february = result["rows"].iloc[1]
+        self.assertEqual(2, january["new_customers"])
+        self.assertEqual(100.0, january["repeat_rate_pct"])
+        self.assertEqual(75.0, january["first_order_ltv"])
+        self.assertEqual(85.0, january["M0"])
+        self.assertEqual(100.0, january["M1"])
+        self.assertEqual(125.0, january["M2"])
+        self.assertEqual(100.0, february["M1"])
+        self.assertTrue(pd.isna(february["M2"]))
+        self.assertEqual(76.67, result["average"]["first_order_ltv"])
+        self.assertEqual(83.33, result["average"]["M0"])
+        self.assertEqual(100.0, result["average"]["M1"])
+        self.assertEqual(125.0, result["average"]["M2"])
+
+    def test_monthly_cohort_ltv_excludes_customers_acquired_before_visible_history(self) -> None:
+        exporter = make_exporter(project_name="vevo")
+        frame = pd.DataFrame(
+            [
+                {
+                    "order_num": "OLD-2",
+                    "customer_email": "old@example.com",
+                    "purchase_date": "2026-01-12 10:00:00",
+                    "customer_first_purchase_date": "2025-12-01 10:00:00",
+                    "order_revenue_net": 90.0,
+                },
+                {
+                    "order_num": "NEW-1",
+                    "customer_email": "new@example.com",
+                    "purchase_date": "2026-01-15 10:00:00",
+                    "customer_first_purchase_date": "2026-01-15 10:00:00",
+                    "order_revenue_net": 70.0,
+                },
+            ]
+        )
+
+        result = exporter._build_monthly_cohort_ltv(frame, "order_revenue_net")
+
+        self.assertTrue(result["available"])
+        self.assertEqual(1, result["excluded_prior_customers"])
+        self.assertEqual(1, len(result["rows"]))
+        self.assertEqual(1, result["rows"].iloc[0]["new_customers"])
+        self.assertEqual(70.0, result["rows"].iloc[0]["M0"])
+
     def test_advanced_cohort_cac_uses_full_fb_google_calendars(self) -> None:
         exporter = make_exporter(project_name="vevo")
         frame = pd.DataFrame(

@@ -7658,6 +7658,164 @@ class BizniWebExporter:
         )
         return result
 
+    def _build_monthly_cohort_ltv(self, df: pd.DataFrame, revenue_col: str) -> dict:
+        """Build cumulative monthly revenue LTV for acquisition cohorts.
+
+        M0 is the acquisition calendar month, M1 the following calendar month,
+        and so on. Values are cumulative net revenue divided by the original
+        number of customers in the cohort. Customers whose known first purchase
+        predates the visible dataframe are excluded because their earlier
+        revenue is unavailable in the current report slice.
+        """
+        base_columns = [
+            "cohort",
+            "new_customers",
+            "repeat_customers",
+            "repeat_rate_pct",
+            "first_order_ltv",
+            "observed_months",
+        ]
+        empty_result = {
+            "available": False,
+            "revenue_basis": revenue_col,
+            "month_columns": [],
+            "rows": pd.DataFrame(columns=base_columns),
+            "average": {},
+            "analysis_end_month": None,
+            "excluded_prior_customers": 0,
+        }
+        required_columns = {"order_num", "customer_email", "purchase_date", revenue_col}
+        if df.empty or not required_columns.issubset(df.columns):
+            return empty_result
+
+        selected_columns = ["order_num", "customer_email", "purchase_date", revenue_col]
+        if "customer_first_purchase_date" in df.columns:
+            selected_columns.append("customer_first_purchase_date")
+
+        orders = df[selected_columns].drop_duplicates(subset=["order_num"]).copy()
+        orders["customer_email"] = orders["customer_email"].fillna("").astype(str).str.strip().str.lower()
+        orders["purchase_datetime"] = pd.to_datetime(orders["purchase_date"], errors="coerce")
+        orders["order_revenue"] = pd.to_numeric(orders[revenue_col], errors="coerce").fillna(0.0)
+        orders = orders[
+            orders["customer_email"].ne("")
+            & orders["customer_email"].ne("nan")
+            & orders["purchase_datetime"].notna()
+        ].copy()
+        if orders.empty:
+            return empty_result
+
+        orders = orders.sort_values(["customer_email", "purchase_datetime", "order_num"]).reset_index(drop=True)
+        visible_first = orders.groupby("customer_email")["purchase_datetime"].transform("min")
+        if "customer_first_purchase_date" in orders.columns:
+            known_first = pd.to_datetime(orders["customer_first_purchase_date"], errors="coerce")
+            known_first = known_first.fillna(visible_first)
+        else:
+            known_first = visible_first
+        orders["first_order_datetime"] = known_first
+
+        customer_start = orders.groupby("customer_email", as_index=False).agg(
+            visible_first=("purchase_datetime", "min"),
+            known_first=("first_order_datetime", "min"),
+        )
+        customer_start["eligible"] = customer_start["visible_first"].eq(customer_start["known_first"])
+        eligible_customers = customer_start.loc[customer_start["eligible"], "customer_email"]
+        excluded_prior_customers = int((~customer_start["eligible"]).sum())
+        orders = orders[orders["customer_email"].isin(eligible_customers)].copy()
+        if orders.empty:
+            result = dict(empty_result)
+            result["excluded_prior_customers"] = excluded_prior_customers
+            return result
+
+        orders["customer_order_num"] = orders.groupby("customer_email").cumcount() + 1
+        orders["cohort_period"] = orders["first_order_datetime"].dt.to_period("M")
+        orders["order_period"] = orders["purchase_datetime"].dt.to_period("M")
+        orders["month_index"] = orders["order_period"].map(lambda value: value.ordinal) - orders[
+            "cohort_period"
+        ].map(lambda value: value.ordinal)
+        orders = orders[orders["month_index"] >= 0].copy()
+        if orders.empty:
+            result = dict(empty_result)
+            result["excluded_prior_customers"] = excluded_prior_customers
+            return result
+
+        analysis_end_period = orders["order_period"].max()
+        cohort_rows = []
+        max_observed_month = 0
+        for cohort_period, cohort_orders in orders.groupby("cohort_period", sort=True):
+            cohort_customers = int(cohort_orders["customer_email"].nunique())
+            if cohort_customers <= 0:
+                continue
+
+            customer_order_counts = cohort_orders.groupby("customer_email").size()
+            repeat_customers = int((customer_order_counts >= 2).sum())
+            observed_months = int(analysis_end_period.ordinal - cohort_period.ordinal)
+            max_observed_month = max(max_observed_month, observed_months)
+
+            first_order_revenue = float(
+                cohort_orders.loc[cohort_orders["customer_order_num"] == 1, "order_revenue"].sum()
+            )
+            revenue_by_month = cohort_orders.groupby("month_index")["order_revenue"].sum().to_dict()
+            row = {
+                "cohort": str(cohort_period),
+                "new_customers": cohort_customers,
+                "repeat_customers": repeat_customers,
+                "repeat_rate_pct": round(repeat_customers / cohort_customers * 100, 1),
+                "first_order_ltv": round(first_order_revenue / cohort_customers, 2),
+                "observed_months": observed_months,
+            }
+            cumulative_revenue = 0.0
+            for month_index in range(observed_months + 1):
+                cumulative_revenue += float(revenue_by_month.get(month_index, 0.0))
+                row[f"M{month_index}"] = round(cumulative_revenue / cohort_customers, 2)
+            cohort_rows.append(row)
+
+        if not cohort_rows:
+            result = dict(empty_result)
+            result["excluded_prior_customers"] = excluded_prior_customers
+            return result
+
+        month_columns = [f"M{month_index}" for month_index in range(max_observed_month + 1)]
+        cohort_frame = pd.DataFrame(cohort_rows)
+        for month_column in month_columns:
+            if month_column not in cohort_frame.columns:
+                cohort_frame[month_column] = np.nan
+        cohort_frame = cohort_frame[base_columns + month_columns]
+
+        total_customers = int(cohort_frame["new_customers"].sum())
+        average_row = {
+            "cohort": "Average",
+            "new_customers": int(round(float(cohort_frame["new_customers"].mean()))),
+            "repeat_customers": int(cohort_frame["repeat_customers"].sum()),
+            "repeat_rate_pct": round(
+                float(cohort_frame["repeat_customers"].sum()) / total_customers * 100,
+                1,
+            ) if total_customers > 0 else 0.0,
+            "first_order_ltv": round(
+                float((cohort_frame["first_order_ltv"] * cohort_frame["new_customers"]).sum())
+                / total_customers,
+                2,
+            ) if total_customers > 0 else 0.0,
+            "observed_months": max_observed_month,
+        }
+        for month_column in month_columns:
+            mature_rows = cohort_frame[cohort_frame[month_column].notna()]
+            mature_customers = int(mature_rows["new_customers"].sum())
+            average_row[month_column] = round(
+                float((mature_rows[month_column] * mature_rows["new_customers"]).sum())
+                / mature_customers,
+                2,
+            ) if mature_customers > 0 else np.nan
+
+        return {
+            "available": True,
+            "revenue_basis": revenue_col,
+            "month_columns": month_columns,
+            "rows": cohort_frame,
+            "average": average_row,
+            "analysis_end_month": str(analysis_end_period),
+            "excluded_prior_customers": excluded_prior_customers,
+        }
+
     def analyze_repeat_purchase_cohorts(self, df: pd.DataFrame) -> dict:
         """
         Analyze repeat purchase cohorts with detailed metrics:
@@ -7703,6 +7861,10 @@ class BizniWebExporter:
         orders_df['days_since_prev_order'] = (orders_df['purchase_datetime'] - orders_df['prev_order_date']).dt.days
 
         result = {}
+
+        # === MONTHLY CUMULATIVE COHORT LTV ===
+        print("  Calculating monthly cumulative cohort LTV...")
+        result["cohort_ltv"] = self._build_monthly_cohort_ltv(df, revenue_col)
 
         # === 1. TIME TO NTH ORDER ANALYSIS ===
         print("  Calculating time to nth order...")
@@ -7969,6 +8131,14 @@ class BizniWebExporter:
         if not result['cohort_retention'].empty:
             result['cohort_retention'].to_csv(cohort_filename, index=False, encoding='utf-8-sig')
             print(f"Cohort analysis saved: {cohort_filename}")
+
+        cohort_ltv_rows = result.get("cohort_ltv", {}).get("rows")
+        if isinstance(cohort_ltv_rows, pd.DataFrame) and not cohort_ltv_rows.empty:
+            cohort_ltv_filename = self.output_path(
+                f"cohort_ltv_{df['purchase_datetime'].min().strftime('%Y%m%d')}-{df['purchase_datetime'].max().strftime('%Y%m%d')}.csv"
+            )
+            cohort_ltv_rows.to_csv(cohort_ltv_filename, index=False, encoding="utf-8-sig")
+            print(f"Cohort LTV saved: {cohort_ltv_filename}")
 
         print(f"  Cohort analysis complete:")
         print(f"    - Total customers: {result['summary']['total_customers']}")
