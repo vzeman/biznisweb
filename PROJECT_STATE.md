@@ -61,16 +61,21 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- VEVO monthly Cohort LTV heatmap implementation is in progress on `codex/vevo-cohort-ltv-heatmap` (`2026-08-13`):
+- VEVO monthly Cohort LTV heatmap is deployed and live (`2026-08-13`):
   - reusable cohort analytics now calculate cumulative net revenue LTV per acquired customer for calendar months `M0..Mn`, together with cohort size, observed repeat rate, first-order LTV, and customer-weighted averages
   - customers whose known first purchase predates the visible report history are excluded from the matrix so rolling period slices cannot fabricate acquisition cohorts from returning customers
   - the modern customer dashboard now renders a responsive, horizontally scrollable heatmap with a sticky cohort column, `New`, `R-%`, a per-cohort trend sparkline, first-order LTV, cumulative `M0..Mn` values, explicit future-month blanks, and a customer-weighted average row
   - focused and full relevant verification passes: `96` dashboard/reporting-calculation tests, Python compile, payload null-preservation regression, and `git diff --check`
-  - implementation merged through PR `#263` as `11a45bea4421b2d828aa7b53a074f4833bc00004`; exact image build `31712963641` published digest `sha256:865e6500725d93cc260eec9cff61a7821ba94825ae68a964c13dcf81c5e9dc11`
-  - protected generation run `31713205621` stopped before localhost marker validation or any production promotion because BiznisWeb returns an internal `price_elements` error for order `2602007112`
-  - read-only VEVO administration verification identified that exact order as a shipped `21.15 EUR` net damage-compensation order for Slovak Parcel Service with no delivery or payment method, so a narrow audited realized-revenue override is being added without weakening fail-closed handling for any other order
+  - implementation merged through PR `#263` as `11a45bea4421b2d828aa7b53a074f4833bc00004`
+  - initial protected generation `31713205621` stopped safely before localhost validation or promotion because BiznisWeb's `price_elements` resolver fails for order `2602007112`; read-only VEVO admin verification identified it as a shipped `21.15 EUR` net damage-compensation order for Slovak Parcel Service with no delivery/payment method by design
+  - exact, audit-reasoned realized-revenue override merged through PR `#264` as `138a0d4e2adf9c82e1f7ec29a48a2c44a5c042b0`; it is status-bounded, wildcard-free, conflict-checked, and does not weaken the fail-closed metadata guard for any other order
   - override verification passes: `282` unit tests, reporting QA smoke, Python compile, both project settings JSON parses, and `git diff --check`
-  - Next exact step: merge the exact override through PR, rebuild the immutable image, rerun protected VEVO generation, validate localhost marker/QA, promote the artifact and scheduler, then visually verify the live Cohort LTV matrix
+  - exact image build `31715345397` published tag `git-138a0d4e2adf9c82e1f7ec29a48a2c44a5c042b0` and digest `sha256:60a2c71290f4a902cb33efa361797d37ddd07e7599a5c3542cd6a66c0b153abf`
+  - protected deploy `31715597027` succeeded on Fargate task `03dd0b29dc5f47d9a79d6ddde8191e55`, private IP `172.31.43.206`, service `vevo-daily-report-email`, candidate/promoted task definition `vevo-reporting-daily:25`, exact digest above, and localhost marker path `http://127.0.0.1:8000/marker.json`
+  - immutable generation `20260813T154733Z` covers `2025-05-03..2026-08-12`; all `7d`, `30d`, `90d`, and full report artifacts passed the generation/marker gates, scheduler promotion, App Runner accounting checks, and production-board checks
+  - full Cohort LTV artifact `cohort_ltv_20250503-20260812.csv` was generated for `5,440` customers and `1,088` repeat customers (`20.0%`); mature 90-day cohorts show `21.2%` second-order and `7.8%` third-order retention
+  - automated Chrome visual inspection was attempted only after the host gates, but the local Comet client blocked the App Runner origin with `ERR_BLOCKED_BY_CLIENT`; server-side live UI/API validation still passed in the protected workflow and the user tab was restored without saving any admin changes
+  - Next exact step: monitor the next scheduled `vevo-daily-report-email` run on task definition `:25`; use a browser without the local Comet App Runner block for manual visual spot-checking when needed
 
 - ROY large bear-set product identity and missing-cost QA fix are merged, deployed, and live on `2026-08-11`:
   - identity PR `#260` merged as `05d8a1ee69218af1d89d6b3dfb9071e5e8562c3f`; QA-input PR `#261` merged as `dbcd65bfe054cedf16c5e8dc08d2f2be4b40a2bd`
