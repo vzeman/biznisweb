@@ -3022,6 +3022,68 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
         self.assertTrue(exporter._needs_payment_metadata_for_realized_revenue(order))
 
+    def test_vevo_realized_override_is_exact_audited_and_status_bounded(self) -> None:
+        exporter = make_exporter("vevo")
+        fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
+        overridden = {
+            "order_num": "2602007112",
+            "status": {"name": fulfilled_status},
+        }
+        another_missing = {
+            "order_num": "2602007113",
+            "status": {"name": fulfilled_status},
+        }
+
+        self.assertEqual(
+            (True, "configured_missing_payment_metadata_realized"),
+            exporter._realized_revenue_decision(overridden),
+        )
+        self.assertFalse(exporter._needs_payment_metadata_for_realized_revenue(overridden))
+        self.assertEqual([overridden], exporter._filter_by_status([overridden], track_excluded=False))
+        self.assertTrue(exporter._needs_payment_metadata_for_realized_revenue(another_missing))
+
+        overridden["status"] = {"name": "Storno"}
+        self.assertEqual(
+            (False, "non_realized_status"),
+            exporter._realized_revenue_decision(overridden),
+        )
+
+        overridden["status"] = {"name": fulfilled_status}
+        overridden["price_elements"] = [price_element("payment", "Dobierkou", "7")]
+        self.assertEqual(
+            (True, "cod_status_and_payment"),
+            exporter._realized_revenue_decision(overridden),
+        )
+
+    def test_vevo_realized_override_skips_only_the_exact_enrichment_candidate(self) -> None:
+        exporter = make_exporter("vevo")
+        fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
+        orders = [
+            {
+                "id": "DAMAGE-COMPENSATION",
+                "order_num": "2602007112",
+                "status": {"name": fulfilled_status},
+            },
+            {
+                "id": "OTHER-MISSING",
+                "order_num": "OTHER-MISSING",
+                "status": {"name": fulfilled_status},
+            },
+        ]
+        attempted_order_nums = []
+
+        def fetch_metadata(order):
+            attempted_order_nums.append(order["order_num"])
+            order["price_elements"] = [price_element("payment", "Bankovym prevodom", "6")]
+            return True
+
+        with patch.object(exporter, "_fetch_order_payment_metadata", side_effect=fetch_metadata):
+            exporter._enrich_payment_metadata_for_realized_revenue(orders)
+
+        self.assertEqual(["OTHER-MISSING"], attempted_order_nums)
+        self.assertNotIn("price_elements", orders[0])
+        self.assertIn("price_elements", orders[1])
+
     def test_non_realized_override_configuration_fails_closed(self) -> None:
         invalid_values = [
             [],
@@ -3041,6 +3103,43 @@ class ReportingCalculationFixTests(unittest.TestCase):
                     self.assertRaises(ValueError),
                 ):
                     make_exporter("roy")
+
+    def test_realized_override_configuration_fails_closed(self) -> None:
+        invalid_values = [
+            [],
+            {"": "audit reason"},
+            {"ORDER-1": ""},
+            {"*": "wildcard must not be accepted"},
+        ]
+        for invalid_value in invalid_values:
+            with self.subTest(invalid_value=invalid_value):
+                settings = {
+                    "realized_revenue": {
+                        "missing_payment_metadata_realized_order_overrides": invalid_value,
+                    }
+                }
+                with (
+                    patch("export_orders.load_project_settings", return_value=settings),
+                    self.assertRaises(ValueError),
+                ):
+                    make_exporter("vevo")
+
+    def test_conflicting_missing_metadata_overrides_fail_closed(self) -> None:
+        settings = {
+            "realized_revenue": {
+                "missing_payment_metadata_realized_order_overrides": {
+                    "ORDER-1": "verified realized",
+                },
+                "missing_payment_metadata_non_realized_order_overrides": {
+                    "ORDER-1": "verified non-realized",
+                },
+            }
+        }
+        with (
+            patch("export_orders.load_project_settings", return_value=settings),
+            self.assertRaisesRegex(ValueError, "conflict.*ORDER-1"),
+        ):
+            make_exporter("vevo")
 
     def test_roy_non_realized_override_skips_only_the_exact_enrichment_candidate(self) -> None:
         exporter = make_exporter("roy")

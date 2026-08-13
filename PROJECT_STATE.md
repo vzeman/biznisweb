@@ -66,7 +66,10 @@ Bootstrap entrypoints:
   - customers whose known first purchase predates the visible report history are excluded from the matrix so rolling period slices cannot fabricate acquisition cohorts from returning customers
   - the modern customer dashboard now renders a responsive, horizontally scrollable heatmap with a sticky cohort column, `New`, `R-%`, a per-cohort trend sparkline, first-order LTV, cumulative `M0..Mn` values, explicit future-month blanks, and a customer-weighted average row
   - focused and full relevant verification passes: `96` dashboard/reporting-calculation tests, Python compile, payload null-preservation regression, and `git diff --check`
-  - Next exact step: generate a fresh full-history VEVO report, run reporting QA plus visual inspection, and record the exact artifact and cohort totals
+  - implementation merged through PR `#263` as `11a45bea4421b2d828aa7b53a074f4833bc00004`; exact image build `31712963641` published digest `sha256:865e6500725d93cc260eec9cff61a7821ba94825ae68a964c13dcf81c5e9dc11`
+  - protected generation run `31713205621` stopped before localhost marker validation or any production promotion because BiznisWeb returns an internal `price_elements` error for order `2602007112`
+  - read-only VEVO administration verification identified that exact order as a shipped `21.15 EUR` net damage-compensation order for Slovak Parcel Service with no delivery or payment method, so a narrow audited realized-revenue override is being added without weakening fail-closed handling for any other order
+  - Next exact step: merge the exact override through PR, rebuild the immutable image, rerun protected VEVO generation, validate localhost marker/QA, promote the artifact and scheduler, then visually verify the live Cohort LTV matrix
 
 - ROY large bear-set product identity and missing-cost QA fix are merged, deployed, and live on `2026-08-11`:
   - identity PR `#260` merged as `05d8a1ee69218af1d89d6b3dfb9071e5e8562c3f`; QA-input PR `#261` merged as `dbcd65bfe054cedf16c5e8dc08d2f2be4b40a2bd`

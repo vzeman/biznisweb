@@ -3114,34 +3114,51 @@ class BizniWebExporter:
     def _is_price_elements_error(error: Exception) -> bool:
         return "price_elements" in str(error or "")
 
-    def _resolve_realized_revenue_settings(self) -> Dict[str, Any]:
-        raw = self.project_settings.get("realized_revenue") or {}
-        raw_non_realized_overrides = raw.get(
-            "missing_payment_metadata_non_realized_order_overrides",
-            {},
-        )
-        if raw_non_realized_overrides is None:
-            raw_non_realized_overrides = {}
-        if not isinstance(raw_non_realized_overrides, dict):
+    @staticmethod
+    def _resolve_exact_order_override_reasons(
+        raw_overrides: Any,
+        setting_name: str,
+    ) -> Dict[str, str]:
+        if raw_overrides is None:
+            raw_overrides = {}
+        if not isinstance(raw_overrides, dict):
             raise ValueError(
-                "realized_revenue.missing_payment_metadata_non_realized_order_overrides "
-                "must be an object mapping exact order numbers to audit reasons"
+                f"realized_revenue.{setting_name} must be an object mapping "
+                "exact order numbers to audit reasons"
             )
-        non_realized_overrides: Dict[str, str] = {}
-        for raw_order_num, raw_reason in raw_non_realized_overrides.items():
+
+        overrides: Dict[str, str] = {}
+        for raw_order_num, raw_reason in raw_overrides.items():
             order_num = str(raw_order_num or "").strip()
             reason = str(raw_reason or "").strip()
             if not order_num or not reason:
                 raise ValueError(
-                    "realized_revenue.missing_payment_metadata_non_realized_order_overrides "
-                    "requires non-empty exact order numbers and audit reasons"
+                    f"realized_revenue.{setting_name} requires non-empty exact "
+                    "order numbers and audit reasons"
                 )
             if any(character in order_num for character in "*?[]{}"):
                 raise ValueError(
-                    "realized_revenue.missing_payment_metadata_non_realized_order_overrides "
-                    "does not allow wildcard order numbers"
+                    f"realized_revenue.{setting_name} does not allow wildcard order numbers"
                 )
-            non_realized_overrides[order_num] = reason
+            overrides[order_num] = reason
+        return overrides
+
+    def _resolve_realized_revenue_settings(self) -> Dict[str, Any]:
+        raw = self.project_settings.get("realized_revenue") or {}
+        non_realized_overrides = self._resolve_exact_order_override_reasons(
+            raw.get("missing_payment_metadata_non_realized_order_overrides", {}),
+            "missing_payment_metadata_non_realized_order_overrides",
+        )
+        realized_overrides = self._resolve_exact_order_override_reasons(
+            raw.get("missing_payment_metadata_realized_order_overrides", {}),
+            "missing_payment_metadata_realized_order_overrides",
+        )
+        conflicting_order_nums = set(non_realized_overrides).intersection(realized_overrides)
+        if conflicting_order_nums:
+            raise ValueError(
+                "realized_revenue missing-payment overrides conflict for exact order numbers: "
+                + ", ".join(sorted(conflicting_order_nums))
+            )
         paid_statuses = self._as_config_list(
             raw.get("paid_statuses"),
             DEFAULT_REALIZED_REVENUE_PAID_STATUSES,
@@ -3197,6 +3214,8 @@ class BizniWebExporter:
             "prepaid_payment_ids": {str(value).strip() for value in prepaid_payment_ids if str(value).strip()},
             "missing_payment_metadata_non_realized_order_overrides": non_realized_overrides,
             "missing_payment_metadata_non_realized_order_nums": set(non_realized_overrides),
+            "missing_payment_metadata_realized_order_overrides": realized_overrides,
+            "missing_payment_metadata_realized_order_nums": set(realized_overrides),
         }
 
     def _is_cod_payment(self, order: Dict[str, Any]) -> bool:
@@ -3229,8 +3248,19 @@ class BizniWebExporter:
             return True, "paid_status"
 
         order_num = str((order or {}).get("order_num") or "").strip()
+        missing_price_elements = not self._has_loaded_price_elements(order)
+        metadata_dependent_status = (
+            status_norm in settings["prepaid_fulfilled_statuses_normalized"]
+            or status_norm in settings["cod_statuses_normalized"]
+        )
         if (
-            not self._has_loaded_price_elements(order)
+            missing_price_elements
+            and metadata_dependent_status
+            and order_num in settings["missing_payment_metadata_realized_order_nums"]
+        ):
+            return True, "configured_missing_payment_metadata_realized"
+        if (
+            missing_price_elements
             and order_num in settings["missing_payment_metadata_non_realized_order_nums"]
         ):
             return False, "configured_missing_payment_metadata_non_realized"
