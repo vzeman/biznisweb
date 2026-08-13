@@ -69,6 +69,7 @@ Bootstrap entrypoints:
   - implementation merged through PR `#263` as `11a45bea4421b2d828aa7b53a074f4833bc00004`; exact image build `31712963641` published digest `sha256:865e6500725d93cc260eec9cff61a7821ba94825ae68a964c13dcf81c5e9dc11`
   - protected generation run `31713205621` stopped before localhost marker validation or any production promotion because BiznisWeb returns an internal `price_elements` error for order `2602007112`
   - read-only VEVO administration verification identified that exact order as a shipped `21.15 EUR` net damage-compensation order for Slovak Parcel Service with no delivery or payment method, so a narrow audited realized-revenue override is being added without weakening fail-closed handling for any other order
+  - override verification passes: `282` unit tests, reporting QA smoke, Python compile, both project settings JSON parses, and `git diff --check`
   - Next exact step: merge the exact override through PR, rebuild the immutable image, rerun protected VEVO generation, validate localhost marker/QA, promote the artifact and scheduler, then visually verify the live Cohort LTV matrix
 
 - ROY large bear-set product identity and missing-cost QA fix are merged, deployed, and live on `2026-08-11`:
