@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-07-22T06:21:21+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "C:\\Users\\Patrik jankech\\Documents\\Playground\\content\\VEVO_CONTENT\\imports\\batch-42-2026-07-22-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Stálofarebnosť textilu: prečo farby blednú pri praní, svetle a trení",
+      "slug": "stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "post_id": "2345",
+      "create": {
+        "post_id": "2345",
+        "title": "Stálofarebnosť textilu: prečo farby blednú pri praní, svetle a trení",
+        "link": "stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+        "active": "0",
+        "short_length": 193,
+        "long_length": 26128,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2345",
+        "title": "Stálofarebnosť textilu: prečo farby blednú pri praní, svetle a trení",
+        "link": "stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+        "active": "1",
+        "short_length": 193,
+        "long_length": 26128,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+        "status_code": 200,
+        "location": null,
+        "body_length": 141795
+      }
+    },
+    {
+      "title": "Pevnosť šva a posun nití: prečo oblečenie praská pri švoch",
+      "slug": "pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "post_id": "2346",
+      "create": {
+        "post_id": "2346",
+        "title": "Pevnosť šva a posun nití: prečo oblečenie praská pri švoch",
+        "link": "pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+        "active": "0",
+        "short_length": 168,
+        "long_length": 25812,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2346",
+        "title": "Pevnosť šva a posun nití: prečo oblečenie praská pri švoch",
+        "link": "pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+        "active": "1",
+        "short_length": 168,
+        "long_length": 25812,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+        "status_code": 200,
+        "location": null,
+        "body_length": 141373
+      }
+    },
+    {
+      "title": "Zatrhávanie textilu: prečo vznikajú vytiahnuté očká a ako im predchádzať",
+      "slug": "zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "post_id": "2347",
+      "create": {
+        "post_id": "2347",
+        "title": "Zatrhávanie textilu: prečo vznikajú vytiahnuté očká a ako im predchádzať",
+        "link": "zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+        "active": "0",
+        "short_length": 178,
+        "long_length": 25292,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2347",
+        "title": "Zatrhávanie textilu: prečo vznikajú vytiahnuté očká a ako im predchádzať",
+        "link": "zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+        "active": "1",
+        "short_length": 178,
+        "long_length": 25292,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+        "status_code": 200,
+        "location": null,
+        "body_length": 141003
+      }
+    },
+    {
+      "title": "Počet nití pri obliečkach: čo znamená thread count a čo o kvalite nehovorí",
+      "slug": "pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "post_id": "2348",
+      "create": {
+        "post_id": "2348",
+        "title": "Počet nití pri obliečkach: čo znamená thread count a čo o kvalite nehovorí",
+        "link": "pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+        "active": "0",
+        "short_length": 189,
+        "long_length": 25422,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2348",
+        "title": "Počet nití pri obliečkach: čo znamená thread count a čo o kvalite nehovorí",
+        "link": "pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+        "active": "1",
+        "short_length": 189,
+        "long_length": 25422,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+        "status_code": 200,
+        "location": null,
+        "body_length": 141152
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-07-22T06:22:05+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 566,
+  "preflight": [
+    {
+      "title": "Stálofarebnosť textilu: prečo farby blednú pri praní, svetle a trení",
+      "slug": "stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123589
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Pevnosť šva a posun nití: prečo oblečenie praská pri švoch",
+      "slug": "pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123571
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Zatrhávanie textilu: prečo vznikajú vytiahnuté očká a ako im predchádzať",
+      "slug": "zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123599
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Počet nití pri obliečkach: čo znamená thread count a čo o kvalite nehovorí",
+      "slug": "pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123603
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-07-22T06:21:27+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-07-22T06:23:22+02:00"
+}

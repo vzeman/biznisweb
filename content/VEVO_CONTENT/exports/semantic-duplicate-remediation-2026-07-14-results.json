@@ -1,0 +1,745 @@
+{
+  "created_at": "2026-07-14T09:09:23.686020+00:00",
+  "mode": "execute-live",
+  "updates": [
+    {
+      "post_id": "2309",
+      "title": "Parfum do prania pri ručnom praní",
+      "slug": "parfum-do-prania-pri-rucnom-prani",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/parfum-do-prania-pri-rucnom-prani",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Parfum do prania pri ručnom praní",
+        "slug": "parfum-do-prania-pri-rucnom-prani",
+        "words": 2669,
+        "h2_count": 34,
+        "table_count": 4,
+        "styled_block_count": 12,
+        "product_link_count": 2,
+        "category_link_count": 2,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2310",
+      "title": "Parfum do prania pri praní na 30 stupňov",
+      "slug": "parfum-do-prania-pri-prani-na-30-stupnov",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-30-stupnov",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Parfum do prania pri praní na 30 stupňov",
+        "slug": "parfum-do-prania-pri-prani-na-30-stupnov",
+        "words": 2672,
+        "h2_count": 34,
+        "table_count": 4,
+        "styled_block_count": 12,
+        "product_link_count": 2,
+        "category_link_count": 3,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2311",
+      "title": "Parfum do prania pri praní na 60 stupňov",
+      "slug": "parfum-do-prania-pri-prani-na-60-stupnov",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-60-stupnov",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Parfum do prania pri praní na 60 stupňov",
+        "slug": "parfum-do-prania-pri-prani-na-60-stupnov",
+        "words": 2599,
+        "h2_count": 34,
+        "table_count": 4,
+        "styled_block_count": 12,
+        "product_link_count": 2,
+        "category_link_count": 2,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2313",
+      "title": "Prací gél na čierne oblečenie",
+      "slug": "praci-gel-na-cierne-oblecenie",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/praci-gel-na-cierne-oblecenie",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Prací gél na čierne oblečenie",
+        "slug": "praci-gel-na-cierne-oblecenie",
+        "words": 2609,
+        "h2_count": 36,
+        "table_count": 4,
+        "styled_block_count": 12,
+        "product_link_count": 2,
+        "category_link_count": 5,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2314",
+      "title": "Prací gél na biele oblečenie",
+      "slug": "praci-gel-na-biele-oblecenie",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/praci-gel-na-biele-oblecenie",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Prací gél na biele oblečenie",
+        "slug": "praci-gel-na-biele-oblecenie",
+        "words": 2581,
+        "h2_count": 36,
+        "table_count": 4,
+        "styled_block_count": 12,
+        "product_link_count": 2,
+        "category_link_count": 5,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2315",
+      "title": "Prací gél na farebné oblečenie",
+      "slug": "praci-gel-na-farebne-oblecenie",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/praci-gel-na-farebne-oblecenie",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Prací gél na farebné oblečenie",
+        "slug": "praci-gel-na-farebne-oblecenie",
+        "words": 2544,
+        "h2_count": 36,
+        "table_count": 4,
+        "styled_block_count": 12,
+        "product_link_count": 2,
+        "category_link_count": 5,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1500",
+      "title": "Ako umyť okná bez šmúh – Kompletný sprievodca",
+      "slug": "ako-umyt-okna-bez-smuh-kompletny-sprievodca",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-umyt-okna-bez-smuh-kompletny-sprievodca",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako umyť okná bez šmúh – Kompletný sprievodca",
+        "slug": "ako-umyt-okna-bez-smuh-kompletny-sprievodca",
+        "words": 2977,
+        "h2_count": 29,
+        "table_count": 3,
+        "styled_block_count": 6,
+        "product_link_count": 1,
+        "category_link_count": 3,
+        "faq_question_count": 7,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1459",
+      "title": "Ako umyť okná bez šmúh – Kompletný sprievodca a odpovede na časté otázky",
+      "slug": "ako-umyt-okna-bez-smuh-kompletny-sprievodca-a-odpovede-na-caste-otazky",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-umyt-okna-bez-smuh-kompletny-sprievodca-a-odpovede-na-caste-otazky",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako umyť okná bez šmúh – Kompletný sprievodca a odpovede na časté otázky",
+        "slug": "ako-umyt-okna-bez-smuh-kompletny-sprievodca-a-odpovede-na-caste-otazky",
+        "words": 2836,
+        "h2_count": 26,
+        "table_count": 3,
+        "styled_block_count": 6,
+        "product_link_count": 4,
+        "category_link_count": 1,
+        "faq_question_count": 15,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1437",
+      "title": "Koľko stojí jedno pranie? Kompletný sprievodca nákladmi na pranie",
+      "slug": "kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-na-pranie",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-na-pranie",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Koľko stojí jedno pranie? Kompletný sprievodca nákladmi na pranie",
+        "slug": "kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-na-pranie",
+        "words": 2642,
+        "h2_count": 26,
+        "table_count": 3,
+        "styled_block_count": 6,
+        "product_link_count": 1,
+        "category_link_count": 1,
+        "faq_question_count": 7,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1375",
+      "title": "Koľko stojí jedno pranie? Kompletný sprievodca nákladmi a úsporami",
+      "slug": "kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-a-usporami",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-a-usporami",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Koľko stojí jedno pranie? Kompletný sprievodca nákladmi a úsporami",
+        "slug": "kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-a-usporami",
+        "words": 2160,
+        "h2_count": 23,
+        "table_count": 3,
+        "styled_block_count": 6,
+        "product_link_count": 5,
+        "category_link_count": 3,
+        "faq_question_count": 7,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1185",
+      "title": "Najlepší parfum do prania",
+      "slug": "najlepsi-parfum-do-prania",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/najlepsi-parfum-do-prania",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Najlepší parfum do prania",
+        "slug": "najlepsi-parfum-do-prania",
+        "words": 1510,
+        "h2_count": 18,
+        "table_count": 2,
+        "styled_block_count": 6,
+        "product_link_count": 2,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1193",
+      "title": "Najlepší parfum do prania? Záleží na vkuse – no náš favorit je jasný",
+      "slug": "najlepsi-parfum-do-prania-zalezi-na-vkuse-no-nas-favorit-je-jasny",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/najlepsi-parfum-do-prania-zalezi-na-vkuse-no-nas-favorit-je-jasny",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Najlepší parfum do prania? Záleží na vkuse – no náš favorit je jasný",
+        "slug": "najlepsi-parfum-do-prania-zalezi-na-vkuse-no-nas-favorit-je-jasny",
+        "words": 1524,
+        "h2_count": 16,
+        "table_count": 2,
+        "styled_block_count": 6,
+        "product_link_count": 2,
+        "category_link_count": 1,
+        "faq_question_count": 9,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1576",
+      "title": "Parfum do prania – Čo to je a ako funguje",
+      "slug": "parfum-do-prania-co-to-je-a-ako-funguje",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Parfum do prania – Čo to je a ako funguje",
+        "slug": "parfum-do-prania-co-to-je-a-ako-funguje",
+        "words": 1526,
+        "h2_count": 20,
+        "table_count": 3,
+        "styled_block_count": 9,
+        "product_link_count": 2,
+        "category_link_count": 2,
+        "faq_question_count": 9,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1186",
+      "title": "🌸 Čo je parfum do prania a ako funguje?",
+      "slug": "co-je-parfum-do-prania-a-ako-funguje",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "🌸 Čo je parfum do prania a ako funguje?",
+        "slug": "co-je-parfum-do-prania-a-ako-funguje",
+        "words": 1513,
+        "h2_count": 18,
+        "table_count": 2,
+        "styled_block_count": 6,
+        "product_link_count": 1,
+        "category_link_count": 2,
+        "faq_question_count": 10,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1623",
+      "title": "Parfum do prania - Kompletný sprievodca | Čo to je, ako funguje a ako ho používať",
+      "slug": "parfum-do-prania-kompletny-sprievodca-co-to-je-ako-funguje-a-ako-ho-pouzivat",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/parfum-do-prania-kompletny-sprievodca-co-to-je-ako-funguje-a-ako-ho-pouzivat",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Parfum do prania - Kompletný sprievodca | Čo to je, ako funguje a ako ho používať",
+        "slug": "parfum-do-prania-kompletny-sprievodca-co-to-je-ako-funguje-a-ako-ho-pouzivat",
+        "words": 1519,
+        "h2_count": 22,
+        "table_count": 3,
+        "styled_block_count": 6,
+        "product_link_count": 1,
+        "category_link_count": 1,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1921",
+      "title": "Ako kombinovať prací gél a parfum do prania",
+      "slug": "ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako kombinovať prací gél a parfum do prania",
+        "slug": "ako-kombinovat-praci-gel-a-parfum-do-prania",
+        "words": 1588,
+        "h2_count": 23,
+        "table_count": 2,
+        "styled_block_count": 8,
+        "product_link_count": 2,
+        "category_link_count": 3,
+        "faq_question_count": 9,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1868",
+      "title": "Prací gél a parfum do prania: ako ich kombinovať, aby prádlo čistilo aj voňalo",
+      "slug": "praci-gel-a-parfum-do-prania-ako-ich-kombinovat-aby-pradlo-cistilo-aj-vonalo",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/praci-gel-a-parfum-do-prania-ako-ich-kombinovat-aby-pradlo-cistilo-aj-vonalo",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Prací gél a parfum do prania: ako ich kombinovať, aby prádlo čistilo aj voňalo",
+        "slug": "praci-gel-a-parfum-do-prania-ako-ich-kombinovat-aby-pradlo-cistilo-aj-vonalo",
+        "words": 1885,
+        "h2_count": 26,
+        "table_count": 3,
+        "styled_block_count": 9,
+        "product_link_count": 2,
+        "category_link_count": 6,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1967",
+      "title": "Ako prať športové uteráky, aby nezapáchali",
+      "slug": "ako-prat-sportove-uteraky-aby-nezapachali",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-prat-sportove-uteraky-aby-nezapachali",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako prať športové uteráky, aby nezapáchali",
+        "slug": "ako-prat-sportove-uteraky-aby-nezapachali",
+        "words": 1556,
+        "h2_count": 21,
+        "table_count": 3,
+        "styled_block_count": 9,
+        "product_link_count": 2,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2069",
+      "title": "Ako prať športové uteráky a uteráky do fitka",
+      "slug": "ako-prat-sportove-uteraky-a-uteraky-do-fitka",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-prat-sportove-uteraky-a-uteraky-do-fitka",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako prať športové uteráky a uteráky do fitka",
+        "slug": "ako-prat-sportove-uteraky-a-uteraky-do-fitka",
+        "words": 1624,
+        "h2_count": 24,
+        "table_count": 3,
+        "styled_block_count": 9,
+        "product_link_count": 1,
+        "category_link_count": 1,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1990",
+      "title": "Ako prať kúpeľňové predložky, aby nezapáchali",
+      "slug": "ako-prat-kupelnove-predlozky-aby-nezapachali",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-prat-kupelnove-predlozky-aby-nezapachali",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako prať kúpeľňové predložky, aby nezapáchali",
+        "slug": "ako-prat-kupelnove-predlozky-aby-nezapachali",
+        "words": 1536,
+        "h2_count": 22,
+        "table_count": 3,
+        "styled_block_count": 9,
+        "product_link_count": 2,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2066",
+      "title": "Ako prať kúpeľňové predložky a rohože bez zápachu",
+      "slug": "ako-prat-kupelnove-predlozky-a-rohoze-bez-zapachu",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-prat-kupelnove-predlozky-a-rohoze-bez-zapachu",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako prať kúpeľňové predložky a rohože bez zápachu",
+        "slug": "ako-prat-kupelnove-predlozky-a-rohoze-bez-zapachu",
+        "words": 1595,
+        "h2_count": 24,
+        "table_count": 3,
+        "styled_block_count": 9,
+        "product_link_count": 1,
+        "category_link_count": 1,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1881",
+      "title": "Ako prať čierne oblečenie, aby nebledlo a nebolo fľakaté",
+      "slug": "ako-prat-cierne-oblecenie-aby-nebledlo-a-nebolo-flakate",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nebledlo-a-nebolo-flakate",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako prať čierne oblečenie, aby nebledlo a nebolo fľakaté",
+        "slug": "ako-prat-cierne-oblecenie-aby-nebledlo-a-nebolo-flakate",
+        "words": 1590,
+        "h2_count": 24,
+        "table_count": 2,
+        "styled_block_count": 9,
+        "product_link_count": 2,
+        "category_link_count": 4,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1906",
+      "title": "Ako prať čierne oblečenie, aby nevybledlo",
+      "slug": "ako-prat-cierne-oblecenie-aby-nevybledlo",
+      "action": "updated",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nevybledlo",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako prať čierne oblečenie, aby nevybledlo",
+        "slug": "ako-prat-cierne-oblecenie-aby-nevybledlo",
+        "words": 1511,
+        "h2_count": 21,
+        "table_count": 2,
+        "styled_block_count": 8,
+        "product_link_count": 2,
+        "category_link_count": 3,
+        "faq_question_count": 9,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    }
+  ],
+  "link_preflight": [
+    {
+      "url": "https://energy-efficient-products.ec.europa.eu/product-list/washing-machines_en",
+      "status_code": 200,
+      "final_url": "https://energy-efficient-products.ec.europa.eu/product-list/washing-machines_en",
+      "ok": true
+    },
+    {
+      "url": "https://ifrafragrance.org/about-fragrance/how-is-fragrance-made",
+      "status_code": 200,
+      "final_url": "https://ifrafragrance.org/about-fragrance/how-is-fragrance-made",
+      "ok": true
+    },
+    {
+      "url": "https://ifrafragrance.org/initiatives-positions/safe-use-fragrance-science/ifra-standards/ifra-code-of-practice",
+      "status_code": 200,
+      "final_url": "https://ifrafragrance.org/initiatives-positions/safe-use-fragrance-science/ifra-standards/ifra-code-of-practice",
+      "ok": true
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33962979/",
+      "status_code": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/33962979/",
+      "ok": true
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/39924526/",
+      "status_code": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/39924526/",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/biological-contaminants-and-indoor-air-quality",
+      "status_code": 200,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/biological-contaminants-and-indoor-air-quality",
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/GB/labelling/care-symbols.asp",
+      "status_code": 200,
+      "final_url": "https://www.ginetex.net/GB/labelling/care-symbols.asp",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-kupelnove-predlozky-aby-nezapachali",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-kupelnove-predlozky-aby-nezapachali",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-umyt-okna-bez-smuh-kompletny-sprievodca",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-umyt-okna-bez-smuh-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-zmaekcit-uteraky",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-zmaekcit-uteraky",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-na-pranie",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/kolko-stoji-jedno-pranie-kompletny-sprievodca-nakladmi-na-pranie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/najlepsi-parfum-do-prania",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/najlepsi-parfum-do-prania",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/praci-gel-a-parfum-do-prania-ako-ich-kombinovat-aby-pradlo-cistilo-aj-vonalo",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/praci-gel-a-parfum-do-prania-ako-ich-kombinovat-aby-pradlo-cistilo-aj-vonalo",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/praci-gel-na-cierne-oblecenie",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/praci-gel-na-cierne-oblecenie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/symboly-prania-kompletny-sprievodca-praciim-stitkom",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/pracie-symboly-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1560/biely-ocot-1-liter",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1560/biely-ocot-1-liter",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-249/sada-vsetkych-6-vzoriek-po-1ks",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-249/sada-vsetkych-6-vzoriek-po-1ks",
+      "ok": true
+    }
+  ],
+  "all_ok": true
+}

@@ -1,0 +1,19 @@
+{
+  "existing_count": 810,
+  "excluded_batch": 39,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Gramáž látky: čo znamená GSM pri uterákoch, obliečkach a tričkách",
+      "slug": "gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

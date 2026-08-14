@@ -1,0 +1,209 @@
+{
+  "checked_count": 29,
+  "failure_count": 0,
+  "links": [
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-mop-a-vedro-spinava-voda-usadeniny-a-spravne-susenie",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-mikrovlaknove-utierky-aby-nezapachali-a-dobre-cistili",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-umyt-podlahu-bez-smuh-laminat-vinyl-dlazba-a-mopovanie-v-praxi",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/coronavirus-and-disinfectants/whats-difference-between-products-disinfect-sanitize-and-clean",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/ventilation-important-indoor-air-quality-when-cleaning-andor-sanitizing",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/improving-your-indoor-environment",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/p-1553/parfum-na-podlahy-vevo-no-01-cotton-paradise",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/vona-na-umyvanie-podlah",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vybrat-roboticky-vysavac-s-mopom",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-hubky-a-kefy-na-upratovanie-mastnota-opotrebovanie-a-vcasna-vymena",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-kuchynsku-linku-od-mastnoty-prachu-a-smuh-bez-poskodenia-povrchu",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://doi.org/10.1038/s41598-017-06055-9",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-drez-a-bateriu-vodny-kamen-mastnota-zapach-a-bezpecne-cistenie",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-vetracie-mriezky-v-domacnosti-prach-mastnota-a-prudenie-vzduchu",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-radiator-od-prachu-rebra-zadna-strana-mastnota-a-bezpecna-udrzba",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-parapety-a-okenne-ramy-prach-pel-cierne-mapy-a-skvrny",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/sources-indoor-particulate-matter-pm",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/should-you-have-air-ducts-your-home-cleaned",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-strop-a-rohy-od-prachu-a-pavucin-bez-rozmazania",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-cistit-textilne-tienidla-lamp-a-dekoracie-od-prachu",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/mold/mold-cleanup-your-home",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.osha.gov/sites/default/files/publications/PORTABLE_LADDER_QC.pdf",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-interierove-dvere-a-zarubne-odtlacky-mastnota-a-povrch-bez-smuh",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-garnizu-a-kolajnice-zaclon-prach-mastnota-a-zasekavanie",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/symboly-prania-kompletny-sprievodca-praciim-stitkom",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-vyzehlit-zaclonu-kompletny-sprievodca",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    }
+  ]
+}

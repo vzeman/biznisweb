@@ -1,0 +1,330 @@
+{
+  "checked_count": 41,
+  "failure_count": 0,
+  "links": [
+    {
+      "url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia"
+    },
+    {
+      "url": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla1",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla1"
+    },
+    {
+      "url": "https://www.vevo.sk/n/polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie",
+      "kind": "intra_batch_target_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach"
+    },
+    {
+      "url": "https://www.iso.org/standard/85998.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/85998.html"
+    },
+    {
+      "url": "https://www.iso.org/standard/16869.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/16869.html"
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm195/591/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm195/591/"
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm79/499/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm79/499/"
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm200/954/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm200/954/"
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols"
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "kind": "intra_batch_target_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia"
+    },
+    {
+      "url": "https://www.vevo.sk/n/frote-bambus-alebo-mikrovlakno-ktory-uterak-vybrat-podla-savosti-a-schnutia",
+      "kind": "intra_batch_target_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/frote-bambus-alebo-mikrovlakno-ktory-uterak-vybrat-podla-savosti-a-schnutia"
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-flanelove-obliecky-aby-zostali-maekke",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-flanelove-obliecky-aby-zostali-maekke"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou"
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38627879/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/38627879/"
+    },
+    {
+      "url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "kind": "intra_batch_target_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu"
+    },
+    {
+      "url": "https://www.vevo.sk/n/frote-bambus-alebo-mikrovlakno-ktory-uterak-vybrat-podla-savosti-a-schnutia",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/frote-bambus-alebo-mikrovlakno-ktory-uterak-vybrat-podla-savosti-a-schnutia"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost"
+    },
+    {
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-sportove-uteraky-aby-nezapachali",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-sportove-uteraky-aby-nezapachali"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky"
+    },
+    {
+      "url": "https://store.astm.org/d4772-26.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://store.astm.org/d4772-26.html"
+    },
+    {
+      "url": "https://single-market-economy.ec.europa.eu/sectors/textiles-ecosystem/textiles-leather-fur_en",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://single-market-economy.ec.europa.eu/sectors/textiles-ecosystem/textiles-leather-fur_en"
+    },
+    {
+      "url": "https://www.vevo.sk/n/polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-cyklisticky-dres-a-elasticke-sportove-oblecenie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-cyklisticky-dres-a-elasticke-sportove-oblecenie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar"
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25128346/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/25128346/"
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/37960939/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/37960939/"
+    },
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12029065/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12029065/"
+    }
+  ]
+}
