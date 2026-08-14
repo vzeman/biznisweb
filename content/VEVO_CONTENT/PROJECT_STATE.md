@@ -1825,6 +1825,24 @@ Branch: codex/vevo-content-batch-43
   - `imports/verify_batch_42_public.py`;
   - corresponding duplicate, link, content, depth, HTML, MCP smoke, MCP publication, and public verification reports under `exports/`.
 
+## Batch 43 - Prepared 2026-08-14
+
+- Status: prepared and fully checked; live publication is the next step.
+- The eight-topic exploration was narrowed to four distinct C09A intents. The wrinkle-resistance candidate returned `review` and was excluded. The final four titles returned `ok` against `823` merged Blog, FAQ, glossary, and local records:
+  - `Pevnosť textilu v ťahu a proti roztrhnutiu: čo skúšky hovoria o odolnosti`;
+  - `Splývavosť textilu: prečo niektoré látky držia tvar a iné kopírujú postavu`;
+  - `Tepelný odpor textilu: prečo niektoré vrstvy hrejú viac pri rovnakej hrúbke`;
+  - `Ochrana textilu pred UV žiarením: čo znamená UPF a čo ju znižuje`.
+- Prepared quality: visible word counts `2612`, `2621`, `2668`, and `2713`; every article has `26` H2 headings, `2` responsive tables, `12` styled blocks, a product card, a category card, six reader-facing FAQ questions, and zero one-character paragraphs.
+- Link preflight checked `37` target and outgoing destinations with zero failures. Future target slugs return exact `404`; VEVO article, product, category, AATCC, ASTM, WHO, UK government, and GINETEX links return `200`. ISO standard pages return their documented automated-client `403`, accepted only for `www.iso.org` after the four exact pages were independently opened and verified as valid current standard pages.
+- Public wording and HTML safety guards are clean: zero fixed prices, zero forbidden workflow terminology, zero escaped HTML, and zero malformed-link findings.
+- Full pre-publication project check passed with `38/38` tests, audit `block_count=0`, and the live Blog catalog at `820` public RSS records with zero duplicate-title groups and zero invalid slugs.
+- Durable preparation artifacts:
+  - `content-plan/batch-43-textile-performance-2026-08-14.md`;
+  - `batches/batch-43-candidate-scan-2026-08-14.txt` and `batches/batch-43-candidates-2026-08-14.txt`;
+  - `imports/build_batch_43_textile_performance.py` and `imports/batch-43-2026-08-14-articles.json`;
+  - corresponding candidate-scan, duplicate, link, wording, depth, and HTML reports under `exports/`.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -1846,8 +1864,8 @@ Branch: codex/vevo-content-batch-43
 
 For the next VEVO work:
 
-1. Select the next small expert VEVO batch only after the complete three-block live/local duplicate guard clears each proposed intent, title, and slug; treat batch 40, batch 41, and batch 42 material and textile-construction guides as occupied intents.
-2. Run `scripts/check.ps1`, link preflight, and the repo-local MCP read-only preflight before publication; finish with an independent public verifier.
+1. Run the batch 43 repo-local MCP read-only preflight, disposable hidden smoke, hidden-first creation, and explicit publish confirmation without changing any prepared title or slug.
+2. Build and run an independent batch 43 public verifier for exact titles, slugs, rich HTML, depth, cards, links, and responsive table containment.
 3. Keep `codex/vevo-content-batch-43` rebased on `origin/main`, push every durable checkpoint, and merge only through a pull request. Never return VEVO content work to the unrelated local-only `opan-claw` history.
 4. Resolve the older batch 31 hidden posts `2278` and `2279` separately, preserving their prepared titles and slugs and checking first that no public/canonical replacement already exists.
 5. Never use legacy remote `biznisweb-add_news_post`/`biznisweb-update_news_post` as the final VEVO new-article path. The approved API path is repo-local `biznisweb-vevo-content` with hidden-first creation, explicit slug, readback, resumable report, and independent public verification.
