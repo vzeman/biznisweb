@@ -11,11 +11,13 @@ import argparse
 import calendar
 import csv
 import hashlib
+import io
 import json
 import mimetypes
 import os
 import subprocess
 import sys
+import zipfile
 from datetime import date, datetime, timedelta, timezone
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -62,6 +64,9 @@ PERIOD_LIVE_ARTIFACT_NAMES = {
     },
 }
 STRICT_LIVE_REPORT_PROJECTS = {"roy", "vevo"}
+SES_RAW_MESSAGE_LIMIT_BYTES = 10 * 1024 * 1024
+# Leave room for small header/body growth and SDK serialization differences.
+SES_RAW_MESSAGE_TARGET_BYTES = 9 * 1024 * 1024
 
 
 def bootstrap_project_from_argv(argv: List[str]) -> str:
@@ -1385,34 +1390,62 @@ def send_email_ses(
     if not destinations:
         raise ValueError("REPORT_EMAIL_TO has no valid recipients")
 
-    msg = MIMEMultipart("mixed")
-    msg["Subject"] = subject
-    msg["From"] = source
-    msg["To"] = ", ".join(destinations)
-    msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain="amazonses.com")
-    msg["Reply-To"] = source
+    def build_message(*, compress_html: bool) -> MIMEMultipart:
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = source
+        msg["To"] = ", ".join(destinations)
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain="amazonses.com")
+        msg["Reply-To"] = source
 
-    # Keep a short non-empty body to reduce spam score.
-    msg.attach(MIMEText(body_text, "plain", "utf-8"))
+        # Keep a short non-empty body to reduce spam score.
+        msg.attach(MIMEText(body_text, "plain", "utf-8"))
 
-    def attach_file(path: Path) -> None:
+        attach_file(msg, file_paths["report_html"], compress_html=compress_html)
+        for extra in extra_attachments or []:
+            attach_file(msg, extra, compress_html=False)
+        return msg
+
+    def attach_file(msg: MIMEMultipart, path: Path, *, compress_html: bool) -> None:
         if path.suffix.lower() in {".html", ".htm"}:
-            text = path.read_text(encoding="utf-8", errors="replace")
-            part = MIMEText(text, "html", "utf-8")
+            if compress_html:
+                archive = io.BytesIO()
+                with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output_zip:
+                    output_zip.writestr(path.name, path.read_bytes())
+                attachment_name = f"{path.name}.zip"
+                part = MIMEApplication(archive.getvalue(), _subtype="zip", Name=attachment_name)
+            else:
+                text = path.read_text(encoding="utf-8", errors="replace")
+                attachment_name = path.name
+                part = MIMEText(text, "html", "utf-8")
         else:
             with path.open("rb") as f:
                 part = MIMEApplication(f.read(), Name=path.name)
-        part["Content-Disposition"] = f'attachment; filename="{path.name}"'
+            attachment_name = path.name
+        part["Content-Disposition"] = f'attachment; filename="{attachment_name}"'
         msg.attach(part)
 
     if not file_paths["report_html"].exists():
         raise FileNotFoundError(f"Missing HTML report attachment: {file_paths['report_html']}")
-    attach_file(file_paths["report_html"])
     for extra in extra_attachments or []:
         if not extra.exists():
             raise FileNotFoundError(f"Missing extra attachment: {extra}")
-        attach_file(extra)
+
+    msg = build_message(compress_html=False)
+    raw_message = msg.as_bytes()
+    if len(raw_message) > SES_RAW_MESSAGE_TARGET_BYTES:
+        msg = build_message(compress_html=True)
+        raw_message = msg.as_bytes()
+        print(
+            "SES email HTML attachment compressed to stay within the raw-message limit: "
+            f"bytes={len(raw_message)} limit={SES_RAW_MESSAGE_LIMIT_BYTES}"
+        )
+    if len(raw_message) > SES_RAW_MESSAGE_LIMIT_BYTES:
+        raise ValueError(
+            "SES raw email remains too large after HTML compression: "
+            f"{len(raw_message)} > {SES_RAW_MESSAGE_LIMIT_BYTES} bytes"
+        )
 
     try:
         import boto3  # type: ignore
@@ -1425,7 +1458,7 @@ def send_email_ses(
         send_args: Dict[str, Any] = {
             "Source": source,
             "Destinations": destinations,
-            "RawMessage": {"Data": msg.as_string()},
+            "RawMessage": {"Data": raw_message},
         }
         if configuration_set:
             send_args["ConfigurationSetName"] = configuration_set
