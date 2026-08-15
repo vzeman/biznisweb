@@ -61,14 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY daily report / live-dashboard freshness incident fix is in progress (`2026-08-15`):
+- ROY daily report / live-dashboard freshness incident is fixed and live (`2026-08-15`):
   - production incident run `31859338478` reproduced the common failure after a successful export through `2026-08-14`: SES rejected the `10,560,976` byte raw message because its hard limit is `10,485,760` bytes
   - because the protected Fargate workflow promotes the newly generated S3 artifacts only after the runner exits successfully, the same oversized email failure left both email delivery and the live dashboard stale
   - hard-gate identity: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.37.203`, service `roy-daily-report-email`, task `5ae77222ff0d4d0a88c001af839fe196`, task definition `roy-reporting-daily:64`, runtime path `/app`, localhost marker `http://127.0.0.1:8000/marker.json`, image digest `sha256:27f2017d29454a0ed297ac3da8cbc1aa0434ed526be4e773a97691b32a1f5f8b`
   - the email sender now preflights the exact serialized raw MIME size and transparently ZIP-compresses only the HTML attachment when the message exceeds a conservative `9 MiB` target; it fails locally before the SES API if even the compressed message exceeds the `10 MiB` hard limit
   - focused regression coverage verifies both the large-report ZIP fallback (including archive contents and final raw size) and unchanged direct HTML delivery for small reports
   - local verification passed: full `284`-test suite, reporting QA smoke, Python compile, and `git diff --check`
-  - Next exact step: merge through PR, build the immutable image, run the protected ROY deploy/refresh with real email delivery, verify localhost marker + SES MessageId, then verify the live dashboard generation in Chrome
+  - implementation PR `#267` merged as `1b4388c6779bc78bf0652bf029791e89082f23b7`; immutable build `31860902114` succeeded with digest `sha256:1204ecb4a111b3938e2fd277490039c1b1e6d56608fa7200a02e29b45138751e`
+  - protected deploy `31861014269` succeeded: Fargate task `818f4498e5794d31a4d8cfd250dd2857`, private IP `172.31.45.234`, service `roy-daily-report-email`, candidate/promoted task definition `roy-reporting-daily:65`, exact digest above, localhost live-dashboard/artifact gates, immutable S3 generation gates, scheduler promotion, and App Runner release gates all passed
+  - real production email smoke `31862536350` succeeded on task `b8fd9e80059149f48c6e3321fa4fb3e2`, private IP `172.31.35.210`, task definition `:65`, and the exact digest above; the oversized HTML MIME was automatically compressed to `1,405,987` bytes, SES returned MessageId `010701a0039d270d-f7b22b1a-bba0-4dcc-9e94-28b5626a3564-000000`, localhost marker passed, and the task exited `0`
+  - post-host Chrome verification passed: selected ROY operations dashboard updated at `2026-08-15T04:10:36Z`, KPI source is `2026-08-15T03:28:52Z`, and cache status is `fresh` instead of `stale_revalidating`
+  - no local server, worker, watcher, tunnel, or other temporary runtime was started
+  - Next exact step: monitor the next natural `roy-daily-report-email` run on task definition `:65`; no further code or deploy action remains for this incident
 
 - VEVO monthly Cohort LTV heatmap is deployed and live (`2026-08-13`):
   - reusable cohort analytics now calculate cumulative net revenue LTV per acquired customer for calendar months `M0..Mn`, together with cohort size, observed repeat rate, first-order LTV, and customer-weighted averages
