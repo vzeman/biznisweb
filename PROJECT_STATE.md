@@ -61,6 +61,15 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY daily report / live-dashboard freshness incident fix is in progress (`2026-08-15`):
+  - production incident run `31859338478` reproduced the common failure after a successful export through `2026-08-14`: SES rejected the `10,560,976` byte raw message because its hard limit is `10,485,760` bytes
+  - because the protected Fargate workflow promotes the newly generated S3 artifacts only after the runner exits successfully, the same oversized email failure left both email delivery and the live dashboard stale
+  - hard-gate identity: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.37.203`, service `roy-daily-report-email`, task `5ae77222ff0d4d0a88c001af839fe196`, task definition `roy-reporting-daily:64`, runtime path `/app`, localhost marker `http://127.0.0.1:8000/marker.json`, image digest `sha256:27f2017d29454a0ed297ac3da8cbc1aa0434ed526be4e773a97691b32a1f5f8b`
+  - the email sender now preflights the exact serialized raw MIME size and transparently ZIP-compresses only the HTML attachment when the message exceeds a conservative `9 MiB` target; it fails locally before the SES API if even the compressed message exceeds the `10 MiB` hard limit
+  - focused regression coverage verifies both the large-report ZIP fallback (including archive contents and final raw size) and unchanged direct HTML delivery for small reports
+  - local verification passed: full `284`-test suite, reporting QA smoke, Python compile, and `git diff --check`
+  - Next exact step: merge through PR, build the immutable image, run the protected ROY deploy/refresh with real email delivery, verify localhost marker + SES MessageId, then verify the live dashboard generation in Chrome
+
 - VEVO monthly Cohort LTV heatmap is deployed and live (`2026-08-13`):
   - reusable cohort analytics now calculate cumulative net revenue LTV per acquired customer for calendar months `M0..Mn`, together with cohort size, observed repeat rate, first-order LTV, and customer-weighted averages
   - customers whose known first purchase predates the visible report history are excluded from the matrix so rolling period slices cannot fabricate acquisition cohorts from returning customers
