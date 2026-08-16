@@ -61,6 +61,14 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- Roy daily report email delivery is switched off on the project-level config as of `2026-08-16`:
+  - branch: `codex/report-email-dispatch`
+  - change: `projects/roy/settings.json` now has `"send_daily_report_email": false` so ROY daily report emails are disabled in code path
+  - change: `reporting_core/config.py` now exposes `send_daily_report_email` with default `true` in `resolve_reporting_defaults(...)`
+  - change: `daily_report_runner.py` now skips daily report email sending when `send_daily_report_email` is false
+  - what is verified: code-path guard and default added (diff-level change only)
+  - next exact step: deploy or run manual report for `roy` with current scheduler settings and verify no SES `ReportEmailSent` metric is produced
+
 - Production reporting smoke email dispatch mode is implemented locally on `2026-06-18`:
   - branch/worktree: `codex/report-email-dispatch` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - workflow `.github/workflows/production-reporting-smoke.yml` keeps the default `send_email=false` dry-run behavior

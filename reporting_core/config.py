@@ -123,6 +123,7 @@ def resolve_reporting_defaults(project_name: str, settings: Optional[Dict[str, A
             str(settings.get("report_email_subject", "")).strip()
             or f"Daily {display_name} report"
         ),
+        "send_daily_report_email": bool(settings.get("send_daily_report_email", True)),
         "ses_configuration_set": str(settings.get("ses_configuration_set", "")).strip(),
         "cloudwatch_namespace": (
             str(settings.get("cloudwatch_namespace", "")).strip()
