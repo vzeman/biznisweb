@@ -61,6 +61,13 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY daily report email delivery is disabled at project level as of `2026-08-21`:
+  - branch: `codex/disable-roy-daily-email`
+  - `projects/roy/settings.json` sets `"send_daily_report_email": false`; daily report generation and dashboard artifact publication remain enabled
+  - `reporting_core/config.py` exposes the setting with a default of `true`, preserving email behavior for VEVO and other projects
+  - `daily_report_runner.py` skips only the email dispatch when this project setting is false
+  - Next exact step: merge through PR, wait for the ECR image build, then run a ROY-only production smoke with email disabled and verify the Fargate localhost marker plus refreshed dashboard payload
+
 - ROY SD-card purchase-cost correction is merged, deployed, and host-verified (`2026-08-21`):
   - PR `#290` merged as `d9f4d4c3823d880179d8cd58a5cd45a967b57d59`; exact reporting SKUs now map `F_206` to `4.50 EUR` and `12876` to `13.50 EUR`
   - regression coverage proves the current import-code mappings take precedence over the older EAN mappings; the focused check and all `96` tests in `tests.test_reporting_calculation_fixes` passed, together with JSON parsing and `git diff --check`
@@ -841,7 +848,6 @@ Bootstrap entrypoints:
   - because the code path would write `summary.available=false` even on creditnote API failure, a missing `dashboard.creditnotes.summary` indicates the scheduled reporting task was still running an older image/task definition rather than the new PR `#177` reporting code
   - change in this branch: `Production Reporting Smoke` gains `update_task_image`; when true it resolves ECR `vevo-reporting:latest` to the current digest, registers a new daily reporting task definition if the scheduled container image differs, updates the EventBridge schedule, and then runs the host smoke/email task against that refreshed definition
   - Next exact step: validate/merge this workflow update, dispatch production reporting smoke with `update_task_image=true`, and require `LOCALHOST_MARKER_OK`, SES message IDs, and UI smoke before considering both shops fixed
-
 - Production reporting smoke email dispatch mode is implemented locally on `2026-06-18`:
   - branch/worktree: `codex/report-email-dispatch` in `C:\Users\Patrik jankech\Desktop\biznisweb-creditnote-carrier-audit`
   - workflow `.github/workflows/production-reporting-smoke.yml` keeps the default `send_email=false` dry-run behavior

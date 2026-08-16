@@ -3,6 +3,7 @@
   "project_display_name": "Roy",
   "reporting_system_name": "Roy reporting",
   "enable_email_strategy_report": false,
+  "send_daily_report_email": false,
   "report_from_date": "2025-09-24",
   "report_schedule": {
     "schedule_name": "roy-daily-report-email",

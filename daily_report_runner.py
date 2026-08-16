@@ -1551,6 +1551,8 @@ def main() -> None:
 
     if args.skip_email:
         print("Email sending skipped by flag.")
+    elif not reporting_defaults["send_daily_report_email"]:
+        print("Daily report email sending disabled by project configuration.")
     else:
         subject = build_email_subject(reporting_defaults, data_quality)
         summary_text = build_report_summary(output_paths)
