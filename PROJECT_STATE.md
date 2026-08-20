@@ -5011,7 +5011,7 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - deployed in VEVO generation `20260716T010224Z`; 7-day QA is `ok`, all four periods have zero failures, and the production UI/API arithmetic reconciles
 
 ### 2026-08-20 (VEVO bundle purchase costs from real components)
-- Change prepared on branch `codex/vevo-bundle-purchase-costs`:
+- Change merged through PR `#276` as `7ee2a29358a0fd3d90374b66fe5212cfdde00566`:
   - bundle/set purchase costs are derived from the current mapped purchase costs of their individual bottles/components instead of stale copied totals
   - configured totals are: Essence Sample Set `3.12 EUR`, Natural Discovery `2.44 EUR`, Premium Discovery `1.98 EUR`, Complete Discovery `3.77 EUR`, Natural Bestsellers 3x200 ml `9.44 EUR`, Natural Complete Fragrance 6x200 ml `19.54 EUR`, and Ylang Absolute + Pure Garden 2x500 ml `12.47 EUR`
   - homogeneous Ylang Absolute 2x/3x500 ml bundles remain inferred from the single 500 ml bottle at `12.28/18.42 EUR`
@@ -5022,7 +5022,14 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - focused bundle-cost regressions: `5` tests passed
   - full suite: `291` tests passed
   - `python -m py_compile export_orders.py` and `git diff --check` passed
+- Production build and deployment:
+  - immutable build workflow `32369972475` succeeded with image `git-7ee2a29358a0fd3d90374b66fe5212cfdde00566` and digest `sha256:2639fecce2f8bd9cb561838b6fe2d24bdce0b1725c7605233022e761e40a232d`
+  - protected deploy workflow `32370203470` succeeded and regenerated all `7d`, `30d`, `90d`, and `full` artifacts
+  - Fargate hard-gate identity: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.32.133`, service `vevo-daily-report-email`, task `93b495feac2f4801a90ae4b4f0c7fdea`, candidate/promoted task definition `vevo-reporting-daily:28`, runtime `/app`, and marker `http://127.0.0.1:8000/marker.json`
+  - read-only diagnostic workflow `32372552491` confirmed the task is stopped with container exit code `0`, `LOCALHOST_LIVE_DASHBOARD_OK:vevo:periods=7d,30d,90d,full`, and `LIVE_ARTIFACT_MARKER_OK`
+  - immutable generation `20260820T130043Z` is live and scheduler `vevo-daily-report-email` is `ENABLED` on task definition `:28`
+  - the protected workflow's authenticated App Runner HTML/API gates passed; a separate Chrome visual attempt was blocked locally by `ERR_BLOCKED_BY_CLIENT` for the App Runner origin, so a local-browser visual pass is not claimed
 - Known input gap:
   - the real purchase cost of one `Vevo Pure Harmony 500ml` bottle is not present in the current cost map; its 2x/3x bundles remain intentionally unmapped rather than using an invented cost
 - Next exact step:
-  - commit and push the branch, merge through PR, build the immutable reporting image, then deploy/regenerate VEVO through the protected host-marker workflow and verify the live product-cost rows
+  - provide the real ex-VAT purchase cost of one `Vevo Pure Harmony 500ml` bottle; then map it once so its 2x/3x bundles are inferred automatically
