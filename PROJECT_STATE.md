@@ -5009,3 +5009,20 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - reporting QA smoke, Python compile, both project settings JSON parses, and `git diff --check` passed
 - Final status:
   - deployed in VEVO generation `20260716T010224Z`; 7-day QA is `ok`, all four periods have zero failures, and the production UI/API arithmetic reconciles
+
+### 2026-08-20 (VEVO bundle purchase costs from real components)
+- Change prepared on branch `codex/vevo-bundle-purchase-costs`:
+  - bundle/set purchase costs are derived from the current mapped purchase costs of their individual bottles/components instead of stale copied totals
+  - configured totals are: Essence Sample Set `3.12 EUR`, Natural Discovery `2.44 EUR`, Premium Discovery `1.98 EUR`, Complete Discovery `3.77 EUR`, Natural Bestsellers 3x200 ml `9.44 EUR`, Natural Complete Fragrance 6x200 ml `19.54 EUR`, and Ylang Absolute + Pure Garden 2x500 ml `12.47 EUR`
+  - homogeneous Ylang Absolute 2x/3x500 ml bundles remain inferred from the single 500 ml bottle at `12.28/18.42 EUR`
+  - Vevo Ylang Absolute floor cleaner 500 ml is mapped at the supplied real purchase cost `2.35 EUR` excl. VAT; 2x/3x bundles are therefore inferred at `4.70/7.05 EUR`
+  - stale direct set totals and the erroneous `1.00 EUR` Bestsellers alias were removed so future bottle-cost corrections propagate automatically to the sets
+- Verification:
+  - VEVO settings and product-expense JSON parse passed
+  - focused bundle-cost regressions: `5` tests passed
+  - full suite: `291` tests passed
+  - `python -m py_compile export_orders.py` and `git diff --check` passed
+- Known input gap:
+  - the real purchase cost of one `Vevo Pure Harmony 500ml` bottle is not present in the current cost map; its 2x/3x bundles remain intentionally unmapped rather than using an invented cost
+- Next exact step:
+  - commit and push the branch, merge through PR, build the immutable reporting image, then deploy/regenerate VEVO through the protected host-marker workflow and verify the live product-cost rows
