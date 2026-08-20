@@ -641,7 +641,7 @@ jobs:
           if "access-control-allow-origin: https://www.vevo.sk" not in cors:
               raise SystemExit("exact CORS origin header missing")
           rejected = json.loads(Path("rejected-body.json").read_text(encoding="utf-8"))
-          if rejected != {"accepted": False, "code": "field_set_mismatch"}:
+          if rejected != {"accepted": False, "code": "invalid_event"}:
               raise SystemExit(f"unexpected rejection body: {rejected}")
           PY
           ATTACKER_STATUS="$(curl -sS -o attacker-body.json -w '%{http_code}' \

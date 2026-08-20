@@ -52,6 +52,9 @@ def main() -> int:
         growthbook_deploy_workflow = read(
             ".github/workflows/deploy-vevo-growthbook-preview.yml"
         )
+        growthbook_verify_workflow = read(
+            ".github/workflows/verify-vevo-growthbook-preview.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -449,6 +452,31 @@ def main() -> int:
             "source_schedule:",
             "GrowthBook deploy must not accept an arbitrary network source schedule.",
         )
+        require(
+            growthbook_deploy_workflow,
+            'rejected != {"accepted": False, "code": "invalid_event"}',
+            "GrowthBook deploy must expect the collector's generic public rejection code.",
+        )
+        forbid(
+            growthbook_deploy_workflow,
+            '"code": "field_set_mismatch"',
+            "GrowthBook deploy must not depend on a masked internal validation reason.",
+        )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            'if stack["StackStatus"] != "UPDATE_COMPLETE"',
+            'parameters.get("PublicRouteEnabled") != "true"',
+            'route.get("RouteKey") != "POST /v1/events"',
+            '"code": "invalid_event"',
+            '"code": "origin_not_allowed"',
+            "cmp -s raw-objects-before.json raw-objects-after.json",
+            "COLLECTOR_ACTIVE_PUBLIC_NO_WRITE_OK",
+        ):
+            require(
+                growthbook_verify_workflow,
+                marker,
+                f"GrowthBook active verifier lost safety marker: {marker}",
+            )
         forbid(
             growthbook_template,
             "s3:DeleteObject",
