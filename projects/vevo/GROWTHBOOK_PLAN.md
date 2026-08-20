@@ -19,14 +19,15 @@ The rollout is complete only when the A/A acceptance gates pass and the first A/
 | Storefront | `https://www.vevo.sk/` |
 | Platform | BiznisWeb/FLOX, Verona template |
 | Language | Slovak only (`data-lang-code="sk"`) |
-| BiznisWeb root/page | root `79`, homepage `299` |
-| Current hero | slider block `1778`, four image slides |
+| BiznisWeb root/page | root `79`; homepage `299` remains unchanged |
+| Confirmed page baseline | homepage `267` active users/28d; product detail `759` `view_item` users/28d and `451`/7d |
 | Existing GTM | configured for Slovak language and present in the page head |
 | Existing GA4 | configured in BiznisWeb and present on the public site |
 | Existing Meta measurement | browser Pixel loaded through GTM; native BiznisWeb Meta Pixel/CAPI fields are empty |
-| First A/B surface | homepage hero only |
-| First A/B change | control has no overlay headline; variant adds one value-proposition headline while image, link, price, products, checkout, and all other content stay identical |
-| Primary business metric | realized contribution profit per eligible exposed visitor, using the version-frozen VEVO reporting formula |
+| First A/B surface | Slovak product-detail pages on which the add-to-cart CTA is actually rendered |
+| First A/B change | CTA background/color only; label, size, layout, product selector, prices, cart behavior, and all other content stay identical |
+| Primary decision metric | unique devices with `add_to_cart` within 24 hours / unique first-exposed product-viewer devices |
+| Primary business guardrail | authoritative CM1 contribution per eligible exposed device under metric definition `vevo_cm1_v1_2026-08-20` |
 | Excluded initially | prices, discounts, cart, checkout, payments, stock, product duplication, personalized pricing, and non-Slovak storefronts |
 
 ## Architecture decision
@@ -64,7 +65,7 @@ The current Basic-Auth App Runner dashboard is not a public event collector. Ing
 
 ## Meta Ads operating model
 
-The first test will not split traffic inside Meta. All included Meta ads use the same canonical VEVO homepage URL and GrowthBook randomizes visitors after arrival. This preserves randomization and lets Meta campaign/ad/ad-set/placement remain analysis dimensions rather than competing assignment systems.
+The first test will not split traffic inside Meta. Included Meta ads keep their intended canonical VEVO destination and GrowthBook randomizes a visitor only after an eligible Slovak product-detail CTA is rendered. This preserves randomization and lets Meta campaign/ad/ad-set/placement remain analysis dimensions rather than competing assignment systems.
 
 New or edited Meta destination URLs must use stable IDs, not only mutable names:
 
@@ -107,22 +108,19 @@ Whether the anonymous sticky-assignment cookie is classified as functional or an
 
 Acceptance: read-only evidence is recorded in this file and `PROJECT_STATE.md`; no storefront mutation occurred.
 
-### 2. Measurement baseline — next
+### 2. Measurement baseline — traffic/funnel frozen; join gate open
 
-Use the latest complete 28 days, excluding known outages and internal traffic, to freeze:
+The dated artifact `GROWTHBOOK_BASELINE_2026-08-20.md` freezes the observable GA4 traffic/funnel baseline for `2026-07-23..2026-08-19`. Before production allocation, finish the unavailable or non-authoritative parts:
 
-- eligible homepage visitors and sessions;
-- purchase conversion rate;
-- contribution profit per eligible visitor;
-- average order value and order contribution;
-- cancellation/refund rate;
+- exact consent-eligible exposure population from the new event dataset;
+- authoritative purchase conversion, CM1 per eligible device, average order value, cancellation/refund rate, and order contribution from the reporting join;
 - Meta visitors by campaign, ad set, ad, and placement where URL IDs exist;
 - p75 LCP and JavaScript error baseline if observable;
-- current purchase-event count and transaction-ID completeness.
+- purchase-event completeness and duplication across the currently observed GA4 measurement IDs.
 
 Verify on one safe test order or a pre-approved existing order that BiznisWeb's confirmation-page `transactionId` equals the reporting API `order_num`. Do not infer equality from documentation.
 
-Acceptance: a dated baseline artifact exists, metric formula version is frozen, and the transaction join succeeds exactly. Otherwise the rollout is NO-GO.
+Acceptance: the dated baseline artifact exists, metric definition `vevo_cm1_v1_2026-08-20` is frozen, and the transaction join succeeds exactly. The first two conditions now pass; the join and measurement-quality conditions remain NO-GO gates.
 
 ### 3. GrowthBook Pro workspace
 
@@ -180,7 +178,7 @@ Acceptance: signed QA checklist and exact rollback test pass. Any checkout, cons
 
 ### 7. A/A validation
 
-Run `vevo-sk-aa-001` with identical control and variant at 50/50 among eligible consented visitors. Minimum duration is seven full calendar days and minimum sample is 1,000 unique eligible devices; both conditions must be met.
+Run the invisible, site-wide `vevo-sk-aa-001` with identical control and variant at 50/50 among eligible consented Slovak storefront visitors. Its broad eligibility is intentional so it validates assignment, consent, Meta dimensions, purchase joining, and reporting without waiting for a low-volume visual surface. Minimum duration is seven full calendar days and minimum sample is 1,000 unique eligible devices; both conditions must be met.
 
 Pass gates:
 
@@ -198,20 +196,21 @@ An apparent A/A business-metric winner is investigated, never promoted. Any fail
 
 ### 8. First A/B experiment
 
-Experiment ID: `vevo-sk-home-hero-headline-001`
+Experiment ID: `vevo-sk-product-cta-color-001`
 
-Hypothesis: adding one concise value-proposition headline to the existing first homepage hero will increase realized contribution profit per eligible exposed visitor because visitors understand VEVO's offer earlier.
+Hypothesis: changing only the product-detail add-to-cart CTA background from the current control color to one approved, accessible, high-contrast VEVO brand color will increase the share of exposed product viewers who add a product to cart because the primary action is easier to notice.
 
-- Population: eligible consented devices on the Slovak homepage.
+- Population: eligible consented devices on Slovak product-detail pages where the add-to-cart CTA is actually rendered.
 - Split: 50/50, sticky by anonymous device ID.
-- Control: current hero, no overlay headline.
-- Variant: one approved overlay headline; no other difference.
-- Primary metric: contribution profit per eligible exposed visitor.
-- Guardrails: purchase conversion, AOV, cancellation/refund rate, add-to-cart rate, p75 LCP, JavaScript errors, and checkout health.
+- Control: the current CTA color.
+- Variant: one approved high-contrast brand-palette CTA color; label, dimensions, placement, selectors, prices, cart behavior, and every other element remain unchanged.
+- Primary metric: binary device-level `add_to_cart` within 24 hours of first valid exposure, divided by unique first-exposed product-viewer devices.
+- Primary business guardrail: authoritative CM1 contribution per eligible exposed device under `vevo_cm1_v1_2026-08-20`.
+- Other guardrails: purchase conversion, AOV, cancellation/refund rate, p75 LCP, JavaScript errors, and checkout health.
 - Dimensions for diagnosis only: Meta campaign ID, ad-set ID, ad ID, placement, device type, and new/returning device. Dimension findings do not replace the primary all-traffic decision.
 - Minimum run: 14 full days and two complete weekday cycles.
 - Maximum planned run: 42 days.
-- Sample target: calculated from the frozen baseline before launch at 80% power, two-sided 5% alpha, and the smallest economically meaningful effect. It is written into the experiment record before launch and is never reduced after seeing results.
+- Provisional planning target: `1,084` total exposed devices (`542`/arm), calculated from the diagnostic seven-day GA4 ratio `148 add_to_cart users / 451 view_item users`, a `25%` relative MDE, `80%` power, and two-sided `5%` alpha. Because the GA4 ratio is not an exposure-linked cohort, recompute once from A/A event data, freeze the final target before launch, and never change it after observing A/B results.
 - Decision timing: no winner/loser call before both minimum duration and planned sample are reached. Guardrail harm may stop the test early.
 
 Decision contract:
@@ -228,7 +227,7 @@ Rollback order is deliberately independent of BiznisWeb content edits:
 
 1. Set the GrowthBook production feature to control/`0%`.
 2. Disable only the versioned VEVO GrowthBook GTM tag.
-3. Confirm the public site returns the original hero and checkout is healthy.
+3. Confirm the public product-detail CTA returns to its original color and checkout is healthy.
 4. Leave the append-only event dataset intact for audit; stop new ingestion only if required.
 5. Revert infrastructure/code through Git and the documented deployment workflow.
 
@@ -242,7 +241,7 @@ Rollback must not disable the existing GA4, Meta Pixel, consent banner, or unrel
 
 - GrowthBook Pro workspace/client key exists;
 - consent category and retention are approved;
-- 28-day baseline is frozen;
+- the dated traffic/funnel baseline exists and its remaining measurement gaps are closed;
 - `transactionId` → `order_num` is verified;
 - isolated collector and Athena dataset pass security tests;
 - Preview and rollback QA pass;

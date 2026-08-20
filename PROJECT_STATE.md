@@ -61,18 +61,22 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- VEVO GrowthBook Pro rollout has a concrete, read-only preflight and execution contract on branch `codex/vevo-growthbook` (`2026-08-20`):
-  - the goal is to validate the complete GrowthBook → Meta dimensions → reporting chain with A/A and then finish one non-price homepage-hero A/B test; script installation alone is explicitly not completion
-  - confirmed scope is the Slovak `www.vevo.sk` storefront, BiznisWeb root `79`, homepage `299`, slider block `1778`; all other languages, prices, products, cart, checkout, payments, and stock remain out of scope
+- VEVO GrowthBook Pro rollout has a concrete, read-only preflight, dated baseline, and execution contract on branch `codex/vevo-growthbook` (`2026-08-20`):
+  - the goal is to validate the complete GrowthBook → Meta dimensions → reporting chain with an invisible site-wide A/A and then finish one non-price product-detail CTA-color A/B test; script installation alone is explicitly not completion
+  - confirmed scope is the Slovak `www.vevo.sk` storefront; all other languages, prices, product content, cart, checkout, payments, and stock remain out of scope
   - public/admin evidence confirms head-loaded Slovak GTM, GA4, cookie categories, and a Meta browser Pixel delivered through GTM; native BiznisWeb Meta Pixel/CAPI inputs are empty and GrowthBook is not currently present
   - the architecture keeps one source of truth: a separate PII-free first-party collector writes an experiment-only AWS dataset, GrowthBook Pro queries it read-only through Athena, and the existing VEVO reporting reads the same events
   - the existing Basic-Auth App Runner dashboard is not reused as a public collector; GrowthBook receives no access to order/customer/invoice exports and browser-submitted money is never authoritative
   - production allocation remains `0%` until consent classification/retention, a frozen 28-day baseline, exact `transactionId` → API `order_num` validation, collector/Athena security tests, Preview/rollback QA, and deployment hard-gate evidence all pass
-  - A/A `vevo-sk-aa-001` requires at least seven full days and 1,000 eligible devices plus SRM, reconciliation, deduplication, transaction-join, privacy, and performance gates
-  - first A/B `vevo-sk-home-hero-headline-001` changes only the presence of one hero overlay headline, uses contribution profit per eligible exposed visitor as primary metric, runs for at least 14 days with a pre-registered sample target, and ends as `WIN`, `LOSE`, or `INCONCLUSIVE`
+  - the exact production GA4 baseline for `2026-07-23..2026-08-19` is frozen in `projects/vevo/GROWTHBOOK_BASELINE_2026-08-20.md`: `2,362` active users, `2,971` sessions, `58` purchases, `759` `view_item` users, and `261` `add_to_cart` users; homepage volume was only `267` active users
+  - the latest complete seven days had `451` `view_item` users and `148` `add_to_cart` users; at the diagnostic `32.82%` rate, `25%` relative MDE, `80%` power, and two-sided `5%` alpha, the provisional target is `1,084` exposed devices, or about `16.8` days before consent/eligibility loss
+  - metric definition `vevo_cm1_v1_2026-08-20` is frozen as net order revenue minus product expense, packaging cost, and net shipping cost; CM1 per exposed device is the primary business guardrail, while device-level `add_to_cart` within 24 hours is the A/B primary decision metric
+  - A/A `vevo-sk-aa-001` is invisible and site-wide, and requires at least seven full days and 1,000 eligible devices plus SRM, reconciliation, deduplication, transaction-join, privacy, and performance gates
+  - first A/B `vevo-sk-product-cta-color-001` changes only the eligible product-detail CTA background/color, runs for at least 14 days with a pre-registered final sample target, and ends as `WIN`, `LOSE`, or `INCONCLUSIVE`
+  - the baseline exposed a material measurement gap: GA4 recorded `58` purchases while the BiznisWeb diagnostic aggregate contained `184` created and `165` shipped orders; the populations/statuses and potential GA4 routing/duplication must be reconciled before production assignment
   - exact rollout and rollback gates are in `projects/vevo/GROWTHBOOK_PLAN.md`; the strict versioned PII-free schema is in `projects/vevo/GROWTHBOOK_DATA_CONTRACT.md`
   - no BiznisWeb, GTM, Meta, GrowthBook, AWS, or runtime mutation occurred during preflight; no local server/process was started
-  - Next exact step: generate and freeze the latest complete 28-day VEVO baseline, then validate one confirmation-page `transactionId` against the authoritative BiznisWeb API `order_num` before implementing any collector or storefront tag
+  - Next exact step: validate one confirmation-page `transactionId` against the authoritative BiznisWeb API `order_num`, reconcile the GA4/BiznisWeb purchase populations, and freeze consent/performance baselines before implementing any collector or storefront tag
 
 - VEVO profit-first Meta spend and sample-customer decision system is implemented on branch `codex/vevo-meta-profit-scaling` (`2026-08-20`):
   - the reporting model now evaluates Meta scaling against nominal contribution profit, not a fixed ROAS target; it combines immediate company profit with mature 30/60/90/180-day contribution LTV, safety-buffered marginal CAC guardrails, and explicit scale/hold/reduce decisions
