@@ -5069,5 +5069,12 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - full unit suite: `291` tests passed
   - VEVO settings JSON parse, reporting QA smoke, Python compile, and `git diff --check` passed
   - no local server, worker, watcher, tunnel, or persistent runtime was started
+- Merge, build, and production deployment:
+  - implementation PR `#280` merged as `3c59f4da470966b6a8e20649473b9b58e7293f50`
+  - immutable build workflow `32388731178` succeeded with tag `git-3c59f4da470966b6a8e20649473b9b58e7293f50` and digest `sha256:04b5039afe84aeebda08b3a46036cb1d1ecbcdc93661757d0b7c77b1ccb47feb`
+  - protected deploy workflow `32388991632` succeeded and regenerated all `7d`, `30d`, `90d`, and `full` artifacts
+  - Fargate hard-gate identity: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.27.142`, service `vevo-daily-report-email`, task `668a0e723cdb45bbbe45cb1d7f343b84`, candidate/promoted task definition `vevo-reporting-daily:30`, runtime `/app`, and marker `http://127.0.0.1:8000/marker.json`
+  - the refresh emitted `LOCALHOST_LIVE_DASHBOARD_OK:vevo:periods=7d,30d,90d,full` and `LIVE_ARTIFACT_MARKER_OK`; immutable generation `20260820T161914Z` passed the live generation manifest gate
+  - scheduler `vevo-daily-report-email` was promoted to task definition `:30`; authenticated App Runner production-board and VEVO accounting gates passed on the exact image digest, followed by `APP_RUNNER_DEPLOY_OK`
 - Next exact step:
-  - merge through PR, build the exact immutable image, run the protected VEVO deployment, verify the Fargate localhost marker and artifact marker, then confirm scheduler promotion and the live reporting generation
+  - collect 14 days of orders under the new two-Shot exact label, then compare units, AOV, contribution profit, orders above the free-shipping threshold, and cannibalization against the immediately preceding matched-weekday window
