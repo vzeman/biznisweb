@@ -1,0 +1,49 @@
+{
+  "existing_count": 827,
+  "excluded_batch": 44,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je jersey úplet: pružnosť, krútenie švov a správne pranie",
+      "slug": "co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+      "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+      "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "status": "ok",
+      "clusters": [
+        {
+          "cluster": "bedding_sleep",
+          "terms": [
+            "obliecky"
+          ],
+          "intent_terms": [],
+          "note": "Bedding topics need clear separation by textile type and user problem."
+        }
+      ],
+      "issues": []
+    },
+    {
+      "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+      "slug": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

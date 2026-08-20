@@ -1,10 +1,10 @@
 # VEVO_CONTENT Project State
 
-Date: 2026-08-14
+Date: 2026-08-20
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-43
+Branch: codex/vevo-content-batch-44
 
 ## Current State
 
@@ -1851,6 +1851,24 @@ Branch: codex/vevo-content-batch-43
   - `imports/build_batch_43_textile_performance.py` and `imports/batch-43-2026-08-14-articles.json`;
   - `imports/verify_batch_43_public.py`;
   - corresponding candidate-scan, duplicate, link, wording, depth, HTML, MCP smoke, MCP publication, and independent public verification reports under `exports/`.
+
+## Batch 44 Fabric Constructions - Prepared 2026-08-20
+
+- Status: four articles are prepared and all pre-publication gates pass; no live record has been created at this checkpoint.
+- A twelve-topic exploratory scan was narrowed to four distinct construction-level intents. All final titles and exact slugs returned `ok` against `827` merged Blog, FAQ, glossary, and local records. The live catalog has zero duplicate-title groups and zero invalid slugs:
+  - `Čo je jersey úplet: pružnosť, krútenie švov a správne pranie`;
+  - `Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť`;
+  - `Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie`;
+  - `Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia`.
+- Prepared quality: visible word counts `2985`, `2831`, `3299`, and `3348`; H2 counts `27`, `27`, `30`, and `31`; every article has two responsive tables, twelve styled blocks, a concrete product card, a category card, at least six reader-facing FAQ questions, and zero short or one-character paragraphs.
+- Link preflight checked all future targets and outgoing destinations with zero failures. Future article slugs return exact `404`; existing VEVO article, product, category, ASTM, AATCC, CottonWorks, DLA, and GINETEX links return `200`. Exact ISO pages return their documented automated-client `403`; the official EUR-Lex consolidated regulation returns an asynchronous `202` to the automated checker. Those responses are accepted only for the exact authoritative hosts after the pages were independently identified as valid sources.
+- Public wording, depth, and HTML safety guards pass with zero fixed prices, forbidden workflow wording, escaped HTML, malformed links, or structural failures. The complete project check passed `38/38` tests with project audit `block_count=0`.
+- Durable prepared artifacts:
+  - `content-plan/batch-44-fabric-constructions-2026-08-20.md`;
+  - `batches/batch-44-candidate-scan-2026-08-20.txt` and `batches/batch-44-candidates-2026-08-20.txt`;
+  - `imports/build_batch_44_fabric_constructions.py` and `imports/batch-44-2026-08-20-articles.json`;
+  - corresponding candidate-scan, duplicate, link, wording, depth, and HTML reports under `exports/`.
+- Next exact step: run the repo-local VEVO content MCP/API read-only preflight, disposable hidden smoke, immediate duplicate recheck, hidden-first publication, explicit visibility confirmation, and independent public verification. Do not use the legacy remote add/update tools.
 
 ## Known Issues
 
