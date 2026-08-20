@@ -58,8 +58,20 @@ def main() -> int:
         growthbook_preview_config = json.loads(
             read("storefront/vevo-growthbook/config.preview.example.json")
         )
+        gitleaks_ignore_entries = {
+            line.strip()
+            for line in read(".gitleaksignore").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
         read("scripts/reporting_qa_smoke.py")
         read("scripts/import_product_expenses_excel.py")
+
+        if gitleaks_ignore_entries != {
+            "projects/vevo/growthbook_workspace.json:generic-api-key:328"
+        }:
+            raise AssertionError(
+                "Gitleaks ignore must remain limited to the reviewed metric false positive"
+            )
 
         require(
             facebook_ads,
