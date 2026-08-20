@@ -8,6 +8,7 @@ This stack defines, but does not activate, the PII-free experiment collector and
 - The stack creates no IAM user, access key, GrowthBook credential, DNS record, GTM tag, BiznisWeb script, or Meta change.
 - GrowthBook can receive only the managed read policy for the curated fact prefix. It cannot read raw experiment events, BiznisWeb orders, customer exports, invoices, or reporting data outside this dedicated bucket.
 - The reporting policy can read raw events and publish curated facts, but it has no delete permission.
+- The versioned reconciliation command is dry-run by default. Curated writes require both `--publish` and `GROWTHBOOK_FACT_PUBLISH_ENABLED=true` in the reviewed reporting runtime.
 - Raw object keys are immutable: the bucket policy requires `If-None-Match`, and the collector itself sends `IfNoneMatch="*"`.
 - API access logs omit IP, user agent, URL/query values, headers, and request bodies. The Lambda code does not log event payloads.
 

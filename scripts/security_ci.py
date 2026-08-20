@@ -41,6 +41,9 @@ def main() -> int:
         growthbook_collector = read("growthbook_collector/handler.py")
         growthbook_registry = read("growthbook_collector/experiments.json")
         growthbook_reporting = read("reporting_core/experiments.py")
+        growthbook_event_io = read("reporting_core/experiment_io.py")
+        growthbook_order_adapter = read("reporting_core/experiment_orders.py")
+        growthbook_reconciler = read("scripts/reconcile_growthbook_facts.py")
         growthbook_template = read("infra/vevo-growthbook/template.yaml")
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         read("scripts/reporting_qa_smoke.py")
@@ -247,6 +250,31 @@ def main() -> int:
             "GrowthBook reporting must prevent cross-device double attribution.",
         )
         require(
+            growthbook_event_io,
+            'partition_prefix = f"{normalized_prefix}/event_date={current.isoformat()}/"',
+            "GrowthBook raw loader must enumerate exact server-receipt date partitions.",
+        )
+        forbid(
+            growthbook_event_io,
+            'Prefix=normalized_prefix',
+            "GrowthBook raw loader must never scan the broad raw prefix.",
+        )
+        require(
+            growthbook_order_adapter,
+            'if set(fact) != ORDER_FIELDS',
+            "GrowthBook order adapter must enforce the exact PII-free output schema.",
+        )
+        require(
+            growthbook_reconciler,
+            'GROWTHBOOK_FACT_PUBLISH_ENABLED',
+            "GrowthBook fact publication must keep the environment write gate.",
+        )
+        require(
+            growthbook_reconciler,
+            'if args.publish and not _enabled',
+            "GrowthBook fact publication must require both explicit CLI and runtime gates.",
+        )
+        require(
             growthbook_template,
             "DenyRawWritesWithoutIfNoneMatch",
             "GrowthBook event bucket must enforce conditional raw writes.",
@@ -305,6 +333,9 @@ def main() -> int:
             "scripts/reporting_qa_smoke.py",
             "growthbook_collector/handler.py",
             "reporting_core/experiments.py",
+            "reporting_core/experiment_io.py",
+            "reporting_core/experiment_orders.py",
+            "scripts/reconcile_growthbook_facts.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)
 

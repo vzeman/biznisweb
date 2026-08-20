@@ -12,7 +12,7 @@ Last reviewed: 2026-08-20
 - `device_id` is a random VEVO experiment identifier and is the only assignment key.
 - Event and attribute names are allowlisted; unknown fields are rejected, not silently stored.
 - No raw request body is written to application logs.
-- Server receipt time is authoritative. Client time is diagnostic and bounded against server time.
+- Server receipt time is authoritative for event ordering and experiment windows. Client time is diagnostic and bounded against server time.
 - Accepted rows are append-only and idempotent by `event_id`.
 - Revenue and contribution are derived from the authoritative BiznisWeb order/reporting records after an exact transaction join; browser-submitted monetary values are never authoritative.
 - Metric definition `vevo_cm1_v1_2026-08-20` is frozen as `net order revenue - product expense - packaging cost - net shipping cost`, before allocated ad spend and fixed overhead.
@@ -126,7 +126,7 @@ An order can be attributed only when:
 3. `transaction_id` joins exactly one authoritative order;
 4. the order is not a test/internal order under the frozen reporting exclusions.
 
-The purchase attribution window is frozen at seven days from the first valid exposure. Cancellation/refund maturity is evaluated 14 days after the authoritative order timestamp. A row before that checkpoint is retained with an explicit immature-order count; it is never silently presented as mature.
+The purchase attribution window is frozen at seven days from the first valid exposure. The order timestamp used by this dataset is the first validated collector receipt of the exact-joined `order_completed` event; BiznisWeb remains authoritative for existence, lifecycle, revenue, and contribution. Cancellation/refund maturity is evaluated 14 days after that server receipt. A row before that checkpoint is retained with an explicit immature-order count; it is never silently presented as mature.
 
 ## Derived experiment fact table
 
@@ -148,12 +148,20 @@ Reporting also creates `experiment_performance_facts`, one row per first accepte
 
 Non-buyers receive zero revenue/contribution, not a missing row. Customer identity and order-line details remain outside the GrowthBook-readable dataset.
 
+The implementation boundary is executable and dry-run-first:
+
+- `reporting_core/experiment_io.py` reads only explicit `event_date=YYYY-MM-DD` raw partitions, with bounded pagination, object count, and object size;
+- `reporting_core/experiment_orders.py` immediately reduces matching in-memory BiznisWeb order records to the exact seven fields `order_num`, `order_at`, `net_revenue_eur`, `cm1_eur`, `lifecycle_state`, `mature`, and `excluded`;
+- `scripts/reconcile_growthbook_facts.py` reuses the existing VEVO product-expense, packaging, shipping, and realized-revenue logic; it is read-only by default and can publish curated facts only when both `--publish` and `GROWTHBOOK_FACT_PUBLISH_ENABLED=true` are present.
+
+Non-realized pending/cancelled/refunded rows currently carry zero order value while preserving their explicit lifecycle counters. The A/A pipeline can validate joins and lifecycle changes with that conservative rule, but a final A/B CM1 decision remains a `NO-GO` until the 14-day credit-note/refund-cost reconciliation is verified against the existing reporting audit.
+
 ## Retention and access
 
 - Proposed deployment parameters are 180 days for raw events, 400 days for curated anonymous facts, 30 days for Athena results, and 30 days for payload-free service logs. They remain unapproved until recorded in the deployment change; production stays at `0%` until then.
 - GrowthBook receives a dedicated IAM identity with `SELECT`/Athena query capability and S3 read access only to the experiment fact/exposure prefixes plus its query-result prefix.
 - The VEVO reporting runtime receives only the permissions required to read experiment events and produce derived facts.
-- No credentials are committed. Required names belong in `.env.example`/`.env.required`; values belong in the deployment secret store.
+- No credentials are committed. Optional experiment runtime names belong in `.env.example`; values belong in the deployment secret store. The experiment bucket is not added to the repository-wide required baseline because non-VEVO reporting runs must remain independent.
 - Access, schema rejects, throttle events, and deletion/lifecycle jobs are auditable without logging event payloads.
 
 The version-controlled active-experiment registry is `growthbook_collector/experiments.json`. Preview contains the named A/A and CTA experiments; Production is an empty object until a reviewed rollout commit. Exposure pages and downstream health-observation pages are separate allowlists, so checkout health can be observed after an earlier exposure without assigning a new variation on the confirmation page.

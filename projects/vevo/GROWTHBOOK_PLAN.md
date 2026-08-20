@@ -29,7 +29,7 @@ The rollout is complete only when the A/A acceptance gates pass and the first A/
 | Primary decision metric | unique devices with `add_to_cart` within 24 hours / unique first-exposed product-viewer devices |
 | Primary business guardrail | authoritative CM1 contribution per eligible exposed device under metric definition `vevo_cm1_v1_2026-08-20` |
 | Purchase attribution window | 7 days from the first valid exposure, frozen before A/A |
-| Cancellation/refund maturity checkpoint | 14 days after the authoritative order timestamp; immature rows remain explicitly flagged |
+| Cancellation/refund maturity checkpoint | 14 days after the first validated server receipt of the exact-joined order-completion event; immature rows remain explicitly flagged |
 | Excluded initially | prices, discounts, cart, checkout, payments, stock, product duplication, personalized pricing, and non-Slovak storefronts |
 
 ## Architecture decision
@@ -157,7 +157,9 @@ No GrowthBook subscription purchase or paid upgrade is executed without the acco
 - Add reporting ingestion and reconciliation from the same dataset.
 - Freeze the browser-to-order attribution window at seven days and keep the 14-day cancellation/refund maturity state explicit rather than silently treating immature orders as final.
 
-Acceptance: invalid, oversized, cross-origin, duplicate, and PII-bearing payload tests fail closed; valid synthetic events appear once in Athena and reporting.
+Implemented locally on `codex/vevo-growthbook`: the bounded reader scans only explicit raw `event_date` partitions; validated transaction IDs select the matching BiznisWeb records; the existing VEVO realized-revenue and item-cost calculations produce an exact seven-field PII-free order boundary; and one deterministic builder creates the curated device/performance/quality facts used by both consumers. The reconciliation command is dry-run by default and requires a second runtime environment gate in addition to `--publish`. No AWS or shop mutation occurred.
+
+Acceptance: local invalid, oversized, escaped-prefix, duplicate, conflicting, and PII-bearing cases fail closed, and synthetic reconciliation produces one deterministic fact set. The remaining Preview acceptance is to deploy the reviewed endpoint/runtime, prove one valid synthetic event appears exactly once in raw Athena and both curated/reporting consumers, and verify credit-note/refund cost handling before any final A/B CM1 decision.
 
 ### 5. Storefront integration
 

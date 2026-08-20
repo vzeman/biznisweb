@@ -349,6 +349,29 @@ def _deduplicate_events(
     return sorted(by_id.values(), key=lambda item: (item["_received_at"], item["event_id"])), duplicate_counts
 
 
+def order_completion_receipts(
+    raw_events: Iterable[Mapping[str, Any]],
+) -> Dict[str, datetime]:
+    """Return the first validated server receipt for each completed order.
+
+    Validation is intentionally identical to fact generation, including the
+    strict field allowlist and PII rejection.  A caller can therefore select
+    exact BiznisWeb orders without trusting an unvalidated transaction ID.
+    """
+
+    events, _duplicate_counts = _deduplicate_events(raw_events)
+    receipts: Dict[str, datetime] = {}
+    for event in events:
+        if event["event_name"] != "order_completed":
+            continue
+        transaction_id = event["transaction_id"]
+        received_at = event["_received_at"]
+        existing = receipts.get(transaction_id)
+        if existing is None or received_at < existing:
+            receipts[transaction_id] = received_at
+    return receipts
+
+
 def _deduplicate_orders(raw_orders: Iterable[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
     by_num: Dict[str, Dict[str, Any]] = {}
     for raw in raw_orders:
