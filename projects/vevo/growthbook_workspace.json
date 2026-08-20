@@ -70,13 +70,18 @@
     "aws_region": "eu-central-1",
     "default_catalog": "AwsDataCatalog",
     "authentication": "dedicated_readonly_iam_user_access_key",
-    "credentials_status": "not_created",
+    "credentials_status": "created_active_not_committed",
+    "iam_user_name": "vevo-growthbook-preview-reader",
+    "iam_user_arn": "arn:aws:iam::919341186960:user/vevo/growthbook/preview/vevo-growthbook-preview-reader",
+    "policy_arn": "arn:aws:iam::919341186960:policy/vevo-growthbook-readonly-preview",
+    "access_key_count": 1,
+    "credential_material_committed": false,
     "preview": {
       "data_source_name": "VEVO Preview Experiment Facts",
       "workgroup": "vevo-growthbook-readonly-preview",
       "database": "vevo_growthbook_preview",
-      "s3_results_url": "from_preview_stack_output",
-      "status": "collector_active_athena_identity_pending"
+      "s3_results_url": "s3://vevo-growthbook-preview-experimentdatabucket-pj7zod15wpyr/athena-results/growthbook/",
+      "status": "athena_reader_active_growthbook_connection_pending"
     },
     "production": {
       "data_source_name": "VEVO Production Experiment Facts",
