@@ -5033,3 +5033,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - the real purchase cost of one `Vevo Pure Harmony 500ml` bottle is not present in the current cost map; its 2x/3x bundles remain intentionally unmapped rather than using an invented cost
 - Next exact step:
   - provide the real ex-VAT purchase cost of one `Vevo Pure Harmony 500ml` bottle; then map it once so its 2x/3x bundles are inferred automatically
+
+### 2026-08-20 (VEVO bundle gifts and two new full-size sets)
+- External catalog change:
+  - four full-size VEVO sets now have new exact product labels and include a real Vevo Shot plus one or two wooden 7 ml measuring cups
+  - new products `Kompletný prací rituál – Ylang Absolute` and `Dve najobľúbenejšie vône + čistá práčka` were created in BiznisWeb
+- Reporting change:
+  - added six exact-label component-cost rules for the new catalog state while retaining the previous rules unchanged for historical orders
+  - derived ex-VAT COGS: Bestsellers 3x200 + Shot + cup `10.40 EUR`; Complete 6x200 + Shot + two cups `20.81 EUR`; 3x Ylang 500 + Shot + two cups `19.69 EUR`; Ylang 500 + 3 gels + Shot + cup `14.39 EUR`; complete laundry ritual `9.53 EUR`; Ylang + Pure Garden + Shot + two cups `13.74 EUR`
+  - regression coverage asserts every new exact label, total cost, and configured-rule source
+- Verified locally:
+  - full unit suite: `291` tests passed
+  - reporting QA smoke, Python compile, both VEVO JSON parses, and `git diff --check` passed
+  - no local server, worker, watcher, tunnel, or persistent runtime was started
+- Next exact step:
+  - merge through PR, build the immutable image, then deploy VEVO through the protected workflow and verify the Fargate identity, localhost marker, generated artifact, scheduler promotion, and live UI/API gates

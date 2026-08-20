@@ -369,6 +369,34 @@
       ]
     },
     {
+      "rule_id": "natural_bestsellers_200ml_shot_cup",
+      "exact_labels": [
+        "Vevo Natural Bestsellers 3×200 ml + Shot a odmerka ZADARMO"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.08 Cotton Dream (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.09 Pure Garden (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Odmerka Vevo 7ml drevená na parfum do prania",
+          "quantity": 1
+        }
+      ]
+    },
+    {
       "rule_id": "natural_complete_fragrance_6x200ml",
       "exact_labels": [
         "Vevo Natural Complete Fragrance Set",
@@ -398,6 +426,46 @@
         {
           "expense_key": "Parfum do prania Vevo Natural No.09 Pure Garden (200ml)",
           "quantity": 1
+        }
+      ]
+    },
+    {
+      "rule_id": "natural_complete_6x200_shot_2_cups",
+      "exact_labels": [
+        "Vevo Natural Complete 6×200 ml + Shot a 2 odmerky ZADARMO"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.01 Cotton Paradise (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.02 Sweet Paradise (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.06 Royal Cotton (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.08 Cotton Dream (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.09 Pure Garden (200ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Odmerka Vevo 7ml drevená na parfum do prania",
+          "quantity": 2
         }
       ]
     },
@@ -455,6 +523,98 @@
         {
           "expense_key": "8594201618000",
           "quantity": 3
+        }
+      ]
+    },
+    {
+      "rule_id": "ylang_absolute_3x500_shot_2_cups",
+      "exact_labels": [
+        "3× Ylang Absolute 500 ml + Vevo Shot a 2 odmerky ZADARMO"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+          "quantity": 3
+        },
+        {
+          "expense_key": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Odmerka Vevo 7ml drevená na parfum do prania",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "rule_id": "ylang_absolute_perfume_gel_1_3_shot_cup",
+      "exact_labels": [
+        "Ylang Absolute 500 ml + 3× prací gél 1 l + Shot a odmerka ZADARMO"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "8594201618000",
+          "quantity": 3
+        },
+        {
+          "expense_key": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Odmerka Vevo 7ml drevená na parfum do prania",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "rule_id": "complete_laundry_ritual_ylang",
+      "exact_labels": [
+        "Kompletný prací rituál – Ylang Absolute"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "8594201618000",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Odmerka Vevo 7ml drevená na parfum do prania",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "rule_id": "ylang_pure_garden_shot_2_cups",
+      "exact_labels": [
+        "Dve najobľúbenejšie vône + čistá práčka"
+      ],
+      "components": [
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Parfum do prania Vevo Natural No.09 Pure Garden (500ml)",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+          "quantity": 1
+        },
+        {
+          "expense_key": "Odmerka Vevo 7ml drevená na parfum do prania",
+          "quantity": 2
         }
       ]
     },
