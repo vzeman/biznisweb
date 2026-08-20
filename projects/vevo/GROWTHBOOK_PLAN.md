@@ -105,6 +105,8 @@ Default rollout rule:
 
 Whether the anonymous sticky-assignment cookie is classified as functional or analytical is a business/privacy decision and must be recorded before production activation. Until that decision exists, production traffic allocation remains `0%`.
 
+A dedicated read-only admin inspection on `2026-08-20` confirmed that the Slovak storefront uses GTM container `GTM-5ZB5LFGB`, every native BiznisWeb Facebook Pixel ID/Access Token input shown for the language versions is empty, and the cookie manager has its Reject button enabled. The manager exposes Mandatory, Functional, Analytical, and Marketing categories; its current Analytical description explicitly covers browsing, component interaction, and conversion events. This supports the proposed analytical classification for experiment delivery/measurement, but it does not constitute legal approval and the admin view exposes no verified JavaScript accept/withdraw callback. Preview must still prove the actual consent signal and withdrawal behavior before Production can move above `0%`.
+
 ## Execution plan and acceptance gates
 
 ### 1. Preflight — completed
@@ -114,8 +116,9 @@ Whether the anonymous sticky-assignment cookie is classified as functional or an
 - Confirm other language roots remain out of scope.
 - Confirm no native BiznisWeb A/B engine is documented and no safe public price-variant API exists.
 - Preserve all existing BiznisWeb admin content; no connector mutation is used for the hero because its mutation API cannot safely round-trip the full slider content.
+- Confirm in the dedicated admin tab that SK GTM, native Meta inputs, and cookie-manager categories match the public preflight; do not press any Save/Confirm control.
 
-Acceptance: read-only evidence is recorded in this file and `PROJECT_STATE.md`; no storefront mutation occurred.
+Acceptance: read-only evidence is recorded in this file and `PROJECT_STATE.md`; no storefront mutation occurred. The dedicated admin check passed without saving any form.
 
 ### 2. Measurement baseline — traffic/funnel and join frozen; consent/performance gates open
 
