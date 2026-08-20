@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "environments": {
+    "preview": {
+      "vevo-sk-aa-001": {
+        "variations": [
+          "control",
+          "variant"
+        ],
+        "exposure_page_types": [
+          "home",
+          "product",
+          "category"
+        ],
+        "health_page_types": [
+          "home",
+          "product",
+          "category",
+          "checkout_success"
+        ],
+        "allowed_events": [
+          "experiment_exposure",
+          "add_to_cart",
+          "order_completed",
+          "performance_vital",
+          "client_error_observed"
+        ]
+      },
+      "vevo-sk-product-cta-color-001": {
+        "variations": [
+          "control",
+          "brand_contrast"
+        ],
+        "exposure_page_types": [
+          "product"
+        ],
+        "health_page_types": [
+          "product",
+          "checkout_success"
+        ],
+        "allowed_events": [
+          "experiment_exposure",
+          "add_to_cart",
+          "order_completed",
+          "performance_vital",
+          "client_error_observed"
+        ]
+      }
+    },
+    "production": {}
+  }
+}

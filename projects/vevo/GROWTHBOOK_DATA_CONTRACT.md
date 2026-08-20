@@ -150,6 +150,8 @@ Non-buyers receive zero revenue/contribution, not a missing row. Customer identi
 - No credentials are committed. Required names belong in `.env.example`/`.env.required`; values belong in the deployment secret store.
 - Access, schema rejects, throttle events, and deletion/lifecycle jobs are auditable without logging event payloads.
 
+The version-controlled active-experiment registry is `growthbook_collector/experiments.json`. Preview contains the named A/A and CTA experiments; Production is an empty object until a reviewed rollout commit. Exposure pages and downstream health-observation pages are separate allowlists, so checkout health can be observed after an earlier exposure without assigning a new variation on the confirmation page.
+
 ## Collector rejection rules
 
 Reject with no persistence when any condition is true:

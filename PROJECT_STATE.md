@@ -77,10 +77,14 @@ Bootstrap entrypoints:
   - the exact join passes the planned `98%` gate and rules out same-ID duplication in the audited GA4 property; GA4 still covers only `55/165` (`33.33%`) of shipped-order aggregate, so consent coverage remains the leading but not yet proven explanation and GA4 totals are not authoritative shop revenue
   - PageSpeed's 28-day origin-level CrUX baseline passes Core Web Vitals: mobile p75 LCP `1.3 s`, INP `152 ms`, CLS `0`; desktop LCP `1.3 s`, INP `50 ms`, CLS `0`; a representative product Lighthouse run scored `64` mobile / `85` desktop with `13.3 s` / `1.4 s` lab LCP, so per-variation performance events and strict stop thresholds are required
   - the PII-free contract now includes bounded, detail-free `performance_vital` and `client_error_observed` events; it never stores error text, stacks, filenames, URLs, or rejected values
+  - the isolated `growthbook_collector` Lambda implementation is versioned and locally verified: exact per-event field sets, origin/consent/UUID/time/registry checks, PII and raw-click-ID rejection, server receipt partitions, generic errors, optional KMS encryption, and atomic S3 `IfNoneMatch="*"` idempotency are enforced
+  - Preview registry entries exist for `vevo-sk-aa-001` and `vevo-sk-product-cta-color-001`; Production is deliberately `{}` and cannot accept an experiment until a separate reviewed activation commit
+  - exposure-page and downstream health-page allowlists are separate, allowing anonymous checkout health after an earlier assignment without assigning a new checkout variation
+  - verification passed: focused collector suite `13` tests, full repository suite `304` tests, Python compile, registry JSON parse, security CI, and `git diff --check`
   - exact rollout and rollback gates are in `projects/vevo/GROWTHBOOK_PLAN.md`; the strict versioned PII-free schema is in `projects/vevo/GROWTHBOOK_DATA_CONTRACT.md`
-  - no BiznisWeb, GTM, Meta, GrowthBook, AWS, or runtime mutation occurred during preflight; no local server/process was started
+  - no BiznisWeb, GTM, Meta, GrowthBook, AWS, or runtime mutation occurred; no local server/process was started
   - GrowthBook Cloud currently opens at new-account registration; no identity, legal terms, trial, paid plan, or auto-renewal was accepted by Codex
-  - Next exact step: Patrik completes the one-time GrowthBook account registration/login in the isolated GrowthBook tab; then create the Pro Preview/Production workspace at `0%` and freeze the BiznisWeb analytical-consent/retention decision before implementing any collector or storefront tag
+  - Next exact step: add the dedicated API Gateway/Lambda/S3/Glue/Athena infrastructure and reporting reconciliation with Production registry still empty; in parallel Patrik completes the one-time GrowthBook account registration/login so the Pro Preview/Production workspace can be created at `0%`
 
 - VEVO profit-first Meta spend and sample-customer decision system is implemented on branch `codex/vevo-meta-profit-scaling` (`2026-08-20`):
   - the reporting model now evaluates Meta scaling against nominal contribution profit, not a fixed ROAS target; it combines immediate company profit with mature 30/60/90/180-day contribution LTV, safety-buffered marginal CAC guardrails, and explicit scale/hold/reduce decisions

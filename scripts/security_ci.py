@@ -37,6 +37,8 @@ def main() -> int:
         read("templates/reporting-client/product_expenses.json")
         read("templates/reporting-client/README_CLIENT_SETUP.md")
         read("projects/vevo/product_name_aliases.json")
+        growthbook_collector = read("growthbook_collector/handler.py")
+        growthbook_registry = read("growthbook_collector/experiments.json")
         read("scripts/reporting_qa_smoke.py")
         read("scripts/import_product_expenses_excel.py")
 
@@ -205,6 +207,26 @@ def main() -> int:
             "observability_snapshot.py",
             "Reporting repo must keep an observability workflow baseline.",
         )
+        require(
+            growthbook_collector,
+            '"IfNoneMatch": "*"',
+            "GrowthBook collector must keep conditional idempotent S3 writes.",
+        )
+        require(
+            growthbook_collector,
+            "set(payload) != expected_fields",
+            "GrowthBook collector must reject non-allowlisted event fields.",
+        )
+        forbid(
+            growthbook_collector,
+            "Access-Control-Allow-Origin\": \"*",
+            "GrowthBook collector must never use wildcard CORS.",
+        )
+        require(
+            growthbook_registry,
+            '"production": {}',
+            "GrowthBook production registry must remain empty before rollout approval.",
+        )
 
         for rel_path in [
             "http_client.py",
@@ -221,6 +243,7 @@ def main() -> int:
             "scripts/scaffold_client.py",
             "scripts/import_product_expenses_excel.py",
             "scripts/reporting_qa_smoke.py",
+            "growthbook_collector/handler.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)
 
