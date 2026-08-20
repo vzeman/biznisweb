@@ -768,6 +768,11 @@ class ReportingCalculationFixTests(unittest.TestCase):
                 "natural_bestsellers_200ml_ylang_cotton_dream_pure_garden",
             ),
             (
+                "Vevo Natural Bestsellers 3×200 ml + Shot a odmerka ZADARMO",
+                10.40,
+                "natural_bestsellers_200ml_shot_cup",
+            ),
+            (
                 "Vevo Natural Complete Fragrance Set",
                 19.54,
                 "natural_complete_fragrance_6x200ml",
@@ -778,6 +783,11 @@ class ReportingCalculationFixTests(unittest.TestCase):
                 "natural_complete_fragrance_6x200ml",
             ),
             (
+                "Vevo Natural Complete 6×200 ml + Shot a 2 odmerky ZADARMO",
+                20.81,
+                "natural_complete_6x200_shot_2_cups",
+            ),
+            (
                 "Bundle parfumov do prania Vevo Natural Pure Garden + Ylang Absolute 2×500 ml",
                 12.47,
                 "natural_bestsellers_500ml_ylang_pure_garden",
@@ -786,6 +796,26 @@ class ReportingCalculationFixTests(unittest.TestCase):
                 "Sada parfumov do prania Vevo Natural Pure Garden + Ylang Absolute 2×500 ml",
                 12.47,
                 "natural_bestsellers_500ml_ylang_pure_garden",
+            ),
+            (
+                "3× Ylang Absolute 500 ml + Vevo Shot a 2 odmerky ZADARMO",
+                19.69,
+                "ylang_absolute_3x500_shot_2_cups",
+            ),
+            (
+                "Ylang Absolute 500 ml + 3× prací gél 1 l + Shot a odmerka ZADARMO",
+                14.39,
+                "ylang_absolute_perfume_gel_1_3_shot_cup",
+            ),
+            (
+                "Kompletný prací rituál – Ylang Absolute",
+                9.53,
+                "complete_laundry_ritual_ylang",
+            ),
+            (
+                "Dve najobľúbenejšie vône + čistá práčka",
+                13.74,
+                "ylang_pure_garden_shot_2_cups",
             ),
         )
         for label, expected_cost, rule_id in configured_cases:
