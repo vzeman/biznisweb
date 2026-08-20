@@ -5056,3 +5056,18 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - the protected App Runner HTML/API gates passed on exact image digest `sha256:953df51e3c07bac20e985e22ca535d47c3706ff5bb76900401b50ac51ddcc20c`
 - Next exact step:
   - collect 14 days of orders under the new exact labels, then compare units, AOV, contribution profit, orders above the free-shipping threshold, and cannibalization against the immediately preceding matched-weekday window
+
+### 2026-08-20 (VEVO Natural Complete upgraded to two Shots)
+- External catalog change:
+  - `Vevo Natural Complete 6×200 ml + 2× Vevo Shot a 2 odmerky ZADARMO` now contains two Vevo Shots and two wooden 7 ml measuring cups
+  - customer-facing value is `121.30 EUR`, sale price remains `89.90 EUR`, displayed savings are `31.40 EUR / 25.9%`, and the gifts are presented at `19.80 EUR`
+- Reporting change:
+  - added a new exact-label component-cost rule for the two-Shot catalog state while retaining the one-Shot rule unchanged for historical orders
+  - derived ex-VAT COGS is `21.46 EUR`: six 200 ml perfumes, two Vevo Shots, and two wooden measuring cups
+- Verified locally:
+  - focused exact-label/cost regression passed
+  - full unit suite: `291` tests passed
+  - VEVO settings JSON parse, reporting QA smoke, Python compile, and `git diff --check` passed
+  - no local server, worker, watcher, tunnel, or persistent runtime was started
+- Next exact step:
+  - merge through PR, build the exact immutable image, run the protected VEVO deployment, verify the Fargate localhost marker and artifact marker, then confirm scheduler promotion and the live reporting generation
