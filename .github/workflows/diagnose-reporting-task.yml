@@ -96,13 +96,21 @@ jobs:
           log_prefix = str(options.get("awslogs-stream-prefix") or "")
           if not log_group or not log_prefix:
               raise SystemExit("Task definition is missing awslogs group or stream prefix")
+          environment = {
+              str(row.get("name") or ""): str(row.get("value") or "")
+              for row in definitions[0].get("environment") or []
+          }
           task_id = str(task.get("taskArn") or "").rsplit("/", 1)[-1]
           print(log_group)
           print(f"{log_prefix}/{container_name}/{task_id}")
+          print(environment.get("REPORT_S3_BUCKET") or "")
+          print(environment.get("REPORT_S3_PREFIX") or "")
           PY
           )
           LOG_GROUP="${LOG_CONTEXT[0]}"
           LOG_STREAM="${LOG_CONTEXT[1]}"
+          REPORT_S3_BUCKET="${LOG_CONTEXT[2]:-}"
+          REPORT_S3_PREFIX="${LOG_CONTEXT[3]:-}"
 
           aws logs get-log-events \
             --log-group-name "${LOG_GROUP}" \
@@ -111,11 +119,30 @@ jobs:
             --limit 10000 \
             --region "${AWS_REGION}" > log-events.json
 
-          python - "${PROJECT}" "${LOG_GROUP}" "${LOG_STREAM}" <<'PY' | tee diagnostic.txt
+          if [[ -n "${REPORT_S3_BUCKET}" && -n "${REPORT_S3_PREFIX}" ]]; then
+            aws s3 cp \
+              "s3://${REPORT_S3_BUCKET}/${REPORT_S3_PREFIX}/latest/dashboard_payload_latest.json" \
+              dashboard-payload.json \
+              --only-show-errors || echo '{}' > dashboard-payload.json
+            aws s3 cp \
+              "s3://${REPORT_S3_BUCKET}/${REPORT_S3_PREFIX}/latest/generation.json" \
+              generation.json \
+              --only-show-errors || echo '{}' > generation.json
+          else
+            echo '{}' > dashboard-payload.json
+            echo '{}' > generation.json
+          fi
+
+          SCHEDULE_NAME="${PROJECT}-daily-report-email"
+          aws scheduler get-schedule \
+            --name "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > schedule.json || echo '{}' > schedule.json
+
+          python - "${PROJECT}" "${LOG_GROUP}" "${LOG_STREAM}" "${REPORT_S3_BUCKET}" "${REPORT_S3_PREFIX}" <<'PY' | tee diagnostic.txt
           import json
           import sys
 
-          project, log_group, log_stream = sys.argv[1:]
+          project, log_group, log_stream, report_bucket, report_prefix = sys.argv[1:]
           task = json.load(open("task.json", encoding="utf-8"))["tasks"][0]
           containers = task.get("containers") or []
           container = containers[0] if containers else {}
@@ -140,6 +167,34 @@ jobs:
               message = str(event.get("message") or "").replace("\x00", "")
               print(message)
           print("--- END CLOUDWATCH TAIL ---")
+
+          payload = json.load(open("dashboard-payload.json", encoding="utf-8"))
+          generation = json.load(open("generation.json", encoding="utf-8"))
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          target = schedule.get("Target") or {}
+          scaling = payload.get("meta_profit_scaling") or {}
+          snapshot = {
+              "project": project,
+              "artifact": (
+                  f"s3://{report_bucket}/{report_prefix}/latest/dashboard_payload_latest.json"
+                  if report_bucket and report_prefix
+                  else None
+              ),
+              "generation_id": generation.get("generation_id"),
+              "schedule_state": schedule.get("State"),
+              "schedule_task_definition": (target.get("EcsParameters") or {}).get("TaskDefinitionArn"),
+              "summary": scaling.get("summary") or {},
+              "ltv_rows": scaling.get("ltv_rows") or [],
+              "recent_rows": scaling.get("recent_rows") or [],
+              "spend_tier_rows": scaling.get("spend_tier_rows") or [],
+              "quality_rows": scaling.get("quality_rows") or [],
+              "sample_rows": scaling.get("sample_rows") or [],
+              "guardrail_rows": scaling.get("guardrail_rows") or [],
+              "methodology": scaling.get("methodology") or {},
+          }
+          print("--- PROFIT-FIRST SNAPSHOT (aggregated; no order/customer rows) ---")
+          print(json.dumps(snapshot, ensure_ascii=False, sort_keys=True))
+          print("--- END PROFIT-FIRST SNAPSHOT ---")
           PY
 
           {
