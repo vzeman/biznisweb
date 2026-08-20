@@ -9343,7 +9343,11 @@ class BizniWebExporter:
             else pd.DataFrame()
         )
 
-        latest_7d = recent_rows_df[recent_rows_df["window_days"] == 7]
+        latest_7d = (
+            recent_rows_df[recent_rows_df["window_days"] == 7]
+            if "window_days" in recent_rows_df.columns
+            else pd.DataFrame()
+        )
         latest_7d_row = latest_7d.iloc[0].to_dict() if not latest_7d.empty else {}
         current_meta_spend_per_day = latest_7d_row.get("current_meta_spend_per_day")
         recent_verdict = str(latest_7d_row.get("verdict") or "MONITOR")
