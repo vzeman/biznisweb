@@ -1,0 +1,318 @@
+{
+  "batch": "batch-44",
+  "checked_at": "2026-08-20T08:53:58.433401+00:00",
+  "target_count": 4,
+  "outgoing_count": 34,
+  "check_count": 38,
+  "failure_count": 0,
+  "checks": [
+    {
+      "url": "https://cottonworks.com/encyclopedia-item/percale/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/encyclopedia-item/percale/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cottonworks.com/learning-hub/knitting/single-and-double-knits/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/learning-hub/knitting/single-and-double-knits/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02011R1007-20180215",
+      "status": 202,
+      "final_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02011R1007-20180215",
+      "allowed_automation_block": true,
+      "automation_note": "Official EUR-Lex page accepts the automated request asynchronously",
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm179/577/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm179/577/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=23768",
+      "status": 200,
+      "final_url": "https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=23768",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d1424-25.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d1424-25.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d3775-17r23.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d3775-17r23.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d8007-24.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d8007-24.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/15553.html",
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/15553.html",
+      "allowed_automation_block": true,
+      "automation_note": "Official ISO page blocks the automated link checker",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/23369.html",
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/23369.html",
+      "allowed_automation_block": true,
+      "automation_note": "Official ISO page blocks the automated link checker",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/86700.html",
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/86700.html",
+      "allowed_automation_block": true,
+      "automation_note": "Official ISO page blocks the automated link checker",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ochrana-textilu-pred-uv-ziarenim-co-znamena-upf-a-co-ju-znizuje",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ochrana-textilu-pred-uv-ziarenim-co-znamena-upf-a-co-ju-znizuje",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    }
+  ]
+}

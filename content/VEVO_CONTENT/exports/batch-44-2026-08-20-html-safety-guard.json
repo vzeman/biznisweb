@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je jersey úplet: pružnosť, krútenie švov a správne pranie",
+      "slug": "co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "body_length": 29332,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-44-2026-08-20-articles.json"
+    },
+    {
+      "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+      "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "body_length": 28553,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-44-2026-08-20-articles.json"
+    },
+    {
+      "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+      "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "body_length": 32275,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-44-2026-08-20-articles.json"
+    },
+    {
+      "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+      "slug": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "body_length": 33029,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-44-2026-08-20-articles.json"
+    }
+  ]
+}

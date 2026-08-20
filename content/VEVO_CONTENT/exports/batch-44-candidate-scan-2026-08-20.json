@@ -1,0 +1,105 @@
+{
+  "existing_count": 827,
+  "excluded_batch": 44,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je jersey úplet: pružnosť, krútenie švov a správne pranie",
+      "slug": "co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+      "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+      "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "status": "ok",
+      "clusters": [
+        {
+          "cluster": "bedding_sleep",
+          "terms": [
+            "obliecky"
+          ],
+          "intent_terms": [],
+          "note": "Bedding topics need clear separation by textile type and user problem."
+        }
+      ],
+      "issues": []
+    },
+    {
+      "title": "Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť",
+      "slug": "co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+      "slug": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je gabardén: pevná tkanina na nohavice a kabáty a ako ju prať",
+      "slug": "co-je-gabarden-pevna-tkanina-na-nohavice-a-kabaty-a-ako-ju-prat",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť",
+      "slug": "co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+      "slug": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je neopren: penový materiál, zápach, čistenie a sušenie",
+      "slug": "co-je-neopren-penovy-material-zapach-cistenie-a-susenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je šifón: jemná priesvitná látka a bezpečná starostlivosť",
+      "slug": "co-je-sifon-jemna-priesvitna-latka-a-bezpecna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+      "slug": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je boucle alebo buklé: slučkový povrch, žmolky a šetrné čistenie",
+      "slug": "co-je-boucle-alebo-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

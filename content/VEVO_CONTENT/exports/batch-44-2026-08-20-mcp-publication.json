@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-08-20T10:56:25+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "D:\\CodexWorktrees\\Playground-vevo-b44\\content\\VEVO_CONTENT\\imports\\batch-44-2026-08-20-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Čo je jersey úplet: pružnosť, krútenie švov a správne pranie",
+      "slug": "co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "url": "https://www.vevo.sk/n/co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "post_id": "3171",
+      "create": {
+        "post_id": "3171",
+        "title": "Čo je jersey úplet: pružnosť, krútenie švov a správne pranie",
+        "link": "co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+        "active": "0",
+        "short_length": 155,
+        "long_length": 29330,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3171",
+        "title": "Čo je jersey úplet: pružnosť, krútenie švov a správne pranie",
+        "link": "co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+        "active": "1",
+        "short_length": 155,
+        "long_length": 29332,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 145660
+      }
+    },
+    {
+      "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+      "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "post_id": "3172",
+      "create": {
+        "post_id": "3172",
+        "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+        "link": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+        "active": "0",
+        "short_length": 163,
+        "long_length": 28551,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3172",
+        "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+        "link": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+        "active": "1",
+        "short_length": 163,
+        "long_length": 28553,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+        "status_code": 200,
+        "location": null,
+        "body_length": 144985
+      }
+    },
+    {
+      "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+      "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "post_id": "3173",
+      "create": {
+        "post_id": "3173",
+        "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+        "link": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+        "active": "0",
+        "short_length": 154,
+        "long_length": 32273,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3173",
+        "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+        "link": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+        "active": "1",
+        "short_length": 154,
+        "long_length": 32275,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 148581
+      }
+    },
+    {
+      "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+      "slug": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "url": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "post_id": "3174",
+      "create": {
+        "post_id": "3174",
+        "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+        "link": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+        "active": "0",
+        "short_length": 164,
+        "long_length": 33027,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3174",
+        "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+        "link": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+        "active": "1",
+        "short_length": 164,
+        "long_length": 33029,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+        "status_code": 200,
+        "location": null,
+        "body_length": 149547
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-08-20T10:57:51+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 574,
+  "preflight": [
+    {
+      "title": "Čo je jersey úplet: pružnosť, krútenie švov a správne pranie",
+      "slug": "co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-jersey-uplet-pruznost-krutenie-svov-a-spravne-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124772
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+      "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124784
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+      "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124772
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+      "slug": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124804
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-08-20T10:57:43+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-08-20T10:59:21+02:00"
+}
