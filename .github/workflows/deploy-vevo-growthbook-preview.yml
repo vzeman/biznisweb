@@ -511,6 +511,8 @@ jobs:
             fi
             sleep 5
           done
+          grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:preview:git-${GITHUB_SHA}" host-gate.log
+          grep -F "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}" host-gate.log
           {
             echo "instance-id=N/A (ECS/Fargate task)"
             echo "private-ip=${HOST_GATE_PRIVATE_IP}"
