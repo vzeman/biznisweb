@@ -662,6 +662,152 @@ class DashboardModernTests(unittest.TestCase):
         self.assertIn("MISSING-6", html)
         self.assertIn("Order-status refund proxy", html)
 
+    def test_meta_profit_scaling_section_and_payload_are_rendered_for_vevo(self) -> None:
+        date_agg = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2026-08-19"),
+                    "total_revenue": 200.0,
+                    "net_profit": 20.0,
+                    "contribution_profit": 90.0,
+                    "unique_orders": 10,
+                    "fb_ads_spend": 50.0,
+                    "google_ads_spend": 0.0,
+                    "total_items": 10,
+                    "product_expense": 60.0,
+                    "packaging_cost": 3.0,
+                    "shipping_net_cost": 2.0,
+                    "fixed_daily_cost": 70.0,
+                    "total_cost": 180.0,
+                    "pre_ad_contribution_profit": 140.0,
+                }
+            ]
+        )
+        scaling = {
+            "summary": {
+                "account_action": "HOLD",
+                "account_action_tone": "warning",
+                "account_action_reason_sk": "Dalsi rast spendu zatial stopnut.",
+                "current_meta_spend_per_day_7d": 53.93,
+                "recommended_core_spend_low": 50.0,
+                "recommended_core_spend_high": 60.0,
+                "tested_scale_ceiling": 70.0,
+                "safe_cac_90d": 9.61,
+                "hard_cac_180d": 13.05,
+                "safety_buffer_pct": 15.0,
+                "latest_7d_marginal_cac": 8.71,
+                "latest_7d_immediate_profit_delta_per_day": -15.05,
+                "latest_7d_ltv90_profit_delta_per_day": -0.15,
+            },
+            "ltv_rows": pd.DataFrame(
+                [
+                    {
+                        "window_days": 90,
+                        "mature_customers": 4000,
+                        "first_contribution_per_customer": 8.05,
+                        "downstream_contribution_per_customer": 3.26,
+                        "contribution_ltv_per_customer": 11.31,
+                        "safe_cac": 9.61,
+                        "repeat_pct": 15.0,
+                    }
+                ]
+            ),
+            "recent_window_rows": pd.DataFrame(
+                [
+                    {
+                        "window_days": 7,
+                        "previous_meta_spend_per_day": 14.10,
+                        "current_meta_spend_per_day": 53.93,
+                        "incremental_meta_spend_per_day": 39.83,
+                        "incremental_new_customers_per_day": 4.57,
+                        "marginal_cac": 8.71,
+                        "incremental_company_profit_per_day": -15.05,
+                        "ltv_adjusted_profit_90d_per_day": -0.15,
+                        "ltv_adjusted_profit_180d_per_day": 7.80,
+                        "current_sample_entry_share_pct": 73.0,
+                        "verdict": "HOLD",
+                        "verdict_tone": "warning",
+                    }
+                ]
+            ),
+            "spend_tier_rows": pd.DataFrame(
+                [
+                    {
+                        "spend_range": "EUR 50-60",
+                        "days": 76,
+                        "avg_meta_spend": 54.5,
+                        "avg_company_profit": 48.5,
+                        "median_company_profit": 40.0,
+                        "smoothed_company_profit_lcb80": 35.0,
+                        "cm3_win_rate_pct": 60.0,
+                        "new_customer_cac_proxy": 5.0,
+                        "sample_entry_share_pct": 70.0,
+                        "decision_eligible": True,
+                    }
+                ]
+            ),
+            "cohort_quality_rows": pd.DataFrame(
+                [
+                    {
+                        "bucket_label": "High paid day (> EUR 90)",
+                        "acquisition_days": 100,
+                        "new_customers": 1000,
+                        "avg_meta_spend_on_acquisition_day": 110.0,
+                        "sample_entry_share_pct": 75.0,
+                        "sample_6x10_share_pct": 60.0,
+                        "sample_3x10_share_pct": 3.0,
+                        "mature_90d_customers": 800,
+                        "contribution_ltv_90d_per_customer": 11.0,
+                        "repeat_90d_pct": 15.0,
+                        "contribution_ltv_180d_per_customer": 13.0,
+                        "confidence": "high",
+                    }
+                ]
+            ),
+            "sample_product_rows": pd.DataFrame(
+                [
+                    {
+                        "item_name": "Sada vzoriek Vevo 3 x 10ml",
+                        "entry_customers": 139,
+                        "direct_contribution_per_customer": 3.0,
+                        "fullsize_60d_pct": 4.3,
+                        "mature_90d_customers": 100,
+                        "contribution_ltv_90d_per_customer": 6.0,
+                        "downstream_contribution_90d_per_customer": 3.0,
+                        "safe_cac_90d": 5.1,
+                        "current_marginal_cac": 8.71,
+                        "contribution_ltv_180d_per_customer": 7.0,
+                        "paid_action": "CUT_PAID",
+                        "paid_tone": "negative",
+                        "shop_action": "KEEP_ORGANIC",
+                    }
+                ]
+            ),
+            "guardrail_rows": pd.DataFrame(
+                [{"band": "GREEN", "marginal_cac_from": 0.0, "marginal_cac_to": 9.61, "action": "Scale 10%"}]
+            ),
+            "methodology": {"known_limitations": ["Paid-day proxy is not click attribution."]},
+        }
+
+        html = generate_modern_dashboard(
+            date_agg,
+            pd.DataFrame([{"item_label": "Test", "total_quantity": 10, "total_revenue": 200.0}]),
+            datetime(2026, 8, 19),
+            datetime(2026, 8, 19),
+            report_title="VEVO Meta profit test",
+            advanced_dtc_metrics={"meta_profit_scaling": scaling},
+            source_health={"project": "vevo"},
+        )
+
+        self.assertIn("Meta profit scaling system", html)
+        self.assertIn("Did high-spend days acquire better future customers?", html)
+        self.assertIn("Sada vzoriek Vevo 3 x 10ml", html)
+        self.assertIn("CUT_PAID", html)
+        payload = extract_embedded_dashboard_payload(html)["meta_profit_scaling"]
+        self.assertEqual("HOLD", payload["summary"]["account_action"])
+        self.assertEqual(9.61, payload["summary"]["safe_cac_90d"])
+        self.assertEqual("CUT_PAID", payload["sample_rows"][0]["paid_action"])
+
 
 if __name__ == "__main__":
     unittest.main()

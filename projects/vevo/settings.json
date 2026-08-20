@@ -199,7 +199,7 @@
     {
       "key": "sample_sets",
       "label": "Sample sets",
-      "patterns": ["Vzorky", "Sample Set", "Discovery Set"]
+      "patterns": ["Vzorky", "Sada vzoriek", "Sample Set", "Discovery Set"]
     },
     {
       "key": "sample_singles",
@@ -238,11 +238,11 @@
     }
   ],
   "vevo_growth_model": {
-    "sample_entry_patterns": ["Vzorky", "Sample Set", "Discovery Set", "Vzorka 10ml"],
-    "sample_set_patterns": ["Vzorky", "Sample Set", "Discovery Set"],
+    "sample_entry_patterns": ["Vzorky", "Sada vzoriek", "Sample Set", "Discovery Set", "Vzorka 10ml"],
+    "sample_set_patterns": ["Vzorky", "Sada vzoriek", "Sample Set", "Discovery Set"],
     "fullsize_200_patterns": ["(200ml)", "200 ml"],
     "fullsize_500_patterns": ["(500ml)", "500 ml"],
-    "bundle_anchor_patterns": ["Vzorky", "Sample Set", "(200ml)", "(500ml)"],
+    "bundle_anchor_patterns": ["Vzorky", "Sada vzoriek", "Sample Set", "(200ml)", "(500ml)"],
     "bundle_attached_patterns": ["Odmerka", "Praci gel", "Laundry gel", "Vevo Shot", "Poistenie"],
     "scent_patterns": [
       {
@@ -340,5 +340,10 @@
     "HUF": 0.0025,
     "PLN": 0.23,
     "USD": 0.92
+  },
+  "marketing_profit_scaling": {
+    "safety_buffer_pct": 15,
+    "minimum_tier_days": 14,
+    "scale_step_pct": 10
   }
 }

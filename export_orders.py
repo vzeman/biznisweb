@@ -4453,11 +4453,16 @@ class BizniWebExporter:
                     "source_proxy_label",
                     "product_family_key",
                     "product_family_label",
+                    "first_order_revenue",
+                    "first_order_contribution",
+                    "purchase_datetime",
                 ]
-            ],
+            ].rename(columns={"purchase_datetime": "acquisition_datetime"}),
             on="customer_email",
             how="left",
         )
+
+        analysis_end = pd.to_datetime(order_source_frame["purchase_datetime"], errors="coerce").max()
 
         def _repeat_within_days(group: pd.DataFrame, days: int) -> int:
             return int(((group["days_since_first"] > 0) & (group["days_since_first"] <= days)).any())
@@ -4465,7 +4470,11 @@ class BizniWebExporter:
         customer_level_rows = []
         for customer_email, group in customer_enriched.groupby("customer_email"):
             first_row = group.sort_values("purchase_datetime").iloc[0]
-            window_90 = group[group["days_since_first"] <= 90].copy()
+            acquisition_datetime = pd.to_datetime(first_row.get("acquisition_datetime"), errors="coerce")
+            age_days = int((analysis_end.normalize() - acquisition_datetime.normalize()).days) if pd.notna(analysis_end) and pd.notna(acquisition_datetime) else -1
+            mature_60d = age_days >= 60
+            mature_90d = age_days >= 90
+            window_90 = group[(group["days_since_first"] >= 0) & (group["days_since_first"] <= 90)].copy()
             customer_level_rows.append(
                 {
                     "customer_email": customer_email,
@@ -4476,10 +4485,12 @@ class BizniWebExporter:
                     "first_order_revenue": float(first_row.get("first_order_revenue") or 0.0),
                     "first_order_contribution": float(first_row.get("first_order_contribution") or 0.0),
                     "orders_total": int(group["order_num"].nunique()),
-                    "repeat_60d_flag": _repeat_within_days(group, 60),
-                    "repeat_90d_flag": _repeat_within_days(group, 90),
-                    "revenue_ltv_90d": float(window_90[revenue_col].sum()),
-                    "contribution_ltv_90d": float(window_90["pre_ad_contribution"].sum()),
+                    "mature_60d_flag": int(mature_60d),
+                    "mature_90d_flag": int(mature_90d),
+                    "repeat_60d_flag": _repeat_within_days(group, 60) if mature_60d else np.nan,
+                    "repeat_90d_flag": _repeat_within_days(group, 90) if mature_90d else np.nan,
+                    "revenue_ltv_90d": float(window_90[revenue_col].sum()) if mature_90d else np.nan,
+                    "contribution_ltv_90d": float(window_90["pre_ad_contribution"].sum()) if mature_90d else np.nan,
                 }
             )
 
@@ -4501,6 +4512,8 @@ class BizniWebExporter:
                 new_customers=("customer_email", "nunique"),
                 first_order_revenue=("first_order_revenue", "sum"),
                 first_order_contribution=("first_order_contribution", "sum"),
+                mature_60d_customers=("mature_60d_flag", "sum"),
+                mature_90d_customers=("mature_90d_flag", "sum"),
                 repeat_60d_customers=("repeat_60d_flag", "sum"),
                 repeat_90d_customers=("repeat_90d_flag", "sum"),
                 revenue_ltv_90d=("revenue_ltv_90d", "sum"),
@@ -4516,19 +4529,19 @@ class BizniWebExporter:
             axis=1,
         )
         cube_rows["repeat_60d_rate_pct"] = cube_rows.apply(
-            lambda row: (row["repeat_60d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            lambda row: (row["repeat_60d_customers"] / row["mature_60d_customers"] * 100) if row["mature_60d_customers"] > 0 else np.nan,
             axis=1,
         )
         cube_rows["repeat_90d_rate_pct"] = cube_rows.apply(
-            lambda row: (row["repeat_90d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            lambda row: (row["repeat_90d_customers"] / row["mature_90d_customers"] * 100) if row["mature_90d_customers"] > 0 else np.nan,
             axis=1,
         )
         cube_rows["revenue_ltv_90d_per_customer"] = cube_rows.apply(
-            lambda row: (row["revenue_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            lambda row: (row["revenue_ltv_90d"] / row["mature_90d_customers"]) if row["mature_90d_customers"] > 0 else np.nan,
             axis=1,
         )
         cube_rows["contribution_ltv_90d_per_customer"] = cube_rows.apply(
-            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            lambda row: (row["contribution_ltv_90d"] / row["mature_90d_customers"]) if row["mature_90d_customers"] > 0 else np.nan,
             axis=1,
         )
         cube_rows = cube_rows.sort_values(
@@ -4540,12 +4553,13 @@ class BizniWebExporter:
             cube_rows.groupby(["source_proxy_key", "source_proxy_label"], as_index=False)
             .agg(
                 new_customers=("new_customers", "sum"),
+                mature_90d_customers=("mature_90d_customers", "sum"),
                 revenue_ltv_90d=("revenue_ltv_90d", "sum"),
                 contribution_ltv_90d=("contribution_ltv_90d", "sum"),
             )
         )
         source_rows["contribution_ltv_90d_per_customer"] = source_rows.apply(
-            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            lambda row: (row["contribution_ltv_90d"] / row["mature_90d_customers"]) if row["mature_90d_customers"] > 0 else np.nan,
             axis=1,
         )
 
@@ -4553,17 +4567,18 @@ class BizniWebExporter:
             cube_rows.groupby(["product_family_key", "product_family_label"], as_index=False)
             .agg(
                 new_customers=("new_customers", "sum"),
+                mature_90d_customers=("mature_90d_customers", "sum"),
                 first_order_revenue=("first_order_revenue", "sum"),
                 contribution_ltv_90d=("contribution_ltv_90d", "sum"),
                 repeat_90d_customers=("repeat_90d_customers", "sum"),
             )
         )
         family_rows["repeat_90d_rate_pct"] = family_rows.apply(
-            lambda row: (row["repeat_90d_customers"] / row["new_customers"] * 100) if row["new_customers"] > 0 else 0.0,
+            lambda row: (row["repeat_90d_customers"] / row["mature_90d_customers"] * 100) if row["mature_90d_customers"] > 0 else np.nan,
             axis=1,
         )
         family_rows["contribution_ltv_90d_per_customer"] = family_rows.apply(
-            lambda row: (row["contribution_ltv_90d"] / row["new_customers"]) if row["new_customers"] > 0 else 0.0,
+            lambda row: (row["contribution_ltv_90d"] / row["mature_90d_customers"]) if row["mature_90d_customers"] > 0 else np.nan,
             axis=1,
         )
 
@@ -6911,6 +6926,12 @@ class BizniWebExporter:
             weather_analysis=weather_analysis,
             financial_metrics=financial_metrics,
         )
+        if isinstance(advanced_dtc_metrics, dict):
+            advanced_dtc_metrics["meta_profit_scaling"] = self.analyze_meta_profit_scaling(
+                analytics_df,
+                ads_effectiveness=ads_effectiveness,
+                sample_funnel_analysis=sample_funnel_analysis,
+            )
         consistency_checks = self.validate_metric_consistency(date_agg, financial_metrics, clv_return_time_analysis)
         cfo_kpi_payload = build_cfo_kpi_payload(
             date_agg=date_agg,
@@ -8796,6 +8817,633 @@ class BizniWebExporter:
             "summary": summary,
             "entry_rows": entry_rows_df,
             "window_rows": pd.DataFrame(window_rows),
+        }
+
+    def analyze_meta_profit_scaling(
+        self,
+        df: pd.DataFrame,
+        *,
+        ads_effectiveness: Optional[dict] = None,
+        sample_funnel_analysis: Optional[dict] = None,
+    ) -> dict:
+        """Build a profit-first Meta budget decision layer with mature LTV cohorts.
+
+        The model deliberately separates four different questions:
+        - observed company profit by daily Meta spend tier,
+        - recent incremental response to a budget change,
+        - future customer quality by acquisition-day Meta spend,
+        - product-specific sample-entry contribution and safe CAC.
+
+        Acquisition source remains a paid-day proxy until order-level campaign
+        attribution is available, so no row is presented as causal attribution.
+        """
+        empty_result = {
+            "summary": {},
+            "ltv_rows": pd.DataFrame(),
+            "recent_window_rows": pd.DataFrame(),
+            "spend_tier_rows": pd.DataFrame(),
+            "cohort_quality_rows": pd.DataFrame(),
+            "sample_product_rows": pd.DataFrame(),
+            "guardrail_rows": pd.DataFrame(),
+            "methodology": {},
+        }
+        if self.project_name != "vevo" or df is None or df.empty:
+            return empty_result
+
+        raw_config = dict((self.project_settings or {}).get("marketing_profit_scaling") or {})
+        safety_buffer_pct = min(max(float(raw_config.get("safety_buffer_pct", 15.0) or 15.0), 0.0), 80.0)
+        safety_factor = 1.0 - (safety_buffer_pct / 100.0)
+        minimum_tier_days = max(7, int(raw_config.get("minimum_tier_days", 14) or 14))
+        scale_step_pct = min(max(float(raw_config.get("scale_step_pct", 10.0) or 10.0), 5.0), 25.0)
+        horizons = (30, 60, 90, 180)
+
+        orders_df, item_df, _ = self._build_growth_order_item_frames(df)
+        if orders_df.empty or item_df.empty:
+            return empty_result
+
+        first_orders = (
+            orders_df[~orders_df["is_returning"]]
+            .sort_values(["customer_email", "purchase_datetime", "order_num"])
+            .drop_duplicates(subset=["customer_email"], keep="first")
+            .copy()
+        )
+        if first_orders.empty:
+            return empty_result
+
+        analysis_end = orders_df["purchase_datetime"].max().normalize()
+        first_orders["acquisition_date"] = first_orders["purchase_datetime"].dt.date
+
+        first_item_rows = item_df.merge(
+            first_orders[["customer_email", "order_num"]],
+            on=["customer_email", "order_num"],
+            how="inner",
+        )
+        first_item_rows["is_sample"] = first_item_rows["item_label"].apply(self._is_sample_item_label)
+        first_item_rows["is_fullsize"] = first_item_rows["item_label"].apply(self._is_fullsize_item_label)
+        normalized_first_labels = first_item_rows["item_label"].apply(self._normalize_match_text)
+        first_item_rows["is_sample_6x10"] = normalized_first_labels.apply(
+            lambda value: "vzor" in value and "6 x 10ml" in value
+        )
+        first_item_rows["is_sample_3x10"] = normalized_first_labels.apply(
+            lambda value: "vzor" in value and "3 x 10ml" in value
+        )
+        first_order_flags = first_item_rows.groupby("customer_email", as_index=False).agg(
+            contains_sample=("is_sample", "any"),
+            contains_fullsize=("is_fullsize", "any"),
+            contains_sample_6x10=("is_sample_6x10", "any"),
+            contains_sample_3x10=("is_sample_3x10", "any"),
+        )
+        first_order_flags["is_sample_entry"] = (
+            first_order_flags["contains_sample"] & (~first_order_flags["contains_fullsize"])
+        )
+        first_orders = first_orders.merge(first_order_flags, on="customer_email", how="left")
+        for flag_col in [
+            "contains_sample",
+            "contains_fullsize",
+            "contains_sample_6x10",
+            "contains_sample_3x10",
+            "is_sample_entry",
+        ]:
+            first_orders[flag_col] = first_orders[flag_col].fillna(False).astype(bool)
+
+        order_fullsize_flags = item_df.groupby("order_num", as_index=False).agg(
+            contains_fullsize=("item_label", lambda values: any(self._is_fullsize_item_label(value) for value in values))
+        )
+        customer_orders = orders_df.merge(
+            first_orders[["customer_email", "purchase_datetime"]].rename(
+                columns={"purchase_datetime": "entry_purchase_datetime"}
+            ),
+            on="customer_email",
+            how="inner",
+        )
+        customer_orders["days_since_entry"] = (
+            customer_orders["purchase_datetime"] - customer_orders["entry_purchase_datetime"]
+        ).dt.total_seconds() / 86400.0
+        customer_orders = customer_orders.merge(order_fullsize_flags, on="order_num", how="left")
+        customer_orders["contains_fullsize"] = customer_orders["contains_fullsize"].fillna(False).astype(bool)
+
+        def _cohort_horizon_metrics(customers: List[str], horizon: int) -> Dict[str, Any]:
+            selected = first_orders[first_orders["customer_email"].isin(customers)].copy()
+            selected = selected[
+                selected["purchase_datetime"].dt.normalize() <= analysis_end - pd.Timedelta(days=horizon)
+            ]
+            mature_customers = selected["customer_email"].dropna().unique().tolist()
+            mature_count = len(mature_customers)
+            if mature_count == 0:
+                return {
+                    "mature_customers": 0,
+                    "first_contribution_per_customer": None,
+                    "contribution_ltv_per_customer": None,
+                    "downstream_contribution_per_customer": None,
+                    "repeat_pct": None,
+                    "fullsize_pct": None,
+                }
+
+            window_orders = customer_orders[
+                customer_orders["customer_email"].isin(mature_customers)
+                & (customer_orders["days_since_entry"] >= 0)
+                & (customer_orders["days_since_entry"] <= horizon)
+            ].copy()
+            contribution_ltv = float(window_orders["cm1_profit"].sum()) / mature_count
+            first_contribution = float(selected["cm1_profit"].sum()) / mature_count
+            repeat_customers = int(
+                window_orders.loc[window_orders["days_since_entry"] > 0, "customer_email"].nunique()
+            )
+            fullsize_customers = int(
+                window_orders.loc[
+                    (window_orders["days_since_entry"] > 0) & window_orders["contains_fullsize"],
+                    "customer_email",
+                ].nunique()
+            )
+            return {
+                "mature_customers": mature_count,
+                "first_contribution_per_customer": round(first_contribution, 2),
+                "contribution_ltv_per_customer": round(contribution_ltv, 2),
+                "downstream_contribution_per_customer": round(contribution_ltv - first_contribution, 2),
+                "repeat_pct": round(repeat_customers / mature_count * 100, 1),
+                "fullsize_pct": round(fullsize_customers / mature_count * 100, 1),
+            }
+
+        all_new_customers = first_orders["customer_email"].tolist()
+        ltv_rows = []
+        account_horizon_metrics: Dict[int, Dict[str, Any]] = {}
+        for horizon in horizons:
+            metrics = _cohort_horizon_metrics(all_new_customers, horizon)
+            account_horizon_metrics[horizon] = metrics
+            contribution_ltv = metrics.get("contribution_ltv_per_customer")
+            ltv_rows.append(
+                {
+                    "window_days": horizon,
+                    **metrics,
+                    "safe_cac": round(max(float(contribution_ltv or 0.0) * safety_factor, 0.0), 2)
+                    if contribution_ltv is not None
+                    else None,
+                }
+            )
+        ltv_rows_df = pd.DataFrame(ltv_rows)
+
+        daily_data = (ads_effectiveness or {}).get("daily_data")
+        daily_data = daily_data.copy() if isinstance(daily_data, pd.DataFrame) else pd.DataFrame()
+        if daily_data.empty:
+            daily_data = self._build_ads_decision_daily_data(df)
+        daily_data["date"] = pd.to_datetime(daily_data["date"], errors="coerce").dt.normalize()
+        daily_data = daily_data.dropna(subset=["date"]).copy()
+        if daily_data.empty:
+            return {
+                **empty_result,
+                "ltv_rows": ltv_rows_df,
+            }
+
+        daily_mix = first_orders.groupby("acquisition_date", as_index=False).agg(
+            new_customers_from_cohort=("customer_email", "nunique"),
+            sample_entry_customers=("is_sample_entry", "sum"),
+            sample_6x10_customers=("contains_sample_6x10", "sum"),
+            sample_3x10_customers=("contains_sample_3x10", "sum"),
+        )
+        daily_mix["date"] = pd.to_datetime(daily_mix["acquisition_date"], errors="coerce").dt.normalize()
+        daily_mix = daily_mix.drop(columns=["acquisition_date"])
+
+        calendar = pd.DataFrame(
+            {"date": pd.date_range(daily_data["date"].min(), daily_data["date"].max(), freq="D")}
+        )
+        daily_data = calendar.merge(daily_data, on="date", how="left").merge(daily_mix, on="date", how="left")
+        numeric_daily_columns = [
+            "orders",
+            "revenue",
+            "fb_spend",
+            "google_spend",
+            "total_ad_spend",
+            "pre_ad_contribution",
+            "profit_without_fixed",
+            "profit_with_fixed",
+            "new_customers",
+            "returning_customers",
+            "new_customers_from_cohort",
+            "sample_entry_customers",
+            "sample_6x10_customers",
+            "sample_3x10_customers",
+        ]
+        for column in numeric_daily_columns:
+            daily_data[column] = pd.to_numeric(daily_data.get(column, 0.0), errors="coerce").fillna(0.0)
+        daily_data["new_customers"] = daily_data[["new_customers", "new_customers_from_cohort"]].max(axis=1)
+        daily_data["day_of_week"] = daily_data["date"].dt.day_name()
+
+        safe_cac_30d = float(account_horizon_metrics[30].get("contribution_ltv_per_customer") or 0.0) * safety_factor
+        safe_cac_90d = float(account_horizon_metrics[90].get("contribution_ltv_per_customer") or 0.0) * safety_factor
+        break_even_cac_90d = float(account_horizon_metrics[90].get("contribution_ltv_per_customer") or 0.0)
+        hard_cac_180d = float(account_horizon_metrics[180].get("contribution_ltv_per_customer") or 0.0)
+
+        recent_rows = []
+        latest_date = daily_data["date"].max()
+        for window_days in (7, 14, 28):
+            current_start = latest_date - pd.Timedelta(days=window_days - 1)
+            previous_end = current_start - pd.Timedelta(days=1)
+            previous_start = previous_end - pd.Timedelta(days=window_days - 1)
+            current = daily_data[(daily_data["date"] >= current_start) & (daily_data["date"] <= latest_date)]
+            previous = daily_data[(daily_data["date"] >= previous_start) & (daily_data["date"] <= previous_end)]
+            if len(current) != window_days or len(previous) != window_days:
+                continue
+
+            current_meta_spend = float(current["fb_spend"].sum())
+            previous_meta_spend = float(previous["fb_spend"].sum())
+            delta_meta_spend_per_day = (current_meta_spend - previous_meta_spend) / window_days
+            delta_google_spend_per_day = float(current["google_spend"].sum() - previous["google_spend"].sum()) / window_days
+            delta_new_customers_per_day = float(current["new_customers"].sum() - previous["new_customers"].sum()) / window_days
+            delta_revenue_per_day = float(current["revenue"].sum() - previous["revenue"].sum()) / window_days
+            delta_company_profit_per_day = float(
+                current["profit_with_fixed"].sum() - previous["profit_with_fixed"].sum()
+            ) / window_days
+            marginal_cac = (
+                delta_meta_spend_per_day / delta_new_customers_per_day
+                if delta_meta_spend_per_day > 0 and delta_new_customers_per_day > 0
+                else None
+            )
+            ltv_adjusted: Dict[int, Optional[float]] = {}
+            for horizon in horizons:
+                downstream = account_horizon_metrics[horizon].get("downstream_contribution_per_customer")
+                ltv_adjusted[horizon] = (
+                    delta_company_profit_per_day + delta_new_customers_per_day * float(downstream)
+                    if downstream is not None
+                    else None
+                )
+
+            adjusted_90d = ltv_adjusted.get(90)
+            if delta_meta_spend_per_day <= 0:
+                verdict = "MONITOR"
+                reason_sk = "Spend sa oproti predchadzajucemu oknu nezvysil; nejde o scale test."
+                tone = "neutral"
+            elif delta_new_customers_per_day <= 0 or (
+                marginal_cac is not None and hard_cac_180d > 0 and marginal_cac > hard_cac_180d
+            ):
+                verdict = "CUT"
+                reason_sk = "Vyssi Meta spend nepriniesol dost novych zakaznikov ani do 180d CAC stropu."
+                tone = "negative"
+            elif adjusted_90d is None or adjusted_90d <= 0 or (
+                marginal_cac is not None and safe_cac_90d > 0 and marginal_cac > safe_cac_90d
+            ):
+                verdict = "HOLD"
+                reason_sk = "Dalsie zvysenie spendu zatial nema bezpecny 90d contribution profit."
+                tone = "warning"
+            elif delta_company_profit_per_day > 0:
+                verdict = "SCALE_ELIGIBLE"
+                reason_sk = "Vyssi spend zvysil nominalny zisk okamzite aj po 90d LTV uprave."
+                tone = "positive"
+            else:
+                verdict = "HOLD"
+                reason_sk = "90d LTV moze krok zachranit, ale okamzity firemny zisk klesol."
+                tone = "warning"
+
+            current_new_customers = float(current["new_customers"].sum())
+            previous_new_customers = float(previous["new_customers"].sum())
+            recent_rows.append(
+                {
+                    "window_days": window_days,
+                    "current_start": current_start.strftime("%Y-%m-%d"),
+                    "current_end": latest_date.strftime("%Y-%m-%d"),
+                    "previous_start": previous_start.strftime("%Y-%m-%d"),
+                    "previous_end": previous_end.strftime("%Y-%m-%d"),
+                    "current_meta_spend": round(current_meta_spend, 2),
+                    "previous_meta_spend": round(previous_meta_spend, 2),
+                    "current_meta_spend_per_day": round(current_meta_spend / window_days, 2),
+                    "previous_meta_spend_per_day": round(previous_meta_spend / window_days, 2),
+                    "incremental_meta_spend_per_day": round(delta_meta_spend_per_day, 2),
+                    "incremental_google_spend_per_day": round(delta_google_spend_per_day, 2),
+                    "incremental_new_customers_per_day": round(delta_new_customers_per_day, 2),
+                    "incremental_revenue_per_day": round(delta_revenue_per_day, 2),
+                    "incremental_company_profit_per_day": round(delta_company_profit_per_day, 2),
+                    "marginal_cac": round(float(marginal_cac), 2) if marginal_cac is not None else None,
+                    "ltv_adjusted_profit_30d_per_day": round(float(ltv_adjusted[30]), 2) if ltv_adjusted[30] is not None else None,
+                    "ltv_adjusted_profit_60d_per_day": round(float(ltv_adjusted[60]), 2) if ltv_adjusted[60] is not None else None,
+                    "ltv_adjusted_profit_90d_per_day": round(float(ltv_adjusted[90]), 2) if ltv_adjusted[90] is not None else None,
+                    "ltv_adjusted_profit_180d_per_day": round(float(ltv_adjusted[180]), 2) if ltv_adjusted[180] is not None else None,
+                    "current_sample_entry_share_pct": round(
+                        float(current["sample_entry_customers"].sum()) / current_new_customers * 100, 1
+                    ) if current_new_customers > 0 else None,
+                    "previous_sample_entry_share_pct": round(
+                        float(previous["sample_entry_customers"].sum()) / previous_new_customers * 100, 1
+                    ) if previous_new_customers > 0 else None,
+                    "verdict": verdict,
+                    "verdict_reason_sk": reason_sk,
+                    "verdict_tone": tone,
+                }
+            )
+        recent_rows_df = pd.DataFrame(recent_rows)
+
+        daily_data["meta_tier_low"] = np.where(
+            daily_data["fb_spend"] > 0.009,
+            np.floor(daily_data["fb_spend"] / 10.0) * 10.0,
+            -10.0,
+        )
+        tier_rows = []
+        for tier_low, group in daily_data.groupby("meta_tier_low"):
+            tier_low = float(tier_low)
+            tier_high = tier_low + 10.0 if tier_low >= 0 else 0.0
+            days = int(len(group))
+            avg_profit = float(group["profit_with_fixed"].mean())
+            profit_std = float(group["profit_with_fixed"].std(ddof=1)) if days > 1 else 0.0
+            profit_lcb = avg_profit - 1.28 * profit_std / np.sqrt(days) if days > 0 else avg_profit
+            new_customers_total = float(group["new_customers"].sum())
+            tier_rows.append(
+                {
+                    "tier_low": tier_low,
+                    "tier_high": tier_high,
+                    "spend_range": "Meta off" if tier_low < 0 else f"EUR {int(tier_low)}-{int(tier_high)}",
+                    "days": days,
+                    "weekday_coverage": int(group["day_of_week"].nunique()),
+                    "avg_meta_spend": round(float(group["fb_spend"].mean()), 2),
+                    "avg_google_spend": round(float(group["google_spend"].mean()), 2),
+                    "avg_revenue": round(float(group["revenue"].mean()), 2),
+                    "avg_new_customers": round(float(group["new_customers"].mean()), 2),
+                    "new_customer_cac_proxy": round(float(group["fb_spend"].sum()) / new_customers_total, 2)
+                    if new_customers_total > 0
+                    else None,
+                    "avg_company_profit": round(avg_profit, 2),
+                    "median_company_profit": round(float(group["profit_with_fixed"].median()), 2),
+                    "company_profit_lcb80": round(float(profit_lcb), 2),
+                    "cm3_win_rate_pct": round(float((group["profit_with_fixed"] > 0).mean() * 100), 1),
+                    "sample_entry_share_pct": round(
+                        float(group["sample_entry_customers"].sum()) / new_customers_total * 100, 1
+                    ) if new_customers_total > 0 else None,
+                }
+            )
+        tier_rows_df = pd.DataFrame(tier_rows).sort_values("tier_low").reset_index(drop=True)
+        for idx, row in tier_rows_df.iterrows():
+            tier_low = float(row["tier_low"])
+            if tier_low < 0:
+                tier_rows_df.loc[idx, ["smoothed_days", "smoothed_avg_company_profit", "smoothed_company_profit_lcb80"]] = [
+                    row["days"], row["avg_company_profit"], row["company_profit_lcb80"]
+                ]
+                continue
+            smooth = daily_data[
+                (daily_data["meta_tier_low"] >= tier_low - 10.0)
+                & (daily_data["meta_tier_low"] <= tier_low + 10.0)
+            ]
+            smooth_days = int(len(smooth))
+            smooth_avg = float(smooth["profit_with_fixed"].mean()) if smooth_days else 0.0
+            smooth_std = float(smooth["profit_with_fixed"].std(ddof=1)) if smooth_days > 1 else 0.0
+            smooth_lcb = smooth_avg - 1.28 * smooth_std / np.sqrt(smooth_days) if smooth_days else 0.0
+            tier_rows_df.loc[idx, "smoothed_days"] = smooth_days
+            tier_rows_df.loc[idx, "smoothed_avg_company_profit"] = round(smooth_avg, 2)
+            tier_rows_df.loc[idx, "smoothed_company_profit_lcb80"] = round(smooth_lcb, 2)
+
+        tier_rows_df["decision_eligible"] = (
+            (tier_rows_df["tier_low"] >= 0)
+            & (tier_rows_df["days"] >= minimum_tier_days)
+            & (tier_rows_df["weekday_coverage"] >= 5)
+            & (tier_rows_df["smoothed_days"] >= minimum_tier_days * 2)
+            & (tier_rows_df["smoothed_company_profit_lcb80"] > 0)
+        )
+        eligible_tiers = tier_rows_df[tier_rows_df["decision_eligible"]].copy()
+        core_low = core_high = test_ceiling = None
+        if not eligible_tiers.empty:
+            best_index = eligible_tiers["smoothed_company_profit_lcb80"].idxmax()
+            best_tier = tier_rows_df.loc[best_index]
+            core_low = float(best_tier["tier_low"])
+            core_high = float(best_tier["tier_high"])
+            test_ceiling = core_high
+            next_tier = tier_rows_df[
+                (tier_rows_df["tier_low"] == core_high) & tier_rows_df["decision_eligible"]
+            ]
+            if not next_tier.empty and float(next_tier.iloc[0]["smoothed_company_profit_lcb80"]) >= float(best_tier["smoothed_company_profit_lcb80"]) * 0.85:
+                test_ceiling = float(next_tier.iloc[0]["tier_high"])
+
+        positive_meta_days = daily_data.loc[daily_data["fb_spend"] > 0.009, "fb_spend"]
+        if positive_meta_days.empty:
+            spend_quantiles = [0.0, 0.0, 0.0]
+        else:
+            spend_quantiles = [float(positive_meta_days.quantile(q)) for q in (0.25, 0.5, 0.75)]
+
+        def _quality_bucket(spend: Any) -> Tuple[int, str, str]:
+            value = float(spend or 0.0)
+            q25, q50, q75 = spend_quantiles
+            if value <= 0.009:
+                return 0, "meta_off", "Meta off"
+            if value <= q25:
+                return 1, "meta_low", f"Low paid day (<= EUR {q25:.0f})"
+            if value <= q50:
+                return 2, "meta_mid_low", f"Mid-low paid day (<= EUR {q50:.0f})"
+            if value <= q75:
+                return 3, "meta_mid_high", f"Mid-high paid day (<= EUR {q75:.0f})"
+            return 4, "meta_high", f"High paid day (> EUR {q75:.0f})"
+
+        quality_buckets = first_orders["fb_ads_daily_spend"].apply(_quality_bucket)
+        first_orders["quality_bucket_order"] = quality_buckets.apply(lambda value: value[0])
+        first_orders["quality_bucket_key"] = quality_buckets.apply(lambda value: value[1])
+        first_orders["quality_bucket_label"] = quality_buckets.apply(lambda value: value[2])
+        quality_rows = []
+        for (bucket_order, bucket_key, bucket_label), group in first_orders.groupby(
+            ["quality_bucket_order", "quality_bucket_key", "quality_bucket_label"]
+        ):
+            customers = group["customer_email"].tolist()
+            row: Dict[str, Any] = {
+                "bucket_order": int(bucket_order),
+                "bucket_key": bucket_key,
+                "bucket_label": bucket_label,
+                "acquisition_days": int(group["acquisition_date"].nunique()),
+                "new_customers": int(len(customers)),
+                "avg_meta_spend_on_acquisition_day": round(float(group["fb_ads_daily_spend"].mean()), 2),
+                "sample_entry_share_pct": round(float(group["is_sample_entry"].mean() * 100), 1),
+                "sample_6x10_share_pct": round(float(group["contains_sample_6x10"].mean() * 100), 1),
+                "sample_3x10_share_pct": round(float(group["contains_sample_3x10"].mean() * 100), 1),
+                "first_contribution_per_customer": round(float(group["cm1_profit"].mean()), 2),
+            }
+            for horizon in horizons:
+                metrics = _cohort_horizon_metrics(customers, horizon)
+                row[f"mature_{horizon}d_customers"] = metrics["mature_customers"]
+                row[f"contribution_ltv_{horizon}d_per_customer"] = metrics["contribution_ltv_per_customer"]
+                row[f"repeat_{horizon}d_pct"] = metrics["repeat_pct"]
+                row[f"fullsize_{horizon}d_pct"] = metrics["fullsize_pct"]
+            mature_90d = int(row.get("mature_90d_customers") or 0)
+            row["confidence"] = "high" if mature_90d >= 100 else ("medium" if mature_90d >= 30 else "low")
+            quality_rows.append(row)
+        quality_rows_df = pd.DataFrame(quality_rows).sort_values("bucket_order").reset_index(drop=True)
+
+        sample_entry_items = first_item_rows[first_item_rows["is_sample"]].copy()
+        sample_entry_items = sample_entry_items.merge(
+            first_orders.loc[first_orders["is_sample_entry"], ["customer_email"]],
+            on="customer_email",
+            how="inner",
+        )
+        sample_product_rows = []
+        current_marginal_cac = None
+        if not recent_rows_df.empty:
+            current_marginal_cac = recent_rows_df.loc[
+                recent_rows_df["window_days"] == 7, "marginal_cac"
+            ]
+            current_marginal_cac = float(current_marginal_cac.iloc[0]) if not current_marginal_cac.empty and pd.notna(current_marginal_cac.iloc[0]) else None
+        sample_fullsize_60_baseline = float(
+            ((sample_funnel_analysis or {}).get("summary") or {}).get("fullsize_any_60d_pct") or 0.0
+        )
+        for (item_name, item_sku), group in sample_entry_items.groupby(["item_label", "product_sku"], dropna=False):
+            customers = sorted(group["customer_email"].dropna().unique().tolist())
+            if len(customers) < 10:
+                continue
+            entry_orders = first_orders[first_orders["customer_email"].isin(customers)].copy()
+            row = {
+                "item_name": str(item_name or "Unknown"),
+                "item_sku": str(item_sku or ""),
+                "entry_customers": len(customers),
+                "meta_paid_day_customers": int((entry_orders["fb_ads_daily_spend"] > 0.009).sum()),
+                "direct_contribution_per_customer": round(float(entry_orders["cm1_profit"].mean()), 2),
+                "current_marginal_cac": round(current_marginal_cac, 2) if current_marginal_cac is not None else None,
+            }
+            for horizon in horizons:
+                metrics = _cohort_horizon_metrics(customers, horizon)
+                row[f"mature_{horizon}d_customers"] = metrics["mature_customers"]
+                row[f"contribution_ltv_{horizon}d_per_customer"] = metrics["contribution_ltv_per_customer"]
+                row[f"downstream_contribution_{horizon}d_per_customer"] = metrics["downstream_contribution_per_customer"]
+                row[f"repeat_{horizon}d_pct"] = metrics["repeat_pct"]
+                row[f"fullsize_{horizon}d_pct"] = metrics["fullsize_pct"]
+            product_ltv_90d = row.get("contribution_ltv_90d_per_customer")
+            product_ltv_180d = row.get("contribution_ltv_180d_per_customer")
+            product_safe_cac_90d = max(float(product_ltv_90d or 0.0) * safety_factor, 0.0) if product_ltv_90d is not None else None
+            row["safe_cac_90d"] = round(product_safe_cac_90d, 2) if product_safe_cac_90d is not None else None
+            mature_90d = int(row.get("mature_90d_customers") or 0)
+            fullsize_60d = row.get("fullsize_60d_pct")
+            quality_floor = sample_fullsize_60_baseline * 0.75
+            if mature_90d < 30:
+                paid_action = "EXPERIMENT"
+                paid_reason_sk = "Mala zrela vzorka; nevypinat ani nesklovat bez testu."
+                paid_tone = "neutral"
+            elif current_marginal_cac is None:
+                paid_action = "MEASURE"
+                paid_reason_sk = "Chyba aktualny marginalny CAC na porovnanie."
+                paid_tone = "neutral"
+            elif product_safe_cac_90d is None or current_marginal_cac > product_safe_cac_90d:
+                if (
+                    (product_ltv_90d is not None and current_marginal_cac > float(product_ltv_90d))
+                    or (fullsize_60d is not None and float(fullsize_60d) < quality_floor)
+                ):
+                    paid_action = "CUT_PAID"
+                    paid_reason_sk = "Aktualny mCAC presahuje produktovu ekonomiku alebo je full-size konverzia slaba."
+                    paid_tone = "negative"
+                else:
+                    paid_action = "HOLD_PAID"
+                    paid_reason_sk = "Produkt je pod 90d bezpecnostnym CAC; dalsi paid spend zatial nezvysovat."
+                    paid_tone = "warning"
+            else:
+                paid_action = "ELIGIBLE_TEST"
+                paid_reason_sk = "90d contribution pokryva aktualny mCAC aj bezpecnostnu rezervu; skalovat iba po krokoch."
+                paid_tone = "positive"
+            row["paid_action"] = paid_action
+            row["paid_reason_sk"] = paid_reason_sk
+            row["paid_tone"] = paid_tone
+            if product_ltv_180d is not None and float(product_ltv_180d) <= 0:
+                row["shop_action"] = "REVIEW_REMOVAL"
+                row["shop_reason_sk"] = "Ani 180d contribution nie je kladna."
+            else:
+                row["shop_action"] = "KEEP_ORGANIC"
+                row["shop_reason_sk"] = "Produkt moze ostat dostupny; paid akvizicia sa rozhoduje samostatne."
+            sample_product_rows.append(row)
+        sample_product_rows_df = (
+            pd.DataFrame(sample_product_rows)
+            .sort_values(["entry_customers", "safe_cac_90d"], ascending=[False, False])
+            .reset_index(drop=True)
+            if sample_product_rows
+            else pd.DataFrame()
+        )
+
+        latest_7d = recent_rows_df[recent_rows_df["window_days"] == 7]
+        latest_7d_row = latest_7d.iloc[0].to_dict() if not latest_7d.empty else {}
+        current_meta_spend_per_day = latest_7d_row.get("current_meta_spend_per_day")
+        recent_verdict = str(latest_7d_row.get("verdict") or "MONITOR")
+        if core_low is None or core_high is None:
+            account_action = "EXPERIMENT"
+            account_tone = "neutral"
+            action_reason_sk = "Nie je dost stabilnych spend pasiem na automaticke urcenie denneho koridoru."
+        elif current_meta_spend_per_day is not None and test_ceiling is not None and float(current_meta_spend_per_day) > test_ceiling:
+            account_action = "REDUCE_TO_CORRIDOR"
+            account_tone = "negative"
+            action_reason_sk = "Aktualny priemer je nad robustne overenym profit koridorom."
+        elif recent_verdict == "CUT":
+            account_action = "REDUCE"
+            account_tone = "negative"
+            action_reason_sk = "Posledny scale krok prekrocil contribution CAC strop."
+        elif recent_verdict == "HOLD":
+            account_action = "HOLD"
+            account_tone = "warning"
+            action_reason_sk = "Dalsi rast spendu stopnut, kym 7/14d scale test neprida kladny 90d LTV-upraveny zisk."
+        elif recent_verdict == "SCALE_ELIGIBLE" and current_meta_spend_per_day is not None and test_ceiling is not None and float(current_meta_spend_per_day) < test_ceiling:
+            account_action = f"SCALE_{int(round(scale_step_pct))}_PCT"
+            account_tone = "positive"
+            action_reason_sk = "Scale po jednom kroku; dalsi krok az po kladnom 7d aj 14d nominalnom zisku."
+        else:
+            account_action = "HOLD"
+            account_tone = "warning"
+            action_reason_sk = "Udrzat spend v overenom koridore a zbierat dalsie porovnatelne dni."
+
+        guardrail_rows = pd.DataFrame(
+            [
+                {
+                    "band": "GREEN",
+                    "marginal_cac_from": 0.0,
+                    "marginal_cac_to": round(safe_cac_90d, 2),
+                    "action": f"Scale max {scale_step_pct:.0f}% po potvrdeni 7d aj 14d nominalneho zisku",
+                },
+                {
+                    "band": "YELLOW",
+                    "marginal_cac_from": round(safe_cac_90d, 2),
+                    "marginal_cac_to": round(break_even_cac_90d, 2),
+                    "action": "Hold; 90d LTV este pokryva CAC, ale chyba bezpecnostna rezerva",
+                },
+                {
+                    "band": "ORANGE",
+                    "marginal_cac_from": round(break_even_cac_90d, 2),
+                    "marginal_cac_to": round(hard_cac_180d, 2),
+                    "action": "Reduce/test; payback sa odklada za 90 dni",
+                },
+                {
+                    "band": "RED",
+                    "marginal_cac_from": round(hard_cac_180d, 2),
+                    "marginal_cac_to": None,
+                    "action": "Cut incremental spend; ani 180d contribution ho nepokryva",
+                },
+            ]
+        )
+
+        summary = {
+            "objective": "maximize_nominal_contribution_profit",
+            "analysis_end": analysis_end.strftime("%Y-%m-%d"),
+            "account_action": account_action,
+            "account_action_tone": account_tone,
+            "account_action_reason_sk": action_reason_sk,
+            "current_meta_spend_per_day_7d": round(float(current_meta_spend_per_day), 2) if current_meta_spend_per_day is not None else None,
+            "recommended_core_spend_low": round(core_low, 2) if core_low is not None else None,
+            "recommended_core_spend_high": round(core_high, 2) if core_high is not None else None,
+            "tested_scale_ceiling": round(test_ceiling, 2) if test_ceiling is not None else None,
+            "safe_cac_30d": round(safe_cac_30d, 2),
+            "safe_cac_90d": round(safe_cac_90d, 2),
+            "break_even_cac_90d": round(break_even_cac_90d, 2),
+            "hard_cac_180d": round(hard_cac_180d, 2),
+            "safety_buffer_pct": round(safety_buffer_pct, 1),
+            "scale_step_pct": round(scale_step_pct, 1),
+            "minimum_tier_days": minimum_tier_days,
+            "latest_7d_marginal_cac": latest_7d_row.get("marginal_cac"),
+            "latest_7d_immediate_profit_delta_per_day": latest_7d_row.get("incremental_company_profit_per_day"),
+            "latest_7d_ltv90_profit_delta_per_day": latest_7d_row.get("ltv_adjusted_profit_90d_per_day"),
+        }
+
+        return {
+            "summary": summary,
+            "ltv_rows": ltv_rows_df,
+            "recent_window_rows": recent_rows_df,
+            "spend_tier_rows": tier_rows_df,
+            "cohort_quality_rows": quality_rows_df,
+            "sample_product_rows": sample_product_rows_df,
+            "guardrail_rows": guardrail_rows,
+            "methodology": {
+                "source_attribution": "first_order_day_meta_spend_presence_proxy",
+                "profit_basis": "CM1 contribution before ads for LTV; observed CM3 for daily company profit",
+                "maturity_rule": "customer must be fully observed through each 30/60/90/180d horizon",
+                "tier_rule": f"EUR 10 Meta bins; at least {minimum_tier_days} days, five weekdays, and positive smoothed 80% lower bound",
+                "scale_rule": f"maximize nominal profit; move budget by at most {scale_step_pct:.0f}% after both 7d and 14d confirmation",
+                "known_limitations": [
+                    "Paid-day assignment is not click- or campaign-level attribution.",
+                    "Recent scale windows are observational and may contain promo, seasonality, weather, and Google overlap.",
+                    "Payment-provider fees are not a separate ingested cost source.",
+                    "Fixed overhead is included in observed daily company profit but excluded from marginal customer LTV.",
+                ],
+            },
         }
 
     def analyze_vevo_crm_funnel_kpis(
@@ -15340,11 +15988,15 @@ class BizniWebExporter:
         spend_effectiveness = pd.DataFrame(
             columns=[
                 "spend_range",
+                "days",
+                "weekday_coverage",
                 "avg_orders",
                 "avg_revenue",
                 "avg_spend",
                 "avg_profit_without_fixed",
                 "avg_profit_with_fixed",
+                "median_profit_with_fixed",
+                "cm3_win_rate_pct",
                 "avg_cm3_margin_pct",
                 "avg_returning_revenue_share_pct",
                 "avg_aov",
@@ -15367,11 +16019,15 @@ class BizniWebExporter:
             spend_effectiveness = (
                 daily_data.groupby("total_spend_range", observed=True)
                 .agg(
+                    days=("date", "count"),
+                    weekday_coverage=("day_of_week", "nunique"),
                     orders=("orders", "mean"),
                     revenue=("revenue", "mean"),
                     total_ad_spend=("total_ad_spend", "mean"),
                     profit_without_fixed=("profit_without_fixed", "mean"),
                     profit_with_fixed=("profit_with_fixed", "mean"),
+                    median_profit_with_fixed=("profit_with_fixed", "median"),
+                    cm3_win_rate_pct=("profit_with_fixed", lambda values: float((values > 0).mean() * 100)),
                     cm3_margin_pct=("cm3_margin_pct", "mean"),
                     returning_revenue_share_pct=("returning_revenue_share_pct", "mean"),
                     aov=("aov", "mean"),
@@ -15380,11 +16036,15 @@ class BizniWebExporter:
             )
             spend_effectiveness.columns = [
                 "spend_range",
+                "days",
+                "weekday_coverage",
                 "avg_orders",
                 "avg_revenue",
                 "avg_spend",
                 "avg_profit_without_fixed",
                 "avg_profit_with_fixed",
+                "median_profit_with_fixed",
+                "cm3_win_rate_pct",
                 "avg_cm3_margin_pct",
                 "avg_returning_revenue_share_pct",
                 "avg_aov",
@@ -15392,6 +16052,19 @@ class BizniWebExporter:
             spend_effectiveness["avg_profit"] = spend_effectiveness["avg_profit_without_fixed"]
             spend_effectiveness["roas"] = (spend_effectiveness["avg_revenue"] / spend_effectiveness["avg_spend"]).round(2)
             spend_effectiveness["roas"] = spend_effectiveness["roas"].replace([float("inf"), float("-inf")], 0).fillna(0)
+
+        profit_scaling_config = dict((self.project_settings or {}).get("marketing_profit_scaling") or {})
+        minimum_tier_days = max(7, int(profit_scaling_config.get("minimum_tier_days", 14) or 14))
+        if not spend_effectiveness.empty:
+            spend_effectiveness["decision_eligible"] = (
+                (spend_effectiveness["days"] >= minimum_tier_days)
+                & (spend_effectiveness["weekday_coverage"] >= 5)
+            )
+        eligible_spend_effectiveness = (
+            spend_effectiveness[spend_effectiveness["decision_eligible"]].copy()
+            if not spend_effectiveness.empty
+            else pd.DataFrame()
+        )
 
         paid_days = daily_data[daily_data["has_any_ads"]].copy()
         if paid_days.empty:
@@ -15410,13 +16083,17 @@ class BizniWebExporter:
             paid_day_aov = round(float(paid_revenue_total / paid_orders_total), 2) if paid_orders_total > 0 else None
 
         best_cm3_range = (
-            spend_effectiveness.loc[spend_effectiveness["avg_profit_with_fixed"].idxmax(), "spend_range"]
-            if not spend_effectiveness.empty
+            eligible_spend_effectiveness.loc[
+                eligible_spend_effectiveness["avg_profit_with_fixed"].idxmax(), "spend_range"
+            ]
+            if not eligible_spend_effectiveness.empty
             else "N/A"
         )
         best_cm3_margin_range = (
-            spend_effectiveness.loc[spend_effectiveness["avg_cm3_margin_pct"].idxmax(), "spend_range"]
-            if not spend_effectiveness.empty
+            eligible_spend_effectiveness.loc[
+                eligible_spend_effectiveness["avg_cm3_margin_pct"].idxmax(), "spend_range"
+            ]
+            if not eligible_spend_effectiveness.empty
             else "N/A"
         )
         decision_summary = {
@@ -15607,8 +16284,10 @@ class BizniWebExporter:
             "correlations": correlations,
             "spend_effectiveness": spend_effectiveness,
             "dow_effectiveness": dow_effectiveness,
-            "best_roas_range": spend_effectiveness.loc[spend_effectiveness["roas"].idxmax(), "spend_range"]
-            if not spend_effectiveness.empty
+            "best_roas_range": eligible_spend_effectiveness.loc[
+                eligible_spend_effectiveness["roas"].idxmax(), "spend_range"
+            ]
+            if not eligible_spend_effectiveness.empty
             else "N/A",
             "best_profit_range": best_cm3_range,
             "best_cm3_range": best_cm3_range,
