@@ -172,7 +172,8 @@ jobs:
           generation = json.load(open("generation.json", encoding="utf-8"))
           schedule = json.load(open("schedule.json", encoding="utf-8"))
           target = schedule.get("Target") or {}
-          scaling = payload.get("meta_profit_scaling") or {}
+          dashboard = payload.get("dashboard") or {}
+          scaling = dashboard.get("meta_profit_scaling") or payload.get("meta_profit_scaling") or {}
           snapshot = {
               "project": project,
               "artifact": (
