@@ -743,6 +743,85 @@ class ReportingCalculationFixTests(unittest.TestCase):
             self.assertAlmostEqual(expected_cost, cost, places=2)
             self.assertEqual(expected_source, source)
 
+    def test_vevo_sets_use_current_component_costs_and_floor_cleaner_real_cost(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        cost_map = json.loads(
+            (project_root / "projects" / "vevo" / "product_expenses.json").read_text(encoding="utf-8")
+        )
+        exporter = make_exporter(project_name="vevo")
+        exporter._rebuild_product_expense_indexes(cost_map)
+
+        configured_cases = (
+            ("Vevo Essence Sample Set", 3.12, "essence_sample_set_9x10"),
+            ("Vevo Essence Sample Set 9x10ml", 3.12, "essence_sample_set_9x10"),
+            ("Vevo Natural Discovery Set", 2.44, "natural_discovery_sample_shot_1_1"),
+            ("Vevo Premium Discovery Set", 1.98, "premium_discovery_sample_shot_1_1"),
+            ("Vevo Complete Discovery Set", 3.77, "complete_discovery_samples_shot_1_1_1"),
+            (
+                "Vevo Natural Bestsellers Set",
+                9.44,
+                "natural_bestsellers_200ml_ylang_cotton_dream_pure_garden",
+            ),
+            (
+                "Vevo Natural Bestsellers Set 3x200ml",
+                9.44,
+                "natural_bestsellers_200ml_ylang_cotton_dream_pure_garden",
+            ),
+            (
+                "Vevo Natural Complete Fragrance Set",
+                19.54,
+                "natural_complete_fragrance_6x200ml",
+            ),
+            (
+                "Vevo Natural Complete Fragrance Set 6x200ml",
+                19.54,
+                "natural_complete_fragrance_6x200ml",
+            ),
+            (
+                "Bundle parfumov do prania Vevo Natural Pure Garden + Ylang Absolute 2×500 ml",
+                12.47,
+                "natural_bestsellers_500ml_ylang_pure_garden",
+            ),
+            (
+                "Sada parfumov do prania Vevo Natural Pure Garden + Ylang Absolute 2×500 ml",
+                12.47,
+                "natural_bestsellers_500ml_ylang_pure_garden",
+            ),
+        )
+        for label, expected_cost, rule_id in configured_cases:
+            with self.subTest(label=label):
+                cost, source = exporter._resolve_product_expense("", label)
+                self.assertAlmostEqual(expected_cost, cost, places=2)
+                self.assertEqual(f"bundle_components_configured:{rule_id}", source)
+
+        inferred_cases = (
+            ("2x Parfum do prania Vevo Natural No.07 Ylang Absolute 500ml", 12.28, 2),
+            ("3x Parfum do prania Vevo Natural No.07 Ylang Absolute 500ml", 18.42, 3),
+            (
+                "2x Vevo Ylang Absolute čistič podláh pre všetky vysávače s umývaním - 500ml",
+                4.70,
+                2,
+            ),
+            (
+                "3x Vevo Ylang Absolute čistič podláh pre všetky vysávače s umývaním - 500ml",
+                7.05,
+                3,
+            ),
+        )
+        for label, expected_cost, multiplier in inferred_cases:
+            with self.subTest(label=label):
+                cost, source = exporter._resolve_product_expense("", label)
+                self.assertAlmostEqual(expected_cost, cost, places=2)
+                self.assertTrue(str(source).startswith(f"bundle_components_inferred:x{multiplier}:"))
+
+        floor_cleaner_cost, floor_cleaner_source = exporter._resolve_product_expense(
+            "H-750DC0BF",
+            "Vevo Ylang Absolute parfumovaný čistič podláh pre všetky vysávače s umývaním - 500ml",
+        )
+        self.assertEqual(2.35, floor_cleaner_cost)
+        self.assertEqual("mapped_product_sku", floor_cleaner_source)
+        self.assertEqual(2.35, cost_map["8595727701504"])
+
     def test_configured_bundle_rule_fails_closed_when_component_cost_is_missing(self) -> None:
         exporter = make_exporter(project_name="vevo")
         exporter._rebuild_product_expense_indexes({"8594201618000": 2.43})
