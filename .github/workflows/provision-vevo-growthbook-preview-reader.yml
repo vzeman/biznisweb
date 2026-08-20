@@ -1,0 +1,428 @@
+name: Provision VEVO GrowthBook Preview Reader
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_identity:
+        description: Type the exact dedicated IAM user name
+        required: true
+        type: string
+      recipient_certificate_b64:
+        description: Base64-encoded PEM certificate used only to encrypt the one-time credential handoff
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-preview-reader-provision
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: "919341186960"
+  STACK_NAME: vevo-growthbook-preview
+  SERVICE_NAME: vevo-growthbook-collector-preview
+  RUNTIME_PATH: /app
+  IAM_USER_NAME: vevo-growthbook-preview-reader
+  IAM_USER_PATH: /vevo/growthbook/preview/
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  provision-preview-reader:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout identity contract
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm active runtime and least-privilege policy
+        env:
+          CONFIRM_IDENTITY: ${{ inputs.confirm_identity }}
+        run: |
+          set -euo pipefail
+          if [[ "${CONFIRM_IDENTITY}" != "${IAM_USER_NAME}" ]]; then
+            echo "Dedicated IAM identity confirmation did not match." >&2
+            exit 1
+          fi
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > active-stack.json
+          python3 - <<'PY' > active-identity-stack.env
+          import json
+          import os
+          import shlex
+
+          stack = json.load(open("active-stack.json", encoding="utf-8"))["Stacks"][0]
+          if stack["StackStatus"] != "UPDATE_COMPLETE":
+              raise SystemExit(f"active stack is not UPDATE_COMPLETE: {stack['StackStatus']}")
+          parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack["Parameters"]}
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack["Outputs"]}
+          if parameters.get("Environment") != "preview":
+              raise SystemExit("collector stack is not Preview")
+          if parameters.get("PublicRouteEnabled") != "true":
+              raise SystemExit("collector public route is not enabled")
+          required = {
+              "CollectorClusterArn",
+              "CollectorServiceArn",
+              "CollectorServiceName",
+              "CollectorTaskDefinitionArn",
+              "EventBucketName",
+              "ExperimentDatabaseName",
+              "GrowthBookReadOnlyPolicyArn",
+              "GrowthBookWorkGroupName",
+          }
+          missing = sorted(required - outputs.keys())
+          if missing:
+              raise SystemExit(f"active stack outputs missing: {missing}")
+          if outputs["CollectorServiceName"] != os.environ["SERVICE_NAME"]:
+              raise SystemExit("collector service identity drift")
+          values = {
+              "ACTIVE_CLUSTER_ARN": outputs["CollectorClusterArn"],
+              "ACTIVE_DATABASE": outputs["ExperimentDatabaseName"],
+              "ACTIVE_EVENT_BUCKET": outputs["EventBucketName"],
+              "ACTIVE_GROWTHBOOK_POLICY_ARN": outputs["GrowthBookReadOnlyPolicyArn"],
+              "ACTIVE_GROWTHBOOK_WORKGROUP": outputs["GrowthBookWorkGroupName"],
+              "ACTIVE_IMAGE": parameters["CollectorImageUri"],
+              "ACTIVE_SERVICE_ARN": outputs["CollectorServiceArn"],
+              "ACTIVE_TASK_DEFINITION": outputs["CollectorTaskDefinitionArn"],
+              "ACTIVE_VERSION": parameters["CollectorVersion"],
+          }
+          for key, value in sorted(values.items()):
+              print(f"{key}={shlex.quote(value)}")
+          PY
+          set -a
+          source active-identity-stack.env
+          set +a
+          cat active-identity-stack.env >> "${GITHUB_ENV}"
+          aws ecs describe-services \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --services "${ACTIVE_SERVICE_ARN}" \
+            --region "${AWS_REGION}" > active-service.json
+          aws ecs describe-task-definition \
+            --task-definition "${ACTIVE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > active-task-definition.json
+          aws ecs list-tasks \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" > active-task-list.json
+          ACTIVE_TASK_ARN="$(python3 -c 'import json; rows=json.load(open("active-task-list.json"))["taskArns"]; assert len(rows) == 1, rows; print(rows[0])')"
+          aws ecs describe-tasks \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --tasks "${ACTIVE_TASK_ARN}" \
+            --region "${AWS_REGION}" > active-task.json
+          POLICY_VERSION="$(aws iam get-policy \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" \
+            --query 'Policy.DefaultVersionId' \
+            --output text)"
+          aws iam get-policy-version \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" \
+            --version-id "${POLICY_VERSION}" > active-policy.json
+          python3 - <<'PY'
+          import json
+          import os
+
+          service = json.load(open("active-service.json", encoding="utf-8"))["services"][0]
+          if service["serviceName"] != os.environ["SERVICE_NAME"]:
+              raise SystemExit("active service name drift")
+          if service["taskDefinition"] != os.environ["ACTIVE_TASK_DEFINITION"]:
+              raise SystemExit("active service task definition drift")
+          if service["desiredCount"] != 1 or service["runningCount"] != 1:
+              raise SystemExit("active service is not exactly 1/1")
+          definition = json.load(open("active-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          containers = definition["containerDefinitions"]
+          if len(containers) != 1 or containers[0]["name"] != "collector":
+              raise SystemExit("task definition does not contain exactly one collector")
+          container = containers[0]
+          if container["image"] != os.environ["ACTIVE_IMAGE"]:
+              raise SystemExit("active image drift")
+          if container.get("workingDirectory") != os.environ["RUNTIME_PATH"]:
+              raise SystemExit("collector runtime path drift")
+          if container.get("readonlyRootFilesystem") is not True or container.get("user") != "10001:10001":
+              raise SystemExit("collector runtime security boundary drift")
+          task = json.load(open("active-task.json", encoding="utf-8"))["tasks"][0]
+          if task.get("lastStatus") != "RUNNING" or task.get("healthStatus") != "HEALTHY":
+              raise SystemExit("collector task is not RUNNING/HEALTHY")
+          running = task["containers"][0]
+          digest = os.environ["ACTIVE_IMAGE"].rsplit("@", 1)[-1]
+          if running.get("imageDigest") != digest:
+              raise SystemExit("collector image digest drift")
+          private_ips = []
+          for attachment in task.get("attachments") or []:
+              for detail in attachment.get("details") or []:
+                  if detail.get("name") == "privateIPv4Address" and detail.get("value"):
+                      private_ips.append(detail["value"])
+          if len(private_ips) != 1:
+              raise SystemExit(f"collector private IP unresolved: {private_ips}")
+
+          document = json.load(open("active-policy.json", encoding="utf-8"))["PolicyVersion"]["Document"]
+          statements = document.get("Statement") or []
+          allowed_actions = {
+              "athena:GetQueryExecution",
+              "athena:GetQueryResults",
+              "athena:GetWorkGroup",
+              "athena:StartQueryExecution",
+              "athena:StopQueryExecution",
+              "glue:GetDatabase",
+              "glue:GetDatabases",
+              "glue:GetPartition",
+              "glue:GetPartitions",
+              "glue:GetTable",
+              "glue:GetTables",
+              "s3:AbortMultipartUpload",
+              "s3:GetBucketLocation",
+              "s3:GetObject",
+              "s3:ListBucket",
+              "s3:PutObject",
+          }
+          observed_actions = set()
+          bucket_arn = f"arn:aws:s3:::{os.environ['ACTIVE_EVENT_BUCKET']}"
+          allowed_resources = {
+              bucket_arn,
+              f"{bucket_arn}/experiment-events/curated/*",
+              f"{bucket_arn}/athena-results/growthbook/*",
+              f"arn:aws:athena:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"workgroup/{os.environ['ACTIVE_GROWTHBOOK_WORKGROUP']}",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:catalog",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"database/{os.environ['ACTIVE_DATABASE']}",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"table/{os.environ['ACTIVE_DATABASE']}/experiment_device_facts",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"table/{os.environ['ACTIVE_DATABASE']}/experiment_performance_facts",
+          }
+          for statement in statements:
+              actions = statement.get("Action") or []
+              resources = statement.get("Resource") or []
+              if isinstance(actions, str):
+                  actions = [actions]
+              if isinstance(resources, str):
+                  resources = [resources]
+              if statement.get("Effect") != "Allow" or not set(actions) <= allowed_actions:
+                  raise SystemExit(f"GrowthBook policy action drift: {actions}")
+              observed_actions.update(actions)
+              if not set(resources) <= allowed_resources:
+                  raise SystemExit(f"GrowthBook policy resource drift: {resources}")
+          if observed_actions != allowed_actions:
+              raise SystemExit(
+                  f"GrowthBook policy action set drift: {sorted(observed_actions ^ allowed_actions)}"
+              )
+          task_id = task["taskArn"].rsplit("/", 1)[-1]
+          print(
+              "GROWTHBOOK_IDENTITY_PREPROVISION_GATE:"
+              f"instance-id=N/A(ECS/Fargate):task={task_id}:ip={private_ips[0]}:"
+              f"service={os.environ['SERVICE_NAME']}:path={os.environ['RUNTIME_PATH']}:digest={digest}"
+          )
+          PY
+
+      - name: Create one dedicated encrypted credential handoff
+        env:
+          RECIPIENT_CERTIFICATE_B64: ${{ inputs.recipient_certificate_b64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          CREDENTIAL_JSON="${RUNNER_TEMP}/vevo-growthbook-preview-reader.json"
+          ACCESS_KEY_ID_FILE="${RUNNER_TEMP}/vevo-growthbook-preview-reader-access-key-id"
+          CREATED_MARKER="${RUNNER_TEMP}/vevo-growthbook-preview-reader-created"
+          RECIPIENT_CERT="${RUNNER_TEMP}/vevo-growthbook-preview-recipient.pem"
+          ENCRYPTED_HANDOFF="${GITHUB_WORKSPACE}/vevo-growthbook-preview-reader.cms"
+          SAFE_MANIFEST="${GITHUB_WORKSPACE}/vevo-growthbook-preview-reader-manifest.json"
+
+          cleanup_failed_provision() {
+            set +e
+            if [[ -f "${ACCESS_KEY_ID_FILE}" ]]; then
+              aws iam delete-access-key \
+                --user-name "${IAM_USER_NAME}" \
+                --access-key-id "$(<"${ACCESS_KEY_ID_FILE}")"
+            fi
+            aws iam detach-user-policy \
+              --user-name "${IAM_USER_NAME}" \
+              --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" 2>/dev/null || true
+            aws iam delete-user --user-name "${IAM_USER_NAME}" 2>/dev/null || true
+            rm -f "${CREDENTIAL_JSON}" "${ACCESS_KEY_ID_FILE}" "${CREATED_MARKER}" \
+              "${RECIPIENT_CERT}" "${ENCRYPTED_HANDOFF}" "${SAFE_MANIFEST}"
+          }
+          trap cleanup_failed_provision ERR
+
+          if aws iam get-user --user-name "${IAM_USER_NAME}" >/dev/null 2>&1; then
+            echo "Dedicated GrowthBook IAM user already exists; refusing to rotate or replace it." >&2
+            exit 1
+          fi
+          printf '%s' "${RECIPIENT_CERTIFICATE_B64}" | base64 --decode > "${RECIPIENT_CERT}"
+          openssl x509 -in "${RECIPIENT_CERT}" -noout -checkend 3600 >/dev/null
+          if ! openssl x509 -in "${RECIPIENT_CERT}" -pubkey -noout | \
+            openssl pkey -pubin -text -noout | grep -q 'Public-Key: (3072 bit)'; then
+            echo "Credential recipient must be an unexpired RSA-3072 certificate." >&2
+            exit 1
+          fi
+
+          aws iam create-user \
+            --user-name "${IAM_USER_NAME}" \
+            --path "${IAM_USER_PATH}" \
+            --tags \
+              Key=Project,Value=VEVO \
+              Key=Purpose,Value=GrowthBookAthena \
+              Key=Environment,Value=preview \
+              Key=ManagedBy,Value=GitHubActions >/dev/null
+          : > "${CREATED_MARKER}"
+          aws iam attach-user-policy \
+            --user-name "${IAM_USER_NAME}" \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}"
+          aws iam create-access-key \
+            --user-name "${IAM_USER_NAME}" > "${CREDENTIAL_JSON}"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "vevo-growthbook-preview-reader.json"
+          row = json.loads(path.read_text(encoding="utf-8"))["AccessKey"]
+          if row.get("UserName") != os.environ["IAM_USER_NAME"] or row.get("Status") != "Active":
+              raise SystemExit("created access key identity/status drift")
+          if not row.get("AccessKeyId") or not row.get("SecretAccessKey"):
+              raise SystemExit("created access key is incomplete")
+          (Path(os.environ["RUNNER_TEMP"]) / "vevo-growthbook-preview-reader-access-key-id").write_text(
+              row["AccessKeyId"], encoding="ascii"
+          )
+          PY
+          aws iam list-attached-user-policies \
+            --user-name "${IAM_USER_NAME}" > attached-policies.json
+          aws iam list-user-policies \
+            --user-name "${IAM_USER_NAME}" > inline-policies.json
+          aws iam list-groups-for-user \
+            --user-name "${IAM_USER_NAME}" > user-groups.json
+          aws iam list-user-tags \
+            --user-name "${IAM_USER_NAME}" > user-tags.json
+          aws iam list-access-keys \
+            --user-name "${IAM_USER_NAME}" > access-key-metadata.json
+          aws iam get-user \
+            --user-name "${IAM_USER_NAME}" > created-user.json
+          python3 - <<'PY'
+          import json
+          import os
+
+          user = json.load(open("created-user.json", encoding="utf-8"))["User"]
+          if user.get("Path") != os.environ["IAM_USER_PATH"] or user.get("UserName") != os.environ["IAM_USER_NAME"]:
+              raise SystemExit("created IAM user path/name drift")
+          attached = json.load(open("attached-policies.json", encoding="utf-8"))["AttachedPolicies"]
+          if [row["PolicyArn"] for row in attached] != [os.environ["ACTIVE_GROWTHBOOK_POLICY_ARN"]]:
+              raise SystemExit(f"GrowthBook user attached policy drift: {attached}")
+          if json.load(open("inline-policies.json", encoding="utf-8"))["PolicyNames"]:
+              raise SystemExit("GrowthBook user unexpectedly has an inline policy")
+          if json.load(open("user-groups.json", encoding="utf-8"))["Groups"]:
+              raise SystemExit("GrowthBook user unexpectedly belongs to an IAM group")
+          tags = {
+              row["Key"]: row["Value"]
+              for row in json.load(open("user-tags.json", encoding="utf-8"))["Tags"]
+          }
+          expected_tags = {
+              "Environment": "preview",
+              "ManagedBy": "GitHubActions",
+              "Project": "VEVO",
+              "Purpose": "GrowthBookAthena",
+          }
+          if tags != expected_tags:
+              raise SystemExit(f"GrowthBook user tag drift: {tags}")
+          keys = json.load(open("access-key-metadata.json", encoding="utf-8"))["AccessKeyMetadata"]
+          if len(keys) != 1 or keys[0].get("Status") != "Active":
+              raise SystemExit("GrowthBook user must have exactly one active access key")
+          PY
+
+          openssl cms -encrypt -binary -aes-256-cbc \
+            -in "${CREDENTIAL_JSON}" \
+            -outform DER \
+            -out "${ENCRYPTED_HANDOFF}" \
+            "${RECIPIENT_CERT}"
+          ACCESS_KEY_ID="$(<"${ACCESS_KEY_ID_FILE}")"
+          if grep -a -F -q "${ACCESS_KEY_ID}" "${ENCRYPTED_HANDOFF}"; then
+            echo "Encrypted handoff unexpectedly contains the plaintext access key ID." >&2
+            exit 1
+          fi
+          CERT_SHA256="$(openssl x509 -in "${RECIPIENT_CERT}" -noout -fingerprint -sha256 | cut -d= -f2)"
+          export CERT_SHA256
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = {
+              "schema_version": 1,
+              "aws_account_id": os.environ["EXPECTED_ACCOUNT_ID"],
+              "aws_region": os.environ["AWS_REGION"],
+              "iam_user_name": os.environ["IAM_USER_NAME"],
+              "iam_user_path": os.environ["IAM_USER_PATH"],
+              "policy_arn": os.environ["ACTIVE_GROWTHBOOK_POLICY_ARN"],
+              "stack_name": os.environ["STACK_NAME"],
+              "workgroup": os.environ["ACTIVE_GROWTHBOOK_WORKGROUP"],
+              "database": os.environ["ACTIVE_DATABASE"],
+              "s3_results_url": (
+                  f"s3://{os.environ['ACTIVE_EVENT_BUCKET']}/athena-results/growthbook/"
+              ),
+              "recipient_certificate_sha256": os.environ["CERT_SHA256"],
+              "contains_plaintext_credentials": False,
+          }
+          Path("vevo-growthbook-preview-reader-manifest.json").write_text(
+              json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+          shred --remove "${CREDENTIAL_JSON}"
+          rm -f "${RECIPIENT_CERT}"
+          trap - ERR
+          echo "GROWTHBOOK_PREVIEW_READER_ENCRYPTED_HANDOFF_READY:${IAM_USER_NAME}:${CERT_SHA256}"
+
+      - name: Upload encrypted one-time handoff
+        id: handoff
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-preview-reader-${{ github.run_id }}
+          path: |
+            vevo-growthbook-preview-reader.cms
+            vevo-growthbook-preview-reader-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Confirm successful provisioning
+        run: |
+          set -euo pipefail
+          rm -f \
+            "${RUNNER_TEMP}/vevo-growthbook-preview-reader-access-key-id" \
+            "${RUNNER_TEMP}/vevo-growthbook-preview-reader-created"
+          echo "GROWTHBOOK_PREVIEW_READER_ACTIVE:${IAM_USER_NAME}:${ACTIVE_GROWTHBOOK_POLICY_ARN}"
+
+      - name: Revoke incomplete provisioning
+        if: ${{ failure() }}
+        run: |
+          set -euo pipefail
+          CREATED_MARKER="${RUNNER_TEMP}/vevo-growthbook-preview-reader-created"
+          ACCESS_KEY_ID_FILE="${RUNNER_TEMP}/vevo-growthbook-preview-reader-access-key-id"
+          if [[ ! -f "${CREATED_MARKER}" ]]; then
+            echo "No IAM identity was created by this failed run."
+            exit 0
+          fi
+          if [[ -f "${ACCESS_KEY_ID_FILE}" ]]; then
+            aws iam delete-access-key \
+              --user-name "${IAM_USER_NAME}" \
+              --access-key-id "$(<"${ACCESS_KEY_ID_FILE}")"
+          fi
+          aws iam detach-user-policy \
+            --user-name "${IAM_USER_NAME}" \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" 2>/dev/null || true
+          aws iam delete-user --user-name "${IAM_USER_NAME}"
+          rm -f "${ACCESS_KEY_ID_FILE}" "${CREATED_MARKER}"
+          echo "GROWTHBOOK_PREVIEW_READER_FAILED_RUN_REVOKED:${IAM_USER_NAME}"
