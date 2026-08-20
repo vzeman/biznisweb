@@ -158,10 +158,28 @@ def validate() -> None:
     athena = workspace.get("athena", {})
     if athena.get("authentication") != "dedicated_readonly_iam_user_access_key":
         raise AssertionError("GrowthBook Cloud Athena must keep a dedicated read-only identity")
-    if athena.get("credentials_status") != "not_created":
-        raise AssertionError("GrowthBook credentials must not be claimed before deployment")
-    if athena.get("preview", {}).get("status") != "collector_active_athena_identity_pending":
-        raise AssertionError("Preview Athena status must match the verified active collector")
+    expected_reader = {
+        "credentials_status": "created_active_not_committed",
+        "iam_user_name": "vevo-growthbook-preview-reader",
+        "iam_user_arn": (
+            "arn:aws:iam::919341186960:user/vevo/growthbook/preview/"
+            "vevo-growthbook-preview-reader"
+        ),
+        "policy_arn": "arn:aws:iam::919341186960:policy/vevo-growthbook-readonly-preview",
+        "access_key_count": 1,
+        "credential_material_committed": False,
+    }
+    for key, value in expected_reader.items():
+        if athena.get(key) != value:
+            raise AssertionError(f"GrowthBook Preview reader state drift: {key}")
+    preview_athena = athena.get("preview", {})
+    if preview_athena.get("status") != "athena_reader_active_growthbook_connection_pending":
+        raise AssertionError("Preview Athena status must match the active dedicated reader")
+    if preview_athena.get("s3_results_url") != (
+        "s3://vevo-growthbook-preview-experimentdatabucket-pj7zod15wpyr/"
+        "athena-results/growthbook/"
+    ):
+        raise AssertionError("Preview Athena results location drift")
     assignment_path = athena.get("assignment_query")
     assignment_sql = _read_repo_path(assignment_path)
     _validate_sql(
