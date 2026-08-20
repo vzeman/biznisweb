@@ -255,13 +255,51 @@ jobs:
       - name: Create, validate, and execute route-disabled candidate change set
         run: |
           set -euo pipefail
-          if aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-            CHANGE_TYPE=UPDATE
-            WAIT_TARGET=stack-update-complete
+          if aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > current-stack.json 2>/dev/null; then
+            STACK_STATUS="$(python -c 'import json; print(json.load(open("current-stack.json"))["Stacks"][0]["StackStatus"])')"
+            if [[ "${STACK_STATUS}" == "REVIEW_IN_PROGRESS" ]]; then
+              CHANGE_TYPE=CREATE
+              WAIT_TARGET=stack-create-complete
+              aws cloudformation list-change-sets \
+                --stack-name "${STACK_NAME}" \
+                --region "${AWS_REGION}" > review-change-sets.json
+              python - <<'PY' > stale-review-change-sets.txt
+          import json
+          import re
+
+          summaries = json.load(open("review-change-sets.json", encoding="utf-8")).get("Summaries") or []
+          for summary in summaries:
+              name = summary.get("ChangeSetName", "")
+              execution = summary.get("ExecutionStatus", "")
+              if not re.fullmatch(r"candidate-[0-9]+-[0-9]+", name):
+                  raise SystemExit(f"unreviewed change set exists on placeholder stack: {name}")
+              if execution not in {"AVAILABLE", "UNAVAILABLE"}:
+                  raise SystemExit(f"change set is not safe to replace: {name} {execution}")
+              print(name)
+          PY
+              while IFS= read -r stale_change_set; do
+                if [[ -n "${stale_change_set}" ]]; then
+                  aws cloudformation delete-change-set \
+                    --stack-name "${STACK_NAME}" \
+                    --change-set-name "${stale_change_set}" \
+                    --region "${AWS_REGION}"
+                fi
+              done < stale-review-change-sets.txt
+            elif [[ "${STACK_STATUS}" == "CREATE_COMPLETE" || "${STACK_STATUS}" == "UPDATE_COMPLETE" ]]; then
+              CHANGE_TYPE=UPDATE
+              WAIT_TARGET=stack-update-complete
+            else
+              echo "Collector stack is not in a deployable state: ${STACK_STATUS}" >&2
+              exit 1
+            fi
           else
+            STACK_STATUS=ABSENT
             CHANGE_TYPE=CREATE
             WAIT_TARGET=stack-create-complete
           fi
+          echo "CANDIDATE_STACK_STATUS:${STACK_STATUS}:${CHANGE_TYPE}"
           CHANGE_SET="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           aws cloudformation create-change-set \
             --stack-name "${STACK_NAME}" \
@@ -297,9 +335,16 @@ jobs:
             cat candidate-change-set.json >&2
             exit 1
           fi
-          python scripts/validate_growthbook_changeset.py \
+          if ! python scripts/validate_growthbook_changeset.py \
             --change-set candidate-change-set.json \
-            --phase candidate
+            --change-set-type "${CHANGE_TYPE}" \
+            --phase candidate; then
+            aws cloudformation delete-change-set \
+              --stack-name "${STACK_NAME}" \
+              --change-set-name "${CHANGE_SET}" \
+              --region "${AWS_REGION}" || true
+            exit 1
+          fi
           aws cloudformation execute-change-set \
             --stack-name "${STACK_NAME}" \
             --change-set-name "${CHANGE_SET}" \
@@ -538,6 +583,7 @@ jobs:
             --region "${AWS_REGION}" > activation-change-set.json
           python scripts/validate_growthbook_changeset.py \
             --change-set activation-change-set.json \
+            --change-set-type UPDATE \
             --phase activate
           aws cloudformation execute-change-set \
             --stack-name "${STACK_NAME}" \

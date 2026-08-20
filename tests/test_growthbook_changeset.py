@@ -3,7 +3,11 @@ from __future__ import annotations
 import copy
 import unittest
 
-from scripts.validate_growthbook_changeset import EXPECTED_CREATE_RESOURCES, validate
+from scripts.validate_growthbook_changeset import (
+    EXPECTED_CREATE_RESOURCES,
+    validate,
+    with_change_set_type,
+)
 
 
 def change(
@@ -113,6 +117,23 @@ class GrowthBookChangeSetTests(unittest.TestCase):
                 },
                 "candidate",
             )
+
+    def test_workflow_supplies_type_omitted_by_describe_change_set(self) -> None:
+        raw = {
+            "Status": "CREATE_COMPLETE",
+            "Changes": [
+                change(logical_id, resource_type)
+                for logical_id, resource_type in EXPECTED_CREATE_RESOURCES.items()
+            ],
+        }
+        normalized = with_change_set_type(raw, "CREATE")
+        self.assertEqual("CREATE", normalized["ChangeSetType"])
+        self.assertNotIn("ChangeSetType", raw)
+        self.assertEqual(len(EXPECTED_CREATE_RESOURCES), len(validate(normalized, "candidate")))
+
+    def test_workflow_rejects_api_type_mismatch(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "type mismatch"):
+            with_change_set_type({"ChangeSetType": "UPDATE"}, "CREATE")
 
 
 if __name__ == "__main__":

@@ -54,6 +54,21 @@ def _load(path: Path) -> dict[str, Any]:
     return payload
 
 
+def with_change_set_type(
+    payload: dict[str, Any], expected_change_set_type: str
+) -> dict[str, Any]:
+    if expected_change_set_type not in {"CREATE", "UPDATE"}:
+        raise AssertionError(f"unsupported expected change set type: {expected_change_set_type}")
+    api_value = payload.get("ChangeSetType")
+    if api_value is not None and str(api_value) != expected_change_set_type:
+        raise AssertionError(
+            f"change set type mismatch: API={api_value} expected={expected_change_set_type}"
+        )
+    normalized = dict(payload)
+    normalized["ChangeSetType"] = expected_change_set_type
+    return normalized
+
+
 def validate(payload: dict[str, Any], phase: str) -> list[dict[str, str]]:
     status = str(payload.get("Status") or "")
     if status != "CREATE_COMPLETE":
@@ -147,9 +162,11 @@ def validate(payload: dict[str, Any], phase: str) -> list[dict[str, str]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fail closed on unsafe GrowthBook change sets")
     parser.add_argument("--change-set", type=Path, required=True)
+    parser.add_argument("--change-set-type", choices=("CREATE", "UPDATE"), required=True)
     parser.add_argument("--phase", choices=("candidate", "activate"), required=True)
     args = parser.parse_args()
-    normalized = validate(_load(args.change_set), args.phase)
+    payload = with_change_set_type(_load(args.change_set), args.change_set_type)
+    normalized = validate(payload, args.phase)
     print(json.dumps(normalized, separators=(",", ":"), sort_keys=True))
     return 0
 
