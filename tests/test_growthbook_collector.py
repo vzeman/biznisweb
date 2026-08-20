@@ -28,9 +28,12 @@ class FakeS3:
         self.objects = {}
         self.put_calls = []
         self.fail_code = None
+        self.fail_codes = []
 
     def put_object(self, **kwargs):
         self.put_calls.append(kwargs)
+        if self.fail_codes:
+            raise FakeS3Error(self.fail_codes.pop(0))
         if self.fail_code:
             raise FakeS3Error(self.fail_code)
         key = (kwargs["Bucket"], kwargs["Key"])
@@ -156,6 +159,33 @@ class GrowthBookCollectorTests(unittest.TestCase):
         self.assertEqual(202, second["statusCode"])
         self.assertEqual({"accepted": True, "duplicate": True}, self.response_body(second))
         self.assertEqual(1, len(self.s3.objects))
+
+    def test_conditional_conflict_retries_and_is_not_called_a_duplicate(self):
+        self.s3.fail_codes = ["ConditionalRequestConflict"]
+
+        response = self.request(base_payload())
+
+        self.assertEqual(202, response["statusCode"])
+        self.assertEqual({"accepted": True, "duplicate": False}, self.response_body(response))
+        self.assertEqual(2, len(self.s3.put_calls))
+        self.assertEqual(1, len(self.s3.objects))
+
+    def test_repeated_conditional_conflict_fails_closed(self):
+        self.s3.fail_codes = [
+            "ConditionalRequestConflict",
+            "ConditionalRequestConflict",
+            "ConditionalRequestConflict",
+        ]
+
+        response = self.request(base_payload())
+
+        self.assertEqual(503, response["statusCode"])
+        self.assertEqual(
+            {"accepted": False, "code": "storage_unavailable"},
+            self.response_body(response),
+        )
+        self.assertEqual(3, len(self.s3.put_calls))
+        self.assertEqual(0, len(self.s3.objects))
 
     def test_production_registry_starts_empty_and_rejects_preview_experiment(self):
         production = load_registry(str(self.registry_path), "production")

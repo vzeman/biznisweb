@@ -10,7 +10,7 @@ Current state: implementation and local tests only. No AWS resource, endpoint, G
 - Requests require the exact approved HTTPS origin and analytical-consent state.
 - Each event type has an exact field set. Missing, unknown, nested, money, customer, raw URL, click-ID, IP, email, phone, and error-detail data fail closed.
 - The server supplies receipt time, partition date, collector version, and risk result.
-- S3 keys are partitioned by server receipt date and written with `IfNoneMatch="*"`; a duplicate event ID returns idempotent success without a second object.
+- S3 keys are partitioned by server receipt date and written with `IfNoneMatch="*"`; only S3 `412 PreconditionFailed` is treated as an idempotent duplicate, while a `409 ConditionalRequestConflict` is retried twice and then fails closed.
 - The function has no reason to read, list, overwrite, or delete event objects. Deployment IAM must grant only conditional `PutObject` to the dedicated raw prefix.
 - Browser-facing error responses are generic and never echo the payload or identifiers.
 

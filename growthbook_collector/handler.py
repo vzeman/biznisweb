@@ -520,18 +520,22 @@ def persist_event(s3: Any, config: CollectorConfig, record: Dict[str, Any]) -> b
     }
     if config.kms_key_arn:
         put_args["SSEKMSKeyId"] = config.kms_key_arn
-    try:
-        s3.put_object(**put_args)
-        return False
-    except Exception as exc:
-        if _s3_error_code(exc) in {
-            "PreconditionFailed",
-            "412",
-            "ConditionalRequestConflict",
-            "409",
-        }:
-            return True
-        raise
+    # A 409 means a competing operation prevented S3 from deciding the
+    # conditional write. It is not evidence that this event already exists.
+    # Retry twice with the same immutable key; only a 412 proves a duplicate.
+    for attempt in range(3):
+        try:
+            s3.put_object(**put_args)
+            return False
+        except Exception as exc:
+            error_code = _s3_error_code(exc)
+            if error_code in {"PreconditionFailed", "412"}:
+                return True
+            if error_code in {"ConditionalRequestConflict", "409"} and attempt < 2:
+                continue
+            raise
+
+    raise RuntimeError("unreachable S3 conditional-write state")
 
 
 def handle_request(
