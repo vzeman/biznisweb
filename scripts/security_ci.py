@@ -434,6 +434,9 @@ def main() -> int:
             "COLLECTOR_LOCALHOST_MARKER_OK:/app",
             "--phase candidate",
             "--phase activate",
+            '--change-set-type "${CHANGE_TYPE}"',
+            '"${STACK_STATUS}" == "REVIEW_IN_PROGRESS"',
+            "stale-review-change-sets.txt",
             "cmp -s raw-objects-before.json raw-objects-after.json",
         ):
             require(
