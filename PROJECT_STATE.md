@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-11
+Last updated: 2026-08-20
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -60,6 +60,20 @@ Bootstrap entrypoints:
 - `scripts/bootstrap.ps1`
 
 ## 5) Current Verified State
+
+- VEVO profit-first Meta spend and sample-customer decision system is implemented on branch `codex/vevo-meta-profit-scaling` (`2026-08-20`):
+  - the reporting model now evaluates Meta scaling against nominal contribution profit, not a fixed ROAS target; it combines immediate company profit with mature 30/60/90/180-day contribution LTV, safety-buffered marginal CAC guardrails, and explicit scale/hold/reduce decisions
+  - recent 7/14/28-day scale steps are compared with the immediately preceding equal windows and expose incremental spend, new customers, revenue, immediate profit, and LTV-adjusted profit at every maturity horizon
+  - spend recommendations use EUR 10 daily-spend tiers with minimum sample and weekday coverage, median and win-rate diagnostics, and a smoothed conservative lower bound; small and one-day outliers cannot become the recommended tier
+  - high-spend customer-quality cohorts expose mature contribution LTV, downstream contribution, repeat rate, and sample mix; the UI labels this as an observational paid-spend-day proxy rather than customer-level Meta attribution
+  - product-family acquisition math now uses real first-order revenue/contribution and maturity-censored 60/90-day denominators, so recent customers are not incorrectly counted as failed repeat purchasers
+  - the sample-product table separates the paid-acquisition action (`CUT_PAID`, `HOLD`, `ELIGIBLE_TEST`) from the shop action (`KEEP_ORGANIC`, `REVIEW_REMOVAL`) and reports direct contribution, mature 60/90/180-day contribution LTV, downstream 90-day value, 60-day full-size conversion, safe CAC, and current marginal CAC
+  - VEVO settings now recognize the classic `Sada vzoriek` product names and define a 15% LTV safety buffer, 14-day minimum spend-tier sample, and 10% scale step
+  - the modern marketing dashboard renders a dedicated VEVO `Meta spend: maximalizacia nominalneho zisku` section with the account decision, safe core corridor, recent scale-step audit, LTV curve, guardrails, robust spend tiers, future customer quality, product-level sample eligibility, and methodology limitations
+  - local verification passed: Python compile, settings JSON parse, focused dashboard/calculation suite (`105` tests), full suite (`289` tests), reporting QA smoke, security CI, and `git diff --check`
+  - no local server, worker, watcher, tunnel, or persistent runtime was started; a synthetic local HTML preview was generated outside the repository, but Chrome correctly blocked opening a new `file://` automation tab, so production visual verification remains gated behind the required Fargate localhost marker
+  - production replay is still required for exact live safe-CAC/product-action values because this clean worktree intentionally has no reporting secrets or AWS credentials
+  - Next exact step: commit and push the branch, merge through PR, build the exact immutable image, then run the protected production workflow and accept the UI only after the Fargate identity, private IP, `/app` runtime, localhost marker, immutable generation, and App Runner gates pass
 
 - ROY daily report / live-dashboard freshness incident is fixed and live (`2026-08-15`):
   - production incident run `31859338478` reproduced the common failure after a successful export through `2026-08-14`: SES rejected the `10,560,976` byte raw message because its hard limit is `10,485,760` bytes

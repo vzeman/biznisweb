@@ -1156,15 +1156,20 @@ def generate_modern_dashboard(
         _to_frame((ads_effectiveness or {}).get("spend_effectiveness")),
         [
             "spend_range",
+            "days",
+            "weekday_coverage",
             "avg_orders",
             "avg_revenue",
             "avg_spend",
             "avg_profit_without_fixed",
             "avg_profit_with_fixed",
+            "median_profit_with_fixed",
+            "cm3_win_rate_pct",
             "avg_cm3_margin_pct",
             "avg_returning_revenue_share_pct",
             "avg_aov",
             "roas",
+            "decision_eligible",
         ],
         limit=20,
     )
@@ -1302,6 +1307,8 @@ def generate_modern_dashboard(
             "product_family_key",
             "product_family_label",
             "new_customers",
+            "mature_60d_customers",
+            "mature_90d_customers",
             "first_order_revenue",
             "first_order_contribution",
             "first_order_aov",
@@ -1321,6 +1328,7 @@ def generate_modern_dashboard(
             "source_proxy_key",
             "source_proxy_label",
             "new_customers",
+            "mature_90d_customers",
             "revenue_ltv_90d",
             "contribution_ltv_90d",
             "contribution_ltv_90d_per_customer",
@@ -1333,6 +1341,7 @@ def generate_modern_dashboard(
             "product_family_key",
             "product_family_label",
             "new_customers",
+            "mature_90d_customers",
             "first_order_revenue",
             "contribution_ltv_90d",
             "repeat_90d_rate_pct",
@@ -1982,6 +1991,134 @@ def generate_modern_dashboard(
         ],
         limit=None,
     )
+    meta_profit_scaling = (advanced_dtc_metrics or {}).get("meta_profit_scaling", {}) if advanced_dtc_metrics else {}
+    meta_profit_scaling_summary = (meta_profit_scaling or {}).get("summary") or {}
+    meta_profit_ltv_rows = _frame_rows(
+        (meta_profit_scaling or {}).get("ltv_rows"),
+        [
+            "window_days",
+            "mature_customers",
+            "first_contribution_per_customer",
+            "downstream_contribution_per_customer",
+            "contribution_ltv_per_customer",
+            "safe_cac",
+            "repeat_pct",
+            "fullsize_pct",
+        ],
+        limit=None,
+    )
+    meta_profit_recent_rows = _frame_rows(
+        (meta_profit_scaling or {}).get("recent_window_rows"),
+        [
+            "window_days",
+            "current_start",
+            "current_end",
+            "previous_start",
+            "previous_end",
+            "current_meta_spend",
+            "previous_meta_spend",
+            "current_meta_spend_per_day",
+            "previous_meta_spend_per_day",
+            "incremental_meta_spend_per_day",
+            "incremental_google_spend_per_day",
+            "incremental_new_customers_per_day",
+            "incremental_revenue_per_day",
+            "incremental_company_profit_per_day",
+            "marginal_cac",
+            "ltv_adjusted_profit_30d_per_day",
+            "ltv_adjusted_profit_60d_per_day",
+            "ltv_adjusted_profit_90d_per_day",
+            "ltv_adjusted_profit_180d_per_day",
+            "current_sample_entry_share_pct",
+            "previous_sample_entry_share_pct",
+            "verdict",
+            "verdict_reason_sk",
+            "verdict_tone",
+        ],
+        limit=None,
+    )
+    meta_profit_spend_tier_rows = _frame_rows(
+        (meta_profit_scaling or {}).get("spend_tier_rows"),
+        [
+            "tier_low",
+            "tier_high",
+            "spend_range",
+            "days",
+            "weekday_coverage",
+            "avg_meta_spend",
+            "avg_google_spend",
+            "avg_revenue",
+            "avg_new_customers",
+            "new_customer_cac_proxy",
+            "avg_company_profit",
+            "median_company_profit",
+            "company_profit_lcb80",
+            "cm3_win_rate_pct",
+            "sample_entry_share_pct",
+            "smoothed_days",
+            "smoothed_avg_company_profit",
+            "smoothed_company_profit_lcb80",
+            "decision_eligible",
+        ],
+        limit=None,
+    )
+    meta_profit_quality_rows = _frame_rows(
+        (meta_profit_scaling or {}).get("cohort_quality_rows"),
+        [
+            "bucket_order",
+            "bucket_key",
+            "bucket_label",
+            "acquisition_days",
+            "new_customers",
+            "avg_meta_spend_on_acquisition_day",
+            "sample_entry_share_pct",
+            "sample_6x10_share_pct",
+            "sample_3x10_share_pct",
+            "first_contribution_per_customer",
+            "mature_60d_customers",
+            "contribution_ltv_60d_per_customer",
+            "fullsize_60d_pct",
+            "mature_90d_customers",
+            "contribution_ltv_90d_per_customer",
+            "repeat_90d_pct",
+            "mature_180d_customers",
+            "contribution_ltv_180d_per_customer",
+            "confidence",
+        ],
+        limit=None,
+    )
+    meta_profit_sample_rows = _frame_rows(
+        (meta_profit_scaling or {}).get("sample_product_rows"),
+        [
+            "item_name",
+            "item_sku",
+            "entry_customers",
+            "meta_paid_day_customers",
+            "direct_contribution_per_customer",
+            "current_marginal_cac",
+            "mature_60d_customers",
+            "contribution_ltv_60d_per_customer",
+            "fullsize_60d_pct",
+            "mature_90d_customers",
+            "contribution_ltv_90d_per_customer",
+            "downstream_contribution_90d_per_customer",
+            "safe_cac_90d",
+            "mature_180d_customers",
+            "contribution_ltv_180d_per_customer",
+            "paid_action",
+            "paid_reason_sk",
+            "paid_tone",
+            "shop_action",
+            "shop_reason_sk",
+        ],
+        limit=20,
+    )
+    meta_profit_guardrail_rows = _frame_rows(
+        (meta_profit_scaling or {}).get("guardrail_rows"),
+        ["band", "marginal_cac_from", "marginal_cac_to", "action"],
+        limit=None,
+    )
+    meta_profit_methodology = (meta_profit_scaling or {}).get("methodology") or {}
     crm_funnel = (advanced_dtc_metrics or {}).get("vevo_crm_funnel_kpis", {}) if advanced_dtc_metrics else {}
     crm_funnel_rows = _frame_rows(
         (crm_funnel or {}).get("segment_rows"),
@@ -2445,6 +2582,16 @@ def generate_modern_dashboard(
             "summary": {k: _json_safe(v) for k, v in ((direct_assisted or {}).get("summary") or {}).items()},
             "entry_rows": direct_assisted_entry_rows,
             "window_rows": direct_assisted_window_rows,
+        },
+        "meta_profit_scaling": {
+            "summary": {k: _json_safe(v) for k, v in meta_profit_scaling_summary.items()},
+            "ltv_rows": meta_profit_ltv_rows,
+            "recent_rows": meta_profit_recent_rows,
+            "spend_tier_rows": meta_profit_spend_tier_rows,
+            "quality_rows": meta_profit_quality_rows,
+            "sample_rows": meta_profit_sample_rows,
+            "guardrail_rows": meta_profit_guardrail_rows,
+            "methodology": _json_safe(meta_profit_methodology),
         },
         "crm_funnel": {
             "summary": {k: _json_safe(v) for k, v in ((crm_funnel or {}).get("summary") or {}).items()},
@@ -3731,15 +3878,19 @@ def generate_modern_dashboard(
         (
             "<tr>"
             f"<td>{escape(str(row.get('spend_range') or '-'))}</td>"
+            f"<td>{int(round(_num(row.get('days'))))}</td>"
             f"<td>&euro;{_num(row.get('avg_spend')):,.2f}</td>"
             f"<td>{_num(row.get('avg_orders')):.1f}</td>"
             f"<td>&euro;{_num(row.get('avg_revenue')):,.2f}</td>"
             f"<td>&euro;{_num(row.get('avg_profit_without_fixed')):,.2f}</td>"
             f"<td>&euro;{_num(row.get('avg_profit_with_fixed')):,.2f}</td>"
+            f"<td>&euro;{_num(row.get('median_profit_with_fixed')):,.2f}</td>"
+            f"<td>{_num(row.get('cm3_win_rate_pct')):.1f}%</td>"
             f"<td>{_num(row.get('avg_cm3_margin_pct')):.1f}%</td>"
             f"<td>{_num(row.get('avg_returning_revenue_share_pct')):.1f}%</td>"
             f"<td>&euro;{_num(row.get('avg_aov')):,.2f}</td>"
             f"<td>{_num(row.get('roas')):.2f}x</td>"
+            f"<td>{'YES' if row.get('decision_eligible') else 'NO'}</td>"
             "</tr>"
         )
         for row in spend_effectiveness_rows
@@ -3784,6 +3935,177 @@ def generate_modern_dashboard(
         )
         for row in incrementality_rows
     ) or '<tr><td colspan="13"><span class="lang-en">No incrementality comparison is available yet.</span><span class="lang-sk hidden">Incrementality porovnanie zatial nie je dostupne.</span></td></tr>'
+
+    meta_profit_recent_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{int(round(_num(row.get('window_days'))))}d</td>"
+            f"<td>{_format_mini_value_html(row.get('previous_meta_spend_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('current_meta_spend_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_meta_spend_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_new_customers_per_day'), kind='number', decimals=2)}</td>"
+            f"<td>{_format_mini_value_html(row.get('marginal_cac'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('incremental_company_profit_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('ltv_adjusted_profit_90d_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('ltv_adjusted_profit_180d_per_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('current_sample_entry_share_pct'), kind='percent', decimals=1)}</td>"
+            f"<td><span class=\"delta {escape(str(row.get('verdict_tone') or 'neutral'))}\">{escape(str(row.get('verdict') or '-'))}</span></td>"
+            "</tr>"
+        )
+        for row in meta_profit_recent_rows
+    ) or '<tr><td colspan="11"><span class="lang-en">No recent scale windows available.</span><span class="lang-sk hidden">Nie su dostupne posledne scale okna.</span></td></tr>'
+
+    meta_profit_ltv_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{int(round(_num(row.get('window_days'))))}d</td>"
+            f"<td>{int(round(_num(row.get('mature_customers'))))}</td>"
+            f"<td>{_format_mini_value_html(row.get('first_contribution_per_customer'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('downstream_contribution_per_customer'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('contribution_ltv_per_customer'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('safe_cac'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('repeat_pct'), kind='percent', decimals=1)}</td>"
+            "</tr>"
+        )
+        for row in meta_profit_ltv_rows
+    ) or '<tr><td colspan="7"><span class="lang-en">No mature contribution LTV curve available.</span><span class="lang-sk hidden">Zrela contribution LTV krivka nie je dostupna.</span></td></tr>'
+
+    meta_profit_guardrail_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td><strong>{escape(str(row.get('band') or '-'))}</strong></td>"
+            f"<td>{_format_mini_value_html(row.get('marginal_cac_from'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('marginal_cac_to'), kind='currency')}</td>"
+            f"<td>{escape(str(row.get('action') or '-'))}</td>"
+            "</tr>"
+        )
+        for row in meta_profit_guardrail_rows
+    ) or '<tr><td colspan="4"><span class="lang-en">No CAC guardrails available.</span><span class="lang-sk hidden">CAC guardrails nie su dostupne.</span></td></tr>'
+
+    meta_profit_spend_tier_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('spend_range') or '-'))}</td>"
+            f"<td>{int(round(_num(row.get('days'))))}</td>"
+            f"<td>{_format_mini_value_html(row.get('avg_meta_spend'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('avg_company_profit'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('median_company_profit'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('smoothed_company_profit_lcb80'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('cm3_win_rate_pct'), kind='percent', decimals=1)}</td>"
+            f"<td>{_format_mini_value_html(row.get('new_customer_cac_proxy'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('sample_entry_share_pct'), kind='percent', decimals=1)}</td>"
+            f"<td>{'<span class=\"delta positive\">YES</span>' if row.get('decision_eligible') else '<span class=\"delta neutral\">NO</span>'}</td>"
+            "</tr>"
+        )
+        for row in meta_profit_spend_tier_rows
+    ) or '<tr><td colspan="10"><span class="lang-en">No stable Meta spend tiers available.</span><span class="lang-sk hidden">Stabilne Meta spend pasma nie su dostupne.</span></td></tr>'
+
+    meta_profit_quality_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('bucket_label') or '-'))}</td>"
+            f"<td>{int(round(_num(row.get('acquisition_days'))))}</td>"
+            f"<td>{int(round(_num(row.get('new_customers'))))}</td>"
+            f"<td>{_format_mini_value_html(row.get('avg_meta_spend_on_acquisition_day'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('sample_entry_share_pct'), kind='percent', decimals=1)}</td>"
+            f"<td>{_format_mini_value_html(row.get('sample_6x10_share_pct'), kind='percent', decimals=1)}</td>"
+            f"<td>{_format_mini_value_html(row.get('sample_3x10_share_pct'), kind='percent', decimals=1)}</td>"
+            f"<td>{int(round(_num(row.get('mature_90d_customers'))))}</td>"
+            f"<td>{_format_mini_value_html(row.get('contribution_ltv_90d_per_customer'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('repeat_90d_pct'), kind='percent', decimals=1)}</td>"
+            f"<td>{_format_mini_value_html(row.get('contribution_ltv_180d_per_customer'), kind='currency')}</td>"
+            f"<td>{escape(str(row.get('confidence') or '-')).upper()}</td>"
+            "</tr>"
+        )
+        for row in meta_profit_quality_rows
+    ) or '<tr><td colspan="12"><span class="lang-en">No acquisition-day quality cohorts available.</span><span class="lang-sk hidden">Kohorty kvality podla akvizicneho dna nie su dostupne.</span></td></tr>'
+
+    meta_profit_sample_rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{escape(str(row.get('item_name') or '-'))}</td>"
+            f"<td>{int(round(_num(row.get('entry_customers'))))}</td>"
+            f"<td>{_format_mini_value_html(row.get('direct_contribution_per_customer'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('fullsize_60d_pct'), kind='percent', decimals=1)}</td>"
+            f"<td>{int(round(_num(row.get('mature_90d_customers'))))}</td>"
+            f"<td>{_format_mini_value_html(row.get('contribution_ltv_90d_per_customer'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('downstream_contribution_90d_per_customer'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('safe_cac_90d'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('current_marginal_cac'), kind='currency')}</td>"
+            f"<td>{_format_mini_value_html(row.get('contribution_ltv_180d_per_customer'), kind='currency')}</td>"
+            f"<td><span class=\"delta {escape(str(row.get('paid_tone') or 'neutral'))}\">{escape(str(row.get('paid_action') or '-'))}</span></td>"
+            f"<td>{escape(str(row.get('shop_action') or '-'))}</td>"
+            "</tr>"
+        )
+        for row in meta_profit_sample_rows
+    ) or '<tr><td colspan="12"><span class="lang-en">No sample-product profit decisions available.</span><span class="lang-sk hidden">Produktove profit rozhodnutia vzoriek nie su dostupne.</span></td></tr>'
+
+    meta_profit_limitations = meta_profit_methodology.get("known_limitations") or []
+    meta_profit_limitations_html = "".join(
+        f"<li>{escape(str(item))}</li>" for item in meta_profit_limitations
+    )
+    meta_profit_scaling_section_html = ""
+    if project_key == "vevo" and meta_profit_scaling_summary:
+        meta_action = escape(str(meta_profit_scaling_summary.get("account_action") or "N/A"))
+        meta_action_tone = escape(str(meta_profit_scaling_summary.get("account_action_tone") or "neutral"))
+        meta_action_reason_sk = escape(str(meta_profit_scaling_summary.get("account_action_reason_sk") or ""))
+        meta_core_low = meta_profit_scaling_summary.get("recommended_core_spend_low")
+        meta_core_high = meta_profit_scaling_summary.get("recommended_core_spend_high")
+        meta_core_range = (
+            f"&euro;{_num(meta_core_low):,.0f}-{_num(meta_core_high):,.0f}/day"
+            if meta_core_low is not None and meta_core_high is not None
+            else "N/A"
+        )
+        meta_profit_scaling_section_html = f"""
+                    <div class="panel" id="meta-profit-scaling" style="margin-bottom:18px;">
+                        <div class="card-head">
+                            <div>
+                                <h3><span class="lang-en">Meta profit scaling system</span><span class="lang-sk hidden">System profitoveho skalovania Meta</span></h3>
+                                <p><span class="lang-en">Optimizes nominal euro profit, not maximum ROAS. Mature contribution LTV, recent marginal CAC and observed company profit are kept separate.</span><span class="lang-sk hidden">Optimalizuje nominalny zisk v eurach, nie maximalne ROAS. Oddeluje zrele contribution LTV, posledny marginalny CAC a pozorovany firemny zisk.</span></p>
+                            </div>
+                        </div>
+                        <div class="library-tile-grid">
+                            <div class="library-tile tone-{meta_action_tone}"><small><span class="lang-en">Account action</span><span class="lang-sk hidden">Akcia pre ucet</span></small><div class="library-tile-value">{meta_action}</div><div class="library-note"><span class="lang-en">Automated profit-first verdict from the latest scale step.</span><span class="lang-sk hidden">{meta_action_reason_sk}</span></div></div>
+                            <div class="library-tile tone-neutral"><small><span class="lang-en">Current Meta / day (7d)</span><span class="lang-sk hidden">Aktualna Meta / den (7d)</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('current_meta_spend_per_day_7d'), kind='currency')}</div></div>
+                            <div class="library-tile tone-positive"><small><span class="lang-en">Robust core corridor</span><span class="lang-sk hidden">Robustny core koridor</span></small><div class="library-tile-value">{meta_core_range}</div><div class="library-note"><span class="lang-en">Tested ceiling {_format_library_tile_value(meta_profit_scaling_summary.get('tested_scale_ceiling'), 'currency')}/day</span><span class="lang-sk hidden">Testovany strop {_format_library_tile_value(meta_profit_scaling_summary.get('tested_scale_ceiling'), 'currency')}/den</span></div></div>
+                            <div class="library-tile tone-neutral"><small><span class="lang-en">Latest marginal CAC</span><span class="lang-sk hidden">Posledny marginalny CAC</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('latest_7d_marginal_cac'), kind='currency')}</div></div>
+                            <div class="library-tile tone-positive"><small><span class="lang-en">Safe CAC 90d</span><span class="lang-sk hidden">Bezpecny CAC 90d</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('safe_cac_90d'), kind='currency')}</div><div class="library-note">{_num(meta_profit_scaling_summary.get('safety_buffer_pct')):.0f}% safety buffer</div></div>
+                            <div class="library-tile tone-neutral"><small><span class="lang-en">Absolute CAC ceiling 180d</span><span class="lang-sk hidden">Absolutny CAC strop 180d</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('hard_cac_180d'), kind='currency')}</div></div>
+                            <div class="library-tile tone-{_profit_status_class(meta_profit_scaling_summary.get('latest_7d_immediate_profit_delta_per_day'))}"><small><span class="lang-en">Latest immediate profit delta / day</span><span class="lang-sk hidden">Posledna okamzita zmena zisku / den</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('latest_7d_immediate_profit_delta_per_day'), kind='currency')}</div></div>
+                            <div class="library-tile tone-{_profit_status_class(meta_profit_scaling_summary.get('latest_7d_ltv90_profit_delta_per_day'))}"><small><span class="lang-en">Latest 90d LTV profit delta / day</span><span class="lang-sk hidden">Posledna 90d LTV zmena zisku / den</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('latest_7d_ltv90_profit_delta_per_day'), kind='currency')}</div></div>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-bottom:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Recent scale-step audit</span><span class="lang-sk hidden">Audit poslednych scale krokov</span></h3><p><span class="lang-en">Current 7/14/28 days against the immediately preceding equal weekday mix. The LTV columns add only downstream contribution, avoiding first-order double counting.</span><span class="lang-sk hidden">Aktualnych 7/14/28 dni proti bezprostredne predchadzajucemu rovnakemu mixu dni. LTV pridava iba downstream contribution bez dvojiteho zapocitania prvej objednavky.</span></p></div></div>
+                        <table><thead><tr><th>Window</th><th>Prev Meta/day</th><th>Now Meta/day</th><th>Delta Meta/day</th><th>Delta new/day</th><th>mCAC</th><th>Immediate profit delta/day</th><th>90d LTV profit delta/day</th><th>180d LTV profit delta/day</th><th>Sample share</th><th>Verdict</th></tr></thead><tbody>{meta_profit_recent_rows_html}</tbody></table>
+                    </div>
+                    <div class="grid-2" style="margin-bottom:18px;">
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Mature contribution LTV curve</span><span class="lang-sk hidden">Zrela contribution LTV krivka</span></h3><p><span class="lang-en">Only customers fully observed through the horizon are included.</span><span class="lang-sk hidden">Zahrnuti su iba zakaznici plne odsledovani cez cele okno.</span></p></div></div>
+                            <table><thead><tr><th>Window</th><th>Mature</th><th>First contribution</th><th>Downstream</th><th>Total contribution LTV</th><th>Safe CAC</th><th>Repeat</th></tr></thead><tbody>{meta_profit_ltv_rows_html}</tbody></table>
+                        </div>
+                        <div class="panel table-card">
+                            <div class="card-head"><div><h3><span class="lang-en">Marginal CAC guardrails</span><span class="lang-sk hidden">Guardrails marginalneho CAC</span></h3><p><span class="lang-en">ROAS may fall while euro profit rises; these bands decide from contribution and payback instead.</span><span class="lang-sk hidden">ROAS moze klesat, kym eurovy zisk rastie; pasma preto rozhoduju z contribution a paybacku.</span></p></div></div>
+                            <table><thead><tr><th>Band</th><th>mCAC from</th><th>mCAC to</th><th>Action</th></tr></thead><tbody>{meta_profit_guardrail_rows_html}</tbody></table>
+                        </div>
+                    </div>
+                    <div class="panel table-card" style="margin-bottom:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Robust Meta spend tiers</span><span class="lang-sk hidden">Robustne pasma Meta spendu</span></h3><p><span class="lang-en">A tier is decision-eligible only with enough days, weekday coverage and a positive smoothed lower profit bound. This blocks one-day outliers from becoming the recommendation.</span><span class="lang-sk hidden">Pasmo je pouzitelne iba s dostatkom dni, pokrytim dni v tyzdni a kladnou vyhladenou spodnou hranicou zisku. Jednodnove outliery tak nemozu vyhrat.</span></p></div></div>
+                        <table><thead><tr><th>Meta range</th><th>Days</th><th>Avg Meta</th><th>Avg CM3</th><th>Median CM3</th><th>Smoothed LCB80</th><th>CM3 win rate</th><th>New-customer CAC proxy</th><th>Sample share</th><th>Eligible</th></tr></thead><tbody>{meta_profit_spend_tier_rows_html}</tbody></table>
+                    </div>
+                    <div class="panel table-card" style="margin-bottom:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Did high-spend days acquire better future customers?</span><span class="lang-sk hidden">Priniesli high-spend dni kvalitnejsich zakaznikov do buducna?</span></h3><p><span class="lang-en">Maturity-censored customer contribution by first-order-day Meta spend. This is a quality proxy, not click-level attribution.</span><span class="lang-sk hidden">Contribution zakaznika s kontrolou zrelosti podla Meta spendu v den prvej objednavky. Je to quality proxy, nie click-level atribucia.</span></p></div></div>
+                        <table><thead><tr><th>Acquisition-day tier</th><th>Days</th><th>New</th><th>Avg Meta</th><th>Sample share</th><th>6x share</th><th>3x share</th><th>Mature 90d</th><th>Contribution LTV 90d</th><th>Repeat 90d</th><th>Contribution LTV 180d</th><th>Confidence</th></tr></thead><tbody>{meta_profit_quality_rows_html}</tbody></table>
+                    </div>
+                    <div class="panel table-card" style="margin-bottom:18px;">
+                        <div class="card-head"><div><h3><span class="lang-en">Sample-product paid eligibility</span><span class="lang-sk hidden">Paid eligibility vzorkovych produktov</span></h3><p><span class="lang-en">Paid acquisition and shop availability are separate decisions. Safe CAC uses 90d contribution LTV after the configured safety buffer.</span><span class="lang-sk hidden">Paid akvizicia a dostupnost na e-shope su dve rozne rozhodnutia. Safe CAC pouziva 90d contribution LTV po bezpecnostnej rezerve.</span></p></div></div>
+                        <table><thead><tr><th>Sample product</th><th>Customers</th><th>Direct contribution</th><th>Full-size 60d</th><th>Mature 90d</th><th>Contribution LTV 90d</th><th>Downstream 90d</th><th>Safe CAC 90d</th><th>Current mCAC</th><th>LTV 180d</th><th>Paid action</th><th>Shop action</th></tr></thead><tbody>{meta_profit_sample_rows_html}</tbody></table>
+                    </div>
+                    <div class="panel" style="margin-bottom:18px;padding:18px 20px;">
+                        <strong><span class="lang-en">Decision limitations</span><span class="lang-sk hidden">Obmedzenia rozhodnutia</span></strong>
+                        <ul class="warning-list">{meta_profit_limitations_html}</ul>
+                    </div>
+        """
 
 
     basket_rows_html = "".join(
@@ -4492,6 +4814,7 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">Best lag</span><span class="lang-sk hidden">Najlepsi lag</span></small><strong>{escape(str((cost_per_order or {}).get("best_attribution_lag") or "N/A"))}</strong></div>
                         </div>
                     </div>
+                    {meta_profit_scaling_section_html}
                     <div class="grid-2">
                         <div class="panel chart-card">
                             <div class="card-head"><div><h3><span class="lang-en">Daily spend, clicks and impressions</span><span class="lang-sk hidden">Denný spend, kliky a impresie</span></h3><p><span class="lang-en">Core Facebook delivery metrics in time.</span><span class="lang-sk hidden">Hlavne Facebook delivery metriky v case.</span></p></div></div>
@@ -4520,7 +4843,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Spend bucket effectiveness</span><span class="lang-sk hidden">Efektivita spend bucketov</span></h3><p><span class="lang-en">Average output by spend range.</span><span class="lang-sk hidden">Priemerny vystup podla spend rozsahu.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk s fixami</span></th><th><span class="lang-en">CM3 margin</span><span class="lang-sk hidden">CM3 marza</span></th><th><span class="lang-en">Returning rev. share</span><span class="lang-sk hidden">Podiel vracajucich sa trz.</span></th><th><span class="lang-en">AOV</span><span class="lang-sk hidden">AOV</span></th><th>ROAS</th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Days</span><span class="lang-sk hidden">Dni</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Avg profit incl. fixed</span><span class="lang-sk hidden">Priem. zisk s fixami</span></th><th><span class="lang-en">Median profit</span><span class="lang-sk hidden">Median zisku</span></th><th><span class="lang-en">CM3 win rate</span><span class="lang-sk hidden">CM3 uspesnost</span></th><th><span class="lang-en">CM3 margin</span><span class="lang-sk hidden">CM3 marza</span></th><th><span class="lang-en">Returning rev. share</span><span class="lang-sk hidden">Podiel vracajucich sa trz.</span></th><th><span class="lang-en">AOV</span><span class="lang-sk hidden">AOV</span></th><th>ROAS</th><th><span class="lang-en">Eligible</span><span class="lang-sk hidden">Pouzitelne</span></th></tr></thead>
                                 <tbody>{spend_effectiveness_rows_html}</tbody>
                             </table>
                         </div>

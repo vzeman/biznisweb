@@ -3475,6 +3475,234 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
             self.assertIsNone(exporter.load_from_cache(order_date))
 
+    def test_vevo_sample_growth_patterns_include_classic_sada_vzoriek_products(self) -> None:
+        exporter = make_exporter("vevo")
+        patterns = exporter._vevo_growth_config()["sample_entry_patterns"]
+
+        self.assertTrue(exporter._matches_patterns("Sada vzoriek Vevo 6 x 10ml", patterns))
+        self.assertTrue(exporter._matches_patterns("Sada vzoriek Vevo 3 x 10ml", patterns))
+
+    def test_acquisition_family_ltv_uses_mature_denominator_and_keeps_first_order_values(self) -> None:
+        exporter = make_exporter("vevo")
+        rows = [
+            analytics_item_row(
+                "OLD",
+                "old@example.com",
+                "2026-01-01",
+                revenue=100.0,
+                fb_spend=20.0,
+            ),
+            analytics_item_row(
+                "RECENT",
+                "recent@example.com",
+                "2026-04-15",
+                revenue=100.0,
+                fb_spend=20.0,
+            ),
+        ]
+        for row in rows:
+            row["order_revenue_net"] = row["order_total"]
+            row["item_label"] = "Parfum do prania Test (500ml)"
+            row["product_sku"] = "FULL-500"
+        frame = pd.DataFrame(rows)
+        orders_df, item_df, revenue_col = exporter._build_growth_order_item_frames(frame)
+        first_order_map = (
+            orders_df.sort_values(["customer_email", "purchase_datetime"])
+            .groupby("customer_email")
+            .first()[["purchase_datetime"]]
+            .rename(columns={"purchase_datetime": "first_purchase_datetime"})
+        )
+        customer_orders = orders_df.merge(
+            first_order_map,
+            left_on="customer_email",
+            right_index=True,
+            how="left",
+        )
+        customer_orders["days_since_first"] = (
+            customer_orders["purchase_datetime"] - customer_orders["first_purchase_datetime"]
+        ).dt.days
+
+        result = exporter.analyze_acquisition_source_product_family_cube(
+            orders_df=orders_df,
+            item_df=item_df,
+            customer_orders=customer_orders,
+            revenue_col=revenue_col,
+        )
+
+        family = result["family_rows"].loc[
+            result["family_rows"]["product_family_key"] == "fullsize_500"
+        ].iloc[0]
+        old_contribution = float(
+            orders_df.loc[orders_df["order_num"] == "OLD", "pre_ad_contribution"].iloc[0]
+        )
+        self.assertEqual(2, int(family["new_customers"]))
+        self.assertEqual(1, int(family["mature_90d_customers"]))
+        self.assertAlmostEqual(200.0, float(family["first_order_revenue"]), places=2)
+        self.assertAlmostEqual(old_contribution, float(family["contribution_ltv_90d"]), places=2)
+        self.assertAlmostEqual(old_contribution, float(family["contribution_ltv_90d_per_customer"]), places=2)
+
+    def test_meta_profit_scaling_separates_paid_sample_action_from_shop_availability(self) -> None:
+        exporter = make_exporter("vevo")
+        rows = []
+        start = pd.Timestamp("2025-01-01")
+
+        def add_order(
+            order_num: str,
+            customer_email: str,
+            purchase_date: pd.Timestamp,
+            first_purchase_date: pd.Timestamp,
+            *,
+            label: str,
+            sku: str,
+            revenue: float,
+            expense: float,
+            fb_spend: float,
+        ) -> None:
+            rows.append(
+                {
+                    "order_num": order_num,
+                    "customer_email": customer_email,
+                    "purchase_date": purchase_date,
+                    "customer_first_purchase_date": first_purchase_date,
+                    "order_total": revenue,
+                    "order_revenue_net": revenue,
+                    "total_items_in_order": 1,
+                    "fb_ads_daily_spend": fb_spend,
+                    "google_ads_daily_spend": 0.0,
+                    "total_expense": expense,
+                    "product_sku": sku,
+                    "item_label": label,
+                    "item_quantity": 1,
+                    "item_total_without_tax": revenue,
+                    "item_total_with_tax": revenue,
+                    "item_unit_price": revenue,
+                    "item_line_sum_original": revenue,
+                    "item_line_sum_with_tax_original": revenue,
+                    "item_unit_price_original": revenue,
+                }
+            )
+
+        for index in range(220):
+            purchase_date = start + pd.Timedelta(days=index)
+            customer = f"meta-{index}@example.com"
+            is_six_pack = index % 2 == 0
+            add_order(
+                f"FIRST-{index}",
+                customer,
+                purchase_date,
+                purchase_date,
+                label="Sada vzoriek Vevo 6 x 10ml" if is_six_pack else "Sada vzoriek Vevo 3 x 10ml",
+                sku="SAMPLE-6" if is_six_pack else "SAMPLE-3",
+                revenue=15.0 if is_six_pack else 6.0,
+                expense=2.0,
+                fb_spend=20.0,
+            )
+            if is_six_pack and index < 170:
+                add_order(
+                    f"REPEAT-{index}",
+                    customer,
+                    purchase_date + pd.Timedelta(days=45),
+                    purchase_date,
+                    label="Parfum do prania Test (500ml)",
+                    sku="FULL-500",
+                    revenue=35.0,
+                    expense=8.0,
+                    fb_spend=20.0,
+                )
+
+        frame = pd.DataFrame(rows)
+        latest_date = frame["purchase_date"].max().normalize()
+        daily = pd.DataFrame({"date": pd.date_range(frame["purchase_date"].min(), latest_date, freq="D")})
+        daily["orders"] = 1
+        daily["revenue"] = 20.0
+        daily["fb_spend"] = 20.0
+        daily["google_spend"] = 0.0
+        daily["total_ad_spend"] = daily["fb_spend"]
+        daily["pre_ad_contribution"] = 35.0
+        daily["profit_without_fixed"] = 15.0
+        daily["profit_with_fixed"] = 10.0
+        daily["new_customers"] = 1
+        daily["returning_customers"] = 0
+        current_mask = daily["date"] > latest_date - pd.Timedelta(days=7)
+        previous_mask = (daily["date"] > latest_date - pd.Timedelta(days=14)) & (~current_mask)
+        daily.loc[previous_mask, ["fb_spend", "total_ad_spend", "new_customers", "profit_with_fixed"]] = [
+            10.0,
+            10.0,
+            1.0,
+            30.0,
+        ]
+        daily.loc[current_mask, ["fb_spend", "total_ad_spend", "new_customers", "profit_with_fixed"]] = [
+            50.0,
+            50.0,
+            5.0,
+            20.0,
+        ]
+
+        result = exporter.analyze_meta_profit_scaling(
+            frame,
+            ads_effectiveness={"daily_data": daily},
+            sample_funnel_analysis={"summary": {"fullsize_any_60d_pct": 10.0}},
+        )
+
+        recent_7d = result["recent_window_rows"].loc[
+            result["recent_window_rows"]["window_days"] == 7
+        ].iloc[0]
+        self.assertAlmostEqual(10.0, float(recent_7d["marginal_cac"]), places=2)
+        self.assertGreater(
+            float(recent_7d["ltv_adjusted_profit_90d_per_day"]),
+            float(recent_7d["incremental_company_profit_per_day"]),
+        )
+
+        sample_rows = result["sample_product_rows"].set_index("item_sku")
+        self.assertEqual("CUT_PAID", sample_rows.loc["SAMPLE-3", "paid_action"])
+        self.assertNotEqual("CUT_PAID", sample_rows.loc["SAMPLE-6", "paid_action"])
+        self.assertEqual("KEEP_ORGANIC", sample_rows.loc["SAMPLE-3", "shop_action"])
+        self.assertEqual("KEEP_ORGANIC", sample_rows.loc["SAMPLE-6", "shop_action"])
+
+    def test_best_spend_range_ignores_one_day_profit_outlier(self) -> None:
+        exporter = make_exporter("vevo")
+        dates = pd.date_range("2026-01-01", periods=31, freq="D")
+        export_rows = []
+        daily_rows = []
+        for index, purchase_date in enumerate(dates):
+            outlier = index == len(dates) - 1
+            spend = 205.0 if outlier else 55.0
+            company_profit = 250.0 if outlier else 30.0
+            export_rows.append(
+                analytics_item_row(
+                    f"ORDER-{index}",
+                    f"customer-{index}@example.com",
+                    purchase_date.strftime("%Y-%m-%d"),
+                    revenue=100.0,
+                    fb_spend=spend,
+                )
+            )
+            daily_rows.append(
+                {
+                    "date": purchase_date,
+                    "unique_orders": 1,
+                    "total_revenue": 100.0,
+                    "fb_ads_spend": spend,
+                    "google_ads_spend": 0.0,
+                    "pre_ad_contribution_profit": company_profit + spend + 70.0,
+                    "contribution_profit": company_profit + 70.0,
+                    "net_profit": company_profit,
+                    "total_items": 1,
+                }
+            )
+
+        result = exporter.analyze_ads_effectiveness(
+            pd.DataFrame(export_rows),
+            date_agg=pd.DataFrame(daily_rows),
+            financial_metrics={"total_ad_spend": 1855.0, "break_even_cac": 100.0},
+        )
+
+        outlier_row = result["spend_effectiveness"].loc[
+            result["spend_effectiveness"]["spend_range"] == "200-210EUR"
+        ].iloc[0]
+        self.assertFalse(bool(outlier_row["decision_eligible"]))
+        self.assertEqual("50-60EUR", result["best_cm3_range"])
+
 
 if __name__ == "__main__":
     unittest.main()
