@@ -1,0 +1,646 @@
+name: Deploy VEVO GrowthBook Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      activate_route:
+        description: Enable POST /v1/events only after the localhost host gate passes
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-preview-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: "919341186960"
+  STACK_NAME: vevo-growthbook-preview
+  ECR_REPOSITORY: vevo-growthbook-collector
+  SERVICE_NAME: vevo-growthbook-collector-preview
+  SOURCE_SCHEDULE: vevo-daily-report-email
+  RUNTIME_PATH: /app
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy-preview:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate code and infrastructure contract
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install boto3==1.42.63 cfn-lint==1.55.1
+          python -m unittest \
+            tests.test_growthbook_collector \
+            tests.test_growthbook_collector_server \
+            tests.test_growthbook_changeset \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          cfn-lint infra/vevo-growthbook/template.yaml
+          docker build -f growthbook_collector/Dockerfile -t vevo-growthbook-collector:preflight .
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            -e AWS_ACCESS_KEY_ID=preflight-placeholder \
+            -e AWS_SECRET_ACCESS_KEY=preflight-placeholder \
+            -e AWS_EC2_METADATA_DISABLED=true \
+            -e AWS_REGION=eu-central-1 \
+            -e GROWTHBOOK_ALLOWED_ORIGINS=https://www.vevo.sk \
+            -e GROWTHBOOK_COLLECTOR_VERSION="git-${GITHUB_SHA}" \
+            -e GROWTHBOOK_ENVIRONMENT=preview \
+            -e GROWTHBOOK_EVENT_BUCKET=preflight-placeholder \
+            -e GROWTHBOOK_EXPERIMENT_REGISTRY_PATH=/app/growthbook_collector/experiments.json \
+            vevo-growthbook-collector:preflight \
+            /bin/sh /app/growthbook_collector/host_gate.sh
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm account, region, service, path, and network before candidate deploy
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > source-schedule.json
+          python - <<'PY' > resolved-network.env
+          import json
+          import os
+
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          if schedule.get("Name") != os.environ["SOURCE_SCHEDULE"]:
+              raise SystemExit("source schedule identity drift")
+          if schedule.get("State") != "ENABLED":
+              raise SystemExit("source schedule is not enabled")
+          cluster_arn = schedule["Target"]["Arn"]
+          expected_prefix = (
+              f"arn:aws:ecs:{os.environ['AWS_REGION']}:"
+              f"{os.environ['EXPECTED_ACCOUNT_ID']}:cluster/"
+          )
+          if not cluster_arn.startswith(expected_prefix):
+              raise SystemExit(f"source cluster is outside the approved account/region: {cluster_arn}")
+          network = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
+          subnets = network.get("Subnets") or network.get("subnets") or []
+          assign_public_ip = network.get("AssignPublicIp") or network.get("assignPublicIp") or "DISABLED"
+          if len(subnets) < 2 or len(set(subnets)) != len(subnets):
+              raise SystemExit("source schedule must expose at least two distinct subnets")
+          if assign_public_ip not in {"DISABLED", "ENABLED"}:
+              raise SystemExit("source schedule has an invalid AssignPublicIp value")
+          print(f"SERVICE_SUBNET_IDS={','.join(subnets)}")
+          print(f"TASK_ASSIGN_PUBLIC_IP={assign_public_ip}")
+          print(f"SOURCE_CLUSTER_ARN={cluster_arn}")
+          PY
+          cat resolved-network.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          source resolved-network.env
+          IFS=',' read -r -a SUBNET_ARRAY <<< "${SERVICE_SUBNET_IDS}"
+          aws ec2 describe-subnets \
+            --subnet-ids "${SUBNET_ARRAY[@]}" \
+            --region "${AWS_REGION}" > resolved-subnets.json
+          python - <<'PY' > resolved-vpc.env
+          import json
+
+          rows = json.load(open("resolved-subnets.json", encoding="utf-8"))["Subnets"]
+          vpcs = {row["VpcId"] for row in rows}
+          azs = {row["AvailabilityZone"] for row in rows}
+          if len(vpcs) != 1:
+              raise SystemExit(f"subnets cross VPCs: {sorted(vpcs)}")
+          if len(azs) < 2:
+              raise SystemExit(f"collector requires at least two AZs: {sorted(azs)}")
+          print(f"VPC_ID={next(iter(vpcs))}")
+          print(f"SERVICE_AZS={','.join(sorted(azs))}")
+          PY
+          cat resolved-vpc.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          source resolved-vpc.env
+          {
+            echo "AWS account=${ACCOUNT_ID}"
+            echo "AWS region=${AWS_REGION}"
+            echo "stack=${STACK_NAME}"
+            echo "instance-id=N/A (ECS/Fargate candidate; task ID and IP resolved before route activation)"
+            echo "service=${SERVICE_NAME}"
+            echo "runtime-path=${RUNTIME_PATH}"
+            echo "container=collector"
+            echo "endpoint-path=/v1/events"
+            echo "vpc=${VPC_ID}"
+            echo "subnets=${SERVICE_SUBNET_IDS}"
+            echo "availability-zones=${SERVICE_AZS}"
+            echo "assign-public-ip=${TASK_ASSIGN_PUBLIC_IP}"
+            echo "network-source-schedule=${SOURCE_SCHEDULE}"
+            echo "network-source-cluster=${SOURCE_CLUSTER_ARN}"
+            echo "git-commit=${GITHUB_SHA}"
+          } | tee hard-gate-predeploy.txt
+
+      - name: Build and publish immutable collector image
+        id: image
+        run: |
+          set -euo pipefail
+          if ! aws ecr describe-repositories \
+            --repository-names "${ECR_REPOSITORY}" \
+            --region "${AWS_REGION}" >/dev/null 2>&1; then
+            aws ecr create-repository \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-tag-mutability IMMUTABLE \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256 \
+              --region "${AWS_REGION}" >/dev/null
+          fi
+          aws ecr describe-repositories \
+            --repository-names "${ECR_REPOSITORY}" \
+            --region "${AWS_REGION}" > collector-repository.json
+          python - <<'PY'
+          import json
+          import os
+
+          repository = json.load(open("collector-repository.json", encoding="utf-8"))["repositories"][0]
+          expected_arn_prefix = (
+              f"arn:aws:ecr:{os.environ['AWS_REGION']}:"
+              f"{os.environ['EXPECTED_ACCOUNT_ID']}:repository/"
+          )
+          if repository.get("repositoryName") != os.environ["ECR_REPOSITORY"]:
+              raise SystemExit("collector ECR repository name drift")
+          if not repository.get("repositoryArn", "").startswith(expected_arn_prefix):
+              raise SystemExit("collector ECR repository account/region drift")
+          if repository.get("imageTagMutability") != "IMMUTABLE":
+              raise SystemExit("collector ECR repository must use immutable tags")
+          if repository.get("imageScanningConfiguration", {}).get("scanOnPush") is not True:
+              raise SystemExit("collector ECR repository must scan on push")
+          if repository.get("encryptionConfiguration", {}).get("encryptionType") != "AES256":
+              raise SystemExit("collector ECR repository encryption drift")
+          PY
+          REGISTRY="${EXPECTED_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          TAG="git-${GITHUB_SHA}"
+          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+          aws ecr get-login-password --region "${AWS_REGION}" | \
+            docker login --username AWS --password-stdin "${REGISTRY}"
+          if ! aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${TAG}" \
+            --region "${AWS_REGION}" >/dev/null 2>&1; then
+            docker build -f growthbook_collector/Dockerfile -t "${IMAGE_URI}" .
+            docker push "${IMAGE_URI}"
+          fi
+          IMAGE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${TAG}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text \
+            --region "${AWS_REGION}")"
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid ECR digest: ${IMAGE_DIGEST}" >&2
+            exit 1
+          fi
+          IMAGE_IDENTIFIER="${REGISTRY}/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+          echo "IMAGE_IDENTIFIER=${IMAGE_IDENTIFIER}" >> "${GITHUB_ENV}"
+          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> "${GITHUB_ENV}"
+          echo "image=${IMAGE_IDENTIFIER}" >> "${GITHUB_OUTPUT}"
+          echo "ECR_EXACT_IMAGE_OK:${TAG}:${IMAGE_DIGEST}"
+
+      - name: Prepare candidate stack parameters with public route disabled
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          values = {
+              "AllowedOrigin": "https://www.vevo.sk",
+              "CollectorImageUri": os.environ["IMAGE_IDENTIFIER"],
+              "CollectorVersion": f"git-{os.environ['GITHUB_SHA']}",
+              "CuratedRetentionDays": "400",
+              "Environment": "preview",
+              "PublicRouteEnabled": "false",
+              "QueryResultRetentionDays": "30",
+              "RawProjectionStartDate": "2026-08-20",
+              "RawRetentionDays": "180",
+              "ServiceSubnetIds": os.environ["SERVICE_SUBNET_IDS"],
+              "TaskAssignPublicIp": os.environ["TASK_ASSIGN_PUBLIC_IP"],
+              "VpcId": os.environ["VPC_ID"],
+          }
+          payload = [
+              {"ParameterKey": key, "ParameterValue": value}
+              for key, value in sorted(values.items())
+          ]
+          with open("candidate-parameters.json", "w", encoding="utf-8") as handle:
+              json.dump(payload, handle, separators=(",", ":"))
+          values["PublicRouteEnabled"] = "true"
+          activation = [
+              {"ParameterKey": key, "ParameterValue": value}
+              for key, value in sorted(values.items())
+          ]
+          with open("activation-parameters.json", "w", encoding="utf-8") as handle:
+              json.dump(activation, handle, separators=(",", ":"))
+          PY
+
+      - name: Create, validate, and execute route-disabled candidate change set
+        run: |
+          set -euo pipefail
+          if aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            CHANGE_TYPE=UPDATE
+            WAIT_TARGET=stack-update-complete
+          else
+            CHANGE_TYPE=CREATE
+            WAIT_TARGET=stack-create-complete
+          fi
+          CHANGE_SET="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --change-set-type "${CHANGE_TYPE}" \
+            --template-body file://infra/vevo-growthbook/template.yaml \
+            --parameters file://candidate-parameters.json \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --description "Route-disabled VEVO GrowthBook candidate ${GITHUB_SHA}" \
+            --region "${AWS_REGION}" >/dev/null
+          set +e
+          aws cloudformation wait change-set-create-complete \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          WAIT_CODE=$?
+          set -e
+          aws cloudformation describe-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --include-property-values \
+            --region "${AWS_REGION}" > candidate-change-set.json
+          if [[ "${WAIT_CODE}" -ne 0 ]]; then
+            STATUS_REASON="$(python -c 'import json; print(json.load(open("candidate-change-set.json"))["StatusReason"])')"
+            if [[ "${STATUS_REASON}" == *"didn't contain changes"* ]]; then
+              echo "CANDIDATE_CHANGESET_NO_CHANGES"
+              aws cloudformation delete-change-set \
+                --stack-name "${STACK_NAME}" \
+                --change-set-name "${CHANGE_SET}" \
+                --region "${AWS_REGION}"
+              exit 0
+            fi
+            cat candidate-change-set.json >&2
+            exit 1
+          fi
+          python scripts/validate_growthbook_changeset.py \
+            --change-set candidate-change-set.json \
+            --phase candidate
+          aws cloudformation execute-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          aws cloudformation wait "${WAIT_TARGET}" \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}"
+
+      - name: Resolve and verify route-disabled service identity
+        run: |
+          set -euo pipefail
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > deployed-stack.json
+          python - <<'PY' > stack-outputs.env
+          import json
+
+          stack = json.load(open("deployed-stack.json", encoding="utf-8"))["Stacks"][0]
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs") or []}
+          parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack.get("Parameters") or []}
+          required = {
+              "CollectorApiBaseUrl",
+              "CollectorClusterArn",
+              "CollectorContainerLogGroup",
+              "CollectorHostMarkerPath",
+              "CollectorServiceArn",
+              "CollectorServiceName",
+              "CollectorTaskDefinitionArn",
+              "EventBucketName",
+          }
+          missing = sorted(required - outputs.keys())
+          if missing:
+              raise SystemExit(f"stack outputs missing: {missing}")
+          if "CollectorEndpoint" in outputs:
+              raise SystemExit("public collector endpoint exists before host verification")
+          if parameters.get("PublicRouteEnabled") != "false":
+              raise SystemExit("candidate stack unexpectedly enabled its public route")
+          for key, value in sorted(outputs.items()):
+              print(f"{key.upper()}={value}")
+          PY
+          cat stack-outputs.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          set -a
+          source stack-outputs.env
+          set +a
+          if [[ "${COLLECTORSERVICENAME}" != "${SERVICE_NAME}" ]]; then
+            echo "Service name mismatch: ${COLLECTORSERVICENAME}" >&2
+            exit 1
+          fi
+          if [[ "${COLLECTORHOSTMARKERPATH}" != "http://127.0.0.1:8080/marker.json" ]]; then
+            echo "Host marker path mismatch: ${COLLECTORHOSTMARKERPATH}" >&2
+            exit 1
+          fi
+          aws ecs describe-services \
+            --cluster "${COLLECTORCLUSTERARN}" \
+            --services "${COLLECTORSERVICEARN}" \
+            --region "${AWS_REGION}" > collector-service.json
+          python - <<'PY' > candidate-network.json
+          import json
+          import os
+
+          service = json.load(open("collector-service.json", encoding="utf-8"))["services"][0]
+          if service["serviceName"] != os.environ["SERVICE_NAME"]:
+              raise SystemExit("deployed service name drift")
+          if service["taskDefinition"] != os.environ["COLLECTORTASKDEFINITIONARN"]:
+              raise SystemExit("deployed task definition drift")
+          if service["desiredCount"] != 1 or service["runningCount"] != 1:
+              raise SystemExit(f"collector service is not 1/1 healthy: {service['runningCount']}/{service['desiredCount']}")
+          print(json.dumps(service["networkConfiguration"], separators=(",", ":")))
+          PY
+          aws ecs describe-task-definition \
+            --task-definition "${COLLECTORTASKDEFINITIONARN}" \
+            --region "${AWS_REGION}" > collector-task-definition.json
+          python - <<'PY'
+          import json
+          import os
+
+          task = json.load(open("collector-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          containers = task["containerDefinitions"]
+          if len(containers) != 1 or containers[0]["name"] != "collector":
+              raise SystemExit("collector task must contain exactly one named container")
+          if containers[0]["image"] != os.environ["IMAGE_IDENTIFIER"]:
+              raise SystemExit("collector task is not pinned to the exact image digest")
+          if containers[0].get("readonlyRootFilesystem") is not True:
+              raise SystemExit("collector root filesystem is not read-only")
+          if containers[0].get("user") != "10001:10001":
+              raise SystemExit("collector does not run as the reviewed non-root user")
+          PY
+
+      - name: Run direct Fargate localhost host gate
+        run: |
+          set -euo pipefail
+          cat > host-gate-overrides.json <<'JSON'
+          {"containerOverrides":[{"name":"collector","command":["/bin/sh","/app/growthbook_collector/host_gate.sh"]}]}
+          JSON
+          HOST_GATE_TASK_ARN="$(aws ecs run-task \
+            --cluster "${COLLECTORCLUSTERARN}" \
+            --task-definition "${COLLECTORTASKDEFINITIONARN}" \
+            --launch-type FARGATE \
+            --network-configuration file://candidate-network.json \
+            --overrides file://host-gate-overrides.json \
+            --started-by "gb-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          if [[ -z "${HOST_GATE_TASK_ARN}" || "${HOST_GATE_TASK_ARN}" == "None" ]]; then
+            echo "Fargate host-gate task did not start." >&2
+            exit 1
+          fi
+          aws ecs wait tasks-stopped \
+            --cluster "${COLLECTORCLUSTERARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}"
+          aws ecs describe-tasks \
+            --cluster "${COLLECTORCLUSTERARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}" > host-gate-task.json
+          python - <<'PY' > host-gate.env
+          import json
+          import os
+
+          task = json.load(open("host-gate-task.json", encoding="utf-8"))["tasks"][0]
+          container = task["containers"][0]
+          if task["taskDefinitionArn"] != os.environ["COLLECTORTASKDEFINITIONARN"]:
+              raise SystemExit("host-gate task definition mismatch")
+          if container.get("exitCode") != 0:
+              raise SystemExit(f"host-gate container failed: {container.get('reason')} exit={container.get('exitCode')}")
+          if container.get("image") != os.environ["IMAGE_IDENTIFIER"]:
+              raise SystemExit("host-gate image URI mismatch")
+          if container.get("imageDigest") != os.environ["IMAGE_DIGEST"]:
+              raise SystemExit("host-gate image digest mismatch")
+          private_ips = []
+          for attachment in task.get("attachments") or []:
+              for detail in attachment.get("details") or []:
+                  if detail.get("name") == "privateIPv4Address" and detail.get("value"):
+                      private_ips.append(detail["value"])
+          if len(private_ips) != 1:
+              raise SystemExit(f"host-gate task private IP unresolved: {private_ips}")
+          task_id = task["taskArn"].rsplit("/", 1)[-1]
+          print(f"HOST_GATE_TASK_ARN={task['taskArn']}")
+          print(f"HOST_GATE_TASK_ID={task_id}")
+          print(f"HOST_GATE_PRIVATE_IP={private_ips[0]}")
+          print(f"HOST_GATE_LOG_STREAM=collector/collector/{task_id}")
+          PY
+          cat host-gate.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          source host-gate.env
+          for attempt in $(seq 1 12); do
+            aws logs get-log-events \
+              --log-group-name "${COLLECTORCONTAINERLOGGROUP}" \
+              --log-stream-name "${HOST_GATE_LOG_STREAM}" \
+              --start-from-head \
+              --region "${AWS_REGION}" \
+              --query 'events[].message' \
+              --output text > host-gate.log 2>/dev/null || true
+            if grep -q "COLLECTOR_LOCALHOST_HEALTH_OK:preview:git-${GITHUB_SHA}" host-gate.log && \
+               grep -q "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}" host-gate.log; then
+              break
+            fi
+            if [[ "${attempt}" == "12" ]]; then
+              cat host-gate.log >&2 || true
+              echo "Direct localhost marker was not observed." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          {
+            echo "instance-id=N/A (ECS/Fargate task)"
+            echo "private-ip=${HOST_GATE_PRIVATE_IP}"
+            echo "service=${SERVICE_NAME}"
+            echo "candidate-task=${HOST_GATE_TASK_ARN}"
+            echo "task-definition=${COLLECTORTASKDEFINITIONARN}"
+            echo "container=collector"
+            echo "runtime-path=${RUNTIME_PATH}"
+            echo "image=${IMAGE_IDENTIFIER}"
+            echo "health=http://127.0.0.1:8080/health"
+            echo "marker=http://127.0.0.1:8080/marker.json"
+          } | tee host-gate-verified.txt
+
+      - name: Verify the route-disabled service task and target health
+        run: |
+          set -euo pipefail
+          SERVICE_TASK_ARN="$(aws ecs list-tasks \
+            --cluster "${COLLECTORCLUSTERARN}" \
+            --service-name "${SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" \
+            --query 'taskArns[0]' \
+            --output text)"
+          aws ecs describe-tasks \
+            --cluster "${COLLECTORCLUSTERARN}" \
+            --tasks "${SERVICE_TASK_ARN}" \
+            --region "${AWS_REGION}" > service-task.json
+          aws elbv2 describe-target-health \
+            --target-group-arn "$(python -c 'import json; print(json.load(open("collector-service.json"))["services"][0]["loadBalancers"][0]["targetGroupArn"])')" \
+            --region "${AWS_REGION}" > target-health.json
+          python - <<'PY'
+          import json
+          import os
+
+          task = json.load(open("service-task.json", encoding="utf-8"))["tasks"][0]
+          container = task["containers"][0]
+          if task["taskDefinitionArn"] != os.environ["COLLECTORTASKDEFINITIONARN"]:
+              raise SystemExit("service task definition mismatch")
+          if container.get("imageDigest") != os.environ["IMAGE_DIGEST"]:
+              raise SystemExit("service task image digest mismatch")
+          health = json.load(open("target-health.json", encoding="utf-8"))["TargetHealthDescriptions"]
+          states = [row["TargetHealth"]["State"] for row in health]
+          if states != ["healthy"]:
+              raise SystemExit(f"collector target health mismatch: {states}")
+          print(f"COLLECTOR_SERVICE_TARGET_HEALTH_OK:{task['taskArn']}:{container['imageDigest']}")
+          PY
+
+      - name: Activate exact public route after host gate
+        if: ${{ inputs.activate_route }}
+        run: |
+          set -euo pipefail
+          CHANGE_SET="activate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --change-set-type UPDATE \
+            --template-body file://infra/vevo-growthbook/template.yaml \
+            --parameters file://activation-parameters.json \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --description "Enable VEVO GrowthBook route after localhost gate ${GITHUB_SHA}" \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          aws cloudformation describe-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --include-property-values \
+            --region "${AWS_REGION}" > activation-change-set.json
+          python scripts/validate_growthbook_changeset.py \
+            --change-set activation-change-set.json \
+            --phase activate
+          aws cloudformation execute-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          aws cloudformation wait stack-update-complete \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}"
+
+      - name: Verify public CORS, rejection, route isolation, and zero writes
+        if: ${{ inputs.activate_route }}
+        run: |
+          set -euo pipefail
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > activated-stack.json
+          COLLECTOR_ENDPOINT="$(python - <<'PY'
+          import json
+          stack = json.load(open("activated-stack.json", encoding="utf-8"))["Stacks"][0]
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack["Outputs"]}
+          print(outputs["CollectorEndpoint"])
+          PY
+          )"
+          aws s3api list-objects-v2 \
+            --bucket "${EVENTBUCKETNAME}" \
+            --prefix experiment-events/raw/ \
+            --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' \
+            --output json \
+            --region "${AWS_REGION}" > raw-objects-before.json
+          CORS_STATUS="$(curl -sS -D cors-headers.txt -o cors-body.txt -w '%{http_code}' \
+            -X OPTIONS "${COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://www.vevo.sk' \
+            -H 'Access-Control-Request-Method: POST')"
+          if [[ "${CORS_STATUS}" != "204" && "${CORS_STATUS}" != "200" ]]; then
+            cat cors-headers.txt cors-body.txt >&2
+            exit 1
+          fi
+          curl -sS -D rejected-headers.txt -o rejected-body.json \
+            -X POST "${COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://www.vevo.sk' \
+            -H 'Content-Type: application/json' \
+            --data '{}'
+          REJECTED_STATUS="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' rejected-headers.txt)"
+          if [[ "${REJECTED_STATUS}" != "400" ]]; then
+            cat rejected-headers.txt rejected-body.json >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          cors = Path("cors-headers.txt").read_text(encoding="utf-8").lower()
+          if "access-control-allow-origin: https://www.vevo.sk" not in cors:
+              raise SystemExit("exact CORS origin header missing")
+          rejected = json.loads(Path("rejected-body.json").read_text(encoding="utf-8"))
+          if rejected != {"accepted": False, "code": "field_set_mismatch"}:
+              raise SystemExit(f"unexpected rejection body: {rejected}")
+          PY
+          ATTACKER_STATUS="$(curl -sS -o attacker-body.json -w '%{http_code}' \
+            -X POST "${COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://attacker.example' \
+            -H 'Content-Type: application/json' \
+            --data '{}')"
+          if [[ "${ATTACKER_STATUS}" != "403" ]]; then
+            cat attacker-body.json >&2
+            exit 1
+          fi
+          for private_path in health marker.json; do
+            STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "${COLLECTORAPIBASEURL}/${private_path}")"
+            if [[ "${STATUS}" != "404" ]]; then
+              echo "Private path ${private_path} unexpectedly returned ${STATUS}" >&2
+              exit 1
+            fi
+          done
+          aws s3api list-objects-v2 \
+            --bucket "${EVENTBUCKETNAME}" \
+            --prefix experiment-events/raw/ \
+            --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' \
+            --output json \
+            --region "${AWS_REGION}" > raw-objects-after.json
+          if ! cmp -s raw-objects-before.json raw-objects-after.json; then
+            diff -u raw-objects-before.json raw-objects-after.json >&2 || true
+            echo "Rejected public probes changed the raw S3 object snapshot." >&2
+            exit 1
+          fi
+          echo "COLLECTOR_PUBLIC_REJECTION_NO_WRITE_OK:${COLLECTOR_ENDPOINT}"
+          echo "COLLECTOR_ENDPOINT=${COLLECTOR_ENDPOINT}" >> "${GITHUB_ENV}"
+
+      - name: Deployment summary
+        if: always()
+        env:
+          ACTIVATE_ROUTE: ${{ inputs.activate_route }}
+        run: |
+          {
+            echo "## VEVO GrowthBook Preview collector"
+            echo
+            echo "- Git commit: \`${GITHUB_SHA}\`"
+            echo "- AWS account/region: \`${EXPECTED_ACCOUNT_ID}\` / \`${AWS_REGION}\`"
+            echo "- Service: \`${SERVICE_NAME}\`"
+            echo "- Runtime path: \`${RUNTIME_PATH}\`"
+            echo "- Immutable image: \`${IMAGE_IDENTIFIER:-not-resolved}\`"
+            echo "- Host-gate task: \`${HOST_GATE_TASK_ID:-not-run}\`"
+            echo "- Host-gate private IP: \`${HOST_GATE_PRIVATE_IP:-not-resolved}\`"
+            echo "- Public route requested: \`${ACTIVATE_ROUTE}\`"
+            echo "- Collector endpoint: \`${COLLECTOR_ENDPOINT:-disabled}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

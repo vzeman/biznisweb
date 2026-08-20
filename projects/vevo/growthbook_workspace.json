@@ -1,0 +1,420 @@
+{
+  "schema_version": 1,
+  "state": "workspace_preview_initialized",
+  "workspace": {
+    "organization_name": "Vevo",
+    "organization_id": "org_19g6mmt1q79o1",
+    "project_name": "VEVO SK Web",
+    "project_id": "prj_2CeEJc6J9FwQFix9UhsnKr",
+    "project_public_id": "vevo-sk-web",
+    "region_preference": "EU",
+    "actual_region": null,
+    "region_status": "not_exposed_in_current_workspace_ui",
+    "environments": [
+      "staging",
+      "production"
+    ],
+    "environment_aliases": {
+      "preview": "staging"
+    },
+    "plan_type": "starter",
+    "production_allocation_percent": 0,
+    "subscription_or_trial_status": "starter_active_no_paid_upgrade_accepted"
+  },
+  "sdk_connection": {
+    "name": "VEVO SK Web Preview",
+    "status": "created_not_connected",
+    "environment": "staging",
+    "project": "VEVO SK Web",
+    "language": "javascript",
+    "sdk_version": "1.7.0",
+    "api_host": "https://cdn.growthbook.io",
+    "client_key_status": "created_not_committed_pending_runtime_config",
+    "include_draft_experiment_rules": true,
+    "include_feature_rule_ids": true,
+    "hide_feature_names": true,
+    "visual_editor_enabled": false,
+    "url_redirects_enabled": false,
+    "production_connection_created": false
+  },
+  "feature_flags": [
+    {
+      "key": "vevo-sk-aa-assignment",
+      "type": "string",
+      "default_value": "control",
+      "project": "VEVO SK Web",
+      "staging_enabled": true,
+      "production_enabled": false,
+      "live_rule_count": 0,
+      "draft_rule_experiment": "vevo-sk-aa-001"
+    },
+    {
+      "key": "vevo-sk-product-cta-color",
+      "type": "string",
+      "default_value": "control",
+      "project": "VEVO SK Web",
+      "staging_enabled": true,
+      "production_enabled": false,
+      "live_rule_count": 0,
+      "draft_rule_experiment": "vevo-sk-product-cta-color-001"
+    }
+  ],
+  "identifier": {
+    "type": "device_id",
+    "join_tables": []
+  },
+  "athena": {
+    "engine": "athena",
+    "event_tracker": "custom",
+    "aws_account_id": "919341186960",
+    "aws_region": "eu-central-1",
+    "default_catalog": "AwsDataCatalog",
+    "authentication": "dedicated_readonly_iam_user_access_key",
+    "credentials_status": "not_created",
+    "preview": {
+      "data_source_name": "VEVO Preview Experiment Facts",
+      "workgroup": "vevo-growthbook-readonly-preview",
+      "database": "vevo_growthbook_preview",
+      "s3_results_url": "from_preview_stack_output",
+      "status": "ready_for_route_disabled_candidate_deploy"
+    },
+    "production": {
+      "data_source_name": "VEVO Production Experiment Facts",
+      "workgroup": "vevo-growthbook-readonly-production",
+      "database": "vevo_growthbook_production",
+      "s3_results_url": "from_production_stack_output",
+      "status": "deferred_until_preview_passes"
+    },
+    "assignment_query": "projects/vevo/growthbook_sql/assignment.sql"
+  },
+  "fact_tables": [
+    {
+      "key": "vevo_device_outcomes_v1",
+      "name": "VEVO Device Outcomes v1",
+      "query": "projects/vevo/growthbook_sql/device_outcomes.sql",
+      "identifier": "device_id",
+      "timestamp_semantics": "first eligible exposure in UTC",
+      "outcome_windows_enforced_upstream": true
+    },
+    {
+      "key": "vevo_performance_vitals_v1",
+      "name": "VEVO Performance Vitals v1",
+      "query": "projects/vevo/growthbook_sql/performance_vitals.sql",
+      "identifier": "device_id",
+      "timestamp_semantics": "first accepted measurement per page load and vital in UTC",
+      "outcome_windows_enforced_upstream": true
+    }
+  ],
+  "metrics": [
+    {
+      "key": "vevo_add_to_cart_24h",
+      "name": "VEVO Add to cart within 24h",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "proportion",
+      "row_filters": [
+        {
+          "column": "add_to_cart_24h",
+          "operator": "=",
+          "value": 1
+        }
+      ],
+      "goal": "increase",
+      "growthbook_window": "none",
+      "contract_window_hours": 24,
+      "roles": {
+        "vevo-sk-aa-001": "diagnostic",
+        "vevo-sk-product-cta-color-001": "primary"
+      }
+    },
+    {
+      "key": "vevo_purchase_conversion_7d",
+      "name": "VEVO Purchase conversion within 7d",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "proportion",
+      "row_filters": [
+        {
+          "column": "purchase_converted",
+          "operator": "=",
+          "value": 1
+        }
+      ],
+      "goal": "increase",
+      "growthbook_window": "none",
+      "contract_window_days": 7,
+      "roles": {
+        "vevo-sk-aa-001": "diagnostic",
+        "vevo-sk-product-cta-color-001": "secondary"
+      }
+    },
+    {
+      "key": "vevo_revenue_per_exposed_device_7d",
+      "name": "VEVO Net revenue per exposed device within 7d",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "mean",
+      "aggregation": {
+        "type": "sum",
+        "column": "net_revenue_eur"
+      },
+      "number_format": "currency",
+      "currency": "EUR",
+      "goal": "increase",
+      "growthbook_window": "none",
+      "contract_window_days": 7,
+      "roles": {
+        "vevo-sk-aa-001": "diagnostic",
+        "vevo-sk-product-cta-color-001": "secondary"
+      }
+    },
+    {
+      "key": "vevo_cm1_per_exposed_device_7d",
+      "name": "VEVO CM1 per exposed device within 7d",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "mean",
+      "aggregation": {
+        "type": "sum",
+        "column": "cm1_eur"
+      },
+      "number_format": "currency",
+      "currency": "EUR",
+      "goal": "increase",
+      "growthbook_window": "none",
+      "contract_window_days": 7,
+      "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+      "roles": {
+        "vevo-sk-aa-001": "diagnostic",
+        "vevo-sk-product-cta-color-001": "business_guardrail"
+      }
+    },
+    {
+      "key": "vevo_average_order_value_7d",
+      "name": "VEVO Average order value within 7d",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "ratio",
+      "numerator": {
+        "aggregation": "sum",
+        "column": "net_revenue_eur"
+      },
+      "denominator": {
+        "aggregation": "sum",
+        "column": "joined_order_count"
+      },
+      "number_format": "currency",
+      "currency": "EUR",
+      "goal": "increase",
+      "growthbook_window": "none",
+      "contract_window_days": 7,
+      "roles": {
+        "vevo-sk-aa-001": "diagnostic",
+        "vevo-sk-product-cta-color-001": "diagnostic"
+      }
+    },
+    {
+      "key": "vevo_cancelled_order_rate_14d",
+      "name": "VEVO Cancelled order rate at 14d maturity",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "ratio",
+      "numerator": {
+        "aggregation": "sum",
+        "column": "cancelled_order_count"
+      },
+      "denominator": {
+        "aggregation": "sum",
+        "column": "joined_order_count"
+      },
+      "goal": "decrease",
+      "growthbook_window": "none",
+      "maturity_gate_days": 14,
+      "roles": {
+        "vevo-sk-aa-001": "diagnostic",
+        "vevo-sk-product-cta-color-001": "guardrail"
+      }
+    },
+    {
+      "key": "vevo_refunded_order_rate_14d",
+      "name": "VEVO Refunded order rate at 14d maturity",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "ratio",
+      "numerator": {
+        "aggregation": "sum",
+        "column": "refunded_order_count"
+      },
+      "denominator": {
+        "aggregation": "sum",
+        "column": "joined_order_count"
+      },
+      "goal": "decrease",
+      "growthbook_window": "none",
+      "maturity_gate_days": 14,
+      "roles": {
+        "vevo-sk-aa-001": "diagnostic",
+        "vevo-sk-product-cta-color-001": "guardrail"
+      }
+    },
+    {
+      "key": "vevo_client_error_device_rate_24h",
+      "name": "VEVO Client error device rate within 24h",
+      "fact_table": "vevo_device_outcomes_v1",
+      "type": "proportion",
+      "row_filters": [
+        {
+          "column": "client_error_observed",
+          "operator": "=",
+          "value": 1
+        }
+      ],
+      "goal": "decrease",
+      "growthbook_window": "none",
+      "contract_window_hours": 24,
+      "roles": {
+        "vevo-sk-aa-001": "guardrail",
+        "vevo-sk-product-cta-color-001": "guardrail"
+      }
+    },
+    {
+      "key": "vevo_lcp_p75_24h",
+      "name": "VEVO LCP p75 within 24h",
+      "fact_table": "vevo_performance_vitals_v1",
+      "type": "quantile",
+      "aggregation": {
+        "type": "sum",
+        "column": "vital_value"
+      },
+      "row_filters": [
+        {
+          "column": "vital_name",
+          "operator": "=",
+          "value": "lcp_ms"
+        }
+      ],
+      "quantile": 0.75,
+      "group_by_experiment_user": false,
+      "ignore_zeros": false,
+      "goal": "decrease",
+      "growthbook_window": "conversion",
+      "growthbook_window_hours": 24,
+      "roles": {
+        "vevo-sk-aa-001": "guardrail",
+        "vevo-sk-product-cta-color-001": "guardrail"
+      }
+    },
+    {
+      "key": "vevo_inp_p75_24h",
+      "name": "VEVO INP p75 within 24h",
+      "fact_table": "vevo_performance_vitals_v1",
+      "type": "quantile",
+      "aggregation": {
+        "type": "sum",
+        "column": "vital_value"
+      },
+      "row_filters": [
+        {
+          "column": "vital_name",
+          "operator": "=",
+          "value": "inp_ms"
+        }
+      ],
+      "quantile": 0.75,
+      "group_by_experiment_user": false,
+      "ignore_zeros": false,
+      "goal": "decrease",
+      "growthbook_window": "conversion",
+      "growthbook_window_hours": 24,
+      "roles": {
+        "vevo-sk-aa-001": "guardrail",
+        "vevo-sk-product-cta-color-001": "guardrail"
+      }
+    },
+    {
+      "key": "vevo_cls_p75_milli_24h",
+      "name": "VEVO CLS p75 x1000 within 24h",
+      "fact_table": "vevo_performance_vitals_v1",
+      "type": "quantile",
+      "aggregation": {
+        "type": "sum",
+        "column": "vital_value"
+      },
+      "row_filters": [
+        {
+          "column": "vital_name",
+          "operator": "=",
+          "value": "cls_milli"
+        }
+      ],
+      "quantile": 0.75,
+      "group_by_experiment_user": false,
+      "ignore_zeros": false,
+      "goal": "decrease",
+      "growthbook_window": "conversion",
+      "growthbook_window_hours": 24,
+      "roles": {
+        "vevo-sk-aa-001": "guardrail",
+        "vevo-sk-product-cta-color-001": "guardrail"
+      }
+    }
+  ],
+  "experiments": [
+    {
+      "tracking_key": "vevo-sk-aa-001",
+      "feature_key": "vevo-sk-aa-assignment",
+      "name": "VEVO SK A/A measurement validation",
+      "growthbook_id": "exp_19g6mmt1qsqm9",
+      "status": "draft",
+      "assignment_attribute": "id",
+      "traffic_percent": 100,
+      "feature_rule_status": "draft",
+      "feature_rule_environments": [
+        "staging"
+      ],
+      "variations": [
+        "control",
+        "variant"
+      ],
+      "variation_weights": [
+        0.5,
+        0.5
+      ],
+      "production_allocation_percent": 0,
+      "planned_allocation_percent_after_gates": 100,
+      "winner_calls_allowed": false,
+      "minimum_days": 7,
+      "minimum_eligible_devices": 1000
+    },
+    {
+      "tracking_key": "vevo-sk-product-cta-color-001",
+      "feature_key": "vevo-sk-product-cta-color",
+      "name": "VEVO SK product CTA color",
+      "growthbook_id": "exp_19g6mmt1qxzrp",
+      "status": "draft",
+      "assignment_attribute": "id",
+      "traffic_percent": 100,
+      "feature_rule_status": "draft",
+      "feature_rule_environments": [
+        "staging"
+      ],
+      "variations": [
+        "control",
+        "brand_contrast"
+      ],
+      "variation_weights": [
+        0.5,
+        0.5
+      ],
+      "production_allocation_percent": 0,
+      "planned_allocation_percent_after_aa": 100,
+      "primary_metric": "vevo_add_to_cart_24h",
+      "business_guardrail": "vevo_cm1_per_exposed_device_7d",
+      "minimum_days": 14,
+      "maximum_days": 42,
+      "provisional_total_sample": 1084,
+      "final_sample_status": "recompute_and_freeze_from_aa_before_launch"
+    }
+  ],
+  "decision_gates": {
+    "growthbook_and_reporting_same_population": true,
+    "growthbook_count_difference_max_percent": 2,
+    "exact_order_join_min_percent": 98,
+    "maturity_checkpoint_days": 14,
+    "price_tests_allowed": false,
+    "production_activation_allowed": false
+  }
+}

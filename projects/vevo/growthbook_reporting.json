@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+  "cart_window_hours": 24,
+  "order_window_days": 7,
+  "health_window_hours": 24,
+  "maturity_checkpoint_days": 14,
+  "expected_variation_weights": {
+    "vevo-sk-aa-001": {
+      "control": 0.5,
+      "variant": 0.5
+    },
+    "vevo-sk-product-cta-color-001": {
+      "control": 0.5,
+      "brand_contrast": 0.5
+    }
+  }
+}

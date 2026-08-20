@@ -1,0 +1,187 @@
+# VEVO experiment event contract
+
+Status: locally implemented and tested; no production endpoint exists yet
+
+Version: `1`
+
+Last reviewed: 2026-08-20
+
+## Principles
+
+- The experiment dataset contains anonymous behavioral events, not customer records.
+- `device_id` is a random VEVO experiment identifier and is the only assignment key.
+- Event and attribute names are allowlisted; unknown fields are rejected, not silently stored.
+- No raw request body is written to application logs.
+- Server receipt time is authoritative for event ordering and experiment windows. Client time is diagnostic and bounded against server time.
+- Accepted rows are append-only and idempotent by `event_id`.
+- Revenue and contribution are derived from the authoritative BiznisWeb order/reporting records after an exact transaction join; browser-submitted monetary values are never authoritative.
+- Metric definition `vevo_cm1_v1_2026-08-20` is frozen as `net order revenue - product expense - packaging cost - net shipping cost`, before allocated ad spend and fixed overhead.
+
+## Shared envelope
+
+Every accepted event contains exactly these fields:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `schema_version` | integer | exactly `1` |
+| `event_id` | UUID string | client-generated UUID v4; unique |
+| `event_name` | enum | one of the events below |
+| `occurred_at` | UTC ISO-8601 | no more than 5 minutes in the future or 24 hours old |
+| `device_id` | UUID string | random experiment ID; never a BiznisWeb/customer ID |
+| `page_path` | string | allowlisted path only; no origin, query, or fragment; max 200 chars |
+| `page_type` | enum | `home`, `product`, `category`, `checkout_success` |
+| `consent_state` | enum | approved values mapped from BiznisWeb, for example `analytics_granted` |
+| `experiment_id` | slug string | max 80 chars; allowlisted active experiment |
+| `variation_id` | enum string | exactly a registered variation for that experiment |
+| `utm_source` | string/null | normalized allowlisted value, max 50 chars |
+| `utm_medium` | string/null | normalized allowlisted value, max 50 chars |
+| `meta_campaign_id` | digits/null | from verified `utm_id`, max 30 chars |
+| `meta_adset_id` | digits/null | max 30 chars |
+| `meta_ad_id` | digits/null | from verified `utm_content`, max 30 chars |
+| `meta_placement` | enum/null | allowlisted Meta placement |
+
+The collector adds `received_at`, a deployment `collector_version`, and a coarse request-risk result. It does not persist raw IP, raw user agent, referrer, full URL, query string, or request headers.
+
+## `experiment_exposure`
+
+Emitted only when the visitor actually renders the experiment surface, not when a feature payload is merely downloaded.
+
+Additional fields: none.
+
+Uniqueness for reporting is the first valid exposure per `(experiment_id, device_id)`. Repeated raw exposures remain available for contamination/debugging checks. If a device is ever exposed to different variations in one experiment, it is flagged and excluded from the decision population until investigated.
+
+GrowthBook assignment query runs over the curated device facts, never the raw table. The paste-ready source of truth is `growthbook_sql/assignment.sql`; it returns:
+
+```sql
+SELECT
+  device_id,
+  from_iso8601_timestamp(first_exposure_at) AS timestamp,
+  experiment_id,
+  variation_id,
+  meta_campaign_id,
+  meta_adset_id,
+  meta_ad_id,
+  meta_placement
+FROM experiment_device_facts
+WHERE eligible = 1
+```
+
+The version-controlled SQL includes GrowthBook's `startDateISO`/`endDateISO` template filters and the first eligible, uncontaminated exposure rules. Fact-table queries use `experimentId` to restrict each analysis to its exact experiment. Outcome facts are timestamped at first exposure because their 24-hour and seven-day windows are already precomputed by the reporting contract; the corresponding GrowthBook outcome metrics must therefore use window `None` instead of applying a second, divergent window.
+
+## `add_to_cart`
+
+Emitted after the existing BiznisWeb add-to-cart action succeeds for an eligible exposed device. The experiment client does not replace, delay, or intercept the cart action.
+
+Additional field:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `product_id` | string | internal non-customer product identifier, max 64 chars; strict character allowlist |
+
+The primary metric for `vevo-sk-product-cta-color-001` is binary at device level: at least one accepted `add_to_cart` after first valid product-detail exposure and within 24 hours. The denominator is all unique devices with a first valid exposure to a rendered eligible product CTA. Later exposures and repeated cart additions do not increase either side of the primary ratio.
+
+## `performance_vital`
+
+Emitted only after a valid experiment exposure and only once per supported metric and page load. Measurement uses Google's official standard `web-vitals@6.0.1` IIFE build, exact-version/SRI pinned and loaded only after analytical consent. Only its final numeric metric value is accepted; attribution targets, entries, resource names, DOM details, and URLs are never copied into an event.
+
+Additional fields:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `page_load_id` | UUID string | random per page load; never a session/customer ID |
+| `vital_name` | enum | `lcp_ms`, `inp_ms`, or `cls_milli` |
+| `vital_value` | integer | non-negative bounded integer; milliseconds for LCP/INP and CLS multiplied by 1,000 |
+
+Unknown or non-finite values are rejected. Reporting calculates p75 per variation from first valid metric per `(experiment_id, variation_id, page_load_id, vital_name)` and applies the frozen stop thresholds only after at least `200` measured page loads per arm.
+
+## `client_error_observed`
+
+Emitted at most once per error kind and page load after a valid experiment exposure.
+
+Additional fields:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `page_load_id` | UUID string | same random page-load identifier as performance events |
+| `error_kind` | enum | `runtime_error` or `unhandled_rejection` |
+
+The event contains no message, stack, filename, line, column, URL, DOM content, or rejected value. The decision metric is the share of exposed devices with at least one accepted client-error event.
+
+## `order_completed`
+
+Emitted on the BiznisWeb order-confirmation page only after the page exposes a valid transaction identifier.
+
+Additional field:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `transaction_id` | string | exact confirmation-page ID, max 64 chars; character allowlist |
+
+No browser-reported revenue, margin, product, email, address, payment, or customer value is stored. The reporting job joins `transaction_id` to the BiznisWeb API order number and supplies the versioned contribution value.
+
+An order can be attributed only when:
+
+1. exactly one eligible first exposure exists for the same `device_id` and experiment;
+2. order completion occurs after exposure and within the experiment conversion window;
+3. `transaction_id` joins exactly one authoritative order;
+4. the order is not a test/internal order under the frozen reporting exclusions.
+
+The purchase attribution window is frozen at seven days from the first valid exposure. The order timestamp used by this dataset is the first validated collector receipt of the exact-joined `order_completed` event; BiznisWeb remains authoritative for existence, lifecycle, revenue, and contribution. Cancellation/refund maturity is evaluated 14 days after that server receipt. A row before that checkpoint is retained with an explicit immature-order count; it is never silently presented as mature.
+
+## Derived experiment fact table
+
+Reporting creates one row per `(experiment_id, device_id)` with:
+
+- first exposure timestamp and assigned variation;
+- allowlisted acquisition dimensions captured at first exposure;
+- `add_to_cart`-within-24-hours indicator;
+- purchase conversion indicator;
+- exact joined order count;
+- authoritative net revenue and CM1 contribution under metric definition `vevo_cm1_v1_2026-08-20`;
+- p75 LCP/INP/CLS inputs and client-error indicator from strictly allowlisted health events;
+- cancellation/refund state as of the defined maturity checkpoint;
+- contamination and data-quality flags.
+
+The exact curated device schema also carries order-attribution eligibility/issues, unmatched and ambiguous transaction counts, and the fact-generation timestamp. A transaction observed on multiple devices in one experiment is never double-attributed. An event ID or order number with conflicting payloads fails the entire build closed.
+
+Reporting also creates `experiment_performance_facts`, one row per first accepted `(experiment_id, page_load_id, vital_name)` measurement after a valid exposure. GrowthBook and VEVO reporting calculate performance guardrails from this curated table; the GrowthBook identity does not query raw health events.
+
+Non-buyers receive zero revenue/contribution, not a missing row. Customer identity and order-line details remain outside the GrowthBook-readable dataset.
+
+The implementation boundary is executable and dry-run-first:
+
+- `reporting_core/experiment_io.py` reads only explicit `event_date=YYYY-MM-DD` raw partitions, with bounded pagination, object count, and object size;
+- `reporting_core/experiment_orders.py` immediately reduces matching in-memory BiznisWeb order records to the exact seven fields `order_num`, `order_at`, `net_revenue_eur`, `cm1_eur`, `lifecycle_state`, `mature`, and `excluded`;
+- `scripts/reconcile_growthbook_facts.py` reuses the existing VEVO product-expense, packaging, shipping, and realized-revenue logic; it is read-only by default and can publish curated facts only when both `--publish` and `GROWTHBOOK_FACT_PUBLISH_ENABLED=true` are present.
+
+Non-realized pending/cancelled/refunded rows currently carry zero order value while preserving their explicit lifecycle counters. The A/A pipeline can validate joins and lifecycle changes with that conservative rule, but a final A/B CM1 decision remains a `NO-GO` until the 14-day credit-note/refund-cost reconciliation is verified against the existing reporting audit.
+
+## Retention and access
+
+- Proposed deployment parameters are 180 days for raw events, 400 days for curated anonymous facts, 30 days for Athena results, and 30 days for payload-free service logs. They remain unapproved until recorded in the deployment change; production stays at `0%` until then.
+- GrowthBook receives a dedicated IAM identity with `SELECT`/Athena query capability and S3 read access only to the experiment fact/exposure prefixes plus its query-result prefix.
+- The VEVO reporting runtime receives only the permissions required to read experiment events and produce derived facts.
+- No credentials are committed. Optional experiment runtime names belong in `.env.example`; values belong in the deployment secret store. The experiment bucket is not added to the repository-wide required baseline because non-VEVO reporting runs must remain independent.
+- Access, schema rejects, throttle events, and deletion/lifecycle jobs are auditable without logging event payloads.
+
+The version-controlled active-experiment registry is `growthbook_collector/experiments.json`. Preview contains the named A/A and CTA experiments; Production is an empty object until a reviewed rollout commit. Exposure pages and downstream health-observation pages are separate allowlists, so checkout health can be observed after an earlier exposure without assigning a new variation on the confirmation page.
+
+GrowthBook feature values are the contract variation identifiers. The SDK tracking callback must prefer the validated string `ExperimentResult.value`; `ExperimentResult.key` may be only the default numeric tracking key (`"0"`/`"1"`). Numeric keys are never persisted as `variation_id` for VEVO.
+
+## Collector rejection rules
+
+Reject with no persistence when any condition is true:
+
+- missing/unknown field or unsupported schema version;
+- body exceeds the configured small limit;
+- origin is not the approved VEVO origin;
+- invalid UUID, timestamp, experiment, variation, path, or Meta ID;
+- known PII field name appears anywhere;
+- raw URL, query, `fbclid`, `_fbp`, `_fbc`, email, phone, name, address, IP, customer ID, or order detail appears;
+- timestamp is outside the allowed skew/window;
+- request exceeds per-origin/IP rate limits;
+- experiment is inactive or the consent state is not eligible.
+
+Duplicates return an idempotent success but create no second accepted row.
+
+S3 `409 ConditionalRequestConflict` is not accepted as proof of a duplicate. The collector retries it twice with the same immutable key and then fails closed. Only `412 PreconditionFailed` proves that the event key already exists.

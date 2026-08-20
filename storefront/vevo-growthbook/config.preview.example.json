@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "environment": "preview",
+  "clientKey": "sdk-REPLACE_WITH_PREVIEW_CLIENT_KEY",
+  "apiHost": "https://cdn.growthbook.io",
+  "collectorUrl": "https://events-preview.vevo.sk/v1/events",
+  "allowedHost": "www.vevo.sk",
+  "gtmContainerId": "GTM-5ZB5LFGB",
+  "enableDevMode": true
+}

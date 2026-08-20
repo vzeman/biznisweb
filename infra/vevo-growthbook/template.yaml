@@ -1,0 +1,942 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  PII-free VEVO experiment collector on ECS/Fargate behind an API Gateway
+  private integration, plus the isolated Athena foundation. Production remains
+  inactive while growthbook_collector/experiments.json has an empty production registry.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: preview
+    AllowedValues:
+      - preview
+      - production
+  AllowedOrigin:
+    Type: String
+    Default: https://www.vevo.sk
+    AllowedPattern: '^https://[A-Za-z0-9.-]+$'
+  CollectorVersion:
+    Type: String
+    Description: Immutable Git commit or release marker included in every accepted row.
+    AllowedPattern: '^[A-Za-z0-9._-]{7,80}$'
+  CollectorImageUri:
+    Type: String
+    Description: Immutable ECR image URI pinned by sha256 digest; mutable tags are rejected.
+    AllowedPattern: '^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$'
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC containing the private collector service and API Gateway VPC link.
+  ServiceSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two private subnets in distinct AZs with ECR/S3/Logs egress.
+  TaskAssignPublicIp:
+    Type: String
+    Default: DISABLED
+    AllowedValues:
+      - DISABLED
+      - ENABLED
+    Description: Copied exactly from the approved VEVO Fargate source schedule.
+  PublicRouteEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'false'
+      - 'true'
+    Description: Must remain false until the exact Fargate task passes the localhost host gate.
+  RawRetentionDays:
+    Type: Number
+    Default: 180
+    MinValue: 30
+    MaxValue: 730
+  CuratedRetentionDays:
+    Type: Number
+    Default: 400
+    MinValue: 30
+    MaxValue: 1095
+  QueryResultRetentionDays:
+    Type: Number
+    Default: 30
+    MinValue: 7
+    MaxValue: 90
+  RawProjectionStartDate:
+    Type: String
+    Default: '2026-08-20'
+    AllowedPattern: '^20[0-9]{2}-[0-9]{2}-[0-9]{2}$'
+
+Conditions:
+  ActivatePublicRoute: !Equals
+    - !Ref PublicRouteEnabled
+    - 'true'
+
+Resources:
+  ExperimentDataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: false
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireRawExperimentEvents
+            Prefix: experiment-events/raw/
+            Status: Enabled
+            ExpirationInDays: !Ref RawRetentionDays
+          - Id: ExpireCuratedExperimentFacts
+            Prefix: experiment-events/curated/
+            Status: Enabled
+            ExpirationInDays: !Ref CuratedRetentionDays
+          - Id: ExpireAthenaQueryResults
+            Prefix: athena-results/
+            Status: Enabled
+            ExpirationInDays: !Ref QueryResultRetentionDays
+          - Id: AbortIncompleteMultipartUploads
+            Prefix: ''
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+        - Key: DataClass
+          Value: anonymous-experiment
+
+  ExperimentDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ExperimentDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt ExperimentDataBucket.Arn
+              - !Sub '${ExperimentDataBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+          - Sid: DenyRawWritesWithoutIfNoneMatch
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${ExperimentDataBucket.Arn}/experiment-events/raw/*'
+            Condition:
+              'Null':
+                s3:if-none-match: 'true'
+
+  CollectorApiAccessLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/vevo-growthbook-collector-${Environment}'
+      RetentionInDays: 30
+
+  CollectorApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'vevo-growthbook-collector-${Environment}'
+      ProtocolType: HTTP
+      DisableExecuteApiEndpoint: false
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - content-type
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        MaxAge: 600
+      Tags:
+        Project: vevo-growthbook
+        DataClass: anonymous-experiment
+
+  CollectorApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref CollectorApi
+      AutoDeploy: true
+      StageName: '$default'
+      AccessLogSettings:
+        DestinationArn: !GetAtt CollectorApiAccessLogs.Arn
+        Format: >-
+          {"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}
+      DefaultRouteSettings:
+        DetailedMetricsEnabled: true
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+      Tags:
+        Project: vevo-growthbook
+        DataClass: anonymous-experiment
+
+  CollectorContainerLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/ecs/vevo-growthbook-collector-${Environment}'
+      RetentionInDays: 30
+
+  CollectorCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'vevo-growthbook-collector-${Environment}'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+        - Key: DataClass
+          Value: anonymous-experiment
+
+  CollectorExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'vevo-growthbook-collector-execution-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+
+  CollectorTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'vevo-growthbook-collector-task-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PutImmutableRawExperimentEvent
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: PutImmutableRawExperimentEvent
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${ExperimentDataBucket.Arn}/experiment-events/raw/*'
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+
+  CollectorTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'vevo-growthbook-collector-${Environment}'
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt CollectorExecutionRole.Arn
+      TaskRoleArn: !GetAtt CollectorTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: collector
+          Image: !Ref CollectorImageUri
+          Essential: true
+          ReadonlyRootFilesystem: true
+          User: '10001:10001'
+          PortMappings:
+            - ContainerPort: 8080
+              HostPort: 8080
+              Protocol: tcp
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: GROWTHBOOK_ALLOWED_ORIGINS
+              Value: !Ref AllowedOrigin
+            - Name: GROWTHBOOK_COLLECTOR_VERSION
+              Value: !Ref CollectorVersion
+            - Name: GROWTHBOOK_ENVIRONMENT
+              Value: !Ref Environment
+            - Name: GROWTHBOOK_EVENT_BUCKET
+              Value: !Ref ExperimentDataBucket
+            - Name: GROWTHBOOK_EVENT_PREFIX
+              Value: experiment-events/raw
+            - Name: GROWTHBOOK_EXPERIMENT_REGISTRY_PATH
+              Value: /app/growthbook_collector/experiments.json
+            - Name: GROWTHBOOK_MAX_BODY_BYTES
+              Value: '4096'
+          HealthCheck:
+            Command:
+              - CMD
+              - curl
+              - -fsS
+              - http://127.0.0.1:8080/health
+            Interval: 30
+            Retries: 3
+            StartPeriod: 10
+            Timeout: 5
+          LinuxParameters:
+            Capabilities:
+              Drop:
+                - ALL
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CollectorContainerLogs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: collector
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+        - Key: DataClass
+          Value: anonymous-experiment
+
+  CollectorVpcLinkSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: API Gateway VPC link egress for VEVO GrowthBook collector.
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          DestinationSecurityGroupId: !GetAtt CollectorLoadBalancerSecurityGroup.GroupId
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+
+  CollectorLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Internal ALB ingress only from the API Gateway VPC link.
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          DestinationSecurityGroupId: !GetAtt CollectorServiceSecurityGroup.GroupId
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+
+  CollectorServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Collector ingress only from the internal ALB.
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+
+  CollectorLoadBalancerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt CollectorLoadBalancerSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !GetAtt CollectorVpcLinkSecurityGroup.GroupId
+
+  CollectorServiceIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt CollectorServiceSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !GetAtt CollectorLoadBalancerSecurityGroup.GroupId
+
+  CollectorLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'vevo-gb-${Environment}'
+      Scheme: internal
+      Type: application
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !GetAtt CollectorLoadBalancerSecurityGroup.GroupId
+      Subnets: !Ref ServiceSubnetIds
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: 'false'
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+
+  CollectorTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'vevo-gb-${Environment}'
+      VpcId: !Ref VpcId
+      TargetType: ip
+      Protocol: HTTP
+      ProtocolVersion: HTTP1
+      Port: 8080
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      Matcher:
+        HttpCode: '200'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '15'
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+
+  CollectorListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref CollectorLoadBalancer
+      Port: 8080
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref CollectorTargetGroup
+
+  CollectorService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - CollectorListener
+      - CollectorLoadBalancerIngress
+      - CollectorServiceIngress
+    Properties:
+      ServiceName: !Sub 'vevo-growthbook-collector-${Environment}'
+      Cluster: !Ref CollectorCluster
+      TaskDefinition: !Ref CollectorTaskDefinition
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      DesiredCount: 1
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      HealthCheckGracePeriodSeconds: 30
+      LoadBalancers:
+        - ContainerName: collector
+          ContainerPort: 8080
+          TargetGroupArn: !Ref CollectorTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: !Ref TaskAssignPublicIp
+          SecurityGroups:
+            - !GetAtt CollectorServiceSecurityGroup.GroupId
+          Subnets: !Ref ServiceSubnetIds
+      PropagateTags: SERVICE
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+        - Key: DataClass
+          Value: anonymous-experiment
+
+  CollectorVpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub 'vevo-growthbook-collector-${Environment}'
+      SecurityGroupIds:
+        - !GetAtt CollectorVpcLinkSecurityGroup.GroupId
+      SubnetIds: !Ref ServiceSubnetIds
+      Tags:
+        Project: vevo-growthbook
+        DataClass: anonymous-experiment
+
+  CollectorApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref CollectorApi
+      ConnectionId: !Ref CollectorVpcLink
+      ConnectionType: VPC_LINK
+      Description: Exact private integration to the host-verifiable collector service.
+      IntegrationMethod: ANY
+      IntegrationType: HTTP_PROXY
+      IntegrationUri: !Ref CollectorListener
+      PayloadFormatVersion: '1.0'
+      RequestParameters:
+        'overwrite:path': '$request.path'
+
+  CollectorPostRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Condition: ActivatePublicRoute
+    Properties:
+      ApiId: !Ref CollectorApi
+      AuthorizationType: NONE
+      RouteKey: POST /v1/events
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref CollectorApiIntegration
+
+  ExperimentCatalogDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Description: PII-free VEVO experiment datasets only.
+        Name: !Sub 'vevo_growthbook_${Environment}'
+
+  RawExperimentEventsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref ExperimentCatalogDatabase
+      TableInput:
+        Description: Append-only validated browser events. Not GrowthBook-readable directly.
+        Name: experiment_events_raw
+        Parameters:
+          classification: json
+          EXTERNAL: 'TRUE'
+          projection.enabled: 'true'
+          projection.event_date.type: date
+          projection.event_date.range: !Sub '${RawProjectionStartDate},NOW'
+          projection.event_date.format: yyyy-MM-dd
+          projection.event_date.interval: '1'
+          projection.event_date.interval.unit: DAYS
+          storage.location.template: !Sub 's3://${ExperimentDataBucket}/experiment-events/raw/event_date=${!event_date}/'
+        PartitionKeys:
+          - Name: event_date
+            Type: string
+        StorageDescriptor:
+          Columns:
+            - Name: schema_version
+              Type: int
+            - Name: event_id
+              Type: string
+            - Name: event_name
+              Type: string
+            - Name: occurred_at
+              Type: string
+            - Name: received_at
+              Type: string
+            - Name: device_id
+              Type: string
+            - Name: page_path
+              Type: string
+            - Name: page_type
+              Type: string
+            - Name: consent_state
+              Type: string
+            - Name: experiment_id
+              Type: string
+            - Name: variation_id
+              Type: string
+            - Name: utm_source
+              Type: string
+            - Name: utm_medium
+              Type: string
+            - Name: meta_campaign_id
+              Type: string
+            - Name: meta_adset_id
+              Type: string
+            - Name: meta_ad_id
+              Type: string
+            - Name: meta_placement
+              Type: string
+            - Name: product_id
+              Type: string
+            - Name: transaction_id
+              Type: string
+            - Name: page_load_id
+              Type: string
+            - Name: vital_name
+              Type: string
+            - Name: vital_value
+              Type: bigint
+            - Name: error_kind
+              Type: string
+            - Name: collector_version
+              Type: string
+            - Name: risk_result
+              Type: string
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: !Sub 's3://${ExperimentDataBucket}/experiment-events/raw/'
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            Parameters:
+              ignore.malformed.json: 'false'
+            SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
+        TableType: EXTERNAL_TABLE
+
+  CuratedExperimentFactsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref ExperimentCatalogDatabase
+      TableInput:
+        Description: One PII-free decision row per experiment and anonymous device.
+        Name: experiment_device_facts
+        Parameters:
+          classification: json
+          EXTERNAL: 'TRUE'
+          projection.enabled: 'true'
+          projection.experiment_id.type: enum
+          projection.experiment_id.values: vevo-sk-aa-001,vevo-sk-product-cta-color-001
+          storage.location.template: !Sub 's3://${ExperimentDataBucket}/experiment-events/curated/device_facts/experiment_id=${!experiment_id}/'
+        PartitionKeys:
+          - Name: experiment_id
+            Type: string
+        StorageDescriptor:
+          Columns:
+            - Name: metric_contract_version
+              Type: string
+            - Name: device_id
+              Type: string
+            - Name: first_exposure_at
+              Type: string
+            - Name: variation_id
+              Type: string
+            - Name: meta_campaign_id
+              Type: string
+            - Name: meta_adset_id
+              Type: string
+            - Name: meta_ad_id
+              Type: string
+            - Name: meta_placement
+              Type: string
+            - Name: add_to_cart_24h
+              Type: int
+            - Name: purchase_converted
+              Type: int
+            - Name: joined_order_count
+              Type: int
+            - Name: net_revenue_eur
+              Type: double
+            - Name: cm1_eur
+              Type: double
+            - Name: cancelled_order_count
+              Type: int
+            - Name: refunded_order_count
+              Type: int
+            - Name: immature_order_count
+              Type: int
+            - Name: client_error_observed
+              Type: int
+            - Name: contaminated
+              Type: int
+            - Name: eligible
+              Type: int
+            - Name: order_attribution_eligible
+              Type: int
+            - Name: order_attribution_issue
+              Type: string
+            - Name: unmatched_transaction_count
+              Type: int
+            - Name: ambiguous_transaction_count
+              Type: int
+            - Name: exclusion_reason
+              Type: string
+            - Name: facts_generated_at
+              Type: string
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: !Sub 's3://${ExperimentDataBucket}/experiment-events/curated/device_facts/'
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            Parameters:
+              ignore.malformed.json: 'false'
+            SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
+        TableType: EXTERNAL_TABLE
+
+  CuratedPerformanceFactsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref ExperimentCatalogDatabase
+      TableInput:
+        Description: First accepted Core Web Vital per anonymous page load and vital.
+        Name: experiment_performance_facts
+        Parameters:
+          classification: json
+          EXTERNAL: 'TRUE'
+          projection.enabled: 'true'
+          projection.experiment_id.type: enum
+          projection.experiment_id.values: vevo-sk-aa-001,vevo-sk-product-cta-color-001
+          storage.location.template: !Sub 's3://${ExperimentDataBucket}/experiment-events/curated/performance_facts/experiment_id=${!experiment_id}/'
+        PartitionKeys:
+          - Name: experiment_id
+            Type: string
+        StorageDescriptor:
+          Columns:
+            - Name: metric_contract_version
+              Type: string
+            - Name: device_id
+              Type: string
+            - Name: variation_id
+              Type: string
+            - Name: page_load_id
+              Type: string
+            - Name: vital_name
+              Type: string
+            - Name: vital_value
+              Type: bigint
+            - Name: measured_at
+              Type: string
+            - Name: eligible
+              Type: int
+            - Name: exclusion_reason
+              Type: string
+            - Name: facts_generated_at
+              Type: string
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: !Sub 's3://${ExperimentDataBucket}/experiment-events/curated/performance_facts/'
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            Parameters:
+              ignore.malformed.json: 'false'
+            SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
+        TableType: EXTERNAL_TABLE
+
+  ReportingAthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Description: VEVO reporting reconciliation and curated fact generation.
+      Name: !Sub 'vevo-growthbook-reporting-${Environment}'
+      RecursiveDeleteOption: false
+      State: ENABLED
+      WorkGroupConfiguration:
+        BytesScannedCutoffPerQuery: 1073741824
+        EnforceWorkGroupConfiguration: true
+        EngineVersion:
+          SelectedEngineVersion: AUTO
+        PublishCloudWatchMetricsEnabled: true
+        ResultConfiguration:
+          EncryptionConfiguration:
+            EncryptionOption: SSE_S3
+          OutputLocation: !Sub 's3://${ExperimentDataBucket}/athena-results/reporting/'
+
+  GrowthBookAthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Description: GrowthBook read-only experiment queries over curated device facts.
+      Name: !Sub 'vevo-growthbook-readonly-${Environment}'
+      RecursiveDeleteOption: false
+      State: ENABLED
+      WorkGroupConfiguration:
+        BytesScannedCutoffPerQuery: 268435456
+        EnforceWorkGroupConfiguration: true
+        EngineVersion:
+          SelectedEngineVersion: AUTO
+        PublishCloudWatchMetricsEnabled: true
+        ResultConfiguration:
+          EncryptionConfiguration:
+            EncryptionOption: SSE_S3
+          OutputLocation: !Sub 's3://${ExperimentDataBucket}/athena-results/growthbook/'
+
+  ReportingExperimentDataPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Attach only to the existing VEVO reporting runtime role.
+      ManagedPolicyName: !Sub 'vevo-growthbook-reporting-${Environment}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ListOnlyExperimentPrefixes
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt ExperimentDataBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - experiment-events/raw/*
+                  - experiment-events/curated/*
+                  - athena-results/reporting/*
+          - Sid: LocateExperimentBucket
+            Effect: Allow
+            Action: s3:GetBucketLocation
+            Resource: !GetAtt ExperimentDataBucket.Arn
+          - Sid: ReadRawExperimentEvents
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource: !Sub '${ExperimentDataBucket.Arn}/experiment-events/raw/*'
+          - Sid: PublishCuratedFactsAndReportingQueryResults
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:AbortMultipartUpload
+            Resource:
+              - !Sub '${ExperimentDataBucket.Arn}/experiment-events/curated/*'
+              - !Sub '${ExperimentDataBucket.Arn}/athena-results/reporting/*'
+          - Sid: RunReportingAthenaQueries
+            Effect: Allow
+            Action:
+              - athena:GetQueryExecution
+              - athena:GetQueryResults
+              - athena:GetWorkGroup
+              - athena:StartQueryExecution
+              - athena:StopQueryExecution
+            Resource: !Sub 'arn:${AWS::Partition}:athena:${AWS::Region}:${AWS::AccountId}:workgroup/${ReportingAthenaWorkGroup}'
+          - Sid: ReadExperimentCatalog
+            Effect: Allow
+            Action:
+              - glue:GetDatabase
+              - glue:GetDatabases
+              - glue:GetPartition
+              - glue:GetPartitions
+              - glue:GetTable
+              - glue:GetTables
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${ExperimentCatalogDatabase}'
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${ExperimentCatalogDatabase}/*'
+
+  GrowthBookReadOnlyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Attach only to the GrowthBook Athena identity after connection method review.
+      ManagedPolicyName: !Sub 'vevo-growthbook-readonly-${Environment}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ListOnlyGrowthBookPrefixes
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt ExperimentDataBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - experiment-events/curated/*
+                  - athena-results/growthbook/*
+          - Sid: LocateExperimentBucket
+            Effect: Allow
+            Action: s3:GetBucketLocation
+            Resource: !GetAtt ExperimentDataBucket.Arn
+          - Sid: ReadOnlyCuratedExperimentFacts
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource: !Sub '${ExperimentDataBucket.Arn}/experiment-events/curated/*'
+          - Sid: ManageOnlyOwnQueryResults
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:AbortMultipartUpload
+            Resource: !Sub '${ExperimentDataBucket.Arn}/athena-results/growthbook/*'
+          - Sid: RunOnlyGrowthBookWorkgroupQueries
+            Effect: Allow
+            Action:
+              - athena:GetQueryExecution
+              - athena:GetQueryResults
+              - athena:GetWorkGroup
+              - athena:StartQueryExecution
+              - athena:StopQueryExecution
+            Resource: !Sub 'arn:${AWS::Partition}:athena:${AWS::Region}:${AWS::AccountId}:workgroup/${GrowthBookAthenaWorkGroup}'
+          - Sid: ReadOnlyCuratedCatalog
+            Effect: Allow
+            Action:
+              - glue:GetDatabase
+              - glue:GetDatabases
+              - glue:GetPartition
+              - glue:GetPartitions
+              - glue:GetTable
+              - glue:GetTables
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${ExperimentCatalogDatabase}'
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${ExperimentCatalogDatabase}/${CuratedExperimentFactsTable}'
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${ExperimentCatalogDatabase}/${CuratedPerformanceFactsTable}'
+
+  CollectorTarget5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Any collector target 5xx response requires rollout investigation.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt CollectorLoadBalancer.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt CollectorTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  CollectorHealthyHostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The collector must retain at least one healthy Fargate target.
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt CollectorLoadBalancer.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt CollectorTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 2
+      MetricName: HealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Minimum
+      Threshold: 1
+      TreatMissingData: breaching
+
+Outputs:
+  CollectorApiBaseUrl:
+    Description: API base URL; it has no collector route until the host gate enables it.
+    Value: !Sub 'https://${CollectorApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  CollectorEndpoint:
+    Condition: ActivatePublicRoute
+    Description: Public collector route. Production still rejects all experiments until registry activation.
+    Value: !Sub 'https://${CollectorApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/v1/events'
+  CollectorClusterArn:
+    Value: !GetAtt CollectorCluster.Arn
+  CollectorServiceArn:
+    Value: !Ref CollectorService
+  CollectorServiceName:
+    Value: !GetAtt CollectorService.Name
+  CollectorTaskDefinitionArn:
+    Value: !Ref CollectorTaskDefinition
+  CollectorContainerLogGroup:
+    Value: !Ref CollectorContainerLogs
+  CollectorHostMarkerPath:
+    Value: http://127.0.0.1:8080/marker.json
+  EventBucketName:
+    Value: !Ref ExperimentDataBucket
+  ExperimentDatabaseName:
+    Value: !Ref ExperimentCatalogDatabase
+  GrowthBookReadOnlyPolicyArn:
+    Value: !Ref GrowthBookReadOnlyPolicy
+  GrowthBookWorkGroupName:
+    Value: !Ref GrowthBookAthenaWorkGroup
+  ReportingPolicyArn:
+    Value: !Ref ReportingExperimentDataPolicy
+  ReportingWorkGroupName:
+    Value: !Ref ReportingAthenaWorkGroup
