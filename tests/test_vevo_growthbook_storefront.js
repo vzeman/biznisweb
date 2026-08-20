@@ -147,12 +147,13 @@ function makeRoot(options = {}) {
         ? "vevo-sk-aa-001"
         : "vevo-sk-product-cta-color-001";
       const variation = variations[experimentId] || fallback;
-      const trackingKey = options.invalidTrackingKey && experimentId === "vevo-sk-product-cta-color-001"
-        ? "1"
+      const variationIndex = variation === "control" ? 0 : 1;
+      const featureValue = options.invalidVariationValue && experimentId === "vevo-sk-product-cta-color-001"
+        ? "unexpected"
         : variation;
       this.settings.trackingCallback(
         { key: experimentId },
-        { key: trackingKey, value: variation },
+        { key: String(variationIndex), variationId: variationIndex, value: featureValue },
       );
       return variation;
     }
@@ -314,8 +315,18 @@ test("checkout sends exact transaction id for prior assignments without new SDK 
   client.destroy();
 });
 
-test("invalid variation metadata and SDK failures both preserve control", async () => {
-  const invalidKeyFixture = makeRoot({ page: "product", consent: true, invalidTrackingKey: true });
+test("uses the feature value instead of numeric tracking metadata and fails closed on an invalid value", async () => {
+  const validFixture = makeRoot({ page: "product", consent: true });
+  const validClient = createClient(validFixture.root, config());
+  await validClient.ready();
+  assert.equal(validFixture.button.classList.contains("vevo-gb-cta-brand-contrast"), true);
+  assert.equal(
+    validFixture.fetches.some((row) => row.body.variation_id === "1"),
+    false,
+  );
+  validClient.destroy();
+
+  const invalidKeyFixture = makeRoot({ page: "product", consent: true, invalidVariationValue: true });
   const invalidKeyClient = createClient(invalidKeyFixture.root, config());
   await invalidKeyClient.ready();
   assert.equal(invalidKeyFixture.button.classList.contains("vevo-gb-cta-brand-contrast"), false);
@@ -324,7 +335,9 @@ test("invalid variation metadata and SDK failures both preserve control", async 
     false,
   );
   invalidKeyClient.destroy();
+});
 
+test("SDK, script, and collector failures preserve control", async () => {
   const failureFixture = makeRoot({ page: "product", consent: true, sdkFailure: true });
   const failureClient = createClient(failureFixture.root, config());
   await failureClient.ready();

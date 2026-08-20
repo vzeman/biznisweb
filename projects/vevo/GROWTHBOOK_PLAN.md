@@ -134,15 +134,17 @@ The public GTM mapping plus a named GA4 transaction-ID Exploration and read-only
 
 Acceptance: the dated baseline artifact exists, metric definition `vevo_cm1_v1_2026-08-20` is frozen, the historical transaction join exceeds the `98%` gate, and public CrUX plus representative mobile/desktop Lighthouse measurements are recorded. These historical-baseline conditions pass. Consent coverage and purchase/performance reconciliation for the implemented event path remain downstream NO-GO gates.
 
-### 3. GrowthBook Pro workspace
+### 3. GrowthBook workspace — Preview objects initialized
 
-- Create organization `VEVO` and project `VEVO SK Web` in the EU data region when offered.
-- Create Production and Preview environments.
-- Create one Web SDK connection; store the client key as configuration, never a server secret.
+- Authenticated organization `Vevo` and project `VEVO SK Web` now exist. The current UI did not expose a workspace region, so no region is claimed.
+- The current workspace is Starter. Its default `staging` environment is the Preview alias; `production` remains disabled for both VEVO flags. No paid Pro upgrade was accepted.
+- Preview Web SDK connection `VEVO SK Web Preview` now exists for staging only; its client key was not committed and the connection is not connected until reviewed Preview installation.
 - Configure `device_id`/anonymous ID as the single assignment identifier.
 - Enable sticky bucketing only after consent.
 - Create a dedicated read-only Athena data source limited to experiment tables.
 - Keep the production feature at `0%` until all QA gates pass.
+
+The exact, version-controlled object contract in `growthbook_workspace.json` now records the authenticated Starter workspace, staging-as-Preview alias, Preview SDK connection, two safe string flags, and both unstarted staging-only draft experiments. Paste-ready Athena queries under `growthbook_sql/` and the operator handoff in `GROWTHBOOK_PRO_WORKSPACE.md` remain blocked until the runtime hard gate is resolved. A validator rejects PII-bearing/raw-table SQL, metric-window drift, variation mismatches, a changed primary/business guardrail, a published/running experiment, a Production rule/connection, or any nonzero Production allocation. No GrowthBook data source/metric, AWS object, GTM tag, BiznisWeb change, or runtime mutation was created.
 
 Acceptance: Preview can fetch the SDK payload, Production is still `0%`, and Athena can run approved `SELECT` queries but cannot read unrelated S3 prefixes or mutate data.
 

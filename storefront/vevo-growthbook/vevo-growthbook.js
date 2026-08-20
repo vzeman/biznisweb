@@ -486,7 +486,12 @@
 
   function trackingCallback(experiment, result) {
     var experimentId = experiment && experiment.key;
-    var variationId = result && (result.key || result.variationId);
+    // GrowthBook's result.key is the variation tracking key and defaults to
+    // the numeric index ("0"/"1"). Our data contract is defined by the
+    // string feature value, so prefer result.value and fail closed below.
+    var variationId = result && typeof result.value === "string"
+      ? result.value
+      : result && (result.key || result.variationId);
     var definition = EXPERIMENTS[experimentId];
     if (
       !definition ||

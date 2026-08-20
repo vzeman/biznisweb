@@ -281,6 +281,7 @@ def main() -> int:
             "disableVisualExperiments: true",
             "disableJsInjection: true",
             "disableUrlRedirectExperiments: true",
+            'typeof result.value === "string"',
             "library.setPolyfills",
             "options.consent & options.ANALYTIC",
             '#product-detail .s1-detailCart .s1-submitCart',
@@ -421,6 +422,7 @@ def main() -> int:
             "reporting_core/experiment_orders.py",
             "scripts/reconcile_growthbook_facts.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",
+            "scripts/validate_growthbook_workspace.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)
 
