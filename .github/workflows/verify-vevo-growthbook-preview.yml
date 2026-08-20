@@ -1,0 +1,245 @@
+name: Verify VEVO GrowthBook Preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-preview-public-verification
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: "919341186960"
+  STACK_NAME: vevo-growthbook-preview
+  SERVICE_NAME: vevo-growthbook-collector-preview
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  verify-active-preview:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout verification contract
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve active stack and runtime identity
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > active-stack.json
+          python3 - <<'PY' > active-stack.env
+          import json
+          import os
+          import shlex
+          from urllib.parse import urlsplit
+
+          stack = json.load(open("active-stack.json", encoding="utf-8"))["Stacks"][0]
+          if stack["StackStatus"] != "UPDATE_COMPLETE":
+              raise SystemExit(f"active stack status is not UPDATE_COMPLETE: {stack['StackStatus']}")
+          parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack["Parameters"]}
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack["Outputs"]}
+          if parameters.get("Environment") != "preview":
+              raise SystemExit("collector stack is not Preview")
+          if parameters.get("PublicRouteEnabled") != "true":
+              raise SystemExit("collector public route is not enabled in stack parameters")
+          required = {
+              "CollectorApiBaseUrl",
+              "CollectorClusterArn",
+              "CollectorEndpoint",
+              "CollectorServiceArn",
+              "CollectorServiceName",
+              "CollectorTaskDefinitionArn",
+              "EventBucketName",
+          }
+          missing = sorted(required - outputs.keys())
+          if missing:
+              raise SystemExit(f"active stack outputs missing: {missing}")
+          base_url = outputs["CollectorApiBaseUrl"].rstrip("/")
+          endpoint = outputs["CollectorEndpoint"]
+          if endpoint != f"{base_url}/v1/events":
+              raise SystemExit("collector endpoint is outside the exact API base/path")
+          parsed = urlsplit(base_url)
+          expected_suffix = f".execute-api.{os.environ['AWS_REGION']}.amazonaws.com"
+          if parsed.scheme != "https" or not parsed.hostname or not parsed.hostname.endswith(expected_suffix):
+              raise SystemExit("collector API base is not the approved regional execute-api origin")
+          api_id = parsed.hostname[: -len(expected_suffix)]
+          values = {
+              "ACTIVE_COLLECTOR_API_ID": api_id,
+              "ACTIVE_COLLECTOR_CLUSTER_ARN": outputs["CollectorClusterArn"],
+              "ACTIVE_COLLECTOR_ENDPOINT": endpoint,
+              "ACTIVE_COLLECTOR_IMAGE": parameters["CollectorImageUri"],
+              "ACTIVE_COLLECTOR_SERVICE_ARN": outputs["CollectorServiceArn"],
+              "ACTIVE_COLLECTOR_TASK_DEFINITION": outputs["CollectorTaskDefinitionArn"],
+              "ACTIVE_COLLECTOR_VERSION": parameters["CollectorVersion"],
+              "ACTIVE_EVENT_BUCKET": outputs["EventBucketName"],
+          }
+          if outputs["CollectorServiceName"] != os.environ["SERVICE_NAME"]:
+              raise SystemExit("collector service name drift")
+          for key, value in sorted(values.items()):
+              print(f"{key}={shlex.quote(value)}")
+          PY
+          set -a
+          source active-stack.env
+          set +a
+          cat active-stack.env >> "${GITHUB_ENV}"
+          aws ecs describe-services \
+            --cluster "${ACTIVE_COLLECTOR_CLUSTER_ARN}" \
+            --services "${ACTIVE_COLLECTOR_SERVICE_ARN}" \
+            --region "${AWS_REGION}" > active-service.json
+          aws ecs describe-task-definition \
+            --task-definition "${ACTIVE_COLLECTOR_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > active-task-definition.json
+          aws ecs list-tasks \
+            --cluster "${ACTIVE_COLLECTOR_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" > active-task-list.json
+          ACTIVE_TASK_ARN="$(python3 -c 'import json; rows=json.load(open("active-task-list.json"))["taskArns"]; assert len(rows) == 1, rows; print(rows[0])')"
+          aws ecs describe-tasks \
+            --cluster "${ACTIVE_COLLECTOR_CLUSTER_ARN}" \
+            --tasks "${ACTIVE_TASK_ARN}" \
+            --region "${AWS_REGION}" > active-task.json
+          aws apigatewayv2 get-routes \
+            --api-id "${ACTIVE_COLLECTOR_API_ID}" \
+            --region "${AWS_REGION}" > active-routes.json
+          python3 - <<'PY'
+          import json
+          import os
+
+          service = json.load(open("active-service.json", encoding="utf-8"))["services"][0]
+          if service["serviceName"] != os.environ["SERVICE_NAME"]:
+              raise SystemExit("active ECS service name drift")
+          if service["taskDefinition"] != os.environ["ACTIVE_COLLECTOR_TASK_DEFINITION"]:
+              raise SystemExit("active ECS task definition drift")
+          if service["desiredCount"] != 1 or service["runningCount"] != 1:
+              raise SystemExit("active ECS service is not exactly 1/1")
+          definition = json.load(open("active-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          containers = definition["containerDefinitions"]
+          if len(containers) != 1 or containers[0]["name"] != "collector":
+              raise SystemExit("active task does not have exactly one collector container")
+          container = containers[0]
+          environment = {row["name"]: row["value"] for row in container.get("environment") or []}
+          if container["image"] != os.environ["ACTIVE_COLLECTOR_IMAGE"]:
+              raise SystemExit("active task image is not the stack's immutable image")
+          if environment.get("GROWTHBOOK_COLLECTOR_VERSION") != os.environ["ACTIVE_COLLECTOR_VERSION"]:
+              raise SystemExit("active collector version drift")
+          if container.get("readonlyRootFilesystem") is not True or container.get("user") != "10001:10001":
+              raise SystemExit("active collector lost its non-root/read-only boundary")
+          task = json.load(open("active-task.json", encoding="utf-8"))["tasks"][0]
+          if task["taskDefinitionArn"] != os.environ["ACTIVE_COLLECTOR_TASK_DEFINITION"]:
+              raise SystemExit("running task definition drift")
+          if task.get("lastStatus") != "RUNNING" or task.get("healthStatus") != "HEALTHY":
+              raise SystemExit("running collector task is not healthy")
+          running = task["containers"][0]
+          digest = os.environ["ACTIVE_COLLECTOR_IMAGE"].rsplit("@", 1)[-1]
+          if running.get("imageDigest") != digest:
+              raise SystemExit("running collector digest drift")
+          routes = json.load(open("active-routes.json", encoding="utf-8")).get("Items") or []
+          if len(routes) != 1:
+              raise SystemExit(f"collector API route count drift: {len(routes)}")
+          route = routes[0]
+          if route.get("RouteKey") != "POST /v1/events" or route.get("AuthorizationType") != "NONE":
+              raise SystemExit(f"collector API route drift: {route}")
+          print(f"COLLECTOR_ACTIVE_RUNTIME_OK:{task['taskArn']}:{digest}")
+          PY
+
+      - name: Verify public rejection, isolation, CORS, and zero writes
+        run: |
+          set -euo pipefail
+          aws s3api list-objects-v2 \
+            --bucket "${ACTIVE_EVENT_BUCKET}" \
+            --prefix experiment-events/raw/ \
+            --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' \
+            --output json \
+            --region "${AWS_REGION}" > raw-objects-before.json
+          CORS_STATUS="$(curl -sS -D cors-headers.txt -o cors-body.txt -w '%{http_code}' \
+            -X OPTIONS "${ACTIVE_COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://www.vevo.sk' \
+            -H 'Access-Control-Request-Method: POST')"
+          REJECTED_STATUS="$(curl -sS -o rejected-body.json -w '%{http_code}' \
+            -X POST "${ACTIVE_COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://www.vevo.sk' \
+            -H 'Content-Type: application/json' \
+            --data '{}')"
+          ATTACKER_STATUS="$(curl -sS -o attacker-body.json -w '%{http_code}' \
+            -X POST "${ACTIVE_COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://attacker.example' \
+            -H 'Content-Type: application/json' \
+            --data '{}')"
+          export CORS_STATUS REJECTED_STATUS ATTACKER_STATUS
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          if os.environ["CORS_STATUS"] not in {"200", "204"}:
+              raise SystemExit(f"CORS preflight failed: {os.environ['CORS_STATUS']}")
+          headers = Path("cors-headers.txt").read_text(encoding="utf-8").lower()
+          if "access-control-allow-origin: https://www.vevo.sk" not in headers:
+              raise SystemExit("exact CORS origin missing")
+          if os.environ["REJECTED_STATUS"] != "400":
+              raise SystemExit(f"valid-origin rejection status drift: {os.environ['REJECTED_STATUS']}")
+          if json.loads(Path("rejected-body.json").read_text(encoding="utf-8")) != {
+              "accepted": False,
+              "code": "invalid_event",
+          }:
+              raise SystemExit("valid-origin rejection body drift")
+          if os.environ["ATTACKER_STATUS"] != "403":
+              raise SystemExit(f"attacker-origin status drift: {os.environ['ATTACKER_STATUS']}")
+          if json.loads(Path("attacker-body.json").read_text(encoding="utf-8")) != {
+              "accepted": False,
+              "code": "origin_not_allowed",
+          }:
+              raise SystemExit("attacker-origin rejection body drift")
+          PY
+          API_BASE="${ACTIVE_COLLECTOR_ENDPOINT%/v1/events}"
+          for private_path in health marker.json; do
+            STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "${API_BASE}/${private_path}")"
+            if [[ "${STATUS}" != "404" ]]; then
+              echo "Private path ${private_path} unexpectedly returned ${STATUS}" >&2
+              exit 1
+            fi
+          done
+          aws s3api list-objects-v2 \
+            --bucket "${ACTIVE_EVENT_BUCKET}" \
+            --prefix experiment-events/raw/ \
+            --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' \
+            --output json \
+            --region "${AWS_REGION}" > raw-objects-after.json
+          if ! cmp -s raw-objects-before.json raw-objects-after.json; then
+            diff -u raw-objects-before.json raw-objects-after.json >&2 || true
+            echo "Rejected public probes changed the raw S3 object snapshot." >&2
+            exit 1
+          fi
+          echo "COLLECTOR_ACTIVE_PUBLIC_NO_WRITE_OK:${ACTIVE_COLLECTOR_ENDPOINT}"
+
+      - name: Verification summary
+        if: always()
+        run: |
+          {
+            echo "## VEVO GrowthBook active Preview verification"
+            echo
+            echo "- Stack: \`${STACK_NAME}\`"
+            echo "- Service: \`${SERVICE_NAME}\`"
+            echo "- Deployed version: \`${ACTIVE_COLLECTOR_VERSION:-not-resolved}\`"
+            echo "- Immutable image: \`${ACTIVE_COLLECTOR_IMAGE:-not-resolved}\`"
+            echo "- Endpoint: \`${ACTIVE_COLLECTOR_ENDPOINT:-not-resolved}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
