@@ -40,12 +40,18 @@ def main() -> int:
         read("projects/vevo/product_name_aliases.json")
         growthbook_collector = read("growthbook_collector/handler.py")
         growthbook_registry = read("growthbook_collector/experiments.json")
+        growthbook_registry_config = json.loads(growthbook_registry)
         growthbook_reporting = read("reporting_core/experiments.py")
         growthbook_event_io = read("reporting_core/experiment_io.py")
         growthbook_order_adapter = read("reporting_core/experiment_orders.py")
         growthbook_reconciler = read("scripts/reconcile_growthbook_facts.py")
         growthbook_template = read("infra/vevo-growthbook/template.yaml")
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
+        growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
+        growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
+        growthbook_preview_config = json.loads(
+            read("storefront/vevo-growthbook/config.preview.example.json")
+        )
         read("scripts/reporting_qa_smoke.py")
         read("scripts/import_product_expenses_excel.py")
 
@@ -235,6 +241,77 @@ def main() -> int:
             "GrowthBook production registry must remain empty before rollout approval.",
         )
         require(
+            growthbook_storefront,
+            "var PRODUCTION_ACTIVATION = false;",
+            "GrowthBook storefront must remain hard-disabled for Production.",
+        )
+        forbid(
+            growthbook_storefront,
+            "PRODUCTION_ACTIVATION = true",
+            "GrowthBook storefront Production activation requires a reviewed rollout change.",
+        )
+        require(
+            growthbook_storefront,
+            "@growthbook/growthbook@1.7.0/dist/bundles/index.min.js",
+            "GrowthBook storefront must keep the reviewed SDK bundle pin.",
+        )
+        require(
+            growthbook_storefront,
+            "sha384-LE9sSbxrM6BIe5z0T5qNuBymAEx7Iwp14FYi2TtCWSalftZaK5cG7ckbe3hNSRPK",
+            "GrowthBook storefront must keep the verified SDK SRI marker.",
+        )
+        require(
+            growthbook_storefront,
+            "web-vitals@6.0.1/dist/web-vitals.iife.js",
+            "GrowthBook storefront must use the pinned official Web Vitals build.",
+        )
+        require(
+            growthbook_storefront,
+            "sha384-xduvx5szsAXW0V0fxOYjfsvz/Zl93SEZcLM+BK+7y6Spco3N+8g8NjbtUIAWCCAQ",
+            "GrowthBook storefront must keep the verified Web Vitals SRI marker.",
+        )
+        forbid(
+            growthbook_storefront,
+            "auto.min.js",
+            "GrowthBook auto bundle would duplicate exposure tracking into GA4/GTM.",
+        )
+        for required_safety_marker in [
+            'credentials: "omit"',
+            'referrerPolicy: "no-referrer"',
+            "disableVisualExperiments: true",
+            "disableJsInjection: true",
+            "disableUrlRedirectExperiments: true",
+            "library.setPolyfills",
+            "options.consent & options.ANALYTIC",
+            '#product-detail .s1-detailCart .s1-submitCart',
+            'collector.port ||',
+        ]:
+            require(
+                growthbook_storefront,
+                required_safety_marker,
+                f"GrowthBook storefront lost safety marker: {required_safety_marker}",
+            )
+        for forbidden_storefront_marker in [
+            "innerHTML",
+            "document.write",
+            "eval(",
+            "fbclid",
+            "_fbp",
+            "_fbc",
+        ]:
+            forbid(
+                growthbook_storefront,
+                forbidden_storefront_marker,
+                f"GrowthBook storefront contains forbidden marker: {forbidden_storefront_marker}",
+            )
+        require(
+            growthbook_gtm_builder,
+            'payload["environment"] != "preview"',
+            "GrowthBook GTM builder must remain Preview-only.",
+        )
+        if growthbook_preview_config.get("environment") != "preview":
+            raise AssertionError("GrowthBook example config must remain Preview-only.")
+        require(
             growthbook_reporting,
             "authoritative order must use the exact PII-free schema",
             "GrowthBook reporting must reject order rows outside the PII-free boundary.",
@@ -315,6 +392,13 @@ def main() -> int:
             raise AssertionError("VEVO GrowthBook purchase attribution window must remain 7 days.")
         if growthbook_reporting_config.get("maturity_checkpoint_days") != 14:
             raise AssertionError("VEVO GrowthBook maturity checkpoint must remain 14 days.")
+        preview_registry = growthbook_registry_config.get("environments", {}).get("preview", {})
+        for experiment_id, weights in growthbook_reporting_config.get("expected_variation_weights", {}).items():
+            registry_variations = preview_registry.get(experiment_id, {}).get("variations", [])
+            if set(registry_variations) != set(weights):
+                raise AssertionError(
+                    f"GrowthBook registry/reporting variation mismatch for {experiment_id}."
+                )
 
         for rel_path in [
             "http_client.py",
@@ -336,6 +420,7 @@ def main() -> int:
             "reporting_core/experiment_io.py",
             "reporting_core/experiment_orders.py",
             "scripts/reconcile_growthbook_facts.py",
+            "scripts/build_vevo_growthbook_gtm_tag.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)
 

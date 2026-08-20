@@ -66,6 +66,7 @@ ORDER_FIELDS = frozenset(
 ORDER_STATES = frozenset({"realized", "pending", "cancelled", "refunded"})
 VITAL_NAMES = frozenset({"lcp_ms", "inp_ms", "cls_milli"})
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,79}$")
+VARIATION_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 DEVICE_FACT_FIELDS = frozenset(
     {
@@ -144,7 +145,7 @@ class ExperimentBuildConfig:
                 raise ExperimentDataError(f"{experiment_id} must define at least two variations")
             total = 0.0
             for variation_id, weight in weights.items():
-                _slug(variation_id, "variation_id")
+                _variation(variation_id)
                 if isinstance(weight, bool) or not math.isfinite(float(weight)) or float(weight) <= 0:
                     raise ExperimentDataError(f"invalid weight for {experiment_id}/{variation_id}")
                 total += float(weight)
@@ -193,6 +194,12 @@ def load_experiment_build_config(path: Path | str) -> ExperimentBuildConfig:
 def _slug(value: Any, field: str) -> str:
     if not isinstance(value, str) or not SLUG_RE.fullmatch(value):
         raise ExperimentDataError(f"invalid {field}")
+    return value
+
+
+def _variation(value: Any) -> str:
+    if not isinstance(value, str) or not VARIATION_RE.fullmatch(value):
+        raise ExperimentDataError("invalid variation_id")
     return value
 
 
@@ -269,7 +276,7 @@ def _normalize_event(row: Mapping[str, Any]) -> Dict[str, Any]:
     event_id = _uuid4(row.get("event_id"), "event_id")
     device_id = _uuid4(row.get("device_id"), "device_id")
     experiment_id = _slug(row.get("experiment_id"), "experiment_id")
-    variation_id = _slug(row.get("variation_id"), "variation_id")
+    variation_id = _variation(row.get("variation_id"))
     received_at = _utc_datetime(row.get("received_at"), "received_at")
     _utc_datetime(row.get("occurred_at"), "occurred_at")
 

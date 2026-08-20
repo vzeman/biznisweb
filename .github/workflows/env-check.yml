@@ -78,6 +78,11 @@ jobs:
         run: |
           python3 scripts/security_ci.py
 
+      - name: VEVO GrowthBook storefront unit tests
+        run: |
+          node --check storefront/vevo-growthbook/vevo-growthbook.js
+          node --test tests/test_vevo_growthbook_storefront.js
+
       - name: Validate VEVO GrowthBook CloudFormation
         run: |
           python -m pip install cfn-lint==1.55.1

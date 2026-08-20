@@ -105,7 +105,7 @@ Default rollout rule:
 
 Whether the anonymous sticky-assignment cookie is classified as functional or analytical is a business/privacy decision and must be recorded before production activation. Until that decision exists, production traffic allocation remains `0%`.
 
-A dedicated read-only admin inspection on `2026-08-20` confirmed that the Slovak storefront uses GTM container `GTM-5ZB5LFGB`, every native BiznisWeb Facebook Pixel ID/Access Token input shown for the language versions is empty, and the cookie manager has its Reject button enabled. The manager exposes Mandatory, Functional, Analytical, and Marketing categories; its current Analytical description explicitly covers browsing, component interaction, and conversion events. This supports the proposed analytical classification for experiment delivery/measurement, but it does not constitute legal approval and the admin view exposes no verified JavaScript accept/withdraw callback. Preview must still prove the actual consent signal and withdrawal behavior before Production can move above `0%`.
+A dedicated read-only admin inspection on `2026-08-20` confirmed that the Slovak storefront uses GTM container `GTM-5ZB5LFGB`, every native BiznisWeb Facebook Pixel ID/Access Token input shown for the language versions is empty, and the cookie manager has its Reject button enabled. The manager exposes Mandatory, Functional, Analytical, and Marketing categories; its current Analytical description explicitly covers browsing, component interaction, and conversion events. Public storefront source then confirmed the exact runtime signal `FloxSettings.options.consent & FloxSettings.options.ANALYTIC` and the existing `cookie_consent` data-layer event used for accept/withdraw synchronization. This supports the proposed analytical classification for experiment delivery/measurement, but it does not constitute legal approval; Preview must still prove accept, reject, withdrawal, and reload behavior before Production can move above `0%`.
 
 ## Execution plan and acceptance gates
 
@@ -165,11 +165,13 @@ Acceptance: local invalid, oversized, escaped-prefix, duplicate, conflicting, an
 
 - Implement the SDK bootstrap and collector client as version-controlled code.
 - Load it only on the Slovak storefront and make the page/experiment eligibility explicit.
-- Preserve control when the SDK, collector, consent API, or variant selector fails.
+- Preserve control when the SDK/payload, consent API, configuration, or variant selector fails. A collector/network failure must never block cart/checkout; it suppresses dependent cart/health facts and is a rollout `NO-GO` detected by Preview/A/A quality gates.
 - Add a deterministic preview override that is unavailable to ordinary traffic.
 - Keep price, cart, checkout, and product data untouched.
 
 Because BiznisWeb currently loads GTM in the page head, A/A may begin through a versioned GTM custom template/tag after QA. If flicker or LCP is unacceptable, stop and obtain a supported early-head integration from BiznisWeb before any visual variant.
+
+Implemented locally on `codex/vevo-growthbook`: `storefront/vevo-growthbook/vevo-growthbook.js` is a Preview-only, consent-aware client; `scripts/build_vevo_growthbook_gtm_tag.py` creates a reproducible exact Custom HTML artifact; and the three versioned bridge tags reuse BiznisWeb's existing `cookie_consent`, successful `add_to_cart`, and `purchase` events. Production is hard-disabled, arbitrary SDK/collector inputs fail closed, the manual GrowthBook SDK avoids duplicate GA4/GTM exposure forwarding, and the official SRI-pinned Web Vitals library forwards only bounded numeric LCP/INP/CLS values. No GTM container or storefront was mutated.
 
 Acceptance: unit/security checks pass; the integration is deployed from a branch and PR; rollback disables the GrowthBook tag/feature without editing shop content.
 
@@ -220,7 +222,7 @@ Hypothesis: changing only the product-detail add-to-cart CTA background from the
 - Population: eligible consented devices on Slovak product-detail pages where the add-to-cart CTA is actually rendered.
 - Split: 50/50, sticky by anonymous device ID.
 - Control: the current CTA color.
-- Variant: one approved high-contrast brand-palette CTA color; label, dimensions, placement, selectors, prices, cart behavior, and every other element remain unchanged.
+- Variant `brand_contrast`: VEVO's existing gold gradient `#c9a962` → `#b8956f` with dark brand text `#0f172a`; label, dimensions, placement, selectors, prices, cart behavior, and every other element remain unchanged.
 - Primary metric: binary device-level `add_to_cart` within 24 hours of first valid exposure, divided by unique first-exposed product-viewer devices.
 - Primary business guardrail: authoritative CM1 contribution per eligible exposed device under `vevo_cm1_v1_2026-08-20`.
 - Other guardrails: purchase conversion, AOV, cancellation/refund rate, p75 LCP, JavaScript errors, and checkout health.

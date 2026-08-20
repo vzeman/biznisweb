@@ -82,7 +82,7 @@ The primary metric for `vevo-sk-product-cta-color-001` is binary at device level
 
 ## `performance_vital`
 
-Emitted only after a valid experiment exposure and only once per supported metric and page load. Collection uses the browser performance APIs and must not enumerate resource names or URLs.
+Emitted only after a valid experiment exposure and only once per supported metric and page load. Measurement uses Google's official standard `web-vitals@6.0.1` IIFE build, exact-version/SRI pinned and loaded only after analytical consent. Only its final numeric metric value is accepted; attribution targets, entries, resource names, DOM details, and URLs are never copied into an event.
 
 Additional fields:
 

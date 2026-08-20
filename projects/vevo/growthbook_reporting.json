@@ -12,7 +12,7 @@
     },
     "vevo-sk-product-cta-color-001": {
       "control": 0.5,
-      "variant": 0.5
+      "brand_contrast": 0.5
     }
   }
 }

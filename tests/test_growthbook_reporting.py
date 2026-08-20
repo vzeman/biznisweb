@@ -87,7 +87,7 @@ def order(
 def config():
     return ExperimentBuildConfig(
         metric_contract_version="vevo_cm1_v1_2026-08-20",
-        expected_variation_weights={EXPERIMENT: {"control": 0.5, "variant": 0.5}},
+        expected_variation_weights={EXPERIMENT: {"control": 0.5, "brand_contrast": 0.5}},
     )
 
 
@@ -185,7 +185,7 @@ class GrowthBookReportingTests(unittest.TestCase):
                 event(device_id=device_id, variation_id="control"),
                 event(
                     device_id=device_id,
-                    variation_id="variant",
+                    variation_id="brand_contrast",
                     received_at=BASE + timedelta(minutes=1),
                 ),
             ]
@@ -202,7 +202,7 @@ class GrowthBookReportingTests(unittest.TestCase):
         self.assertEqual(1, bundle.quality_reports[0]["duplicate_event_count"])
 
         conflicting = dict(duplicate)
-        conflicting["variation_id"] = "variant"
+        conflicting["variation_id"] = "brand_contrast"
         with self.assertRaises(ExperimentDataError):
             self.build([duplicate, conflicting])
 
@@ -290,11 +290,11 @@ class GrowthBookReportingTests(unittest.TestCase):
 
     def test_srm_alert_uses_frozen_point_zero_zero_one_threshold(self):
         events = [event(device_id=uid(), variation_id="control") for _ in range(90)]
-        events.extend(event(device_id=uid(), variation_id="variant") for _ in range(10))
+        events.extend(event(device_id=uid(), variation_id="brand_contrast") for _ in range(10))
         report = self.build(events).quality_reports[0]
         self.assertTrue(report["srm_alert"])
         self.assertLess(report["srm_p_value"], 0.001)
-        self.assertEqual({"control": 90, "variant": 10}, report["variation_counts"])
+        self.assertEqual({"control": 90, "brand_contrast": 10}, report["variation_counts"])
 
     def test_lifecycle_and_maturity_are_preserved_without_customer_data(self):
         device_id = uid()
@@ -329,7 +329,7 @@ class GrowthBookReportingTests(unittest.TestCase):
         self.assertEqual(24, loaded.cart_window_hours)
         self.assertEqual(7, loaded.order_window_days)
         self.assertEqual(14, loaded.maturity_checkpoint_days)
-        self.assertEqual(0.5, loaded.expected_variation_weights[EXPERIMENT]["variant"])
+        self.assertEqual(0.5, loaded.expected_variation_weights[EXPERIMENT]["brand_contrast"])
 
         with tempfile.TemporaryDirectory() as temp_dir:
             invalid_path = Path(temp_dir) / "invalid.json"
