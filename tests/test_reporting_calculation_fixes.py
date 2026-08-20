@@ -788,6 +788,11 @@ class ReportingCalculationFixTests(unittest.TestCase):
                 "natural_complete_6x200_shot_2_cups",
             ),
             (
+                "Vevo Natural Complete 6×200 ml + 2× Vevo Shot a 2 odmerky ZADARMO",
+                21.46,
+                "natural_complete_6x200_2_shots_2_cups",
+            ),
+            (
                 "Bundle parfumov do prania Vevo Natural Pure Garden + Ylang Absolute 2×500 ml",
                 12.47,
                 "natural_bestsellers_500ml_ylang_pure_garden",
