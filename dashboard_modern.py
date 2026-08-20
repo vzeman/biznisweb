@@ -3982,6 +3982,11 @@ def generate_modern_dashboard(
         for row in meta_profit_guardrail_rows
     ) or '<tr><td colspan="4"><span class="lang-en">No CAC guardrails available.</span><span class="lang-sk hidden">CAC guardrails nie su dostupne.</span></td></tr>'
 
+    def _decision_eligible_badge(value: Any) -> str:
+        if value:
+            return '<span class="delta positive">YES</span>'
+        return '<span class="delta neutral">NO</span>'
+
     meta_profit_spend_tier_rows_html = "".join(
         (
             "<tr>"
@@ -3994,7 +3999,7 @@ def generate_modern_dashboard(
             f"<td>{_format_mini_value_html(row.get('cm3_win_rate_pct'), kind='percent', decimals=1)}</td>"
             f"<td>{_format_mini_value_html(row.get('new_customer_cac_proxy'), kind='currency')}</td>"
             f"<td>{_format_mini_value_html(row.get('sample_entry_share_pct'), kind='percent', decimals=1)}</td>"
-            f"<td>{'<span class=\"delta positive\">YES</span>' if row.get('decision_eligible') else '<span class=\"delta neutral\">NO</span>'}</td>"
+            f"<td>{_decision_eligible_badge(row.get('decision_eligible'))}</td>"
             "</tr>"
         )
         for row in meta_profit_spend_tier_rows
