@@ -1,7 +1,9 @@
 # VEVO experiment event contract
 
-Status: design contract; no production endpoint exists yet  
-Version: `1`  
+Status: design contract; no production endpoint exists yet
+
+Version: `1`
+
 Last reviewed: 2026-08-20
 
 ## Principles
@@ -121,4 +123,3 @@ Reject with no persistence when any condition is true:
 - experiment is inactive or the consent state is not eligible.
 
 Duplicates return an idempotent success but create no second accepted row.
-

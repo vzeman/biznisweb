@@ -1,7 +1,9 @@
 # VEVO GrowthBook Pro rollout plan
 
-Status: preflight completed, implementation is a conditional GO  
-Owner: VEVO  
+Status: preflight completed, implementation is a conditional GO
+
+Owner: VEVO
+
 Last reviewed: 2026-08-20
 
 ## Goal
@@ -234,7 +236,8 @@ Rollback must not disable the existing GA4, Meta Pixel, consent banner, or unrel
 
 ## Current GO/NO-GO
 
-`GO` for implementation and Preview/A/A preparation.  
+`GO` for implementation and Preview/A/A preparation.
+
 `NO-GO` for production allocation above `0%` until all of the following are true:
 
 - GrowthBook Pro workspace/client key exists;
@@ -257,4 +260,3 @@ Rollback must not disable the existing GA4, Meta Pixel, consent banner, or unrel
 - BiznisWeb Google Tag Manager: <https://www.biznisweb.sk/a/741/google-tag-manager-spravca-znaciek-google>
 - BiznisWeb cookie categories: <https://www.biznisweb.sk/a/1302/cookies-lista>
 - BiznisWeb Meta Pixel/CAPI: <https://www.biznisweb.sk/a/1409/nastavenie-facebook-conversion-api>
-
