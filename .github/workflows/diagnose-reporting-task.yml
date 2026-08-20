@@ -1,0 +1,150 @@
+name: Diagnose Reporting ECS Task
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Reporting project owning the task
+        required: true
+        type: choice
+        options:
+          - vevo
+          - roy
+      task_id:
+        description: Exact ECS task ID or ARN to inspect
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+  ECS_CLUSTER: vevo-reporting-cluster
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read task state and CloudWatch tail
+        shell: bash
+        env:
+          PROJECT: ${{ inputs.project }}
+          TASK_ID: ${{ inputs.task_id }}
+        run: |
+          set -euo pipefail
+          EXPECTED_FAMILY="${PROJECT}-reporting-daily"
+          aws ecs describe-tasks \
+            --cluster "${ECS_CLUSTER}" \
+            --tasks "${TASK_ID}" \
+            --region "${AWS_REGION}" > task.json
+
+          TASK_DEFINITION_ARN="$(python - "${EXPECTED_FAMILY}" <<'PY'
+          import json
+          import sys
+
+          expected_family = sys.argv[1]
+          response = json.load(open("task.json", encoding="utf-8"))
+          failures = response.get("failures") or []
+          if failures:
+              raise SystemExit(f"ECS task lookup failed: {failures}")
+          tasks = response.get("tasks") or []
+          if len(tasks) != 1:
+              raise SystemExit(f"Expected exactly one ECS task, got {len(tasks)}")
+          task_definition = str(tasks[0].get("taskDefinitionArn") or "")
+          if f"task-definition/{expected_family}:" not in task_definition:
+              raise SystemExit(
+                  f"Task definition {task_definition!r} does not belong to {expected_family!r}"
+              )
+          print(task_definition)
+          PY
+          )"
+
+          aws ecs describe-task-definition \
+            --task-definition "${TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > task-definition.json
+
+          readarray -t LOG_CONTEXT < <(python - <<'PY'
+          import json
+
+          task = json.load(open("task.json", encoding="utf-8"))["tasks"][0]
+          task_definition = json.load(open("task-definition.json", encoding="utf-8"))["taskDefinition"]
+          containers = task.get("containers") or []
+          if len(containers) != 1:
+              raise SystemExit(f"Expected exactly one task container, got {len(containers)}")
+          container_name = str(containers[0].get("name") or "")
+          definitions = [
+              row for row in task_definition.get("containerDefinitions") or []
+              if str(row.get("name") or "") == container_name
+          ]
+          if len(definitions) != 1:
+              raise SystemExit(f"Could not resolve container definition for {container_name!r}")
+          options = ((definitions[0].get("logConfiguration") or {}).get("options") or {})
+          log_group = str(options.get("awslogs-group") or "")
+          log_prefix = str(options.get("awslogs-stream-prefix") or "")
+          if not log_group or not log_prefix:
+              raise SystemExit("Task definition is missing awslogs group or stream prefix")
+          task_id = str(task.get("taskArn") or "").rsplit("/", 1)[-1]
+          print(log_group)
+          print(f"{log_prefix}/{container_name}/{task_id}")
+          PY
+          )
+          LOG_GROUP="${LOG_CONTEXT[0]}"
+          LOG_STREAM="${LOG_CONTEXT[1]}"
+
+          aws logs get-log-events \
+            --log-group-name "${LOG_GROUP}" \
+            --log-stream-name "${LOG_STREAM}" \
+            --start-from-head \
+            --limit 10000 \
+            --region "${AWS_REGION}" > log-events.json
+
+          python - "${PROJECT}" "${LOG_GROUP}" "${LOG_STREAM}" <<'PY' | tee diagnostic.txt
+          import json
+          import sys
+
+          project, log_group, log_stream = sys.argv[1:]
+          task = json.load(open("task.json", encoding="utf-8"))["tasks"][0]
+          containers = task.get("containers") or []
+          container = containers[0] if containers else {}
+          task_id = str(task.get("taskArn") or "").rsplit("/", 1)[-1]
+          print(
+              "ECS_REPORT_TASK_DIAGNOSTIC:"
+              f"project={project}:"
+              f"task={task_id}:"
+              f"last_status={task.get('lastStatus')}:"
+              f"desired_status={task.get('desiredStatus')}:"
+              f"stop_code={task.get('stopCode')}:"
+              f"stopped_reason={task.get('stoppedReason')}:"
+              f"container_reason={container.get('reason')}:"
+              f"exit_code={container.get('exitCode')}:"
+              f"task_definition={task.get('taskDefinitionArn')}:"
+              f"log_group={log_group}:"
+              f"log_stream={log_stream}"
+          )
+          print("--- CLOUDWATCH TAIL (last 400 events) ---")
+          events = json.load(open("log-events.json", encoding="utf-8")).get("events") or []
+          for event in events[-400:]:
+              message = str(event.get("message") or "").replace("\x00", "")
+              print(message)
+          print("--- END CLOUDWATCH TAIL ---")
+          PY
+
+          {
+            echo '## Reporting ECS task diagnostic'
+            echo '```text'
+            cat diagnostic.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
