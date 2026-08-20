@@ -120,7 +120,7 @@ The dated artifact `GROWTHBOOK_BASELINE_2026-08-20.md` freezes the observable GA
 
 The public GTM mapping plus a named GA4 transaction-ID Exploration and read-only BiznisWeb API audit verified `57/58` exact production joins (`98.28%`), with every GA4 transaction ID counted once. The single historical non-join remains excluded rather than manually mapped. Re-validate the implemented collector path during A/A; do not rely only on this historical sample.
 
-Acceptance: the dated baseline artifact exists, metric definition `vevo_cm1_v1_2026-08-20` is frozen, and the historical transaction join exceeds the `98%` gate. These conditions pass. Consent coverage, performance/checkout baselines, and purchase-population reconciliation for the implemented event path remain NO-GO gates.
+Acceptance: the dated baseline artifact exists, metric definition `vevo_cm1_v1_2026-08-20` is frozen, the historical transaction join exceeds the `98%` gate, and public CrUX plus representative mobile/desktop Lighthouse measurements are recorded. These historical-baseline conditions pass. Consent coverage and purchase/performance reconciliation for the implemented event path remain downstream NO-GO gates.
 
 ### 3. GrowthBook Pro workspace
 
@@ -171,6 +171,8 @@ Test Preview first, then a zero-visual-difference production smoke:
 - no duplicate GA4 or Meta purchase events;
 - no console errors, broken navigation, layout overlap, or cumulative layout shift;
 - collector unavailable: page remains control and checkout still works.
+
+Performance stop thresholds after at least `200` measured page loads per arm are frozen in the baseline artifact: p75 LCP increase greater than `max(200 ms, 10%)`, p75 INP increase greater than `max(20 ms, 10%)`, CLS increase greater than `0.02`, or client-error device-rate increase greater than `0.5` percentage points. Any reproducible cart/checkout runtime error stops immediately without waiting for that sample.
 
 For any AWS deploy, first record the exact instance/task identity, IP, service, and runtime path. Verify the service on-host with `curl localhost` and a build marker before browser UI testing.
 

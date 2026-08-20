@@ -89,10 +89,46 @@ GA4 covered `55 / 165 = 33.33%` of the period's shipped-order aggregate and `58 
 - GA4 recorded `58` purchases, while the BiznisWeb diagnostic aggregate reported `184` created orders and `165` shipped orders for the same dates. Exact joining is now verified, but the BiznisWeb aggregate also includes failed/expired payment statuses and is not consent-scoped. Neither total is the experiment denominator; the denominator is the consent-eligible exposed-device population.
 - A production page and the public GTM configuration expose different GA4 measurement IDs. This is an audit lead only; duplication is not asserted. Tag ownership, destination routing, and purchase deduplication must be verified before A/A.
 - Existing Meta URL coverage by stable campaign, ad-set, ad, and placement IDs has not been fully measured. These remain diagnostic dimensions, never the randomization key.
-- p75 LCP, JavaScript-error rate, checkout-health baseline, cancellation/refund rate, authoritative AOV, and CM1 per eligible device are not yet available under the experiment population definition.
+- JavaScript-error device rate, experiment-scoped checkout health, cancellation/refund rate, authoritative AOV, and CM1 per eligible device are not yet available under the experiment population definition. A public performance baseline is frozen below, but per-variation performance requires the new event path.
 - Consent-eligible traffic is unknown until the consent-aware exposure event exists.
 
 Production allocation must remain `0%` until consent classification/coverage, performance baselines, the isolated collector, and reporting reconciliation gates pass. The historical join audit passes; the new `order_completed` implementation must independently pass the same gate before A/A acceptance.
+
+## Public performance baseline
+
+Google PageSpeed Insights report time: `2026-08-20 16:59 Europe/Bratislava`.
+
+The representative product URL did not have sufficient URL-level field data, so PageSpeed displayed the `vevo.sk` origin-level Chrome UX Report for the latest 28 days:
+
+| Field metric (p75) | Mobile | Desktop |
+| --- | ---: | ---: |
+| Core Web Vitals assessment | passed | passed |
+| LCP | 1.3 s | 1.3 s |
+| INP | 152 ms | 50 ms |
+| CLS | 0 | 0 |
+| FCP | 1.2 s | 1.0 s |
+| TTFB | 0.8 s | 0.7 s |
+
+One Lighthouse run of the representative product detail `/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute` produced:
+
+| Lab metric | Mobile | Desktop |
+| --- | ---: | ---: |
+| Performance score | 64 | 85 |
+| FCP | 3.3 s | 0.5 s |
+| LCP | 13.3 s | 1.4 s |
+| Total Blocking Time | 150 ms | 260 ms |
+| CLS | 0.028 | 0.001 |
+| Transfer size | 17,973 KiB | 18,030 KiB |
+
+The single Lighthouse results are diagnostics, not p75 estimates. They show why Preview must be compared under identical repeated conditions and why A/A/A/B must record per-variation web vitals. PageSpeed also observed browser-console errors, but it does not provide a decision-grade device error rate; the collector records only a boolean/error-kind signal and never an error message, stack, URL, or payload.
+
+Locked performance stop thresholds for A/A and A/B after at least `200` measured page loads per arm:
+
+- variant p75 LCP may not exceed control by more than the greater of `200 ms` or `10%`;
+- variant p75 INP may not exceed control by more than the greater of `20 ms` or `10%`;
+- variant p75 CLS may not exceed control by more than `0.02`;
+- variant client-error device rate may not exceed control by more than `0.5` percentage points;
+- any reproducible checkout or add-to-cart runtime error stops the rollout immediately regardless of sample.
 
 ## Surface decision
 

@@ -80,6 +80,33 @@ Additional field:
 
 The primary metric for `vevo-sk-product-cta-color-001` is binary at device level: at least one accepted `add_to_cart` after first valid product-detail exposure and within 24 hours. The denominator is all unique devices with a first valid exposure to a rendered eligible product CTA. Later exposures and repeated cart additions do not increase either side of the primary ratio.
 
+## `performance_vital`
+
+Emitted only after a valid experiment exposure and only once per supported metric and page load. Collection uses the browser performance APIs and must not enumerate resource names or URLs.
+
+Additional fields:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `page_load_id` | UUID string | random per page load; never a session/customer ID |
+| `vital_name` | enum | `lcp_ms`, `inp_ms`, or `cls_milli` |
+| `vital_value` | integer | non-negative bounded integer; milliseconds for LCP/INP and CLS multiplied by 1,000 |
+
+Unknown or non-finite values are rejected. Reporting calculates p75 per variation from first valid metric per `(experiment_id, variation_id, page_load_id, vital_name)` and applies the frozen stop thresholds only after at least `200` measured page loads per arm.
+
+## `client_error_observed`
+
+Emitted at most once per error kind and page load after a valid experiment exposure.
+
+Additional fields:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `page_load_id` | UUID string | same random page-load identifier as performance events |
+| `error_kind` | enum | `runtime_error` or `unhandled_rejection` |
+
+The event contains no message, stack, filename, line, column, URL, DOM content, or rejected value. The decision metric is the share of exposed devices with at least one accepted client-error event.
+
 ## `order_completed`
 
 Emitted on the BiznisWeb order-confirmation page only after the page exposes a valid transaction identifier.
@@ -109,6 +136,7 @@ Reporting creates one row per `(experiment_id, device_id)` with:
 - purchase conversion indicator;
 - exact joined order count;
 - authoritative net revenue and CM1 contribution under metric definition `vevo_cm1_v1_2026-08-20`;
+- p75 LCP/INP/CLS inputs and client-error indicator from strictly allowlisted health events;
 - cancellation/refund state as of the defined maturity checkpoint;
 - contamination and data-quality flags.
 
