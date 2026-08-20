@@ -3659,6 +3659,59 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual("KEEP_ORGANIC", sample_rows.loc["SAMPLE-3", "shop_action"])
         self.assertEqual("KEEP_ORGANIC", sample_rows.loc["SAMPLE-6", "shop_action"])
 
+    def test_meta_profit_scaling_handles_short_period_without_comparison_window(self) -> None:
+        exporter = make_exporter("vevo")
+        dates = pd.date_range("2026-08-13", periods=7, freq="D")
+        rows = []
+        for index, purchase_date in enumerate(dates):
+            rows.append(
+                {
+                    "order_num": f"SHORT-{index}",
+                    "customer_email": f"short-{index}@example.com",
+                    "purchase_date": purchase_date,
+                    "customer_first_purchase_date": purchase_date,
+                    "order_total": 25.0,
+                    "order_revenue_net": 25.0,
+                    "total_items_in_order": 1,
+                    "fb_ads_daily_spend": 20.0,
+                    "google_ads_daily_spend": 0.0,
+                    "total_expense": 8.0,
+                    "product_sku": "FULL-500",
+                    "item_label": "Parfum do prania Test (500ml)",
+                    "item_quantity": 1,
+                    "item_total_without_tax": 25.0,
+                    "item_total_with_tax": 25.0,
+                    "item_unit_price": 25.0,
+                    "item_line_sum_original": 25.0,
+                    "item_line_sum_with_tax_original": 25.0,
+                    "item_unit_price_original": 25.0,
+                }
+            )
+        daily = pd.DataFrame(
+            {
+                "date": dates,
+                "orders": 1,
+                "revenue": 25.0,
+                "fb_spend": 20.0,
+                "google_spend": 0.0,
+                "total_ad_spend": 20.0,
+                "pre_ad_contribution": 17.0,
+                "profit_without_fixed": -3.0,
+                "profit_with_fixed": -8.0,
+                "new_customers": 1,
+                "returning_customers": 0,
+            }
+        )
+
+        result = exporter.analyze_meta_profit_scaling(
+            pd.DataFrame(rows),
+            ads_effectiveness={"daily_data": daily},
+            sample_funnel_analysis={"summary": {"fullsize_any_60d_pct": 0.0}},
+        )
+
+        self.assertTrue(result["recent_window_rows"].empty)
+        self.assertEqual("EXPERIMENT", result["summary"]["account_action"])
+
     def test_best_spend_range_ignores_one_day_profit_outlier(self) -> None:
         exporter = make_exporter("vevo")
         dates = pd.date_range("2026-01-01", periods=31, freq="D")
