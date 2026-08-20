@@ -55,6 +55,9 @@ def main() -> int:
         growthbook_verify_workflow = read(
             ".github/workflows/verify-vevo-growthbook-preview.yml"
         )
+        growthbook_reader_workflow = read(
+            ".github/workflows/provision-vevo-growthbook-preview-reader.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -476,6 +479,43 @@ def main() -> int:
                 growthbook_verify_workflow,
                 marker,
                 f"GrowthBook active verifier lost safety marker: {marker}",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "IAM_USER_NAME: vevo-growthbook-preview-reader",
+            "IAM_USER_PATH: /vevo/growthbook/preview/",
+            "GROWTHBOOK_IDENTITY_PREPROVISION_GATE",
+            'parameters.get("PublicRouteEnabled") != "true"',
+            'container.get("workingDirectory") != os.environ["RUNTIME_PATH"]',
+            "if not set(resources) <= allowed_resources:",
+            "if observed_actions != allowed_actions:",
+            "aws iam create-user",
+            "aws iam attach-user-policy",
+            "aws iam create-access-key",
+            "aws iam list-access-keys",
+            "aws iam list-user-tags",
+            "openssl cms -encrypt -binary -aes-256-cbc",
+            "uses: actions/upload-artifact@v4.6.2",
+            "retention-days: 1",
+            "GROWTHBOOK_PREVIEW_READER_ACTIVE",
+            "GROWTHBOOK_PREVIEW_READER_FAILED_RUN_REVOKED",
+        ):
+            require(
+                growthbook_reader_workflow,
+                marker,
+                f"GrowthBook Preview reader workflow lost safety marker: {marker}",
+            )
+        for forbidden_reader_marker in (
+            "cat ${CREDENTIAL_JSON}",
+            "cat \"${CREDENTIAL_JSON}\"",
+            "GITHUB_ENV} < ${CREDENTIAL_JSON}",
+            "GITHUB_OUTPUT} < ${CREDENTIAL_JSON}",
+            "s3:DeleteObject",
+        ):
+            forbid(
+                growthbook_reader_workflow,
+                forbidden_reader_marker,
+                f"GrowthBook Preview reader workflow contains unsafe marker: {forbidden_reader_marker}",
             )
         forbid(
             growthbook_template,
