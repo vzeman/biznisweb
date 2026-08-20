@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import pathlib
 import py_compile
 import sys
@@ -39,6 +40,9 @@ def main() -> int:
         read("projects/vevo/product_name_aliases.json")
         growthbook_collector = read("growthbook_collector/handler.py")
         growthbook_registry = read("growthbook_collector/experiments.json")
+        growthbook_reporting = read("reporting_core/experiments.py")
+        growthbook_template = read("infra/vevo-growthbook/template.yaml")
+        growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         read("scripts/reporting_qa_smoke.py")
         read("scripts/import_product_expenses_excel.py")
 
@@ -227,6 +231,62 @@ def main() -> int:
             '"production": {}',
             "GrowthBook production registry must remain empty before rollout approval.",
         )
+        require(
+            growthbook_reporting,
+            "authoritative order must use the exact PII-free schema",
+            "GrowthBook reporting must reject order rows outside the PII-free boundary.",
+        )
+        require(
+            growthbook_reporting,
+            "one event_id has conflicting payloads",
+            "GrowthBook reporting must fail closed on conflicting event IDs.",
+        )
+        require(
+            growthbook_reporting,
+            "ambiguous_transaction_device",
+            "GrowthBook reporting must prevent cross-device double attribution.",
+        )
+        require(
+            growthbook_template,
+            "DenyRawWritesWithoutIfNoneMatch",
+            "GrowthBook event bucket must enforce conditional raw writes.",
+        )
+        require(
+            growthbook_template,
+            "BlockPublicPolicy: true",
+            "GrowthBook event bucket must block public policies.",
+        )
+        require(
+            growthbook_template,
+            "ReservedConcurrentExecutions: 5",
+            "GrowthBook collector must keep a bounded concurrency limit.",
+        )
+        forbid(
+            growthbook_template,
+            "s3:DeleteObject",
+            "GrowthBook runtime policies must not delete experiment objects.",
+        )
+        growthbook_policy_section = growthbook_template.split("  GrowthBookReadOnlyPolicy:", 1)[1].split(
+            "  CollectorErrorsAlarm:", 1
+        )[0]
+        forbid(
+            growthbook_policy_section,
+            "experiment-events/raw",
+            "GrowthBook identity must not read raw experiment events.",
+        )
+        forbid(
+            growthbook_policy_section,
+            "Resource: '*'",
+            "GrowthBook identity must not receive wildcard resources.",
+        )
+        if growthbook_reporting_config.get("metric_contract_version") != "vevo_cm1_v1_2026-08-20":
+            raise AssertionError("VEVO GrowthBook reporting must keep the frozen CM1 metric contract.")
+        if growthbook_reporting_config.get("cart_window_hours") != 24:
+            raise AssertionError("VEVO GrowthBook primary cart window must remain 24 hours.")
+        if growthbook_reporting_config.get("order_window_days") != 7:
+            raise AssertionError("VEVO GrowthBook purchase attribution window must remain 7 days.")
+        if growthbook_reporting_config.get("maturity_checkpoint_days") != 14:
+            raise AssertionError("VEVO GrowthBook maturity checkpoint must remain 14 days.")
 
         for rel_path in [
             "http_client.py",
@@ -244,6 +304,7 @@ def main() -> int:
             "scripts/import_product_expenses_excel.py",
             "scripts/reporting_qa_smoke.py",
             "growthbook_collector/handler.py",
+            "reporting_core/experiments.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)
 

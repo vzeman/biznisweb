@@ -28,6 +28,8 @@ The rollout is complete only when the A/A acceptance gates pass and the first A/
 | First A/B change | CTA background/color only; label, size, layout, product selector, prices, cart behavior, and all other content stay identical |
 | Primary decision metric | unique devices with `add_to_cart` within 24 hours / unique first-exposed product-viewer devices |
 | Primary business guardrail | authoritative CM1 contribution per eligible exposed device under metric definition `vevo_cm1_v1_2026-08-20` |
+| Purchase attribution window | 7 days from the first valid exposure, frozen before A/A |
+| Cancellation/refund maturity checkpoint | 14 days after the authoritative order timestamp; immature rows remain explicitly flagged |
 | Excluded initially | prices, discounts, cart, checkout, payments, stock, product duplication, personalized pricing, and non-Slovak storefronts |
 
 ## Architecture decision
@@ -50,16 +52,23 @@ www.vevo.sk (same canonical URL)
              validated, PII-free events
                    |
                    v
-             AWS event-only S3 prefix
-                /            \
-               v              v
-        Athena read-only    VEVO reporting
-               |
-               v
-        GrowthBook Pro results
+             AWS raw event-only S3 prefix
+                         |
+                         v
+              VEVO reporting reconciliation
+             (exact order join; authoritative CM1)
+                         |
+                         v
+             curated anonymous fact prefixes
+                    /                 \
+                   v                   v
+          Athena read-only        VEVO reporting
+                   |
+                   v
+          GrowthBook Pro results
 ```
 
-One event dataset is therefore used by both GrowthBook and the existing reporting. GrowthBook Cloud receives only aggregate query results from Athena. Its IAM principal must have least-privilege read access to the experiment-only dataset and query-result location; it must not be able to read order exports, customer records, invoices, secrets, or unrelated client data.
+One raw event dataset is therefore reconciled once by the existing reporting boundary and materialized as anonymous device/performance facts used by both GrowthBook and VEVO reporting. GrowthBook Cloud receives only Athena query results over the curated prefixes. Its IAM principal cannot read raw events, order exports, customer records, invoices, secrets, or unrelated client data.
 
 The current Basic-Auth App Runner dashboard is not a public event collector. Ingestion must be a separate endpoint with its own rate limits, validation, CORS policy, logging, and rollback.
 
@@ -143,6 +152,7 @@ No GrowthBook subscription purchase or paid upgrade is executed without the acco
 - Never persist raw IP addresses, full URLs/query strings, user-agent strings, Meta click IDs, or customer data.
 - Partition the S3 dataset by event date and expose it through a dedicated Glue/Athena database.
 - Add reporting ingestion and reconciliation from the same dataset.
+- Freeze the browser-to-order attribution window at seven days and keep the 14-day cancellation/refund maturity state explicit rather than silently treating immature orders as final.
 
 Acceptance: invalid, oversized, cross-origin, duplicate, and PII-bearing payload tests fail closed; valid synthetic events appear once in Athena and reporting.
 
@@ -174,7 +184,7 @@ Test Preview first, then a zero-visual-difference production smoke:
 
 Performance stop thresholds after at least `200` measured page loads per arm are frozen in the baseline artifact: p75 LCP increase greater than `max(200 ms, 10%)`, p75 INP increase greater than `max(20 ms, 10%)`, CLS increase greater than `0.02`, or client-error device-rate increase greater than `0.5` percentage points. Any reproducible cart/checkout runtime error stops immediately without waiting for that sample.
 
-For any AWS deploy, first record the exact instance/task identity, IP, service, and runtime path. Verify the service on-host with `curl localhost` and a build marker before browser UI testing.
+For any AWS deploy, first record the exact instance/task identity, IP, service, and runtime path. Verify the service on-host with `curl localhost` and a build marker before browser UI testing. The current proposed API Gateway/Lambda collector has no instance ID, host IP, service manager, or localhost surface, so it remains deployment-blocked under this hard-gate even though its CloudFormation can be reviewed and linted. Resolve the architecture/policy mismatch before creating a stack; do not reinterpret lint success as deployment approval.
 
 Acceptance: signed QA checklist and exact rollback test pass. Any checkout, consent, duplication, or performance regression is an immediate NO-GO.
 
@@ -248,6 +258,7 @@ Rollback must not disable the existing GA4, Meta Pixel, consent banner, or unrel
 - isolated collector and Athena dataset pass security tests;
 - Preview and rollback QA pass;
 - exact deployment hard-gate evidence exists.
+- the serverless collector design is reconciled with the mandatory host-local verification rule, or replaced by a compliant dedicated host design before any AWS mutation.
 
 `NO-GO` for price testing until BiznisWeb provides a supported, server-authoritative per-visitor price mechanism that keeps product feed, cart, checkout, tax, stock, invoices, and legal display consistent.
 
