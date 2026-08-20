@@ -79,6 +79,7 @@ jobs:
               raise SystemExit("collector public route is not enabled")
           required = {
               "CollectorClusterArn",
+              "CollectorContainerLogGroup",
               "CollectorServiceArn",
               "CollectorServiceName",
               "CollectorTaskDefinitionArn",
@@ -94,6 +95,7 @@ jobs:
               raise SystemExit("collector service identity drift")
           values = {
               "ACTIVE_CLUSTER_ARN": outputs["CollectorClusterArn"],
+              "ACTIVE_LOG_GROUP": outputs["CollectorContainerLogGroup"],
               "ACTIVE_DATABASE": outputs["ExperimentDatabaseName"],
               "ACTIVE_EVENT_BUCKET": outputs["EventBucketName"],
               "ACTIVE_GROWTHBOOK_POLICY_ARN": outputs["GrowthBookReadOnlyPolicyArn"],
@@ -152,8 +154,6 @@ jobs:
           container = containers[0]
           if container["image"] != os.environ["ACTIVE_IMAGE"]:
               raise SystemExit("active image drift")
-          if container.get("workingDirectory") != os.environ["RUNTIME_PATH"]:
-              raise SystemExit("collector runtime path drift")
           if container.get("readonlyRootFilesystem") is not True or container.get("user") != "10001:10001":
               raise SystemExit("collector runtime security boundary drift")
           task = json.load(open("active-task.json", encoding="utf-8"))["tasks"][0]
@@ -223,13 +223,88 @@ jobs:
               raise SystemExit(
                   f"GrowthBook policy action set drift: {sorted(observed_actions ^ allowed_actions)}"
               )
-          task_id = task["taskArn"].rsplit("/", 1)[-1]
-          print(
-              "GROWTHBOOK_IDENTITY_PREPROVISION_GATE:"
-              f"instance-id=N/A(ECS/Fargate):task={task_id}:ip={private_ips[0]}:"
-              f"service={os.environ['SERVICE_NAME']}:path={os.environ['RUNTIME_PATH']}:digest={digest}"
-          )
+          with open("identity-host-gate-network.json", "w", encoding="utf-8") as handle:
+              json.dump(service["networkConfiguration"], handle, separators=(",", ":"))
           PY
+          cat > identity-host-gate-overrides.json <<'JSON'
+          {"containerOverrides":[{"name":"collector","command":["/bin/sh","/app/growthbook_collector/host_gate.sh"]}]}
+          JSON
+          IDENTITY_HOST_GATE_TASK_ARN="$(aws ecs run-task \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --task-definition "${ACTIVE_TASK_DEFINITION}" \
+            --launch-type FARGATE \
+            --network-configuration file://identity-host-gate-network.json \
+            --overrides file://identity-host-gate-overrides.json \
+            --started-by "gb-reader-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          if [[ -z "${IDENTITY_HOST_GATE_TASK_ARN}" || "${IDENTITY_HOST_GATE_TASK_ARN}" == "None" ]]; then
+            echo "GrowthBook identity host-gate task did not start." >&2
+            exit 1
+          fi
+          aws ecs wait tasks-stopped \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --tasks "${IDENTITY_HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}"
+          aws ecs describe-tasks \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --tasks "${IDENTITY_HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}" > identity-host-gate-task.json
+          python3 - <<'PY' > identity-host-gate.env
+          import json
+          import os
+
+          task = json.load(open("identity-host-gate-task.json", encoding="utf-8"))["tasks"][0]
+          if task["taskDefinitionArn"] != os.environ["ACTIVE_TASK_DEFINITION"]:
+              raise SystemExit("identity host-gate task definition drift")
+          container = task["containers"][0]
+          digest = os.environ["ACTIVE_IMAGE"].rsplit("@", 1)[-1]
+          if container.get("exitCode") != 0:
+              raise SystemExit(
+                  f"identity host-gate failed: {container.get('reason')} exit={container.get('exitCode')}"
+              )
+          if container.get("image") != os.environ["ACTIVE_IMAGE"]:
+              raise SystemExit("identity host-gate image URI drift")
+          if container.get("imageDigest") != digest:
+              raise SystemExit("identity host-gate image digest drift")
+          private_ips = []
+          for attachment in task.get("attachments") or []:
+              for detail in attachment.get("details") or []:
+                  if detail.get("name") == "privateIPv4Address" and detail.get("value"):
+                      private_ips.append(detail["value"])
+          if len(private_ips) != 1:
+              raise SystemExit(f"identity host-gate private IP unresolved: {private_ips}")
+          task_id = task["taskArn"].rsplit("/", 1)[-1]
+          print(f"IDENTITY_HOST_GATE_TASK_ID={task_id}")
+          print(f"IDENTITY_HOST_GATE_PRIVATE_IP={private_ips[0]}")
+          print(f"IDENTITY_HOST_GATE_LOG_STREAM=collector/collector/{task_id}")
+          PY
+          set -a
+          source identity-host-gate.env
+          set +a
+          for attempt in $(seq 1 12); do
+            aws logs get-log-events \
+              --log-group-name "${ACTIVE_LOG_GROUP}" \
+              --log-stream-name "${IDENTITY_HOST_GATE_LOG_STREAM}" \
+              --start-from-head \
+              --region "${AWS_REGION}" \
+              --query 'events[].message' \
+              --output text > identity-host-gate.log 2>/dev/null || true
+            if grep -F -q "COLLECTOR_LOCALHOST_HEALTH_OK:preview:${ACTIVE_VERSION}" identity-host-gate.log && \
+               grep -F -q "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:${ACTIVE_VERSION}" identity-host-gate.log; then
+              break
+            fi
+            if [[ "${attempt}" == "12" ]]; then
+              cat identity-host-gate.log >&2 || true
+              echo "GrowthBook identity localhost marker was not observed." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:preview:${ACTIVE_VERSION}" identity-host-gate.log
+          grep -F "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:${ACTIVE_VERSION}" identity-host-gate.log
+          echo "GROWTHBOOK_IDENTITY_PREPROVISION_GATE:instance-id=N/A(ECS/Fargate):task=${IDENTITY_HOST_GATE_TASK_ID}:ip=${IDENTITY_HOST_GATE_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:digest=${ACTIVE_IMAGE##*@}"
 
       - name: Create one dedicated encrypted credential handoff
         env:
