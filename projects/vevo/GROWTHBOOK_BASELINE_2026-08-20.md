@@ -1,6 +1,6 @@
 # VEVO GrowthBook baseline — 2026-08-20
 
-Status: GA4 traffic/funnel baseline frozen; authoritative order join and performance baselines remain open production gates
+Status: GA4 traffic/funnel and production transaction join frozen; consent coverage and performance baselines remain open production gates
 
 Observation window: `2026-07-23..2026-08-19` (latest complete 28 days)
 
@@ -66,16 +66,33 @@ CM1 is calculated only from authoritative BiznisWeb/reporting order data after a
 
 The first A/B primary decision metric is the device-level `add_to_cart` rate within 24 hours of first product-detail exposure. CM1 contribution per eligible exposed device is the primary business guardrail.
 
+## Production transaction-join audit
+
+A named GA4 Exploration, `Codex VEVO transaction join audit 2026-08-20`, listed all production-property transaction IDs for the frozen 28-day window. It contained `58` unique IDs and every row had exactly one transaction, so this property showed no duplicate transaction ID in the audited period.
+
+The public GTM purchase configuration maps `ecommerce.transaction_id` to GA4 `transaction_id`. Read-only BiznisWeb API checks produced:
+
+| Join result | Count | Share of 58 GA4 transactions |
+| --- | ---: | ---: |
+| Exact GA4 `transaction_id` = BiznisWeb `order_num` | 57 | 98.28% |
+| Exact and currently `Odoslaná` | 55 | 94.83% |
+| Exact and later online-payment-expired | 1 | 1.72% |
+| Exact and currently waiting | 1 | 1.72% |
+| Not found through the current BiznisWeb order API/search | 1 | 1.72% |
+
+This passes the planned minimum `98%` exact-join gate for the audited production sample and confirms the identifier format required by the collector/reporting contract. The unmatched historical ID remains excluded from authoritative value until it joins exactly; it is not fabricated or manually remapped.
+
+GA4 covered `55 / 165 = 33.33%` of the period's shipped-order aggregate and `58 / 184 = 31.52%` of all created-order aggregate. Consent gating is a plausible explanation, but it is not yet proven because the BiznisWeb aggregate is not consent-scoped and includes failed/expired statuses. Experiment purchases therefore come from the consent-eligible exposure population and are enriched by the authoritative order join; GA4 totals alone are not the source of truth for shop revenue.
+
 ## Measurement gaps and NO-GO gates
 
-- GA4 recorded `58` purchases, while the BiznisWeb diagnostic aggregate reported `184` created orders and `165` shipped orders for the same dates. The BiznisWeb aggregate also included failed/expired payment statuses and may cover more than the intended Slovak production population. Neither count is accepted as the experiment denominator until population, status, consent, and tagging differences are reconciled.
-- The public GTM purchase mapping supplies `ecommerce.transaction_id` as GA4 `transaction_id`, but equality with the authoritative BiznisWeb API `order_num` has not been demonstrated on one exact confirmation/order pair.
+- GA4 recorded `58` purchases, while the BiznisWeb diagnostic aggregate reported `184` created orders and `165` shipped orders for the same dates. Exact joining is now verified, but the BiznisWeb aggregate also includes failed/expired payment statuses and is not consent-scoped. Neither total is the experiment denominator; the denominator is the consent-eligible exposed-device population.
 - A production page and the public GTM configuration expose different GA4 measurement IDs. This is an audit lead only; duplication is not asserted. Tag ownership, destination routing, and purchase deduplication must be verified before A/A.
 - Existing Meta URL coverage by stable campaign, ad-set, ad, and placement IDs has not been fully measured. These remain diagnostic dimensions, never the randomization key.
 - p75 LCP, JavaScript-error rate, checkout-health baseline, cancellation/refund rate, authoritative AOV, and CM1 per eligible device are not yet available under the experiment population definition.
 - Consent-eligible traffic is unknown until the consent-aware exposure event exists.
 
-Production allocation must remain `0%` until the exact transaction join, purchase reconciliation, consent classification, performance baselines, and collector/reporting gates pass.
+Production allocation must remain `0%` until consent classification/coverage, performance baselines, the isolated collector, and reporting reconciliation gates pass. The historical join audit passes; the new `order_completed` implementation must independently pass the same gate before A/A acceptance.
 
 ## Surface decision
 

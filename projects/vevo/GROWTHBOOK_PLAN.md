@@ -108,7 +108,7 @@ Whether the anonymous sticky-assignment cookie is classified as functional or an
 
 Acceptance: read-only evidence is recorded in this file and `PROJECT_STATE.md`; no storefront mutation occurred.
 
-### 2. Measurement baseline — traffic/funnel frozen; join gate open
+### 2. Measurement baseline — traffic/funnel and join frozen; consent/performance gates open
 
 The dated artifact `GROWTHBOOK_BASELINE_2026-08-20.md` freezes the observable GA4 traffic/funnel baseline for `2026-07-23..2026-08-19`. Before production allocation, finish the unavailable or non-authoritative parts:
 
@@ -118,9 +118,9 @@ The dated artifact `GROWTHBOOK_BASELINE_2026-08-20.md` freezes the observable GA
 - p75 LCP and JavaScript error baseline if observable;
 - purchase-event completeness and duplication across the currently observed GA4 measurement IDs.
 
-Verify on one safe test order or a pre-approved existing order that BiznisWeb's confirmation-page `transactionId` equals the reporting API `order_num`. Do not infer equality from documentation.
+The public GTM mapping plus a named GA4 transaction-ID Exploration and read-only BiznisWeb API audit verified `57/58` exact production joins (`98.28%`), with every GA4 transaction ID counted once. The single historical non-join remains excluded rather than manually mapped. Re-validate the implemented collector path during A/A; do not rely only on this historical sample.
 
-Acceptance: the dated baseline artifact exists, metric definition `vevo_cm1_v1_2026-08-20` is frozen, and the transaction join succeeds exactly. The first two conditions now pass; the join and measurement-quality conditions remain NO-GO gates.
+Acceptance: the dated baseline artifact exists, metric definition `vevo_cm1_v1_2026-08-20` is frozen, and the historical transaction join exceeds the `98%` gate. These conditions pass. Consent coverage, performance/checkout baselines, and purchase-population reconciliation for the implemented event path remain NO-GO gates.
 
 ### 3. GrowthBook Pro workspace
 
@@ -242,7 +242,7 @@ Rollback must not disable the existing GA4, Meta Pixel, consent banner, or unrel
 - GrowthBook Pro workspace/client key exists;
 - consent category and retention are approved;
 - the dated traffic/funnel baseline exists and its remaining measurement gaps are closed;
-- `transactionId` → `order_num` is verified;
+- the implemented `order_completed` path reproduces the verified `transaction_id` → `order_num` join at or above `98%`;
 - isolated collector and Athena dataset pass security tests;
 - Preview and rollback QA pass;
 - exact deployment hard-gate evidence exists.
