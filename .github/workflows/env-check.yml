@@ -83,6 +83,26 @@ jobs:
           node --check storefront/vevo-growthbook/vevo-growthbook.js
           node --test tests/test_vevo_growthbook_storefront.js
 
+      - name: VEVO GrowthBook collector host adapter
+        run: |
+          python3 -m unittest \
+            tests.test_growthbook_collector \
+            tests.test_growthbook_collector_server \
+            tests.test_growthbook_changeset
+          docker build -f growthbook_collector/Dockerfile -t vevo-growthbook-collector:ci .
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            -e AWS_ACCESS_KEY_ID=ci-placeholder \
+            -e AWS_SECRET_ACCESS_KEY=ci-placeholder \
+            -e AWS_EC2_METADATA_DISABLED=true \
+            -e AWS_REGION=eu-central-1 \
+            -e GROWTHBOOK_ALLOWED_ORIGINS=https://www.vevo.sk \
+            -e GROWTHBOOK_COLLECTOR_VERSION=git-ci-host-gate \
+            -e GROWTHBOOK_ENVIRONMENT=preview \
+            -e GROWTHBOOK_EVENT_BUCKET=ci-placeholder \
+            -e GROWTHBOOK_EXPERIMENT_REGISTRY_PATH=/app/growthbook_collector/experiments.json \
+            vevo-growthbook-collector:ci \
+            /bin/sh /app/growthbook_collector/host_gate.sh
+
       - name: VEVO GrowthBook workspace contract
         run: |
           python3 scripts/validate_growthbook_workspace.py

@@ -160,8 +160,8 @@ def validate() -> None:
         raise AssertionError("GrowthBook Cloud Athena must keep a dedicated read-only identity")
     if athena.get("credentials_status") != "not_created":
         raise AssertionError("GrowthBook credentials must not be claimed before deployment")
-    if athena.get("preview", {}).get("status") != "blocked_by_runtime_hard_gate":
-        raise AssertionError("Preview Athena must remain blocked by the unresolved runtime hard gate")
+    if athena.get("preview", {}).get("status") != "ready_for_route_disabled_candidate_deploy":
+        raise AssertionError("Preview Athena status must match the reviewed route-disabled candidate")
     assignment_path = athena.get("assignment_query")
     assignment_sql = _read_repo_path(assignment_path)
     _validate_sql(

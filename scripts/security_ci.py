@@ -39,6 +39,9 @@ def main() -> int:
         read("templates/reporting-client/README_CLIENT_SETUP.md")
         read("projects/vevo/product_name_aliases.json")
         growthbook_collector = read("growthbook_collector/handler.py")
+        growthbook_collector_server = read("growthbook_collector/server.py")
+        growthbook_collector_dockerfile = read("growthbook_collector/Dockerfile")
+        growthbook_collector_host_gate = read("growthbook_collector/host_gate.sh")
         growthbook_registry = read("growthbook_collector/experiments.json")
         growthbook_registry_config = json.loads(growthbook_registry)
         growthbook_reporting = read("reporting_core/experiments.py")
@@ -46,6 +49,9 @@ def main() -> int:
         growthbook_order_adapter = read("reporting_core/experiment_orders.py")
         growthbook_reconciler = read("scripts/reconcile_growthbook_facts.py")
         growthbook_template = read("infra/vevo-growthbook/template.yaml")
+        growthbook_deploy_workflow = read(
+            ".github/workflows/deploy-vevo-growthbook-preview.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -235,6 +241,31 @@ def main() -> int:
             "Access-Control-Allow-Origin\": \"*",
             "GrowthBook collector must never use wildcard CORS.",
         )
+        for marker in (
+            'HOST_MARKER = "VEVO_GROWTHBOOK_COLLECTOR_HOST_OK"',
+            'self.path != "/v1/events"',
+            "def log_message",
+        ):
+            require(
+                growthbook_collector_server,
+                marker,
+                f"GrowthBook collector host adapter lost safety marker: {marker}",
+            )
+        for marker in (
+            "USER 10001:10001",
+            'CMD ["python", "-m", "growthbook_collector.server"]',
+            'CMD ["curl", "-fsS", "http://127.0.0.1:8080/health"]',
+        ):
+            require(
+                growthbook_collector_dockerfile,
+                marker,
+                f"GrowthBook collector image lost safety marker: {marker}",
+            )
+        require(
+            growthbook_collector_host_gate,
+            "curl -fsS http://127.0.0.1:8080/marker.json",
+            "GrowthBook collector must prove its marker with curl on localhost.",
+        )
         require(
             growthbook_registry,
             '"production": {}',
@@ -362,10 +393,46 @@ def main() -> int:
             "BlockPublicPolicy: true",
             "GrowthBook event bucket must block public policies.",
         )
-        require(
+        for marker in (
+            "Type: AWS::ECS::Service",
+            "Scheme: internal",
+            "ConnectionType: VPC_LINK",
+            "Condition: ActivatePublicRoute",
+            "Default: 'false'",
+            "ReadonlyRootFilesystem: true",
+            "AssignPublicIp: !Ref TaskAssignPublicIp",
+            "CollectorImageUri",
+        ):
+            require(
+                growthbook_template,
+                marker,
+                f"GrowthBook Fargate foundation lost safety marker: {marker}",
+            )
+        forbid(
             growthbook_template,
-            "ReservedConcurrentExecutions: 5",
-            "GrowthBook collector must keep a bounded concurrency limit.",
+            "AWS::Lambda",
+            "GrowthBook collector must remain host-verifiable on ECS/Fargate.",
+        )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "SOURCE_SCHEDULE: vevo-daily-report-email",
+            '"PublicRouteEnabled": "false"',
+            "/app/growthbook_collector/host_gate.sh",
+            "COLLECTOR_LOCALHOST_HEALTH_OK:preview",
+            "COLLECTOR_LOCALHOST_MARKER_OK:/app",
+            "--phase candidate",
+            "--phase activate",
+            "cmp -s raw-objects-before.json raw-objects-after.json",
+        ):
+            require(
+                growthbook_deploy_workflow,
+                marker,
+                f"GrowthBook protected deploy lost safety marker: {marker}",
+            )
+        forbid(
+            growthbook_deploy_workflow,
+            "source_schedule:",
+            "GrowthBook deploy must not accept an arbitrary network source schedule.",
         )
         forbid(
             growthbook_template,
@@ -373,7 +440,7 @@ def main() -> int:
             "GrowthBook runtime policies must not delete experiment objects.",
         )
         growthbook_policy_section = growthbook_template.split("  GrowthBookReadOnlyPolicy:", 1)[1].split(
-            "  CollectorErrorsAlarm:", 1
+            "  CollectorTarget5xxAlarm:", 1
         )[0]
         forbid(
             growthbook_policy_section,
@@ -417,11 +484,13 @@ def main() -> int:
             "scripts/import_product_expenses_excel.py",
             "scripts/reporting_qa_smoke.py",
             "growthbook_collector/handler.py",
+            "growthbook_collector/server.py",
             "reporting_core/experiments.py",
             "reporting_core/experiment_io.py",
             "reporting_core/experiment_orders.py",
             "scripts/reconcile_growthbook_facts.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",
+            "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_workspace.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)

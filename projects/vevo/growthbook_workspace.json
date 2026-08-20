@@ -76,7 +76,7 @@
       "workgroup": "vevo-growthbook-readonly-preview",
       "database": "vevo_growthbook_preview",
       "s3_results_url": "from_preview_stack_output",
-      "status": "blocked_by_runtime_hard_gate"
+      "status": "ready_for_route_disabled_candidate_deploy"
     },
     "production": {
       "data_source_name": "VEVO Production Experiment Facts",

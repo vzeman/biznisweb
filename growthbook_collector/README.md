@@ -2,7 +2,7 @@
 
 This package is the isolated, append-only browser-event collector described by `projects/vevo/GROWTHBOOK_DATA_CONTRACT.md`.
 
-Current state: implementation and local tests only. No AWS resource, endpoint, GrowthBook workspace, GTM tag, cookie, or production traffic allocation exists yet.
+Current state: implementation, container host adapter, and local tests only. GrowthBook draft objects exist, but no AWS collector resource, endpoint, GTM tag, cookie, or production traffic allocation exists yet.
 
 ## Safety model
 
@@ -16,23 +16,23 @@ Current state: implementation and local tests only. No AWS resource, endpoint, G
 
 ## Runtime contract
 
-The Lambda entrypoint is:
+The host runtime entrypoint is:
 
 ```text
-handler.lambda_handler
+python -m growthbook_collector.server
 ```
 
-Package the contents of this directory so `handler.py` and `experiments.json` are both at `/var/task`. Required and optional configuration is documented in `.env.example`; secrets are not used by the browser collector.
+The dedicated image is built from `growthbook_collector/Dockerfile`, runs as UID/GID `10001`, and exposes port `8080`. `/health` and `/marker.json` are available only through the task/ALB network; API Gateway publishes only the exact event route after the host gate. The original `handler.lambda_handler` remains a thin compatibility entrypoint for unit-level request behavior, while the Fargate adapter reuses the same validation/persistence functions. Required and optional configuration is documented in `.env.example`; secrets are not used by the browser collector.
 
-The public route accepts only `POST` and CORS `OPTIONS`. API Gateway/WAF throttling, a dedicated encrypted S3 bucket with lifecycle retention, Glue/Athena tables, alarms, and deployment hard gates are intentionally handled by the infrastructure layer and are not implied by passing unit tests.
+The public route accepts only `POST` and API Gateway CORS preflight. API Gateway throttling, the private VPC integration, dedicated encrypted S3 bucket, lifecycle retention, Glue/Athena tables, alarms, and deployment hard gates are handled by the infrastructure layer and are not implied by passing unit tests.
 
 ## Verification
 
 From the repository root:
 
 ```powershell
-python -m py_compile growthbook_collector/handler.py tests/test_growthbook_collector.py
-python -m unittest tests.test_growthbook_collector -v
+python -m py_compile growthbook_collector/handler.py growthbook_collector/server.py
+python -m unittest tests.test_growthbook_collector tests.test_growthbook_collector_server -v
 python scripts/security_ci.py
 ```
 

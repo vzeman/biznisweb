@@ -144,7 +144,7 @@ Acceptance: the dated baseline artifact exists, metric definition `vevo_cm1_v1_2
 - Create a dedicated read-only Athena data source limited to experiment tables.
 - Keep the production feature at `0%` until all QA gates pass.
 
-The exact, version-controlled object contract in `growthbook_workspace.json` now records the authenticated Starter workspace, staging-as-Preview alias, Preview SDK connection, two safe string flags, and both unstarted staging-only draft experiments. Paste-ready Athena queries under `growthbook_sql/` and the operator handoff in `GROWTHBOOK_PRO_WORKSPACE.md` remain blocked until the runtime hard gate is resolved. A validator rejects PII-bearing/raw-table SQL, metric-window drift, variation mismatches, a changed primary/business guardrail, a published/running experiment, a Production rule/connection, or any nonzero Production allocation. No GrowthBook data source/metric, AWS object, GTM tag, BiznisWeb change, or runtime mutation was created.
+The exact, version-controlled object contract in `growthbook_workspace.json` now records the authenticated Starter workspace, staging-as-Preview alias, Preview SDK connection, two safe string flags, and both unstarted staging-only draft experiments. Paste-ready Athena queries under `growthbook_sql/` and the operator handoff in `GROWTHBOOK_PRO_WORKSPACE.md` remain blocked until the protected route-disabled Fargate candidate passes CI and its AWS localhost host gate. A validator rejects PII-bearing/raw-table SQL, metric-window drift, variation mismatches, a changed primary/business guardrail, a published/running experiment, a Production rule/connection, or any nonzero Production allocation. No GrowthBook data source/metric, AWS object, GTM tag, BiznisWeb change, or runtime mutation was created.
 
 Acceptance: Preview can fetch the SDK payload, Production is still `0%`, and Athena can run approved `SELECT` queries but cannot read unrelated S3 prefixes or mutate data.
 
@@ -193,7 +193,7 @@ Test Preview first, then a zero-visual-difference production smoke:
 
 Performance stop thresholds after at least `200` measured page loads per arm are frozen in the baseline artifact: p75 LCP increase greater than `max(200 ms, 10%)`, p75 INP increase greater than `max(20 ms, 10%)`, CLS increase greater than `0.02`, or client-error device-rate increase greater than `0.5` percentage points. Any reproducible cart/checkout runtime error stops immediately without waiting for that sample.
 
-For any AWS deploy, first record the exact instance/task identity, IP, service, and runtime path. Verify the service on-host with `curl localhost` and a build marker before browser UI testing. The current proposed API Gateway/Lambda collector has no instance ID, host IP, service manager, or localhost surface, so it remains deployment-blocked under this hard-gate even though its CloudFormation can be reviewed and linted. Resolve the architecture/policy mismatch before creating a stack; do not reinterpret lint success as deployment approval.
+For any AWS deploy, first record the exact instance/task identity, IP, service, and runtime path. Verify the service on-host with `curl localhost` and a build marker before browser UI testing. The reviewed implementation now uses a dedicated non-root ECS/Fargate collector behind an internal ALB and API Gateway VPC Link. Its first CloudFormation change set has no public collector route; the workflow resolves the exact task ID/private IP/service/`/app` runtime, executes `curl http://127.0.0.1:8080/health` and `/marker.json` inside the exact task definition, verifies the immutable image digest and target health, and only then may a second change set add exactly `POST /v1/events`. CI/lint success alone is still not deployment approval.
 
 Acceptance: signed QA checklist and exact rollback test pass. Any checkout, consent, duplication, or performance regression is an immediate NO-GO.
 
@@ -267,7 +267,7 @@ Rollback must not disable the existing GA4, Meta Pixel, consent banner, or unrel
 - isolated collector and Athena dataset pass security tests;
 - Preview and rollback QA pass;
 - exact deployment hard-gate evidence exists.
-- the serverless collector design is reconciled with the mandatory host-local verification rule, or replaced by a compliant dedicated host design before any AWS mutation.
+- the route-disabled Fargate candidate passes the exact task-ID/private-IP/service/path plus localhost marker gate before the single public route is added.
 
 `NO-GO` for price testing until BiznisWeb provides a supported, server-authoritative per-visitor price mechanism that keeps product feed, cart, checkout, tax, stock, invoices, and legal display consistent.
 
