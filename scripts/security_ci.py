@@ -96,6 +96,10 @@ def main() -> int:
             ".github/workflows/provision-vevo-growthbook-production-reader.yml"
         )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
+        growthbook_aa_evaluator = read("scripts/evaluate_growthbook_aa.py")
+        growthbook_aa_acceptance = json.loads(
+            read("projects/vevo/growthbook_aa_acceptance.json")
+        )
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
         growthbook_preview_config = json.loads(
@@ -1067,6 +1071,67 @@ def main() -> int:
             raise AssertionError("VEVO GrowthBook purchase attribution window must remain 7 days.")
         if growthbook_reporting_config.get("maturity_checkpoint_days") != 14:
             raise AssertionError("VEVO GrowthBook maturity checkpoint must remain 14 days.")
+        expected_aa_acceptance = {
+            "schema_version": 1,
+            "experiment_id": "vevo-sk-aa-001",
+            "timezone": "Europe/Bratislava",
+            "variations": ["control", "variant"],
+            "expected_variation_weights": {"control": 0.5, "variant": 0.5},
+            "required_production_allocation_percent": 100,
+            "minimum_full_calendar_days": 7,
+            "minimum_eligible_devices": 1000,
+            "minimum_measured_page_loads_per_arm": 200,
+            "minimum_exact_joined_transactions": 1,
+            "minimum_meta_exposures": 1,
+            "privacy_sample_max_rows": 100,
+            "srm_p_value_min": 0.001,
+            "split_percent_min": 48,
+            "split_percent_max": 52,
+            "pipeline_count_difference_max_percent": 2,
+            "growthbook_reporting_count_difference_max_percent": 2,
+            "duplicate_event_rate_max_percent": 0.5,
+            "exact_order_join_rate_min_percent": 98,
+            "lcp_degradation_absolute_ms": 200,
+            "lcp_degradation_relative_percent": 10,
+            "inp_degradation_absolute_ms": 20,
+            "inp_degradation_relative_percent": 10,
+            "cls_degradation_absolute_milli": 20,
+            "client_error_rate_increase_max_percentage_points": 0.5,
+        }
+        if growthbook_aa_acceptance != expected_aa_acceptance:
+            raise AssertionError("VEVO GrowthBook A/A acceptance contract drifted.")
+        for forbidden_aa_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "facebook_ads",
+            "tagmanager",
+            "update_experiment",
+        ):
+            forbid(
+                growthbook_aa_evaluator.lower(),
+                forbidden_aa_marker.lower(),
+                f"GrowthBook A/A evaluator must remain offline: {forbidden_aa_marker}",
+            )
+        for required_aa_marker in (
+            '"PASS"',
+            '"FAIL"',
+            '"NOT_READY"',
+            '"winner_calls_allowed": False',
+            'ZoneInfo(config["timezone"])',
+            '"growthbook_reporting_variation_parity"',
+            '"exact_order_join"',
+            '"performance_guardrails"',
+            '"consent_boundary"',
+            '"commerce_health_and_rollback"',
+        ):
+            require(
+                growthbook_aa_evaluator,
+                required_aa_marker,
+                f"GrowthBook A/A evaluator lost required gate marker: {required_aa_marker}",
+            )
         preview_registry = growthbook_registry_config.get("environments", {}).get("preview", {})
         for experiment_id, weights in growthbook_reporting_config.get("expected_variation_weights", {}).items():
             registry_variations = preview_registry.get(experiment_id, {}).get("variations", [])
@@ -1100,6 +1165,7 @@ def main() -> int:
             "scripts/build_growthbook_reconciliation_parameters.py",
             "scripts/audit_vevo_meta_dimensions.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",
+            "scripts/evaluate_growthbook_aa.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",

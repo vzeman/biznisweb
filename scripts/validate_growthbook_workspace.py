@@ -36,7 +36,36 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 REPORTING_PATH = ROOT / "projects" / "vevo" / "growthbook_reporting.json"
+AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json"
 REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
+
+EXPECTED_AA_ACCEPTANCE = {
+    "schema_version": 1,
+    "experiment_id": "vevo-sk-aa-001",
+    "timezone": "Europe/Bratislava",
+    "variations": ["control", "variant"],
+    "expected_variation_weights": {"control": 0.5, "variant": 0.5},
+    "required_production_allocation_percent": 100,
+    "minimum_full_calendar_days": 7,
+    "minimum_eligible_devices": 1000,
+    "minimum_measured_page_loads_per_arm": 200,
+    "minimum_exact_joined_transactions": 1,
+    "minimum_meta_exposures": 1,
+    "privacy_sample_max_rows": 100,
+    "srm_p_value_min": 0.001,
+    "split_percent_min": 48,
+    "split_percent_max": 52,
+    "pipeline_count_difference_max_percent": 2,
+    "growthbook_reporting_count_difference_max_percent": 2,
+    "duplicate_event_rate_max_percent": 0.5,
+    "exact_order_join_rate_min_percent": 98,
+    "lcp_degradation_absolute_ms": 200,
+    "lcp_degradation_relative_percent": 10,
+    "inp_degradation_absolute_ms": 20,
+    "inp_degradation_relative_percent": 10,
+    "cls_degradation_absolute_milli": 20,
+    "client_error_rate_increase_max_percentage_points": 0.5,
+}
 
 EXPECTED_FACT_TABLES = {
     "vevo_device_outcomes_v1": "projects/vevo/growthbook_sql/device_outcomes.sql",
@@ -150,6 +179,9 @@ def validate() -> None:
     workspace = _load(WORKSPACE_PATH)
     reporting = _load(REPORTING_PATH)
     registry = _load(REGISTRY_PATH)
+    aa_acceptance = json.loads(AA_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
+    if aa_acceptance != EXPECTED_AA_ACCEPTANCE:
+        raise AssertionError("A/A acceptance thresholds changed")
 
     if (
         workspace.get("schema_version") != 1
@@ -1133,6 +1165,16 @@ def validate() -> None:
         raise AssertionError("GrowthBook CTA A/B must remain an unstarted draft")
     if aa_experiment.get("winner_calls_allowed") is not False:
         raise AssertionError("A/A must never be used for a winner call")
+    if (
+        aa_acceptance["variations"] != aa_experiment.get("variations")
+        or aa_acceptance["expected_variation_weights"]
+        != reporting_weights.get("vevo-sk-aa-001")
+        or aa_acceptance["minimum_full_calendar_days"]
+        != aa_experiment.get("minimum_days")
+        or aa_acceptance["minimum_eligible_devices"]
+        != aa_experiment.get("minimum_eligible_devices")
+    ):
+        raise AssertionError("A/A evaluator/workspace contract differs")
 
     gates = workspace.get("decision_gates", {})
     if gates.get("maturity_checkpoint_days") != reporting.get("maturity_checkpoint_days"):
@@ -1141,6 +1183,13 @@ def validate() -> None:
         raise AssertionError("price testing must remain disabled")
     if gates.get("production_activation_allowed") is not False:
         raise AssertionError("Production activation must remain blocked")
+    if (
+        aa_acceptance["growthbook_reporting_count_difference_max_percent"]
+        != gates.get("growthbook_count_difference_max_percent")
+        or aa_acceptance["exact_order_join_rate_min_percent"]
+        != gates.get("exact_order_join_min_percent")
+    ):
+        raise AssertionError("A/A evaluator/workspace release gates differ")
 
 
 def main() -> int:
