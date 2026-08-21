@@ -4,7 +4,7 @@ import copy
 import hashlib
 import json
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from scripts.verify_growthbook_natural_reconciliation import (
     EXPECTED_IMAGE_DIGEST,
@@ -19,16 +19,18 @@ from scripts.verify_growthbook_natural_reconciliation import (
 
 ACCOUNT = "919341186960"
 REGION = "eu-central-1"
-CLUSTER_ARN = f"arn:aws:ecs:{REGION}:{ACCOUNT}:cluster/vevo-reporting"
+CLUSTER_ARN = f"arn:aws:ecs:{REGION}:{ACCOUNT}:cluster/vevo-reporting-cluster"
 TASK_DEFINITION_ARN = (
     f"arn:aws:ecs:{REGION}:{ACCOUNT}:task-definition/"
     "vevo-growthbook-reconcile-preview:4"
 )
 TASK_ID = "a" * 32
-TASK_ARN = f"arn:aws:ecs:{REGION}:{ACCOUNT}:task/vevo-reporting/{TASK_ID}"
+TASK_ARN = (
+    f"arn:aws:ecs:{REGION}:{ACCOUNT}:task/vevo-reporting-cluster/{TASK_ID}"
+)
 ROLE_ARN = f"arn:aws:iam::{ACCOUNT}:role/vevo-growthbook-reconcile-preview-scheduler"
 DLQ_ARN = f"arn:aws:sqs:{REGION}:{ACCOUNT}:vevo-growthbook-reconcile-preview-dlq"
-LOG_GROUP = "/ecs/vevo-reporting"
+LOG_GROUP = "/ecs/vevo-reporting-daily"
 LOG_PREFIX = "ecs"
 LOG_STREAM = f"{LOG_PREFIX}/reporting/{TASK_ID}"
 COMMAND = [
@@ -380,6 +382,32 @@ class GrowthBookNaturalReconciliationVerifierTests(unittest.TestCase):
     def test_rejects_verification_after_live_evidence_window(self) -> None:
         with self.assertRaisesRegex(VerificationError, "evidence window has closed"):
             self.verify(_base_payloads(), now=VERIFY_BEFORE_UTC)
+
+    def test_rejects_wrong_consistent_cluster_identity(self) -> None:
+        payloads = _base_payloads()
+        wrong_cluster = f"arn:aws:ecs:{REGION}:{ACCOUNT}:cluster/vevo-reporting"
+        payloads["stack_payload"]["Stacks"][0]["Parameters"][1][
+            "ParameterValue"
+        ] = wrong_cluster
+        payloads["schedule_payload"]["Target"]["Arn"] = wrong_cluster
+        with self.assertRaisesRegex(VerificationError, "cluster identity"):
+            self.verify(payloads)
+
+    def test_rejects_wrong_log_boundary(self) -> None:
+        payloads = _base_payloads()
+        payloads["task_definition_payload"]["taskDefinition"][
+            "containerDefinitions"
+        ][0]["logConfiguration"]["options"]["awslogs-group"] = "/ecs/other"
+        with self.assertRaisesRegex(VerificationError, "log boundary"):
+            self.verify(payloads)
+
+    def test_rejects_private_ip_outside_reporting_vpc(self) -> None:
+        payloads = _base_payloads()
+        payloads["task_state_payload"]["tasks"][0]["attachments"][0]["details"][
+            0
+        ]["value"] = "10.0.0.1"
+        with self.assertRaisesRegex(VerificationError, "private IP boundary"):
+            self.verify(payloads)
 
     def test_rejects_duplicate_at_least_once_delivery(self) -> None:
         payloads = _base_payloads()

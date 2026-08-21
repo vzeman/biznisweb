@@ -26,6 +26,11 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "first natural-run verification is not due until",
             "first natural-run live ECS evidence window has closed",
             "workspace.get('reconciliation_checkpoint', {}).get(",
+            "EXPECTED_CLUSTER_ARN: arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster",
+            "EXPECTED_CONTAINER_NAME: reporting",
+            "EXPECTED_LOG_GROUP: /ecs/vevo-reporting-daily",
+            "EXPECTED_LOG_PREFIX: ecs",
+            "values[0] != os.environ['EXPECTED_CLUSTER_ARN']",
             "Configure AWS credentials for read-only evidence",
         ):
             self.assertIn(marker, self.workflow)

@@ -22,6 +22,10 @@ concurrency:
 env:
   AWS_REGION: eu-central-1
   EXPECTED_ACCOUNT_ID: '919341186960'
+  EXPECTED_CLUSTER_ARN: arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster
+  EXPECTED_CONTAINER_NAME: reporting
+  EXPECTED_LOG_GROUP: /ecs/vevo-reporting-daily
+  EXPECTED_LOG_PREFIX: ecs
   STACK_NAME: vevo-growthbook-reconciliation-preview
   SCHEDULE_NAME: vevo-growthbook-reconcile-preview
   SOURCE_SCHEDULE: vevo-daily-report-email
@@ -140,6 +144,7 @@ jobs:
 
           readarray -t RUNTIME_VALUES < <(python - <<'PY'
           import json
+          import os
 
           schedule = json.load(open('natural-schedule.json', encoding='utf-8'))
           task = json.load(open('natural-task-definition.json', encoding='utf-8'))['taskDefinition']
@@ -152,7 +157,12 @@ jobs:
               str(target.get('Arn') or ''),
               str(logs.get('awslogs-group') or ''),
           ]
-          if not values[0].endswith('/vevo-reporting') or not values[1].startswith('/ecs/'):
+          if (
+              values[0] != os.environ['EXPECTED_CLUSTER_ARN']
+              or values[1] != os.environ['EXPECTED_LOG_GROUP']
+              or containers[0].get('name') != os.environ['EXPECTED_CONTAINER_NAME']
+              or logs.get('awslogs-stream-prefix') != os.environ['EXPECTED_LOG_PREFIX']
+          ):
               raise SystemExit('natural reconciliation runtime boundary drift')
           print('\n'.join(values))
           PY
