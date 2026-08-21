@@ -83,6 +83,9 @@ def main() -> int:
         growthbook_production_preflight_workflow = read(
             ".github/workflows/preflight-vevo-growthbook-production-foundation.yml"
         )
+        growthbook_production_foundation_workflow = read(
+            ".github/workflows/deploy-vevo-growthbook-production-foundation.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -691,6 +694,54 @@ def main() -> int:
                 growthbook_production_preflight_workflow.lower(),
                 forbidden_action,
                 f"GrowthBook Production preflight must remain read-only: {forbidden_action}",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "first natural reconciliation must be verified before foundation deploy",
+            "Production deployment gate is false",
+            "Production foundation deployment gate is false",
+            "successful read-only Production preflight evidence drift",
+            "PREVIEW_RUNTIME_IDENTITY_OK:",
+            "PLANNED_PRODUCTION_IDENTITY:",
+            "PREDEPLOY_PRODUCTION_MODE_HARD_GATE_OK:",
+            "--change-set-type CREATE",
+            "--phase production-foundation",
+            "'PublicRouteEnabled': 'false'",
+            "PRODUCTION_FOUNDATION_HARD_GATE_OK:",
+            "COLLECTOR_LOCALHOST_HEALTH_OK:production:",
+            "COLLECTOR_LOCALHOST_MARKER_OK:/app:",
+            "PRODUCTION_FOUNDATION_ROUTE_DISABLED_OK:",
+            "GrowthBook reader credentials: `not created`",
+        ):
+            require(
+                growthbook_production_foundation_workflow,
+                marker,
+                f"GrowthBook Production foundation workflow lost safety marker: {marker}",
+            )
+        for forbidden_action in (
+            "--change-set-type update",
+            "'publicrouteenabled': 'true'",
+            "docker push",
+            "ecr create-repository",
+            "cloudformation update-stack",
+            "cloudformation delete-stack",
+            "aws scheduler update-",
+            "aws scheduler create-",
+            "aws scheduler delete-",
+            "aws s3api put-",
+            "aws s3api delete-",
+            "aws athena start-query-execution",
+            "aws iam attach-",
+            "aws iam put-",
+            "aws iam delete-",
+            "ads_update",
+            "adcreatives_create",
+            "submit",
+        ):
+            forbid(
+                growthbook_production_foundation_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook Production foundation workflow violated its boundary: {forbidden_action}",
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",

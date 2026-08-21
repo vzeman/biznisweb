@@ -648,6 +648,11 @@ def validate() -> None:
         "public_route_enabled": False,
         "experiment_registry_empty": True,
         "deployment_allowed": False,
+        "foundation_deployment_workflow": (
+            ".github/workflows/deploy-vevo-growthbook-production-foundation.yml"
+        ),
+        "foundation_deployment_status": "code_prepared_natural_run_gate_pending",
+        "foundation_deployment_allowed": False,
         "credentials_created": False,
         "first_preflight_attempt": {
             "workflow_run_id": "32465911390",

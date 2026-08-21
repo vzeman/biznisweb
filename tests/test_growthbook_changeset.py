@@ -44,6 +44,40 @@ class GrowthBookChangeSetTests(unittest.TestCase):
         result = validate(payload(*changes, change_set_type="CREATE"), "candidate")
         self.assertEqual(len(EXPECTED_CREATE_RESOURCES), len(result))
 
+    def test_production_foundation_allows_only_exact_route_disabled_create(self) -> None:
+        changes = [
+            change(logical_id, resource_type)
+            for logical_id, resource_type in EXPECTED_CREATE_RESOURCES.items()
+        ]
+        result = validate(
+            payload(*changes, change_set_type="CREATE"),
+            "production-foundation",
+        )
+        self.assertEqual(len(EXPECTED_CREATE_RESOURCES), len(result))
+
+        with self.assertRaisesRegex(AssertionError, "must be a CREATE"):
+            validate(
+                payload(
+                    change(
+                        "CollectorService",
+                        "AWS::ECS::Service",
+                        action="Modify",
+                    ),
+                    change_set_type="UPDATE",
+                ),
+                "production-foundation",
+            )
+
+        with self.assertRaisesRegex(AssertionError, "resource contract mismatch"):
+            validate(
+                payload(
+                    *changes,
+                    change("CollectorPostRoute", "AWS::ApiGatewayV2::Route"),
+                    change_set_type="CREATE",
+                ),
+                "production-foundation",
+            )
+
     def test_candidate_allows_only_runtime_update(self) -> None:
         result = validate(
             payload(

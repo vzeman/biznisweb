@@ -109,7 +109,8 @@ jobs:
           python3 -m unittest \
             tests.test_growthbook_workspace \
             tests.test_growthbook_natural_reconciliation_verifier \
-            tests.test_growthbook_natural_reconciliation_workflow
+            tests.test_growthbook_natural_reconciliation_workflow \
+            tests.test_growthbook_production_foundation_workflow
 
       - name: VEVO GrowthBook reconciliation host gate
         run: |
