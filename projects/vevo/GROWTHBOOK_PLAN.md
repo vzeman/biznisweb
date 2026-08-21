@@ -242,6 +242,7 @@ Hypothesis: changing only the product-detail add-to-cart CTA background from the
 - Split: 50/50, sticky by anonymous device ID.
 - Control: the current CTA color.
 - Variant `brand_contrast`: VEVO's existing gold gradient `#c9a962` → `#b8956f` with dark brand text `#0f172a`; label, dimensions, placement, selectors, prices, cart behavior, and every other element remain unchanged.
+- The exact visual boundary is machine-readable in `growthbook_cta_design.json` and enforced against the version-controlled storefront source by `scripts/validate_growthbook_cta_design.py`. WCAG 2.2 contrast is `7.9359:1` at `#c9a962` and `6.4325:1` at `#b8956f`, both above the frozen `4.5:1` normal-text minimum. CI permits only `background-color`, `background-image`, and `color`; label/content, dimensions, layout, placement, selector, price, cart, and checkout mutations fail closed.
 - Primary metric: binary device-level `add_to_cart` within 24 hours of first valid exposure, divided by unique first-exposed product-viewer devices.
 - Primary business guardrail: authoritative CM1 contribution per eligible exposed device under `vevo_cm1_v1_2026-08-20`.
 - Other guardrails: purchase conversion, AOV, cancellation/refund rate, p75 LCP, JavaScript errors, and checkout health.

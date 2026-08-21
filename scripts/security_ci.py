@@ -1755,6 +1755,7 @@ def main() -> int:
             "scripts/build_growthbook_aa_automated_evidence.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_production_clone_evidence.py",
+            "scripts/validate_growthbook_cta_design.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",

@@ -28,6 +28,8 @@ Variation metadata keys must match those strings exactly. CI now rejects a colle
 
 The frozen CTA hypothesis is: replacing only the current orange/red/pink background with VEVO's existing brand-gold gradient (`#c9a962` → `#b8956f`) and dark brand text (`#0f172a`) improves device-level add-to-cart rate without changing label, size, layout, selector, price, or cart behavior.
 
+`projects/vevo/growthbook_cta_design.json` is the machine-readable visual boundary. `scripts/validate_growthbook_cta_design.py` verifies the storefront source can change only `background-color`, `background-image`, and `color`, rejects button content/behavior mutations, and enforces WCAG 2.2 AA contrast of at least `4.5:1`. The frozen colors measure `7.9359:1` and `6.4325:1` against the dark CTA text.
+
 ## Reproducible GTM Preview artifact
 
 1. Keep `config.preview.example.json` versioned with its placeholder. Pass the actual Preview `sdk-...` client key and the host-verified Preview collector endpoint only through the task-scoped `VEVO_GROWTHBOOK_PREVIEW_CLIENT_KEY` and `VEVO_GROWTHBOOK_PREVIEW_COLLECTOR_URL` environment variables; do not create a local config copy. The builder validates both overrides and still requires Preview dev mode. The client key is public configuration, but it must not become an unreviewed local or committed source of truth.

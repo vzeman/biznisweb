@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "variation_id": "brand_contrast",
+  "surface": "slovak_product_detail_add_to_cart_cta",
+  "selector": "#product-detail .s1-detailCart .s1-submitCart",
+  "class_name": "vevo-gb-cta-brand-contrast",
+  "scope": "background_color_only",
+  "allowed_css_properties": [
+    "background-color",
+    "background-image",
+    "color"
+  ],
+  "text_color": "#0f172a",
+  "gradient": {
+    "angle_degrees": 135,
+    "start_color": "#c9a962",
+    "end_color": "#b8956f"
+  },
+  "contrast_standard": "WCAG_2_2_AA_normal_text",
+  "minimum_wcag_contrast_ratio": 4.5,
+  "unchanged_surfaces": [
+    "label",
+    "dimensions",
+    "layout",
+    "placement",
+    "product_selector",
+    "price",
+    "cart_behavior",
+    "checkout_behavior"
+  ]
+}

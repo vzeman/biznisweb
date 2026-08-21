@@ -65,12 +65,25 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_plan as validate_cta_sample_plan,
     )
 
+try:
+    from validate_growthbook_cta_design import (
+        CtaDesignContractError,
+        validate_contract as validate_cta_design_contract,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.validate_growthbook_cta_design import (
+        CtaDesignContractError,
+        validate_contract as validate_cta_design_contract,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 REPORTING_PATH = ROOT / "projects" / "vevo" / "growthbook_reporting.json"
 AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json"
 CTA_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
+CTA_DESIGN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_design.json"
+CTA_STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
 ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_production_aa_activation.json"
 
@@ -218,12 +231,20 @@ def validate() -> None:
     activation = json.loads(ACTIVATION_PATH.read_text(encoding="utf-8"))
     aa_acceptance = json.loads(AA_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
     cta_sample_plan = json.loads(CTA_SAMPLE_PLAN_PATH.read_text(encoding="utf-8"))
+    cta_design = json.loads(CTA_DESIGN_PATH.read_text(encoding="utf-8"))
     if aa_acceptance != EXPECTED_AA_ACCEPTANCE:
         raise AssertionError("A/A acceptance thresholds changed")
     try:
         validate_cta_sample_plan(cta_sample_plan)
     except CtaSampleFreezeError as exc:
         raise AssertionError(f"CTA sample plan is invalid: {exc}") from exc
+    try:
+        validate_cta_design_contract(
+            cta_design,
+            CTA_STOREFRONT_PATH.read_text(encoding="utf-8"),
+        )
+    except CtaDesignContractError as exc:
+        raise AssertionError(f"CTA design contract is invalid: {exc}") from exc
 
     if (
         workspace.get("schema_version") != 1
