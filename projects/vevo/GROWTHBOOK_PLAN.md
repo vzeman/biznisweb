@@ -90,6 +90,8 @@ meta_placement={{placement}}
 
 The exact macro syntax must be verified in Meta Ads Manager preview before publishing. Existing live ad URLs are not changed during A/A. Raw `fbclid`, `_fbp`, `_fbc`, email, phone, name, address, account ID, and IP address are not stored in the experiment dataset.
 
+The repeatable operator procedure, no-bulk-edit boundary, post-publish aggregate gate, and rollback are frozen in [`META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md`](META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md).
+
 Future landing-page tests may use GrowthBook URL redirects or separate BiznisWeb pages, but only after the non-redirect A/A and first DOM test pass. Meta must never run its own A/B traffic split at the same time as GrowthBook for the same hypothesis.
 
 ## Consent decision

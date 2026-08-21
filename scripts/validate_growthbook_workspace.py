@@ -494,12 +494,56 @@ def validate() -> None:
             },
             "external_mutation_observed": False,
         },
-        "next_gate": (
-            "document_meta_parameter_rollout_and_verify_first_natural_reconciliation"
-        ),
+        "next_gate": "verify_first_natural_reconciliation_before_measured_aa_publish",
     }
     if workspace.get("population_audit") != expected_population_audit:
         raise AssertionError("GrowthBook Meta/population audit state drift")
+
+    expected_meta_parameter_rollout = {
+        "status": "runbook_verified_existing_live_ads_unchanged",
+        "runbook": "projects/vevo/META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md",
+        "owner_of_randomization": "growthbook",
+        "meta_split_for_same_hypothesis_allowed": False,
+        "analyzed_dimensions": [
+            "utm_source",
+            "utm_medium",
+            "utm_id",
+            "utm_content",
+            "meta_adset_id",
+            "meta_placement",
+        ],
+        "diagnostic_label": {"utm_campaign": "{{campaign.name}}"},
+        "canonical_url_parameters": (
+            "utm_source=meta&utm_medium=paid_social&utm_id={{campaign.id}}"
+            "&utm_campaign={{campaign.name}}&utm_content={{ad.id}}"
+            "&meta_adset_id={{adset.id}}&meta_placement={{placement}}"
+        ),
+        "existing_live_ads_policy": "do_not_edit_only_for_tracking_during_aa",
+        "new_or_otherwise_edited_ads_policy": "apply_before_publish",
+        "bulk_live_edit_allowed": False,
+        "pii_or_configured_click_ids_allowed": False,
+        "baseline_audit_run_id": "32464046045",
+        "baseline_complete_contract_ads": 0,
+        "current_meta_mutation_observed": False,
+        "next_gate": "verify_first_natural_reconciliation_before_measured_aa_publish",
+    }
+    if workspace.get("meta_parameter_rollout") != expected_meta_parameter_rollout:
+        raise AssertionError("GrowthBook Meta parameter rollout state drift")
+    meta_runbook = _read_repo_path(expected_meta_parameter_rollout["runbook"])
+    required_meta_runbook_markers = {
+        expected_meta_parameter_rollout["canonical_url_parameters"],
+        "Do not edit an existing live ad only to add this tracking during A/A.",
+        "Do not enable Meta's A/B-test split for the same hypothesis.",
+        "Existing live ads were not changed.",
+        "Audit VEVO GrowthBook and Meta Population",
+    }
+    missing_meta_runbook_markers = sorted(
+        marker for marker in required_meta_runbook_markers if marker not in meta_runbook
+    )
+    if missing_meta_runbook_markers:
+        raise AssertionError(
+            f"GrowthBook Meta parameter runbook drift: {missing_meta_runbook_markers}"
+        )
 
     feature_flags = workspace.get("feature_flags", [])
     feature_map = {row.get("key"): row for row in feature_flags if isinstance(row, dict)}
