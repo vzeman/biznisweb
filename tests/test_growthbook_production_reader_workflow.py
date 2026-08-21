@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import textwrap
 import unittest
 
 
@@ -33,6 +34,7 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
             "Production foundation redeployment gate must be closed",
             "workspace.get('reconciliation_checkpoint', {}).get(",
             "GrowthBook clone must remain disabled during reader provisioning",
+            "Production reader evidence state must remain pending",
             "Configure authenticated AWS reader-provisioning identity",
         ):
             self.assertIn(marker, self.workflow)
@@ -89,8 +91,11 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
             "openssl cms -encrypt -binary -aes-256-cbc",
             "uses: actions/upload-artifact@v4.6.2",
             "retention-days: 1",
-            "contains_plaintext_credentials': False",
-            "growthbook_control_plane_mutated': False",
+            "READER_EVIDENCE_FILE: vevo-growthbook-production-reader-evidence.json",
+            "scripts/record_growthbook_production_reader_evidence.py build",
+            '--foundation-workflow-run-id "${FOUNDATION_WORKFLOW_RUN_ID}"',
+            '--foundation-sha256 "${FOUNDATION_EVIDENCE_SHA256}"',
+            "vevo-growthbook-production-reader-evidence.json",
             "GROWTHBOOK_PRODUCTION_READER_ACTIVE",
             "GROWTHBOOK_PRODUCTION_READER_FAILED_RUN_REVOKED",
         ):
@@ -124,6 +129,26 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
             self.assertNotIn(forbidden, lowered)
         self.assertIn("GrowthBook control plane: `unchanged`", self.workflow)
         self.assertIn("Meta Ads and BiznisWeb commerce state: `unchanged`", self.workflow)
+
+    def test_every_inline_python_block_compiles(self) -> None:
+        lines = self.workflow.splitlines()
+        blocks: list[str] = []
+        index = 0
+        while index < len(lines):
+            if "python - <<'PY'" not in lines[index]:
+                index += 1
+                continue
+            index += 1
+            body: list[str] = []
+            while index < len(lines) and lines[index].strip() != "PY":
+                body.append(lines[index])
+                index += 1
+            self.assertLess(index, len(lines), "unterminated inline Python block")
+            blocks.append(textwrap.dedent("\n".join(body)))
+            index += 1
+        self.assertGreaterEqual(len(blocks), 7)
+        for block_index, source in enumerate(blocks):
+            compile(source, f"production-reader-inline-{block_index}.py", "exec")
 
 
 if __name__ == "__main__":

@@ -152,6 +152,8 @@ Acceptance: Preview can fetch the SDK payload, Production is still `0%`, and Ath
 
 No GrowthBook subscription purchase or paid upgrade is executed without the account owner completing or explicitly authorizing the charge.
 
+Production reader provisioning and Production GrowthBook cloning are two separate reviewed gates. A successful reader workflow must first produce both the one-day CMS-encrypted credential handoff and a canonical sanitized evidence artifact. The evidence is independently bound to the foundation artifact and exact workflow run/commit, contains no access-key ID or secret, and is recorded only by the offline hash-validating recorder. Recording may close the reader gate and make the clone contract reviewable, but it cannot create GrowthBook objects, repoint Preview, publish GTM, change Meta Ads or BiznisWeb, or move Production allocation above `0%`. The current evidence fields remain null/pending; no Production reader or clone is claimed.
+
 ### 4. Event collector and data contract
 
 - Implement the versioned events in `GROWTHBOOK_DATA_CONTRACT.md`.
