@@ -77,6 +77,9 @@ def main() -> int:
         growthbook_meta_audit_workflow = read(
             ".github/workflows/audit-vevo-growthbook-meta-population.yml"
         )
+        growthbook_production_preflight_workflow = read(
+            ".github/workflows/preflight-vevo-growthbook-production-foundation.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -601,6 +604,43 @@ def main() -> int:
                 growthbook_meta_audit,
                 forbidden_call,
                 f"GrowthBook Meta audit must remain GET-only: {forbidden_call}",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "PRODUCTION_STACK_NAME: vevo-growthbook-production",
+            "PRODUCTION_SERVICE_NAME: vevo-growthbook-collector-production",
+            "GROWTHBOOK_ENVIRONMENT=production",
+            "Production experiment registry must remain empty",
+            "parameters.get('PublicRouteEnabled') != 'false'",
+            "PRODUCTION_FOUNDATION_PREFLIGHT_OK:",
+            "PLANNED_PRODUCTION_IDENTITY:instance-id=N/A:Fargate",
+            "AWS mutations: `none`",
+        ):
+            require(
+                growthbook_production_preflight_workflow,
+                marker,
+                f"GrowthBook Production preflight lost safety marker: {marker}",
+            )
+        for forbidden_action in (
+            "aws cloudformation create-",
+            "aws cloudformation update-",
+            "aws cloudformation delete-",
+            "aws cloudformation execute-",
+            "aws ecs run-task",
+            "aws ecs register-task-definition",
+            "aws iam create-",
+            "aws iam attach-",
+            "aws iam put-",
+            "aws iam delete-",
+            "aws glue create-",
+            "aws athena start-query-execution",
+            "aws s3api put-",
+            "aws s3api delete-",
+        ):
+            forbid(
+                growthbook_production_preflight_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook Production preflight must remain read-only: {forbidden_action}",
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
