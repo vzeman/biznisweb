@@ -61,14 +61,19 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY daily report email delivery is being disabled at project level as of `2026-08-21`:
+- ROY daily report email delivery is disabled, deployed, and host-verified as of `2026-08-21`:
   - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`
   - `projects/roy/settings.json` sets `"send_daily_report_email": false`; daily report generation and dashboard artifact publication remain enabled
   - `reporting_core/config.py` exposes the setting with a default of `true`, preserving email behavior for VEVO and other projects
   - `daily_report_runner.py` skips only the email dispatch when this project setting is false
   - ECR build `32447071929` passed and published exact digest `sha256:37ad85ee7dc737afcbdd0500232cbdc79ed9480d04c8e1a6f3ac9202ca1bb307`
-  - branch `codex/roy-only-image-refresh` allows `Production Reporting Smoke` to refresh only the selected project task image instead of requiring `project=all`
-  - Next exact step: merge the ROY-only refresh support, then run `project=roy`, `send_email=true`, `update_task_image=true` and require Fargate localhost marker, refreshed untagged dashboard payload, and the project-config email-skip log
+  - PR `#302` merged to `main` as `2c89d3a02a02c10c9c7160a15f165664c7666bfa`; production smoke can refresh only the selected project task image
+  - ROY-only production run `32447411582` passed with `project=roy`, `send_email=true`, and `update_task_image=true`; VEVO was not selected or updated
+  - Fargate hard-gate: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.21.89`, service `roy-daily-report-email`, task definition `roy-reporting-daily:67`, task `1cbdeb6f717a46b6b2416a65f5199255`, runtime `/app`, exact image digest above, and container exit code `0`
+  - the untagged `data/roy/report_latest.html` and `data/roy/dashboard_payload_latest.json` were regenerated; marker `LOCALHOST_MARKER_OK` reported `331` daily-profit rows and the UI check returned `UI_SMOKE_OK:roy:daily-profit-loss`
+  - the natural email-capable path logged `Daily report email sending disabled by project configuration.` and produced no SES `MessageId`; invoice automation was independently skipped for the smoke
+  - external App Runner health returned `ok: true` after the host gate; no local server, worker, watcher, or tunnel was started
+  - Next exact step: monitor the next natural `roy-daily-report-email` schedule run on task definition `:67` and confirm the live ROY dashboard refreshes without a new ROY report email
 
 - ROY SD-card purchase-cost correction is merged, deployed, and host-verified (`2026-08-21`):
   - PR `#290` merged as `d9f4d4c3823d880179d8cd58a5cd45a967b57d59`; exact reporting SKUs now map `F_206` to `4.50 EUR` and `12876` to `13.50 EUR`
