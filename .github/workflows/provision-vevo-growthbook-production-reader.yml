@@ -632,16 +632,23 @@ jobs:
           trap - ERR
           echo "GROWTHBOOK_PRODUCTION_READER_ENCRYPTED_HANDOFF_READY:${IAM_USER_NAME}:${CERT_SHA256}"
 
-      - name: Upload encrypted one-time Production handoff
-        id: handoff
+      - name: Upload encrypted one-time Production credential handoff
+        id: credential_handoff
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: vevo-growthbook-production-reader-${{ github.run_id }}
-          path: |
-            vevo-growthbook-production-reader.cms
-            vevo-growthbook-production-reader-evidence.json
+          name: vevo-growthbook-production-reader-credentials-${{ github.run_id }}
+          path: vevo-growthbook-production-reader.cms
           if-no-files-found: error
           retention-days: 1
+
+      - name: Upload sanitized Production reader evidence
+        id: reader_evidence
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-production-reader-evidence-${{ github.run_id }}
+          path: vevo-growthbook-production-reader-evidence.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Confirm successful Production reader provisioning
         run: |

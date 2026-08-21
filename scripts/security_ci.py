@@ -1055,7 +1055,12 @@ def main() -> int:
             "aws iam attach-user-policy",
             "aws iam create-access-key",
             "openssl cms -encrypt -binary -aes-256-cbc",
+            "name: vevo-growthbook-production-reader-credentials-${{ github.run_id }}",
+            "path: vevo-growthbook-production-reader.cms",
             "retention-days: 1",
+            "name: vevo-growthbook-production-reader-evidence-${{ github.run_id }}",
+            "path: vevo-growthbook-production-reader-evidence.json",
+            "retention-days: 14",
             "GROWTHBOOK_PRODUCTION_READER_ACTIVE",
             "GROWTHBOOK_PRODUCTION_READER_FAILED_RUN_REVOKED",
             "GrowthBook control plane: `unchanged`",
@@ -1064,6 +1069,37 @@ def main() -> int:
                 growthbook_production_reader_workflow,
                 marker,
                 f"GrowthBook Production reader workflow lost safety marker: {marker}",
+            )
+        if growthbook_production_reader_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 2:
+            raise AssertionError(
+                "GrowthBook Production reader must upload separate credential and evidence artifacts."
+            )
+        credential_upload = growthbook_production_reader_workflow.index(
+            "Upload encrypted one-time Production credential handoff"
+        )
+        evidence_upload = growthbook_production_reader_workflow.index(
+            "Upload sanitized Production reader evidence", credential_upload
+        )
+        success_confirmation = growthbook_production_reader_workflow.index(
+            "Confirm successful Production reader provisioning", evidence_upload
+        )
+        if not credential_upload < evidence_upload < success_confirmation:
+            raise AssertionError(
+                "Production reader success must follow both artifact uploads."
+            )
+        if "vevo-growthbook-production-reader-evidence.json" in (
+            growthbook_production_reader_workflow[credential_upload:evidence_upload]
+        ):
+            raise AssertionError(
+                "Sanitized reader evidence must not share the credential artifact."
+            )
+        if "vevo-growthbook-production-reader.cms" in (
+            growthbook_production_reader_workflow[evidence_upload:success_confirmation]
+        ):
+            raise AssertionError(
+                "Encrypted credentials must not share the reader evidence artifact."
             )
         local_reader_gate = growthbook_production_reader_workflow.index(
             "PRODUCTION_READER_LOCAL_RELEASE_GATE_OK:"

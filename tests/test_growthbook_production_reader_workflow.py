@@ -89,17 +89,36 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
     def test_handoff_is_encrypted_short_lived_and_plaintext_is_not_exposed(self) -> None:
         for marker in (
             "openssl cms -encrypt -binary -aes-256-cbc",
-            "uses: actions/upload-artifact@v4.6.2",
+            "name: vevo-growthbook-production-reader-credentials-${{ github.run_id }}",
+            "path: vevo-growthbook-production-reader.cms",
             "retention-days: 1",
             "READER_EVIDENCE_FILE: vevo-growthbook-production-reader-evidence.json",
             "scripts/record_growthbook_production_reader_evidence.py build",
             '--foundation-workflow-run-id "${FOUNDATION_WORKFLOW_RUN_ID}"',
             '--foundation-sha256 "${FOUNDATION_EVIDENCE_SHA256}"',
-            "vevo-growthbook-production-reader-evidence.json",
+            "name: vevo-growthbook-production-reader-evidence-${{ github.run_id }}",
+            "path: vevo-growthbook-production-reader-evidence.json",
+            "retention-days: 14",
             "GROWTHBOOK_PRODUCTION_READER_ACTIVE",
             "GROWTHBOOK_PRODUCTION_READER_FAILED_RUN_REVOKED",
         ):
             self.assertIn(marker, self.workflow)
+        self.assertEqual(2, self.workflow.count("uses: actions/upload-artifact@v4.6.2"))
+        credential_upload = self.workflow.index(
+            "Upload encrypted one-time Production credential handoff"
+        )
+        evidence_upload = self.workflow.index(
+            "Upload sanitized Production reader evidence", credential_upload
+        )
+        success = self.workflow.index(
+            "Confirm successful Production reader provisioning", evidence_upload
+        )
+        self.assertLess(credential_upload, evidence_upload)
+        self.assertLess(evidence_upload, success)
+        credential_block = self.workflow[credential_upload:evidence_upload]
+        evidence_block = self.workflow[evidence_upload:success]
+        self.assertNotIn("vevo-growthbook-production-reader-evidence.json", credential_block)
+        self.assertNotIn("vevo-growthbook-production-reader.cms", evidence_block)
         for forbidden in (
             'cat ${CREDENTIAL_JSON}',
             'cat "${CREDENTIAL_JSON}"',
