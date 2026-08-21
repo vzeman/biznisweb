@@ -219,6 +219,8 @@ An apparent A/A business-metric winner is investigated, never promoted. Any fail
 
 The machine-readable decision contract is frozen in `growthbook_aa_acceptance.json` and evaluated only from an aggregate, PII-free snapshot by `scripts/evaluate_growthbook_aa.py`. The evaluator independently recomputes SRM, local-calendar duration, split, count differences, duplicate and exact-join rates, and performance deltas. It also requires the consent, privacy, Meta-dimension, desktop/mobile, commerce-health, purchase-duplication, and rollback gates. Its only valid conclusions are `PASS`, `FAIL`, and `NOT_READY`; `winner_calls_allowed` is always false. Production activation and the later CTA A/B remain separate reviewed actions even after an A/A `PASS`.
 
+The authoritative accepted-duplicate numerator and denominator come from the collector's PII-free receipt markers, not from S3 row counts: an idempotent retry is intentionally absent as a second raw object. Each successfully handled request produces only `accepted=true` plus a boolean `duplicate` marker after persistence. A protected read-only workflow may temporarily export the exact bounded CloudWatch marker window, reduce it offline with `scripts/summarize_growthbook_receipts.py`, and retain only the three aggregate counts. Raw log events, event/device IDs, messages, stream names, timestamps, and customer/order data must never enter the evidence artifact or Git.
+
 ### 8. First A/B experiment
 
 Experiment ID: `vevo-sk-product-cta-color-001`

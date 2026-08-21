@@ -97,6 +97,7 @@ def main() -> int:
         )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_aa_evaluator = read("scripts/evaluate_growthbook_aa.py")
+        growthbook_receipt_summarizer = read("scripts/summarize_growthbook_receipts.py")
         growthbook_aa_acceptance = json.loads(
             read("projects/vevo/growthbook_aa_acceptance.json")
         )
@@ -290,6 +291,31 @@ def main() -> int:
             '"IfNoneMatch": "*"',
             "GrowthBook collector must keep conditional idempotent S3 writes.",
         )
+        require(
+            growthbook_collector,
+            'RECEIPT_MARKER = "VEVO_GROWTHBOOK_COLLECTOR_RECEIPT"',
+            "GrowthBook collector must emit the sanitized A/A receipt marker.",
+        )
+        receipt_marker_section = growthbook_collector.split(
+            "def _emit_receipt_marker", 1
+        )[1].split("def _headers", 1)[0]
+        for forbidden_receipt_field in (
+            "event_id",
+            "event_name",
+            "device_id",
+            "transaction_id",
+            "page_path",
+            "utm_",
+            "meta_",
+            "record",
+            "payload",
+        ):
+            forbid(
+                receipt_marker_section.lower(),
+                forbidden_receipt_field.lower(),
+                "GrowthBook collector receipt marker contains forbidden field: "
+                f"{forbidden_receipt_field}",
+            )
         require(
             growthbook_collector,
             "set(payload) != expected_fields",
@@ -1132,6 +1158,37 @@ def main() -> int:
                 required_aa_marker,
                 f"GrowthBook A/A evaluator lost required gate marker: {required_aa_marker}",
             )
+        for forbidden_receipt_summarizer_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "facebook_ads",
+            "tagmanager",
+        ):
+            forbid(
+                growthbook_receipt_summarizer.lower(),
+                forbidden_receipt_summarizer_marker.lower(),
+                "GrowthBook receipt summarizer must remain offline: "
+                f"{forbidden_receipt_summarizer_marker}",
+            )
+        for required_receipt_summarizer_marker in (
+            '"evidence_type": "vevo_growthbook_collector_receipt_counts"',
+            '"contains_raw_log_events": False',
+            '"contains_event_or_device_ids": False',
+            'not payload.get("nextToken")',
+            'set(receipt) == EXPECTED_RECEIPT_KEYS',
+            'receipt["marker"] == RECEIPT_MARKER',
+            'receipt["accepted"] is True',
+            'type(receipt["duplicate"]) is bool',
+        ):
+            require(
+                growthbook_receipt_summarizer,
+                required_receipt_summarizer_marker,
+                "GrowthBook receipt summarizer lost safety marker: "
+                f"{required_receipt_summarizer_marker}",
+            )
         preview_registry = growthbook_registry_config.get("environments", {}).get("preview", {})
         for experiment_id, weights in growthbook_reporting_config.get("expected_variation_weights", {}).items():
             registry_variations = preview_registry.get(experiment_id, {}).get("variations", [])
@@ -1166,6 +1223,7 @@ def main() -> int:
             "scripts/audit_vevo_meta_dimensions.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",
             "scripts/evaluate_growthbook_aa.py",
+            "scripts/summarize_growthbook_receipts.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",

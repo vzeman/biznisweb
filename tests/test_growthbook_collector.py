@@ -1,13 +1,17 @@
 import base64
+import contextlib
+import io
 import json
 import tempfile
 import unittest
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 from growthbook_collector.handler import (
     CollectorConfig,
+    RECEIPT_MARKER,
     handle_request,
     load_registry,
 )
@@ -107,6 +111,7 @@ class GrowthBookCollectorTests(unittest.TestCase):
         )
         self.registry = load_registry(str(self.registry_path), "preview")
         self.s3 = FakeS3()
+        self.receipt_logs = []
 
     def request(self, payload, **overrides):
         event = {
@@ -116,13 +121,19 @@ class GrowthBookCollectorTests(unittest.TestCase):
             "isBase64Encoded": False,
         }
         event.update(overrides)
-        return handle_request(
-            event,
-            config=self.config,
-            registry=self.registry,
-            s3=self.s3,
-            now=NOW,
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            response = handle_request(
+                event,
+                config=self.config,
+                registry=self.registry,
+                s3=self.s3,
+                now=NOW,
+            )
+        self.receipt_logs.extend(
+            json.loads(line) for line in output.getvalue().splitlines() if line.strip()
         )
+        return response
 
     def response_body(self, response):
         return json.loads(response["body"])
@@ -149,6 +160,28 @@ class GrowthBookCollectorTests(unittest.TestCase):
         self.assertEqual("accepted", stored["risk_result"])
         self.assertNotIn("origin", stored)
         self.assertNotIn("headers", stored)
+        self.assertEqual(
+            [
+                {
+                    "accepted": True,
+                    "duplicate": False,
+                    "marker": RECEIPT_MARKER,
+                    "schema_version": 1,
+                }
+            ],
+            self.receipt_logs,
+        )
+        serialized_receipt = json.dumps(self.receipt_logs, sort_keys=True).lower()
+        for forbidden in (
+            "event_id",
+            "device_id",
+            "transaction_id",
+            "page_path",
+            "meta_campaign_id",
+            payload["event_id"].lower(),
+            payload["device_id"].lower(),
+        ):
+            self.assertNotIn(forbidden, serialized_receipt)
 
     def test_duplicate_is_idempotent_and_creates_no_second_object(self):
         payload = base_payload()
@@ -159,6 +192,7 @@ class GrowthBookCollectorTests(unittest.TestCase):
         self.assertEqual(202, second["statusCode"])
         self.assertEqual({"accepted": True, "duplicate": True}, self.response_body(second))
         self.assertEqual(1, len(self.s3.objects))
+        self.assertEqual([False, True], [row["duplicate"] for row in self.receipt_logs])
 
     def test_conditional_conflict_retries_and_is_not_called_a_duplicate(self):
         self.s3.fail_codes = ["ConditionalRequestConflict"]
@@ -169,6 +203,16 @@ class GrowthBookCollectorTests(unittest.TestCase):
         self.assertEqual({"accepted": True, "duplicate": False}, self.response_body(response))
         self.assertEqual(2, len(self.s3.put_calls))
         self.assertEqual(1, len(self.s3.objects))
+        self.assertEqual([False], [row["duplicate"] for row in self.receipt_logs])
+
+    def test_receipt_logging_failure_never_changes_a_persisted_success(self):
+        with mock.patch("builtins.print", side_effect=OSError("stdout unavailable")):
+            response = self.request(base_payload())
+
+        self.assertEqual(202, response["statusCode"])
+        self.assertEqual({"accepted": True, "duplicate": False}, self.response_body(response))
+        self.assertEqual(1, len(self.s3.objects))
+        self.assertEqual([], self.receipt_logs)
 
     def test_repeated_conditional_conflict_fails_closed(self):
         self.s3.fail_codes = [
@@ -186,6 +230,7 @@ class GrowthBookCollectorTests(unittest.TestCase):
         )
         self.assertEqual(3, len(self.s3.put_calls))
         self.assertEqual(0, len(self.s3.objects))
+        self.assertEqual([], self.receipt_logs)
 
     def test_production_registry_starts_empty_and_rejects_preview_experiment(self):
         production = load_registry(str(self.registry_path), "production")
@@ -224,6 +269,7 @@ class GrowthBookCollectorTests(unittest.TestCase):
         )
         self.assertEqual(204, preflight["statusCode"])
         self.assertEqual(ORIGIN, preflight["headers"]["Access-Control-Allow-Origin"])
+        self.assertEqual([], self.receipt_logs)
 
     def test_content_type_method_and_body_size_are_enforced(self):
         wrong_type = self.request(
@@ -388,20 +434,23 @@ class GrowthBookCollectorTests(unittest.TestCase):
                 "kms_key_arn": "arn:aws:kms:eu-central-1:123456789012:key/test",
             }
         )
-        response = handle_request(
-            {
-                "requestContext": {"http": {"method": "POST"}},
-                "headers": {"origin": ORIGIN, "content-type": "application/json"},
-                "body": json.dumps(base_payload()),
-            },
-            config=config,
-            registry=self.registry,
-            s3=self.s3,
-            now=NOW,
-        )
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            response = handle_request(
+                {
+                    "requestContext": {"http": {"method": "POST"}},
+                    "headers": {"origin": ORIGIN, "content-type": "application/json"},
+                    "body": json.dumps(base_payload()),
+                },
+                config=config,
+                registry=self.registry,
+                s3=self.s3,
+                now=NOW,
+            )
         self.assertEqual(202, response["statusCode"])
         self.assertEqual("aws:kms", self.s3.put_calls[-1]["ServerSideEncryption"])
         self.assertEqual(config.kms_key_arn, self.s3.put_calls[-1]["SSEKMSKeyId"])
+        self.assertEqual(RECEIPT_MARKER, json.loads(output.getvalue())["marker"])
 
 
 if __name__ == "__main__":
