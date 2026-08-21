@@ -215,7 +215,13 @@ def validate() -> None:
         or tag_assistant.get("gtm_script_present_in_dom") is not True
         or tag_assistant.get("no_analytics_consent_growthbook_dom_marker_count") != 0
         or tag_assistant.get("analytics_only_connection_result") != "timeout_zero_tags_found"
+        or tag_assistant.get("clean_session_analytics_pregranted_connection_result")
+        != "timeout_zero_tags_found"
         or tag_assistant.get("all_consent_connection_result") != "timeout_zero_tags_found"
+        or tag_assistant.get("debug_signal_disabled_connection_result")
+        != "timeout_zero_tags_found"
+        or tag_assistant.get("official_troubleshooting_reference")
+        != "https://support.google.com/tagmanager/answer/10039345"
         or tag_assistant.get("draft_container_evaluated") is not False
         or tag_assistant.get("blocker")
         != "tag_assistant_web_session_timeout_browser_extension_not_installed"
