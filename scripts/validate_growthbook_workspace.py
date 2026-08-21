@@ -361,7 +361,7 @@ def validate() -> None:
         raise AssertionError("GrowthBook reconciliation checkpoint state drift")
 
     expected_population_audit = {
-        "status": "second_runtime_root_cause_proven_module_entrypoint_fix_prepared",
+        "status": "audit_passed_reporting_parity_meta_delivery_contract_gap_proven",
         "workflow": ".github/workflows/audit-vevo-growthbook-meta-population.yml",
         "meta_audit_script": "scripts/audit_vevo_meta_dimensions.py",
         "population_sql": "projects/vevo/growthbook_sql/population_audit.sql",
@@ -431,7 +431,72 @@ def validate() -> None:
             "athena_step_started": False,
             "external_mutation_observed": False,
         },
-        "next_gate": "merge_python_module_entrypoint_then_rerun_exact_digest",
+        "successful_runtime": {
+            "implementation_pr": 316,
+            "build_workflow_run_id": "32463854583",
+            "workflow_run_id": "32464046045",
+            "workflow_run_url": (
+                "https://github.com/vzeman/biznisweb/actions/runs/32464046045"
+            ),
+            "main_commit": "9ef741b328cb5709f1e3e7e78c2f4b7afeadc066",
+            "reporting_image_digest": (
+                "sha256:95efe5fffa2f4a3c7ded6c710697b0d5f6f6b45fbc525ad6a848a069753234ef"
+            ),
+            "candidate_task_definition": "vevo-growthbook-meta-audit-preview:3",
+            "host_gate": {
+                "instance_id": "N/A:Fargate",
+                "private_ip": "172.31.16.54",
+                "service": "vevo-growthbook-meta-audit-preview",
+                "path": "/app",
+                "task_id": "cd74ee3a3b5d43e999c45b15b0fdec1a",
+            },
+            "meta_task": {
+                "instance_id": "N/A:Fargate",
+                "private_ip": "172.31.19.87",
+                "service": "vevo-growthbook-meta-audit-preview",
+                "path": "/app",
+                "task_id": "3b1e00828825416da1f5c1422e6d1cac",
+                "exit_code": 0,
+                "stop_code": "EssentialContainerExited",
+            },
+            "meta_summary": {
+                "window_since": "2026-07-22",
+                "window_until": "2026-08-20",
+                "traffic_campaigns": 3,
+                "traffic_adsets": 3,
+                "traffic_ads": 19,
+                "total_clicks": 2210,
+                "total_spend_eur": 523.13,
+                "complete_contract_ads": 0,
+                "forbidden_click_identifier_parameter_ads": 0,
+                "coverage_percent": {
+                    "utm_source": 100.0,
+                    "utm_medium": 100.0,
+                    "utm_id": 100.0,
+                    "utm_content": 0.0,
+                    "meta_adset_id": 0.0,
+                    "meta_placement": 0.0,
+                },
+            },
+            "athena_summary": {
+                "assignment_rows": 5,
+                "outcome_rows": 5,
+                "assignment_keys": 5,
+                "outcome_keys": 5,
+                "duplicate_assignment_keys": 0,
+                "duplicate_outcome_keys": 0,
+                "assignments_missing_outcomes": 0,
+                "outcomes_missing_assignments": 0,
+                "complete_meta_dimension_rows": 3,
+                "invalid_meta_dimension_rows": 0,
+                "population_query_id": "0acd8e02-d081-4cec-a85e-71034321f8de",
+                "variations_query_id": "5ef71971-9ea2-4511-8d49-517a1c00318a",
+            },
+            "external_mutation_observed": False,
+        },
+        "next_gate": (
+            "document_meta_parameter_rollout_and_verify_first_natural_reconciliation"
+        ),
     }
     if workspace.get("population_audit") != expected_population_audit:
         raise AssertionError("GrowthBook Meta/population audit state drift")
