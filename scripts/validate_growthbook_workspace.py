@@ -45,6 +45,21 @@ EXPECTED_PRO_BLOCKED_METRICS = {
     "vevo_inp_p75_24h",
     "vevo_cls_p75_milli_24h",
 }
+EXPECTED_OUTCOME_NUMERIC_COLUMNS = [
+    "add_to_cart_24h",
+    "purchase_converted",
+    "joined_order_count",
+    "net_revenue_eur",
+    "cm1_eur",
+    "cancelled_order_count",
+    "refunded_order_count",
+    "immature_order_count",
+    "lifecycle_mature",
+    "client_error_observed",
+    "order_attribution_eligible",
+    "unmatched_transaction_count",
+    "ambiguous_transaction_count",
+]
 EXPECTED_FEATURES = {
     "vevo-sk-aa-001": "vevo-sk-aa-assignment",
     "vevo-sk-product-cta-color-001": "vevo-sk-product-cta-color",
@@ -114,7 +129,7 @@ def validate() -> None:
     if (
         workspace.get("schema_version") != 1
         or workspace.get("state")
-        != "preview_outcome_metrics_verified_pro_quantiles_blocked"
+        != "preview_outcome_metrics_query_verified_pro_quantiles_blocked"
     ):
         raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
@@ -258,6 +273,13 @@ def validate() -> None:
     ):
         raise AssertionError("GrowthBook device-outcome fact-table verification state drift")
     if (
+        fact_map["vevo_device_outcomes_v1"].get("growthbook_numeric_columns_verified")
+        != EXPECTED_OUTCOME_NUMERIC_COLUMNS
+        or fact_map["vevo_device_outcomes_v1"].get("column_types_verified_date")
+        != "2026-08-21"
+    ):
+        raise AssertionError("GrowthBook device-outcome column-type state drift")
+    if (
         fact_map["vevo_performance_vitals_v1"].get("growthbook_id")
         != "ftb_19g6mmt2e0otd"
         or fact_map["vevo_performance_vitals_v1"].get("status")
@@ -266,6 +288,13 @@ def validate() -> None:
         != "2026-08-21"
     ):
         raise AssertionError("GrowthBook performance fact-table verification state drift")
+    if (
+        fact_map["vevo_performance_vitals_v1"].get("growthbook_numeric_columns_verified")
+        != ["vital_value"]
+        or fact_map["vevo_performance_vitals_v1"].get("column_types_verified_date")
+        != "2026-08-21"
+    ):
+        raise AssertionError("GrowthBook performance column-type state drift")
 
     metrics = workspace.get("metrics", [])
     metric_map = {row.get("key"): row for row in metrics if isinstance(row, dict)}
@@ -283,8 +312,10 @@ def validate() -> None:
         metric = metric_map[key]
         if (
             metric.get("growthbook_id") != growthbook_id
-            or metric.get("status") != "growthbook_created_ui_verified"
+            or metric.get("status") != "growthbook_created_query_verified"
             or metric.get("created_verified_date") != "2026-08-21"
+            or metric.get("analysis_query_verified_date") != "2026-08-21"
+            or metric.get("analysis_query_synthetic_device_count") != 1
         ):
             raise AssertionError(f"GrowthBook created metric state drift: {key}")
     for key in EXPECTED_PRO_BLOCKED_METRICS:

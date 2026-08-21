@@ -72,11 +72,28 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "created metric state drift"):
                 validator.validate()
 
+    def test_validator_rejects_unverified_metric_analysis(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        metric = next(row for row in altered["metrics"] if row["key"] == "vevo_add_to_cart_24h")
+        metric["analysis_query_synthetic_device_count"] = 0
+        with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
+            with self.assertRaisesRegex(AssertionError, "created metric state drift"):
+                validator.validate()
+
+    def test_validator_rejects_numeric_column_type_drift(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["fact_tables"][0]["growthbook_numeric_columns_verified"].remove(
+            "client_error_observed"
+        )
+        with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
+            with self.assertRaisesRegex(AssertionError, "column-type state drift"):
+                validator.validate()
+
     def test_validator_rejects_unapproved_pro_metric_claim(self) -> None:
         altered = copy.deepcopy(self.workspace)
         metric = next(row for row in altered["metrics"] if row["key"] == "vevo_lcp_p75_24h")
         metric["growthbook_id"] = "fact_unapproved"
-        metric["status"] = "growthbook_created_ui_verified"
+        metric["status"] = "growthbook_created_query_verified"
         with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
             with self.assertRaisesRegex(AssertionError, "Pro metric blocker state drift"):
                 validator.validate()
