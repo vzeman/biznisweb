@@ -433,7 +433,7 @@
       "workgroup": "vevo-growthbook-readonly-production",
       "database": "vevo_growthbook_production",
       "s3_results_url": "from_production_stack_output",
-      "status": "second_preflight_stopped_before_aws_gate_path_fix_prepared",
+      "status": "read_only_preflight_passed_natural_run_gate_pending",
       "preflight_workflow": ".github/workflows/preflight-vevo-growthbook-production-foundation.yml",
       "expected_stack": "vevo-growthbook-production",
       "expected_service": "vevo-growthbook-collector-production",
@@ -462,7 +462,21 @@
         "aws_credentials_step_started": false,
         "external_mutation_observed": false
       },
-      "next_gate": "merge_exact_decision_gates_path_then_rerun_read_only_preflight"
+      "successful_preflight": {
+        "workflow_run_id": "32466708456",
+        "workflow_run_url": "https://github.com/vzeman/biznisweb/actions/runs/32466708456",
+        "main_commit": "f50e5712b039b991e2bc986552af8d8a54a6d551",
+        "aws_account_id": "919341186960",
+        "aws_region": "eu-central-1",
+        "production_stack_state": "absent",
+        "preview_task_id": "4a2cdbe240794f439b68ad674f9bb2d6",
+        "preview_private_ip": "172.31.34.243",
+        "preview_service": "vevo-growthbook-collector-preview",
+        "preview_runtime_path": "/app",
+        "preview_image_digest": "sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1",
+        "external_mutation_observed": false
+      },
+      "next_gate": "verify_first_natural_reconciliation_then_prepare_route_disabled_deployment"
     },
     "assignment_query": "projects/vevo/growthbook_sql/assignment.sql"
   },
