@@ -1,0 +1,276 @@
+name: Build VEVO GrowthBook Production A/A Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_snapshot:
+        description: Type true to assemble the protected read-only Production A/A snapshot
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      automated_run_id:
+        description: Independently verified successful automated-evidence workflow run ID
+        required: true
+        type: string
+      automated_sha256:
+        description: Independently verified canonical automated-evidence SHA-256
+        required: true
+        type: string
+      manual_qa_run_id:
+        description: Independently verified successful manual-QA evidence workflow run ID
+        required: true
+        type: string
+      manual_qa_sha256:
+        description: Independently verified canonical manual-QA evidence SHA-256
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: vevo-growthbook-production-aa-snapshot
+  cancel-in-progress: false
+
+env:
+  SNAPSHOT_MANIFEST: projects/vevo/growthbook_aa_snapshot.json
+  AUTOMATED_EVIDENCE_FILE: vevo-growthbook-aa-automated-evidence.json
+  MANUAL_QA_EVIDENCE_FILE: vevo-growthbook-aa-manual-qa-evidence.json
+  SNAPSHOT_FILE: vevo-growthbook-aa-snapshot.json
+  DECISION_FILE: vevo-growthbook-aa-decision.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build-snapshot:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Require exact snapshot confirmation
+        env:
+          CONFIRM_SNAPSHOT: ${{ inputs.confirm_snapshot }}
+          AUTOMATED_RUN_ID: ${{ inputs.automated_run_id }}
+          AUTOMATED_SHA256: ${{ inputs.automated_sha256 }}
+          MANUAL_QA_RUN_ID: ${{ inputs.manual_qa_run_id }}
+          MANUAL_QA_SHA256: ${{ inputs.manual_qa_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_SNAPSHOT}" == 'true' ]]
+          [[ "${AUTOMATED_RUN_ID}" =~ ^[1-9][0-9]{5,19}$ ]]
+          [[ "${MANUAL_QA_RUN_ID}" =~ ^[1-9][0-9]{5,19}$ ]]
+          [[ "${AUTOMATED_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          [[ "${MANUAL_QA_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          {
+            echo "AUTOMATED_RUN_ID=${AUTOMATED_RUN_ID}"
+            echo "AUTOMATED_SHA256=${AUTOMATED_SHA256}"
+            echo "MANUAL_QA_RUN_ID=${MANUAL_QA_RUN_ID}"
+            echo "MANUAL_QA_SHA256=${MANUAL_QA_SHA256}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate disabled-by-default contract before artifact access
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_aa_snapshot_assembler \
+            tests.test_growthbook_aa_snapshot_workflow \
+            tests.test_growthbook_aa_evaluator \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+          python - <<'PY'
+          import json
+          import os
+          import re
+
+          manifest = json.load(open(os.environ['SNAPSHOT_MANIFEST'], encoding='utf-8'))
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          production = (workspace.get('athena') or {}).get('production') or {}
+          clone = production.get('growthbook_clone') or {}
+          expected = {
+              'schema_version': 1,
+              'experiment_id': 'vevo-sk-aa-001',
+              'snapshot_workflow': '.github/workflows/build-vevo-growthbook-production-aa-snapshot.yml',
+          }
+          for key, value in expected.items():
+              if manifest.get(key) != value:
+                  raise SystemExit(f'A/A snapshot manifest drift: {key}')
+          if manifest.get('snapshot_build_allowed') is not True:
+              raise SystemExit('A/A snapshot build gate is closed')
+          if workspace.get('workspace', {}).get('production_allocation_percent') != 100:
+              raise SystemExit('Production A/A allocation is not the frozen 100 percent')
+          if workspace.get('decision_gates', {}).get('production_activation_allowed') is not True:
+              raise SystemExit('Production activation evidence is not recorded')
+          if production.get('successful_foundation_deployment') is None:
+              raise SystemExit('Production foundation evidence is missing')
+          if production.get('credentials_created') is not True:
+              raise SystemExit('Production reader evidence is missing')
+          if clone.get('status') != 'verified_complete' or clone.get('clone_allowed') is not False:
+              raise SystemExit('Production GrowthBook clone must be complete and re-closed')
+          for target in ('target_data_source_id',):
+              if not clone.get(target):
+                  raise SystemExit(f'Production GrowthBook target missing: {target}')
+          for group in ('target_fact_table_ids', 'target_metric_ids'):
+              values = clone.get(group) or {}
+              if not values or any(not value for value in values.values()):
+                  raise SystemExit(f'Production GrowthBook target group incomplete: {group}')
+
+          pairs = (
+              ('automated_evidence', os.environ['AUTOMATED_RUN_ID'], os.environ['AUTOMATED_SHA256']),
+              ('manual_qa_evidence', os.environ['MANUAL_QA_RUN_ID'], os.environ['MANUAL_QA_SHA256']),
+          )
+          for group, run_id, sha256 in pairs:
+              evidence = manifest.get(group) or {}
+              if evidence.get('status') != 'verified':
+                  raise SystemExit(f'{group} is not verified')
+              if str(evidence.get('run_id')) != run_id or evidence.get('sha256') != sha256:
+                  raise SystemExit(f'{group} independently supplied identity mismatch')
+              if re.fullmatch(r'[0-9a-f]{40}', str(evidence.get('main_commit') or '')) is None:
+                  raise SystemExit(f'{group} main commit is invalid')
+          boundaries = manifest.get('release_boundaries') or {}
+          required_true = {'main_only', 'github_artifact_reads_only'}
+          required_false = {
+              'aws_credentials_allowed', 'aws_api_calls_allowed',
+              'growthbook_mutation_allowed', 'gtm_mutation_allowed',
+              'meta_ads_mutation_allowed', 'biznisweb_mutation_allowed',
+              'winner_calls_allowed', 'cta_activation_allowed',
+          }
+          if any(boundaries.get(key) is not True for key in required_true):
+              raise SystemExit('snapshot read-only boundary drift')
+          if any(boundaries.get(key) is not False for key in required_false):
+              raise SystemExit('snapshot mutation boundary drift')
+          print('PRODUCTION_AA_SNAPSHOT_LOCAL_GATE_OK:source=verified-artifacts:mutation=none:winner=false')
+          PY
+
+      - name: Read and verify exact successful component workflow identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${AUTOMATED_RUN_ID}" > automated-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${MANUAL_QA_RUN_ID}" > manual-run.json
+          python - <<'PY'
+          import json
+          import os
+
+          manifest = json.load(open(os.environ['SNAPSHOT_MANIFEST'], encoding='utf-8'))
+          for group, path in (
+              ('automated_evidence', 'automated-run.json'),
+              ('manual_qa_evidence', 'manual-run.json'),
+          ):
+              expected = manifest[group]
+              run = json.load(open(path, encoding='utf-8'))
+              if str(run.get('id')) != str(expected['run_id']):
+                  raise SystemExit(f'{group} GitHub run ID drift')
+              if run.get('status') != 'completed' or run.get('conclusion') != 'success':
+                  raise SystemExit(f'{group} GitHub run is not successful')
+              if run.get('head_branch') != 'main' or run.get('head_sha') != expected['main_commit']:
+                  raise SystemExit(f'{group} main provenance drift')
+              if run.get('event') != 'workflow_dispatch':
+                  raise SystemExit(f'{group} workflow event drift')
+              if run.get('name') != expected['workflow_name']:
+                  raise SystemExit(f'{group} workflow name drift')
+          print('PRODUCTION_AA_COMPONENT_RUNS_VERIFIED:branch=main:conclusion=success')
+          PY
+
+      - name: Download only the two sanitized component artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p automated-component manual-component
+          gh run download "${AUTOMATED_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name vevo-growthbook-aa-automated-evidence \
+            --dir automated-component
+          gh run download "${MANUAL_QA_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name vevo-growthbook-aa-manual-qa-evidence \
+            --dir manual-component
+          [[ "$(find automated-component -type f | wc -l)" -eq 1 ]]
+          [[ "$(find manual-component -type f | wc -l)" -eq 1 ]]
+          [[ "$(find automated-component -mindepth 1 -type d -o -type l | wc -l)" -eq 0 ]]
+          [[ "$(find manual-component -mindepth 1 -type d -o -type l | wc -l)" -eq 0 ]]
+          [[ -f "automated-component/${AUTOMATED_EVIDENCE_FILE}" ]]
+          [[ -f "manual-component/${MANUAL_QA_EVIDENCE_FILE}" ]]
+          [[ "$(sha256sum "automated-component/${AUTOMATED_EVIDENCE_FILE}" | cut -d' ' -f1)" == "${AUTOMATED_SHA256}" ]]
+          [[ "$(sha256sum "manual-component/${MANUAL_QA_EVIDENCE_FILE}" | cut -d' ' -f1)" == "${MANUAL_QA_SHA256}" ]]
+
+      - name: Assemble exact aggregate snapshot and offline A/A decision
+        run: |
+          set -euo pipefail
+          readarray -t SOURCE_COMMITS < <(python - <<'PY'
+          import json
+          import os
+          manifest = json.load(open(os.environ['SNAPSHOT_MANIFEST'], encoding='utf-8'))
+          print(manifest['automated_evidence']['main_commit'])
+          print(manifest['manual_qa_evidence']['main_commit'])
+          PY
+          )
+          python scripts/assemble_growthbook_aa_snapshot.py \
+            --automated "automated-component/${AUTOMATED_EVIDENCE_FILE}" \
+            --automated-sha256 "${AUTOMATED_SHA256}" \
+            --automated-run-id "${AUTOMATED_RUN_ID}" \
+            --automated-main-commit "${SOURCE_COMMITS[0]}" \
+            --manual "manual-component/${MANUAL_QA_EVIDENCE_FILE}" \
+            --manual-sha256 "${MANUAL_QA_SHA256}" \
+            --manual-run-id "${MANUAL_QA_RUN_ID}" \
+            --manual-main-commit "${SOURCE_COMMITS[1]}" \
+            --output "${SNAPSHOT_FILE}"
+          python scripts/evaluate_growthbook_aa.py \
+            --snapshot "${SNAPSHOT_FILE}" \
+            --output "${DECISION_FILE}"
+          python - <<'PY'
+          import json
+          import os
+
+          decision = json.load(open(os.environ['DECISION_FILE'], encoding='utf-8'))
+          if decision.get('winner_calls_allowed') is not False:
+              raise SystemExit('A/A decision attempted to authorize a winner')
+          if decision.get('verdict') not in {'PASS', 'FAIL', 'NOT_READY'}:
+              raise SystemExit('A/A verdict drift')
+          print(
+              'PRODUCTION_AA_DECISION_READY:'
+              f"verdict={decision['verdict']}:winner=false:cta=unchanged"
+          )
+          PY
+          rm -rf automated-component manual-component automated-run.json manual-run.json
+
+      - name: Upload only sanitized snapshot and decision
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-aa-snapshot
+          path: |
+            vevo-growthbook-aa-snapshot.json
+            vevo-growthbook-aa-decision.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write sanitized decision summary
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+          import json
+          import os
+          decision = json.load(open(os.environ['DECISION_FILE'], encoding='utf-8'))
+          summary = decision['summary']
+          print('## VEVO Production A/A snapshot')
+          print(f"- Verdict: `{decision['verdict']}`")
+          print('- Winner calls allowed: `false`')
+          print(f"- Full local calendar days: `{summary['full_calendar_days']}`")
+          print(f"- Eligible devices: `{summary['eligible_devices']}`")
+          print('- GrowthBook, GTM, Meta Ads, BiznisWeb and Production traffic: `unchanged`')
+          print('- Raw AWS/log/component artifacts uploaded: `no`')
+          PY

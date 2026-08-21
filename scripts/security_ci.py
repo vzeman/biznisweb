@@ -98,6 +98,15 @@ def main() -> int:
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_aa_evaluator = read("scripts/evaluate_growthbook_aa.py")
         growthbook_receipt_summarizer = read("scripts/summarize_growthbook_receipts.py")
+        growthbook_aa_snapshot_assembler = read(
+            "scripts/assemble_growthbook_aa_snapshot.py"
+        )
+        growthbook_aa_snapshot_workflow = read(
+            ".github/workflows/build-vevo-growthbook-production-aa-snapshot.yml"
+        )
+        growthbook_aa_snapshot_manifest = json.loads(
+            read("projects/vevo/growthbook_aa_snapshot.json")
+        )
         growthbook_aa_acceptance = json.loads(
             read("projects/vevo/growthbook_aa_acceptance.json")
         )
@@ -1189,6 +1198,127 @@ def main() -> int:
                 "GrowthBook receipt summarizer lost safety marker: "
                 f"{required_receipt_summarizer_marker}",
             )
+        for forbidden_snapshot_assembler_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "facebook_ads",
+            "tagmanager",
+        ):
+            forbid(
+                growthbook_aa_snapshot_assembler.lower(),
+                forbidden_snapshot_assembler_marker.lower(),
+                "GrowthBook A/A snapshot assembler must remain offline: "
+                f"{forbidden_snapshot_assembler_marker}",
+            )
+        for required_snapshot_assembler_marker in (
+            "evidence must use canonical JSON bytes",
+            "SHA-256 mismatch",
+            "component window mismatch",
+            '"contains_raw_aws_payloads"',
+            '"contains_cloudwatch_messages"',
+            '"contains_event_or_device_ids"',
+            '"contains_customer_or_order_data"',
+            "evaluate(snapshot, config)",
+        ):
+            require(
+                growthbook_aa_snapshot_assembler,
+                required_snapshot_assembler_marker,
+                "GrowthBook A/A snapshot assembler lost safety marker: "
+                f"{required_snapshot_assembler_marker}",
+            )
+        if growthbook_aa_snapshot_manifest.get("snapshot_build_allowed") is not False:
+            raise AssertionError("GrowthBook A/A snapshot build must remain disabled before evidence.")
+        for evidence_group in ("automated_evidence", "manual_qa_evidence"):
+            evidence = growthbook_aa_snapshot_manifest.get(evidence_group, {})
+            if evidence.get("status") != "not_recorded" or any(
+                evidence.get(field) is not None
+                for field in ("run_id", "main_commit", "sha256")
+            ):
+                raise AssertionError(
+                    f"GrowthBook A/A snapshot evidence opened early: {evidence_group}."
+                )
+        snapshot_boundaries = growthbook_aa_snapshot_manifest.get("release_boundaries", {})
+        for boundary in ("main_only", "github_artifact_reads_only"):
+            if snapshot_boundaries.get(boundary) is not True:
+                raise AssertionError(f"GrowthBook A/A snapshot boundary drift: {boundary}.")
+        for boundary in (
+            "aws_credentials_allowed",
+            "aws_api_calls_allowed",
+            "growthbook_mutation_allowed",
+            "gtm_mutation_allowed",
+            "meta_ads_mutation_allowed",
+            "biznisweb_mutation_allowed",
+            "winner_calls_allowed",
+            "cta_activation_allowed",
+        ):
+            if snapshot_boundaries.get(boundary) is not False:
+                raise AssertionError(f"GrowthBook A/A snapshot mutation gate opened: {boundary}.")
+        snapshot_output = growthbook_aa_snapshot_manifest.get("output", {})
+        if (
+            snapshot_output.get("artifact_name") != "vevo-growthbook-aa-snapshot"
+            or snapshot_output.get("retention_days") != 14
+        ):
+            raise AssertionError("GrowthBook A/A snapshot output identity drift.")
+        for output_boundary in (
+            "contains_component_artifacts",
+            "contains_raw_aws_payloads",
+            "contains_cloudwatch_messages",
+            "contains_event_or_device_ids",
+            "contains_customer_or_order_data",
+        ):
+            if snapshot_output.get(output_boundary) is not False:
+                raise AssertionError(
+                    f"GrowthBook A/A snapshot output boundary opened: {output_boundary}."
+                )
+        for required_snapshot_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "permissions:\n  contents: read\n  actions: read",
+            "snapshot_build_allowed') is not True",
+            "Production GrowthBook clone must be complete and re-closed",
+            "gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${AUTOMATED_RUN_ID}\"",
+            "gh run download \"${AUTOMATED_RUN_ID}\"",
+            "gh run download \"${MANUAL_QA_RUN_ID}\"",
+            "scripts/assemble_growthbook_aa_snapshot.py",
+            "scripts/evaluate_growthbook_aa.py",
+            "winner=false:cta=unchanged",
+            "uses: actions/upload-artifact@v4.6.2",
+        ):
+            require(
+                growthbook_aa_snapshot_workflow,
+                required_snapshot_workflow_marker,
+                "GrowthBook A/A snapshot workflow lost safety marker: "
+                f"{required_snapshot_workflow_marker}",
+            )
+        if growthbook_aa_snapshot_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError("GrowthBook A/A snapshot must upload exactly one artifact.")
+        for forbidden_snapshot_workflow_marker in (
+            "configure-aws-credentials",
+            "aws ",
+            "boto3",
+            "start-query-execution",
+            "ecs run-task",
+            "register-task-definition",
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "curl ",
+            "wget ",
+        ):
+            forbid(
+                growthbook_aa_snapshot_workflow.lower(),
+                forbidden_snapshot_workflow_marker.lower(),
+                "GrowthBook A/A snapshot workflow must remain artifact-read-only: "
+                f"{forbidden_snapshot_workflow_marker}",
+            )
         preview_registry = growthbook_registry_config.get("environments", {}).get("preview", {})
         for experiment_id, weights in growthbook_reporting_config.get("expected_variation_weights", {}).items():
             registry_variations = preview_registry.get(experiment_id, {}).get("variations", [])
@@ -1224,6 +1354,7 @@ def main() -> int:
             "scripts/build_vevo_growthbook_gtm_tag.py",
             "scripts/evaluate_growthbook_aa.py",
             "scripts/summarize_growthbook_receipts.py",
+            "scripts/assemble_growthbook_aa_snapshot.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",
