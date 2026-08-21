@@ -114,6 +114,17 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "GTM Tag Assistant Preview blocker state drift"):
                 validator.validate()
 
+    def test_validator_rejects_unverified_reconciliation_checkpoint(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["reconciliation_checkpoint"][
+            "raw_curated_reporting_athena_identity_verified"
+        ] = False
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "reconciliation checkpoint"):
+                validator.validate()
+
     def test_validator_rejects_growthbook_before_analytics_consent(self) -> None:
         altered = copy.deepcopy(self.workspace)
         altered["gtm_preview_workspace"]["tag_assistant_preview"][
