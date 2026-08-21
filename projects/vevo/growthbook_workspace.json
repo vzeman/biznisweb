@@ -91,7 +91,10 @@
       "gtm_script_present_in_dom": true,
       "no_analytics_consent_growthbook_dom_marker_count": 0,
       "analytics_only_connection_result": "timeout_zero_tags_found",
+      "clean_session_analytics_pregranted_connection_result": "timeout_zero_tags_found",
       "all_consent_connection_result": "timeout_zero_tags_found",
+      "debug_signal_disabled_connection_result": "timeout_zero_tags_found",
+      "official_troubleshooting_reference": "https://support.google.com/tagmanager/answer/10039345",
       "draft_container_evaluated": false,
       "blocker": "tag_assistant_web_session_timeout_browser_extension_not_installed",
       "next_gate": "explicit_user_confirmation_before_installing_or_enabling_google_tag_assistant_extension_then_repeat_preview"
