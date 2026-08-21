@@ -61,12 +61,16 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY SD-card purchase-cost correction is in progress (`2026-08-21`):
-  - branch `codex/roy-sd-card-purchase-costs`
-  - requested net purchase costs are mapped by exact reporting SKU: `F_206` = `4.50 EUR` and `12876` = `13.50 EUR`
-  - regression coverage verifies that these current import-code mappings take precedence over the older EAN mappings for the same catalog items
-  - verification and production deployment are pending
-  - Next exact step: run focused/full reporting checks, commit and push, open/merge a PR, then perform the production infra hard-gate and host verification before the UI readback
+- ROY SD-card purchase-cost correction is merged, deployed, and host-verified (`2026-08-21`):
+  - PR `#290` merged as `d9f4d4c3823d880179d8cd58a5cd45a967b57d59`; exact reporting SKUs now map `F_206` to `4.50 EUR` and `12876` to `13.50 EUR`
+  - regression coverage proves the current import-code mappings take precedence over the older EAN mappings; the focused check and all `96` tests in `tests.test_reporting_calculation_fixes` passed, together with JSON parsing and `git diff --check`
+  - the deploy used current main `e55ccd14b47c660b9b39a5788a1e65a63a98fc1a`, which contains PR `#290`, and immutable digest `sha256:30a23fcd69eb2d7a41195bffa0bc055d38bc2dd706e9eb07d5126675a21a6add`
+  - protected workflow `32441607094` passed after a mismatched queued attempt `32441474240` was cancelled before host execution while a newer main image was still building
+  - ROY hard-gate identity: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.23.146`, service `roy-daily-report-email`, task `fd8594dd477c485fadda207a0aabd1bf`, task definition `roy-reporting-daily:66`, runtime path `/app`, localhost marker `http://127.0.0.1:8000/marker.json`, and exact digest above
+  - the host generated the tagged ROY report for `2025-09-24..2026-08-20`, returned `LOCALHOST_MARKER_OK`, passed `UI_SMOKE_OK:roy:daily-profit-loss`, exited normally, and left the ROY scheduler pinned to task definition `:66`; no report email was sent
+  - post-host Chrome verification confirmed the authenticated ROY operations dashboard loads; its current live S3 artifact still shows the preceding `F_206` valuation (`75.90 EUR` for `23` units), because the safety smoke was tagged and intentionally did not promote or email a new daily artifact
+  - no local server, worker, watcher, or tunnel was started
+  - Next exact step: monitor the next natural `roy-daily-report-email` run on task definition `:66`, then verify the refreshed live inventory rows show unit purchase costs `4.50 EUR` for `F_206` and `13.50 EUR` for `12876`
 
 - VEVO GrowthBook Pro rollout has a concrete, read-only preflight, dated baseline, and execution contract on branch `codex/vevo-growthbook` (`2026-08-20`):
   - the goal is to validate the complete GrowthBook → Meta dimensions → reporting chain with an invisible site-wide A/A and then finish one non-price product-detail CTA-color A/B test; script installation alone is explicitly not completion
