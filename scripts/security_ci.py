@@ -73,6 +73,9 @@ def main() -> int:
         growthbook_reconciliation_recovery_workflow = read(
             ".github/workflows/recover-vevo-growthbook-reconciliation-rollback.yml"
         )
+        growthbook_natural_reconciliation_workflow = read(
+            ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
+        )
         growthbook_meta_audit = read("scripts/audit_vevo_meta_dimensions.py")
         growthbook_meta_audit_workflow = read(
             ".github/workflows/audit-vevo-growthbook-meta-population.yml"
@@ -518,6 +521,53 @@ def main() -> int:
                 growthbook_reconciliation_workflow,
                 forbidden_action,
                 f"GrowthBook reconciliation workflow must not use {forbidden_action}.",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'",
+            "first natural-run verification is not due until",
+            "cloudformation describe-stacks",
+            "scheduler get-schedule",
+            "ecs describe-task-definition",
+            "logs filter-log-events",
+            "ecs describe-tasks",
+            "cloudtrail lookup-events",
+            "sqs get-queue-attributes",
+            "scripts/verify_growthbook_natural_reconciliation.py",
+            "AWS mutations: `none`",
+        ):
+            require(
+                growthbook_natural_reconciliation_workflow,
+                marker,
+                f"GrowthBook natural reconciliation verifier lost safety marker: {marker}",
+            )
+        for forbidden_action in (
+            "aws cloudformation create-",
+            "aws cloudformation update-",
+            "aws cloudformation execute-",
+            "aws cloudformation delete-",
+            "aws ecs run-task",
+            "aws ecs register-task-definition",
+            "aws scheduler create-",
+            "aws scheduler update-",
+            "aws scheduler delete-",
+            "aws sqs send-message",
+            "aws sqs delete-",
+            "aws logs put-",
+            "aws logs delete-",
+            "aws cloudwatch put-",
+            "aws cloudwatch delete-",
+            "aws cloudwatch set-alarm-state",
+            "aws s3api put-",
+            "aws s3api delete-",
+            "aws athena start-query-execution",
+            "ads_update",
+            "submit",
+        ):
+            forbid(
+                growthbook_natural_reconciliation_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook natural reconciliation verifier must remain read-only: {forbidden_action}",
             )
         for marker in (
             '"ScheduleState": "DISABLED"',

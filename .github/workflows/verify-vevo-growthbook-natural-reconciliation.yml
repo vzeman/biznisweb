@@ -1,0 +1,249 @@
+name: Verify VEVO GrowthBook Natural Reconciliation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_verification:
+        description: Type true to run the read-only first natural reconciliation verification
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-natural-reconciliation-verification
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  STACK_NAME: vevo-growthbook-reconciliation-preview
+  SCHEDULE_NAME: vevo-growthbook-reconcile-preview
+  SOURCE_SCHEDULE: vevo-daily-report-email
+  TASK_DEFINITION: vevo-growthbook-reconcile-preview:4
+  DLQ_NAME: vevo-growthbook-reconcile-preview-dlq
+  RUNTIME_PATH: /app
+  FIRST_RUN_DUE_UTC: '2026-08-22T01:30:00Z'
+  VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'
+  VERIFY_BEFORE_UTC: '2026-08-23T01:30:00Z'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  verify-natural-reconciliation:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Require exact read-only verification confirmation
+        env:
+          CONFIRM_VERIFICATION: ${{ inputs.confirm_verification }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_VERIFICATION}" == "true" ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate read-only contract and first-run time gate before AWS credentials
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_natural_reconciliation_verifier \
+            tests.test_growthbook_natural_reconciliation_workflow \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          recurring = workspace.get('workspace', {}).get('recurring_schedule', {})
+          if recurring.get('first_natural_run_status') != 'pending':
+              raise SystemExit('first natural-run status must remain pending before verification')
+          if workspace.get('workspace', {}).get('production_allocation_percent') != 0:
+              raise SystemExit('GrowthBook Production allocation must remain zero')
+          if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'not_published':
+              raise SystemExit('GTM Preview workspace must remain unpublished')
+          if workspace.get('decision_gates', {}).get('production_activation_allowed') is not False:
+              raise SystemExit('Production activation gate must remain false')
+
+          now = datetime.now(timezone.utc)
+          not_before = datetime.fromisoformat(os.environ['VERIFY_NOT_BEFORE_UTC'].replace('Z', '+00:00'))
+          before = datetime.fromisoformat(os.environ['VERIFY_BEFORE_UTC'].replace('Z', '+00:00'))
+          if now < not_before:
+              raise SystemExit(f'first natural-run verification is not due until {not_before.isoformat()}')
+          if now >= before:
+              raise SystemExit('first natural-run live ECS evidence window has closed')
+          print('NATURAL_RECONCILIATION_LOCAL_GATE_OK:allocation=0:gtm=not_published:mutation=none')
+          PY
+
+      - name: Configure AWS credentials for read-only evidence
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read exact schedule, runtime, marker, task, monitoring, and Scheduler evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > natural-stack.json
+          aws scheduler get-schedule \
+            --name "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > natural-schedule.json
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > source-schedule.json
+          aws ecs describe-task-definition \
+            --task-definition "${TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > natural-task-definition.json
+          aws cloudwatch describe-alarms \
+            --alarm-names \
+              vevo-growthbook-reconcile-preview-failure \
+              vevo-growthbook-reconcile-preview-missing-success \
+              vevo-growthbook-reconcile-preview-dlq \
+            --region "${AWS_REGION}" > natural-alarms.json
+          DLQ_URL="$(aws sqs get-queue-url \
+            --queue-name "${DLQ_NAME}" \
+            --region "${AWS_REGION}" \
+            --query QueueUrl \
+            --output text)"
+          aws sqs get-queue-attributes \
+            --queue-url "${DLQ_URL}" \
+            --attribute-names All \
+            --region "${AWS_REGION}" > natural-dlq.json
+
+          readarray -t RUNTIME_VALUES < <(python - <<'PY'
+          import json
+
+          schedule = json.load(open('natural-schedule.json', encoding='utf-8'))
+          task = json.load(open('natural-task-definition.json', encoding='utf-8'))['taskDefinition']
+          target = schedule.get('Target') or {}
+          containers = task.get('containerDefinitions') or []
+          if len(containers) != 1:
+              raise SystemExit('exactly one reconciliation container is required')
+          logs = (containers[0].get('logConfiguration') or {}).get('options') or {}
+          values = [
+              str(target.get('Arn') or ''),
+              str(logs.get('awslogs-group') or ''),
+          ]
+          if not values[0].endswith('/vevo-reporting') or not values[1].startswith('/ecs/'):
+              raise SystemExit('natural reconciliation runtime boundary drift')
+          print('\n'.join(values))
+          PY
+          )
+          CLUSTER_ARN="${RUNTIME_VALUES[0]}"
+          LOG_GROUP="${RUNTIME_VALUES[1]}"
+
+          START_MS="$(python - <<'PY'
+          from datetime import datetime
+          print(int(datetime.fromisoformat('2026-08-22T01:29:00+00:00').timestamp() * 1000))
+          PY
+          )"
+          END_MS="$(python - <<'PY'
+          from datetime import datetime, timezone
+          print(int(datetime.now(timezone.utc).timestamp() * 1000))
+          PY
+          )"
+          aws logs filter-log-events \
+            --log-group-name "${LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK"' \
+            --start-time "${START_MS}" \
+            --end-time "${END_MS}" \
+            --region "${AWS_REGION}" > natural-success-events.json
+          aws logs filter-log-events \
+            --log-group-name "${LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE"' \
+            --start-time "${START_MS}" \
+            --end-time "${END_MS}" \
+            --region "${AWS_REGION}" > natural-failure-events.json
+          python - <<'PY'
+          import json
+
+          successes = json.load(open('natural-success-events.json', encoding='utf-8')).get('events') or []
+          failures = json.load(open('natural-failure-events.json', encoding='utf-8')).get('events') or []
+          json.dump({'events': [*successes, *failures]}, open('natural-marker-events.json', 'w', encoding='utf-8'))
+          PY
+
+          readarray -t NATURAL_TASK_VALUES < <(python - <<'PY'
+          import json
+          import re
+
+          events = json.load(open('natural-marker-events.json', encoding='utf-8')).get('events') or []
+          successes = [row for row in events if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:' in str(row.get('message') or '')]
+          failures = [row for row in events if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:' in str(row.get('message') or '')]
+          if failures or len(successes) != 1:
+              raise SystemExit('first natural window requires exactly one success and zero failures')
+          stream = str(successes[0].get('logStreamName') or '')
+          task_id = stream.rsplit('/', 1)[-1]
+          if re.fullmatch(r'[0-9a-f]{32}', task_id) is None:
+              raise SystemExit('natural task ID is invalid')
+          print(stream)
+          print(task_id)
+          PY
+          )
+          NATURAL_LOG_STREAM="${NATURAL_TASK_VALUES[0]}"
+          NATURAL_TASK_ID="${NATURAL_TASK_VALUES[1]}"
+
+          aws ecs describe-tasks \
+            --cluster "${CLUSTER_ARN}" \
+            --tasks "${NATURAL_TASK_ID}" \
+            --region "${AWS_REGION}" > natural-task-state.json
+          aws logs get-log-events \
+            --log-group-name "${LOG_GROUP}" \
+            --log-stream-name "${NATURAL_LOG_STREAM}" \
+            --start-from-head \
+            --region "${AWS_REGION}" > natural-task-logs.json
+          aws cloudtrail lookup-events \
+            --lookup-attributes AttributeKey=EventName,AttributeValue=RunTask \
+            --start-time '2026-08-22T01:29:00Z' \
+            --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --max-results 50 \
+            --region "${AWS_REGION}" > natural-cloudtrail.json
+
+          python scripts/verify_growthbook_natural_reconciliation.py \
+            --schedule natural-schedule.json \
+            --stack natural-stack.json \
+            --task-definition natural-task-definition.json \
+            --marker-events natural-marker-events.json \
+            --task-state natural-task-state.json \
+            --task-logs natural-task-logs.json \
+            --alarms natural-alarms.json \
+            --dlq natural-dlq.json \
+            --source-schedule source-schedule.json \
+            --cloudtrail natural-cloudtrail.json
+
+      - name: Read-only verification summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## VEVO GrowthBook first natural reconciliation'
+            echo "- Schedule: \`${SCHEDULE_NAME}\`"
+            echo "- Expected runtime: \`instance-id=N/A:Fargate / service=${SCHEDULE_NAME} / path=${RUNTIME_PATH}\`"
+            echo '- AWS mutations: `none`'
+            echo '- GrowthBook Production allocation: `0%` (unchanged)'
+            echo '- GTM: `not_published` (unchanged)'
+            echo '- Meta Ads and BiznisWeb commerce state: `unchanged`'
+          } >> "${GITHUB_STEP_SUMMARY}"
