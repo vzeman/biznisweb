@@ -19,6 +19,7 @@ DEFAULT_MAX_BODY_BYTES = 4096
 DEFAULT_ORIGIN = "https://www.vevo.sk"
 DEFAULT_PREFIX = "experiment-events/raw"
 DEFAULT_REGISTRY_PATH = Path(__file__).with_name("experiments.json")
+RECEIPT_MARKER = "VEVO_GROWTHBOOK_COLLECTOR_RECEIPT"
 
 EVENT_FIELDS = {
     "experiment_exposure": frozenset(),
@@ -441,6 +442,23 @@ def validate_event(
     return normalized
 
 
+def _emit_receipt_marker(duplicate: bool) -> None:
+    """Emit one aggregate PII-free receipt used for A/A duplicate-rate proof."""
+
+    marker = {
+        "accepted": True,
+        "duplicate": duplicate,
+        "marker": RECEIPT_MARKER,
+        "schema_version": 1,
+    }
+    try:
+        print(json.dumps(marker, separators=(",", ":"), sort_keys=True), flush=True)
+    except Exception:
+        # Receipt evidence must never turn a persisted event into a failed cart
+        # or checkout-side request. Missing markers fail the later parity gate.
+        pass
+
+
 def _headers(event: Mapping[str, Any]) -> Dict[str, str]:
     raw_headers = event.get("headers") or {}
     if not isinstance(raw_headers, dict):
@@ -583,6 +601,7 @@ def handle_request(
     except Exception:
         return _response(503, {"accepted": False, "code": "storage_unavailable"}, allowed_origin)
 
+    _emit_receipt_marker(duplicate)
     return _response(202, {"accepted": True, "duplicate": duplicate}, allowed_origin)
 
 

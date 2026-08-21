@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import http.client
+import io
 import json
 import threading
 import unittest
@@ -8,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from growthbook_collector.handler import CollectorConfig
+from growthbook_collector.handler import CollectorConfig, RECEIPT_MARKER
 from growthbook_collector.server import HEALTH_MARKER, HOST_MARKER, create_server
 
 
@@ -123,18 +125,34 @@ class GrowthBookCollectorServerTests(unittest.TestCase):
         self.assertEqual("preview", marker["environment"])
 
     def test_exact_post_route_reuses_validated_append_only_collector(self) -> None:
-        body = json.dumps(exposure_payload(), separators=(",", ":")).encode("utf-8")
-        status, headers, response = self.request(
-            "POST",
-            "/v1/events",
-            body,
-            {"Content-Type": "application/json", "Origin": ORIGIN},
-        )
+        payload = exposure_payload()
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status, headers, response = self.request(
+                "POST",
+                "/v1/events",
+                body,
+                {"Content-Type": "application/json", "Origin": ORIGIN},
+            )
         self.assertEqual(202, status)
         self.assertEqual({"accepted": True, "duplicate": False}, response)
         self.assertEqual(ORIGIN, headers["access-control-allow-origin"])
         self.assertEqual(1, len(self.s3.put_calls))
         self.assertEqual("*", self.s3.put_calls[0]["IfNoneMatch"])
+        receipt = json.loads(output.getvalue())
+        self.assertEqual(
+            {
+                "accepted": True,
+                "duplicate": False,
+                "marker": RECEIPT_MARKER,
+                "schema_version": 1,
+            },
+            receipt,
+        )
+        serialized = json.dumps(receipt).lower()
+        self.assertNotIn(payload["event_id"].lower(), serialized)
+        self.assertNotIn(payload["device_id"].lower(), serialized)
 
     def test_preflight_is_exact_origin_and_does_not_write(self) -> None:
         status, headers, response = self.request(
