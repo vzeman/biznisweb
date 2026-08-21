@@ -24,6 +24,7 @@ class GrowthBookProductionPreflightWorkflowTests(unittest.TestCase):
             "GTM Preview workspace must remain unpublished",
             "get('publish_status') != 'not_published'",
             "Production activation gate must remain false",
+            "get('decision_gates', {}).get('production_activation_allowed') is not False",
             "parameters.get('PublicRouteEnabled') != 'false'",
             "'CollectorEndpoint' in outputs",
             "PRODUCTION_FOUNDATION_PREFLIGHT_OK:",
