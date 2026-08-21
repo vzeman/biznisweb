@@ -83,11 +83,22 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "GTM Preview bridge is not fail closed"):
                 validator.validate()
 
-    def test_validator_rejects_claimed_tag_assistant_acceptance(self) -> None:
+    def test_validator_rejects_claimed_tag_assistant_exposure_delivery(self) -> None:
         altered = copy.deepcopy(self.workspace)
         altered["gtm_preview_workspace"]["tag_assistant_preview"][
-            "draft_container_evaluated"
-        ] = True
+            "analytics_only_exposure_delivery_result"
+        ] = "accepted"
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "GTM Tag Assistant Preview blocker state drift"):
+                validator.validate()
+
+    def test_validator_rejects_growthbook_before_analytics_consent(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["gtm_preview_workspace"]["tag_assistant_preview"][
+            "no_analytics_consent_growthbook_or_collector_asset_count"
+        ] = 1
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):

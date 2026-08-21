@@ -180,7 +180,7 @@ def validate() -> None:
         "public_container_id": "GTM-5ZB5LFGB",
         "workspace_id": "16",
         "workspace_name": "VEVO GrowthBook Preview",
-        "status": "unpublished_draft_preview_connection_blocked",
+        "status": "unpublished_draft_preview_feature_payload_blocked",
         "created_verified_date": "2026-08-21",
         "artifact_sha256": "e4dab7ad37432c255c9552eff953bfb0c80c48035db06b814e6d5a58af29532f",
         "runtime_secret_material_committed": False,
@@ -210,22 +210,45 @@ def validate() -> None:
     }:
         raise AssertionError("GTM Preview add-to-cart trigger state drift")
     tag_assistant = gtm_preview.get("tag_assistant_preview", {})
-    if (
-        tag_assistant.get("target_url") != "https://www.vevo.sk/"
-        or tag_assistant.get("gtm_script_present_in_dom") is not True
-        or tag_assistant.get("no_analytics_consent_growthbook_dom_marker_count") != 0
-        or tag_assistant.get("analytics_only_connection_result") != "timeout_zero_tags_found"
-        or tag_assistant.get("clean_session_analytics_pregranted_connection_result")
-        != "timeout_zero_tags_found"
-        or tag_assistant.get("all_consent_connection_result") != "timeout_zero_tags_found"
-        or tag_assistant.get("debug_signal_disabled_connection_result")
-        != "timeout_zero_tags_found"
-        or tag_assistant.get("official_troubleshooting_reference")
-        != "https://support.google.com/tagmanager/answer/10039345"
-        or tag_assistant.get("draft_container_evaluated") is not False
-        or tag_assistant.get("blocker")
-        != "tag_assistant_web_session_timeout_browser_extension_not_installed"
-    ):
+    expected_tag_assistant = {
+        "target_url": "https://www.vevo.sk/",
+        "browser": "Comet",
+        "extension_installed": True,
+        "extension_version": "26.216.2.45",
+        "extension_site_access": "all_sites_user_confirmed",
+        "vevo_adblock_exceptions_user_confirmed": [
+            "https://vevo.flox.sk",
+            "https://www.vevo.sk",
+        ],
+        "gtm_script_present_in_dom": True,
+        "connection_result": "connected_three_google_tags_found",
+        "detected_google_tag_count": 3,
+        "draft_container_evaluated": True,
+        "loader_fired": True,
+        "consent_bridge_fired": True,
+        "tag_assistant_console_error_count": 0,
+        "no_analytics_consent_growthbook_dom_marker_count": 0,
+        "no_analytics_consent_sdk_dom_count": 0,
+        "no_analytics_consent_growthbook_or_collector_asset_count": 0,
+        "analytics_only_sdk_dom_count": 1,
+        "analytics_only_feature_request_observed": True,
+        "analytics_only_feature_request_result": "blocked_by_comet_adblock",
+        "analytics_only_exposure_delivery_result": "not_attempted_feature_payload_blocked",
+        "collector_request_observed": False,
+        "feature_payload_blocker_host": "cdn.growthbook.io",
+        "official_troubleshooting_reference": (
+            "https://support.google.com/tagmanager/answer/10039345"
+        ),
+        "comet_adblock_reference": (
+            "https://www.perplexity.ai/help-center/comet/en/articles/11734702-adblock"
+        ),
+        "blocker": "comet_adblock_blocks_growthbook_feature_payload",
+        "next_gate": (
+            "user_allowlists_https_cdn_growthbook_io_then_repeat_analytics_only_preview_"
+            "and_verify_exposure_delivery"
+        ),
+    }
+    if tag_assistant != expected_tag_assistant:
         raise AssertionError("GTM Tag Assistant Preview blocker state drift")
 
     feature_flags = workspace.get("feature_flags", [])
