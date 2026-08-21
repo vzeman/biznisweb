@@ -261,6 +261,28 @@ jobs:
                   raise SystemExit(f"invalid runtime value: {key}")
               print(f"{key}={value}")
           PY
+          python3 <<'PY'
+          import re
+
+          expected = {
+              "ASSIGN_PUBLIC_IP", "CLUSTER_ARN", "CONTAINER_NAME", "EVENT_BUCKET",
+              "EXECUTION_ROLE_ARN", "LAUNCH_TYPE", "LOG_GROUP", "LOG_PREFIX",
+              "PLATFORM_VERSION", "REPORTING_POLICY_ARN", "SECURITY_GROUP_IDS",
+              "SUBNET_IDS", "TASK_ROLE_ARN",
+          }
+          rows = [row for row in open("runtime.env", encoding="utf-8").read().splitlines() if row]
+          pairs = [row.split("=", 1) for row in rows]
+          keys = [pair[0] for pair in pairs if len(pair) == 2]
+          if len(pairs) != len(expected) or len(keys) != len(expected) or set(keys) != expected:
+              raise SystemExit("runtime.env key set is not exact")
+          if len(keys) != len(set(keys)):
+              raise SystemExit("runtime.env contains duplicate keys")
+          if any(not re.fullmatch(r"[A-Z][A-Z0-9_]*", key) or not value for key, value in pairs):
+              raise SystemExit("runtime.env contains an invalid assignment")
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+          done < runtime.env
           cat runtime.env >> "${GITHUB_ENV}"
           {
             echo "SOURCE_TASK_DEFINITION=${SOURCE_TASK_DEFINITION}"
