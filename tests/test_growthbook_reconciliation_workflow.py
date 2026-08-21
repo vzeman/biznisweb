@@ -50,6 +50,15 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.workflow)
 
+    def test_validated_runtime_values_are_available_in_the_resolve_step(self) -> None:
+        exact_keys = self.workflow.index('raise SystemExit("runtime.env key set is not exact")')
+        export_loop = self.workflow.index("while IFS='=' read -r key value; do", exact_keys)
+        export_assignment = self.workflow.index('export "${key}=${value}"', export_loop)
+        first_consumer = self.workflow.index('TASK_ROLE_NAME="${TASK_ROLE_ARN##*/}"', export_assignment)
+        self.assertLess(exact_keys, export_loop)
+        self.assertLess(export_loop, export_assignment)
+        self.assertLess(export_assignment, first_consumer)
+
     def test_source_schedule_and_production_boundaries_are_unchanged(self) -> None:
         lowered = self.workflow.lower()
         self.assertNotIn("scheduler update-schedule", lowered)
