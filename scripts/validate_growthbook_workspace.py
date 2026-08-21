@@ -230,6 +230,21 @@ def validate() -> None:
             else "experiment_performance_facts"
         )
         _validate_sql(expected_path, sql, table=table, experiment_filter=True)
+    if (
+        fact_map["vevo_device_outcomes_v1"].get("growthbook_id") != "ftb_19g6mmt2dhrdi"
+        or fact_map["vevo_device_outcomes_v1"].get("status")
+        != "growthbook_created_query_verified_one_row"
+        or fact_map["vevo_device_outcomes_v1"].get("query_verified_date") != "2026-08-21"
+    ):
+        raise AssertionError("GrowthBook device-outcome fact-table verification state drift")
+    if (
+        fact_map["vevo_performance_vitals_v1"].get("growthbook_id") is not None
+        or fact_map["vevo_performance_vitals_v1"].get("status")
+        != "growthbook_creation_pending_synthetic_performance_fact"
+        or fact_map["vevo_performance_vitals_v1"].get("query_test_status")
+        != "athena_executed_no_rows_growthbook_did_not_persist_table"
+    ):
+        raise AssertionError("GrowthBook performance fact-table pending state drift")
 
     metrics = workspace.get("metrics", [])
     metric_map = {row.get("key"): row for row in metrics if isinstance(row, dict)}

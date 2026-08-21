@@ -107,6 +107,9 @@
     {
       "key": "vevo_device_outcomes_v1",
       "name": "VEVO Device Outcomes v1",
+      "growthbook_id": "ftb_19g6mmt2dhrdi",
+      "status": "growthbook_created_query_verified_one_row",
+      "query_verified_date": "2026-08-21",
       "query": "projects/vevo/growthbook_sql/device_outcomes.sql",
       "identifier": "device_id",
       "timestamp_semantics": "first eligible exposure in UTC",
@@ -115,6 +118,9 @@
     {
       "key": "vevo_performance_vitals_v1",
       "name": "VEVO Performance Vitals v1",
+      "growthbook_id": null,
+      "status": "growthbook_creation_pending_synthetic_performance_fact",
+      "query_test_status": "athena_executed_no_rows_growthbook_did_not_persist_table",
       "query": "projects/vevo/growthbook_sql/performance_vitals.sql",
       "identifier": "device_id",
       "timestamp_semantics": "first accepted measurement per page load and vital in UTC",
