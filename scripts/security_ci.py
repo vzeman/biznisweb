@@ -600,6 +600,10 @@ def main() -> int:
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'",
+            "EXPECTED_CLUSTER_ARN: arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster",
+            "EXPECTED_CONTAINER_NAME: reporting",
+            "EXPECTED_LOG_GROUP: /ecs/vevo-reporting-daily",
+            "EXPECTED_LOG_PREFIX: ecs",
             "workspace.get('reconciliation_checkpoint', {}).get(",
             "first natural-run verification is not due until",
             "cloudformation describe-stacks",

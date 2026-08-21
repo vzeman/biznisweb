@@ -10,6 +10,7 @@ as the scheduled run.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import re
 from datetime import datetime, timezone
@@ -19,6 +20,12 @@ from typing import Any, Mapping, Sequence
 
 EXPECTED_ACCOUNT_ID = "919341186960"
 EXPECTED_REGION = "eu-central-1"
+EXPECTED_CLUSTER_ARN = (
+    "arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster"
+)
+EXPECTED_CONTAINER_NAME = "reporting"
+EXPECTED_LOG_GROUP = "/ecs/vevo-reporting-daily"
+EXPECTED_LOG_PREFIX = "ecs"
 EXPECTED_STACK_NAME = "vevo-growthbook-reconciliation-preview"
 EXPECTED_SCHEDULE_NAME = "vevo-growthbook-reconcile-preview"
 EXPECTED_SOURCE_SCHEDULE = "vevo-daily-report-email"
@@ -180,6 +187,10 @@ def verify_natural_reconciliation(
         "reconciliation task definition drift",
     )
     _require(parameters.get("Environment") == "preview", "reconciliation environment drift")
+    _require(
+        parameters.get("ClusterArn") == EXPECTED_CLUSTER_ARN,
+        "reconciliation cluster identity drift",
+    )
     _require(parameters.get("ScheduleState") == "ENABLED", "stack schedule state drift")
     _require(
         parameters.get("ScheduleExpression") == EXPECTED_SCHEDULE_EXPRESSION,
@@ -230,6 +241,10 @@ def verify_natural_reconciliation(
     except json.JSONDecodeError as exc:
         raise VerificationError("schedule input is invalid JSON") from exc
     expected_override = _normalized_override(schedule_input)
+    _require(
+        expected_override["name"] == EXPECTED_CONTAINER_NAME,
+        "scheduled container identity drift",
+    )
     _require(expected_override["command"] == EXPECTED_COMMAND, "scheduled command drift")
     _require(
         expected_override["environment"]
@@ -256,14 +271,17 @@ def verify_natural_reconciliation(
     containers = task_definition.get("containerDefinitions") or []
     _require(isinstance(containers, list) and len(containers) == 1, "one task container is required")
     container_definition = containers[0]
-    _require(container_definition.get("name") == expected_override["name"], "container name drift")
+    _require(container_definition.get("name") == EXPECTED_CONTAINER_NAME, "container name drift")
     _require(container_definition.get("command") == EXPECTED_COMMAND, "task command drift")
     image = str(container_definition.get("image") or "")
     _require(image.endswith(f"@{EXPECTED_IMAGE_DIGEST}"), "task image digest drift")
     log_options = ((container_definition.get("logConfiguration") or {}).get("options") or {})
     log_group = str(log_options.get("awslogs-group") or "")
     log_prefix = str(log_options.get("awslogs-stream-prefix") or "")
-    _require(log_group.startswith("/ecs/") and bool(log_prefix), "task log boundary drift")
+    _require(
+        log_group == EXPECTED_LOG_GROUP and log_prefix == EXPECTED_LOG_PREFIX,
+        "task log boundary drift",
+    )
 
     marker_events = _messages(marker_events_payload)
     successes = [
@@ -293,7 +311,11 @@ def verify_natural_reconciliation(
     _require(not (task_state_payload.get("failures") or []), "ECS task read-back contains failures")
     _require(isinstance(tasks, list) and len(tasks) == 1, "exact natural ECS task is required")
     task = tasks[0]
-    _require(str(task.get("taskArn") or "").endswith(f"/{task_id}"), "natural task ARN drift")
+    expected_runtime_task_arn = (
+        f"arn:aws:ecs:{EXPECTED_REGION}:{EXPECTED_ACCOUNT_ID}:"
+        f"task/vevo-reporting-cluster/{task_id}"
+    )
+    _require(task.get("taskArn") == expected_runtime_task_arn, "natural task ARN drift")
     _require(task.get("taskDefinitionArn") == expected_task_arn, "natural task definition drift")
     _require(task.get("group") == EXPECTED_SCHEDULE_NAME, "natural task group drift")
     _require(task.get("launchType") == "FARGATE", "natural task launch type drift")
@@ -325,7 +347,15 @@ def verify_natural_reconciliation(
         (str(row.get("value") or "") for row in details if row.get("name") == "privateIPv4Address"),
         "",
     )
-    _require(bool(re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", private_ip)), "natural private IP missing")
+    try:
+        parsed_private_ip = ipaddress.ip_address(private_ip)
+    except ValueError as exc:
+        raise VerificationError("natural private IP missing") from exc
+    _require(
+        isinstance(parsed_private_ip, ipaddress.IPv4Address)
+        and parsed_private_ip in ipaddress.ip_network("172.31.0.0/16"),
+        "natural private IP boundary drift",
+    )
 
     task_messages = _messages(task_logs_payload)
     task_successes = [
