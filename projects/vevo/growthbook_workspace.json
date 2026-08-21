@@ -37,6 +37,66 @@
     "url_redirects_enabled": false,
     "production_connection_created": false
   },
+  "gtm_preview_workspace": {
+    "account_id": "6254499282",
+    "container_id": "198135331",
+    "public_container_id": "GTM-5ZB5LFGB",
+    "workspace_id": "16",
+    "workspace_name": "VEVO GrowthBook Preview",
+    "status": "unpublished_draft_preview_connection_blocked",
+    "created_verified_date": "2026-08-21",
+    "artifact_sha256": "e4dab7ad37432c255c9552eff953bfb0c80c48035db06b814e6d5a58af29532f",
+    "runtime_secret_material_committed": false,
+    "temporary_artifact_status": "deleted_after_ui_paste_and_readback",
+    "publish_status": "not_published",
+    "workspace_changes": {
+      "added": 5,
+      "modified": 0,
+      "deleted": 0
+    },
+    "tags": {
+      "loader": {
+        "id": "44",
+        "name": "VEVO GrowthBook v1 - Loader - Preview",
+        "trigger": "Initialization - All Pages"
+      },
+      "consent_bridge": {
+        "id": "46",
+        "name": "VEVO GrowthBook v1 - Consent Bridge - Preview",
+        "trigger": "CE - cookie_consent",
+        "loader_sequence_fail_closed_verified": true
+      },
+      "add_to_cart_bridge": {
+        "id": "47",
+        "name": "VEVO GrowthBook v1 - Add to Cart Bridge - Preview",
+        "trigger": "CE - add_to_cart - VEVO GrowthBook Preview",
+        "loader_sequence_fail_closed_verified": true
+      },
+      "purchase_bridge": {
+        "id": "48",
+        "name": "VEVO GrowthBook v1 - Purchase Bridge - Preview",
+        "trigger": "CE - Purchase",
+        "loader_sequence_fail_closed_verified": true
+      }
+    },
+    "triggers": {
+      "add_to_cart": {
+        "id": "45",
+        "name": "CE - add_to_cart - VEVO GrowthBook Preview",
+        "custom_event": "add_to_cart"
+      }
+    },
+    "tag_assistant_preview": {
+      "target_url": "https://www.vevo.sk/",
+      "gtm_script_present_in_dom": true,
+      "no_analytics_consent_growthbook_dom_marker_count": 0,
+      "analytics_only_connection_result": "timeout_zero_tags_found",
+      "all_consent_connection_result": "timeout_zero_tags_found",
+      "draft_container_evaluated": false,
+      "blocker": "tag_assistant_web_session_timeout_browser_extension_not_installed",
+      "next_gate": "explicit_user_confirmation_before_installing_or_enabling_google_tag_assistant_extension_then_repeat_preview"
+    }
+  },
   "feature_flags": [
     {
       "key": "vevo-sk-aa-assignment",

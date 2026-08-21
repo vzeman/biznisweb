@@ -35,7 +35,9 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
     def test_validator_rejects_nonzero_production_allocation(self) -> None:
         altered = copy.deepcopy(self.workspace)
         altered["workspace"]["production_allocation_percent"] = 1
-        with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
             with self.assertRaisesRegex(AssertionError, "Production allocation"):
                 validator.validate()
 
@@ -44,7 +46,9 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
         altered["experiments"][0]["status"] = "running"
         altered["experiments"][0]["feature_rule_status"] = "published"
         altered["experiments"][0]["feature_rule_environments"] = ["staging", "production"]
-        with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
             with self.assertRaisesRegex(AssertionError, "staging-only draft"):
                 validator.validate()
 
@@ -52,8 +56,42 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
         altered = copy.deepcopy(self.workspace)
         altered["sdk_connection"]["client_key_status"] = "committed"
         altered["sdk_connection"]["production_connection_created"] = True
-        with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
             with self.assertRaisesRegex(AssertionError, "SDK connection"):
+                validator.validate()
+
+    def test_validator_rejects_published_or_mutating_gtm_preview_workspace(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["gtm_preview_workspace"]["publish_status"] = "published"
+        altered["gtm_preview_workspace"]["workspace_changes"]["modified"] = 1
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "GTM Preview workspace safety state drift"):
+                validator.validate()
+
+    def test_validator_rejects_unverified_gtm_bridge_sequence(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["gtm_preview_workspace"]["tags"]["purchase_bridge"][
+            "loader_sequence_fail_closed_verified"
+        ] = False
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "GTM Preview bridge is not fail closed"):
+                validator.validate()
+
+    def test_validator_rejects_claimed_tag_assistant_acceptance(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["gtm_preview_workspace"]["tag_assistant_preview"][
+            "draft_container_evaluated"
+        ] = True
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "GTM Tag Assistant Preview blocker state drift"):
                 validator.validate()
 
     def test_validator_rejects_metric_contract_drift(self) -> None:
