@@ -70,6 +70,9 @@ def main() -> int:
         growthbook_reconciliation_workflow = read(
             ".github/workflows/deploy-vevo-growthbook-reconciliation.yml"
         )
+        growthbook_reconciliation_recovery_workflow = read(
+            ".github/workflows/recover-vevo-growthbook-reconciliation-rollback.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -467,6 +470,7 @@ def main() -> int:
             "MaximumRetryAttempts: 2",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK",
+            "schedule-group/default",
         ):
             require(
                 growthbook_reconciliation_template,
@@ -518,6 +522,31 @@ def main() -> int:
                 growthbook_reconciliation_parameters,
                 marker,
                 f"GrowthBook reconciliation parameter builder lost safety marker: {marker}",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "ROLLBACK_COMPLETE",
+            "ROLLBACK_CLEANUP_HARD_GATE_OK:",
+            "aws cloudformation delete-stack",
+            "aws cloudformation wait stack-delete-complete",
+            "aws sqs delete-queue",
+            "cmp -s source-schedule-before.json source-schedule-after.json",
+        ):
+            require(
+                growthbook_reconciliation_recovery_workflow,
+                marker,
+                f"GrowthBook reconciliation recovery lost safety marker: {marker}",
+            )
+        for forbidden_action in (
+            "ecs run-task",
+            "scheduler delete-schedule",
+            "s3api delete-object",
+            "iam delete-role",
+        ):
+            forbid(
+                growthbook_reconciliation_recovery_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook reconciliation recovery must not use {forbidden_action}.",
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
