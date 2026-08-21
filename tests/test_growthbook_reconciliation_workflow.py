@@ -88,13 +88,19 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         self.assertIn("GTM: unpublished (unchanged)", self.workflow)
 
     def test_monitoring_and_no_payload_logs_are_required(self) -> None:
+        template = (ROOT / "infra/vevo-growthbook-reconciliation/template.yaml").read_text(encoding="utf-8")
         for marker in (
             "vevo-growthbook-reconcile-preview-failure",
             "vevo-growthbook-reconcile-preview-missing-success",
             "vevo-growthbook-reconcile-preview-dlq",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE",
         ):
-            self.assertIn(marker, (ROOT / "infra/vevo-growthbook-reconciliation/template.yaml").read_text(encoding="utf-8"))
+            self.assertIn(marker, template)
+
+    def test_scheduler_trust_is_scoped_to_the_exact_default_schedule_group(self) -> None:
+        template = (ROOT / "infra/vevo-growthbook-reconciliation/template.yaml").read_text(encoding="utf-8")
+        self.assertIn("schedule-group/default", template)
+        self.assertNotIn("schedule/default/vevo-growthbook-reconcile-preview", template)
 
 
 if __name__ == "__main__":

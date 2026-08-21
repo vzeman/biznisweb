@@ -1,0 +1,205 @@
+name: Recover VEVO GrowthBook Reconciliation Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_cleanup:
+        description: Type true to remove only the verified failed stack and its empty retained DLQ
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  AWS_REGION: eu-central-1
+  STACK_NAME: vevo-growthbook-reconciliation-preview
+  SCHEDULE_NAME: vevo-growthbook-reconcile-preview
+  SOURCE_SCHEDULE: vevo-daily-report-email
+  QUEUE_NAME: vevo-growthbook-reconcile-preview-dlq
+  ROLE_NAME: vevo-growthbook-reconcile-preview-scheduler
+  LOG_GROUP: /ecs/vevo-reporting-daily
+
+jobs:
+  recover:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require exact cleanup confirmation
+        shell: bash
+        env:
+          CONFIRM_CLEANUP: ${{ inputs.confirm_cleanup }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_CLEANUP}" == "true" ]]
+
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify exact rollback boundary and empty retained queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > rollback-stack.json
+          aws cloudformation describe-stack-resources \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > rollback-resources.json
+          if aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Target reconciliation schedule unexpectedly exists" >&2
+            exit 1
+          fi
+          if aws iam get-role --role-name "${ROLE_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Scheduler role unexpectedly exists" >&2
+            exit 1
+          fi
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > source-schedule-before.json
+          QUEUE_URL="$(aws sqs get-queue-url \
+            --queue-name "${QUEUE_NAME}" \
+            --region "${AWS_REGION}" \
+            --query QueueUrl \
+            --output text)"
+          EXPECTED_QUEUE_URL="https://sqs.${AWS_REGION}.amazonaws.com/${EXPECTED_ACCOUNT_ID}/${QUEUE_NAME}"
+          [[ "${QUEUE_URL}" == "${EXPECTED_QUEUE_URL}" ]]
+          aws sqs get-queue-attributes \
+            --queue-url "${QUEUE_URL}" \
+            --attribute-names All \
+            --region "${AWS_REGION}" > rollback-queue-attributes.json
+          aws sqs list-queue-tags \
+            --queue-url "${QUEUE_URL}" \
+            --region "${AWS_REGION}" > rollback-queue-tags.json
+          aws cloudwatch describe-alarms \
+            --alarm-name-prefix "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > rollback-alarms.json
+          aws logs describe-metric-filters \
+            --log-group-name "${LOG_GROUP}" \
+            --filter-name-prefix "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > rollback-filters.json
+          python3 <<'PY'
+          import json
+          import os
+
+          stack = json.load(open("rollback-stack.json", encoding="utf-8"))["Stacks"][0]
+          if stack.get("StackStatus") != "ROLLBACK_COMPLETE":
+              raise SystemExit(f"unexpected stack status: {stack.get('StackStatus')}")
+          expected = {
+              "ReconciliationDeadLetterAlarm": ("AWS::CloudWatch::Alarm", "DELETE_COMPLETE"),
+              "ReconciliationDeadLetterQueue": ("AWS::SQS::Queue", "DELETE_SKIPPED"),
+              "ReconciliationFailureAlarm": ("AWS::CloudWatch::Alarm", "DELETE_COMPLETE"),
+              "ReconciliationFailureMetricFilter": ("AWS::Logs::MetricFilter", "DELETE_COMPLETE"),
+              "ReconciliationMissingSuccessAlarm": ("AWS::CloudWatch::Alarm", "DELETE_COMPLETE"),
+              "ReconciliationSchedule": ("AWS::Scheduler::Schedule", "DELETE_COMPLETE"),
+              "ReconciliationSchedulerRole": ("AWS::IAM::Role", "DELETE_COMPLETE"),
+              "ReconciliationSuccessMetricFilter": ("AWS::Logs::MetricFilter", "DELETE_COMPLETE"),
+          }
+          resources = {
+              row["LogicalResourceId"]: (row["ResourceType"], row["ResourceStatus"])
+              for row in json.load(open("rollback-resources.json", encoding="utf-8")).get("StackResources") or []
+          }
+          if resources != expected:
+              raise SystemExit(f"rollback resource boundary drift: {resources!r}")
+          source = json.load(open("source-schedule-before.json", encoding="utf-8"))
+          source_task = ((source.get("Target") or {}).get("EcsParameters") or {}).get("TaskDefinitionArn") or ""
+          if source.get("Name") != os.environ["SOURCE_SCHEDULE"] or source.get("State") != "ENABLED":
+              raise SystemExit("source reporting schedule identity/state drift")
+          if "task-definition/vevo-reporting-daily:" not in source_task:
+              raise SystemExit("source reporting task definition drift")
+          attributes = json.load(open("rollback-queue-attributes.json", encoding="utf-8"))["Attributes"]
+          expected_arn = f"arn:aws:sqs:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:{os.environ['QUEUE_NAME']}"
+          if attributes.get("QueueArn") != expected_arn:
+              raise SystemExit("retained queue ARN drift")
+          for key in (
+              "ApproximateNumberOfMessages",
+              "ApproximateNumberOfMessagesDelayed",
+              "ApproximateNumberOfMessagesNotVisible",
+          ):
+              if attributes.get(key) != "0":
+                  raise SystemExit(f"retained queue is not empty: {key}={attributes.get(key)}")
+          if attributes.get("SqsManagedSseEnabled") != "true" or attributes.get("MessageRetentionPeriod") != "1209600":
+              raise SystemExit("retained queue encryption/retention drift")
+          tags = json.load(open("rollback-queue-tags.json", encoding="utf-8")).get("Tags") or {}
+          if tags.get("Project") != "vevo-growthbook" or tags.get("Environment") != "preview":
+              raise SystemExit("retained queue ownership tags drift")
+          if json.load(open("rollback-alarms.json", encoding="utf-8")).get("MetricAlarms"):
+              raise SystemExit("rollback left reconciliation alarms")
+          if json.load(open("rollback-filters.json", encoding="utf-8")).get("metricFilters"):
+              raise SystemExit("rollback left reconciliation metric filters")
+          print(
+              "ROLLBACK_CLEANUP_HARD_GATE_OK:instance-id=N/A:control-plane:private-ip=N/A:"
+              "service=vevo-growthbook-reconciliation-preview:path=CloudFormation/rollback+SQS/empty-retained-dlq"
+          )
+          PY
+          echo "VERIFIED_QUEUE_URL=${QUEUE_URL}" >> "${GITHUB_ENV}"
+
+      - name: Remove only the verified failed stack and empty retained queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          if aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Target schedule appeared after the cleanup gate" >&2
+            exit 1
+          fi
+          aws sqs get-queue-attributes \
+            --queue-url "${VERIFIED_QUEUE_URL}" \
+            --attribute-names \
+              ApproximateNumberOfMessages \
+              ApproximateNumberOfMessagesDelayed \
+              ApproximateNumberOfMessagesNotVisible \
+            --region "${AWS_REGION}" > queue-immediately-before-delete.json
+          python3 <<'PY'
+          import json
+
+          attributes = json.load(open("queue-immediately-before-delete.json", encoding="utf-8"))["Attributes"]
+          if set(attributes.values()) != {"0"} or len(attributes) != 3:
+              raise SystemExit(f"retained queue changed after cleanup gate: {attributes!r}")
+          PY
+          aws cloudformation delete-stack \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}"
+          aws cloudformation wait stack-delete-complete \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}"
+          if aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Failed stack still exists after delete waiter" >&2
+            exit 1
+          fi
+          aws sqs delete-queue \
+            --queue-url "${VERIFIED_QUEUE_URL}" \
+            --region "${AWS_REGION}"
+          for attempt in $(seq 1 20); do
+            if ! aws sqs get-queue-url --queue-name "${QUEUE_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 3
+          done
+          if aws sqs get-queue-url --queue-name "${QUEUE_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Retained queue still exists after bounded delete read-back" >&2
+            exit 1
+          fi
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > source-schedule-after.json
+          cmp -s source-schedule-before.json source-schedule-after.json
+          if aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Target schedule exists after rollback cleanup" >&2
+            exit 1
+          fi
+          echo "ROLLBACK_STACK_DELETE_OK:${STACK_NAME}"
+          echo "EMPTY_RETAINED_DLQ_DELETE_OK:${QUEUE_NAME}"
+          echo "SOURCE_REPORTING_SCHEDULE_UNCHANGED:${SOURCE_SCHEDULE}"
