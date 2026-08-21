@@ -49,7 +49,27 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):
-            with self.assertRaisesRegex(AssertionError, "staging-only draft"):
+            with self.assertRaisesRegex(AssertionError, "staging-only"):
+                validator.validate()
+
+    def test_validator_rejects_aa_analysis_setting_drift(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["experiments"][0]["analysis_settings"]["goal_metrics"] = [
+            "vevo_purchase_conversion_7d"
+        ]
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "A/A Preview running state drift"):
+                validator.validate()
+
+    def test_validator_rejects_started_cta_experiment(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["experiments"][1]["status"] = "running"
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "CTA A/B must remain"):
                 validator.validate()
 
     def test_validator_rejects_committed_or_production_sdk_connection(self) -> None:

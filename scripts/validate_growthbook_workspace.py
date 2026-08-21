@@ -129,7 +129,7 @@ def validate() -> None:
     if (
         workspace.get("schema_version") != 1
         or workspace.get("state")
-        != "preview_outcome_metrics_query_verified_pro_quantiles_blocked"
+        != "preview_aa_running_browser_feature_payload_blocked_pro_quantiles_blocked"
     ):
         raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
@@ -220,6 +220,7 @@ def validate() -> None:
             "https://vevo.flox.sk",
             "https://www.vevo.sk",
         ],
+        "growthbook_adblock_exception_user_confirmed": "https://cdn.growthbook.io",
         "gtm_script_present_in_dom": True,
         "connection_result": "connected_three_google_tags_found",
         "detected_google_tag_count": 3,
@@ -232,20 +233,27 @@ def validate() -> None:
         "no_analytics_consent_growthbook_or_collector_asset_count": 0,
         "analytics_only_sdk_dom_count": 1,
         "analytics_only_feature_request_observed": True,
-        "analytics_only_feature_request_result": "blocked_by_comet_adblock",
+        "analytics_only_feature_request_result": (
+            "blocked_by_comet_adblock_after_exact_host_exception"
+        ),
         "analytics_only_exposure_delivery_result": "not_attempted_feature_payload_blocked",
         "collector_request_observed": False,
         "feature_payload_blocker_host": "cdn.growthbook.io",
+        "control_plane_feature_payload_http_status": 200,
+        "control_plane_aa_rule_count": 1,
+        "control_plane_cta_rule_count": 0,
         "official_troubleshooting_reference": (
             "https://support.google.com/tagmanager/answer/10039345"
         ),
         "comet_adblock_reference": (
             "https://www.perplexity.ai/help-center/comet/en/articles/11734702-adblock"
         ),
-        "blocker": "comet_adblock_blocks_growthbook_feature_payload",
+        "blocker": (
+            "comet_global_adblock_blocks_growthbook_feature_payload_after_host_exception"
+        ),
         "next_gate": (
-            "user_allowlists_https_cdn_growthbook_io_then_repeat_analytics_only_preview_"
-            "and_verify_exposure_delivery"
+            "user_temporarily_disables_comet_global_adblock_then_repeat_analytics_only_"
+            "preview_and_verify_exposure_delivery"
         ),
     }
     if tag_assistant != expected_tag_assistant:
@@ -255,16 +263,34 @@ def validate() -> None:
     feature_map = {row.get("key"): row for row in feature_flags if isinstance(row, dict)}
     if set(feature_map) != set(EXPECTED_FEATURES.values()):
         raise AssertionError("GrowthBook feature-flag set changed")
-    for experiment_id, feature_key in EXPECTED_FEATURES.items():
-        feature = feature_map[feature_key]
-        if (
-            feature.get("type") != "string"
-            or feature.get("default_value") != "control"
-            or feature.get("staging_enabled") is not True
-            or feature.get("production_enabled") is not False
-            or feature.get("live_rule_count") != 0
-            or feature.get("draft_rule_experiment") != experiment_id
-        ):
+    expected_feature_flags = {
+        "vevo-sk-aa-assignment": {
+            "key": "vevo-sk-aa-assignment",
+            "type": "string",
+            "default_value": "control",
+            "project": "VEVO SK Web",
+            "staging_enabled": True,
+            "production_enabled": False,
+            "live_rule_count": 1,
+            "live_rule_experiment": "vevo-sk-aa-001",
+            "live_rule_environments": ["staging"],
+            "live_rule_revision": 2,
+            "live_rule_published_date": "2026-08-21",
+            "draft_rule_experiment": None,
+        },
+        "vevo-sk-product-cta-color": {
+            "key": "vevo-sk-product-cta-color",
+            "type": "string",
+            "default_value": "control",
+            "project": "VEVO SK Web",
+            "staging_enabled": True,
+            "production_enabled": False,
+            "live_rule_count": 0,
+            "draft_rule_experiment": "vevo-sk-product-cta-color-001",
+        },
+    }
+    for feature_key, expected_feature in expected_feature_flags.items():
+        if feature_map[feature_key] != expected_feature:
             raise AssertionError(f"GrowthBook feature-flag safety contract changed: {feature_key}")
 
     athena = workspace.get("athena", {})
@@ -459,13 +485,11 @@ def validate() -> None:
         if experiment.get("feature_key") != feature_key:
             raise AssertionError(f"GrowthBook feature key changed for {experiment_id}")
         if (
-            experiment.get("status") != "draft"
-            or experiment.get("assignment_attribute") != "id"
+            experiment.get("assignment_attribute") != "id"
             or experiment.get("traffic_percent") != 100
-            or experiment.get("feature_rule_status") != "draft"
             or experiment.get("feature_rule_environments") != ["staging"]
         ):
-            raise AssertionError(f"GrowthBook experiment must remain staging-only draft: {experiment_id}")
+            raise AssertionError(f"GrowthBook experiment must remain staging-only: {experiment_id}")
         if experiment.get("production_allocation_percent") != 0:
             raise AssertionError(f"GrowthBook Production allocation must remain zero: {experiment_id}")
         variations = experiment.get("variations", [])
@@ -476,7 +500,44 @@ def validate() -> None:
             expected_weights.values()
         ):
             raise AssertionError(f"GrowthBook/reporting weights differ for {experiment_id}")
-    if experiment_map["vevo-sk-aa-001"].get("winner_calls_allowed") is not False:
+    aa_experiment = experiment_map["vevo-sk-aa-001"]
+    expected_aa_analysis = {
+        "verified_date": "2026-08-21",
+        "data_source_id": "ds_19g6mmt2c4dmn",
+        "data_source_name": "VEVO Preview Experiment Facts",
+        "assignment_query_id": "tbl_mt2c74ol",
+        "assignment_query_name": "VEVO consented devices",
+        "statistics_engine": "bayesian_default",
+        "cuped_enabled": False,
+        "post_stratification_enabled": False,
+        "activation_metric": None,
+        "goal_metrics": ["vevo_add_to_cart_24h"],
+        "secondary_metrics": [
+            "vevo_average_order_value_7d",
+            "vevo_cancelled_order_rate_14d",
+            "vevo_cm1_per_exposed_device_7d",
+            "vevo_revenue_per_exposed_device_7d",
+            "vevo_purchase_conversion_7d",
+            "vevo_refunded_order_rate_14d",
+        ],
+        "guardrail_metrics": ["vevo_client_error_device_rate_24h"],
+    }
+    if (
+        aa_experiment.get("status") != "running_preview_staging_only"
+        or aa_experiment.get("started_date") != "2026-08-21"
+        or aa_experiment.get("feature_rule_status") != "live"
+        or aa_experiment.get("feature_rule_revision") != 2
+        or aa_experiment.get("analysis_settings") != expected_aa_analysis
+    ):
+        raise AssertionError("GrowthBook A/A Preview running state drift")
+    cta_experiment = experiment_map["vevo-sk-product-cta-color-001"]
+    if (
+        cta_experiment.get("status") != "draft"
+        or cta_experiment.get("feature_rule_status") != "draft"
+        or "analysis_settings" in cta_experiment
+    ):
+        raise AssertionError("GrowthBook CTA A/B must remain an unstarted draft")
+    if aa_experiment.get("winner_calls_allowed") is not False:
         raise AssertionError("A/A must never be used for a winner call")
 
     gates = workspace.get("decision_gates", {})

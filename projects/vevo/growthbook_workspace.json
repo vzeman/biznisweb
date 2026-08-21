@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "preview_outcome_metrics_query_verified_pro_quantiles_blocked",
+  "state": "preview_aa_running_browser_feature_payload_blocked_pro_quantiles_blocked",
   "workspace": {
     "organization_name": "Vevo",
     "organization_id": "org_19g6mmt1q79o1",
@@ -96,6 +96,7 @@
         "https://vevo.flox.sk",
         "https://www.vevo.sk"
       ],
+      "growthbook_adblock_exception_user_confirmed": "https://cdn.growthbook.io",
       "gtm_script_present_in_dom": true,
       "connection_result": "connected_three_google_tags_found",
       "detected_google_tag_count": 3,
@@ -108,14 +109,17 @@
       "no_analytics_consent_growthbook_or_collector_asset_count": 0,
       "analytics_only_sdk_dom_count": 1,
       "analytics_only_feature_request_observed": true,
-      "analytics_only_feature_request_result": "blocked_by_comet_adblock",
+      "analytics_only_feature_request_result": "blocked_by_comet_adblock_after_exact_host_exception",
       "analytics_only_exposure_delivery_result": "not_attempted_feature_payload_blocked",
       "collector_request_observed": false,
       "feature_payload_blocker_host": "cdn.growthbook.io",
+      "control_plane_feature_payload_http_status": 200,
+      "control_plane_aa_rule_count": 1,
+      "control_plane_cta_rule_count": 0,
       "official_troubleshooting_reference": "https://support.google.com/tagmanager/answer/10039345",
       "comet_adblock_reference": "https://www.perplexity.ai/help-center/comet/en/articles/11734702-adblock",
-      "blocker": "comet_adblock_blocks_growthbook_feature_payload",
-      "next_gate": "user_allowlists_https_cdn_growthbook_io_then_repeat_analytics_only_preview_and_verify_exposure_delivery"
+      "blocker": "comet_global_adblock_blocks_growthbook_feature_payload_after_host_exception",
+      "next_gate": "user_temporarily_disables_comet_global_adblock_then_repeat_analytics_only_preview_and_verify_exposure_delivery"
     }
   },
   "feature_flags": [
@@ -126,8 +130,14 @@
       "project": "VEVO SK Web",
       "staging_enabled": true,
       "production_enabled": false,
-      "live_rule_count": 0,
-      "draft_rule_experiment": "vevo-sk-aa-001"
+      "live_rule_count": 1,
+      "live_rule_experiment": "vevo-sk-aa-001",
+      "live_rule_environments": [
+        "staging"
+      ],
+      "live_rule_revision": 2,
+      "live_rule_published_date": "2026-08-21",
+      "draft_rule_experiment": null
     },
     {
       "key": "vevo-sk-product-cta-color",
@@ -537,10 +547,12 @@
       "feature_key": "vevo-sk-aa-assignment",
       "name": "VEVO SK A/A measurement validation",
       "growthbook_id": "exp_19g6mmt1qsqm9",
-      "status": "draft",
+      "status": "running_preview_staging_only",
+      "started_date": "2026-08-21",
       "assignment_attribute": "id",
       "traffic_percent": 100,
-      "feature_rule_status": "draft",
+      "feature_rule_status": "live",
+      "feature_rule_revision": 2,
       "feature_rule_environments": [
         "staging"
       ],
@@ -555,6 +567,31 @@
       "production_allocation_percent": 0,
       "planned_allocation_percent_after_gates": 100,
       "winner_calls_allowed": false,
+      "analysis_settings": {
+        "verified_date": "2026-08-21",
+        "data_source_id": "ds_19g6mmt2c4dmn",
+        "data_source_name": "VEVO Preview Experiment Facts",
+        "assignment_query_id": "tbl_mt2c74ol",
+        "assignment_query_name": "VEVO consented devices",
+        "statistics_engine": "bayesian_default",
+        "cuped_enabled": false,
+        "post_stratification_enabled": false,
+        "activation_metric": null,
+        "goal_metrics": [
+          "vevo_add_to_cart_24h"
+        ],
+        "secondary_metrics": [
+          "vevo_average_order_value_7d",
+          "vevo_cancelled_order_rate_14d",
+          "vevo_cm1_per_exposed_device_7d",
+          "vevo_revenue_per_exposed_device_7d",
+          "vevo_purchase_conversion_7d",
+          "vevo_refunded_order_rate_14d"
+        ],
+        "guardrail_metrics": [
+          "vevo_client_error_device_rate_24h"
+        ]
+      },
       "minimum_days": 7,
       "minimum_eligible_devices": 1000
     },
