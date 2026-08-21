@@ -256,6 +256,9 @@ test("assigns only after consent, captures safe Meta IDs, and records successful
   assert.ok(cartRows.every((row) => row.body.product_id === "1531"));
   assert.ok(cartRows.every((row) => !("value" in row.body) && !("price" in row.body)));
   assert.equal(fixture.root.cacheSettings.cacheKey, "vevo_gb_features_v1");
+  assert.equal(fixture.root.cacheSettings.backgroundSync, false);
+  assert.equal(fixture.root.cacheSettings.maxAge, 0);
+  assert.equal(fixture.root.cacheSettings.disableCache, true);
   assert.equal(typeof fixture.root.sdkPolyfills.fetch, "function");
   const beforeDestroy = fixture.fetches.length;
   client.destroy();

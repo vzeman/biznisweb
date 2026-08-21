@@ -842,11 +842,12 @@
           });
         }
         if (typeof library.configureCache === "function") {
+          var previewWithoutFeatureCache = config.environment === "preview";
           library.configureCache({
             cacheKey: STORAGE.featureCache,
             backgroundSync: false,
-            maxAge: 4 * 60 * 60 * 1000,
-            disableCache: false
+            maxAge: previewWithoutFeatureCache ? 0 : 4 * 60 * 60 * 1000,
+            disableCache: previewWithoutFeatureCache
           });
         }
         var sticky = typeof library.LocalStorageStickyBucketService === "function"
