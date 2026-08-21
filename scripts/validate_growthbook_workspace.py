@@ -129,7 +129,7 @@ def validate() -> None:
     if (
         workspace.get("schema_version") != 1
         or workspace.get("state")
-        != "preview_aa_runtime_accepted_reconciliation_pending_pro_quantiles_blocked"
+        != "preview_aa_runtime_and_reconciliation_verified_recurring_schedule_pending_pro_quantiles_blocked"
     ):
         raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
@@ -269,11 +269,54 @@ def validate() -> None:
         ),
         "blocker": "none_in_temporary_preview_conditions",
         "next_gate": (
-            "reconcile_real_exposure_to_curated_facts_and_verify_growthbook_population"
+            "add_reviewed_recurring_reconciliation_and_verify_same_population_meta_dimensions"
         ),
     }
     if tag_assistant != expected_tag_assistant:
         raise AssertionError("GTM Tag Assistant Preview blocker state drift")
+
+    expected_reconciliation_checkpoint = {
+        "status": "controlled_real_preview_partition_verified",
+        "event_date": "2026-08-21",
+        "workflow_run_id": "32453223068",
+        "workflow_run_url": (
+            "https://github.com/vzeman/biznisweb/actions/runs/32453223068"
+        ),
+        "main_commit": "521472cac27b779f6bd1b969cadd1e4dfd8870fd",
+        "allow_existing_partition_events": True,
+        "reporting_image_digest": (
+            "sha256:194d97bc159e59678cf184cdad3c33c0f5b2ddf501fa31d1d3422c6a7b5d2f68"
+        ),
+        "host_gate": {
+            "instance_id": "N/A:Fargate",
+            "private_ip": "172.31.8.58",
+            "service": "vevo-daily-report-email",
+            "path": "/app",
+            "task_id": "2f4894451b6b40b0a2e7210f8ec18a08",
+        },
+        "reconciliation_task": {
+            "instance_id": "N/A:Fargate",
+            "private_ip": "172.31.22.22",
+            "service": "vevo-daily-report-email",
+            "path": "/app",
+            "task_id": "f39633f1ab4e4a6ab2c01eb650e67b32",
+        },
+        "sanitized_partition_counts": {
+            "raw_events": 23,
+            "device_facts": 5,
+            "performance_facts": 11,
+            "transaction_facts": 0,
+            "order_facts": 0,
+        },
+        "published_counts_match_generated_counts": True,
+        "synthetic_identity_verified_without_browser_device_ids": True,
+        "athena_assignment_query_id": "ef981af5-3c3f-4d32-813a-a546be77b79b",
+        "raw_curated_reporting_athena_identity_verified": True,
+        "production_allocation_percent": 0,
+        "recurring_schedule_status": "not_configured",
+    }
+    if workspace.get("reconciliation_checkpoint") != expected_reconciliation_checkpoint:
+        raise AssertionError("GrowthBook reconciliation checkpoint state drift")
 
     feature_flags = workspace.get("feature_flags", [])
     feature_map = {row.get("key"): row for row in feature_flags if isinstance(row, dict)}
