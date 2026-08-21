@@ -65,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install cfn-lint==1.55.1
+          python -m pip install -r requirements.txt cfn-lint==1.55.1
           cfn-lint "${TEMPLATE_PATH}"
           python -m unittest \
             tests.test_scheduled_growthbook_reconciliation \
