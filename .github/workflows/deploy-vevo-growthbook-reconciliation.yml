@@ -69,7 +69,8 @@ jobs:
           cfn-lint "${TEMPLATE_PATH}"
           python -m unittest \
             tests.test_scheduled_growthbook_reconciliation \
-            tests.test_growthbook_reconciliation_changeset
+            tests.test_growthbook_reconciliation_changeset \
+            tests.test_growthbook_reconciliation_parameters
           python scripts/security_ci.py
           python - <<'PY'
           import json
@@ -423,28 +424,15 @@ jobs:
           fi
           echo "CHANGE_TYPE=${CHANGE_TYPE}" >> "${GITHUB_ENV}"
           CHANGE_SET="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/build_growthbook_reconciliation_parameters.py \
+            --phase candidate > candidate-parameters.json
           aws cloudformation create-change-set \
             --stack-name "${STACK_NAME}" \
             --change-set-name "${CHANGE_SET}" \
             --change-set-type "${CHANGE_TYPE}" \
             --template-body "file://${TEMPLATE_PATH}" \
             --capabilities CAPABILITY_NAMED_IAM \
-            --parameters \
-              ParameterKey=Environment,ParameterValue=preview \
-              ParameterKey=ClusterArn,ParameterValue="${CLUSTER_ARN}" \
-              ParameterKey=TaskDefinitionArn,ParameterValue="${CANDIDATE_TASK_DEFINITION}" \
-              ParameterKey=TaskRoleArn,ParameterValue="${TASK_ROLE_ARN}" \
-              ParameterKey=ExecutionRoleArn,ParameterValue="${EXECUTION_ROLE_ARN}" \
-              ParameterKey=ContainerName,ParameterValue="${CONTAINER_NAME}" \
-              ParameterKey=EventBucketName,ParameterValue="${EVENT_BUCKET}" \
-              ParameterKey=LogGroupName,ParameterValue="${LOG_GROUP}" \
-              ParameterKey=SubnetIds,ParameterValue="${SUBNET_IDS}" \
-              ParameterKey=SecurityGroupIds,ParameterValue="${SECURITY_GROUP_IDS}" \
-              ParameterKey=AssignPublicIp,ParameterValue="${ASSIGN_PUBLIC_IP}" \
-              ParameterKey=PlatformVersion,ParameterValue="${PLATFORM_VERSION}" \
-              ParameterKey=ScheduleState,ParameterValue=DISABLED \
-              ParameterKey=ScheduleExpression,ParameterValue='cron(30 3 * * ? *)' \
-              ParameterKey=ScheduleTimezone,ParameterValue=Europe/Bratislava \
+            --parameters file://candidate-parameters.json \
             --region "${AWS_REGION}" >/dev/null
           aws cloudformation wait change-set-create-complete \
             --stack-name "${STACK_NAME}" \
@@ -601,28 +589,15 @@ jobs:
         run: |
           set -euo pipefail
           CHANGE_SET="activate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/build_growthbook_reconciliation_parameters.py \
+            --phase activate > activation-parameters.json
           aws cloudformation create-change-set \
             --stack-name "${STACK_NAME}" \
             --change-set-name "${CHANGE_SET}" \
             --change-set-type UPDATE \
             --template-body "file://${TEMPLATE_PATH}" \
             --capabilities CAPABILITY_NAMED_IAM \
-            --parameters \
-              ParameterKey=Environment,UsePreviousValue=true \
-              ParameterKey=ClusterArn,UsePreviousValue=true \
-              ParameterKey=TaskDefinitionArn,UsePreviousValue=true \
-              ParameterKey=TaskRoleArn,UsePreviousValue=true \
-              ParameterKey=ExecutionRoleArn,UsePreviousValue=true \
-              ParameterKey=ContainerName,UsePreviousValue=true \
-              ParameterKey=EventBucketName,UsePreviousValue=true \
-              ParameterKey=LogGroupName,UsePreviousValue=true \
-              ParameterKey=SubnetIds,UsePreviousValue=true \
-              ParameterKey=SecurityGroupIds,UsePreviousValue=true \
-              ParameterKey=AssignPublicIp,UsePreviousValue=true \
-              ParameterKey=PlatformVersion,UsePreviousValue=true \
-              ParameterKey=ScheduleState,ParameterValue=ENABLED \
-              ParameterKey=ScheduleExpression,UsePreviousValue=true \
-              ParameterKey=ScheduleTimezone,UsePreviousValue=true \
+            --parameters file://activation-parameters.json \
             --region "${AWS_REGION}" >/dev/null
           aws cloudformation wait change-set-create-complete \
             --stack-name "${STACK_NAME}" \

@@ -18,7 +18,8 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_deploy:",
             "python -m pip install -r requirements.txt cfn-lint==1.55.1",
-            "ParameterKey=ScheduleState,ParameterValue=DISABLED",
+            "--phase candidate > candidate-parameters.json",
+            "--parameters file://candidate-parameters.json",
             'schedule.get("State") != "DISABLED"',
             "--phase candidate",
             "--phase activate",
@@ -29,7 +30,7 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         host = self.workflow.index("HARD_GATE_OK:")
         disabled = self.workflow.index("GROWTHBOOK_RECONCILIATION_DISABLED_STACK_OK", host)
         one_shot = self.workflow.index("GROWTHBOOK_RECONCILIATION_ONE_SHOT_OK", disabled)
-        activation = self.workflow.index("ParameterKey=ScheduleState,ParameterValue=ENABLED", one_shot)
+        activation = self.workflow.index("--phase activate > activation-parameters.json", one_shot)
         readback = self.workflow.index("GROWTHBOOK_RECONCILIATION_SCHEDULE_READBACK_OK", activation)
         self.assertLess(host, disabled)
         self.assertLess(disabled, one_shot)
@@ -58,6 +59,12 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         self.assertLess(exact_keys, export_loop)
         self.assertLess(export_loop, export_assignment)
         self.assertLess(export_assignment, first_consumer)
+
+    def test_cloudformation_parameters_use_json_without_shorthand_list_coercion(self) -> None:
+        self.assertIn("--parameters file://candidate-parameters.json", self.workflow)
+        self.assertIn("--parameters file://activation-parameters.json", self.workflow)
+        self.assertNotIn("ParameterKey=SubnetIds,ParameterValue=", self.workflow)
+        self.assertIn("tests.test_growthbook_reconciliation_parameters", self.workflow)
 
     def test_source_schedule_and_production_boundaries_are_unchanged(self) -> None:
         lowered = self.workflow.lower()
