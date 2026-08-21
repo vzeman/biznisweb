@@ -221,6 +221,8 @@ The machine-readable decision contract is frozen in `growthbook_aa_acceptance.js
 
 The authoritative accepted-duplicate numerator and denominator come from the collector's PII-free receipt markers, not from S3 row counts: an idempotent retry is intentionally absent as a second raw object. Each successfully handled request produces only `accepted=true` plus a boolean `duplicate` marker after persistence. A protected read-only workflow may temporarily export the exact bounded CloudWatch marker window, reduce it offline with `scripts/summarize_growthbook_receipts.py`, and retain only the three aggregate counts. Raw log events, event/device IDs, messages, stream names, timestamps, and customer/order data must never enter the evidence artifact or Git.
 
+The final evaluator input is assembled only through `build-vevo-growthbook-production-aa-snapshot.yml`. It consumes two separately produced canonical artifacts: automated aggregate Production evidence and manual GrowthBook/Tag Assistant/commerce QA evidence. Both are bound to independently recorded successful main-branch workflow run IDs, commits, and SHA-256 digests and must cover the identical frozen window. The assembler validates but strips infrastructure/provenance fields, uploads no source component, and emits only the exact PII-free snapshot plus the offline decision. Its manifest remains disabled until all Production rollout gates and both evidence producers are verified; a local component file or workflow input can never open the gate.
+
 ### 8. First A/B experiment
 
 Experiment ID: `vevo-sk-product-cta-color-001`

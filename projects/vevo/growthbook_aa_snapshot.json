@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "experiment_id": "vevo-sk-aa-001",
+  "snapshot_workflow": ".github/workflows/build-vevo-growthbook-production-aa-snapshot.yml",
+  "snapshot_build_allowed": false,
+  "automated_evidence": {
+    "workflow": ".github/workflows/collect-vevo-growthbook-production-aa-evidence.yml",
+    "workflow_name": "Collect VEVO GrowthBook Production A/A Evidence",
+    "artifact_name": "vevo-growthbook-aa-automated-evidence",
+    "file_name": "vevo-growthbook-aa-automated-evidence.json",
+    "status": "not_recorded",
+    "run_id": null,
+    "main_commit": null,
+    "sha256": null
+  },
+  "manual_qa_evidence": {
+    "workflow": ".github/workflows/verify-vevo-growthbook-production-aa-manual-qa.yml",
+    "workflow_name": "Verify VEVO GrowthBook Production A/A Manual QA",
+    "artifact_name": "vevo-growthbook-aa-manual-qa-evidence",
+    "file_name": "vevo-growthbook-aa-manual-qa-evidence.json",
+    "status": "not_recorded",
+    "run_id": null,
+    "main_commit": null,
+    "sha256": null
+  },
+  "output": {
+    "artifact_name": "vevo-growthbook-aa-snapshot",
+    "snapshot_file": "vevo-growthbook-aa-snapshot.json",
+    "decision_file": "vevo-growthbook-aa-decision.json",
+    "retention_days": 14,
+    "contains_component_artifacts": false,
+    "contains_raw_aws_payloads": false,
+    "contains_cloudwatch_messages": false,
+    "contains_event_or_device_ids": false,
+    "contains_customer_or_order_data": false
+  },
+  "release_boundaries": {
+    "main_only": true,
+    "github_artifact_reads_only": true,
+    "aws_credentials_allowed": false,
+    "aws_api_calls_allowed": false,
+    "growthbook_mutation_allowed": false,
+    "gtm_mutation_allowed": false,
+    "meta_ads_mutation_allowed": false,
+    "biznisweb_mutation_allowed": false,
+    "winner_calls_allowed": false,
+    "cta_activation_allowed": false
+  }
+}
