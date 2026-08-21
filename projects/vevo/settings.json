@@ -12,6 +12,16 @@
     "timezone": "Europe/Bratislava",
     "task_family": "vevo-reporting-daily"
   },
+  "growthbook_reconciliation": {
+    "environment": "preview",
+    "stack_name": "vevo-growthbook-reconciliation-preview",
+    "schedule_name": "vevo-growthbook-reconcile-preview",
+    "schedule_expression": "cron(30 3 * * ? *)",
+    "timezone": "Europe/Bratislava",
+    "rolling_partition_days": 40,
+    "max_raw_events": 50000,
+    "source_task_family": "vevo-reporting-daily"
+  },
   "product_identity": {
     "prefer_import_code": true
   },

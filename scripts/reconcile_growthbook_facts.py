@@ -71,6 +71,18 @@ def _parser() -> argparse.ArgumentParser:
         help="Experiment reporting contract; defaults to projects/<project>/growthbook_reporting.json",
     )
     parser.add_argument(
+        "--max-partitions",
+        type=int,
+        default=90,
+        help="Fail closed when the inclusive raw partition window exceeds this bound",
+    )
+    parser.add_argument(
+        "--max-raw-events",
+        type=int,
+        default=100_000,
+        help="Fail closed before reconciliation when the raw object count exceeds this bound",
+    )
+    parser.add_argument(
         "--publish",
         action="store_true",
         help="Write curated facts; also requires GROWTHBOOK_FACT_PUBLISH_ENABLED=true",
@@ -85,6 +97,13 @@ def run(argv: Sequence[str] | None = None) -> int:
         raise ExperimentDataError("unknown reporting project")
     if not args.bucket:
         raise ExperimentDataError("GROWTHBOOK_EVENT_BUCKET is required")
+    if type(args.max_partitions) is not int or not 1 <= args.max_partitions <= 90:
+        raise ExperimentDataError("max partitions must be between 1 and 90")
+    if type(args.max_raw_events) is not int or not 1 <= args.max_raw_events <= 100_000:
+        raise ExperimentDataError("max raw events must be between 1 and 100000")
+    partition_count = (args.event_through - args.event_from).days + 1
+    if partition_count < 1 or partition_count > args.max_partitions:
+        raise ExperimentDataError("event partition window exceeds the configured limit")
     if args.publish and not _enabled(os.getenv("GROWTHBOOK_FACT_PUBLISH_ENABLED")):
         raise ExperimentDataError(
             "publishing is disabled; set GROWTHBOOK_FACT_PUBLISH_ENABLED=true only in the reviewed runtime"
@@ -114,6 +133,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         bucket=args.bucket,
         start_date=args.event_from,
         end_date=args.event_through,
+        max_window_days=args.max_partitions,
+        max_objects=args.max_raw_events,
     )
     receipts = order_completion_receipts(raw_events)
 
@@ -156,7 +177,7 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     summary = {
         "mode": "publish" if args.publish else "dry-run",
-        "event_partitions": (args.event_through - args.event_from).days + 1,
+        "event_partitions": partition_count,
         "raw_events": len(raw_events),
         "completed_transaction_ids": len(receipts),
         "authoritative_orders": len(authoritative_orders),
