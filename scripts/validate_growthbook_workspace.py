@@ -129,7 +129,7 @@ def validate() -> None:
     if (
         workspace.get("schema_version") != 1
         or workspace.get("state")
-        != "preview_aa_running_browser_feature_payload_blocked_pro_quantiles_blocked"
+        != "preview_aa_runtime_accepted_reconciliation_pending_pro_quantiles_blocked"
     ):
         raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
@@ -156,13 +156,13 @@ def validate() -> None:
     sdk_connection = workspace.get("sdk_connection", {})
     expected_sdk = {
         "name": "VEVO SK Web Preview",
-        "status": "created_not_connected",
+        "status": "runtime_verified_unpublished",
         "environment": "staging",
         "project": "VEVO SK Web",
         "language": "javascript",
         "sdk_version": "1.7.0",
         "api_host": "https://cdn.growthbook.io",
-        "client_key_status": "created_not_committed_pending_runtime_config",
+        "client_key_status": "configured_in_unpublished_gtm_not_committed",
         "include_draft_experiment_rules": True,
         "include_feature_rule_ids": True,
         "hide_feature_names": True,
@@ -180,11 +180,13 @@ def validate() -> None:
         "public_container_id": "GTM-5ZB5LFGB",
         "workspace_id": "16",
         "workspace_name": "VEVO GrowthBook Preview",
-        "status": "unpublished_draft_preview_feature_payload_blocked",
+        "status": "unpublished_draft_preview_runtime_accepted",
         "created_verified_date": "2026-08-21",
-        "artifact_sha256": "e4dab7ad37432c255c9552eff953bfb0c80c48035db06b814e6d5a58af29532f",
+        "artifact_sha256": "f6b4972641efb7cc99d05b64b2c365c45eec20a6e5600ce9dade1dcaec694de1",
         "runtime_secret_material_committed": False,
-        "temporary_artifact_status": "deleted_after_ui_paste_and_readback",
+        "temporary_artifact_status": (
+            "not_persisted_browser_repl_only_clipboard_cleared_after_exact_sha_readback"
+        ),
         "publish_status": "not_published",
         "workspace_changes": {"added": 5, "modified": 0, "deleted": 0},
     }
@@ -221,6 +223,9 @@ def validate() -> None:
             "https://www.vevo.sk",
         ],
         "growthbook_adblock_exception_user_confirmed": "https://cdn.growthbook.io",
+        "comet_global_adblock_temporary_pause_verified": True,
+        "comet_restart_completed": True,
+        "comet_adblock_reenable_requested": True,
         "gtm_script_present_in_dom": True,
         "connection_result": "connected_three_google_tags_found",
         "detected_google_tag_count": 3,
@@ -234,11 +239,25 @@ def validate() -> None:
         "analytics_only_sdk_dom_count": 1,
         "analytics_only_feature_request_observed": True,
         "analytics_only_feature_request_result": (
-            "blocked_by_comet_adblock_after_exact_host_exception"
+            "accepted_after_preview_no_cache_and_temporary_global_adblock_pause"
         ),
-        "analytics_only_exposure_delivery_result": "not_attempted_feature_payload_blocked",
-        "collector_request_observed": False,
-        "feature_payload_blocker_host": "cdn.growthbook.io",
+        "analytics_only_exposure_delivery_result": "accepted",
+        "collector_request_observed": True,
+        "collector_delivery_result": "accepted",
+        "preview_state_marker": {
+            "status": "active",
+            "reason": "assigned",
+            "consent": "granted",
+            "consent_value_type": "number",
+            "analytic_value_type": "number",
+            "consent_bitwise": "granted",
+        },
+        "aa_variation_observed": "control",
+        "assignment_reload_variation_stable": True,
+        "withdrawal_fail_closed_verified": True,
+        "regrant_accepted_verified": True,
+        "cta_style_applied": False,
+        "historical_feature_payload_blocker_host": "cdn.growthbook.io",
         "control_plane_feature_payload_http_status": 200,
         "control_plane_aa_rule_count": 1,
         "control_plane_cta_rule_count": 0,
@@ -248,12 +267,9 @@ def validate() -> None:
         "comet_adblock_reference": (
             "https://www.perplexity.ai/help-center/comet/en/articles/11734702-adblock"
         ),
-        "blocker": (
-            "comet_global_adblock_blocks_growthbook_feature_payload_after_host_exception"
-        ),
+        "blocker": "none_in_temporary_preview_conditions",
         "next_gate": (
-            "user_temporarily_disables_comet_global_adblock_then_repeat_analytics_only_"
-            "preview_and_verify_exposure_delivery"
+            "reconcile_real_exposure_to_curated_facts_and_verify_growthbook_population"
         ),
     }
     if tag_assistant != expected_tag_assistant:

@@ -26,6 +26,8 @@
   var WEB_VITALS_URL = "https://cdn.jsdelivr.net/npm/web-vitals@6.0.1/dist/web-vitals.iife.js";
   var WEB_VITALS_INTEGRITY = "sha384-xduvx5szsAXW0V0fxOYjfsvz/Zl93SEZcLM+BK+7y6Spco3N+8g8NjbtUIAWCCAQ";
   var WEB_VITALS_SCRIPT_ID = "vevo-web-vitals-v1";
+  var DEBUG_MARKER_PREFIX = "vevo-growthbook-debug-";
+  var DEBUG_STATE_MARKER_ID = "vevo-growthbook-debug-state";
   var STYLE_ID = "vevo-growthbook-style-v1";
   var CTA_CLASS = "vevo-gb-cta-brand-contrast";
   var STORAGE = {
@@ -259,6 +261,37 @@
     }
   }
 
+  function previewDebugState() {
+    if (
+      !config ||
+      config.environment !== "preview" ||
+      !config.enableDevMode ||
+      !root.document ||
+      !root.document.head
+    ) {
+      return;
+    }
+    var options = root.FloxSettings && root.FloxSettings.options;
+    var consentValue = options && options.consent;
+    var analyticValue = options && options.ANALYTIC;
+    var marker = root.document.getElementById(DEBUG_STATE_MARKER_ID);
+    if (!marker) {
+      marker = root.document.createElement("meta");
+      marker.id = DEBUG_STATE_MARKER_ID;
+      marker.setAttribute("name", "vevo-growthbook-preview-state");
+      root.document.head.appendChild(marker);
+    }
+    marker.setAttribute("data-status", state.status);
+    marker.setAttribute("data-reason", state.reason);
+    marker.setAttribute("data-consent", state.consent ? "granted" : "denied");
+    marker.setAttribute("data-consent-value-type", typeof consentValue);
+    marker.setAttribute("data-analytic-value-type", typeof analyticValue);
+    marker.setAttribute(
+      "data-consent-bitwise",
+      options && (consentValue & analyticValue) ? "granted" : "denied"
+    );
+  }
+
   function validPath() {
     var path = root.location && root.location.pathname;
     if (typeof path !== "string" || path.length > 200) return null;
@@ -447,6 +480,36 @@
     return postEvent(payload, 0);
   }
 
+  function previewDebugDelivery(experimentId, variationId, delivery) {
+    if (
+      !config ||
+      config.environment !== "preview" ||
+      !config.enableDevMode ||
+      !root.document ||
+      !root.document.head ||
+      !EXPERIMENTS[experimentId] ||
+      !validVariation(experimentId, variationId)
+    ) {
+      return;
+    }
+    var markerId = DEBUG_MARKER_PREFIX + experimentId;
+    var marker = root.document.getElementById(markerId);
+    if (!marker) {
+      marker = root.document.createElement("meta");
+      marker.id = markerId;
+      marker.setAttribute("name", "vevo-growthbook-preview-debug");
+      root.document.head.appendChild(marker);
+    }
+    marker.setAttribute("data-experiment-id", experimentId);
+    marker.setAttribute("data-variation-id", variationId);
+    marker.setAttribute("data-delivery-status", "pending");
+    delivery.then(function (accepted) {
+      var current = root.document && root.document.getElementById(markerId);
+      if (!current || !state.consent || destroyed) return;
+      current.setAttribute("data-delivery-status", accepted ? "accepted" : "failed");
+    });
+  }
+
   function readAssignments() {
     var raw = storageGet(root.localStorage, STORAGE.assignments);
     if (!raw) return {};
@@ -507,6 +570,7 @@
     var payload = baseEvent("experiment_exposure", experimentId, variationId, state.pageType);
     var delivery = sendEvent(payload);
     exposureDeliveries[experimentId] = delivery;
+    previewDebugDelivery(experimentId, variationId, delivery);
     return delivery;
   }
 
@@ -562,6 +626,14 @@
     } catch (_error) {
       // Control is already the DOM fallback when removal is unavailable.
     }
+    Object.keys(EXPERIMENTS).forEach(function (experimentId) {
+      try {
+        var marker = root.document && root.document.getElementById(DEBUG_MARKER_PREFIX + experimentId);
+        if (marker && marker.parentNode) marker.parentNode.removeChild(marker);
+      } catch (_error) {
+        // A missing debug marker is already the fail-closed state.
+      }
+    });
   }
 
   function loadExternalLibrary(scriptId, url, integrity, readLibrary) {
@@ -799,12 +871,14 @@
       if (!state.pageType) {
         state.status = "control";
         state.reason = "ineligible_page";
+        previewDebugState();
         return false;
       }
       deviceId = getOrCreateDeviceId();
       if (!deviceId) {
         state.status = "control";
         state.reason = "anonymous_storage_unavailable";
+        previewDebugState();
         return false;
       }
       readMetaDimensions();
@@ -820,6 +894,7 @@
         state.active = true;
         state.status = "active";
         state.reason = "checkout_reconciliation_only";
+        previewDebugState();
         startHealthObservers();
         return recordOrderCompleted().then(function () { return true; });
       }
@@ -829,6 +904,7 @@
           stopRuntimeOnly();
           state.status = "control";
           state.reason = "sdk_load_unavailable";
+          previewDebugState();
           return false;
         }
         if (typeof library.setPolyfills === "function") {
@@ -842,12 +918,11 @@
           });
         }
         if (typeof library.configureCache === "function") {
-          var previewWithoutFeatureCache = config.environment === "preview";
           library.configureCache({
             cacheKey: STORAGE.featureCache,
             backgroundSync: false,
-            maxAge: previewWithoutFeatureCache ? 0 : 4 * 60 * 60 * 1000,
-            disableCache: previewWithoutFeatureCache
+            maxAge: config.environment === "preview" ? 0 : 4 * 60 * 60 * 1000,
+            disableCache: config.environment === "preview"
           });
         }
         var sticky = typeof library.LocalStorageStickyBucketService === "function"
@@ -875,6 +950,7 @@
             stopRuntimeOnly();
             state.status = "control";
             state.reason = "sdk_payload_unavailable";
+            previewDebugState();
             return false;
           }
           Object.keys(EXPERIMENTS).forEach(function (experimentId) {
@@ -887,6 +963,7 @@
           state.active = Object.keys(currentPageAssignments).length > 0;
           state.status = state.active ? "active" : "control";
           state.reason = state.active ? "assigned" : "no_active_experiment";
+          previewDebugState();
           startHealthObservers();
           return state.active;
         });
@@ -895,6 +972,7 @@
       stopRuntimeOnly();
       state.status = "control";
       state.reason = "activation_error";
+      previewDebugState();
       return false;
     });
     return activationPromise;
@@ -908,12 +986,20 @@
     if (!granted) {
       if (wasGranted || state.reason !== "analytics_consent_absent") withdraw();
       state.consent = false;
+      previewDebugState();
       return Promise.resolve(false);
     }
-    if (state.active || state.status === "loading") return activationPromise;
-    if (wasGranted && state.status === "control") return activationPromise;
+    if (state.active || state.status === "loading") {
+      previewDebugState();
+      return activationPromise;
+    }
+    if (wasGranted && state.status === "control") {
+      previewDebugState();
+      return activationPromise;
+    }
     state.status = "loading";
     state.reason = "activating_after_consent";
+    previewDebugState();
     return activate();
   }
 
@@ -940,6 +1026,7 @@
       state.reason = "wrong_storefront";
       return Promise.resolve(false);
     }
+    previewDebugState();
     addListener(root.document, "click", scheduleConsentCheck, true);
     addListener(root.document, "change", scheduleConsentCheck, true);
     addListener(root, "storage", scheduleConsentCheck);
@@ -959,6 +1046,12 @@
     });
     listeners = [];
     state.consent = false;
+    try {
+      var debugState = root.document && root.document.getElementById(DEBUG_STATE_MARKER_ID);
+      if (debugState && debugState.parentNode) debugState.parentNode.removeChild(debugState);
+    } catch (_error) {
+      // A missing Preview state marker is already the destroyed state.
+    }
     state.status = "control";
     state.reason = "destroyed";
     return true;

@@ -103,11 +103,11 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "GTM Preview bridge is not fail closed"):
                 validator.validate()
 
-    def test_validator_rejects_claimed_tag_assistant_exposure_delivery(self) -> None:
+    def test_validator_rejects_lost_tag_assistant_exposure_delivery(self) -> None:
         altered = copy.deepcopy(self.workspace)
         altered["gtm_preview_workspace"]["tag_assistant_preview"][
             "analytics_only_exposure_delivery_result"
-        ] = "accepted"
+        ] = "failed"
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):

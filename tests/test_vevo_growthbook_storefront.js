@@ -222,7 +222,13 @@ test("stays control and stores nothing before analytical consent", async () => {
   assert.equal(fixture.fetches.length, 0);
   assert.equal(fixture.root.localStorage.length, 0);
   assert.equal(fixture.button.classList.contains("vevo-gb-cta-brand-contrast"), false);
+  const deniedDebug = fixture.document.getElementById("vevo-growthbook-debug-state");
+  assert.equal(deniedDebug.getAttribute("data-consent"), "denied");
+  assert.equal(deniedDebug.getAttribute("data-consent-bitwise"), "denied");
+  assert.equal(deniedDebug.getAttribute("data-consent-value-type"), "number");
+  assert.equal(deniedDebug.getAttribute("data-analytic-value-type"), "number");
   client.destroy();
+  assert.equal(fixture.document.getElementById("vevo-growthbook-debug-state"), null);
 });
 
 test("assigns only after consent, captures safe Meta IDs, and records successful cart event", async () => {
@@ -239,6 +245,21 @@ test("assigns only after consent, captures safe Meta IDs, and records successful
     "vevo-sk-aa-001": "control",
     "vevo-sk-product-cta-color-001": "brand_contrast",
   });
+  assert.equal(
+    fixture.document.getElementById("vevo-growthbook-debug-vevo-sk-aa-001")
+      .getAttribute("data-delivery-status"),
+    "accepted",
+  );
+  assert.equal(
+    fixture.document.getElementById("vevo-growthbook-debug-vevo-sk-aa-001")
+      .getAttribute("data-variation-id"),
+    "control",
+  );
+  const activeDebug = fixture.document.getElementById("vevo-growthbook-debug-state");
+  assert.equal(activeDebug.getAttribute("data-status"), "active");
+  assert.equal(activeDebug.getAttribute("data-reason"), "assigned");
+  assert.equal(activeDebug.getAttribute("data-consent"), "granted");
+  assert.equal(activeDebug.getAttribute("data-consent-bitwise"), "granted");
   assert.equal(fixture.button.classList.contains("vevo-gb-cta-brand-contrast"), true);
   assert.equal(fixture.fetches.filter((row) => row.body.event_name === "experiment_exposure").length, 2);
   for (const row of fixture.fetches) {
@@ -282,6 +303,14 @@ test("withdrawal restores control and removes only owned experiment storage", as
   assert.equal(localStorage.getItem("vevo_exp_device_v1"), null);
   assert.equal(localStorage.getItem("vevo_exp_assignments_v1"), null);
   assert.equal(localStorage.getItem("unrelated"), "preserve");
+  assert.equal(
+    fixture.document.getElementById("vevo-growthbook-debug-vevo-sk-aa-001"),
+    null,
+  );
+  const withdrawnDebug = fixture.document.getElementById("vevo-growthbook-debug-state");
+  assert.equal(withdrawnDebug.getAttribute("data-status"), "control");
+  assert.equal(withdrawnDebug.getAttribute("data-reason"), "analytics_consent_absent");
+  assert.equal(withdrawnDebug.getAttribute("data-consent"), "denied");
   const before = fixture.fetches.length;
   assert.equal(await client.recordAddToCart(), false);
   assert.equal(fixture.fetches.length, before);
