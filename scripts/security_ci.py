@@ -73,6 +73,10 @@ def main() -> int:
         growthbook_reconciliation_recovery_workflow = read(
             ".github/workflows/recover-vevo-growthbook-reconciliation-rollback.yml"
         )
+        growthbook_meta_audit = read("scripts/audit_vevo_meta_dimensions.py")
+        growthbook_meta_audit_workflow = read(
+            ".github/workflows/audit-vevo-growthbook-meta-population.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -550,6 +554,53 @@ def main() -> int:
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
+            "META_AUDIT_PREDEPLOY_OK:",
+            "META_AUDIT_HARD_GATE_OK:",
+            "META_AUDIT_TASK_OK:",
+            "VEVO_META_DIMENSION_AUDIT_OK:",
+            "VEVO_META_DIMENSION_AUDIT_FAIL:",
+            "VEVO_GROWTHBOOK_REPORTING_POPULATION_AUDIT_OK:",
+            "Production GrowthBook allocation: \\`0%\\` (unchanged)",
+        ):
+            require(
+                growthbook_meta_audit_workflow,
+                marker,
+                f"GrowthBook Meta/population audit workflow lost safety marker: {marker}",
+            )
+        for forbidden_action in (
+            "aws scheduler update-schedule",
+            "aws cloudformation delete-stack",
+            "aws s3api delete-object",
+            "aws sqs delete-queue",
+            "ads_update",
+            "ads_archive",
+            "adcreatives_create",
+        ):
+            forbid(
+                growthbook_meta_audit_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook Meta/population audit must not use {forbidden_action}.",
+            )
+        for marker in (
+            "FORBIDDEN_QUERY_KEYS",
+            "VEVO_META_DIMENSION_AUDIT_OK:",
+            "VEVO_META_DIMENSION_AUDIT_FAIL:",
+            "client._get_json",
+            "unexpected_internal_error",
+        ):
+            require(
+                growthbook_meta_audit,
+                marker,
+                f"GrowthBook Meta audit lost safety marker: {marker}",
+            )
+        for forbidden_call in ("._post_json(", ".post(", ".put(", ".patch(", ".delete("):
+            forbid(
+                growthbook_meta_audit,
+                forbidden_call,
+                f"GrowthBook Meta audit must remain GET-only: {forbidden_call}",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
             "SOURCE_SCHEDULE: vevo-daily-report-email",
             '"PublicRouteEnabled": "false"',
             "/app/growthbook_collector/host_gate.sh",
@@ -694,6 +745,7 @@ def main() -> int:
             "scripts/reconcile_growthbook_facts.py",
             "scripts/run_scheduled_growthbook_reconciliation.py",
             "scripts/build_growthbook_reconciliation_parameters.py",
+            "scripts/audit_vevo_meta_dimensions.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
