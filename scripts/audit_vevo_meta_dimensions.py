@@ -14,6 +14,7 @@ from facebook_ads import FacebookAdsClient
 
 MARKER = "VEVO_META_DIMENSION_AUDIT_OK:"
 FAIL_MARKER = "VEVO_META_DIMENSION_AUDIT_FAIL:"
+START_MARKER = "VEVO_META_DIMENSION_AUDIT_START:schema=1"
 FORBIDDEN_QUERY_KEYS = frozenset({"fbclid", "_fbp", "_fbc"})
 DIMENSIONS = (
     "utm_source",
@@ -323,15 +324,16 @@ def run_audit(client: FacebookAdsClient) -> dict[str, Any]:
 
 
 def main() -> int:
+    print(START_MARKER, flush=True)
     try:
         summary = run_audit(FacebookAdsClient())
-        print(MARKER + json.dumps(summary, sort_keys=True, separators=(",", ":")))
+        print(MARKER + json.dumps(summary, sort_keys=True, separators=(",", ":")), flush=True)
         return 0
     except MetaDimensionAuditError as exc:
-        print(FAIL_MARKER + str(exc), file=sys.stderr)
+        print(FAIL_MARKER + str(exc), file=sys.stderr, flush=True)
         return 1
     except Exception:
-        print(FAIL_MARKER + "unexpected_internal_error", file=sys.stderr)
+        print(FAIL_MARKER + "unexpected_internal_error", file=sys.stderr, flush=True)
         return 1
 
 

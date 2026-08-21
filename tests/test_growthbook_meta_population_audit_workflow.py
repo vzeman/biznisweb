@@ -24,10 +24,13 @@ class GrowthBookMetaPopulationAuditWorkflowTests(unittest.TestCase):
             "image_digest:",
             "META_AUDIT_PREDEPLOY_OK:",
             "META_AUDIT_HARD_GATE_OK:",
+            "META_AUDIT_TASK_STOPPED_READBACK:",
             "META_AUDIT_TASK_OK:",
             "VEVO_GROWTHBOOK_REPORTING_POPULATION_AUDIT_OK:",
             "VEVO_META_DIMENSION_AUDIT_OK:",
             "VEVO_META_DIMENSION_AUDIT_FAIL:",
+            '"REPORT_DATA_DIR"',
+            '"/tmp/vevo-growthbook-meta-audit"',
         ):
             self.assertIn(marker, self.workflow)
         lowered = self.workflow.lower()
