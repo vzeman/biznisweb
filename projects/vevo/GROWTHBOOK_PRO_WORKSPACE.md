@@ -49,7 +49,7 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 
 ## Next exact step
 
-Document a repeatable Meta Ads URL-parameter rollout/checklist for new or otherwise edited ads using the exact six-field macro contract, without changing existing live ads during A/A. Separately verify the first natural reconciliation after `2026-08-22 03:30 Europe/Bratislava`. Do not click GTM `Submit`, do not start CTA A/B, and keep Production allocation at `0%` until the natural-run gate and ad-block delivery design are approved.
+The exact six-field Meta URL-parameter contract and safe rollout are now frozen in `META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md`; existing live ads remain unchanged. Verify the first natural reconciliation after `2026-08-22 03:30 Europe/Bratislava`. Do not click GTM `Submit`, do not start CTA A/B, and keep Production allocation at `0%` until the natural-run gate and ad-block delivery design are approved.
 
 The GrowthBook Web SDK returns the actual string feature value in `ExperimentResult.value`; its `key` is a variation tracking key that defaults to a numeric string such as `"0"` or `"1"`. The storefront therefore validates and stores `result.value` (`control`, `variant`, or `brand_contrast`) and uses numeric metadata only as a fail-closed fallback. See the official [GrowthBook JavaScript SDK source](https://github.com/growthbook/growthbook/blob/main/packages/sdk-js/src/types/growthbook.ts) and [feature implementation guide](https://docs.growthbook.io/lib/js#tracking-callback).
 

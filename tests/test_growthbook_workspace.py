@@ -125,6 +125,15 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "reconciliation checkpoint"):
                 validator.validate()
 
+    def test_validator_rejects_meta_parameter_rollout_drift(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["meta_parameter_rollout"]["bulk_live_edit_allowed"] = True
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "Meta parameter rollout"):
+                validator.validate()
+
     def test_validator_rejects_growthbook_before_analytics_consent(self) -> None:
         altered = copy.deepcopy(self.workspace)
         altered["gtm_preview_workspace"]["tag_assistant_preview"][
