@@ -29,6 +29,9 @@ EXPECTED_IMAGE_DIGEST = (
     "c7cf8e7bb2b6b5e78686305339fdd041"
 )
 EXPECTED_RUNTIME_PATH = "/app"
+EXPECTED_REPOSITORY = "vzeman/biznisweb"
+EXPECTED_WORKFLOW = ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
+EVIDENCE_SCHEMA_VERSION = 1
 EXPECTED_SCHEDULE_EXPRESSION = "cron(30 3 * * ? *)"
 EXPECTED_SCHEDULE_TIMEZONE = "Europe/Bratislava"
 EXPECTED_EVENT_FROM = "2026-07-13"
@@ -49,6 +52,8 @@ EXPECTED_ALARMS = {
     "vevo-growthbook-reconcile-preview-dlq",
 }
 TASK_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+WORKFLOW_RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
 SUCCESS_RE = re.compile(
     r"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:"
     r"project=vevo:environment=preview:"
@@ -435,6 +440,117 @@ def verify_natural_reconciliation(
     }
 
 
+def build_natural_reconciliation_evidence(
+    result: Mapping[str, Any],
+    *,
+    verified_at: datetime,
+    workflow_run_id: str,
+    main_commit: str,
+) -> dict[str, Any]:
+    """Build the only safe artifact allowed to leave the verifier job.
+
+    Raw AWS responses, CloudWatch messages, CloudTrail payloads, credentials,
+    browser identities, and customer/order data are deliberately excluded.
+    """
+
+    if verified_at.tzinfo is None or verified_at.utcoffset() is None:
+        raise VerificationError("evidence clock must be timezone-aware")
+    run_id = str(workflow_run_id or "").strip()
+    commit = str(main_commit or "").strip()
+    _require(WORKFLOW_RUN_ID_RE.fullmatch(run_id) is not None, "workflow run ID is invalid")
+    _require(COMMIT_RE.fullmatch(commit) is not None, "main commit is invalid")
+
+    required_result = {
+        "task_id",
+        "private_ip",
+        "service",
+        "runtime_path",
+        "task_definition",
+        "image_digest",
+        "event_from",
+        "event_through",
+        "raw_events",
+        "device_facts",
+        "performance_facts",
+        "quality_reports",
+        "generated_published_counts_match",
+        "dlq_empty",
+        "alarms_clear",
+        "source_schedule_enabled",
+        "cloudtrail_scheduler_run_task_verified",
+    }
+    _require(set(result) == required_result, "verified result field set drift")
+    _require(result.get("service") == EXPECTED_SCHEDULE_NAME, "evidence service drift")
+    _require(result.get("runtime_path") == EXPECTED_RUNTIME_PATH, "evidence runtime path drift")
+    _require(result.get("task_definition") == EXPECTED_TASK_DEFINITION, "evidence task definition drift")
+    _require(result.get("image_digest") == EXPECTED_IMAGE_DIGEST, "evidence image digest drift")
+
+    verified_utc = verified_at.astimezone(timezone.utc).replace(microsecond=0)
+    return {
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "evidence_type": "vevo_growthbook_first_natural_reconciliation",
+        "status": "passed",
+        "repository": EXPECTED_REPOSITORY,
+        "workflow": EXPECTED_WORKFLOW,
+        "workflow_run_id": run_id,
+        "main_commit": commit,
+        "verified_at_utc": verified_utc.isoformat().replace("+00:00", "Z"),
+        "verification_window": {
+            "first_run_due_utc": FIRST_RUN_DUE_UTC.isoformat().replace("+00:00", "Z"),
+            "not_before_utc": VERIFY_NOT_BEFORE_UTC.isoformat().replace("+00:00", "Z"),
+            "before_utc": VERIFY_BEFORE_UTC.isoformat().replace("+00:00", "Z"),
+        },
+        "aws": {
+            "account_id": EXPECTED_ACCOUNT_ID,
+            "region": EXPECTED_REGION,
+            "stack_name": EXPECTED_STACK_NAME,
+            "schedule_name": EXPECTED_SCHEDULE_NAME,
+            "source_schedule": EXPECTED_SOURCE_SCHEDULE,
+        },
+        "runtime": {
+            "instance_id": "N/A:Fargate",
+            "private_ip": result["private_ip"],
+            "service": result["service"],
+            "runtime_path": result["runtime_path"],
+            "task_id": result["task_id"],
+            "task_definition": result["task_definition"],
+            "image_digest": result["image_digest"],
+        },
+        "reconciliation": {
+            "event_from": result["event_from"],
+            "event_through": result["event_through"],
+            "partitions": EXPECTED_PARTITIONS,
+            "raw_events": result["raw_events"],
+            "device_facts": result["device_facts"],
+            "performance_facts": result["performance_facts"],
+            "quality_reports": result["quality_reports"],
+            "generated_published_counts_match": result[
+                "generated_published_counts_match"
+            ],
+        },
+        "control_plane": {
+            "dlq_empty": result["dlq_empty"],
+            "alarms_clear": result["alarms_clear"],
+            "source_schedule_enabled": result["source_schedule_enabled"],
+            "cloudtrail_scheduler_run_task_verified": result[
+                "cloudtrail_scheduler_run_task_verified"
+            ],
+        },
+        "safety": {
+            "contains_raw_aws_payloads": False,
+            "contains_cloudwatch_messages": False,
+            "contains_cloudtrail_payloads": False,
+            "contains_credentials": False,
+            "contains_customer_or_order_data": False,
+            "aws_mutations": False,
+            "growthbook_mutations": False,
+            "gtm_mutations": False,
+            "meta_ads_mutations": False,
+            "biznisweb_mutations": False,
+        },
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--schedule", required=True)
@@ -447,11 +563,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--dlq", required=True)
     parser.add_argument("--source-schedule", required=True)
     parser.add_argument("--cloudtrail", required=True)
+    parser.add_argument("--evidence-output", required=True)
+    parser.add_argument("--workflow-run-id", required=True)
+    parser.add_argument("--main-commit", required=True)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    now = datetime.now(timezone.utc)
     result = verify_natural_reconciliation(
         schedule_payload=_load(args.schedule),
         stack_payload=_load(args.stack),
@@ -463,7 +583,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         dlq_payload=_load(args.dlq),
         source_schedule_payload=_load(args.source_schedule),
         cloudtrail_payload=_load(args.cloudtrail),
-        now=datetime.now(timezone.utc),
+        now=now,
+    )
+    evidence = build_natural_reconciliation_evidence(
+        result,
+        verified_at=now,
+        workflow_run_id=args.workflow_run_id,
+        main_commit=args.main_commit,
+    )
+    evidence_path = Path(args.evidence_output)
+    evidence_path.write_text(
+        json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
     print(
         "NATURAL_RUNTIME_IDENTITY_OK:"
@@ -473,6 +604,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         "GROWTHBOOK_NATURAL_RECONCILIATION_OK:"
         + json.dumps(result, separators=(",", ":"), sort_keys=True)
+    )
+    print(
+        "GROWTHBOOK_NATURAL_EVIDENCE_READY:"
+        f"schema={EVIDENCE_SCHEMA_VERSION}:file={evidence_path.name}"
     )
     return 0
 
