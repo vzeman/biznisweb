@@ -1,6 +1,6 @@
 # VEVO GrowthBook Pro workspace contract
 
-Status: Preview data source, assignment, fact tables, and eight Starter-compatible outcome metrics query-verified; three p75 quantile metrics blocked pending an explicitly authorized paid Pro upgrade
+Status: Preview data source, assignment, fact tables, eight Starter-compatible outcome metrics, and an isolated unpublished GTM draft workspace are verified; Tag Assistant attachment and three paid-Pro p75 metrics remain blocked
 
 Last reviewed: 2026-08-21
 
@@ -20,7 +20,9 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 10. **Completed:** `VEVO Device Outcomes v1` (`ftb_19g6mmt2dhrdi`) and `VEVO Performance Vitals v1` (`ftb_19g6mmt2e0otd`) were created from their version-controlled SQL, identified by `device_id`, and query-tested in GrowthBook with exactly one anonymous synthetic row each.
 11. **Partially completed and query-verified:** all eight Starter-compatible outcome metrics were created and their exact GrowthBook IDs were read back into `growthbook_workspace.json`. A real GrowthBook metric-analysis run initially exposed the imported `integer = varchar(1)` mismatch on `client_error_observed`; all numeric outcome/quality columns were then corrected to GrowthBook Number, the three binary filters now render numeric `= 1`, and all eight metric analyses passed through the exact Preview Athena connection against one anonymous synthetic device. Outcome metrics use GrowthBook window `None` because the authoritative 24-hour and seven-day windows are already frozen upstream. The three performance p75 metrics remain intentionally uncreated: GrowthBook marks Quantile metrics as Pro, and no paid upgrade was authorized. After an authorized upgrade, create and query-test them with event-level quantile `0.75`, no grouping by experiment user, zeros retained, and a 24-hour conversion window.
 12. **Completed as drafts only:** invisible A/A `vevo-sk-aa-001` and CTA A/B `vevo-sk-product-cta-color-001` exist. Neither experiment is started. The A/B experiment remains unstarted until A/A passes and its final sample is recomputed and frozen.
-13. Before A/A Production traffic, clone the verified Preview data-source/fact/metric objects onto the separate Production Athena database and workgroup. Never repoint the Preview connection in place.
+13. **Completed as an unpublished draft only:** isolated GTM workspace `VEVO GrowthBook Preview` (`16`) contains exactly four new Preview tags and one new custom-event trigger. Its overview reads `5` added, `0` modified, and `0` deleted. Tag IDs are loader `44`, consent bridge `46`, add-to-cart bridge `47`, and purchase bridge `48`; custom trigger `45` observes `add_to_cart`. All three bridges were read back with the loader-before sequence and fail-closed behavior. The temporary runtime-populated artifact matched SHA-256 `e4dab7ad37432c255c9552eff953bfb0c80c48035db06b814e6d5a58af29532f`, was pasted without committing its client key, and was deleted after UI read-back. Nothing was submitted or published.
+14. **Blocked before runtime acceptance:** Tag Assistant could not attach to `https://www.vevo.sk/`; it timed out with zero detected tags both for Analytical-only and all-category test consent, even though the live GTM script was present in the DOM. The no-Analytical control correctly exposed no GrowthBook DOM marker. The draft container was therefore not evaluated, and no A/A Preview traffic was accepted. Installing or enabling the Google Tag Assistant browser extension requires explicit user confirmation at action time; do not bypass this gate.
+15. Before A/A Production traffic, clone the verified Preview data-source/fact/metric objects onto the separate Production Athena database and workgroup. Never repoint the Preview connection in place.
 
 ## Exact analytical behavior
 
@@ -39,7 +41,12 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 - `staging` is the Preview alias until a paid plan is explicitly authorized and a custom `Preview` environment is genuinely needed.
 - Curated fact tables are structurally deployed and contain one anonymous zero-value synthetic A/A device fact; real storefront traffic is still disabled.
 - The GrowthBook data source, assignment query, both fact tables, and all eight Starter-compatible outcome metrics are query-verified. The LCP, INP, and CLS p75 Quantile metrics are blocked until a paid Pro upgrade is explicitly authorized; their GrowthBook IDs remain `null` rather than claiming objects that do not exist.
+- GTM workspace `VEVO GrowthBook Preview` is an unpublished draft with five added and no modified/deleted objects. Tag Assistant's web session could not attach to VEVO, and the Google Tag Assistant browser extension is not installed; loader execution, exposure delivery, assignment stability, consent withdrawal cleanup, and collector delivery therefore remain unverified.
 - Production feature allocation and the collector Production registry remain hard-disabled.
+
+## Next exact step
+
+After explicit user confirmation, install or enable the Google Tag Assistant browser extension and repeat the unpublished Preview checklist. Require a connected Tag Assistant session, the no-Analytical zero-marker control, Analytical-only loader/exposure delivery, stable A/A assignment, consent-withdrawal cleanup, and zero cart/checkout mutation. Do not click GTM `Submit`, do not start either GrowthBook experiment, and keep Production allocation at `0%`.
 
 The GrowthBook Web SDK returns the actual string feature value in `ExperimentResult.value`; its `key` is a variation tracking key that defaults to a numeric string such as `"0"` or `"1"`. The storefront therefore validates and stores `result.value` (`control`, `variant`, or `brand_contrast`) and uses numeric metadata only as a fail-closed fallback. See the official [GrowthBook JavaScript SDK source](https://github.com/growthbook/growthbook/blob/main/packages/sdk-js/src/types/growthbook.ts) and [feature implementation guide](https://docs.growthbook.io/lib/js#tracking-callback).
 

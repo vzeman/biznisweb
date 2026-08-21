@@ -173,6 +173,55 @@ def validate() -> None:
     if sdk_connection != expected_sdk:
         raise AssertionError("GrowthBook Preview SDK connection read-back changed")
 
+    gtm_preview = workspace.get("gtm_preview_workspace", {})
+    expected_gtm_identity = {
+        "account_id": "6254499282",
+        "container_id": "198135331",
+        "public_container_id": "GTM-5ZB5LFGB",
+        "workspace_id": "16",
+        "workspace_name": "VEVO GrowthBook Preview",
+        "status": "unpublished_draft_preview_connection_blocked",
+        "created_verified_date": "2026-08-21",
+        "artifact_sha256": "e4dab7ad37432c255c9552eff953bfb0c80c48035db06b814e6d5a58af29532f",
+        "runtime_secret_material_committed": False,
+        "temporary_artifact_status": "deleted_after_ui_paste_and_readback",
+        "publish_status": "not_published",
+        "workspace_changes": {"added": 5, "modified": 0, "deleted": 0},
+    }
+    for key, value in expected_gtm_identity.items():
+        if gtm_preview.get(key) != value:
+            raise AssertionError(f"GTM Preview workspace safety state drift: {key}")
+    expected_tag_ids = {
+        "loader": "44",
+        "consent_bridge": "46",
+        "add_to_cart_bridge": "47",
+        "purchase_bridge": "48",
+    }
+    gtm_tags = gtm_preview.get("tags", {})
+    if {key: row.get("id") for key, row in gtm_tags.items()} != expected_tag_ids:
+        raise AssertionError("GTM Preview tag identity set changed")
+    for key in ("consent_bridge", "add_to_cart_bridge", "purchase_bridge"):
+        if gtm_tags.get(key, {}).get("loader_sequence_fail_closed_verified") is not True:
+            raise AssertionError(f"GTM Preview bridge is not fail closed: {key}")
+    if gtm_preview.get("triggers", {}).get("add_to_cart") != {
+        "id": "45",
+        "name": "CE - add_to_cart - VEVO GrowthBook Preview",
+        "custom_event": "add_to_cart",
+    }:
+        raise AssertionError("GTM Preview add-to-cart trigger state drift")
+    tag_assistant = gtm_preview.get("tag_assistant_preview", {})
+    if (
+        tag_assistant.get("target_url") != "https://www.vevo.sk/"
+        or tag_assistant.get("gtm_script_present_in_dom") is not True
+        or tag_assistant.get("no_analytics_consent_growthbook_dom_marker_count") != 0
+        or tag_assistant.get("analytics_only_connection_result") != "timeout_zero_tags_found"
+        or tag_assistant.get("all_consent_connection_result") != "timeout_zero_tags_found"
+        or tag_assistant.get("draft_container_evaluated") is not False
+        or tag_assistant.get("blocker")
+        != "tag_assistant_web_session_timeout_browser_extension_not_installed"
+    ):
+        raise AssertionError("GTM Tag Assistant Preview blocker state drift")
+
     feature_flags = workspace.get("feature_flags", [])
     feature_map = {row.get("key"): row for row in feature_flags if isinstance(row, dict)}
     if set(feature_map) != set(EXPECTED_FEATURES.values()):
