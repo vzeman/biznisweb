@@ -1,0 +1,242 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Disabled-first EventBridge Scheduler boundary for the VEVO GrowthBook Preview
+  rolling reconciliation task. The target reuses one exact host-verified VEVO
+  reporting task definition and never changes the reporting schedule.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: preview
+    AllowedValues:
+      - preview
+  ClusterArn:
+    Type: String
+    AllowedPattern: '^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:cluster/[A-Za-z0-9_-]+$'
+  TaskDefinitionArn:
+    Type: String
+    AllowedPattern: '^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:task-definition/vevo-growthbook-reconcile-preview:[1-9][0-9]*$'
+  TaskRoleArn:
+    Type: String
+    AllowedPattern: '^arn:aws[a-z-]*:iam::[0-9]{12}:role/BiznisWebReportingTaskRole-vevo$'
+  ExecutionRoleArn:
+    Type: String
+    AllowedPattern: '^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$'
+  ContainerName:
+    Type: String
+    AllowedPattern: '^[A-Za-z0-9_-]{1,64}$'
+  EventBucketName:
+    Type: String
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+  LogGroupName:
+    Type: String
+    AllowedPattern: '^/ecs/[A-Za-z0-9._/#-]+$'
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+  AssignPublicIp:
+    Type: String
+    AllowedValues:
+      - DISABLED
+      - ENABLED
+  PlatformVersion:
+    Type: String
+    Default: LATEST
+    AllowedPattern: '^(LATEST|[0-9]+\.[0-9]+\.[0-9]+)$'
+  ScheduleState:
+    Type: String
+    Default: DISABLED
+    AllowedValues:
+      - DISABLED
+      - ENABLED
+  ScheduleExpression:
+    Type: String
+    Default: 'cron(30 3 * * ? *)'
+    AllowedValues:
+      - 'cron(30 3 * * ? *)'
+  ScheduleTimezone:
+    Type: String
+    Default: Europe/Bratislava
+    AllowedValues:
+      - Europe/Bratislava
+
+Resources:
+  ReconciliationDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      QueueName: vevo-growthbook-reconcile-preview-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+        - Key: Environment
+          Value: !Ref Environment
+
+  ReconciliationSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vevo-growthbook-reconcile-preview-scheduler
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnEquals:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/vevo-growthbook-reconcile-preview'
+      Policies:
+        - PolicyName: RunExactVevoGrowthBookReconciliationTask
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: RunExactTaskDefinition
+                Effect: Allow
+                Action: ecs:RunTask
+                Resource: !Ref TaskDefinitionArn
+              - Sid: PassExactTaskRoles
+                Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !Ref TaskRoleArn
+                  - !Ref ExecutionRoleArn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+              - Sid: SendOnlyToOwnDeadLetterQueue
+                Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ReconciliationDeadLetterQueue.Arn
+      Tags:
+        - Key: Project
+          Value: vevo-growthbook
+        - Key: Environment
+          Value: !Ref Environment
+
+  ReconciliationSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: vevo-growthbook-reconcile-preview
+      Description: >-
+        Daily bounded reconciliation of complete UTC Preview event partitions;
+        Production GrowthBook allocation remains zero.
+      State: !Ref ScheduleState
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: !Ref ScheduleTimezone
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn: !Ref ClusterArn
+        RoleArn: !GetAtt ReconciliationSchedulerRole.Arn
+        DeadLetterConfig:
+          Arn: !GetAtt ReconciliationDeadLetterQueue.Arn
+        RetryPolicy:
+          MaximumEventAgeInSeconds: 3600
+          MaximumRetryAttempts: 2
+        EcsParameters:
+          TaskDefinitionArn: !Ref TaskDefinitionArn
+          LaunchType: FARGATE
+          PlatformVersion: !Ref PlatformVersion
+          TaskCount: 1
+          EnableExecuteCommand: false
+          Group: vevo-growthbook-reconcile-preview
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              AssignPublicIp: !Ref AssignPublicIp
+              SecurityGroups: !Ref SecurityGroupIds
+              Subnets: !Ref SubnetIds
+        Input: !Sub >-
+          {"containerOverrides":[{"name":"${ContainerName}","command":["/bin/bash","-lc","cd /app && python scripts/run_scheduled_growthbook_reconciliation.py"],"environment":[{"name":"REPORT_PROJECT","value":"vevo"},{"name":"GROWTHBOOK_ENVIRONMENT","value":"preview"},{"name":"GROWTHBOOK_EVENT_BUCKET","value":"${EventBucketName}"},{"name":"GROWTHBOOK_FACT_PUBLISH_ENABLED","value":"true"},{"name":"AWS_REGION","value":"${AWS::Region}"}]}]}
+
+  ReconciliationFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: vevo-growthbook-reconcile-preview-failure
+      FilterPattern: '"GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE"'
+      LogGroupName: !Ref LogGroupName
+      MetricTransformations:
+        - MetricName: ScheduledReconciliationFailure
+          MetricNamespace: VEVO/GrowthBook
+          MetricValue: '1'
+          Unit: Count
+
+  ReconciliationSuccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: vevo-growthbook-reconcile-preview-success
+      FilterPattern: '"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK"'
+      LogGroupName: !Ref LogGroupName
+      MetricTransformations:
+        - MetricName: ScheduledReconciliationSuccess
+          MetricNamespace: VEVO/GrowthBook
+          MetricValue: '1'
+          Unit: Count
+
+  ReconciliationFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: vevo-growthbook-reconcile-preview-failure
+      AlarmDescription: The scheduled Preview reconciler emitted an explicit failure marker.
+      Namespace: VEVO/GrowthBook
+      MetricName: ScheduledReconciliationFailure
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  ReconciliationMissingSuccessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: vevo-growthbook-reconcile-preview-missing-success
+      AlarmDescription: No successful scheduled Preview reconciliation was observed for two UTC days.
+      Namespace: VEVO/GrowthBook
+      MetricName: ScheduledReconciliationSuccess
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+
+  ReconciliationDeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: vevo-growthbook-reconcile-preview-dlq
+      AlarmDescription: EventBridge Scheduler could not deliver the Preview reconciliation task.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ReconciliationDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ScheduleName:
+    Value: !Ref ReconciliationSchedule
+  ScheduleArn:
+    Value: !GetAtt ReconciliationSchedule.Arn
+  SchedulerRoleArn:
+    Value: !GetAtt ReconciliationSchedulerRole.Arn
+  DeadLetterQueueArn:
+    Value: !GetAtt ReconciliationDeadLetterQueue.Arn
+  ScheduleState:
+    Value: !Ref ScheduleState
+  TargetTaskDefinitionArn:
+    Value: !Ref TaskDefinitionArn

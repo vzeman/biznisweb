@@ -122,6 +122,7 @@ jobs:
         run: |
           python -m pip install cfn-lint==1.55.1
           cfn-lint infra/vevo-growthbook/template.yaml
+          cfn-lint infra/vevo-growthbook-reconciliation/template.yaml
 
       - name: Reporting QA smoke test
         run: |

@@ -48,7 +48,13 @@ def main() -> int:
         growthbook_event_io = read("reporting_core/experiment_io.py")
         growthbook_order_adapter = read("reporting_core/experiment_orders.py")
         growthbook_reconciler = read("scripts/reconcile_growthbook_facts.py")
+        growthbook_scheduled_reconciler = read(
+            "scripts/run_scheduled_growthbook_reconciliation.py"
+        )
         growthbook_template = read("infra/vevo-growthbook/template.yaml")
+        growthbook_reconciliation_template = read(
+            "infra/vevo-growthbook-reconciliation/template.yaml"
+        )
         growthbook_deploy_workflow = read(
             ".github/workflows/deploy-vevo-growthbook-preview.yml"
         )
@@ -57,6 +63,9 @@ def main() -> int:
         )
         growthbook_reader_workflow = read(
             ".github/workflows/provision-vevo-growthbook-preview-reader.yml"
+        )
+        growthbook_reconciliation_workflow = read(
+            ".github/workflows/deploy-vevo-growthbook-reconciliation.yml"
         )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
@@ -401,6 +410,19 @@ def main() -> int:
             'if args.publish and not _enabled',
             "GrowthBook fact publication must require both explicit CLI and runtime gates.",
         )
+        for marker in (
+            'scheduled reconciliation accepts no arguments',
+            'GROWTHBOOK_FACT_PUBLISH_ENABLED',
+            'rolling_partition_days',
+            'max_raw_events',
+            'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK',
+            'GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE',
+        ):
+            require(
+                growthbook_scheduled_reconciler,
+                marker,
+                f"Scheduled GrowthBook reconciler lost safety marker: {marker}",
+            )
         require(
             growthbook_template,
             "DenyRawWritesWithoutIfNoneMatch",
@@ -431,6 +453,50 @@ def main() -> int:
             "AWS::Lambda",
             "GrowthBook collector must remain host-verifiable on ECS/Fargate.",
         )
+        for marker in (
+            "Default: DISABLED",
+            "Type: AWS::Scheduler::Schedule",
+            "RoleName: vevo-growthbook-reconcile-preview-scheduler",
+            "Action: ecs:RunTask",
+            "Action: iam:PassRole",
+            "EnableExecuteCommand: false",
+            "MaximumEventAgeInSeconds: 3600",
+            "MaximumRetryAttempts: 2",
+            "GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE",
+            "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK",
+        ):
+            require(
+                growthbook_reconciliation_template,
+                marker,
+                f"GrowthBook reconciliation template lost safety marker: {marker}",
+            )
+        for forbidden_action in ("s3:DeleteObject", "scheduler:UpdateSchedule"):
+            forbid(
+                growthbook_reconciliation_template,
+                forbidden_action,
+                f"GrowthBook reconciliation template must not grant {forbidden_action}.",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "ParameterKey=ScheduleState,ParameterValue=DISABLED",
+            "GROWTHBOOK_RECONCILIATION_DISABLED_STACK_OK",
+            "GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app",
+            "GROWTHBOOK_RECONCILIATION_ONE_SHOT_OK",
+            "ParameterKey=ScheduleState,ParameterValue=ENABLED",
+            "GROWTHBOOK_RECONCILIATION_SCHEDULE_READBACK_OK",
+            "VEVO reporting source schedule changed",
+        ):
+            require(
+                growthbook_reconciliation_workflow,
+                marker,
+                f"GrowthBook reconciliation workflow lost safety marker: {marker}",
+            )
+        for forbidden_action in ("aws scheduler update-schedule", "s3api delete-object"):
+            forbid(
+                growthbook_reconciliation_workflow,
+                forbidden_action,
+                f"GrowthBook reconciliation workflow must not use {forbidden_action}.",
+            )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "SOURCE_SCHEDULE: vevo-daily-report-email",
@@ -575,8 +641,10 @@ def main() -> int:
             "reporting_core/experiment_io.py",
             "reporting_core/experiment_orders.py",
             "scripts/reconcile_growthbook_facts.py",
+            "scripts/run_scheduled_growthbook_reconciliation.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",
             "scripts/validate_growthbook_changeset.py",
+            "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",
         ]:
             py_compile.compile(str(ROOT / rel_path), doraise=True)

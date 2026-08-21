@@ -1,0 +1,717 @@
+name: Deploy VEVO GrowthBook Preview Reconciliation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: Type true to create/update the disabled-first Preview schedule stack
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      enable_schedule:
+        description: Enable only after the localhost and one-shot reconciliation gates pass
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-reconciliation-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy-reconciliation:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_ACCOUNT_ID: '919341186960'
+      AWS_REGION: eu-central-1
+      COLLECTOR_STACK_NAME: vevo-growthbook-preview
+      STACK_NAME: vevo-growthbook-reconciliation-preview
+      SOURCE_SCHEDULE: vevo-daily-report-email
+      SOURCE_TASK_FAMILY: vevo-reporting-daily
+      TARGET_TASK_FAMILY: vevo-growthbook-reconcile-preview
+      EXPECTED_TASK_ROLE: BiznisWebReportingTaskRole-vevo
+      SCHEDULE_NAME: vevo-growthbook-reconcile-preview
+      ECR_REPOSITORY: vevo-reporting
+      TEMPLATE_PATH: infra/vevo-growthbook-reconciliation/template.yaml
+      SETTINGS_PATH: projects/vevo/settings.json
+      RUNTIME_PATH: /app
+    steps:
+      - name: Require explicit protected deployment confirmation
+        shell: bash
+        env:
+          CONFIRM_DEPLOY: ${{ inputs.confirm_deploy }}
+        run: |
+          set -euo pipefail
+          if [[ "${CONFIRM_DEPLOY}" != "true" ]]; then
+            echo "Explicit reconciliation deployment confirmation is required" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate versioned runner, settings, template, and change-set gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install cfn-lint==1.55.1
+          cfn-lint "${TEMPLATE_PATH}"
+          python -m unittest \
+            tests.test_scheduled_growthbook_reconciliation \
+            tests.test_growthbook_reconciliation_changeset
+          python scripts/security_ci.py
+          python - <<'PY'
+          import json
+          import os
+
+          settings = json.load(open(os.environ["SETTINGS_PATH"], encoding="utf-8"))
+          actual = settings.get("growthbook_reconciliation")
+          expected = {
+              "environment": "preview",
+              "stack_name": os.environ["STACK_NAME"],
+              "schedule_name": os.environ["SCHEDULE_NAME"],
+              "schedule_expression": "cron(30 3 * * ? *)",
+              "timezone": "Europe/Bratislava",
+              "rolling_partition_days": 40,
+              "max_raw_events": 50000,
+              "source_task_family": os.environ["SOURCE_TASK_FAMILY"],
+          }
+          if actual != expected:
+              raise SystemExit(f"GrowthBook reconciliation settings drift: {actual!r}")
+          PY
+
+      - name: Configure authenticated AWS deployment identity
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve exact source runtime, network, policy, and immutable image
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+          aws cloudformation describe-stacks \
+            --stack-name "${COLLECTOR_STACK_NAME}" \
+            --region "${AWS_REGION}" > collector-stack.json
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > source-schedule-before.json
+
+          SOURCE_TASK_DEFINITION="$(python3 - <<'PY'
+          import json
+          import os
+
+          schedule = json.load(open("source-schedule-before.json", encoding="utf-8"))
+          if schedule.get("Name") != os.environ["SOURCE_SCHEDULE"] or schedule.get("State") != "ENABLED":
+              raise SystemExit("VEVO source reporting schedule identity/state drift")
+          target = schedule.get("Target") or {}
+          ecs = target.get("EcsParameters") or {}
+          task_definition = str(ecs.get("TaskDefinitionArn") or "")
+          if f"task-definition/{os.environ['SOURCE_TASK_FAMILY']}:" not in task_definition:
+              raise SystemExit(f"unexpected source task definition: {task_definition}")
+          print(task_definition)
+          PY
+          )"
+          aws ecs describe-task-definition \
+            --task-definition "${SOURCE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > source-task-definition.json
+
+          IMAGE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag=latest \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Could not resolve immutable VEVO reporting image digest" >&2
+            exit 1
+          fi
+          IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+
+          python3 - "${IMAGE_IDENTIFIER}" <<'PY' > candidate-task-definition.json
+          import copy
+          import json
+          import os
+          import sys
+
+          image = sys.argv[1]
+          source = json.load(open("source-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          allowed = {
+              "taskRoleArn", "executionRoleArn", "networkMode", "containerDefinitions",
+              "volumes", "placementConstraints", "requiresCompatibilities", "cpu", "memory",
+              "ipcMode", "pidMode", "proxyConfiguration", "inferenceAccelerators",
+              "ephemeralStorage", "runtimePlatform",
+          }
+          candidate = {
+              key: copy.deepcopy(value)
+              for key, value in source.items()
+              if key in allowed and value not in (None, [], {})
+          }
+          candidate["family"] = os.environ["TARGET_TASK_FAMILY"]
+          containers = candidate.get("containerDefinitions") or []
+          if len(containers) != 1:
+              raise SystemExit(f"expected one VEVO reporting container, got {len(containers)}")
+          container = containers[0]
+          container["image"] = image
+          container["command"] = [
+              "/bin/bash", "-lc",
+              "cd /app && python scripts/run_scheduled_growthbook_reconciliation.py",
+          ]
+          secret_names = {str(row.get("name") or "") for row in container.get("secrets") or []}
+          if "BIZNISWEB_API_TOKEN" not in secret_names:
+              raise SystemExit("candidate task does not inherit the managed BiznisWeb token reference")
+          expected_task_role = (
+              f"arn:aws:iam::{os.environ['EXPECTED_ACCOUNT_ID']}:role/"
+              f"{os.environ['EXPECTED_TASK_ROLE']}"
+          )
+          if candidate.get("taskRoleArn") != expected_task_role:
+              raise SystemExit(f"unexpected VEVO task role: {candidate.get('taskRoleArn')}")
+          if not str(candidate.get("executionRoleArn") or "").startswith(
+              f"arn:aws:iam::{os.environ['EXPECTED_ACCOUNT_ID']}:role/"
+          ):
+              raise SystemExit("unexpected VEVO execution role")
+          log_options = (container.get("logConfiguration") or {}).get("options") or {}
+          if not log_options.get("awslogs-group") or not log_options.get("awslogs-stream-prefix"):
+              raise SystemExit("candidate task must retain CloudWatch logs")
+          json.dump(candidate, sys.stdout)
+          PY
+
+          CANDIDATE_TASK_DEFINITION="$(aws ecs register-task-definition \
+            --cli-input-json file://candidate-task-definition.json \
+            --region "${AWS_REGION}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+          aws ecs describe-task-definition \
+            --task-definition "${CANDIDATE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > candidate-task-definition-response.json
+
+          python3 <<'PY' > network.json
+          import json
+          schedule = json.load(open("source-schedule-before.json", encoding="utf-8"))
+          raw = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
+          value = {
+              "awsvpcConfiguration": {
+                  "subnets": raw.get("Subnets") or raw.get("subnets") or [],
+                  "securityGroups": raw.get("SecurityGroups") or raw.get("securityGroups") or [],
+                  "assignPublicIp": raw.get("AssignPublicIp") or raw.get("assignPublicIp") or "DISABLED",
+              }
+          }
+          if len(value["awsvpcConfiguration"]["subnets"]) < 2:
+              raise SystemExit("source schedule must expose at least two subnets")
+          if not value["awsvpcConfiguration"]["securityGroups"]:
+              raise SystemExit("source schedule must expose a security group")
+          print(json.dumps(value))
+          PY
+
+          python3 <<'PY' > runtime.env
+          import json
+          import os
+
+          stack = json.load(open("collector-stack.json", encoding="utf-8"))["Stacks"][0]
+          if stack.get("StackStatus") != "UPDATE_COMPLETE":
+              raise SystemExit(f"collector stack is not UPDATE_COMPLETE: {stack.get('StackStatus')}")
+          parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack.get("Parameters") or []}
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs") or []}
+          if parameters.get("Environment") != "preview" or parameters.get("PublicRouteEnabled") != "true":
+              raise SystemExit("collector stack is not the active Preview boundary")
+          required_outputs = {"EventBucketName", "ReportingPolicyArn"}
+          if not required_outputs.issubset(outputs):
+              raise SystemExit("collector stack is missing reconciliation outputs")
+
+          schedule = json.load(open("source-schedule-before.json", encoding="utf-8"))
+          ecs = schedule["Target"]["EcsParameters"]
+          network = json.load(open("network.json", encoding="utf-8"))["awsvpcConfiguration"]
+          task = json.load(open("candidate-task-definition-response.json", encoding="utf-8"))["taskDefinition"]
+          container = task["containerDefinitions"][0]
+          logs = (container.get("logConfiguration") or {}).get("options") or {}
+          values = {
+              "EVENT_BUCKET": outputs["EventBucketName"],
+              "REPORTING_POLICY_ARN": outputs["ReportingPolicyArn"],
+              "CLUSTER_ARN": schedule["Target"]["Arn"],
+              "LAUNCH_TYPE": ecs.get("LaunchType") or "FARGATE",
+              "PLATFORM_VERSION": ecs.get("PlatformVersion") or "LATEST",
+              "ASSIGN_PUBLIC_IP": network["assignPublicIp"],
+              "SUBNET_IDS": ",".join(network["subnets"]),
+              "SECURITY_GROUP_IDS": ",".join(network["securityGroups"]),
+              "CONTAINER_NAME": container["name"],
+              "TASK_ROLE_ARN": task["taskRoleArn"],
+              "EXECUTION_ROLE_ARN": task["executionRoleArn"],
+              "LOG_GROUP": logs["awslogs-group"],
+              "LOG_PREFIX": logs["awslogs-stream-prefix"],
+          }
+          for key, value in sorted(values.items()):
+              if not value or "\n" in value or "\r" in value:
+                  raise SystemExit(f"invalid runtime value: {key}")
+              print(f"{key}={value}")
+          PY
+          cat runtime.env >> "${GITHUB_ENV}"
+          {
+            echo "SOURCE_TASK_DEFINITION=${SOURCE_TASK_DEFINITION}"
+            echo "CANDIDATE_TASK_DEFINITION=${CANDIDATE_TASK_DEFINITION}"
+            echo "IMAGE_DIGEST=${IMAGE_DIGEST}"
+            echo "IMAGE_IDENTIFIER=${IMAGE_IDENTIFIER}"
+          } >> "${GITHUB_ENV}"
+
+          TASK_ROLE_NAME="${TASK_ROLE_ARN##*/}"
+          aws iam list-attached-role-policies --role-name "${TASK_ROLE_NAME}" > task-role-policies.json
+          python3 <<'PY'
+          import json
+          import os
+          policies = {
+              row["PolicyArn"]
+              for row in json.load(open("task-role-policies.json", encoding="utf-8")).get("AttachedPolicies") or []
+          }
+          if os.environ["REPORTING_POLICY_ARN"] not in policies:
+              raise SystemExit("VEVO task role is missing the exact GrowthBook reporting policy")
+          PY
+
+          echo "PREDEPLOY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=pending-task:service=${SCHEDULE_NAME}:path=${RUNTIME_PATH}:task-definition=${CANDIDATE_TASK_DEFINITION}:image=${IMAGE_IDENTIFIER}"
+
+      - name: Run exact Fargate localhost and marker hard gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY' > host-gate-overrides.json
+          import json
+          import os
+          print(json.dumps({"containerOverrides": [{
+              "name": os.environ["CONTAINER_NAME"],
+              "command": ["/bin/bash", "/app/scripts/growthbook_preview_reconcile_host_gate.sh"],
+              "environment": [
+                  {"name": "REPORT_PROJECT", "value": "vevo"},
+                  {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                  {"name": "GROWTHBOOK_RECONCILE_VERSION", "value": os.environ["IMAGE_DIGEST"]},
+              ],
+          }]}))
+          PY
+          aws ecs run-task \
+            --cluster "${CLUSTER_ARN}" \
+            --task-definition "${CANDIDATE_TASK_DEFINITION}" \
+            --launch-type FARGATE \
+            --platform-version "${PLATFORM_VERSION}" \
+            --network-configuration file://network.json \
+            --overrides file://host-gate-overrides.json \
+            --group "${SCHEDULE_NAME}" \
+            --started-by "vevo-growthbook-reconcile-host-${GITHUB_RUN_ID}" \
+            --region "${AWS_REGION}" > host-gate-task.json
+          HOST_TASK_ARN="$(python3 - <<'PY'
+          import json
+          run = json.load(open("host-gate-task.json", encoding="utf-8"))
+          if run.get("failures") or len(run.get("tasks") or []) != 1:
+              raise SystemExit(f"host gate failed to start: {run}")
+          print(run["tasks"][0]["taskArn"])
+          PY
+          )"
+          aws ecs wait tasks-stopped --cluster "${CLUSTER_ARN}" --tasks "${HOST_TASK_ARN}" --region "${AWS_REGION}"
+          aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${HOST_TASK_ARN}" --region "${AWS_REGION}" > host-gate-state.json
+          readarray -t HOST_VALUES < <(python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          expected = sys.argv[1]
+          task = json.load(open("host-gate-state.json", encoding="utf-8"))["tasks"][0]
+          containers = task.get("containers") or []
+          if len(containers) != 1 or containers[0].get("exitCode") != 0:
+              raise SystemExit(f"host gate task failed: {containers}")
+          if containers[0].get("imageDigest") != expected:
+              raise SystemExit("host gate image digest drift")
+          details = [row for attachment in task.get("attachments") or [] for row in attachment.get("details") or []]
+          private_ip = next((row.get("value") for row in details if row.get("name") == "privateIPv4Address"), "")
+          if not private_ip:
+              raise SystemExit("host gate task private IP missing")
+          print(task["taskArn"].rsplit("/", 1)[-1])
+          print(private_ip)
+          print(containers[0].get("logStreamName") or "")
+          PY
+          )
+          HOST_TASK_ID="${HOST_VALUES[0]}"
+          HOST_PRIVATE_IP="${HOST_VALUES[1]}"
+          HOST_LOG_STREAM="${HOST_VALUES[2]:-${LOG_PREFIX}/${CONTAINER_NAME}/${HOST_TASK_ID}}"
+          HOST_LOG_READY=false
+          for _ in $(seq 1 30); do
+            if aws logs get-log-events \
+              --log-group-name "${LOG_GROUP}" \
+              --log-stream-name "${HOST_LOG_STREAM}" \
+              --start-from-head \
+              --region "${AWS_REGION}" > host-gate-logs.json 2>/dev/null && \
+              python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          digest = sys.argv[1]
+          messages = [row.get("message", "") for row in json.load(open("host-gate-logs.json", encoding="utf-8")).get("events") or []]
+          required = {
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:preview:{digest}",
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{digest}",
+          }
+          raise SystemExit(0 if all(any(marker in message for message in messages) for marker in required) else 1)
+          PY
+            then
+              HOST_LOG_READY=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${HOST_LOG_READY}" != "true" ]]; then
+            echo "Host-gate CloudWatch markers did not arrive within 60 seconds" >&2
+            exit 1
+          fi
+          python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          digest = sys.argv[1]
+          messages = [row.get("message", "") for row in json.load(open("host-gate-logs.json", encoding="utf-8")).get("events") or []]
+          required = {
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:preview:{digest}",
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{digest}",
+          }
+          missing = sorted(marker for marker in required if not any(marker in message for message in messages))
+          if missing:
+              raise SystemExit(f"host gate markers missing: {missing}")
+          PY
+          {
+            echo "HOST_TASK_ID=${HOST_TASK_ID}"
+            echo "HOST_PRIVATE_IP=${HOST_PRIVATE_IP}"
+          } >> "${GITHUB_ENV}"
+          echo "HARD_GATE_OK:instance-id=N/A:Fargate:private-ip=${HOST_PRIVATE_IP}:service=${SCHEDULE_NAME}:path=${RUNTIME_PATH}:task=${HOST_TASK_ID}:image=${IMAGE_IDENTIFIER}"
+
+      - name: Create or update the schedule stack in disabled state
+        shell: bash
+        run: |
+          set -euo pipefail
+          if aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${AWS_REGION}" > existing-stack.json 2>/dev/null; then
+            CHANGE_TYPE=UPDATE
+          else
+            CHANGE_TYPE=CREATE
+          fi
+          echo "CHANGE_TYPE=${CHANGE_TYPE}" >> "${GITHUB_ENV}"
+          CHANGE_SET="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --change-set-type "${CHANGE_TYPE}" \
+            --template-body "file://${TEMPLATE_PATH}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameters \
+              ParameterKey=Environment,ParameterValue=preview \
+              ParameterKey=ClusterArn,ParameterValue="${CLUSTER_ARN}" \
+              ParameterKey=TaskDefinitionArn,ParameterValue="${CANDIDATE_TASK_DEFINITION}" \
+              ParameterKey=TaskRoleArn,ParameterValue="${TASK_ROLE_ARN}" \
+              ParameterKey=ExecutionRoleArn,ParameterValue="${EXECUTION_ROLE_ARN}" \
+              ParameterKey=ContainerName,ParameterValue="${CONTAINER_NAME}" \
+              ParameterKey=EventBucketName,ParameterValue="${EVENT_BUCKET}" \
+              ParameterKey=LogGroupName,ParameterValue="${LOG_GROUP}" \
+              ParameterKey=SubnetIds,ParameterValue="${SUBNET_IDS}" \
+              ParameterKey=SecurityGroupIds,ParameterValue="${SECURITY_GROUP_IDS}" \
+              ParameterKey=AssignPublicIp,ParameterValue="${ASSIGN_PUBLIC_IP}" \
+              ParameterKey=PlatformVersion,ParameterValue="${PLATFORM_VERSION}" \
+              ParameterKey=ScheduleState,ParameterValue=DISABLED \
+              ParameterKey=ScheduleExpression,ParameterValue='cron(30 3 * * ? *)' \
+              ParameterKey=ScheduleTimezone,ParameterValue=Europe/Bratislava \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          aws cloudformation describe-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --include-property-values \
+            --region "${AWS_REGION}" > candidate-change-set.json
+          python scripts/validate_growthbook_reconciliation_changeset.py \
+            --change-set candidate-change-set.json \
+            --change-set-type "${CHANGE_TYPE}" \
+            --phase candidate
+          aws cloudformation execute-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          if [[ "${CHANGE_TYPE}" == "CREATE" ]]; then
+            aws cloudformation wait stack-create-complete --stack-name "${STACK_NAME}" --region "${AWS_REGION}"
+          else
+            aws cloudformation wait stack-update-complete --stack-name "${STACK_NAME}" --region "${AWS_REGION}"
+          fi
+          aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > disabled-schedule.json
+          python3 - <<'PY'
+          import json
+          schedule = json.load(open("disabled-schedule.json", encoding="utf-8"))
+          if schedule.get("State") != "DISABLED":
+              raise SystemExit("reconciliation schedule was not created disabled")
+          PY
+          echo "GROWTHBOOK_RECONCILIATION_DISABLED_STACK_OK:${STACK_NAME}:${CANDIDATE_TASK_DEFINITION}"
+
+      - name: Run exact scheduled command once and verify success marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY' > reconciliation-overrides.json
+          import json
+          import os
+          print(json.dumps({"containerOverrides": [{
+              "name": os.environ["CONTAINER_NAME"],
+              "command": ["/bin/bash", "-lc", "cd /app && python scripts/run_scheduled_growthbook_reconciliation.py"],
+              "environment": [
+                  {"name": "REPORT_PROJECT", "value": "vevo"},
+                  {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                  {"name": "GROWTHBOOK_EVENT_BUCKET", "value": os.environ["EVENT_BUCKET"]},
+                  {"name": "GROWTHBOOK_FACT_PUBLISH_ENABLED", "value": "true"},
+                  {"name": "AWS_REGION", "value": os.environ["AWS_REGION"]},
+              ],
+          }]}))
+          PY
+          aws ecs run-task \
+            --cluster "${CLUSTER_ARN}" \
+            --task-definition "${CANDIDATE_TASK_DEFINITION}" \
+            --launch-type FARGATE \
+            --platform-version "${PLATFORM_VERSION}" \
+            --network-configuration file://network.json \
+            --overrides file://reconciliation-overrides.json \
+            --group "${SCHEDULE_NAME}" \
+            --started-by "vevo-growthbook-reconcile-once-${GITHUB_RUN_ID}" \
+            --region "${AWS_REGION}" > reconciliation-task.json
+          RECONCILIATION_TASK_ARN="$(python3 - <<'PY'
+          import json
+          run = json.load(open("reconciliation-task.json", encoding="utf-8"))
+          if run.get("failures") or len(run.get("tasks") or []) != 1:
+              raise SystemExit(f"reconciliation failed to start: {run}")
+          print(run["tasks"][0]["taskArn"])
+          PY
+          )"
+          aws ecs wait tasks-stopped --cluster "${CLUSTER_ARN}" --tasks "${RECONCILIATION_TASK_ARN}" --region "${AWS_REGION}"
+          aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${RECONCILIATION_TASK_ARN}" --region "${AWS_REGION}" > reconciliation-state.json
+          readarray -t RECONCILIATION_VALUES < <(python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          expected = sys.argv[1]
+          task = json.load(open("reconciliation-state.json", encoding="utf-8"))["tasks"][0]
+          containers = task.get("containers") or []
+          if len(containers) != 1 or containers[0].get("exitCode") != 0:
+              raise SystemExit(f"one-shot reconciliation failed: {containers}")
+          if containers[0].get("imageDigest") != expected:
+              raise SystemExit("one-shot reconciliation image digest drift")
+          details = [row for attachment in task.get("attachments") or [] for row in attachment.get("details") or []]
+          private_ip = next((row.get("value") for row in details if row.get("name") == "privateIPv4Address"), "")
+          if not private_ip:
+              raise SystemExit("one-shot reconciliation private IP missing")
+          print(task["taskArn"].rsplit("/", 1)[-1])
+          print(private_ip)
+          print(containers[0].get("logStreamName") or "")
+          PY
+          )
+          RECONCILIATION_TASK_ID="${RECONCILIATION_VALUES[0]}"
+          RECONCILIATION_PRIVATE_IP="${RECONCILIATION_VALUES[1]}"
+          RECONCILIATION_LOG_STREAM="${RECONCILIATION_VALUES[2]:-${LOG_PREFIX}/${CONTAINER_NAME}/${RECONCILIATION_TASK_ID}}"
+          RECONCILIATION_LOG_READY=false
+          for _ in $(seq 1 30); do
+            if aws logs get-log-events \
+              --log-group-name "${LOG_GROUP}" \
+              --log-stream-name "${RECONCILIATION_LOG_STREAM}" \
+              --start-from-head \
+              --region "${AWS_REGION}" > reconciliation-logs.json 2>/dev/null && \
+              python3 - <<'PY'
+          import json
+          messages = [row.get("message", "") for row in json.load(open("reconciliation-logs.json", encoding="utf-8")).get("events") or []]
+          has_marker = any("GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:" in message for message in messages)
+          has_summary = any(message.strip().startswith("{") and '"mode":"publish"' in message for message in messages)
+          raise SystemExit(0 if has_marker and has_summary else 1)
+          PY
+            then
+              RECONCILIATION_LOG_READY=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${RECONCILIATION_LOG_READY}" != "true" ]]; then
+            echo "One-shot reconciliation CloudWatch marker/summary did not arrive within 60 seconds" >&2
+            exit 1
+          fi
+          python3 <<'PY' > reconciliation-summary.env
+          import json
+          messages = [row.get("message", "") for row in json.load(open("reconciliation-logs.json", encoding="utf-8")).get("events") or []]
+          marker = next((message for message in messages if "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:" in message), "")
+          summaries = []
+          for message in messages:
+              text = message.strip()
+              if text.startswith("{") and '"mode":"publish"' in text:
+                  summaries.append(json.loads(text))
+          if not marker or len(summaries) != 1:
+              raise SystemExit("one-shot reconciliation success marker/summary missing")
+          summary = summaries[0]
+          raw_events = summary.get("raw_events")
+          if summary.get("event_partitions") != 40 or type(raw_events) is not int or not 0 <= raw_events <= 50000:
+              raise SystemExit(f"one-shot reconciliation bounds drift: {summary}")
+          published = summary.get("published") or {}
+          expected = {
+              "device_facts": summary.get("device_facts"),
+              "performance_facts": summary.get("performance_facts"),
+              "quality_reports": summary.get("quality_reports"),
+          }
+          if published != expected:
+              raise SystemExit("one-shot generated/published counts differ")
+          for key in ("raw_events", "device_facts", "performance_facts", "quality_reports"):
+              print(f"{key.upper()}={summary[key]}")
+          PY
+          cat reconciliation-summary.env >> "${GITHUB_ENV}"
+          {
+            echo "RECONCILIATION_TASK_ID=${RECONCILIATION_TASK_ID}"
+            echo "RECONCILIATION_PRIVATE_IP=${RECONCILIATION_PRIVATE_IP}"
+          } >> "${GITHUB_ENV}"
+          echo "GROWTHBOOK_RECONCILIATION_ONE_SHOT_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP}:service=${SCHEDULE_NAME}:path=${RUNTIME_PATH}:task=${RECONCILIATION_TASK_ID}"
+
+      - name: Enable only the verified reconciliation schedule
+        if: ${{ inputs.enable_schedule }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANGE_SET="activate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --change-set-type UPDATE \
+            --template-body "file://${TEMPLATE_PATH}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameters \
+              ParameterKey=Environment,UsePreviousValue=true \
+              ParameterKey=ClusterArn,UsePreviousValue=true \
+              ParameterKey=TaskDefinitionArn,UsePreviousValue=true \
+              ParameterKey=TaskRoleArn,UsePreviousValue=true \
+              ParameterKey=ExecutionRoleArn,UsePreviousValue=true \
+              ParameterKey=ContainerName,UsePreviousValue=true \
+              ParameterKey=EventBucketName,UsePreviousValue=true \
+              ParameterKey=LogGroupName,UsePreviousValue=true \
+              ParameterKey=SubnetIds,UsePreviousValue=true \
+              ParameterKey=SecurityGroupIds,UsePreviousValue=true \
+              ParameterKey=AssignPublicIp,UsePreviousValue=true \
+              ParameterKey=PlatformVersion,UsePreviousValue=true \
+              ParameterKey=ScheduleState,ParameterValue=ENABLED \
+              ParameterKey=ScheduleExpression,UsePreviousValue=true \
+              ParameterKey=ScheduleTimezone,UsePreviousValue=true \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          aws cloudformation describe-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --include-property-values \
+            --region "${AWS_REGION}" > activation-change-set.json
+          python scripts/validate_growthbook_reconciliation_changeset.py \
+            --change-set activation-change-set.json \
+            --change-set-type UPDATE \
+            --phase activate
+          aws cloudformation execute-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --region "${AWS_REGION}"
+          aws cloudformation wait stack-update-complete --stack-name "${STACK_NAME}" --region "${AWS_REGION}"
+
+      - name: Read back exact schedule, role, monitoring, and unchanged source schedule
+        shell: bash
+        env:
+          ENABLE_SCHEDULE: ${{ inputs.enable_schedule }}
+        run: |
+          set -euo pipefail
+          aws scheduler get-schedule --name "${SCHEDULE_NAME}" --region "${AWS_REGION}" > deployed-schedule.json
+          aws scheduler get-schedule --name "${SOURCE_SCHEDULE}" --region "${AWS_REGION}" > source-schedule-after.json
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${AWS_REGION}" > deployed-stack.json
+          aws cloudwatch describe-alarms \
+            --alarm-names \
+              vevo-growthbook-reconcile-preview-failure \
+              vevo-growthbook-reconcile-preview-missing-success \
+              vevo-growthbook-reconcile-preview-dlq \
+            --region "${AWS_REGION}" > deployed-alarms.json
+          python3 <<'PY'
+          import json
+          import os
+
+          before = json.load(open("source-schedule-before.json", encoding="utf-8"))
+          after = json.load(open("source-schedule-after.json", encoding="utf-8"))
+          if before != after:
+              raise SystemExit("VEVO reporting source schedule changed during reconciliation deploy")
+
+          schedule = json.load(open("deployed-schedule.json", encoding="utf-8"))
+          expected_state = "ENABLED" if os.environ["ENABLE_SCHEDULE"] == "true" else "DISABLED"
+          if schedule.get("Name") != os.environ["SCHEDULE_NAME"] or schedule.get("State") != expected_state:
+              raise SystemExit("reconciliation schedule identity/state drift")
+          if schedule.get("ScheduleExpression") != "cron(30 3 * * ? *)":
+              raise SystemExit("reconciliation schedule expression drift")
+          if schedule.get("ScheduleExpressionTimezone") != "Europe/Bratislava":
+              raise SystemExit("reconciliation schedule timezone drift")
+          target = schedule.get("Target") or {}
+          ecs = target.get("EcsParameters") or {}
+          if target.get("Arn") != os.environ["CLUSTER_ARN"]:
+              raise SystemExit("reconciliation cluster drift")
+          if ecs.get("TaskDefinitionArn") != os.environ["CANDIDATE_TASK_DEFINITION"]:
+              raise SystemExit("reconciliation task definition drift")
+          if ecs.get("Group") != os.environ["SCHEDULE_NAME"] or ecs.get("TaskCount") != 1:
+              raise SystemExit("reconciliation ECS group/count drift")
+          if ecs.get("EnableExecuteCommand") is not False:
+              raise SystemExit("reconciliation execute-command must remain disabled")
+          retry = target.get("RetryPolicy") or {}
+          if retry != {"MaximumEventAgeInSeconds": 3600, "MaximumRetryAttempts": 2}:
+              raise SystemExit("reconciliation retry policy drift")
+          actual_input = json.loads(target.get("Input") or "{}")
+          expected_input = {
+              "containerOverrides": [{
+                  "name": os.environ["CONTAINER_NAME"],
+                  "command": ["/bin/bash", "-lc", "cd /app && python scripts/run_scheduled_growthbook_reconciliation.py"],
+                  "environment": [
+                      {"name": "REPORT_PROJECT", "value": "vevo"},
+                      {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                      {"name": "GROWTHBOOK_EVENT_BUCKET", "value": os.environ["EVENT_BUCKET"]},
+                      {"name": "GROWTHBOOK_FACT_PUBLISH_ENABLED", "value": "true"},
+                      {"name": "AWS_REGION", "value": os.environ["AWS_REGION"]},
+                  ],
+              }]
+          }
+          if actual_input != expected_input:
+              raise SystemExit("reconciliation target override drift")
+
+          stack = json.load(open("deployed-stack.json", encoding="utf-8"))["Stacks"][0]
+          if stack.get("StackStatus") != "UPDATE_COMPLETE" and not stack.get("StackStatus", "").endswith("CREATE_COMPLETE"):
+              raise SystemExit("reconciliation stack is not complete")
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs") or []}
+          if outputs.get("TargetTaskDefinitionArn") != os.environ["CANDIDATE_TASK_DEFINITION"]:
+              raise SystemExit("reconciliation stack task output drift")
+          alarms = json.load(open("deployed-alarms.json", encoding="utf-8")).get("MetricAlarms") or []
+          if {row.get("AlarmName") for row in alarms} != {
+              "vevo-growthbook-reconcile-preview-failure",
+              "vevo-growthbook-reconcile-preview-missing-success",
+              "vevo-growthbook-reconcile-preview-dlq",
+          }:
+              raise SystemExit("reconciliation alarms missing")
+          PY
+          echo "GROWTHBOOK_RECONCILIATION_SCHEDULE_READBACK_OK:${SCHEDULE_NAME}:${CANDIDATE_TASK_DEFINITION}:${ENABLE_SCHEDULE}"
+
+      - name: Deployment summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "## VEVO GrowthBook Preview reconciliation"
+            echo "- Instance: \`N/A (ECS/Fargate)\`"
+            echo "- Service: \`${SCHEDULE_NAME}\`"
+            echo "- Runtime: \`${RUNTIME_PATH}\`"
+            echo "- Host task/IP: \`${HOST_TASK_ID:-not-run}\` / \`${HOST_PRIVATE_IP:-not-run}\`"
+            echo "- Reconcile task/IP: \`${RECONCILIATION_TASK_ID:-not-run}\` / \`${RECONCILIATION_PRIVATE_IP:-not-run}\`"
+            echo "- Image: \`${IMAGE_IDENTIFIER:-not-resolved}\`"
+            echo "- Raw/device/performance/quality: \`${RAW_EVENTS:-not-run}\` / \`${DEVICE_FACTS:-not-run}\` / \`${PERFORMANCE_FACTS:-not-run}\` / \`${QUALITY_REPORTS:-not-run}\`"
+            echo "- Production GrowthBook allocation: \`0%\` (unchanged)"
+            echo "- GTM: unpublished (unchanged)"
+          } >> "${GITHUB_STEP_SUMMARY}"
