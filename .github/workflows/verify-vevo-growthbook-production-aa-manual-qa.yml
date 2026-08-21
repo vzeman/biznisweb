@@ -1,0 +1,165 @@
+name: Verify VEVO GrowthBook Production A/A Manual QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_manual_qa:
+        description: Type true to validate and package the reviewed Production A/A browser QA observation
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-aa-manual-qa
+  cancel-in-progress: false
+
+env:
+  SNAPSHOT_MANIFEST: projects/vevo/growthbook_aa_snapshot.json
+  OBSERVATION_FILE: projects/vevo/growthbook_aa_manual_qa_observation.json
+  EVIDENCE_FILE: vevo-growthbook-aa-manual-qa-evidence.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  verify-manual-qa:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Require exact manual QA confirmation
+        env:
+          CONFIRM_MANUAL_QA: ${{ inputs.confirm_manual_qa }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_MANUAL_QA}" == 'true' ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate reviewed observation gate before evidence creation
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_aa_manual_qa_evidence \
+            tests.test_growthbook_aa_manual_qa_workflow \
+            tests.test_growthbook_aa_snapshot_assembler \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+
+          manifest = json.load(open(os.environ['SNAPSHOT_MANIFEST'], encoding='utf-8'))
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          manual = manifest.get('manual_qa_evidence') or {}
+          production = (workspace.get('athena') or {}).get('production') or {}
+          clone = production.get('growthbook_clone') or {}
+          experiments = {
+              row.get('id'): row for row in workspace.get('experiments') or []
+          }
+
+          if manifest.get('snapshot_build_allowed') is not False:
+              raise SystemExit('snapshot build must remain closed while manual evidence is produced')
+          if manual.get('producer_allowed') is not True:
+              raise SystemExit('manual QA evidence producer gate is closed')
+          if manual.get('observation_status') != 'verified_reviewed_browser_qa':
+              raise SystemExit('reviewed browser QA observation is not recorded')
+          if manual.get('observation_file') != os.environ['OBSERVATION_FILE']:
+              raise SystemExit('manual QA observation path drift')
+          observation_sha256 = str(manual.get('observation_sha256') or '')
+          if re.fullmatch(r'[0-9a-f]{64}', observation_sha256) is None:
+              raise SystemExit('manual QA observation SHA-256 is missing')
+          if not pathlib.Path(os.environ['OBSERVATION_FILE']).is_file():
+              raise SystemExit('manual QA observation file is missing')
+          if manual.get('status') != 'not_recorded' or any(
+              manual.get(field) is not None for field in ('run_id', 'main_commit', 'sha256')
+          ):
+              raise SystemExit('manual QA producer must start from an unrecorded artifact state')
+
+          if workspace.get('workspace', {}).get('production_allocation_percent') != 100:
+              raise SystemExit('Production A/A allocation is not the frozen 100 percent')
+          if workspace.get('decision_gates', {}).get('production_activation_allowed') is not True:
+              raise SystemExit('Production activation evidence is not recorded')
+          if production.get('successful_foundation_deployment') is None:
+              raise SystemExit('Production foundation evidence is missing')
+          if production.get('credentials_created') is not True:
+              raise SystemExit('Production reader evidence is missing')
+          if clone.get('status') != 'verified_complete' or clone.get('clone_allowed') is not False:
+              raise SystemExit('Production GrowthBook clone must be complete and re-closed')
+          aa = experiments.get('vevo-sk-aa-001') or {}
+          cta = experiments.get('vevo-sk-product-cta-color-001') or {}
+          if aa.get('status') != 'running_production_aa_only':
+              raise SystemExit('Production A/A is not the only running experiment')
+          if cta.get('status') != 'unstarted_draft' or cta.get('feature_rule_status') != 'no_live_rules':
+              raise SystemExit('CTA A/B must remain unstarted during manual A/A QA')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f'OBSERVATION_SHA256={observation_sha256}\n')
+          print('PRODUCTION_AA_MANUAL_QA_LOCAL_GATE_OK:allocation=100:cta=unstarted:mutation=none')
+          PY
+
+      - name: Build canonical run-bound manual QA evidence offline
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_aa_manual_qa_evidence.py \
+            --observation "${OBSERVATION_FILE}" \
+            --observation-sha256 "${OBSERVATION_SHA256}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --main-commit "${GITHUB_SHA}" \
+            --output "${EVIDENCE_FILE}"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+
+          raw = open(os.environ['EVIDENCE_FILE'], 'rb').read()
+          evidence = json.loads(raw)
+          if evidence.get('source_run_id') != os.environ['GITHUB_RUN_ID']:
+              raise SystemExit('manual QA evidence run ID drift')
+          if evidence.get('source_main_commit') != os.environ['GITHUB_SHA']:
+              raise SystemExit('manual QA evidence main commit drift')
+          if evidence.get('contains_event_or_device_ids') is not False:
+              raise SystemExit('manual QA evidence identity boundary drift')
+          if evidence.get('contains_customer_or_order_data') is not False:
+              raise SystemExit('manual QA evidence customer/order boundary drift')
+          if evidence.get('unplanned_mutation_observed') is not False:
+              raise SystemExit('manual QA observed an unplanned mutation')
+          print(
+              'PRODUCTION_AA_MANUAL_QA_EVIDENCE_READY:'
+              f"sha256={hashlib.sha256(raw).hexdigest()}:winner=false:cta=unchanged"
+          )
+          PY
+
+      - name: Upload sanitized manual QA evidence only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-aa-manual-qa-evidence
+          path: vevo-growthbook-aa-manual-qa-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write sanitized manual QA summary
+        run: |
+          set -euo pipefail
+          {
+            echo '## VEVO Production A/A manual QA evidence'
+            echo '- Browser QA observation: `reviewed and hash-bound`'
+            echo '- Production allocation: `100% A/A only`'
+            echo '- CTA A/B: `unstarted`'
+            echo '- Event/device IDs and customer/order data: `excluded`'
+            echo '- GrowthBook, GTM, Meta Ads and BiznisWeb mutation: `none`'
+            echo '- Winner calls allowed: `false`'
+          } >> "${GITHUB_STEP_SUMMARY}"
