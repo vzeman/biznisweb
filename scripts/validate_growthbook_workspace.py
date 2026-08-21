@@ -32,6 +32,17 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_foundation_evidence,
     )
 
+try:
+    from record_growthbook_production_reader_evidence import (
+        ReaderEvidenceRecordingError,
+        validate_reader_evidence,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.record_growthbook_production_reader_evidence import (
+        ReaderEvidenceRecordingError,
+        validate_reader_evidence,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -780,6 +791,14 @@ def validate() -> None:
         ),
         "reader_provisioning_status": "code_prepared_foundation_gate_pending",
         "reader_provisioning_allowed": False,
+        "reader_evidence_schema_version": 1,
+        "reader_evidence_file": "vevo-growthbook-production-reader-evidence.json",
+        "reader_evidence_artifact_status": "code_prepared_provisioning_pending",
+        "reader_evidence_contains_credentials": False,
+        "reader_provisioning_run_id": None,
+        "reader_provisioning_main_commit": None,
+        "reader_evidence_artifact_sha256": None,
+        "successful_reader_provisioning": None,
         "expected_iam_user_name": "vevo-growthbook-production-reader",
         "expected_iam_user_path": "/vevo/growthbook/production/",
         "successful_foundation_deployment": None,
@@ -962,6 +981,75 @@ def validate() -> None:
                 "reader_provisioning_allowed": True,
                 "successful_foundation_deployment": foundation_evidence,
                 "next_gate": "dispatch_production_reader_after_review",
+            }
+        )
+    reader_evidence = actual_production_connection.get(
+        "successful_reader_provisioning"
+    )
+    reader_evidence_verified = isinstance(reader_evidence, dict)
+    if reader_evidence_verified:
+        if not foundation_evidence_verified:
+            raise AssertionError(
+                "GrowthBook reader evidence cannot precede foundation evidence"
+            )
+        reader_run_id = actual_production_connection.get(
+            "reader_provisioning_run_id"
+        )
+        reader_main_commit = actual_production_connection.get(
+            "reader_provisioning_main_commit"
+        )
+        reader_sha256 = actual_production_connection.get(
+            "reader_evidence_artifact_sha256"
+        )
+        try:
+            validate_reader_evidence(
+                reader_evidence,
+                expected_workflow_run_id=reader_run_id,
+                expected_main_commit=reader_main_commit,
+                expected_foundation_run_id=actual_production_connection.get(
+                    "foundation_deployment_run_id"
+                ),
+                expected_foundation_main_commit=actual_production_connection.get(
+                    "foundation_deployment_main_commit"
+                ),
+                expected_foundation_sha256=actual_production_connection.get(
+                    "foundation_evidence_artifact_sha256"
+                ),
+            )
+        except (ReaderEvidenceRecordingError, TypeError) as exc:
+            raise AssertionError(
+                "GrowthBook reader evidence validation failed"
+            ) from exc
+        if (
+            not isinstance(reader_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", reader_sha256) is None
+            or hashlib.sha256(canonical_evidence_bytes(reader_evidence)).hexdigest()
+            != reader_sha256
+        ):
+            raise AssertionError("GrowthBook reader evidence SHA-256 drift")
+        expected_clone = {
+            **expected_production_connection["growthbook_clone"],
+            "status": "reader_verified_ready_for_reviewed_growthbook_clone",
+            "clone_allowed": True,
+        }
+        expected_production_connection.update(
+            {
+                "credentials_created": True,
+                "reader_provisioning_status": (
+                    "verified_active_encrypted_handoff_ready_for_growthbook"
+                ),
+                "reader_provisioning_allowed": False,
+                "reader_evidence_artifact_status": (
+                    "verified_downloaded_sha256_recorded"
+                ),
+                "reader_provisioning_run_id": reader_run_id,
+                "reader_provisioning_main_commit": reader_main_commit,
+                "reader_evidence_artifact_sha256": reader_sha256,
+                "successful_reader_provisioning": reader_evidence,
+                "growthbook_clone": expected_clone,
+                "next_gate": (
+                    "connect_production_reader_and_clone_growthbook_after_review"
+                ),
             }
         )
     if athena.get("production") != expected_production_connection:

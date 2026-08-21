@@ -95,6 +95,12 @@ def main() -> int:
         growthbook_production_reader_workflow = read(
             ".github/workflows/provision-vevo-growthbook-production-reader.yml"
         )
+        growthbook_production_reader_recorder = read(
+            "scripts/record_growthbook_production_reader_evidence.py"
+        )
+        growthbook_workspace_config = json.loads(
+            read("projects/vevo/growthbook_workspace.json")
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_aa_evaluator = read("scripts/evaluate_growthbook_aa.py")
         growthbook_receipt_summarizer = read("scripts/summarize_growthbook_receipts.py")
@@ -1014,10 +1020,16 @@ def main() -> int:
             "workspace.get('reconciliation_checkpoint', {}).get(",
             "Production foundation deployment is not recorded as verified",
             "Production reader provisioning gate is false",
+            "Production reader evidence state must remain pending",
             "verified_downloaded_sha256_recorded",
             "foundation_evidence_artifact_sha256",
             "validate_foundation_evidence",
             "canonical_evidence_bytes",
+            "READER_EVIDENCE_FILE: vevo-growthbook-production-reader-evidence.json",
+            "scripts/record_growthbook_production_reader_evidence.py build",
+            '--foundation-workflow-run-id "${FOUNDATION_WORKFLOW_RUN_ID}"',
+            '--foundation-sha256 "${FOUNDATION_EVIDENCE_SHA256}"',
+            "vevo-growthbook-production-reader-evidence.json",
             "Production foundation redeployment gate must be closed",
             "GrowthBook clone must remain disabled during reader provisioning",
             "PRODUCTION_READER_LOCAL_RELEASE_GATE_OK:",
@@ -1091,6 +1103,61 @@ def main() -> int:
                 forbidden_production_reader_marker.lower(),
                 "GrowthBook Production reader workflow contains unsafe marker: "
                 f"{forbidden_production_reader_marker}",
+            )
+        for forbidden_production_reader_recorder_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_production_reader_recorder.lower(),
+                forbidden_production_reader_recorder_marker.lower(),
+                "GrowthBook Production reader evidence recorder must remain offline: "
+                f"{forbidden_production_reader_recorder_marker}",
+            )
+        for marker in (
+            '"vevo_growthbook_production_reader_evidence"',
+            '"foundation_evidence_provenance"',
+            '"contains_access_key_id": False',
+            '"contains_secret_access_key": False',
+            '"reader evidence bytes are not canonical"',
+            '"reader evidence SHA-256 mismatch"',
+            '"Production reader manifest change-set boundary drift"',
+            "clone-ready=true",
+            "validate_foundation_evidence",
+            "canonical_evidence_bytes",
+        ):
+            require(
+                growthbook_production_reader_recorder,
+                marker,
+                "GrowthBook Production reader evidence recorder lost safety marker: "
+                f"{marker}",
+            )
+        production_reader_state = growthbook_workspace_config.get("athena", {}).get(
+            "production", {}
+        )
+        if (
+            production_reader_state.get("reader_evidence_artifact_status")
+            != "code_prepared_provisioning_pending"
+            or production_reader_state.get("reader_evidence_contains_credentials") is not False
+            or any(
+                production_reader_state.get(field) is not None
+                for field in (
+                    "reader_provisioning_run_id",
+                    "reader_provisioning_main_commit",
+                    "reader_evidence_artifact_sha256",
+                    "successful_reader_provisioning",
+                )
+            )
+        ):
+            raise AssertionError(
+                "GrowthBook Production reader evidence must remain pending in source control."
             )
         forbid(
             growthbook_template,
@@ -1568,6 +1635,7 @@ def main() -> int:
             "scripts/assemble_growthbook_aa_snapshot.py",
             "scripts/build_growthbook_aa_manual_qa_evidence.py",
             "scripts/build_growthbook_aa_automated_evidence.py",
+            "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",

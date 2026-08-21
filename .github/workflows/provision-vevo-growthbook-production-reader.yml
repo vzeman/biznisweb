@@ -28,6 +28,7 @@ env:
   EXPECTED_IMAGE_DIGEST: sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1
   IAM_USER_NAME: vevo-growthbook-production-reader
   IAM_USER_PATH: /vevo/growthbook/production/
+  READER_EVIDENCE_FILE: vevo-growthbook-production-reader-evidence.json
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -55,12 +56,14 @@ jobs:
           set -euo pipefail
           python -m unittest \
             tests.test_growthbook_production_reader_workflow \
+            tests.test_growthbook_production_reader_evidence_recorder \
             tests.test_growthbook_workspace
           python scripts/security_ci.py
           python scripts/validate_growthbook_workspace.py
           python - <<'PY'
           import hashlib
           import json
+          import os
 
           from scripts.record_growthbook_foundation_evidence import (
               FoundationEvidenceRecordingError,
@@ -97,6 +100,21 @@ jobs:
               raise SystemExit('Production foundation deploy gate must be closed')
           if production.get('credentials_created') is not False:
               raise SystemExit('Production reader credentials already exist')
+          if (
+              production.get('reader_evidence_artifact_status')
+              != 'code_prepared_provisioning_pending'
+              or production.get('reader_evidence_contains_credentials') is not False
+              or any(
+                  production.get(field) is not None
+                  for field in (
+                      'reader_provisioning_run_id',
+                      'reader_provisioning_main_commit',
+                      'reader_evidence_artifact_sha256',
+                      'successful_reader_provisioning',
+                  )
+              )
+          ):
+              raise SystemExit('Production reader evidence state must remain pending')
           if not isinstance(deployment, dict):
               raise SystemExit('successful Production foundation deployment evidence is absent')
           foundation_run_id = str(production.get('foundation_deployment_run_id') or '')
@@ -147,6 +165,10 @@ jobs:
               raise SystemExit('GTM Preview workspace must remain unpublished')
           if workspace.get('decision_gates', {}).get('production_activation_allowed') is not False:
               raise SystemExit('Production activation gate must remain false')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f'FOUNDATION_WORKFLOW_RUN_ID={foundation_run_id}\n')
+              handle.write(f'FOUNDATION_MAIN_COMMIT={foundation_main_commit}\n')
+              handle.write(f'FOUNDATION_EVIDENCE_SHA256={foundation_sha256}\n')
           print('PRODUCTION_READER_LOCAL_RELEASE_GATE_OK:route=false:registry=empty:allocation=0:clone=false')
           PY
 
@@ -477,7 +499,7 @@ jobs:
           CREATED_MARKER="${RUNNER_TEMP}/vevo-growthbook-production-reader-created"
           RECIPIENT_CERT="${RUNNER_TEMP}/vevo-growthbook-production-recipient.pem"
           ENCRYPTED_HANDOFF="${GITHUB_WORKSPACE}/vevo-growthbook-production-reader.cms"
-          SAFE_MANIFEST="${GITHUB_WORKSPACE}/vevo-growthbook-production-reader-manifest.json"
+          SAFE_MANIFEST="${GITHUB_WORKSPACE}/${READER_EVIDENCE_FILE}"
 
           cleanup_failed_provision() {
             set +e
@@ -590,32 +612,21 @@ jobs:
             exit 1
           fi
           CERT_SHA256="$(openssl x509 -in "${RECIPIENT_CERT}" -noout -fingerprint -sha256 | cut -d= -f2)"
-          export CERT_SHA256
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          manifest = {
-              'schema_version': 1,
-              'aws_account_id': os.environ['EXPECTED_ACCOUNT_ID'],
-              'aws_region': os.environ['AWS_REGION'],
-              'environment': 'production',
-              'iam_user_name': os.environ['IAM_USER_NAME'],
-              'iam_user_path': os.environ['IAM_USER_PATH'],
-              'policy_arn': os.environ['ACTIVE_GROWTHBOOK_POLICY_ARN'],
-              'stack_name': os.environ['STACK_NAME'],
-              'workgroup': os.environ['ACTIVE_GROWTHBOOK_WORKGROUP'],
-              'database': os.environ['ACTIVE_DATABASE'],
-              's3_results_url': f"s3://{os.environ['ACTIVE_EVENT_BUCKET']}/athena-results/growthbook/",
-              'recipient_certificate_sha256': os.environ['CERT_SHA256'],
-              'contains_plaintext_credentials': False,
-              'growthbook_control_plane_mutated': False,
-          }
-          Path('vevo-growthbook-production-reader-manifest.json').write_text(
-              json.dumps(manifest, indent=2) + '\n', encoding='utf-8'
-          )
-          PY
+          TASK_DEFINITION_NAME="${ACTIVE_TASK_DEFINITION##*/}"
+          python scripts/record_growthbook_production_reader_evidence.py build \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --main-commit "${GITHUB_SHA}" \
+            --foundation-workflow-run-id "${FOUNDATION_WORKFLOW_RUN_ID}" \
+            --foundation-main-commit "${FOUNDATION_MAIN_COMMIT}" \
+            --foundation-sha256 "${FOUNDATION_EVIDENCE_SHA256}" \
+            --host-task-id "${PRODUCTION_READER_HOST_TASK_ID}" \
+            --host-private-ip "${PRODUCTION_READER_HOST_PRIVATE_IP}" \
+            --task-definition "${TASK_DEFINITION_NAME}" \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" \
+            --database "${ACTIVE_DATABASE}" \
+            --workgroup "${ACTIVE_GROWTHBOOK_WORKGROUP}" \
+            --s3-results-url "s3://${ACTIVE_EVENT_BUCKET}/athena-results/growthbook/" \
+            --output "${SAFE_MANIFEST}"
           shred --remove "${CREDENTIAL_JSON}"
           rm -f "${RECIPIENT_CERT}"
           trap - ERR
@@ -628,7 +639,7 @@ jobs:
           name: vevo-growthbook-production-reader-${{ github.run_id }}
           path: |
             vevo-growthbook-production-reader.cms
-            vevo-growthbook-production-reader-manifest.json
+            vevo-growthbook-production-reader-evidence.json
           if-no-files-found: error
           retention-days: 1
 
