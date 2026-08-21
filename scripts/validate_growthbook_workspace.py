@@ -76,6 +76,21 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_contract as validate_cta_design_contract,
     )
 
+try:
+    from evaluate_growthbook_cta import (
+        CtaEvaluationError,
+        canonical_json_bytes as canonical_cta_lifecycle_bytes,
+        validate_contract as validate_cta_decision_contract,
+        validate_lifecycle_manifest as validate_cta_lifecycle_manifest,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.evaluate_growthbook_cta import (
+        CtaEvaluationError,
+        canonical_json_bytes as canonical_cta_lifecycle_bytes,
+        validate_contract as validate_cta_decision_contract,
+        validate_lifecycle_manifest as validate_cta_lifecycle_manifest,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -84,6 +99,15 @@ AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json
 CTA_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
 CTA_DESIGN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_design.json"
 CTA_STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
+CTA_DECISION_CONTRACT_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_decision_contract.json"
+)
+CTA_LIFECYCLE_RECONCILIATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_lifecycle_reconciliation.json"
+)
+CTA_LIFECYCLE_OBSERVATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_lifecycle_observation.json"
+)
 REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
 ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_production_aa_activation.json"
 
@@ -232,6 +256,24 @@ def validate() -> None:
     aa_acceptance = json.loads(AA_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
     cta_sample_plan = json.loads(CTA_SAMPLE_PLAN_PATH.read_text(encoding="utf-8"))
     cta_design = json.loads(CTA_DESIGN_PATH.read_text(encoding="utf-8"))
+    cta_decision_contract = json.loads(
+        CTA_DECISION_CONTRACT_PATH.read_text(encoding="utf-8")
+    )
+    cta_lifecycle_reconciliation = json.loads(
+        CTA_LIFECYCLE_RECONCILIATION_PATH.read_text(encoding="utf-8")
+    )
+    cta_lifecycle_observation = None
+    if cta_lifecycle_reconciliation.get("verified") is True:
+        observation_bytes = CTA_LIFECYCLE_OBSERVATION_PATH.read_bytes()
+        cta_lifecycle_observation = json.loads(observation_bytes.decode("utf-8"))
+        if observation_bytes != canonical_cta_lifecycle_bytes(
+            cta_lifecycle_observation
+        ):
+            raise AssertionError("CTA lifecycle observation is not canonical JSON")
+    elif CTA_LIFECYCLE_OBSERVATION_PATH.exists():
+        raise AssertionError(
+            "pending CTA lifecycle manifest must not have an observation file"
+        )
     if aa_acceptance != EXPECTED_AA_ACCEPTANCE:
         raise AssertionError("A/A acceptance thresholds changed")
     try:
@@ -245,6 +287,23 @@ def validate() -> None:
         )
     except CtaDesignContractError as exc:
         raise AssertionError(f"CTA design contract is invalid: {exc}") from exc
+    try:
+        validate_cta_decision_contract(cta_decision_contract)
+        validate_cta_lifecycle_manifest(
+            cta_lifecycle_reconciliation,
+            cta_lifecycle_observation,
+        )
+    except CtaEvaluationError as exc:
+        raise AssertionError(f"CTA decision contract is invalid: {exc}") from exc
+    if (
+        cta_decision_contract["decision_timing"]["minimum_full_calendar_days"]
+        != cta_sample_plan["minimum_full_calendar_days"]
+        or cta_decision_contract["decision_timing"]["maximum_full_calendar_days"]
+        != cta_sample_plan["maximum_full_calendar_days"]
+        or cta_decision_contract["expected_variation_weights"]
+        != cta_sample_plan["expected_variation_weights"]
+    ):
+        raise AssertionError("CTA decision and sample contracts differ")
 
     if (
         workspace.get("schema_version") != 1

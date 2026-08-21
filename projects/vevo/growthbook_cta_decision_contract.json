@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+  "timezone": "Europe/Bratislava",
+  "variations": [
+    "control",
+    "brand_contrast"
+  ],
+  "expected_variation_weights": {
+    "control": 0.5,
+    "brand_contrast": 0.5
+  },
+  "decision_cohort": "first_n_eligible_devices_ordered_by_first_exposure_then_device_id",
+  "primary_metric": "add_to_cart_within_24h_per_first_rendered_cta_exposed_device",
+  "primary_test": {
+    "method": "fixed_horizon_pooled_two_proportion_z_test",
+    "two_sided_alpha_percent": 5,
+    "confidence_interval": "unpooled_wald_95_percent",
+    "minimum_effect_percentage_points": 0
+  },
+  "decision_timing": {
+    "minimum_full_calendar_days": 14,
+    "maximum_full_calendar_days": 42,
+    "required_followup_days_after_assignment_stop": 14,
+    "assignment_must_be_stopped": true,
+    "one_final_look_only": true,
+    "safety_guardrails_may_stop_early": true
+  },
+  "quality_thresholds": {
+    "srm_p_value_min": 0.001,
+    "growthbook_reporting_count_difference_max_percent": 2,
+    "duplicate_event_rate_max_percent": 0.5,
+    "exact_order_join_rate_min_percent": 98,
+    "minimum_exact_joined_transactions": 1,
+    "maximum_contaminated_devices": 0,
+    "maximum_ambiguous_transactions": 0
+  },
+  "business_guardrail": {
+    "metric": "vevo_cm1_per_exposed_device_7d",
+    "method": "normal_mean_difference_from_device_sum_squares",
+    "confidence_level_percent": 95,
+    "non_inferiority_margin_relative_percent": 10,
+    "minimum_control_mean_eur": 0.01
+  },
+  "lifecycle_guardrails": {
+    "minimum_mature_joined_orders_per_arm": 20,
+    "cancelled_rate_max_increase_percentage_points": 5,
+    "refunded_rate_max_increase_percentage_points": 5,
+    "reconciliation_manifest": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json"
+  },
+  "performance_guardrails": {
+    "minimum_measured_page_loads_per_arm": 200,
+    "lcp_degradation_absolute_ms": 200,
+    "lcp_degradation_relative_percent": 10,
+    "inp_degradation_absolute_ms": 20,
+    "inp_degradation_relative_percent": 10,
+    "cls_degradation_absolute_milli": 20,
+    "client_error_rate_increase_max_percentage_points": 0.5
+  },
+  "decision_rules": {
+    "win": "fixed_sample_primary_significant_positive_and_all_safety_guardrails_pass",
+    "lose": "fixed_sample_primary_significant_negative_or_material_safety_harm",
+    "inconclusive": "fixed_sample_or_max_duration_reached_without_win_or_lose",
+    "not_ready": "assignment_running_followup_open_sample_unfrozen_or_final_gate_missing"
+  },
+  "mutation_policy": {
+    "automatic_growthbook_mutation_allowed": false,
+    "automatic_gtm_mutation_allowed": false,
+    "automatic_meta_mutation_allowed": false,
+    "automatic_biznisweb_mutation_allowed": false,
+    "price_test_allowed": false
+  }
+}
