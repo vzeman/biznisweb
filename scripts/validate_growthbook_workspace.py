@@ -96,8 +96,11 @@ def validate() -> None:
     reporting = _load(REPORTING_PATH)
     registry = _load(REGISTRY_PATH)
 
-    if workspace.get("schema_version") != 1 or workspace.get("state") != "workspace_preview_initialized":
-        raise AssertionError("GrowthBook workspace must remain an initialized Preview-only v1 contract")
+    if (
+        workspace.get("schema_version") != 1
+        or workspace.get("state") != "preview_datasource_connected"
+    ):
+        raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
     if workspace_config.get("organization_name") != "Vevo":
         raise AssertionError("GrowthBook organization read-back changed")
@@ -159,7 +162,7 @@ def validate() -> None:
     if athena.get("authentication") != "dedicated_readonly_iam_user_access_key":
         raise AssertionError("GrowthBook Cloud Athena must keep a dedicated read-only identity")
     expected_reader = {
-        "credentials_status": "created_active_not_committed",
+        "credentials_status": "created_active_stored_in_growthbook_cloud",
         "iam_user_name": "vevo-growthbook-preview-reader",
         "iam_user_arn": (
             "arn:aws:iam::919341186960:user/vevo/growthbook/preview/"
@@ -168,13 +171,29 @@ def validate() -> None:
         "policy_arn": "arn:aws:iam::919341186960:policy/vevo-growthbook-readonly-preview",
         "access_key_count": 1,
         "credential_material_committed": False,
+        "local_credential_handoff_status": "deleted_after_successful_connection",
     }
     for key, value in expected_reader.items():
         if athena.get(key) != value:
             raise AssertionError(f"GrowthBook Preview reader state drift: {key}")
     preview_athena = athena.get("preview", {})
-    if preview_athena.get("status") != "athena_reader_active_growthbook_connection_pending":
-        raise AssertionError("Preview Athena status must match the active dedicated reader")
+    expected_preview_connection = {
+        "data_source_id": "ds_19g6mmt2c4dmn",
+        "data_source_name": "VEVO Preview Experiment Facts",
+        "identifier_type": "device_id",
+        "assignment_query_name": "VEVO consented devices",
+        "assignment_query_test_status": (
+            "executed_no_rows_pending_synthetic_preview_event"
+        ),
+        "connection_verified_date": "2026-08-21",
+        "status": (
+            "growthbook_datasource_connected_assignment_query_empty_"
+            "pending_synthetic_preview_event"
+        ),
+    }
+    for key, value in expected_preview_connection.items():
+        if preview_athena.get(key) != value:
+            raise AssertionError(f"GrowthBook Preview connection state drift: {key}")
     if preview_athena.get("s3_results_url") != (
         "s3://vevo-growthbook-preview-experimentdatabucket-pj7zod15wpyr/"
         "athena-results/growthbook/"

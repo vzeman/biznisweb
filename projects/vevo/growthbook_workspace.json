@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "workspace_preview_initialized",
+  "state": "preview_datasource_connected",
   "workspace": {
     "organization_name": "Vevo",
     "organization_id": "org_19g6mmt1q79o1",
@@ -70,18 +70,24 @@
     "aws_region": "eu-central-1",
     "default_catalog": "AwsDataCatalog",
     "authentication": "dedicated_readonly_iam_user_access_key",
-    "credentials_status": "created_active_not_committed",
+    "credentials_status": "created_active_stored_in_growthbook_cloud",
     "iam_user_name": "vevo-growthbook-preview-reader",
     "iam_user_arn": "arn:aws:iam::919341186960:user/vevo/growthbook/preview/vevo-growthbook-preview-reader",
     "policy_arn": "arn:aws:iam::919341186960:policy/vevo-growthbook-readonly-preview",
     "access_key_count": 1,
     "credential_material_committed": false,
+    "local_credential_handoff_status": "deleted_after_successful_connection",
     "preview": {
+      "data_source_id": "ds_19g6mmt2c4dmn",
       "data_source_name": "VEVO Preview Experiment Facts",
       "workgroup": "vevo-growthbook-readonly-preview",
       "database": "vevo_growthbook_preview",
       "s3_results_url": "s3://vevo-growthbook-preview-experimentdatabucket-pj7zod15wpyr/athena-results/growthbook/",
-      "status": "athena_reader_active_growthbook_connection_pending"
+      "identifier_type": "device_id",
+      "assignment_query_name": "VEVO consented devices",
+      "assignment_query_test_status": "executed_no_rows_pending_synthetic_preview_event",
+      "connection_verified_date": "2026-08-21",
+      "status": "growthbook_datasource_connected_assignment_query_empty_pending_synthetic_preview_event"
     },
     "production": {
       "data_source_name": "VEVO Production Experiment Facts",

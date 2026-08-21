@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -105,7 +105,9 @@ Bootstrap entrypoints:
   - PR `#286` merged the encrypted one-time Athena-reader handoff workflow as `4b2081d5f88bb035315733630fa2804348e9faa8`; first provisioning run `32401314322` stopped before IAM creation because ECS inherits `/app` from the image and does not expose a task-definition `workingDirectory`. The failed-run cleanup found no created marker, so no IAM user or access key existed to revoke
   - PR `#287` merged the direct reader-provisioning Fargate marker gate as `ad778bd2be20fc5ece2ab70498b3bc453e91da64`; successful run `32401658468` used one-shot task `f071aeb82f5a459691bf9acaca825d19`, private IP `172.31.3.87`, service `vevo-growthbook-collector-preview`, `/app`, and digest `sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1`, with both exact localhost health/marker lines
   - that run created exact IAM user `vevo-growthbook-preview-reader` at `/vevo/growthbook/preview/`, attached only `arn:aws:iam::919341186960:policy/vevo-growthbook-readonly-preview`, verified no inline policy/group and exactly one active key, then produced only a CMS-encrypted one-day handoff. The credential was decrypted locally without printing it and GitHub artifact `vevo-growthbook-preview-reader-32401658468` was deleted immediately
-  - the GrowthBook Cloud Athena form is prefilled only with non-sensitive Preview values and scoped to project `VEVO SK Web`; AWS key/secret entry and connection testing are paused at the mandatory action-time confirmation boundary. Production, GTM, Meta, and both BiznisWeb admin tabs remain unchanged
+  - GrowthBook Cloud data source `VEVO Preview Experiment Facts` (`ds_19g6mmt2c4dmn`) is now `Connected` to the dedicated read-only Preview Athena workgroup/database and scoped only to project `VEVO SK Web`; GrowthBook's connection test passed
+  - the data source now has exactly one anonymous identifier (`device_id`) and one version-controlled assignment query (`VEVO consented devices`); the query executed through Athena without SQL/IAM errors and returned no rows, as expected before the first synthetic Preview event
+  - the temporary local credential handoff, including plaintext credentials and the private decryption key, was deleted immediately after the successful GrowthBook connection; credential material was never committed or printed. Production, GTM, Meta, and both BiznisWeb admin tabs remain unchanged
   - generic reporting reconciliation in `reporting_core/experiments.py` now deterministically creates PII-free device/performance facts from validated raw events plus an exact seven-field authoritative-order boundary
   - `reporting_core/experiment_io.py` now provides a bounded fail-closed reader that enumerates only exact server-receipt `event_date=YYYY-MM-DD` partitions, enforces pagination/object/byte limits, and rejects malformed, nested, escaped, or non-object JSON before reconciliation
   - `reporting_core/experiment_orders.py` now reuses the active BiznisWeb reporting exporter's realized-revenue, item-cost, packaging, and shipping logic, but immediately emits only the seven allowlisted order fields; server-received order-completion time drives the frozen attribution/maturity clock while BiznisWeb remains authoritative for order existence, lifecycle, and money
