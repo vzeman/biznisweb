@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "preview_fact_tables_verified",
+  "state": "preview_outcome_metrics_verified_pro_quantiles_blocked",
   "workspace": {
     "organization_name": "Vevo",
     "organization_id": "org_19g6mmt1q79o1",
@@ -135,6 +135,9 @@
     {
       "key": "vevo_add_to_cart_24h",
       "name": "VEVO Add to cart within 24h",
+      "growthbook_id": "fact__2CeFBdeQA6SLEMaRKd563q",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "proportion",
       "row_filters": [
@@ -155,6 +158,9 @@
     {
       "key": "vevo_purchase_conversion_7d",
       "name": "VEVO Purchase conversion within 7d",
+      "growthbook_id": "fact__2CeFBgoFnykxPTRotYTDnB",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "proportion",
       "row_filters": [
@@ -175,6 +181,9 @@
     {
       "key": "vevo_revenue_per_exposed_device_7d",
       "name": "VEVO Net revenue per exposed device within 7d",
+      "growthbook_id": "fact__2CeFBwmv6pJ39DJbDfwwRQ",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "mean",
       "aggregation": {
@@ -194,6 +203,9 @@
     {
       "key": "vevo_cm1_per_exposed_device_7d",
       "name": "VEVO CM1 per exposed device within 7d",
+      "growthbook_id": "fact__2CeFBxixXV2373bgTrsXzS",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "mean",
       "aggregation": {
@@ -214,6 +226,9 @@
     {
       "key": "vevo_average_order_value_7d",
       "name": "VEVO Average order value within 7d",
+      "growthbook_id": "fact__2CeFC1mPhy2axfQ61NCz45",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "ratio",
       "numerator": {
@@ -237,6 +252,9 @@
     {
       "key": "vevo_cancelled_order_rate_14d",
       "name": "VEVO Cancelled order rate at 14d maturity",
+      "growthbook_id": "fact__2CeFC3CdXkdH8zEzFu2CjP",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "ratio",
       "numerator": {
@@ -258,6 +276,9 @@
     {
       "key": "vevo_refunded_order_rate_14d",
       "name": "VEVO Refunded order rate at 14d maturity",
+      "growthbook_id": "fact__2CeFCDRWDEiKt6p8C8mixz",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "ratio",
       "numerator": {
@@ -279,6 +300,9 @@
     {
       "key": "vevo_client_error_device_rate_24h",
       "name": "VEVO Client error device rate within 24h",
+      "growthbook_id": "fact__2CeFCH8i2mUPmYAj1pmLZ2",
+      "status": "growthbook_created_ui_verified",
+      "created_verified_date": "2026-08-21",
       "fact_table": "vevo_device_outcomes_v1",
       "type": "proportion",
       "row_filters": [
@@ -299,6 +323,10 @@
     {
       "key": "vevo_lcp_p75_24h",
       "name": "VEVO LCP p75 within 24h",
+      "growthbook_id": null,
+      "status": "blocked_pending_paid_pro_upgrade",
+      "blocker": "quantile_metric_requires_paid_pro",
+      "blocker_observed_date": "2026-08-21",
       "fact_table": "vevo_performance_vitals_v1",
       "type": "quantile",
       "aggregation": {
@@ -326,6 +354,10 @@
     {
       "key": "vevo_inp_p75_24h",
       "name": "VEVO INP p75 within 24h",
+      "growthbook_id": null,
+      "status": "blocked_pending_paid_pro_upgrade",
+      "blocker": "quantile_metric_requires_paid_pro",
+      "blocker_observed_date": "2026-08-21",
       "fact_table": "vevo_performance_vitals_v1",
       "type": "quantile",
       "aggregation": {
@@ -353,6 +385,10 @@
     {
       "key": "vevo_cls_p75_milli_24h",
       "name": "VEVO CLS p75 x1000 within 24h",
+      "growthbook_id": null,
+      "status": "blocked_pending_paid_pro_upgrade",
+      "blocker": "quantile_metric_requires_paid_pro",
+      "blocker_observed_date": "2026-08-21",
       "fact_table": "vevo_performance_vitals_v1",
       "type": "quantile",
       "aggregation": {

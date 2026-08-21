@@ -157,7 +157,9 @@ Bootstrap entrypoints:
   - exact rollout and rollback gates are in `projects/vevo/GROWTHBOOK_PLAN.md`; the strict versioned PII-free schema is in `projects/vevo/GROWTHBOOK_DATA_CONTRACT.md`
   - GrowthBook draft/UI mutations above occurred; no BiznisWeb, GTM, Meta, AWS, reporting-runtime, or storefront-runtime mutation occurred, and no local server/process was started, so no process cleanup was required
   - the current GrowthBook plan read-back is Starter; a paid Pro upgrade modal was reviewed and cancelled, so no charge, subscription upgrade, or auto-renewal was accepted
-  - Next exact step: after explicit approval to transmit the dedicated AWS key/secret to GrowthBook Cloud, complete and test only `VEVO Preview Experiment Facts`, securely remove the local credential/certificate handoff, and record the authenticated data-source read-back. Production, GTM publishing, Meta, and BiznisWeb remain unchanged
+  - the dedicated AWS key/secret is stored only in GrowthBook Cloud; the connection, assignment query, and both fact tables are verified, and the temporary local credential/private-key handoff is deleted
+  - eight Starter-compatible outcome metrics are now created and UI-verified with exact IDs recorded in `projects/vevo/growthbook_workspace.json`; three performance p75 Quantile metrics remain intentionally uncreated because the authenticated plan is Starter and no paid Pro charge was authorized
+  - Next exact step: obtain explicit authorization for the paid GrowthBook Pro upgrade before creating LCP/INP/CLS p75 metrics; until then, keep Production allocation at `0%` and do not publish GTM, Meta, or BiznisWeb storefront changes
 
 - VEVO profit-first Meta spend and sample-customer decision system is implemented on branch `codex/vevo-meta-profit-scaling` (`2026-08-20`):
   - the reporting model now evaluates Meta scaling against nominal contribution profit, not a fixed ROAS target; it combines immediate company profit with mature 30/60/90/180-day contribution LTV, safety-buffered marginal CAC guardrails, and explicit scale/hold/reduce decisions
