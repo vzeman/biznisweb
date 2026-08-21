@@ -26,6 +26,12 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
             "Production foundation deployment is not recorded as verified",
             "Production reader provisioning gate is false",
             "successful Production foundation deployment evidence drift",
+            "verified_downloaded_sha256_recorded",
+            "foundation_evidence_artifact_sha256",
+            "validate_foundation_evidence",
+            "hashlib.sha256(canonical_evidence_bytes(deployment)).hexdigest()",
+            "Production foundation redeployment gate must be closed",
+            "workspace.get('reconciliation_checkpoint', {}).get(",
             "GrowthBook clone must remain disabled during reader provisioning",
             "Configure authenticated AWS reader-provisioning identity",
         ):
@@ -35,6 +41,9 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
             "Configure authenticated AWS reader-provisioning identity"
         )
         self.assertLess(local_gate, credentials)
+        self.assertNotIn(
+            "workspace.get('workspace', {}).get('recurring_schedule'", self.workflow
+        )
 
     def test_confirms_exact_route_disabled_runtime_before_iam_creation(self) -> None:
         service_gate = self.workflow.index("PRODUCTION_READER_SERVICE_IDENTITY_OK:")

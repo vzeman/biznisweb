@@ -34,6 +34,7 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
             "Production deployment gate is false",
             "Production foundation deployment gate is false",
             "successful read-only Production preflight evidence drift",
+            "workspace.get('reconciliation_checkpoint', {}).get(",
             "Configure authenticated AWS deployment identity",
         ):
             self.assertIn(marker, self.workflow)
@@ -47,6 +48,9 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
         self.assertLess(natural_gate, credentials)
         self.assertLess(natural_gate, evidence_gate)
         self.assertLess(evidence_gate, credentials)
+        self.assertNotIn(
+            "workspace.get('workspace', {}).get('recurring_schedule'", self.workflow
+        )
 
     def test_requires_hash_bound_sanitized_natural_evidence(self) -> None:
         for marker in (
@@ -122,6 +126,29 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
             self.assertIn(marker, self.workflow)
         self.assertLess(host, route)
         self.assertLess(route, curl)
+
+    def test_uploads_only_one_sanitized_hashable_foundation_artifact(self) -> None:
+        for marker in (
+            "FOUNDATION_EVIDENCE_FILE: vevo-growthbook-production-foundation-evidence.json",
+            "build_foundation_evidence",
+            "canonical_evidence_bytes",
+            "GROWTHBOOK_FOUNDATION_EVIDENCE_READY:",
+            "Upload sanitized Production foundation evidence only",
+            "uses: actions/upload-artifact@v4.6.2",
+            "path: vevo-growthbook-production-foundation-evidence.json",
+            "retention-days: 14",
+        ):
+            self.assertIn(marker, self.workflow)
+        self.assertEqual(1, self.workflow.count("uses: actions/upload-artifact@v4.6.2"))
+        for raw_path in (
+            "path: deployed-production-stack.json",
+            "path: production-service.json",
+            "path: production-service-task.json",
+            "path: production-host-gate-task.json",
+            "path: production-host-gate.log",
+            "path: production-task-definition.json",
+        ):
+            self.assertNotIn(raw_path, self.workflow)
 
     def test_external_and_existing_runtime_mutations_are_absent(self) -> None:
         lowered = self.workflow.lower()

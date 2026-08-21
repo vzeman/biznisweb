@@ -25,12 +25,16 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'",
             "first natural-run verification is not due until",
             "first natural-run live ECS evidence window has closed",
+            "workspace.get('reconciliation_checkpoint', {}).get(",
             "Configure AWS credentials for read-only evidence",
         ):
             self.assertIn(marker, self.workflow)
         gate = self.workflow.index("first natural-run verification is not due until")
         credentials = self.workflow.index("Configure AWS credentials for read-only evidence")
         self.assertLess(gate, credentials)
+        self.assertNotIn(
+            "workspace.get('workspace', {}).get('recurring_schedule'", self.workflow
+        )
 
     def test_requires_full_natural_scheduler_evidence_chain(self) -> None:
         for marker in (

@@ -29,6 +29,7 @@ env:
   SOURCE_SCHEDULE: vevo-daily-report-email
   EXPECTED_IMAGE_DIGEST: sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1
   RUNTIME_PATH: /app
+  FOUNDATION_EVIDENCE_FILE: vevo-growthbook-production-foundation-evidence.json
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -75,7 +76,9 @@ jobs:
 
           registry = json.load(open('growthbook_collector/experiments.json', encoding='utf-8'))
           workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
-          recurring = workspace.get('workspace', {}).get('recurring_schedule', {})
+          recurring = workspace.get('reconciliation_checkpoint', {}).get(
+              'recurring_schedule', {}
+          )
           production = workspace.get('athena', {}).get('production', {})
           preflight = production.get('successful_preflight', {})
           natural_evidence = recurring.get('natural_verifier_evidence')
@@ -873,6 +876,15 @@ jobs:
           import json
           import os
           import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from scripts.record_growthbook_foundation_evidence import (
+              build_foundation_evidence,
+          )
+          from scripts.record_growthbook_natural_evidence import (
+              canonical_evidence_bytes,
+          )
 
           task = json.load(open('production-service-task.json', encoding='utf-8'))['tasks'][0]
           containers = task.get('containers') or []
@@ -906,7 +918,39 @@ jobs:
               f"task={task['taskArn'].rsplit('/', 1)[-1]}:image={container['imageDigest']}"
           )
           print('PRODUCTION_FOUNDATION_ROUTE_DISABLED_OK:route=false:bucket=empty:credentials=none:allocation=0')
+          workspace = json.load(
+              open('projects/vevo/growthbook_workspace.json', encoding='utf-8')
+          )
+          recurring = workspace['reconciliation_checkpoint']['recurring_schedule']
+          evidence = build_foundation_evidence(
+              verified_at=datetime.now(timezone.utc),
+              workflow_run_id=os.environ['GITHUB_RUN_ID'],
+              main_commit=os.environ['GITHUB_SHA'],
+              natural_workflow_run_id=recurring['natural_verifier_run_id'],
+              natural_main_commit=recurring['natural_verifier_main_commit'],
+              natural_evidence_sha256=recurring['natural_evidence_artifact_sha256'],
+              host_task_id=os.environ['PRODUCTION_HOST_TASK_ID'],
+              host_private_ip=os.environ['PRODUCTION_HOST_PRIVATE_IP'],
+              service_task_id=task['taskArn'].rsplit('/', 1)[-1],
+              service_private_ip=private_ip,
+              task_definition=os.environ['PRODUCTION_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1],
+          )
+          Path(os.environ['FOUNDATION_EVIDENCE_FILE']).write_bytes(
+              canonical_evidence_bytes(evidence)
+          )
+          print(
+              'GROWTHBOOK_FOUNDATION_EVIDENCE_READY:'
+              f"schema=1:file={os.environ['FOUNDATION_EVIDENCE_FILE']}"
+          )
           PY
+
+      - name: Upload sanitized Production foundation evidence only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-production-foundation-evidence-${{ github.run_id }}
+          path: vevo-growthbook-production-foundation-evidence.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Production foundation deployment summary
         if: ${{ always() }}
