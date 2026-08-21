@@ -1,0 +1,488 @@
+name: Audit VEVO GrowthBook and Meta Population
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_audit:
+        description: Type true to run the read-only aggregate GrowthBook/Meta audit
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      image_digest:
+        description: Exact sha256 digest built for this main commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-meta-population-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_ACCOUNT_ID: '919341186960'
+      AWS_REGION: eu-central-1
+      COLLECTOR_STACK_NAME: vevo-growthbook-preview
+      RECONCILIATION_STACK_NAME: vevo-growthbook-reconciliation-preview
+      SOURCE_SCHEDULE: vevo-daily-report-email
+      SOURCE_TASK_FAMILY: vevo-reporting-daily
+      TARGET_TASK_FAMILY: vevo-growthbook-meta-audit-preview
+      EXPECTED_TASK_ROLE: BiznisWebReportingTaskRole-vevo
+      SERVICE_NAME: vevo-growthbook-meta-audit-preview
+      ECR_REPOSITORY: vevo-reporting
+      RUNTIME_PATH: /app
+      POPULATION_SQL: projects/vevo/growthbook_sql/population_audit.sql
+      VARIATIONS_SQL: projects/vevo/growthbook_sql/population_variations.sql
+    steps:
+      - name: Require exact read-only audit confirmation
+        shell: bash
+        env:
+          CONFIRM_AUDIT: ${{ inputs.confirm_audit }}
+          REQUESTED_IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_AUDIT}" == "true" ]]
+          [[ "${REQUESTED_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "REQUESTED_IMAGE_DIGEST=${REQUESTED_IMAGE_DIGEST}" >> "${GITHUB_ENV}"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate aggregate-only audit code and contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements.txt
+          python -m unittest \
+            tests.test_vevo_meta_dimension_audit \
+            tests.test_growthbook_meta_population_audit_workflow \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve exact image, runtime, network, and read-only data path
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          COMMIT_TAG="git-${GITHUB_SHA}"
+          COMMIT_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${COMMIT_TAG}" \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          [[ "${COMMIT_DIGEST}" == "${REQUESTED_IMAGE_DIGEST}" ]]
+          IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${COMMIT_DIGEST}"
+          aws cloudformation describe-stacks \
+            --stack-name "${COLLECTOR_STACK_NAME}" \
+            --region "${AWS_REGION}" > collector-stack.json
+          aws cloudformation describe-stacks \
+            --stack-name "${RECONCILIATION_STACK_NAME}" \
+            --region "${AWS_REGION}" > reconciliation-stack.json
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > source-schedule.json
+          SOURCE_TASK_DEFINITION="$(python3 <<'PY'
+          import json
+          import os
+
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          task = str(((schedule.get("Target") or {}).get("EcsParameters") or {}).get("TaskDefinitionArn") or "")
+          if schedule.get("Name") != os.environ["SOURCE_SCHEDULE"] or schedule.get("State") != "ENABLED":
+              raise SystemExit("source reporting schedule identity/state drift")
+          if f"task-definition/{os.environ['SOURCE_TASK_FAMILY']}:" not in task:
+              raise SystemExit("source reporting task definition drift")
+          print(task)
+          PY
+          )"
+          aws ecs describe-task-definition \
+            --task-definition "${SOURCE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > source-task-definition.json
+          python3 - "${IMAGE_IDENTIFIER}" <<'PY' > audit-task-definition.json
+          import copy
+          import json
+          import os
+          import sys
+
+          source = json.load(open("source-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          allowed = {
+              "taskRoleArn", "executionRoleArn", "networkMode", "containerDefinitions",
+              "volumes", "placementConstraints", "requiresCompatibilities", "cpu", "memory",
+              "ipcMode", "pidMode", "proxyConfiguration", "inferenceAccelerators",
+              "ephemeralStorage", "runtimePlatform",
+          }
+          candidate = {
+              key: copy.deepcopy(value)
+              for key, value in source.items()
+              if key in allowed and value not in (None, [], {})
+          }
+          candidate["family"] = os.environ["TARGET_TASK_FAMILY"]
+          containers = candidate.get("containerDefinitions") or []
+          if len(containers) != 1:
+              raise SystemExit("audit candidate must contain one container")
+          container = containers[0]
+          container["image"] = sys.argv[1]
+          container["command"] = [
+              "/bin/bash", "-lc", "cd /app && python scripts/audit_vevo_meta_dimensions.py",
+          ]
+          secret_names = {str(row.get("name") or "") for row in container.get("secrets") or []}
+          environment_names = {str(row.get("name") or "") for row in container.get("environment") or []}
+          if not {"BIZNISWEB_API_TOKEN", "FACEBOOK_ACCESS_TOKEN"}.issubset(secret_names):
+              raise SystemExit("audit candidate is missing managed token references")
+          if "FACEBOOK_AD_ACCOUNT_ID" not in secret_names | environment_names:
+              raise SystemExit("audit candidate is missing the Meta ad-account reference")
+          expected_role = f"arn:aws:iam::{os.environ['EXPECTED_ACCOUNT_ID']}:role/{os.environ['EXPECTED_TASK_ROLE']}"
+          if candidate.get("taskRoleArn") != expected_role:
+              raise SystemExit("audit candidate task role drift")
+          json.dump(candidate, sys.stdout)
+          PY
+          CANDIDATE_TASK_DEFINITION="$(aws ecs register-task-definition \
+            --cli-input-json file://audit-task-definition.json \
+            --region "${AWS_REGION}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+          aws ecs describe-task-definition \
+            --task-definition "${CANDIDATE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > candidate-task-definition.json
+          python3 <<'PY' > network.json
+          import json
+
+          schedule = json.load(open("source-schedule.json", encoding="utf-8"))
+          raw = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
+          print(json.dumps({"awsvpcConfiguration": {
+              "subnets": raw.get("Subnets") or raw.get("subnets") or [],
+              "securityGroups": raw.get("SecurityGroups") or raw.get("securityGroups") or [],
+              "assignPublicIp": raw.get("AssignPublicIp") or raw.get("assignPublicIp") or "DISABLED",
+          }}))
+          PY
+          python3 <<'PY' > runtime.env
+          import json
+
+          collector = json.load(open("collector-stack.json", encoding="utf-8"))["Stacks"][0]
+          reconciliation = json.load(open("reconciliation-stack.json", encoding="utf-8"))["Stacks"][0]
+          if collector.get("StackStatus") != "UPDATE_COMPLETE" or reconciliation.get("StackStatus") != "UPDATE_COMPLETE":
+              raise SystemExit("GrowthBook stack state drift")
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in collector.get("Outputs") or []}
+          required = {"ExperimentDatabaseName", "GrowthBookWorkGroupName"}
+          if not required.issubset(outputs):
+              raise SystemExit("collector stack is missing Athena outputs")
+          source = json.load(open("source-schedule.json", encoding="utf-8"))
+          ecs = source["Target"]["EcsParameters"]
+          task = json.load(open("candidate-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          container = task["containerDefinitions"][0]
+          logs = (container.get("logConfiguration") or {}).get("options") or {}
+          values = {
+              "CLUSTER_ARN": source["Target"]["Arn"],
+              "LAUNCH_TYPE": ecs.get("LaunchType") or "FARGATE",
+              "PLATFORM_VERSION": ecs.get("PlatformVersion") or "LATEST",
+              "CONTAINER_NAME": container["name"],
+              "LOG_GROUP": logs["awslogs-group"],
+              "LOG_PREFIX": logs["awslogs-stream-prefix"],
+              "EXPERIMENT_DATABASE": outputs["ExperimentDatabaseName"],
+              "GROWTHBOOK_WORKGROUP": outputs["GrowthBookWorkGroupName"],
+          }
+          for key, value in sorted(values.items()):
+              if not value or "\n" in value or "\r" in value:
+                  raise SystemExit(f"invalid audit runtime value: {key}")
+              print(f"{key}={value}")
+          PY
+          cat runtime.env >> "${GITHUB_ENV}"
+          {
+            echo "CANDIDATE_TASK_DEFINITION=${CANDIDATE_TASK_DEFINITION}"
+            echo "IMAGE_DIGEST=${COMMIT_DIGEST}"
+            echo "IMAGE_IDENTIFIER=${IMAGE_IDENTIFIER}"
+          } >> "${GITHUB_ENV}"
+          echo "META_AUDIT_PREDEPLOY_OK:instance-id=N/A:Fargate:private-ip=pending-task:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task-definition=${CANDIDATE_TASK_DEFINITION}:image=${IMAGE_IDENTIFIER}"
+
+      - name: Run exact Fargate localhost and marker hard gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY' > host-overrides.json
+          import json
+          import os
+          print(json.dumps({"containerOverrides": [{
+              "name": os.environ["CONTAINER_NAME"],
+              "command": ["/bin/bash", "/app/scripts/growthbook_preview_reconcile_host_gate.sh"],
+              "environment": [
+                  {"name": "REPORT_PROJECT", "value": "vevo"},
+                  {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                  {"name": "GROWTHBOOK_RECONCILE_VERSION", "value": os.environ["IMAGE_DIGEST"]},
+              ],
+          }]}))
+          PY
+          aws ecs run-task \
+            --cluster "${CLUSTER_ARN}" \
+            --task-definition "${CANDIDATE_TASK_DEFINITION}" \
+            --launch-type "${LAUNCH_TYPE}" \
+            --platform-version "${PLATFORM_VERSION}" \
+            --network-configuration file://network.json \
+            --overrides file://host-overrides.json \
+            --group "${SERVICE_NAME}" \
+            --started-by "vevo-growthbook-meta-audit-host-${GITHUB_RUN_ID}" \
+            --region "${AWS_REGION}" > host-task.json
+          HOST_TASK_ARN="$(python3 <<'PY'
+          import json
+          run = json.load(open("host-task.json", encoding="utf-8"))
+          if run.get("failures") or len(run.get("tasks") or []) != 1:
+              raise SystemExit("Meta audit host task failed to start")
+          print(run["tasks"][0]["taskArn"])
+          PY
+          )"
+          aws ecs wait tasks-stopped --cluster "${CLUSTER_ARN}" --tasks "${HOST_TASK_ARN}" --region "${AWS_REGION}"
+          aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${HOST_TASK_ARN}" --region "${AWS_REGION}" > host-state.json
+          readarray -t HOST_VALUES < <(python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          task = json.load(open("host-state.json", encoding="utf-8"))["tasks"][0]
+          containers = task.get("containers") or []
+          if len(containers) != 1 or containers[0].get("exitCode") != 0 or containers[0].get("imageDigest") != sys.argv[1]:
+              raise SystemExit("Meta audit host task identity/exit drift")
+          details = [row for item in task.get("attachments") or [] for row in item.get("details") or []]
+          private_ip = next((row.get("value") for row in details if row.get("name") == "privateIPv4Address"), "")
+          if not private_ip:
+              raise SystemExit("Meta audit host task private IP missing")
+          print(task["taskArn"].rsplit("/", 1)[-1])
+          print(private_ip)
+          print(containers[0].get("logStreamName") or "")
+          PY
+          )
+          HOST_TASK_ID="${HOST_VALUES[0]}"
+          HOST_PRIVATE_IP="${HOST_VALUES[1]}"
+          HOST_LOG_STREAM="${HOST_VALUES[2]:-${LOG_PREFIX}/${CONTAINER_NAME}/${HOST_TASK_ID}}"
+          for _ in $(seq 1 30); do
+            aws logs get-log-events --log-group-name "${LOG_GROUP}" --log-stream-name "${HOST_LOG_STREAM}" --start-from-head --region "${AWS_REGION}" > host-logs.json 2>/dev/null || true
+            if python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          messages = [row.get("message", "") for row in json.load(open("host-logs.json", encoding="utf-8")).get("events") or []]
+          required = {
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:preview:{sys.argv[1]}",
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{sys.argv[1]}",
+          }
+          raise SystemExit(0 if all(any(marker in message for message in messages) for marker in required) else 1)
+          PY
+            then break; fi
+            sleep 2
+          done
+          python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          messages = [row.get("message", "") for row in json.load(open("host-logs.json", encoding="utf-8")).get("events") or []]
+          required = {
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:preview:{sys.argv[1]}",
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{sys.argv[1]}",
+          }
+          if any(not any(marker in message for message in messages) for marker in required):
+              raise SystemExit("Meta audit localhost markers missing")
+          PY
+          echo "META_AUDIT_HARD_GATE_OK:instance-id=N/A:Fargate:private-ip=${HOST_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${HOST_TASK_ID}:image=${IMAGE_IDENTIFIER}"
+
+      - name: Run read-only aggregate Meta delivery dimension audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs run-task \
+            --cluster "${CLUSTER_ARN}" \
+            --task-definition "${CANDIDATE_TASK_DEFINITION}" \
+            --launch-type "${LAUNCH_TYPE}" \
+            --platform-version "${PLATFORM_VERSION}" \
+            --network-configuration file://network.json \
+            --group "${SERVICE_NAME}" \
+            --started-by "vevo-growthbook-meta-audit-${GITHUB_RUN_ID}" \
+            --region "${AWS_REGION}" > audit-task.json
+          AUDIT_TASK_ARN="$(python3 <<'PY'
+          import json
+          run = json.load(open("audit-task.json", encoding="utf-8"))
+          if run.get("failures") or len(run.get("tasks") or []) != 1:
+              raise SystemExit("Meta dimension audit task failed to start")
+          print(run["tasks"][0]["taskArn"])
+          PY
+          )"
+          aws ecs wait tasks-stopped --cluster "${CLUSTER_ARN}" --tasks "${AUDIT_TASK_ARN}" --region "${AWS_REGION}"
+          aws ecs describe-tasks --cluster "${CLUSTER_ARN}" --tasks "${AUDIT_TASK_ARN}" --region "${AWS_REGION}" > audit-state.json
+          readarray -t AUDIT_VALUES < <(python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+          task = json.load(open("audit-state.json", encoding="utf-8"))["tasks"][0]
+          containers = task.get("containers") or []
+          if len(containers) != 1 or containers[0].get("imageDigest") != sys.argv[1]:
+              raise SystemExit("Meta dimension audit task identity/digest drift")
+          details = [row for item in task.get("attachments") or [] for row in item.get("details") or []]
+          private_ip = next((row.get("value") for row in details if row.get("name") == "privateIPv4Address"), "")
+          if not private_ip:
+              raise SystemExit("Meta audit private IP missing")
+          print(task["taskArn"].rsplit("/", 1)[-1])
+          print(private_ip)
+          print(containers[0].get("logStreamName") or "")
+          print(containers[0].get("exitCode", -1))
+          PY
+          )
+          AUDIT_TASK_ID="${AUDIT_VALUES[0]}"
+          AUDIT_PRIVATE_IP="${AUDIT_VALUES[1]}"
+          AUDIT_LOG_STREAM="${AUDIT_VALUES[2]:-${LOG_PREFIX}/${CONTAINER_NAME}/${AUDIT_TASK_ID}}"
+          AUDIT_EXIT_CODE="${AUDIT_VALUES[3]}"
+          for _ in $(seq 1 30); do
+            aws logs get-log-events --log-group-name "${LOG_GROUP}" --log-stream-name "${AUDIT_LOG_STREAM}" --start-from-head --region "${AWS_REGION}" > audit-logs.json 2>/dev/null || true
+            if python3 <<'PY'
+          import json
+          markers = ("VEVO_META_DIMENSION_AUDIT_OK:", "VEVO_META_DIMENSION_AUDIT_FAIL:")
+          messages = [row.get("message", "") for row in json.load(open("audit-logs.json", encoding="utf-8")).get("events") or []]
+          raise SystemExit(0 if sum(marker in message for marker in markers for message in messages) == 1 else 1)
+          PY
+            then break; fi
+            sleep 2
+          done
+          python3 - "${AUDIT_EXIT_CODE}" <<'PY'
+          import json
+          import sys
+          marker = "VEVO_META_DIMENSION_AUDIT_OK:"
+          fail_marker = "VEVO_META_DIMENSION_AUDIT_FAIL:"
+          messages = [row.get("message", "") for row in json.load(open("audit-logs.json", encoding="utf-8")).get("events") or []]
+          matches = [message.split(marker, 1)[1].strip() for message in messages if marker in message]
+          failures = [message.split(fail_marker, 1)[1].strip() for message in messages if fail_marker in message]
+          exit_code = int(sys.argv[1])
+          if len(failures) == 1 and not matches and exit_code != 0:
+              print(fail_marker + failures[0])
+              raise SystemExit(1)
+          if len(matches) != 1 or failures or exit_code != 0:
+              raise SystemExit("Meta audit emitted an unexpected marker/exit combination")
+          summary = json.loads(matches[0])
+          expected = {
+              "schema_version", "api_version", "window", "traffic_ads", "traffic_campaigns",
+              "traffic_adsets", "ads_with_creative_configuration", "total_clicks", "total_spend_eur",
+              "collector_compatible_coverage", "collector_compatible_all_dimensions",
+              "recommended_macro_contract_all_dimensions", "forbidden_click_identifier_parameter_ads",
+          }
+          if set(summary) != expected or summary["traffic_ads"] <= 0:
+              raise SystemExit("Meta audit sanitized summary shape/count drift")
+          print(marker + json.dumps(summary, sort_keys=True, separators=(",", ":")))
+          PY
+          echo "META_AUDIT_TASK_OK:instance-id=N/A:Fargate:private-ip=${AUDIT_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${AUDIT_TASK_ID}"
+
+      - name: Compare exact GrowthBook assignment and reporting outcome populations in Athena
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_query() {
+            local sql_path="$1"
+            local output_path="$2"
+            local query_id state
+            query_id="$(aws athena start-query-execution \
+              --query-string "$(cat "${sql_path}")" \
+              --query-execution-context "Database=${EXPERIMENT_DATABASE},Catalog=AwsDataCatalog" \
+              --work-group "${GROWTHBOOK_WORKGROUP}" \
+              --region "${AWS_REGION}" \
+              --query QueryExecutionId \
+              --output text)"
+            for _ in $(seq 1 60); do
+              state="$(aws athena get-query-execution --query-execution-id "${query_id}" --region "${AWS_REGION}" --query 'QueryExecution.Status.State' --output text)"
+              [[ "${state}" == "SUCCEEDED" ]] && break
+              if [[ "${state}" == "FAILED" || "${state}" == "CANCELLED" ]]; then
+                echo "Athena population audit query failed" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+            [[ "${state}" == "SUCCEEDED" ]]
+            aws athena get-query-results --query-execution-id "${query_id}" --region "${AWS_REGION}" > "${output_path}"
+            echo "${query_id}"
+          }
+          POPULATION_QUERY_ID="$(run_query "${POPULATION_SQL}" population-results.json)"
+          VARIATIONS_QUERY_ID="$(run_query "${VARIATIONS_SQL}" variation-results.json)"
+          python3 - "${POPULATION_QUERY_ID}" "${VARIATIONS_QUERY_ID}" <<'PY'
+          import json
+          import sys
+
+          def rows(path):
+              raw = json.load(open(path, encoding="utf-8"))["ResultSet"]["Rows"]
+              return [[cell.get("VarCharValue", "") for cell in row.get("Data") or []] for row in raw]
+
+          population = rows("population-results.json")
+          expected_header = [
+              "assignment_rows", "outcome_rows", "assignment_keys", "outcome_keys",
+              "duplicate_assignment_keys", "duplicate_outcome_keys", "assignments_missing_outcomes",
+              "outcomes_missing_assignments", "meta_campaign_rows", "meta_adset_rows", "meta_ad_rows",
+              "meta_placement_rows", "complete_meta_dimension_rows", "invalid_meta_dimension_rows",
+          ]
+          if len(population) != 2 or population[0] != expected_header:
+              raise SystemExit("Athena population audit shape drift")
+          values = {key: int(value) for key, value in zip(expected_header, population[1])}
+          if values["assignment_rows"] <= 0:
+              raise SystemExit("Athena population audit has no eligible Preview devices")
+          if not (
+              values["assignment_rows"]
+              == values["outcome_rows"]
+              == values["assignment_keys"]
+              == values["outcome_keys"]
+          ):
+              raise SystemExit("GrowthBook/reporting population counts differ")
+          for key in (
+              "duplicate_assignment_keys", "duplicate_outcome_keys", "assignments_missing_outcomes",
+              "outcomes_missing_assignments", "invalid_meta_dimension_rows",
+          ):
+              if values[key] != 0:
+                  raise SystemExit(f"GrowthBook/reporting population gate failed: {key}")
+          variation_rows = rows("variation-results.json")
+          expected_variation_header = [
+              "experiment_id", "variation_id", "eligible_devices", "meta_campaign_devices",
+              "meta_adset_devices", "meta_ad_devices", "meta_placement_devices",
+          ]
+          if not variation_rows or variation_rows[0] != expected_variation_header:
+              raise SystemExit("Athena variation audit shape drift")
+          variations = []
+          for row in variation_rows[1:]:
+              if len(row) != len(expected_variation_header):
+                  raise SystemExit("Athena variation audit row drift")
+              variations.append({
+                  "experiment_id": row[0],
+                  "variation_id": row[1],
+                  "eligible_devices": int(row[2]),
+                  "meta_campaign_devices": int(row[3]),
+                  "meta_adset_devices": int(row[4]),
+                  "meta_ad_devices": int(row[5]),
+                  "meta_placement_devices": int(row[6]),
+              })
+          if sum(row["eligible_devices"] for row in variations) != values["assignment_rows"]:
+              raise SystemExit("Athena variation totals differ from assignment population")
+          summary = {
+              "population": values,
+              "variations": variations,
+              "population_query_id": sys.argv[1],
+              "variations_query_id": sys.argv[2],
+          }
+          print("VEVO_GROWTHBOOK_REPORTING_POPULATION_AUDIT_OK:" + json.dumps(summary, sort_keys=True, separators=(",", ":")))
+          PY
+
+      - name: Audit summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "## VEVO GrowthBook / Meta population audit"
+            echo "- Mode: aggregate read-only"
+            echo "- Production GrowthBook allocation: \`0%\` (unchanged)"
+            echo "- GTM: unpublished (unchanged)"
+            echo "- Meta delivery/destinations: unchanged"
+            echo "- BiznisWeb/order/price/cart/checkout: unchanged"
+          } >> "${GITHUB_STEP_SUMMARY}"

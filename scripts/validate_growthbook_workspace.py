@@ -269,7 +269,7 @@ def validate() -> None:
         ),
         "blocker": "none_in_temporary_preview_conditions",
         "next_gate": (
-            "add_reviewed_recurring_reconciliation_and_verify_same_population_meta_dimensions"
+            "verify_same_population_meta_dimensions_and_first_natural_reconciliation"
         ),
     }
     if tag_assistant != expected_tag_assistant:
@@ -313,10 +313,69 @@ def validate() -> None:
         "athena_assignment_query_id": "ef981af5-3c3f-4d32-813a-a546be77b79b",
         "raw_curated_reporting_athena_identity_verified": True,
         "production_allocation_percent": 0,
-        "recurring_schedule_status": "not_configured",
+        "recurring_schedule_status": "enabled_one_shot_verified_natural_run_pending",
+        "recurring_schedule": {
+            "stack_name": "vevo-growthbook-reconciliation-preview",
+            "workflow_run_id": "32459100570",
+            "workflow_run_url": (
+                "https://github.com/vzeman/biznisweb/actions/runs/32459100570"
+            ),
+            "main_commit": "4e4443beea2a2da466d80f781199bd4684dfac0c",
+            "reporting_image_digest": (
+                "sha256:cabba3b0bd57f6be322f3a5ff62f0327c7cf8e7bb2b6b5e78686305339fdd041"
+            ),
+            "task_definition": "vevo-growthbook-reconcile-preview:4",
+            "schedule_name": "vevo-growthbook-reconcile-preview",
+            "schedule_state": "ENABLED",
+            "schedule_expression": "cron(30 3 * * ? *)",
+            "schedule_timezone": "Europe/Bratislava",
+            "host_gate": {
+                "instance_id": "N/A:Fargate",
+                "private_ip": "172.31.25.184",
+                "service": "vevo-growthbook-reconcile-preview",
+                "path": "/app",
+                "task_id": "29d5e5d3fed349d79dec1384f5aff32a",
+            },
+            "one_shot_task": {
+                "instance_id": "N/A:Fargate",
+                "private_ip": "172.31.18.86",
+                "service": "vevo-growthbook-reconcile-preview",
+                "path": "/app",
+                "task_id": "668418a08c504e078288f407df44a15e",
+            },
+            "one_shot_sanitized_counts": {
+                "raw_events": 0,
+                "device_facts": 0,
+                "performance_facts": 0,
+                "quality_reports": 2,
+            },
+            "generated_published_counts_match": True,
+            "encrypted_retained_dlq_verified": True,
+            "three_alarms_verified": True,
+            "source_reporting_schedule_unchanged": True,
+            "first_natural_run_local": "2026-08-22 03:30 Europe/Bratislava",
+            "first_natural_run_status": "pending",
+        },
     }
     if workspace.get("reconciliation_checkpoint") != expected_reconciliation_checkpoint:
         raise AssertionError("GrowthBook reconciliation checkpoint state drift")
+
+    expected_population_audit = {
+        "status": "workflow_prepared_runtime_not_run",
+        "workflow": ".github/workflows/audit-vevo-growthbook-meta-population.yml",
+        "meta_audit_script": "scripts/audit_vevo_meta_dimensions.py",
+        "population_sql": "projects/vevo/growthbook_sql/population_audit.sql",
+        "variation_sql": "projects/vevo/growthbook_sql/population_variations.sql",
+        "meta_window_complete_utc_days": 30,
+        "meta_api_mode": "get_only",
+        "output_mode": "aggregate_sanitized_only",
+        "meta_delivery_mutation_allowed": False,
+        "biznisweb_mutation_allowed": False,
+        "production_allocation_percent": 0,
+        "next_gate": "merge_run_exact_digest_and_record_same_population_result",
+    }
+    if workspace.get("population_audit") != expected_population_audit:
+        raise AssertionError("GrowthBook Meta/population audit state drift")
 
     feature_flags = workspace.get("feature_flags", [])
     feature_map = {row.get("key"): row for row in feature_flags if isinstance(row, dict)}
