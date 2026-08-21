@@ -98,7 +98,7 @@ def validate() -> None:
 
     if (
         workspace.get("schema_version") != 1
-        or workspace.get("state") != "preview_datasource_connected"
+        or workspace.get("state") != "preview_assignment_verified"
     ):
         raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
@@ -183,13 +183,15 @@ def validate() -> None:
         "identifier_type": "device_id",
         "assignment_query_name": "VEVO consented devices",
         "assignment_query_test_status": (
-            "executed_no_rows_pending_synthetic_preview_event"
+            "executed_one_exact_synthetic_row_via_growthbook_ui"
         ),
         "connection_verified_date": "2026-08-21",
-        "status": (
-            "growthbook_datasource_connected_assignment_query_empty_"
-            "pending_synthetic_preview_event"
-        ),
+        "assignment_verified_date": "2026-08-21",
+        "verification_source_run_id": 32441597178,
+        "verification_recovery_run_id": 32442114254,
+        "verification_athena_query_id": "934c938d-bc55-42c7-b89c-247337e9e2b1",
+        "verification_row_count": 1,
+        "status": "growthbook_datasource_and_synthetic_assignment_verified",
     }
     for key, value in expected_preview_connection.items():
         if preview_athena.get(key) != value:
