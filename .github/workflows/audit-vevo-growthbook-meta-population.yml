@@ -145,6 +145,15 @@ jobs:
           container["command"] = [
               "/bin/bash", "-lc", "cd /app && python scripts/audit_vevo_meta_dimensions.py",
           ]
+          environment = [
+              row for row in container.get("environment") or []
+              if str(row.get("name") or "") != "REPORT_DATA_DIR"
+          ]
+          environment.append({
+              "name": "REPORT_DATA_DIR",
+              "value": "/tmp/vevo-growthbook-meta-audit",
+          })
+          container["environment"] = environment
           secret_names = {str(row.get("name") or "") for row in container.get("secrets") or []}
           environment_names = {str(row.get("name") or "") for row in container.get("environment") or []}
           if not {"BIZNISWEB_API_TOKEN", "FACEBOOK_ACCESS_TOKEN"}.issubset(secret_names):
@@ -336,13 +345,18 @@ jobs:
           print(private_ip)
           print(containers[0].get("logStreamName") or "")
           print(containers[0].get("exitCode", -1))
+          print(task.get("stopCode") or "UNKNOWN")
           PY
           )
           AUDIT_TASK_ID="${AUDIT_VALUES[0]}"
           AUDIT_PRIVATE_IP="${AUDIT_VALUES[1]}"
           AUDIT_LOG_STREAM="${AUDIT_VALUES[2]:-${LOG_PREFIX}/${CONTAINER_NAME}/${AUDIT_TASK_ID}}"
           AUDIT_EXIT_CODE="${AUDIT_VALUES[3]}"
-          for _ in $(seq 1 30); do
+          AUDIT_STOP_CODE="${AUDIT_VALUES[4]}"
+          [[ "${AUDIT_EXIT_CODE}" =~ ^-?[0-9]+$ ]]
+          [[ "${AUDIT_STOP_CODE}" =~ ^[A-Za-z0-9_-]{1,64}$ ]]
+          echo "META_AUDIT_TASK_STOPPED_READBACK:instance-id=N/A:Fargate:private-ip=${AUDIT_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${AUDIT_TASK_ID}:exit=${AUDIT_EXIT_CODE}:stop-code=${AUDIT_STOP_CODE}"
+          for _ in $(seq 1 60); do
             aws logs get-log-events --log-group-name "${LOG_GROUP}" --log-stream-name "${AUDIT_LOG_STREAM}" --start-from-head --region "${AWS_REGION}" > audit-logs.json 2>/dev/null || true
             if python3 <<'PY'
           import json
@@ -353,20 +367,27 @@ jobs:
             then break; fi
             sleep 2
           done
-          python3 - "${AUDIT_EXIT_CODE}" <<'PY'
+          python3 - "${AUDIT_EXIT_CODE}" "${AUDIT_STOP_CODE}" <<'PY'
           import json
           import sys
+          start_marker = "VEVO_META_DIMENSION_AUDIT_START:schema=1"
           marker = "VEVO_META_DIMENSION_AUDIT_OK:"
           fail_marker = "VEVO_META_DIMENSION_AUDIT_FAIL:"
           messages = [row.get("message", "") for row in json.load(open("audit-logs.json", encoding="utf-8")).get("events") or []]
+          starts = [message for message in messages if start_marker in message]
           matches = [message.split(marker, 1)[1].strip() for message in messages if marker in message]
           failures = [message.split(fail_marker, 1)[1].strip() for message in messages if fail_marker in message]
           exit_code = int(sys.argv[1])
-          if len(failures) == 1 and not matches and exit_code != 0:
+          stop_code = sys.argv[2]
+          if len(starts) == 1 and len(failures) == 1 and not matches and exit_code != 0:
               print(fail_marker + failures[0])
               raise SystemExit(1)
-          if len(matches) != 1 or failures or exit_code != 0:
-              raise SystemExit("Meta audit emitted an unexpected marker/exit combination")
+          if len(starts) != 1 or len(matches) != 1 or failures or exit_code != 0:
+              raise SystemExit(
+                  "Meta audit completion gate failed: "
+                  f"events={len(messages)} start={len(starts)} ok={len(matches)} "
+                  f"fail={len(failures)} exit={exit_code} stop_code={stop_code}"
+              )
           summary = json.loads(matches[0])
           expected = {
               "schema_version", "api_version", "window", "traffic_ads", "traffic_campaigns",

@@ -556,6 +556,7 @@ def main() -> int:
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "META_AUDIT_PREDEPLOY_OK:",
             "META_AUDIT_HARD_GATE_OK:",
+            "META_AUDIT_TASK_STOPPED_READBACK:",
             "META_AUDIT_TASK_OK:",
             "VEVO_META_DIMENSION_AUDIT_OK:",
             "VEVO_META_DIMENSION_AUDIT_FAIL:",
@@ -585,6 +586,7 @@ def main() -> int:
             "FORBIDDEN_QUERY_KEYS",
             "VEVO_META_DIMENSION_AUDIT_OK:",
             "VEVO_META_DIMENSION_AUDIT_FAIL:",
+            "VEVO_META_DIMENSION_AUDIT_START:schema=1",
             "client._get_json",
             "unexpected_internal_error",
         ):

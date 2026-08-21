@@ -361,7 +361,7 @@ def validate() -> None:
         raise AssertionError("GrowthBook reconciliation checkpoint state drift")
 
     expected_population_audit = {
-        "status": "workflow_prepared_runtime_not_run",
+        "status": "first_runtime_stopped_after_host_gate_diagnostic_fix_prepared",
         "workflow": ".github/workflows/audit-vevo-growthbook-meta-population.yml",
         "meta_audit_script": "scripts/audit_vevo_meta_dimensions.py",
         "population_sql": "projects/vevo/growthbook_sql/population_audit.sql",
@@ -372,7 +372,30 @@ def validate() -> None:
         "meta_delivery_mutation_allowed": False,
         "biznisweb_mutation_allowed": False,
         "production_allocation_percent": 0,
-        "next_gate": "merge_run_exact_digest_and_record_same_population_result",
+        "first_runtime_attempt": {
+            "workflow_run_id": "32461687307",
+            "workflow_run_url": (
+                "https://github.com/vzeman/biznisweb/actions/runs/32461687307"
+            ),
+            "main_commit": "d4ed6e276855c71cec91e0827b2619af020ad524",
+            "reporting_image_digest": (
+                "sha256:8cbae67d93fd2181924abe31971a53c9ef3144ac5334c92e3da138f2623c699c"
+            ),
+            "candidate_task_definition": "vevo-growthbook-meta-audit-preview:1",
+            "host_gate": {
+                "instance_id": "N/A:Fargate",
+                "private_ip": "172.31.43.218",
+                "service": "vevo-growthbook-meta-audit-preview",
+                "path": "/app",
+                "task_id": "6912ec37bdce4aee9945739fa208298d",
+            },
+            "meta_step_status": "stopped_on_hidden_marker_exit_combination",
+            "athena_step_started": False,
+            "external_mutation_observed": False,
+        },
+        "next_gate": (
+            "merge_writable_tmp_and_sanitized_marker_diagnostic_then_rerun_exact_digest"
+        ),
     }
     if workspace.get("population_audit") != expected_population_audit:
         raise AssertionError("GrowthBook Meta/population audit state drift")

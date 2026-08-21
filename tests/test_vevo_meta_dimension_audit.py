@@ -6,6 +6,7 @@ import unittest
 from scripts.audit_vevo_meta_dimensions import (
     FAIL_MARKER,
     MetaDimensionAuditError,
+    START_MARKER,
     build_audit_summary,
     main,
 )
@@ -97,16 +98,18 @@ class VevoMetaDimensionAuditTests(unittest.TestCase):
         self.assertEqual(summary["collector_compatible_all_dimensions"]["ads"], 1)
 
     def test_main_emits_only_sanitized_failure_marker(self) -> None:
-        from contextlib import redirect_stderr
+        from contextlib import redirect_stderr, redirect_stdout
         from io import StringIO
         from unittest.mock import patch
 
         stderr = StringIO()
+        stdout = StringIO()
         with patch("scripts.audit_vevo_meta_dimensions.FacebookAdsClient"), patch(
             "scripts.audit_vevo_meta_dimensions.run_audit",
             side_effect=MetaDimensionAuditError("Meta Graph read failed during delivery insights"),
-        ), redirect_stderr(stderr):
+        ), redirect_stderr(stderr), redirect_stdout(stdout):
             self.assertEqual(main(), 1)
+        self.assertEqual(stdout.getvalue().strip(), START_MARKER)
         self.assertEqual(
             stderr.getvalue().strip(),
             FAIL_MARKER + "Meta Graph read failed during delivery insights",
