@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import re
 import sys
 from typing import Any
+
+try:
+    from record_growthbook_natural_evidence import (
+        EvidenceRecordingError,
+        canonical_evidence_bytes,
+        validate_natural_evidence,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.record_growthbook_natural_evidence import (
+        EvidenceRecordingError,
+        canonical_evidence_bytes,
+        validate_natural_evidence,
+    )
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -376,6 +390,47 @@ def validate() -> None:
             "natural_verifier_mutation_allowed": False,
         },
     }
+    actual_reconciliation_checkpoint = workspace.get("reconciliation_checkpoint") or {}
+    actual_recurring_schedule = actual_reconciliation_checkpoint.get("recurring_schedule") or {}
+    natural_evidence_verified = (
+        actual_recurring_schedule.get("first_natural_run_status") == "verified"
+    )
+    if natural_evidence_verified:
+        run_id = actual_recurring_schedule.get("natural_verifier_run_id")
+        main_commit = actual_recurring_schedule.get("natural_verifier_main_commit")
+        evidence_sha256 = actual_recurring_schedule.get("natural_evidence_artifact_sha256")
+        evidence = actual_recurring_schedule.get("natural_verifier_evidence")
+        try:
+            validate_natural_evidence(
+                evidence,
+                expected_workflow_run_id=run_id,
+                expected_main_commit=main_commit,
+            )
+        except (EvidenceRecordingError, TypeError) as exc:
+            raise AssertionError("GrowthBook natural evidence validation failed") from exc
+        if (
+            not isinstance(evidence_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", evidence_sha256) is None
+            or hashlib.sha256(canonical_evidence_bytes(evidence)).hexdigest()
+            != evidence_sha256
+        ):
+            raise AssertionError("GrowthBook natural evidence SHA-256 drift")
+        expected_reconciliation_checkpoint["recurring_schedule_status"] = (
+            "enabled_one_shot_and_first_natural_run_verified"
+        )
+        expected_reconciliation_checkpoint["recurring_schedule"].update(
+            {
+                "first_natural_run_status": "verified",
+                "natural_verifier_status": "passed",
+                "natural_evidence_artifact_status": (
+                    "verified_downloaded_sha256_recorded"
+                ),
+                "natural_verifier_run_id": run_id,
+                "natural_verifier_main_commit": main_commit,
+                "natural_evidence_artifact_sha256": evidence_sha256,
+                "natural_verifier_evidence": evidence,
+            }
+        )
     if workspace.get("reconciliation_checkpoint") != expected_reconciliation_checkpoint:
         raise AssertionError("GrowthBook reconciliation checkpoint state drift")
 
@@ -778,6 +833,18 @@ def validate() -> None:
             "route_disabled_deployment"
         ),
     }
+    if natural_evidence_verified:
+        expected_production_connection.update(
+            {
+                "status": "natural_run_verified_foundation_deployment_ready",
+                "deployment_allowed": True,
+                "foundation_deployment_status": (
+                    "natural_run_verified_ready_for_reviewed_dispatch"
+                ),
+                "foundation_deployment_allowed": True,
+                "next_gate": "dispatch_route_disabled_production_foundation_after_review",
+            }
+        )
     if athena.get("production") != expected_production_connection:
         raise AssertionError("GrowthBook Production connection preflight state drift")
     assignment_path = athena.get("assignment_query")
