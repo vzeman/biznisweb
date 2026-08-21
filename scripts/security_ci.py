@@ -76,6 +76,9 @@ def main() -> int:
         growthbook_natural_reconciliation_workflow = read(
             ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
         )
+        growthbook_natural_evidence_recorder = read(
+            "scripts/record_growthbook_natural_evidence.py"
+        )
         growthbook_meta_audit = read("scripts/audit_vevo_meta_dimensions.py")
         growthbook_meta_audit_workflow = read(
             ".github/workflows/audit-vevo-growthbook-meta-population.yml"
@@ -602,6 +605,32 @@ def main() -> int:
         ) != 1:
             raise AssertionError(
                 "GrowthBook natural verifier must upload exactly one sanitized artifact."
+            )
+        for marker in (
+            "This is an offline, fail-closed manifest transformation.",
+            "validate_natural_evidence",
+            "evidence bytes are not canonical",
+            "manifest change-set boundary drift",
+            "production-allocation=0:reader=false:clone=false",
+        ):
+            require(
+                growthbook_natural_evidence_recorder,
+                marker,
+                f"GrowthBook natural evidence recorder lost safety marker: {marker}",
+            )
+        for forbidden_client in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "from facebook_ads",
+        ):
+            forbid(
+                growthbook_natural_evidence_recorder,
+                forbidden_client,
+                "GrowthBook natural evidence recorder must remain offline: "
+                f"{forbidden_client}",
             )
         for marker in (
             '"ScheduleState": "DISABLED"',
