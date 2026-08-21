@@ -61,12 +61,14 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- ROY daily report email delivery is disabled at project level as of `2026-08-21`:
-  - branch: `codex/disable-roy-daily-email`
+- ROY daily report email delivery is being disabled at project level as of `2026-08-21`:
+  - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`
   - `projects/roy/settings.json` sets `"send_daily_report_email": false`; daily report generation and dashboard artifact publication remain enabled
   - `reporting_core/config.py` exposes the setting with a default of `true`, preserving email behavior for VEVO and other projects
   - `daily_report_runner.py` skips only the email dispatch when this project setting is false
-  - Next exact step: merge through PR, wait for the ECR image build, then run a ROY-only production smoke with email disabled and verify the Fargate localhost marker plus refreshed dashboard payload
+  - ECR build `32447071929` passed and published exact digest `sha256:37ad85ee7dc737afcbdd0500232cbdc79ed9480d04c8e1a6f3ac9202ca1bb307`
+  - branch `codex/roy-only-image-refresh` allows `Production Reporting Smoke` to refresh only the selected project task image instead of requiring `project=all`
+  - Next exact step: merge the ROY-only refresh support, then run `project=roy`, `send_email=true`, `update_task_image=true` and require Fargate localhost marker, refreshed untagged dashboard payload, and the project-config email-skip log
 
 - ROY SD-card purchase-cost correction is merged, deployed, and host-verified (`2026-08-21`):
   - PR `#290` merged as `d9f4d4c3823d880179d8cd58a5cd45a967b57d59`; exact reporting SKUs now map `F_206` to `4.50 EUR` and `12876` to `13.50 EUR`
