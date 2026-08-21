@@ -98,7 +98,7 @@ def validate() -> None:
 
     if (
         workspace.get("schema_version") != 1
-        or workspace.get("state") != "preview_assignment_verified"
+        or workspace.get("state") != "preview_fact_tables_verified"
     ):
         raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
@@ -191,6 +191,10 @@ def validate() -> None:
         "verification_recovery_run_id": 32442114254,
         "verification_athena_query_id": "934c938d-bc55-42c7-b89c-247337e9e2b1",
         "verification_row_count": 1,
+        "performance_verification_run_id": 32443149425,
+        "performance_verification_athena_query_id": "c41e0f2c-690d-4fd5-8081-8868fe8c6876",
+        "performance_verification_event_id": "071b28e4-6177-48ca-86d4-47936cd15a3c",
+        "performance_verification_page_load_id": "a2240ea5-a6f0-416d-a1c2-515b609f8e2c",
         "status": "growthbook_datasource_and_synthetic_assignment_verified",
     }
     for key, value in expected_preview_connection.items():
@@ -238,13 +242,14 @@ def validate() -> None:
     ):
         raise AssertionError("GrowthBook device-outcome fact-table verification state drift")
     if (
-        fact_map["vevo_performance_vitals_v1"].get("growthbook_id") is not None
+        fact_map["vevo_performance_vitals_v1"].get("growthbook_id")
+        != "ftb_19g6mmt2e0otd"
         or fact_map["vevo_performance_vitals_v1"].get("status")
-        != "growthbook_creation_pending_synthetic_performance_fact"
-        or fact_map["vevo_performance_vitals_v1"].get("query_test_status")
-        != "athena_executed_no_rows_growthbook_did_not_persist_table"
+        != "growthbook_created_query_verified_one_row"
+        or fact_map["vevo_performance_vitals_v1"].get("query_verified_date")
+        != "2026-08-21"
     ):
-        raise AssertionError("GrowthBook performance fact-table pending state drift")
+        raise AssertionError("GrowthBook performance fact-table verification state drift")
 
     metrics = workspace.get("metrics", [])
     metric_map = {row.get("key"): row for row in metrics if isinstance(row, dict)}

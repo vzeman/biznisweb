@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "preview_assignment_verified",
+  "state": "preview_fact_tables_verified",
   "workspace": {
     "organization_name": "Vevo",
     "organization_id": "org_19g6mmt1q79o1",
@@ -92,6 +92,10 @@
       "verification_recovery_run_id": 32442114254,
       "verification_athena_query_id": "934c938d-bc55-42c7-b89c-247337e9e2b1",
       "verification_row_count": 1,
+      "performance_verification_run_id": 32443149425,
+      "performance_verification_athena_query_id": "c41e0f2c-690d-4fd5-8081-8868fe8c6876",
+      "performance_verification_event_id": "071b28e4-6177-48ca-86d4-47936cd15a3c",
+      "performance_verification_page_load_id": "a2240ea5-a6f0-416d-a1c2-515b609f8e2c",
       "status": "growthbook_datasource_and_synthetic_assignment_verified"
     },
     "production": {
@@ -118,9 +122,9 @@
     {
       "key": "vevo_performance_vitals_v1",
       "name": "VEVO Performance Vitals v1",
-      "growthbook_id": null,
-      "status": "growthbook_creation_pending_synthetic_performance_fact",
-      "query_test_status": "athena_executed_no_rows_growthbook_did_not_persist_table",
+      "growthbook_id": "ftb_19g6mmt2e0otd",
+      "status": "growthbook_created_query_verified_one_row",
+      "query_verified_date": "2026-08-21",
       "query": "projects/vevo/growthbook_sql/performance_vitals.sql",
       "identifier": "device_id",
       "timestamp_semantics": "first accepted measurement per page load and vital in UTC",
