@@ -75,7 +75,7 @@ jobs:
               raise SystemExit('Production experiment registry must remain empty')
           if workspace.get('workspace', {}).get('production_allocation_percent') != 0:
               raise SystemExit('GrowthBook Production allocation must remain zero')
-          if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'unpublished_draft':
+          if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'not_published':
               raise SystemExit('GTM Preview workspace must remain unpublished')
           if workspace.get('release_gates', {}).get('production_activation_allowed') is not False:
               raise SystemExit('Production activation gate must remain false')

@@ -631,7 +631,7 @@ def validate() -> None:
         "workgroup": "vevo-growthbook-readonly-production",
         "database": "vevo_growthbook_production",
         "s3_results_url": "from_production_stack_output",
-        "status": "read_only_preflight_prepared_natural_run_gate_pending",
+        "status": "first_preflight_stopped_before_aws_literal_fix_prepared",
         "preflight_workflow": (
             ".github/workflows/preflight-vevo-growthbook-production-foundation.yml"
         ),
@@ -642,8 +642,22 @@ def validate() -> None:
         "experiment_registry_empty": True,
         "deployment_allowed": False,
         "credentials_created": False,
+        "first_preflight_attempt": {
+            "workflow_run_id": "32465911390",
+            "workflow_run_url": (
+                "https://github.com/vzeman/biznisweb/actions/runs/32465911390"
+            ),
+            "main_commit": "19adc326d676212df6b410ac96eadeea47655c21",
+            "failure_boundary": (
+                "local_manifest_publish_status_literal_before_aws_credentials"
+            ),
+            "expected_literal": "unpublished_draft",
+            "actual_literal": "not_published",
+            "aws_credentials_step_started": False,
+            "external_mutation_observed": False,
+        },
         "next_gate": (
-            "verify_first_natural_reconciliation_then_run_read_only_production_preflight"
+            "merge_exact_not_published_literal_then_rerun_read_only_preflight"
         ),
     }
     if athena.get("production") != expected_production_connection:
