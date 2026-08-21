@@ -77,7 +77,7 @@ jobs:
               raise SystemExit('GrowthBook Production allocation must remain zero')
           if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'not_published':
               raise SystemExit('GTM Preview workspace must remain unpublished')
-          if workspace.get('release_gates', {}).get('production_activation_allowed') is not False:
+          if workspace.get('decision_gates', {}).get('production_activation_allowed') is not False:
               raise SystemExit('Production activation gate must remain false')
           print('PRODUCTION_FOUNDATION_LOCAL_CONTRACT_OK:route=false:registry=empty:allocation=0')
           PY
