@@ -1,0 +1,635 @@
+name: Provision VEVO GrowthBook Production Reader
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_identity:
+        description: Type the exact dedicated Production IAM user name
+        required: true
+        type: string
+      recipient_certificate_b64:
+        description: Base64-encoded PEM certificate used only to encrypt the one-time credential handoff
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-reader-provision
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  STACK_NAME: vevo-growthbook-production
+  SERVICE_NAME: vevo-growthbook-collector-production
+  RUNTIME_PATH: /app
+  EXPECTED_IMAGE_DIGEST: sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1
+  IAM_USER_NAME: vevo-growthbook-production-reader
+  IAM_USER_PATH: /vevo/growthbook/production/
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  provision-production-reader:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Require exact Production reader confirmation
+        env:
+          CONFIRM_IDENTITY: ${{ inputs.confirm_identity }}
+        run: |
+          set -euo pipefail
+          if [[ "${CONFIRM_IDENTITY}" != "${IAM_USER_NAME}" ]]; then
+            echo 'Dedicated Production IAM identity confirmation did not match.' >&2
+            exit 1
+          fi
+
+      - name: Checkout exact main identity contract
+        uses: actions/checkout@v6.0.2
+
+      - name: Enforce deployed-foundation, zero-allocation, and clone-disabled gates
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_production_reader_workflow \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+          python - <<'PY'
+          import json
+
+          registry = json.load(open('growthbook_collector/experiments.json', encoding='utf-8'))
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          recurring = workspace.get('workspace', {}).get('recurring_schedule', {})
+          production = workspace.get('athena', {}).get('production', {})
+          deployment = production.get('successful_foundation_deployment')
+          clone = production.get('growthbook_clone', {})
+
+          if registry.get('environments', {}).get('production') != {}:
+              raise SystemExit('Production experiment registry must remain empty')
+          if recurring.get('first_natural_run_status') != 'verified':
+              raise SystemExit('first natural reconciliation must be verified before reader provisioning')
+          if recurring.get('natural_verifier_status') != 'passed':
+              raise SystemExit('protected natural reconciliation verifier has not passed')
+          if production.get('status') != 'route_disabled_foundation_deployed_verified':
+              raise SystemExit('Production foundation deployment is not recorded as verified')
+          if production.get('foundation_deployment_status') != 'deployed_route_disabled_verified':
+              raise SystemExit('route-disabled Production foundation evidence is incomplete')
+          if production.get('reader_provisioning_allowed') is not True:
+              raise SystemExit('Production reader provisioning gate is false')
+          if production.get('credentials_created') is not False:
+              raise SystemExit('Production reader credentials already exist')
+          if not isinstance(deployment, dict):
+              raise SystemExit('successful Production foundation deployment evidence is absent')
+          if (
+              deployment.get('stack_status') != 'CREATE_COMPLETE'
+              or deployment.get('public_route_enabled') is not False
+              or deployment.get('api_route_count') != 0
+              or deployment.get('event_bucket_empty') is not True
+              or deployment.get('reader_credentials_created') is not False
+              or deployment.get('image_digest') != (
+                  'sha256:9478acd98a8caf06374b018c563ee51'
+                  'fa896b9cc92148238579f04aa28a134e1'
+              )
+          ):
+              raise SystemExit('successful Production foundation deployment evidence drift')
+          if clone.get('clone_allowed') is not False or clone.get('mutation_status') != 'not_started':
+              raise SystemExit('GrowthBook clone must remain disabled during reader provisioning')
+          if workspace.get('workspace', {}).get('production_allocation_percent') != 0:
+              raise SystemExit('GrowthBook Production allocation must remain zero')
+          if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'not_published':
+              raise SystemExit('GTM Preview workspace must remain unpublished')
+          if workspace.get('decision_gates', {}).get('production_activation_allowed') is not False:
+              raise SystemExit('Production activation gate must remain false')
+          print('PRODUCTION_READER_LOCAL_RELEASE_GATE_OK:route=false:registry=empty:allocation=0:clone=false')
+          PY
+
+      - name: Configure authenticated AWS reader-provisioning identity
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm exact Production instance, IP, service, path, policy, and route-disabled state
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > production-stack.json
+          python - <<'PY' > production-reader-runtime.env
+          import json
+          import os
+
+          stack = json.load(open('production-stack.json', encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackName') != os.environ['STACK_NAME'] or stack.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production stack identity/status drift')
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          if parameters.get('Environment') != 'production':
+              raise SystemExit('collector stack is not Production')
+          if parameters.get('PublicRouteEnabled') != 'false':
+              raise SystemExit('Production public route is not disabled')
+          if 'CollectorEndpoint' in outputs:
+              raise SystemExit('Production public collector endpoint must not exist')
+          required = {
+              'CollectorApiBaseUrl',
+              'CollectorClusterArn',
+              'CollectorContainerLogGroup',
+              'CollectorServiceArn',
+              'CollectorServiceName',
+              'CollectorTaskDefinitionArn',
+              'EventBucketName',
+              'ExperimentDatabaseName',
+              'GrowthBookReadOnlyPolicyArn',
+              'GrowthBookWorkGroupName',
+          }
+          missing = sorted(required - outputs.keys())
+          if missing:
+              raise SystemExit(f'Production stack outputs missing: {missing}')
+          if outputs['CollectorServiceName'] != os.environ['SERVICE_NAME']:
+              raise SystemExit('Production collector service identity drift')
+          expected_digest = os.environ['EXPECTED_IMAGE_DIGEST']
+          image = parameters.get('CollectorImageUri', '')
+          if image.rsplit('@', 1)[-1] != expected_digest:
+              raise SystemExit('Production collector image digest drift')
+          values = {
+              'ACTIVE_API_BASE_URL': outputs['CollectorApiBaseUrl'],
+              'ACTIVE_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'ACTIVE_LOG_GROUP': outputs['CollectorContainerLogGroup'],
+              'ACTIVE_DATABASE': outputs['ExperimentDatabaseName'],
+              'ACTIVE_EVENT_BUCKET': outputs['EventBucketName'],
+              'ACTIVE_GROWTHBOOK_POLICY_ARN': outputs['GrowthBookReadOnlyPolicyArn'],
+              'ACTIVE_GROWTHBOOK_WORKGROUP': outputs['GrowthBookWorkGroupName'],
+              'ACTIVE_IMAGE': image,
+              'ACTIVE_SERVICE_ARN': outputs['CollectorServiceArn'],
+              'ACTIVE_TASK_DEFINITION': outputs['CollectorTaskDefinitionArn'],
+              'ACTIVE_VERSION': parameters['CollectorVersion'],
+          }
+          for key, value in sorted(values.items()):
+              if not value or '\n' in value or '\r' in value:
+                  raise SystemExit(f'invalid Production runtime value: {key}')
+              print(f'{key}={value}')
+          PY
+          cat production-reader-runtime.env >> "${GITHUB_ENV}"
+          set -a
+          source production-reader-runtime.env
+          set +a
+
+          aws ecs describe-services \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --services "${ACTIVE_SERVICE_ARN}" \
+            --region "${AWS_REGION}" > production-service.json
+          aws ecs describe-task-definition \
+            --task-definition "${ACTIVE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > production-task-definition.json
+          aws ecs list-tasks \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" > production-task-list.json
+          ACTIVE_TASK_ARN="$(python -c 'import json; rows=json.load(open("production-task-list.json"))["taskArns"]; assert len(rows) == 1, rows; print(rows[0])')"
+          aws ecs describe-tasks \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --tasks "${ACTIVE_TASK_ARN}" \
+            --region "${AWS_REGION}" > production-task.json
+          POLICY_VERSION="$(aws iam get-policy \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" \
+            --query 'Policy.DefaultVersionId' \
+            --output text)"
+          aws iam get-policy-version \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" \
+            --version-id "${POLICY_VERSION}" > production-policy.json
+          PRODUCTION_API_ID="$(python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          host = urlparse(os.environ['ACTIVE_API_BASE_URL']).hostname or ''
+          api_id = host.split('.', 1)[0]
+          if not api_id:
+              raise SystemExit('Production API ID missing')
+          print(api_id)
+          PY
+          )"
+          aws apigatewayv2 get-routes \
+            --api-id "${PRODUCTION_API_ID}" \
+            --region "${AWS_REGION}" > production-routes.json
+          aws s3api list-objects-v2 \
+            --bucket "${ACTIVE_EVENT_BUCKET}" \
+            --region "${AWS_REGION}" > production-bucket-objects.json
+
+          if aws iam get-user --user-name "${IAM_USER_NAME}" >/dev/null 2>&1; then
+            echo 'Dedicated Production GrowthBook IAM user already exists; refusing to rotate or replace it.' >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          import os
+
+          service = json.load(open('production-service.json', encoding='utf-8'))['services'][0]
+          if service.get('serviceName') != os.environ['SERVICE_NAME']:
+              raise SystemExit('Production service name drift')
+          if service.get('taskDefinition') != os.environ['ACTIVE_TASK_DEFINITION']:
+              raise SystemExit('Production service task definition drift')
+          if service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Production service is not exactly healthy 1/1')
+          definition = json.load(open('production-task-definition.json', encoding='utf-8'))['taskDefinition']
+          containers = definition.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != 'collector':
+              raise SystemExit('Production task definition container drift')
+          container = containers[0]
+          if container.get('image') != os.environ['ACTIVE_IMAGE']:
+              raise SystemExit('Production task definition image drift')
+          if container.get('readonlyRootFilesystem') is not True or container.get('user') != '10001:10001':
+              raise SystemExit('Production collector runtime security boundary drift')
+          task = json.load(open('production-task.json', encoding='utf-8'))['tasks'][0]
+          running = (task.get('containers') or [None])[0]
+          if task.get('lastStatus') != 'RUNNING' or task.get('healthStatus') != 'HEALTHY':
+              raise SystemExit('Production collector task is not RUNNING/HEALTHY')
+          if not running or running.get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+              raise SystemExit('Production service image digest drift')
+          details = [
+              row
+              for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ips = [row.get('value') for row in details if row.get('name') == 'privateIPv4Address']
+          if len(private_ips) != 1 or not private_ips[0]:
+              raise SystemExit(f'Production collector private IP unresolved: {private_ips}')
+          if json.load(open('production-routes.json', encoding='utf-8')).get('Items') not in (None, []):
+              raise SystemExit('Production API unexpectedly has a route')
+          bucket = json.load(open('production-bucket-objects.json', encoding='utf-8'))
+          if bucket.get('KeyCount') != 0 or bucket.get('Contents'):
+              raise SystemExit('Production experiment bucket is not empty')
+
+          document = json.load(open('production-policy.json', encoding='utf-8'))['PolicyVersion']['Document']
+          allowed_actions = {
+              'athena:GetQueryExecution',
+              'athena:GetQueryResults',
+              'athena:GetWorkGroup',
+              'athena:StartQueryExecution',
+              'athena:StopQueryExecution',
+              'glue:GetDatabase',
+              'glue:GetDatabases',
+              'glue:GetPartition',
+              'glue:GetPartitions',
+              'glue:GetTable',
+              'glue:GetTables',
+              's3:AbortMultipartUpload',
+              's3:GetBucketLocation',
+              's3:GetObject',
+              's3:ListBucket',
+              's3:PutObject',
+          }
+          observed_actions = set()
+          observed_resources = set()
+          bucket_arn = f"arn:aws:s3:::{os.environ['ACTIVE_EVENT_BUCKET']}"
+          allowed_resources = {
+              bucket_arn,
+              f'{bucket_arn}/experiment-events/curated/*',
+              f'{bucket_arn}/athena-results/growthbook/*',
+              f"arn:aws:athena:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"workgroup/{os.environ['ACTIVE_GROWTHBOOK_WORKGROUP']}",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:catalog",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"database/{os.environ['ACTIVE_DATABASE']}",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"table/{os.environ['ACTIVE_DATABASE']}/experiment_device_facts",
+              f"arn:aws:glue:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:"
+              f"table/{os.environ['ACTIVE_DATABASE']}/experiment_performance_facts",
+          }
+          for statement in document.get('Statement') or []:
+              actions = statement.get('Action') or []
+              resources = statement.get('Resource') or []
+              if isinstance(actions, str):
+                  actions = [actions]
+              if isinstance(resources, str):
+                  resources = [resources]
+              if statement.get('Effect') != 'Allow' or not set(actions) <= allowed_actions:
+                  raise SystemExit(f'GrowthBook Production policy action drift: {actions}')
+              if not set(resources) <= allowed_resources:
+                  raise SystemExit(f'GrowthBook Production policy resource drift: {resources}')
+              observed_actions.update(actions)
+              observed_resources.update(resources)
+          if observed_actions != allowed_actions:
+              raise SystemExit(
+                  f'GrowthBook Production policy action set drift: {sorted(observed_actions ^ allowed_actions)}'
+              )
+          if observed_resources != allowed_resources:
+              raise SystemExit(
+                  'GrowthBook Production policy resource set drift: '
+                  f'{sorted(observed_resources ^ allowed_resources)}'
+              )
+          with open('production-reader-host-network.json', 'w', encoding='utf-8') as handle:
+              json.dump(service['networkConfiguration'], handle, separators=(',', ':'))
+          print(
+              'PRODUCTION_READER_SERVICE_IDENTITY_OK:'
+              f"instance-id=N/A:Fargate:private-ip={private_ips[0]}:"
+              f"service={os.environ['SERVICE_NAME']}:path={os.environ['RUNTIME_PATH']}:"
+              f"task={task['taskArn'].rsplit('/', 1)[-1]}:image={running['imageDigest']}"
+          )
+          PY
+
+          cat > production-reader-host-overrides.json <<'JSON'
+          {"containerOverrides":[{"name":"collector","command":["/bin/sh","/app/growthbook_collector/host_gate.sh"]}]}
+          JSON
+          HOST_GATE_TASK_ARN="$(aws ecs run-task \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --task-definition "${ACTIVE_TASK_DEFINITION}" \
+            --launch-type FARGATE \
+            --network-configuration file://production-reader-host-network.json \
+            --overrides file://production-reader-host-overrides.json \
+            --group vevo-growthbook-production-reader-host-gate \
+            --started-by "gb-production-reader-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          if [[ -z "${HOST_GATE_TASK_ARN}" || "${HOST_GATE_TASK_ARN}" == 'None' ]]; then
+            echo 'GrowthBook Production reader host-gate task did not start.' >&2
+            exit 1
+          fi
+          aws ecs wait tasks-stopped \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}"
+          aws ecs describe-tasks \
+            --cluster "${ACTIVE_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}" > production-reader-host-task.json
+          python - <<'PY' > production-reader-host.env
+          import json
+          import os
+
+          task = json.load(open('production-reader-host-task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['ACTIVE_TASK_DEFINITION'] or len(containers) != 1:
+              raise SystemExit('Production reader host-gate identity drift')
+          container = containers[0]
+          if container.get('exitCode') != 0:
+              raise SystemExit(f"Production reader host-gate failed: exit={container.get('exitCode')}")
+          if container.get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+              raise SystemExit('Production reader host-gate image digest drift')
+          details = [
+              row
+              for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+          if not private_ip:
+              raise SystemExit('Production reader host-gate private IP missing')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          log_stream = str(container.get('logStreamName') or '')
+          if not log_stream:
+              raise SystemExit('Production reader host-gate log stream missing')
+          print(f'PRODUCTION_READER_HOST_TASK_ID={task_id}')
+          print(f'PRODUCTION_READER_HOST_PRIVATE_IP={private_ip}')
+          print(f'PRODUCTION_READER_HOST_LOG_STREAM={log_stream}')
+          PY
+          cat production-reader-host.env >> "${GITHUB_ENV}"
+          set -a
+          source production-reader-host.env
+          set +a
+          HOST_LOG_READY=false
+          for attempt in $(seq 1 12); do
+            aws logs get-log-events \
+              --log-group-name "${ACTIVE_LOG_GROUP}" \
+              --log-stream-name "${PRODUCTION_READER_HOST_LOG_STREAM}" \
+              --start-from-head \
+              --region "${AWS_REGION}" \
+              --query 'events[].message' \
+              --output text > production-reader-host.log 2>/dev/null || true
+            if grep -Fq "COLLECTOR_LOCALHOST_HEALTH_OK:production:${ACTIVE_VERSION}" production-reader-host.log && \
+               grep -Fq "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:${ACTIVE_VERSION}" production-reader-host.log; then
+              HOST_LOG_READY=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "${HOST_LOG_READY}" != 'true' ]]; then
+            cat production-reader-host.log >&2 || true
+            echo 'Production reader localhost health/marker did not arrive.' >&2
+            exit 1
+          fi
+          grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:production:${ACTIVE_VERSION}" production-reader-host.log
+          grep -F "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:${ACTIVE_VERSION}" production-reader-host.log
+          echo "PRODUCTION_READER_PREPROVISION_HARD_GATE_OK:instance-id=N/A:Fargate:private-ip=${PRODUCTION_READER_HOST_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${PRODUCTION_READER_HOST_TASK_ID}:image=${EXPECTED_IMAGE_DIGEST}"
+
+      - name: Create one dedicated encrypted Production credential handoff
+        env:
+          RECIPIENT_CERTIFICATE_B64: ${{ inputs.recipient_certificate_b64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          CREDENTIAL_JSON="${RUNNER_TEMP}/vevo-growthbook-production-reader.json"
+          ACCESS_KEY_ID_FILE="${RUNNER_TEMP}/vevo-growthbook-production-reader-access-key-id"
+          CREATED_MARKER="${RUNNER_TEMP}/vevo-growthbook-production-reader-created"
+          RECIPIENT_CERT="${RUNNER_TEMP}/vevo-growthbook-production-recipient.pem"
+          ENCRYPTED_HANDOFF="${GITHUB_WORKSPACE}/vevo-growthbook-production-reader.cms"
+          SAFE_MANIFEST="${GITHUB_WORKSPACE}/vevo-growthbook-production-reader-manifest.json"
+
+          cleanup_failed_provision() {
+            set +e
+            if [[ -f "${ACCESS_KEY_ID_FILE}" ]]; then
+              aws iam delete-access-key \
+                --user-name "${IAM_USER_NAME}" \
+                --access-key-id "$(<"${ACCESS_KEY_ID_FILE}")"
+            fi
+            aws iam detach-user-policy \
+              --user-name "${IAM_USER_NAME}" \
+              --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" 2>/dev/null || true
+            aws iam delete-user --user-name "${IAM_USER_NAME}" 2>/dev/null || true
+            rm -f "${CREDENTIAL_JSON}" "${ACCESS_KEY_ID_FILE}" "${CREATED_MARKER}" \
+              "${RECIPIENT_CERT}" "${ENCRYPTED_HANDOFF}" "${SAFE_MANIFEST}"
+          }
+          trap cleanup_failed_provision ERR
+
+          if aws iam get-user --user-name "${IAM_USER_NAME}" >/dev/null 2>&1; then
+            echo 'Dedicated Production GrowthBook IAM user already exists; refusing to rotate or replace it.' >&2
+            exit 1
+          fi
+          printf '%s' "${RECIPIENT_CERTIFICATE_B64}" | base64 --decode > "${RECIPIENT_CERT}"
+          openssl x509 -in "${RECIPIENT_CERT}" -noout -checkend 3600 >/dev/null
+          if ! openssl x509 -in "${RECIPIENT_CERT}" -pubkey -noout | \
+            openssl pkey -pubin -text -noout | grep -q 'Public-Key: (3072 bit)'; then
+            echo 'Credential recipient must be an unexpired RSA-3072 certificate.' >&2
+            exit 1
+          fi
+
+          aws iam create-user \
+            --user-name "${IAM_USER_NAME}" \
+            --path "${IAM_USER_PATH}" \
+            --tags \
+              Key=Project,Value=VEVO \
+              Key=Purpose,Value=GrowthBookAthena \
+              Key=Environment,Value=production \
+              Key=ManagedBy,Value=GitHubActions >/dev/null
+          : > "${CREATED_MARKER}"
+          aws iam attach-user-policy \
+            --user-name "${IAM_USER_NAME}" \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}"
+          aws iam create-access-key \
+            --user-name "${IAM_USER_NAME}" > "${CREDENTIAL_JSON}"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'vevo-growthbook-production-reader.json'
+          row = json.loads(path.read_text(encoding='utf-8'))['AccessKey']
+          if row.get('UserName') != os.environ['IAM_USER_NAME'] or row.get('Status') != 'Active':
+              raise SystemExit('created Production access key identity/status drift')
+          if not row.get('AccessKeyId') or not row.get('SecretAccessKey'):
+              raise SystemExit('created Production access key is incomplete')
+          (Path(os.environ['RUNNER_TEMP']) / 'vevo-growthbook-production-reader-access-key-id').write_text(
+              row['AccessKeyId'], encoding='ascii'
+          )
+          PY
+          aws iam list-attached-user-policies \
+            --user-name "${IAM_USER_NAME}" > production-reader-attached-policies.json
+          aws iam list-user-policies \
+            --user-name "${IAM_USER_NAME}" > production-reader-inline-policies.json
+          aws iam list-groups-for-user \
+            --user-name "${IAM_USER_NAME}" > production-reader-groups.json
+          aws iam list-user-tags \
+            --user-name "${IAM_USER_NAME}" > production-reader-tags.json
+          aws iam list-access-keys \
+            --user-name "${IAM_USER_NAME}" > production-reader-key-metadata.json
+          aws iam get-user \
+            --user-name "${IAM_USER_NAME}" > production-reader-user.json
+          python - <<'PY'
+          import json
+          import os
+
+          user = json.load(open('production-reader-user.json', encoding='utf-8'))['User']
+          if user.get('Path') != os.environ['IAM_USER_PATH'] or user.get('UserName') != os.environ['IAM_USER_NAME']:
+              raise SystemExit('created Production IAM user path/name drift')
+          attached = json.load(open('production-reader-attached-policies.json', encoding='utf-8'))['AttachedPolicies']
+          if [row['PolicyArn'] for row in attached] != [os.environ['ACTIVE_GROWTHBOOK_POLICY_ARN']]:
+              raise SystemExit(f'GrowthBook Production user attached policy drift: {attached}')
+          if json.load(open('production-reader-inline-policies.json', encoding='utf-8'))['PolicyNames']:
+              raise SystemExit('GrowthBook Production user unexpectedly has an inline policy')
+          if json.load(open('production-reader-groups.json', encoding='utf-8'))['Groups']:
+              raise SystemExit('GrowthBook Production user unexpectedly belongs to an IAM group')
+          tags = {
+              row['Key']: row['Value']
+              for row in json.load(open('production-reader-tags.json', encoding='utf-8'))['Tags']
+          }
+          expected_tags = {
+              'Environment': 'production',
+              'ManagedBy': 'GitHubActions',
+              'Project': 'VEVO',
+              'Purpose': 'GrowthBookAthena',
+          }
+          if tags != expected_tags:
+              raise SystemExit(f'GrowthBook Production user tag drift: {tags}')
+          keys = json.load(open('production-reader-key-metadata.json', encoding='utf-8'))['AccessKeyMetadata']
+          if len(keys) != 1 or keys[0].get('Status') != 'Active':
+              raise SystemExit('GrowthBook Production user must have exactly one active access key')
+          PY
+
+          openssl cms -encrypt -binary -aes-256-cbc \
+            -in "${CREDENTIAL_JSON}" \
+            -outform DER \
+            -out "${ENCRYPTED_HANDOFF}" \
+            "${RECIPIENT_CERT}"
+          ACCESS_KEY_ID="$(<"${ACCESS_KEY_ID_FILE}")"
+          if grep -a -F -q "${ACCESS_KEY_ID}" "${ENCRYPTED_HANDOFF}"; then
+            echo 'Encrypted Production handoff unexpectedly contains the plaintext access key ID.' >&2
+            exit 1
+          fi
+          CERT_SHA256="$(openssl x509 -in "${RECIPIENT_CERT}" -noout -fingerprint -sha256 | cut -d= -f2)"
+          export CERT_SHA256
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = {
+              'schema_version': 1,
+              'aws_account_id': os.environ['EXPECTED_ACCOUNT_ID'],
+              'aws_region': os.environ['AWS_REGION'],
+              'environment': 'production',
+              'iam_user_name': os.environ['IAM_USER_NAME'],
+              'iam_user_path': os.environ['IAM_USER_PATH'],
+              'policy_arn': os.environ['ACTIVE_GROWTHBOOK_POLICY_ARN'],
+              'stack_name': os.environ['STACK_NAME'],
+              'workgroup': os.environ['ACTIVE_GROWTHBOOK_WORKGROUP'],
+              'database': os.environ['ACTIVE_DATABASE'],
+              's3_results_url': f"s3://{os.environ['ACTIVE_EVENT_BUCKET']}/athena-results/growthbook/",
+              'recipient_certificate_sha256': os.environ['CERT_SHA256'],
+              'contains_plaintext_credentials': False,
+              'growthbook_control_plane_mutated': False,
+          }
+          Path('vevo-growthbook-production-reader-manifest.json').write_text(
+              json.dumps(manifest, indent=2) + '\n', encoding='utf-8'
+          )
+          PY
+          shred --remove "${CREDENTIAL_JSON}"
+          rm -f "${RECIPIENT_CERT}"
+          trap - ERR
+          echo "GROWTHBOOK_PRODUCTION_READER_ENCRYPTED_HANDOFF_READY:${IAM_USER_NAME}:${CERT_SHA256}"
+
+      - name: Upload encrypted one-time Production handoff
+        id: handoff
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-production-reader-${{ github.run_id }}
+          path: |
+            vevo-growthbook-production-reader.cms
+            vevo-growthbook-production-reader-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Confirm successful Production reader provisioning
+        run: |
+          set -euo pipefail
+          rm -f \
+            "${RUNNER_TEMP}/vevo-growthbook-production-reader-access-key-id" \
+            "${RUNNER_TEMP}/vevo-growthbook-production-reader-created"
+          echo "GROWTHBOOK_PRODUCTION_READER_ACTIVE:${IAM_USER_NAME}:${ACTIVE_GROWTHBOOK_POLICY_ARN}"
+
+      - name: Revoke incomplete Production reader provisioning
+        if: ${{ failure() }}
+        run: |
+          set -euo pipefail
+          CREATED_MARKER="${RUNNER_TEMP}/vevo-growthbook-production-reader-created"
+          ACCESS_KEY_ID_FILE="${RUNNER_TEMP}/vevo-growthbook-production-reader-access-key-id"
+          if [[ ! -f "${CREATED_MARKER}" ]]; then
+            echo 'No Production IAM identity was created by this failed run.'
+            exit 0
+          fi
+          if [[ -f "${ACCESS_KEY_ID_FILE}" ]]; then
+            aws iam delete-access-key \
+              --user-name "${IAM_USER_NAME}" \
+              --access-key-id "$(<"${ACCESS_KEY_ID_FILE}")"
+          fi
+          aws iam detach-user-policy \
+            --user-name "${IAM_USER_NAME}" \
+            --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" 2>/dev/null || true
+          aws iam delete-user --user-name "${IAM_USER_NAME}"
+          rm -f "${ACCESS_KEY_ID_FILE}" "${CREATED_MARKER}"
+          echo "GROWTHBOOK_PRODUCTION_READER_FAILED_RUN_REVOKED:${IAM_USER_NAME}"
+
+      - name: Production reader provisioning summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## VEVO GrowthBook Production reader'
+            echo "- Expected account/region: \`${EXPECTED_ACCOUNT_ID}\` / \`${AWS_REGION}\`"
+            echo "- Service/path: \`${SERVICE_NAME}\` / \`${RUNTIME_PATH}\`"
+            echo "- Host-gate task/IP: \`${PRODUCTION_READER_HOST_TASK_ID:-not-run}\` / \`${PRODUCTION_READER_HOST_PRIVATE_IP:-not-run}\`"
+            echo '- Public route: `disabled`'
+            echo '- Production registry/allocation: `empty` / `0%`'
+            echo '- GrowthBook control plane: `unchanged`'
+            echo '- GTM: `not_published`'
+            echo '- Meta Ads and BiznisWeb commerce state: `unchanged`'
+          } >> "${GITHUB_STEP_SUMMARY}"
