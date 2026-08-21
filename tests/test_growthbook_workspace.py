@@ -64,6 +64,23 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "CM1 contracts differ"):
                 validator.validate()
 
+    def test_validator_rejects_created_metric_id_drift(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        metric = next(row for row in altered["metrics"] if row["key"] == "vevo_add_to_cart_24h")
+        metric["growthbook_id"] = "fact_drifted"
+        with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
+            with self.assertRaisesRegex(AssertionError, "created metric state drift"):
+                validator.validate()
+
+    def test_validator_rejects_unapproved_pro_metric_claim(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        metric = next(row for row in altered["metrics"] if row["key"] == "vevo_lcp_p75_24h")
+        metric["growthbook_id"] = "fact_unapproved"
+        metric["status"] = "growthbook_created_ui_verified"
+        with mock.patch.object(validator, "_load", side_effect=[altered, self.reporting, self.registry]):
+            with self.assertRaisesRegex(AssertionError, "Pro metric blocker state drift"):
+                validator.validate()
+
     def test_validator_rejects_pii_identifier_in_sql(self) -> None:
         with self.assertRaisesRegex(AssertionError, "forbidden identifier email"):
             validator._validate_sql(

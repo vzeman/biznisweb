@@ -30,6 +30,21 @@ EXPECTED_METRICS = {
     "vevo_inp_p75_24h",
     "vevo_cls_p75_milli_24h",
 }
+EXPECTED_CREATED_METRICS = {
+    "vevo_add_to_cart_24h": "fact__2CeFBdeQA6SLEMaRKd563q",
+    "vevo_purchase_conversion_7d": "fact__2CeFBgoFnykxPTRotYTDnB",
+    "vevo_revenue_per_exposed_device_7d": "fact__2CeFBwmv6pJ39DJbDfwwRQ",
+    "vevo_cm1_per_exposed_device_7d": "fact__2CeFBxixXV2373bgTrsXzS",
+    "vevo_average_order_value_7d": "fact__2CeFC1mPhy2axfQ61NCz45",
+    "vevo_cancelled_order_rate_14d": "fact__2CeFC3CdXkdH8zEzFu2CjP",
+    "vevo_refunded_order_rate_14d": "fact__2CeFCDRWDEiKt6p8C8mixz",
+    "vevo_client_error_device_rate_24h": "fact__2CeFCH8i2mUPmYAj1pmLZ2",
+}
+EXPECTED_PRO_BLOCKED_METRICS = {
+    "vevo_lcp_p75_24h",
+    "vevo_inp_p75_24h",
+    "vevo_cls_p75_milli_24h",
+}
 EXPECTED_FEATURES = {
     "vevo-sk-aa-001": "vevo-sk-aa-assignment",
     "vevo-sk-product-cta-color-001": "vevo-sk-product-cta-color",
@@ -98,7 +113,8 @@ def validate() -> None:
 
     if (
         workspace.get("schema_version") != 1
-        or workspace.get("state") != "preview_fact_tables_verified"
+        or workspace.get("state")
+        != "preview_outcome_metrics_verified_pro_quantiles_blocked"
     ):
         raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
     workspace_config = workspace.get("workspace", {})
@@ -263,6 +279,23 @@ def validate() -> None:
         roles = metric.get("roles", {})
         if set(roles) != set(EXPECTED_FEATURES):
             raise AssertionError(f"GrowthBook metric roles are incomplete: {key}")
+    for key, growthbook_id in EXPECTED_CREATED_METRICS.items():
+        metric = metric_map[key]
+        if (
+            metric.get("growthbook_id") != growthbook_id
+            or metric.get("status") != "growthbook_created_ui_verified"
+            or metric.get("created_verified_date") != "2026-08-21"
+        ):
+            raise AssertionError(f"GrowthBook created metric state drift: {key}")
+    for key in EXPECTED_PRO_BLOCKED_METRICS:
+        metric = metric_map[key]
+        if (
+            metric.get("growthbook_id") is not None
+            or metric.get("status") != "blocked_pending_paid_pro_upgrade"
+            or metric.get("blocker") != "quantile_metric_requires_paid_pro"
+            or metric.get("blocker_observed_date") != "2026-08-21"
+        ):
+            raise AssertionError(f"GrowthBook Pro metric blocker state drift: {key}")
     if metric_map["vevo_add_to_cart_24h"]["roles"]["vevo-sk-product-cta-color-001"] != "primary":
         raise AssertionError("CTA A/B must keep add-to-cart as its only primary metric")
     primary_metrics = [
