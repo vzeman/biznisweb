@@ -162,7 +162,8 @@ Bootstrap entrypoints:
   - GrowthBook draft/UI mutations above occurred; no BiznisWeb, GTM, Meta, AWS, reporting-runtime, or storefront-runtime mutation occurred, and no local server/process was started, so no process cleanup was required
   - the current GrowthBook plan read-back is Starter; a paid Pro upgrade modal was reviewed and cancelled, so no charge, subscription upgrade, or auto-renewal was accepted
   - the dedicated AWS key/secret is stored only in GrowthBook Cloud; the connection, assignment query, and both fact tables are verified, and the temporary local credential/private-key handoff is deleted
-  - eight Starter-compatible outcome metrics are now created and UI-verified with exact IDs recorded in `projects/vevo/growthbook_workspace.json`; three performance p75 Quantile metrics remain intentionally uncreated because the authenticated plan is Starter and no paid Pro charge was authorized
+  - eight Starter-compatible outcome metrics are now created with exact IDs recorded in `projects/vevo/growthbook_workspace.json`; a first real metric analysis correctly exposed `integer = varchar(1)` on a binary filter, all numeric outcome/quality columns were corrected from GrowthBook String to Number, and all eight metric analyses then passed through Preview Athena against one anonymous synthetic device
+  - three performance p75 Quantile metrics remain intentionally uncreated because the authenticated plan is Starter and no paid Pro charge was authorized
   - Next exact step: obtain explicit authorization for the paid GrowthBook Pro upgrade before creating LCP/INP/CLS p75 metrics; until then, keep Production allocation at `0%` and do not publish GTM, Meta, or BiznisWeb storefront changes
 
 - VEVO profit-first Meta spend and sample-customer decision system is implemented on branch `codex/vevo-meta-profit-scaling` (`2026-08-20`):
