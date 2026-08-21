@@ -626,6 +626,28 @@ def validate() -> None:
         "athena-results/growthbook/"
     ):
         raise AssertionError("Preview Athena results location drift")
+    expected_production_connection = {
+        "data_source_name": "VEVO Production Experiment Facts",
+        "workgroup": "vevo-growthbook-readonly-production",
+        "database": "vevo_growthbook_production",
+        "s3_results_url": "from_production_stack_output",
+        "status": "read_only_preflight_prepared_natural_run_gate_pending",
+        "preflight_workflow": (
+            ".github/workflows/preflight-vevo-growthbook-production-foundation.yml"
+        ),
+        "expected_stack": "vevo-growthbook-production",
+        "expected_service": "vevo-growthbook-collector-production",
+        "expected_runtime_path": "/app",
+        "public_route_enabled": False,
+        "experiment_registry_empty": True,
+        "deployment_allowed": False,
+        "credentials_created": False,
+        "next_gate": (
+            "verify_first_natural_reconciliation_then_run_read_only_production_preflight"
+        ),
+    }
+    if athena.get("production") != expected_production_connection:
+        raise AssertionError("GrowthBook Production connection preflight state drift")
     assignment_path = athena.get("assignment_query")
     assignment_sql = _read_repo_path(assignment_path)
     _validate_sql(

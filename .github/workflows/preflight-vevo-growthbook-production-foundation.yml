@@ -1,0 +1,279 @@
+name: Preflight VEVO GrowthBook Production Foundation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_preflight:
+        description: Type true to run the read-only Production foundation preflight
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-foundation-preflight
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  PREVIEW_STACK_NAME: vevo-growthbook-preview
+  PRODUCTION_STACK_NAME: vevo-growthbook-production
+  PREVIEW_SERVICE_NAME: vevo-growthbook-collector-preview
+  PRODUCTION_SERVICE_NAME: vevo-growthbook-collector-production
+  SOURCE_SCHEDULE: vevo-daily-report-email
+  RUNTIME_PATH: /app
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  preflight:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Require exact read-only preflight confirmation
+        env:
+          CONFIRM_PREFLIGHT: ${{ inputs.confirm_preflight }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_PREFLIGHT}" == "true" ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate fail-closed Production contract locally
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install boto3==1.42.63 cfn-lint==1.55.1
+          python -m unittest \
+            tests.test_growthbook_collector \
+            tests.test_growthbook_collector_server \
+            tests.test_growthbook_changeset \
+            tests.test_growthbook_production_preflight_workflow \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+          cfn-lint infra/vevo-growthbook/template.yaml
+          python - <<'PY'
+          import json
+
+          registry = json.load(open('growthbook_collector/experiments.json', encoding='utf-8'))
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          if registry.get('environments', {}).get('production') != {}:
+              raise SystemExit('Production experiment registry must remain empty')
+          if workspace.get('workspace', {}).get('production_allocation_percent') != 0:
+              raise SystemExit('GrowthBook Production allocation must remain zero')
+          if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'unpublished_draft':
+              raise SystemExit('GTM Preview workspace must remain unpublished')
+          if workspace.get('release_gates', {}).get('production_activation_allowed') is not False:
+              raise SystemExit('Production activation gate must remain false')
+          print('PRODUCTION_FOUNDATION_LOCAL_CONTRACT_OK:route=false:registry=empty:allocation=0')
+          PY
+          docker build -f growthbook_collector/Dockerfile -t vevo-growthbook-collector:production-preflight .
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            -e AWS_ACCESS_KEY_ID=preflight-placeholder \
+            -e AWS_SECRET_ACCESS_KEY=preflight-placeholder \
+            -e AWS_EC2_METADATA_DISABLED=true \
+            -e AWS_REGION=eu-central-1 \
+            -e GROWTHBOOK_ALLOWED_ORIGINS=https://www.vevo.sk \
+            -e GROWTHBOOK_COLLECTOR_VERSION=git-production-preflight \
+            -e GROWTHBOOK_ENVIRONMENT=production \
+            -e GROWTHBOOK_EVENT_BUCKET=preflight-placeholder \
+            -e GROWTHBOOK_EXPERIMENT_REGISTRY_PATH=/app/growthbook_collector/experiments.json \
+            vevo-growthbook-collector:production-preflight \
+            /bin/sh /app/growthbook_collector/host_gate.sh
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read exact Preview runtime and planned Production boundary
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+
+          aws cloudformation describe-stacks \
+            --stack-name "${PREVIEW_STACK_NAME}" \
+            --region "${AWS_REGION}" > preview-stack.json
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > source-schedule.json
+
+          python - <<'PY' > preview-runtime.env
+          import json
+          import os
+
+          stack = json.load(open('preview-stack.json', encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackStatus') not in {'CREATE_COMPLETE', 'UPDATE_COMPLETE'}:
+              raise SystemExit(f"Preview stack is not healthy: {stack.get('StackStatus')}")
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          if parameters.get('Environment') != 'preview' or parameters.get('PublicRouteEnabled') != 'true':
+              raise SystemExit('Preview collector identity drift')
+          required = {
+              'CollectorClusterArn', 'CollectorServiceArn', 'CollectorServiceName',
+              'CollectorTaskDefinitionArn', 'CollectorHostMarkerPath',
+          }
+          missing = sorted(required - outputs.keys())
+          if missing:
+              raise SystemExit(f'Preview outputs missing: {missing}')
+          if outputs['CollectorServiceName'] != os.environ['PREVIEW_SERVICE_NAME']:
+              raise SystemExit('Preview service name drift')
+          if outputs['CollectorHostMarkerPath'] != 'http://127.0.0.1:8080/marker.json':
+              raise SystemExit('Preview marker path drift')
+
+          schedule = json.load(open('source-schedule.json', encoding='utf-8'))
+          if schedule.get('Name') != os.environ['SOURCE_SCHEDULE'] or schedule.get('State') != 'ENABLED':
+              raise SystemExit('Source reporting schedule identity drift')
+          network = schedule['Target']['EcsParameters']['NetworkConfiguration']['awsvpcConfiguration']
+          subnets = network.get('Subnets') or network.get('subnets') or []
+          if len(subnets) < 2 or len(set(subnets)) != len(subnets):
+              raise SystemExit('Source schedule must expose at least two distinct subnets')
+          print(f"PREVIEW_CLUSTER_ARN={outputs['CollectorClusterArn']}")
+          print(f"PREVIEW_SERVICE_ARN={outputs['CollectorServiceArn']}")
+          print(f"PREVIEW_TASK_DEFINITION_ARN={outputs['CollectorTaskDefinitionArn']}")
+          PY
+          cat preview-runtime.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          set -a
+          source preview-runtime.env
+          set +a
+
+          aws ecs describe-services \
+            --cluster "${PREVIEW_CLUSTER_ARN}" \
+            --services "${PREVIEW_SERVICE_ARN}" \
+            --region "${AWS_REGION}" > preview-service.json
+          PREVIEW_TARGET_GROUP_ARN="$(python -c 'import json; print(json.load(open("preview-service.json"))["services"][0]["loadBalancers"][0]["targetGroupArn"])')"
+          aws elbv2 describe-target-health \
+            --target-group-arn "${PREVIEW_TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > preview-target-health.json
+          PREVIEW_TASK_ARN="$(aws ecs list-tasks \
+            --cluster "${PREVIEW_CLUSTER_ARN}" \
+            --service-name "${PREVIEW_SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" \
+            --query 'taskArns[0]' \
+            --output text)"
+          [[ -n "${PREVIEW_TASK_ARN}" && "${PREVIEW_TASK_ARN}" != "None" ]]
+          aws ecs describe-tasks \
+            --cluster "${PREVIEW_CLUSTER_ARN}" \
+            --tasks "${PREVIEW_TASK_ARN}" \
+            --region "${AWS_REGION}" > preview-task.json
+          aws ecs describe-task-definition \
+            --task-definition "${PREVIEW_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > preview-task-definition.json
+
+          if aws cloudformation describe-stacks \
+            --stack-name "${PRODUCTION_STACK_NAME}" \
+            --region "${AWS_REGION}" > production-stack.json 2> production-stack-error.txt; then
+            PRODUCTION_STACK_STATE=route_disabled_existing
+          elif grep -q 'does not exist' production-stack-error.txt; then
+            PRODUCTION_STACK_STATE=absent
+            printf '{"Stacks":[]}' > production-stack.json
+          else
+            cat production-stack-error.txt >&2
+            exit 1
+          fi
+          echo "PRODUCTION_STACK_STATE=${PRODUCTION_STACK_STATE}" >> "${GITHUB_ENV}"
+
+          python - <<'PY' > production-preflight.env
+          import json
+          import os
+
+          service = json.load(open('preview-service.json', encoding='utf-8'))['services'][0]
+          task = json.load(open('preview-task.json', encoding='utf-8'))['tasks'][0]
+          definition = json.load(open('preview-task-definition.json', encoding='utf-8'))['taskDefinition']
+          if service.get('serviceName') != os.environ['PREVIEW_SERVICE_NAME']:
+              raise SystemExit('Preview service read-back drift')
+          if service.get('taskDefinition') != os.environ['PREVIEW_TASK_DEFINITION_ARN']:
+              raise SystemExit('Preview task definition drift')
+          if service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Preview collector is not 1/1 healthy')
+          target_states = [
+              row['TargetHealth']['State']
+              for row in json.load(open('preview-target-health.json', encoding='utf-8')).get('TargetHealthDescriptions') or []
+          ]
+          if target_states != ['healthy']:
+              raise SystemExit(f'Preview target health drift: {target_states}')
+          if task.get('taskDefinitionArn') != os.environ['PREVIEW_TASK_DEFINITION_ARN']:
+              raise SystemExit('Preview running task definition drift')
+          containers = definition.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != 'collector':
+              raise SystemExit('Preview task container boundary drift')
+          environment = {row['name']: row['value'] for row in containers[0].get('environment') or []}
+          if environment.get('GROWTHBOOK_ENVIRONMENT') != 'preview':
+              raise SystemExit('Preview task environment drift')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1:
+              raise SystemExit(f'Preview private IP unresolved: {private_ips}')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          image_digest = task['containers'][0].get('imageDigest') or ''
+          if not image_digest.startswith('sha256:'):
+              raise SystemExit('Preview image digest unresolved')
+
+          production_stacks = json.load(open('production-stack.json', encoding='utf-8')).get('Stacks') or []
+          if production_stacks:
+              production = production_stacks[0]
+              parameters = {row['ParameterKey']: row['ParameterValue'] for row in production.get('Parameters') or []}
+              outputs = {row['OutputKey']: row['OutputValue'] for row in production.get('Outputs') or []}
+              if production.get('StackStatus') not in {'CREATE_COMPLETE', 'UPDATE_COMPLETE'}:
+                  raise SystemExit('Existing Production stack is not healthy')
+              if parameters.get('Environment') != 'production' or parameters.get('PublicRouteEnabled') != 'false':
+                  raise SystemExit('Existing Production stack is not route-disabled')
+              if 'CollectorEndpoint' in outputs:
+                  raise SystemExit('Existing Production stack exposes a public collector endpoint')
+              if outputs.get('CollectorServiceName') != os.environ['PRODUCTION_SERVICE_NAME']:
+                  raise SystemExit('Existing Production service name drift')
+
+          print(f'PREVIEW_TASK_ID={task_id}')
+          print(f'PREVIEW_PRIVATE_IP={private_ips[0]}')
+          print(f'PREVIEW_IMAGE_DIGEST={image_digest}')
+          PY
+          cat production-preflight.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          source production-preflight.env
+
+          {
+            echo "PRODUCTION_FOUNDATION_PREFLIGHT_OK:account=${ACCOUNT_ID}:region=${AWS_REGION}:production-stack=${PRODUCTION_STACK_STATE}"
+            echo "PREVIEW_RUNTIME_IDENTITY_OK:instance-id=N/A:Fargate:private-ip=${PREVIEW_PRIVATE_IP}:service=${PREVIEW_SERVICE_NAME}:path=${RUNTIME_PATH}:task=${PREVIEW_TASK_ID}:image=${PREVIEW_IMAGE_DIGEST}"
+            echo "PLANNED_PRODUCTION_IDENTITY:instance-id=N/A:Fargate:private-ip=pending-route-disabled-stack:service=${PRODUCTION_SERVICE_NAME}:path=${RUNTIME_PATH}:route=false:registry=empty:allocation=0"
+          } | tee production-foundation-preflight.txt
+
+      - name: Read-only preflight summary
+        if: always()
+        run: |
+          {
+            echo '## VEVO GrowthBook Production foundation preflight'
+            echo
+            echo "- Git commit: \`${GITHUB_SHA}\`"
+            echo "- AWS account/region: \`${EXPECTED_ACCOUNT_ID}\` / \`${AWS_REGION}\`"
+            echo "- Existing Preview service: \`${PREVIEW_SERVICE_NAME}\`"
+            echo "- Planned Production service: \`${PRODUCTION_SERVICE_NAME}\`"
+            echo "- Runtime path: \`${RUNTIME_PATH}\`"
+            echo "- Production stack state: \`${PRODUCTION_STACK_STATE:-not-read}\`"
+            echo '- AWS mutations: `none`'
+            echo '- Production route: `disabled/planned`'
+            echo '- Production registry: `empty`'
+            echo '- GrowthBook Production allocation: `0%`'
+          } >> "${GITHUB_STEP_SUMMARY}"
