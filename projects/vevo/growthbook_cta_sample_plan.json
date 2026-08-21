@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "source_experiment_id": "vevo-sk-aa-001",
+  "timezone": "Europe/Bratislava",
+  "status": "pending_aa_pass_and_final_sample_freeze",
+  "population_definition": "first_valid_aa_product_page_exposure_proxy",
+  "primary_metric": "add_to_cart_within_24h_per_first_product_page_exposed_device",
+  "planning_method": "two_sample_proportions_normal_approximation_equal_allocation",
+  "expected_variation_weights": {
+    "control": 0.5,
+    "brand_contrast": 0.5
+  },
+  "relative_mde_percent": 25,
+  "power_percent": 80,
+  "two_sided_alpha_percent": 5,
+  "minimum_baseline_exposed_devices": 200,
+  "minimum_full_calendar_days": 14,
+  "maximum_full_calendar_days": 42,
+  "provisional": {
+    "source": "ga4_2026-07-23_2026-08-19_diagnostic",
+    "exposed_devices": 451,
+    "converted_devices": 148,
+    "sample_per_arm": 542,
+    "total_sample": 1084
+  },
+  "final": {
+    "observation_sha256": null,
+    "aa_snapshot_sha256": null,
+    "aa_window_started_at_utc": null,
+    "aa_window_ended_at_utc": null,
+    "exposed_devices": null,
+    "converted_devices": null,
+    "baseline_rate_percent": null,
+    "target_rate_percent": null,
+    "sample_per_arm": null,
+    "total_sample": null,
+    "frozen_at_utc": null
+  },
+  "activation_allowed": false,
+  "next_gate": "after_aa_pass_record_hash_bound_product_page_baseline_then_review_full_cta_decision_contract"
+}

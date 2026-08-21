@@ -248,6 +248,7 @@ Hypothesis: changing only the product-detail add-to-cart CTA background from the
 - Minimum run: 14 full days and two complete weekday cycles.
 - Maximum planned run: 42 days.
 - Provisional planning target: `1,084` total exposed devices (`542`/arm), calculated from the diagnostic seven-day GA4 ratio `148 add_to_cart users / 451 view_item users`, a `25%` relative MDE, `80%` power, and two-sided `5%` alpha. Because the GA4 ratio is not an exposure-linked cohort, recompute once from A/A event data, freeze the final target before launch, and never change it after observing A/B results.
+- The machine-readable planning contract is `growthbook_cta_sample_plan.json`. `scripts/freeze_growthbook_cta_sample.py` reproduces the provisional `542`/arm result and may replace it only from a canonical, independently SHA-256-bound, PII-free aggregate after the Production A/A decision is `PASS`. The baseline uses first valid A/A product-page exposure as a conservative planning proxy; the live CTA decision denominator remains the exact first exposure where the CTA is rendered. The tool updates only the sample plan and matching workspace fields, keeps the experiment and feature rule in draft, and leaves `activation_allowed=false` and Production allocation at `0%`.
 - Decision timing: no winner/loser call before both minimum duration and planned sample are reached. Guardrail harm may stop the test early.
 
 Decision contract:
