@@ -16,6 +16,19 @@ on:
         required: false
         default: ""
         type: string
+      recovery_source_event_date:
+        description: UTC event date of the recovered synthetic exposure (YYYY-MM-DD)
+        required: false
+        default: ""
+        type: string
+      confirm_performance_publish:
+        description: Publish one idempotent synthetic LCP fact for the recovered Preview device
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -379,8 +392,18 @@ jobs:
         shell: bash
         env:
           RECOVERY_SOURCE_RUN_ID: ${{ inputs.recovery_source_run_id }}
+          RECOVERY_SOURCE_EVENT_DATE: ${{ inputs.recovery_source_event_date }}
+          CONFIRM_PERFORMANCE_PUBLISH: ${{ inputs.confirm_performance_publish }}
         run: |
           set -euo pipefail
+          if [[ -n "${RECOVERY_SOURCE_RUN_ID}" && ! "${RECOVERY_SOURCE_EVENT_DATE}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "Recovery requires recovery_source_event_date in YYYY-MM-DD form" >&2
+            exit 1
+          fi
+          if [[ "${CONFIRM_PERFORMANCE_PUBLISH}" == "true" && -z "${RECOVERY_SOURCE_RUN_ID}" ]]; then
+            echo "Performance verification requires an existing recovered exposure run ID" >&2
+            exit 1
+          fi
           POLICY_DEFAULT_VERSION="$(aws iam get-policy \
             --policy-arn "${REPORTING_POLICY_ARN}" \
             --query 'Policy.DefaultVersionId' \
@@ -444,7 +467,7 @@ jobs:
           occurred_at = datetime.now(timezone.utc)
           event_id = deterministic_uuid4("event")
           device_id = deterministic_uuid4("device")
-          event_date = occurred_at.date().isoformat()
+          event_date = os.environ.get("RECOVERY_SOURCE_EVENT_DATE", "").strip() or occurred_at.date().isoformat()
           payload = {
               "schema_version": 1,
               "event_id": event_id,
@@ -465,12 +488,29 @@ jobs:
           }
           with open("synthetic-event.json", "w", encoding="utf-8") as handle:
               json.dump(payload, handle, separators=(",", ":"), sort_keys=True)
+          performance_mode = os.environ.get("CONFIRM_PERFORMANCE_PUBLISH") == "true"
+          performance_event_id = deterministic_uuid4("performance-event")
+          page_load_id = deterministic_uuid4("performance-page-load")
+          performance_payload = {
+              **payload,
+              "event_id": performance_event_id,
+              "event_name": "performance_vital",
+              "page_load_id": page_load_id,
+              "vital_name": "lcp_ms",
+              "vital_value": 1300,
+          }
+          if performance_mode:
+              with open("synthetic-performance-event.json", "w", encoding="utf-8") as handle:
+                  json.dump(performance_payload, handle, separators=(",", ":"), sort_keys=True)
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
               handle.write(f"SYNTHETIC_EVENT_ID={event_id}\n")
               handle.write(f"SYNTHETIC_DEVICE_ID={device_id}\n")
               handle.write(f"SYNTHETIC_EVENT_DATE={event_date}\n")
               handle.write(f"RECOVERY_MODE={'true' if os.environ.get('RECOVERY_SOURCE_RUN_ID', '').strip() else 'false'}\n")
               handle.write(f"RECOVERY_SOURCE_RUN_ID_EFFECTIVE={os.environ.get('RECOVERY_SOURCE_RUN_ID', '').strip()}\n")
+              handle.write(f"PERFORMANCE_MODE={'true' if performance_mode else 'false'}\n")
+              handle.write(f"PERFORMANCE_EVENT_ID={performance_event_id}\n")
+              handle.write(f"PERFORMANCE_PAGE_LOAD_ID={page_load_id}\n")
           PY
           set -a
           source "${GITHUB_ENV}"
@@ -547,6 +587,107 @@ jobs:
           PY
           fi
 
+          if [[ "${PERFORMANCE_MODE}" == "true" ]]; then
+            PERFORMANCE_RAW_KEY="experiment-events/raw/event_date=${SYNTHETIC_EVENT_DATE}/${PERFORMANCE_EVENT_ID}.json"
+            if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${PERFORMANCE_RAW_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              aws s3 cp "s3://${EVENT_BUCKET}/${PERFORMANCE_RAW_KEY}" raw-synthetic-performance-event.json --only-show-errors
+              python3 <<'PY'
+          import json
+          import os
+
+          record = json.load(open("raw-synthetic-performance-event.json", encoding="utf-8"))
+          expected = {
+              "schema_version": 1,
+              "event_id": os.environ["PERFORMANCE_EVENT_ID"],
+              "event_name": "performance_vital",
+              "device_id": os.environ["SYNTHETIC_DEVICE_ID"],
+              "page_path": "/",
+              "page_type": "home",
+              "consent_state": "analytics_granted",
+              "experiment_id": "vevo-sk-aa-001",
+              "variation_id": "control",
+              "utm_source": "meta",
+              "utm_medium": "paid_social",
+              "meta_campaign_id": "900000000001",
+              "meta_adset_id": "900000000002",
+              "meta_ad_id": "900000000003",
+              "meta_placement": "instagram_feed",
+              "page_load_id": os.environ["PERFORMANCE_PAGE_LOAD_ID"],
+              "vital_name": "lcp_ms",
+              "vital_value": 1300,
+              "event_date": os.environ["SYNTHETIC_EVENT_DATE"],
+              "risk_result": "accepted",
+          }
+          if any(record.get(key) != value for key, value in expected.items()):
+              raise SystemExit("existing synthetic performance event identity drift")
+          client_fields = {
+              key: value
+              for key, value in record.items()
+              if key not in {"received_at", "event_date", "collector_version", "risk_result"}
+          }
+          with open("synthetic-performance-event.json", "w", encoding="utf-8") as handle:
+              json.dump(client_fields, handle, separators=(",", ":"), sort_keys=True)
+          PY
+              echo "SYNTHETIC_PERFORMANCE_RAW_REUSED:${PERFORMANCE_EVENT_ID}:${PERFORMANCE_PAGE_LOAD_ID}"
+            else
+              if [[ "${SYNTHETIC_EVENT_DATE}" != "$(date -u +%F)" ]]; then
+                echo "Recovered exposure event date is not today; refusing to create an orphan performance event" >&2
+                exit 1
+              fi
+              python3 <<'PY'
+          import json
+          from datetime import datetime, timedelta, timezone
+
+          exposure = json.load(open("raw-synthetic-event.json", encoding="utf-8"))
+          received_at = datetime.fromisoformat(str(exposure.get("received_at") or "").replace("Z", "+00:00"))
+          age = datetime.now(timezone.utc) - received_at.astimezone(timezone.utc)
+          if not timedelta(0) <= age <= timedelta(hours=24):
+              raise SystemExit("recovered exposure is outside the 24-hour health window")
+          PY
+              HTTP_STATUS="$(curl -sS -o collector-performance-response.json -w '%{http_code}' \
+                -X POST "${COLLECTOR_ENDPOINT}" \
+                -H 'Origin: https://www.vevo.sk' \
+                -H 'Content-Type: application/json' \
+                --data-binary @synthetic-performance-event.json)"
+              export HTTP_STATUS
+              python3 <<'PY'
+          import json
+          import os
+
+          if os.environ["HTTP_STATUS"] != "202":
+              raise SystemExit(f"synthetic performance collector status was {os.environ['HTTP_STATUS']}")
+          if json.load(open("collector-performance-response.json", encoding="utf-8")) != {
+              "accepted": True,
+              "duplicate": False,
+          }:
+              raise SystemExit("synthetic performance collector response drift")
+          PY
+            fi
+            for _ in $(seq 1 30); do
+              if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${PERFORMANCE_RAW_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+            aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${PERFORMANCE_RAW_KEY}" --region "${AWS_REGION}" >/dev/null
+            aws s3 cp "s3://${EVENT_BUCKET}/${PERFORMANCE_RAW_KEY}" raw-synthetic-performance-event.json --only-show-errors
+            python3 <<'PY'
+          import json
+          import os
+
+          payload = json.load(open("synthetic-performance-event.json", encoding="utf-8"))
+          record = json.load(open("raw-synthetic-performance-event.json", encoding="utf-8"))
+          server_fields = {"received_at", "event_date", "collector_version", "risk_result"}
+          if set(record) != set(payload) | server_fields:
+              raise SystemExit("persisted synthetic performance event field set drift")
+          if any(record.get(key) != value for key, value in payload.items()):
+              raise SystemExit("persisted synthetic performance event payload drift")
+          if record.get("event_date") != os.environ["SYNTHETIC_EVENT_DATE"] or record.get("risk_result") != "accepted":
+              raise SystemExit("persisted synthetic performance server fields drift")
+          PY
+            echo "SYNTHETIC_PERFORMANCE_RAW_EVENT_OK:${SYNTHETIC_EVENT_DATE}:${PERFORMANCE_EVENT_ID}:${PERFORMANCE_PAGE_LOAD_ID}"
+          fi
+
           for _ in $(seq 1 30); do
             if aws s3api head-object \
               --bucket "${EVENT_BUCKET}" \
@@ -584,17 +725,20 @@ jobs:
         run: |
           set -euo pipefail
           DEVICE_KEY="experiment-events/curated/device_facts/experiment_id=vevo-sk-aa-001/${SYNTHETIC_DEVICE_ID}.json"
+          PERFORMANCE_KEY="experiment-events/curated/performance_facts/experiment_id=vevo-sk-aa-001/${PERFORMANCE_PAGE_LOAD_ID}-lcp_ms.json"
           if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${DEVICE_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
             if [[ "${RECOVERY_MODE}" != "true" ]]; then
               echo "Curated device fact already exists outside recovery mode" >&2
               exit 1
             fi
-            {
-              echo "RECONCILE_TASK_ID=reused-from-run-${RECOVERY_SOURCE_RUN_ID_EFFECTIVE:-unknown}"
-              echo "RECONCILE_PRIVATE_IP=not-applicable-recovery"
-            } >> "${GITHUB_ENV}"
-            echo "GROWTHBOOK_RECONCILE_REUSED_EXISTING_FACT:${SYNTHETIC_DEVICE_ID}"
-            exit 0
+            if [[ "${PERFORMANCE_MODE}" != "true" ]] || aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${PERFORMANCE_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              {
+                echo "RECONCILE_TASK_ID=reused-from-run-${RECOVERY_SOURCE_RUN_ID_EFFECTIVE:-unknown}"
+                echo "RECONCILE_PRIVATE_IP=not-applicable-recovery"
+              } >> "${GITHUB_ENV}"
+              echo "GROWTHBOOK_RECONCILE_REUSED_EXISTING_FACT:${SYNTHETIC_DEVICE_ID}:${PERFORMANCE_MODE}"
+              exit 0
+            fi
           fi
           python3 <<'PY' > reconcile-overrides.json
           import json
@@ -717,6 +861,7 @@ jobs:
           fi
           python3 <<'PY'
           import json
+          import os
 
           messages = [str(row.get("message") or "").strip() for row in json.load(open("reconcile-logs.json"))["events"]]
           summaries = []
@@ -730,14 +875,19 @@ jobs:
           if len(summaries) != 1:
               raise SystemExit(f"expected one reconciliation summary, got {len(summaries)}")
           summary = summaries[0]
+          performance_mode = os.environ.get("PERFORMANCE_MODE") == "true"
           expected = {
-              "raw_events": 1,
+              "raw_events": 2 if performance_mode else 1,
               "completed_transaction_ids": 0,
               "authoritative_orders": 0,
               "device_facts": 1,
-              "performance_facts": 0,
+              "performance_facts": 1 if performance_mode else 0,
               "quality_reports": 2,
-              "published": {"device_facts": 1, "performance_facts": 0, "quality_reports": 2},
+              "published": {
+                  "device_facts": 1,
+                  "performance_facts": 1 if performance_mode else 0,
+                  "quality_reports": 2,
+              },
           }
           for key, value in expected.items():
               if summary.get(key) != value:
@@ -809,6 +959,53 @@ jobs:
               if fact.get(key) != value:
                   raise SystemExit(f"curated fact drift for {key}: {fact.get(key)!r}")
           PY
+
+          if [[ "${PERFORMANCE_MODE}" == "true" ]]; then
+            PERFORMANCE_RAW_KEY="experiment-events/raw/event_date=${SYNTHETIC_EVENT_DATE}/${PERFORMANCE_EVENT_ID}.json"
+            PERFORMANCE_KEY="experiment-events/curated/performance_facts/experiment_id=vevo-sk-aa-001/${PERFORMANCE_PAGE_LOAD_ID}-lcp_ms.json"
+            aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${PERFORMANCE_RAW_KEY}" --region "${AWS_REGION}" >/dev/null
+            aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${PERFORMANCE_KEY}" --region "${AWS_REGION}" >/dev/null
+            aws s3 cp "s3://${EVENT_BUCKET}/${PERFORMANCE_KEY}" curated-performance-fact.json --only-show-errors
+            python3 <<'PY'
+          import ast
+          import json
+          import os
+          from pathlib import Path
+
+          tree = ast.parse(Path("reporting_core/experiments.py").read_text(encoding="utf-8"))
+          fields_node = None
+          for node in tree.body:
+              if isinstance(node, ast.Assign) and any(
+                  isinstance(target, ast.Name) and target.id == "PERFORMANCE_FACT_FIELDS"
+                  for target in node.targets
+              ):
+                  fields_node = node.value
+                  break
+          if not (
+              isinstance(fields_node, ast.Call)
+              and isinstance(fields_node.func, ast.Name)
+              and fields_node.func.id == "frozenset"
+              and len(fields_node.args) == 1
+          ):
+              raise SystemExit("could not statically resolve PERFORMANCE_FACT_FIELDS")
+          fields = set(ast.literal_eval(fields_node.args[0]))
+          fact = json.load(open("curated-performance-fact.json", encoding="utf-8"))
+          if set(fact) != fields - {"experiment_id"}:
+              raise SystemExit("curated performance fact field set drift")
+          expected = {
+              "device_id": os.environ["SYNTHETIC_DEVICE_ID"],
+              "variation_id": "control",
+              "page_load_id": os.environ["PERFORMANCE_PAGE_LOAD_ID"],
+              "vital_name": "lcp_ms",
+              "vital_value": 1300,
+              "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+              "eligible": 1,
+              "exclusion_reason": "",
+          }
+          if any(fact.get(key) != value for key, value in expected.items()):
+              raise SystemExit("curated performance fact identity drift")
+          PY
+          fi
 
           aws s3api list-objects-v2 \
             --bucket "${EVENT_BUCKET}" \
@@ -897,6 +1094,58 @@ jobs:
           print("GROWTHBOOK_ATHENA_SYNTHETIC_ROW_OK")
           PY
           echo "GROWTHBOOK_PREVIEW_FACT_CHAIN_OK:${SYNTHETIC_EVENT_ID}:${SYNTHETIC_DEVICE_ID}:${QUERY_ID}"
+          if [[ "${PERFORMANCE_MODE}" == "true" ]]; then
+            python3 <<'PY' > performance-athena-query.txt
+          import os
+
+          print(
+              "SELECT device_id, CAST(from_iso8601_timestamp(measured_at) AS timestamp) AS timestamp, "
+              "experiment_id, variation_id, page_load_id, vital_name, vital_value "
+              "FROM experiment_performance_facts "
+              f"WHERE experiment_id = 'vevo-sk-aa-001' AND page_load_id = '{os.environ['PERFORMANCE_PAGE_LOAD_ID']}'"
+          )
+          PY
+            PERFORMANCE_QUERY_ID="$(aws athena start-query-execution \
+              --query-string "$(cat performance-athena-query.txt)" \
+              --query-execution-context "Database=${EXPERIMENT_DATABASE},Catalog=AwsDataCatalog" \
+              --work-group "${GROWTHBOOK_WORKGROUP}" \
+              --region "${AWS_REGION}" \
+              --query 'QueryExecutionId' \
+              --output text)"
+            for _ in $(seq 1 60); do
+              PERFORMANCE_QUERY_STATE="$(aws athena get-query-execution --query-execution-id "${PERFORMANCE_QUERY_ID}" --region "${AWS_REGION}" --query 'QueryExecution.Status.State' --output text)"
+              [[ "${PERFORMANCE_QUERY_STATE}" == "SUCCEEDED" ]] && break
+              if [[ "${PERFORMANCE_QUERY_STATE}" == "FAILED" || "${PERFORMANCE_QUERY_STATE}" == "CANCELLED" ]]; then
+                aws athena get-query-execution --query-execution-id "${PERFORMANCE_QUERY_ID}" --region "${AWS_REGION}" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+            [[ "${PERFORMANCE_QUERY_STATE}" == "SUCCEEDED" ]] || { echo "Performance Athena query did not finish" >&2; exit 1; }
+            aws athena get-query-results --query-execution-id "${PERFORMANCE_QUERY_ID}" --region "${AWS_REGION}" > performance-athena-results.json
+            python3 <<'PY'
+          import json
+          import os
+
+          rows = json.load(open("performance-athena-results.json", encoding="utf-8"))["ResultSet"]["Rows"]
+          values = [[cell.get("VarCharValue", "") for cell in row.get("Data") or []] for row in rows]
+          header = ["device_id", "timestamp", "experiment_id", "variation_id", "page_load_id", "vital_name", "vital_value"]
+          if len(values) != 2 or values[0] != header:
+              raise SystemExit(f"unexpected performance Athena result shape: {values}")
+          expected = [
+              os.environ["SYNTHETIC_DEVICE_ID"],
+              values[1][1],
+              "vevo-sk-aa-001",
+              "control",
+              os.environ["PERFORMANCE_PAGE_LOAD_ID"],
+              "lcp_ms",
+              "1300",
+          ]
+          if not values[1][1] or values[1] != expected:
+              raise SystemExit(f"performance Athena identity drift: {values[1]}")
+          PY
+            echo "GROWTHBOOK_PREVIEW_PERFORMANCE_FACT_CHAIN_OK:${PERFORMANCE_EVENT_ID}:${PERFORMANCE_PAGE_LOAD_ID}:${PERFORMANCE_QUERY_ID}"
+          fi
 
       - name: Verification summary
         if: always()
@@ -910,6 +1159,7 @@ jobs:
             echo "- Service/path: \`${SCHEDULE_NAME}\` / \`${RUNTIME_PATH}\`"
             echo "- Immutable image: \`${IMAGE_IDENTIFIER:-not-resolved}\`"
             echo "- Synthetic event/device: \`${SYNTHETIC_EVENT_ID:-not-created}\` / \`${SYNTHETIC_DEVICE_ID:-not-created}\`"
+            echo "- Synthetic performance event/page load: \`${PERFORMANCE_EVENT_ID:-not-requested}\` / \`${PERFORMANCE_PAGE_LOAD_ID:-not-requested}\`"
             echo "- Production allocation: \`0%\` (unchanged)"
             echo "- Scheduler target: unchanged"
           } >> "${GITHUB_STEP_SUMMARY}"
