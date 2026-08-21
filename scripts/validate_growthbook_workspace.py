@@ -355,6 +355,13 @@ def validate() -> None:
             "source_reporting_schedule_unchanged": True,
             "first_natural_run_local": "2026-08-22 03:30 Europe/Bratislava",
             "first_natural_run_status": "pending",
+            "natural_verifier_workflow": (
+                ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
+            ),
+            "natural_verifier_status": "prepared_not_run_before_time_gate",
+            "natural_verifier_not_before_utc": "2026-08-22T01:40:00Z",
+            "natural_verifier_before_utc": "2026-08-23T01:30:00Z",
+            "natural_verifier_mutation_allowed": False,
         },
     }
     if workspace.get("reconciliation_checkpoint") != expected_reconciliation_checkpoint:

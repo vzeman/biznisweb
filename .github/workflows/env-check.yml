@@ -106,7 +106,10 @@ jobs:
       - name: VEVO GrowthBook workspace contract
         run: |
           python3 scripts/validate_growthbook_workspace.py
-          python3 -m unittest tests.test_growthbook_workspace
+          python3 -m unittest \
+            tests.test_growthbook_workspace \
+            tests.test_growthbook_natural_reconciliation_verifier \
+            tests.test_growthbook_natural_reconciliation_workflow
 
       - name: VEVO GrowthBook reconciliation host gate
         run: |
