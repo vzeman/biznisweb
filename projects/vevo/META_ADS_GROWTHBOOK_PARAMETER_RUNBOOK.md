@@ -37,7 +37,8 @@ Never add email, phone, name, address, customer/account ID, `fbclid`, `_fbp`, or
 2. Open the ad preview destination and confirm VEVO loads over HTTPS. Do not copy or store a visitor click ID.
 3. After at least one complete UTC day with delivery, run the protected read-only `Audit VEVO GrowthBook and Meta Population` workflow against the immutable image digest for its exact `main` commit.
 4. Compare only sanitized aggregates. Relative to baseline run `32464046045`, the covered-ad counts for `utm_content`, `meta_adset_id`, and `meta_placement` must increase when a contract-compliant ad has delivered; invalid dimensions and forbidden configured click identifiers must remain zero.
-5. Population parity must continue to show zero duplicate keys and zero assignment/outcome anti-join misses. Dimension coverage is diagnostic and never changes the primary all-traffic experiment decision.
+5. Production A/A remains `NOT_READY` until at least one accepted Meta exposure contains the complete stable campaign, ad-set, ad, and placement contract. Do not bypass that gate by bulk-editing an existing live ad only for tracking; wait for a new ad or a separately authorized planned edit.
+6. Population parity must continue to show zero duplicate keys and zero assignment/outcome anti-join misses. Dimension coverage is diagnostic and never changes the primary all-traffic experiment decision.
 
 ## Safe rollback
 

@@ -35,6 +35,7 @@ EXPECTED_CONFIG_KEYS = {
     "minimum_measured_page_loads_per_arm",
     "minimum_exact_joined_transactions",
     "minimum_meta_exposures",
+    "minimum_complete_stable_meta_dimension_exposures",
     "privacy_sample_max_rows",
     "srm_p_value_min",
     "split_percent_min",
@@ -249,6 +250,7 @@ def validate_config(config: Mapping[str, Any]) -> None:
         "minimum_measured_page_loads_per_arm": (1, None),
         "minimum_exact_joined_transactions": (1, None),
         "minimum_meta_exposures": (1, None),
+        "minimum_complete_stable_meta_dimension_exposures": (1, None),
         "privacy_sample_max_rows": (1, None),
         "split_percent_min": (1, 99),
         "split_percent_max": (1, 99),
@@ -663,7 +665,11 @@ def evaluate(snapshot: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str
         },
     )
 
-    meta_ready = meta["meta_exposure_count"] >= config["minimum_meta_exposures"]
+    meta_ready = (
+        meta["meta_exposure_count"] >= config["minimum_meta_exposures"]
+        and meta["complete_stable_dimension_exposure_count"]
+        >= config["minimum_complete_stable_meta_dimension_exposures"]
+    )
     meta_safe = (
         meta["invalid_dimension_row_count"] == 0
         and meta["forbidden_click_identifier_count"] == 0
@@ -676,6 +682,9 @@ def evaluate(snapshot: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str
         dict(meta),
         {
             "minimum_meta_exposures": config["minimum_meta_exposures"],
+            "minimum_complete_stable_dimension_exposures": config[
+                "minimum_complete_stable_meta_dimension_exposures"
+            ],
             "invalid_dimension_rows": 0,
             "forbidden_click_identifiers": 0,
         },

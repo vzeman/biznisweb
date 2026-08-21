@@ -191,6 +191,21 @@ class GrowthBookAaEvaluatorTests(unittest.TestCase):
                 self.assertEqual("FAIL", result["verdict"])
                 self.assertEqual("fail", gate(result, expected_gate)["status"])
 
+    def test_meta_gate_requires_at_least_one_complete_stable_dimension_exposure(
+        self,
+    ) -> None:
+        evidence = snapshot()
+        evidence["meta_dimension_audit"]["meta_exposure_count"] = 320
+        evidence["meta_dimension_audit"]["complete_stable_dimension_exposure_count"] = 0
+        result = evaluate(evidence, self.config)
+        self.assertEqual("NOT_READY", result["verdict"])
+        meta_gate = gate(result, "meta_dimension_contract")
+        self.assertEqual("not_ready", meta_gate["status"])
+        self.assertEqual(
+            1,
+            meta_gate["requirement"]["minimum_complete_stable_dimension_exposures"],
+        )
+
     def test_fails_srm_split_pipeline_duplicate_join_population_and_performance_gates(
         self,
     ) -> None:
