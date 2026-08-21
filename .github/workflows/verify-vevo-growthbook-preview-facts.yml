@@ -29,6 +29,14 @@ on:
         options:
           - "false"
           - "true"
+      allow_existing_partition_events:
+        description: Reconcile a bounded mixed Preview partition that already contains real accepted events
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -722,6 +730,8 @@ jobs:
 
       - name: Reconcile and publish the curated Preview fact
         shell: bash
+        env:
+          ALLOW_EXISTING_PARTITION_EVENTS: ${{ inputs.allow_existing_partition_events }}
         run: |
           set -euo pipefail
           DEVICE_KEY="experiment-events/curated/device_facts/experiment_id=vevo-sk-aa-001/${SYNTHETIC_DEVICE_ID}.json"
@@ -876,23 +886,61 @@ jobs:
               raise SystemExit(f"expected one reconciliation summary, got {len(summaries)}")
           summary = summaries[0]
           performance_mode = os.environ.get("PERFORMANCE_MODE") == "true"
-          expected = {
-              "raw_events": 2 if performance_mode else 1,
-              "completed_transaction_ids": 0,
-              "authoritative_orders": 0,
-              "device_facts": 1,
-              "performance_facts": 1 if performance_mode else 0,
-              "quality_reports": 2,
-              "published": {
+          if summary.get("event_partitions") != 1:
+              raise SystemExit("reconciliation must remain limited to one explicit event partition")
+          allow_existing = os.environ.get("ALLOW_EXISTING_PARTITION_EVENTS") == "true"
+          if not allow_existing:
+              expected = {
+                  "raw_events": 2 if performance_mode else 1,
+                  "completed_transaction_ids": 0,
+                  "authoritative_orders": 0,
                   "device_facts": 1,
                   "performance_facts": 1 if performance_mode else 0,
                   "quality_reports": 2,
-              },
-          }
-          for key, value in expected.items():
-              if summary.get(key) != value:
-                  raise SystemExit(f"reconciliation summary drift for {key}: {summary.get(key)!r}")
-          print("GROWTHBOOK_RECONCILIATION_SUMMARY_OK")
+                  "published": {
+                      "device_facts": 1,
+                      "performance_facts": 1 if performance_mode else 0,
+                      "quality_reports": 2,
+                  },
+              }
+              for key, value in expected.items():
+                  if summary.get(key) != value:
+                      raise SystemExit(f"reconciliation summary drift for {key}: {summary.get(key)!r}")
+              print("GROWTHBOOK_RECONCILIATION_SUMMARY_OK")
+          else:
+              raw_events = summary.get("raw_events")
+              device_facts = summary.get("device_facts")
+              performance_facts = summary.get("performance_facts")
+              completed = summary.get("completed_transaction_ids")
+              authoritative = summary.get("authoritative_orders")
+              if not isinstance(raw_events, int) or not 1 <= raw_events <= 1000:
+                  raise SystemExit(f"mixed Preview raw event count is out of bounds: {raw_events!r}")
+              if not isinstance(device_facts, int) or not 1 <= device_facts <= raw_events:
+                  raise SystemExit(f"mixed Preview device fact count is invalid: {device_facts!r}")
+              if not isinstance(performance_facts, int) or not 0 <= performance_facts <= raw_events:
+                  raise SystemExit(
+                      f"mixed Preview performance fact count is invalid: {performance_facts!r}"
+                  )
+              if not isinstance(completed, int) or not 0 <= completed <= raw_events:
+                  raise SystemExit(f"mixed Preview transaction count is invalid: {completed!r}")
+              if not isinstance(authoritative, int) or not 0 <= authoritative <= completed:
+                  raise SystemExit(
+                      f"mixed Preview authoritative order count is invalid: {authoritative!r}"
+                  )
+              if summary.get("quality_reports") != 2:
+                  raise SystemExit("mixed Preview reconciliation must publish two quality reports")
+              expected_published = {
+                  "device_facts": device_facts,
+                  "performance_facts": performance_facts,
+                  "quality_reports": 2,
+              }
+              if summary.get("published") != expected_published:
+                  raise SystemExit("mixed Preview published counts do not match generated facts")
+              print(
+                  "GROWTHBOOK_MIXED_PARTITION_RECONCILIATION_OK:"
+                  f"raw={raw_events}:device={device_facts}:performance={performance_facts}:"
+                  f"transactions={completed}:orders={authoritative}"
+              )
           PY
           if [[ -z "${RECONCILE_PRIVATE_IP}" ]]; then
             echo "Reconciliation task private IP was not resolved" >&2

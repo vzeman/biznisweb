@@ -42,6 +42,18 @@ class GrowthBookPreviewFactWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.workflow)
 
+    def test_mixed_preview_partition_requires_explicit_bounded_mode(self) -> None:
+        for marker in (
+            "allow_existing_partition_events:",
+            "ALLOW_EXISTING_PARTITION_EVENTS: ${{ inputs.allow_existing_partition_events }}",
+            "not 1 <= raw_events <= 1000",
+            "not 1 <= device_facts <= raw_events",
+            "not 0 <= performance_facts <= raw_events",
+            'summary.get("published") != expected_published',
+            "GROWTHBOOK_MIXED_PARTITION_RECONCILIATION_OK",
+        ):
+            self.assertIn(marker, self.workflow)
+
     def test_workflow_does_not_promote_or_delete_runtime_data(self) -> None:
         lowered = self.workflow.lower()
         self.assertNotIn("s3api delete-object", lowered)
