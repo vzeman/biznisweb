@@ -22,6 +22,7 @@ class GrowthBookProductionPreflightWorkflowTests(unittest.TestCase):
             "Production experiment registry must remain empty",
             "GrowthBook Production allocation must remain zero",
             "GTM Preview workspace must remain unpublished",
+            "get('publish_status') != 'not_published'",
             "Production activation gate must remain false",
             "parameters.get('PublicRouteEnabled') != 'false'",
             "'CollectorEndpoint' in outputs",
