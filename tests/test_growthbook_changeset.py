@@ -130,6 +130,57 @@ class GrowthBookChangeSetTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "unrelated changes"):
             validate(unsafe, "activate")
 
+    def test_deactivation_allows_only_the_public_route_removal(self) -> None:
+        result = validate(
+            payload(
+                change(
+                    "CollectorPostRoute",
+                    "AWS::ApiGatewayV2::Route",
+                    action="Remove",
+                )
+            ),
+            "deactivate",
+        )
+        self.assertEqual(
+            {
+                "action": "Remove",
+                "logical_id": "CollectorPostRoute",
+                "replacement": "False",
+                "resource_type": "AWS::ApiGatewayV2::Route",
+            },
+            result[0],
+        )
+
+    def test_deactivation_rejects_any_unrelated_or_replacement_change(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "unrelated changes"):
+            validate(
+                payload(
+                    change(
+                        "CollectorPostRoute",
+                        "AWS::ApiGatewayV2::Route",
+                        action="Remove",
+                    ),
+                    change(
+                        "CollectorService",
+                        "AWS::ECS::Service",
+                        action="Modify",
+                    ),
+                ),
+                "deactivate",
+            )
+        with self.assertRaisesRegex(AssertionError, "unexpected route deactivation"):
+            validate(
+                payload(
+                    change(
+                        "CollectorPostRoute",
+                        "AWS::ApiGatewayV2::Route",
+                        action="Remove",
+                        replacement="True",
+                    )
+                ),
+                "deactivate",
+            )
+
     def test_incomplete_or_empty_change_set_is_rejected(self) -> None:
         with self.assertRaisesRegex(AssertionError, "not ready"):
             validate(

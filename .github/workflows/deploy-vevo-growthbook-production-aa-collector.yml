@@ -1,0 +1,832 @@
+name: Deploy VEVO GrowthBook Production A/A Collector
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: Confirm the reviewed route-disabled image rollout and exact public route activation
+        required: true
+        default: false
+        type: boolean
+      expected_main_commit:
+        description: Exact reviewed 40-character main commit to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-aa-collector
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: "919341186960"
+  STACK_NAME: vevo-growthbook-production
+  ECR_REPOSITORY: vevo-growthbook-collector
+  SERVICE_NAME: vevo-growthbook-collector-production
+  RUNTIME_PATH: /app
+  ACTIVATION_MANIFEST: projects/vevo/growthbook_production_aa_activation.json
+  WORKSPACE_MANIFEST: projects/vevo/growthbook_workspace.json
+  REGISTRY_MANIFEST: growthbook_collector/experiments.json
+  EVIDENCE_FILE: vevo-growthbook-production-aa-collector-evidence.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy-production-aa-collector:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fail closed on the reviewed activation gate before AWS credentials
+        env:
+          CONFIRM_DEPLOY: ${{ inputs.confirm_deploy }}
+          EXPECTED_MAIN_COMMIT_INPUT: ${{ inputs.expected_main_commit }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+
+          activation = json.loads(Path(os.environ['ACTIVATION_MANIFEST']).read_text(encoding='utf-8'))
+          workspace = json.loads(Path(os.environ['WORKSPACE_MANIFEST']).read_text(encoding='utf-8'))
+          registry = json.loads(Path(os.environ['REGISTRY_MANIFEST']).read_text(encoding='utf-8'))
+          expected_commit = os.environ['EXPECTED_MAIN_COMMIT_INPUT'].strip()
+          require(os.environ['CONFIRM_DEPLOY'] == 'true', 'explicit collector deployment confirmation is required')
+          require(re.fullmatch(r'[0-9a-f]{40}', expected_commit) is not None, 'expected main commit is invalid')
+          require(expected_commit == os.environ['GITHUB_SHA'], 'workflow commit differs from reviewed main commit')
+
+          require(activation.get('schema_version') == 1, 'activation manifest schema drift')
+          require(activation.get('status') == 'clone_verified_collector_deploy_ready', 'collector activation phase is not ready')
+          require(activation.get('tracking_key') == 'vevo-sk-aa-001', 'A/A tracking key drift')
+          require(activation.get('feature_key') == 'vevo-sk-aa-assignment', 'A/A feature key drift')
+          require(activation.get('variations') == ['control', 'variant'], 'A/A variations drift')
+          require(activation.get('variation_weights') == [0.5, 0.5], 'A/A weights drift')
+          require(activation.get('preconditions') == {
+              'natural_reconciliation_verified': True,
+              'route_disabled_foundation_verified': True,
+              'production_reader_verified': True,
+              'growthbook_clone_verified': True,
+          }, 'activation evidence preconditions are incomplete')
+
+          collector = activation.get('collector') or {}
+          require(collector.get('deployment_workflow') == '.github/workflows/deploy-vevo-growthbook-production-aa-collector.yml', 'collector workflow identity drift')
+          require(collector.get('deployment_allowed') is True, 'collector deployment gate is closed')
+          require(collector.get('registry_entry_present') is True, 'Production registry evidence is not recorded')
+          require(collector.get('public_route_enabled') is False, 'Production route is already recorded as active')
+          require(collector.get('service') == 'vevo-growthbook-collector-production', 'collector service identity drift')
+          require(collector.get('runtime_path') == '/app', 'collector runtime path drift')
+          for key in ('workflow_run_id', 'main_commit', 'image_digest', 'task_definition',
+                      'host_gate_task_id', 'host_gate_private_ip', 'endpoint', 'evidence_sha256'):
+              require(collector.get(key) is None, f'pending collector evidence field is populated: {key}')
+
+          require(activation.get('growthbook') == {
+              'environment': 'production',
+              'sdk_connection_created': False,
+              'sdk_client_key_committed': False,
+              'experiment_created': False,
+              'experiment_id': None,
+              'feature_rule_revision': None,
+              'status': 'not_started',
+              'data_source_id': (workspace.get('athena', {}).get('production', {})
+                                 .get('growthbook_clone', {}).get('target_data_source_id')),
+              'allocation_percent': 0,
+          }, 'GrowthBook must remain unstarted during collector deployment')
+          require(activation.get('gtm') == {
+              'account_id': '6254499282',
+              'container_id': '198135331',
+              'public_container_id': 'GTM-5ZB5LFGB',
+              'source_workspace_id': '16',
+              'production_tag_created': False,
+              'production_tag_id': None,
+              'artifact_sha256': None,
+              'publish_status': 'not_published',
+              'container_version_id': None,
+          }, 'GTM must remain unprepared and unpublished during collector deployment')
+          require(activation.get('traffic') == {
+              'activation_allowed': False,
+              'production_allocation_percent': 0,
+              'active_production_experiments': [],
+              'cta_experiment_started': False,
+          }, 'traffic must remain disabled during collector deployment')
+          require(activation.get('safety') == {
+              'price_tests_allowed': False,
+              'meta_ads_mutated': False,
+              'biznisweb_mutated': False,
+              'cart_checkout_mutated': False,
+              'contains_credentials': False,
+              'contains_customer_or_order_data': False,
+          }, 'Production A/A safety boundary drift')
+          require(activation.get('rollback') == {
+              'order': [
+                  'set_growthbook_allocation_to_zero',
+                  'restore_previous_gtm_container_version',
+                  'disable_collector_public_route',
+              ],
+              'drill_status': 'not_run',
+              'verified_at_utc': None,
+          }, 'Production A/A rollback contract drift')
+
+          production = workspace.get('athena', {}).get('production', {})
+          clone = production.get('growthbook_clone') or {}
+          require(production.get('status') == 'route_disabled_foundation_deployed_verified', 'Production foundation is not verified')
+          require(production.get('reader_provisioning_status') == 'verified_active_encrypted_handoff_ready_for_growthbook', 'Production reader is not verified')
+          require(clone.get('status') == 'verified_complete', 'Production GrowthBook clone is not verified')
+          require(clone.get('mutation_status') == 'created_and_query_verified', 'Production clone mutation state drift')
+          require(clone.get('target_data_source_id') == (activation.get('growthbook') or {}).get('data_source_id'), 'Production data source ID mismatch')
+          require(workspace.get('workspace', {}).get('production_allocation_percent') == 0, 'workspace Production allocation is nonzero')
+          require(workspace.get('decision_gates', {}).get('production_activation_allowed') is False, 'Production activation gate must remain false')
+          require(workspace.get('gtm_preview_workspace', {}).get('publish_status') == 'not_published', 'GTM workspace must remain unpublished')
+
+          environments = registry.get('environments') or {}
+          preview_aa = (environments.get('preview') or {}).get('vevo-sk-aa-001')
+          require(environments.get('production') == {'vevo-sk-aa-001': preview_aa}, 'Production registry must contain only the exact A/A contract')
+          require('vevo-sk-product-cta-color-001' not in environments.get('production', {}), 'CTA experiment is forbidden in Production registry')
+          storefront = Path('storefront/vevo-growthbook/vevo-growthbook.js').read_text(encoding='utf-8')
+          require(storefront.count('var PRODUCTION_ACTIVATION = false;') == 1, 'storefront Production activation must remain compile-time disabled')
+          require('var PRODUCTION_ACTIVATION = true;' not in storefront, 'storefront Production activation is already enabled')
+          print('PRODUCTION_AA_COLLECTOR_LOCAL_GATE_OK:allocation=0:gtm=unpublished:growthbook=stopped:cta=stopped')
+          PY
+
+      - name: Validate code, infrastructure, and Production-mode localhost contract
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install boto3==1.42.63 cfn-lint==1.55.1
+          python -m unittest \
+            tests.test_growthbook_collector \
+            tests.test_growthbook_collector_server \
+            tests.test_growthbook_changeset \
+            tests.test_growthbook_production_aa_activation \
+            tests.test_growthbook_workspace
+          python scripts/validate_growthbook_workspace.py
+          python scripts/security_ci.py
+          cfn-lint infra/vevo-growthbook/template.yaml
+          docker build -f growthbook_collector/Dockerfile -t vevo-growthbook-collector:production-aa-preflight .
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            -e AWS_ACCESS_KEY_ID=preflight-placeholder \
+            -e AWS_SECRET_ACCESS_KEY=preflight-placeholder \
+            -e AWS_EC2_METADATA_DISABLED=true \
+            -e AWS_REGION=eu-central-1 \
+            -e GROWTHBOOK_ALLOWED_ORIGINS=https://www.vevo.sk \
+            -e GROWTHBOOK_COLLECTOR_VERSION="git-${GITHUB_SHA}" \
+            -e GROWTHBOOK_ENVIRONMENT=production \
+            -e GROWTHBOOK_EVENT_BUCKET=preflight-placeholder \
+            -e GROWTHBOOK_EXPERIMENT_REGISTRY_PATH=/app/growthbook_collector/experiments.json \
+            vevo-growthbook-collector:production-aa-preflight \
+            /bin/sh /app/growthbook_collector/host_gate.sh
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm exact Production instance, IP, service, and path before image deployment
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > production-stack-before.json
+          python - <<'PY' > production-stack.env
+          import json
+          import os
+
+          stack = json.load(open('production-stack-before.json', encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackName') != os.environ['STACK_NAME']:
+              raise SystemExit('Production stack identity drift')
+          if stack.get('StackStatus') not in {'CREATE_COMPLETE', 'UPDATE_COMPLETE'}:
+              raise SystemExit(f"Production stack is not deployable: {stack.get('StackStatus')}")
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          if parameters.get('Environment') != 'production' or parameters.get('PublicRouteEnabled') != 'false':
+              raise SystemExit('Production foundation must be route-disabled before image deployment')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorApiBaseUrl', 'CollectorClusterArn', 'CollectorContainerLogGroup',
+              'CollectorHostMarkerPath', 'CollectorServiceArn', 'CollectorServiceName',
+              'CollectorTaskDefinitionArn', 'EventBucketName',
+          }
+          missing = sorted(required - outputs.keys())
+          if missing:
+              raise SystemExit(f'Production stack outputs missing: {missing}')
+          if 'CollectorEndpoint' in outputs:
+              raise SystemExit('Production collector route exists before reviewed deployment')
+          if outputs['CollectorServiceName'] != os.environ['SERVICE_NAME']:
+              raise SystemExit('Production service output drift')
+          if outputs['CollectorHostMarkerPath'] != 'http://127.0.0.1:8080/marker.json':
+              raise SystemExit('Production host marker output drift')
+          mapping = {
+              'PRODUCTION_API_BASE_URL': outputs['CollectorApiBaseUrl'],
+              'PRODUCTION_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'PRODUCTION_LOG_GROUP': outputs['CollectorContainerLogGroup'],
+              'PRODUCTION_SERVICE_ARN': outputs['CollectorServiceArn'],
+              'PRODUCTION_TASK_DEFINITION_ARN': outputs['CollectorTaskDefinitionArn'],
+              'PRODUCTION_EVENT_BUCKET': outputs['EventBucketName'],
+          }
+          for key, value in mapping.items():
+              print(f'{key}={value}')
+          PY
+          cat production-stack.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          source production-stack.env
+          aws ecs describe-services \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_ARN}" \
+            --region "${AWS_REGION}" > production-service-before.json
+          CURRENT_TASK_ARN="$(aws ecs list-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" \
+            --query 'taskArns[0]' --output text)"
+          aws ecs describe-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${CURRENT_TASK_ARN}" \
+            --region "${AWS_REGION}" > production-task-before.json
+          aws ecs describe-task-definition \
+            --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > production-task-definition-before.json
+          python - <<'PY'
+          import ipaddress
+          import json
+          import os
+
+          workspace = json.load(open(os.environ['WORKSPACE_MANIFEST'], encoding='utf-8'))
+          foundation = workspace['athena']['production']['successful_foundation_deployment']
+          service = json.load(open('production-service-before.json', encoding='utf-8'))['services'][0]
+          task = json.load(open('production-task-before.json', encoding='utf-8'))['tasks'][0]
+          task_definition = json.load(open('production-task-definition-before.json', encoding='utf-8'))['taskDefinition']
+          if service.get('serviceName') != os.environ['SERVICE_NAME'] or service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Production service is not the exact healthy 1/1 service')
+          if service.get('taskDefinition') != os.environ['PRODUCTION_TASK_DEFINITION_ARN']:
+              raise SystemExit('Production service task definition drift')
+          containers = task_definition.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != 'collector':
+              raise SystemExit('Production task definition container drift')
+          current_digest = containers[0].get('image', '').rsplit('@', 1)[-1]
+          if current_digest != foundation['service_runtime']['image_digest']:
+              raise SystemExit('Production service no longer uses the recorded foundation image')
+          if task['taskDefinitionArn'] != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(task.get('containers') or []) != 1:
+              raise SystemExit('Production runtime task identity drift')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit(f'Production runtime private IP drift: {private_ips}')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          print(
+              'PRODUCTION_AA_PREDEPLOY_HARD_GATE_OK:'
+              f'instance-id=N/A:Fargate:private-ip={private_ips[0]}:'
+              f'service={os.environ["SERVICE_NAME"]}:path=/app:task={task_id}:'
+              f'task-definition={os.environ["PRODUCTION_TASK_DEFINITION_ARN"].rsplit("/", 1)[-1]}:'
+              f'image={current_digest}:route=false:allocation=0'
+          )
+          PY
+
+      - name: Build and publish the immutable Production A/A collector image
+        run: |
+          set -euo pipefail
+          aws ecr describe-repositories \
+            --repository-names "${ECR_REPOSITORY}" \
+            --region "${AWS_REGION}" > collector-repository.json
+          python - <<'PY'
+          import json
+          import os
+
+          repository = json.load(open('collector-repository.json', encoding='utf-8'))['repositories'][0]
+          expected_prefix = f"arn:aws:ecr:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:repository/"
+          if repository.get('repositoryName') != os.environ['ECR_REPOSITORY']:
+              raise SystemExit('collector repository name drift')
+          if not repository.get('repositoryArn', '').startswith(expected_prefix):
+              raise SystemExit('collector repository account/region drift')
+          if repository.get('imageTagMutability') != 'IMMUTABLE':
+              raise SystemExit('collector repository must use immutable tags')
+          if repository.get('imageScanningConfiguration', {}).get('scanOnPush') is not True:
+              raise SystemExit('collector repository must scan on push')
+          if repository.get('encryptionConfiguration', {}).get('encryptionType') != 'AES256':
+              raise SystemExit('collector repository encryption drift')
+          PY
+          REGISTRY="${EXPECTED_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          TAG="git-${GITHUB_SHA}"
+          TAGGED_IMAGE="${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+          aws ecr get-login-password --region "${AWS_REGION}" | \
+            docker login --username AWS --password-stdin "${REGISTRY}"
+          if ! aws ecr describe-images --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${TAG}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            docker build -f growthbook_collector/Dockerfile -t "${TAGGED_IMAGE}" .
+            docker push "${TAGGED_IMAGE}"
+          fi
+          IMAGE_DIGEST="$(aws ecr describe-images --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${TAG}" --query 'imageDetails[0].imageDigest' \
+            --output text --region "${AWS_REGION}")"
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid image digest: ${IMAGE_DIGEST}" >&2
+            exit 1
+          fi
+          IMAGE_IDENTIFIER="${REGISTRY}/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> "${GITHUB_ENV}"
+          echo "IMAGE_IDENTIFIER=${IMAGE_IDENTIFIER}" >> "${GITHUB_ENV}"
+          echo "PRODUCTION_AA_COLLECTOR_IMAGE_OK:${TAG}:${IMAGE_DIGEST}"
+
+      - name: Prepare exact route-disabled, activation, and rollback parameters
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          stack = json.load(open('production-stack-before.json', encoding='utf-8'))['Stacks'][0]
+          values = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          expected_keys = {
+              'AllowedOrigin', 'CollectorImageUri', 'CollectorVersion', 'CuratedRetentionDays',
+              'Environment', 'PublicRouteEnabled', 'QueryResultRetentionDays',
+              'RawProjectionStartDate', 'RawRetentionDays', 'ServiceSubnetIds',
+              'TaskAssignPublicIp', 'VpcId',
+          }
+          if set(values) != expected_keys:
+              raise SystemExit(f'Production stack parameter set drift: {sorted(values)}')
+          values['CollectorImageUri'] = os.environ['IMAGE_IDENTIFIER']
+          values['CollectorVersion'] = f"git-{os.environ['GITHUB_SHA']}"
+          values['Environment'] = 'production'
+          values['PublicRouteEnabled'] = 'false'
+          if values['AllowedOrigin'] != 'https://www.vevo.sk':
+              raise SystemExit('Production allowed origin drift')
+          def write(name, payload):
+              rows = [{'ParameterKey': key, 'ParameterValue': value} for key, value in sorted(payload.items())]
+              json.dump(rows, open(name, 'w', encoding='utf-8'), separators=(',', ':'))
+          write('candidate-parameters.json', values)
+          activation = dict(values)
+          activation['PublicRouteEnabled'] = 'true'
+          write('activation-parameters.json', activation)
+          write('rollback-parameters.json', values)
+          PY
+
+      - name: Update only the route-disabled collector runtime
+        run: |
+          set -euo pipefail
+          CHANGE_SET="production-aa-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set \
+            --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" \
+            --change-set-type UPDATE \
+            --template-body file://infra/vevo-growthbook/template.yaml \
+            --parameters file://candidate-parameters.json \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --description "Route-disabled VEVO Production A/A collector ${GITHUB_SHA}" \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete \
+            --stack-name "${STACK_NAME}" --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation describe-change-set \
+            --stack-name "${STACK_NAME}" --change-set-name "${CHANGE_SET}" \
+            --include-property-values --region "${AWS_REGION}" > candidate-change-set.json
+          if ! python scripts/validate_growthbook_changeset.py \
+            --change-set candidate-change-set.json --change-set-type UPDATE --phase candidate; then
+            aws cloudformation delete-change-set --stack-name "${STACK_NAME}" \
+              --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}" || true
+            exit 1
+          fi
+          aws cloudformation execute-change-set \
+            --stack-name "${STACK_NAME}" --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation wait stack-update-complete --stack-name "${STACK_NAME}" --region "${AWS_REGION}"
+
+      - name: Resolve and verify the new route-disabled Production runtime
+        run: |
+          set -euo pipefail
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > production-stack-candidate.json
+          python - <<'PY' > candidate-runtime.env
+          import json
+          import os
+
+          stack = json.load(open('production-stack-candidate.json', encoding='utf-8'))['Stacks'][0]
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          if stack.get('StackStatus') != 'UPDATE_COMPLETE':
+              raise SystemExit('Production candidate stack did not reach UPDATE_COMPLETE')
+          if parameters.get('Environment') != 'production' or parameters.get('PublicRouteEnabled') != 'false':
+              raise SystemExit('Production candidate route unexpectedly active')
+          if parameters.get('CollectorImageUri') != os.environ['IMAGE_IDENTIFIER']:
+              raise SystemExit('Production candidate image parameter drift')
+          if 'CollectorEndpoint' in outputs:
+              raise SystemExit('Production public endpoint exists before localhost gate')
+          mapping = {
+              'PRODUCTION_API_BASE_URL': outputs['CollectorApiBaseUrl'],
+              'PRODUCTION_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'PRODUCTION_LOG_GROUP': outputs['CollectorContainerLogGroup'],
+              'PRODUCTION_SERVICE_ARN': outputs['CollectorServiceArn'],
+              'PRODUCTION_TASK_DEFINITION_ARN': outputs['CollectorTaskDefinitionArn'],
+              'PRODUCTION_EVENT_BUCKET': outputs['EventBucketName'],
+          }
+          for key, value in mapping.items():
+              print(f'{key}={value}')
+          PY
+          cat candidate-runtime.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          source candidate-runtime.env
+          aws ecs describe-services --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_ARN}" --region "${AWS_REGION}" > production-service-candidate.json
+          aws ecs describe-task-definition --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > production-task-definition-candidate.json
+          python - <<'PY' > production-network.json
+          import json
+          import os
+
+          service = json.load(open('production-service-candidate.json', encoding='utf-8'))['services'][0]
+          if service.get('serviceName') != os.environ['SERVICE_NAME']:
+              raise SystemExit('Production candidate service drift')
+          if service.get('taskDefinition') != os.environ['PRODUCTION_TASK_DEFINITION_ARN']:
+              raise SystemExit('Production candidate task definition drift')
+          if service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Production candidate service is not healthy 1/1')
+          print(json.dumps(service['networkConfiguration'], separators=(',', ':')))
+          PY
+          python - <<'PY'
+          import json
+          import os
+
+          task = json.load(open('production-task-definition-candidate.json', encoding='utf-8'))['taskDefinition']
+          containers = task.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != 'collector':
+              raise SystemExit('Production candidate container drift')
+          container = containers[0]
+          if container.get('image') != os.environ['IMAGE_IDENTIFIER']:
+              raise SystemExit('Production candidate image is not digest-pinned')
+          if container.get('readonlyRootFilesystem') is not True or container.get('user') != '10001:10001':
+              raise SystemExit('Production candidate container hardening drift')
+          environment = {row['name']: row['value'] for row in container.get('environment') or []}
+          if environment.get('GROWTHBOOK_ENVIRONMENT') != 'production':
+              raise SystemExit('Production candidate environment drift')
+          if environment.get('GROWTHBOOK_EXPERIMENT_REGISTRY_PATH') != '/app/growthbook_collector/experiments.json':
+              raise SystemExit('Production registry path drift')
+          PY
+
+      - name: Run the exact Production Fargate localhost hard gate
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          json.dump(
+              {'containerOverrides': [{'name': 'collector', 'command': ['/bin/sh', '/app/growthbook_collector/host_gate.sh']}]},
+              open('host-gate-overrides.json', 'w', encoding='utf-8'),
+              separators=(',', ':'),
+          )
+          PY
+          HOST_GATE_TASK_ARN="$(aws ecs run-task \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
+            --launch-type FARGATE \
+            --network-configuration file://production-network.json \
+            --overrides file://host-gate-overrides.json \
+            --group vevo-growthbook-production-aa-host-gate \
+            --started-by "vevo-gb-production-aa-${GITHUB_RUN_ID}" \
+            --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' --output text)"
+          if [[ -z "${HOST_GATE_TASK_ARN}" || "${HOST_GATE_TASK_ARN}" == "None" ]]; then
+            echo "Production A/A host-gate task did not start" >&2
+            exit 1
+          fi
+          aws ecs wait tasks-stopped --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" --region "${AWS_REGION}"
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" --region "${AWS_REGION}" > host-gate-task.json
+          python - <<'PY' > host-gate.env
+          import ipaddress
+          import json
+          import os
+
+          task = json.load(open('host-gate-task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('Production A/A host-gate task identity drift')
+          container = containers[0]
+          if container.get('exitCode') != 0:
+              raise SystemExit(f"Production A/A host gate failed: {container.get('reason')} exit={container.get('exitCode')}")
+          if container.get('image') != os.environ['IMAGE_IDENTIFIER'] or container.get('imageDigest') != os.environ['IMAGE_DIGEST']:
+              raise SystemExit('Production A/A host-gate image drift')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit(f'Production A/A host-gate private IP drift: {private_ips}')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          print(f'HOST_GATE_TASK_ARN={task["taskArn"]}')
+          print(f'HOST_GATE_TASK_ID={task_id}')
+          print(f'HOST_GATE_PRIVATE_IP={private_ips[0]}')
+          print(f'HOST_GATE_LOG_STREAM=collector/collector/{task_id}')
+          PY
+          cat host-gate.env >> "${GITHUB_ENV}"
+          # shellcheck disable=SC1091
+          source host-gate.env
+          for attempt in $(seq 1 12); do
+            aws logs get-log-events --log-group-name "${PRODUCTION_LOG_GROUP}" \
+              --log-stream-name "${HOST_GATE_LOG_STREAM}" --start-from-head \
+              --region "${AWS_REGION}" --query 'events[].message' --output text \
+              > host-gate.log 2>/dev/null || true
+            if grep -Fq "COLLECTOR_LOCALHOST_HEALTH_OK:production:git-${GITHUB_SHA}" host-gate.log && \
+               grep -Fq "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}" host-gate.log; then
+              break
+            fi
+            if [[ "${attempt}" == "12" ]]; then
+              cat host-gate.log >&2 || true
+              exit 1
+            fi
+            sleep 5
+          done
+          grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:production:git-${GITHUB_SHA}" host-gate.log
+          grep -F "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}" host-gate.log
+          echo "PRODUCTION_AA_HOST_GATE_OK:instance-id=N/A:Fargate:private-ip=${HOST_GATE_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${HOST_GATE_TASK_ID}:task-definition=${PRODUCTION_TASK_DEFINITION_ARN##*/}:image=${IMAGE_DIGEST}"
+
+      - name: Verify the new service task and healthy target before route activation
+        run: |
+          set -euo pipefail
+          SERVICE_TASK_ARN="$(aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" --desired-status RUNNING --region "${AWS_REGION}" \
+            --query 'taskArns[0]' --output text)"
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${SERVICE_TASK_ARN}" --region "${AWS_REGION}" > service-task.json
+          TARGET_GROUP_ARN="$(python -c 'import json; print(json.load(open("production-service-candidate.json"))["services"][0]["loadBalancers"][0]["targetGroupArn"])')"
+          aws elbv2 describe-target-health --target-group-arn "${TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > target-health.json
+          python - <<'PY' > service-runtime.env
+          import ipaddress
+          import json
+          import os
+
+          task = json.load(open('service-task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('Production A/A service task identity drift')
+          container = containers[0]
+          if container.get('imageDigest') != os.environ['IMAGE_DIGEST']:
+              raise SystemExit('Production A/A service image digest drift')
+          states = [row['TargetHealth']['State'] for row in json.load(open('target-health.json', encoding='utf-8'))['TargetHealthDescriptions']]
+          if states != ['healthy']:
+              raise SystemExit(f'Production A/A target health drift: {states}')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit(f'Production A/A service private IP drift: {private_ips}')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          print(f'SERVICE_TASK_ARN={task["taskArn"]}')
+          print(f'SERVICE_TASK_ID={task_id}')
+          print(f'SERVICE_PRIVATE_IP={private_ips[0]}')
+          PY
+          cat service-runtime.env >> "${GITHUB_ENV}"
+          echo "PRODUCTION_AA_SERVICE_TARGET_OK:instance-id=N/A:Fargate:private-ip=$(grep '^SERVICE_PRIVATE_IP=' service-runtime.env | cut -d= -f2):service=${SERVICE_NAME}:path=${RUNTIME_PATH}:image=${IMAGE_DIGEST}"
+
+      - name: Activate only the public collector route after the host gate
+        run: |
+          set -euo pipefail
+          CHANGE_SET="production-aa-activate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --change-set-type UPDATE \
+            --template-body file://infra/vevo-growthbook/template.yaml \
+            --parameters file://activation-parameters.json --capabilities CAPABILITY_NAMED_IAM \
+            --description "Enable only VEVO Production A/A collector route after localhost gate ${GITHUB_SHA}" \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation describe-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --include-property-values \
+            --region "${AWS_REGION}" > activation-change-set.json
+          python scripts/validate_growthbook_changeset.py --change-set activation-change-set.json \
+            --change-set-type UPDATE --phase activate
+          aws cloudformation execute-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation wait stack-update-complete --stack-name "${STACK_NAME}" --region "${AWS_REGION}"
+          echo "ROUTE_ACTIVATED=true" >> "${GITHUB_ENV}"
+
+      - name: Verify public isolation and byte-identical raw data after invalid probes
+        run: |
+          set -euo pipefail
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > production-stack-active.json
+          COLLECTOR_ENDPOINT="$(python - <<'PY'
+          import json
+          stack = json.load(open('production-stack-active.json', encoding='utf-8'))['Stacks'][0]
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          if stack.get('StackStatus') != 'UPDATE_COMPLETE' or parameters.get('PublicRouteEnabled') != 'true':
+              raise SystemExit('Production A/A route activation read-back drift')
+          print(outputs['CollectorEndpoint'])
+          PY
+          )"
+          echo "COLLECTOR_ENDPOINT=${COLLECTOR_ENDPOINT}" >> "${GITHUB_ENV}"
+          aws s3api list-objects-v2 --bucket "${PRODUCTION_EVENT_BUCKET}" \
+            --prefix experiment-events/raw/ --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' \
+            --output json --region "${AWS_REGION}" > raw-before.unsorted.json
+          python - <<'PY'
+          import json
+          rows = json.load(open('raw-before.unsorted.json', encoding='utf-8')) or []
+          json.dump(sorted(rows, key=lambda row: (row['Key'], row['ETag'], row['Size'])), open('raw-before.json', 'w', encoding='utf-8'), separators=(',', ':'))
+          PY
+          CORS_STATUS="$(curl -sS -D cors-headers.txt -o cors-body.txt -w '%{http_code}' \
+            -X OPTIONS "${COLLECTOR_ENDPOINT}" -H 'Origin: https://www.vevo.sk' \
+            -H 'Access-Control-Request-Method: POST')"
+          if [[ "${CORS_STATUS}" != "204" && "${CORS_STATUS}" != "200" ]]; then
+            cat cors-headers.txt cors-body.txt >&2
+            exit 1
+          fi
+          curl -sS -D rejected-headers.txt -o rejected-body.json -X POST "${COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://www.vevo.sk' -H 'Content-Type: application/json' --data '{}'
+          REJECTED_STATUS="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' rejected-headers.txt)"
+          if [[ "${REJECTED_STATUS}" != "400" ]]; then
+            cat rejected-headers.txt rejected-body.json >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          if 'access-control-allow-origin: https://www.vevo.sk' not in Path('cors-headers.txt').read_text(encoding='utf-8').lower():
+              raise SystemExit('exact Production CORS origin header missing')
+          if json.loads(Path('rejected-body.json').read_text(encoding='utf-8')) != {'accepted': False, 'code': 'invalid_event'}:
+              raise SystemExit('Production invalid-event response drift')
+          PY
+          ATTACKER_STATUS="$(curl -sS -o attacker-body.json -w '%{http_code}' -X POST "${COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://attacker.example' -H 'Content-Type: application/json' --data '{}')"
+          if [[ "${ATTACKER_STATUS}" != "403" ]]; then
+            cat attacker-body.json >&2
+            exit 1
+          fi
+          for path in health marker.json; do
+            STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "${PRODUCTION_API_BASE_URL}/${path}")"
+            if [[ "${STATUS}" != "404" ]]; then
+              echo "Private path ${path} returned ${STATUS}" >&2
+              exit 1
+            fi
+          done
+          aws s3api list-objects-v2 --bucket "${PRODUCTION_EVENT_BUCKET}" \
+            --prefix experiment-events/raw/ --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' \
+            --output json --region "${AWS_REGION}" > raw-after.unsorted.json
+          python - <<'PY'
+          import json
+          rows = json.load(open('raw-after.unsorted.json', encoding='utf-8')) or []
+          json.dump(sorted(rows, key=lambda row: (row['Key'], row['ETag'], row['Size'])), open('raw-after.json', 'w', encoding='utf-8'), separators=(',', ':'))
+          PY
+          cmp -s raw-before.json raw-after.json
+          echo "PRODUCTION_AA_PUBLIC_ISOLATION_OK:${COLLECTOR_ENDPOINT}:invalid-probes=no-write:gtm=unpublished:allocation=0"
+
+      - name: Build sanitized Production collector activation evidence
+        run: |
+          # shellcheck disable=SC1091
+          source host-gate.env
+          # shellcheck disable=SC1091
+          source service-runtime.env
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from urllib.parse import urlparse
+
+          endpoint = os.environ['COLLECTOR_ENDPOINT']
+          endpoint_host_sha256 = hashlib.sha256((urlparse(endpoint).hostname or '').encode('utf-8')).hexdigest()
+          evidence = {
+              'schema_version': 1,
+              'evidence_type': 'vevo_growthbook_production_aa_collector_activation',
+              'status': 'passed',
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'workflow': '.github/workflows/deploy-vevo-growthbook-production-aa-collector.yml',
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'main_commit': os.environ['GITHUB_SHA'],
+              'verified_at_utc': datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
+              'aws': {
+                  'account_id': os.environ['EXPECTED_ACCOUNT_ID'],
+                  'region': os.environ['AWS_REGION'],
+                  'stack_name': os.environ['STACK_NAME'],
+                  'stack_status': 'UPDATE_COMPLETE',
+              },
+              'deployment': {
+                  'registry_tracking_keys': ['vevo-sk-aa-001'],
+                  'image_digest': os.environ['IMAGE_DIGEST'],
+                  'task_definition': os.environ['PRODUCTION_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1],
+                  'public_route_enabled': True,
+                  'endpoint_host_sha256': endpoint_host_sha256,
+                  'invalid_probe_raw_snapshot_unchanged': True,
+                  'growthbook_started': False,
+                  'gtm_published': False,
+                  'production_allocation_percent': 0,
+                  'cta_started': False,
+              },
+              'host_gate': {
+                  'instance_id': 'N/A:Fargate',
+                  'private_ip': os.environ['HOST_GATE_PRIVATE_IP'],
+                  'service': os.environ['SERVICE_NAME'],
+                  'runtime_path': os.environ['RUNTIME_PATH'],
+                  'task_id': os.environ['HOST_GATE_TASK_ID'],
+                  'localhost_health_marker_verified': True,
+                  'localhost_runtime_marker_verified': True,
+              },
+              'service_runtime': {
+                  'instance_id': 'N/A:Fargate',
+                  'private_ip': os.environ['SERVICE_PRIVATE_IP'],
+                  'service': os.environ['SERVICE_NAME'],
+                  'runtime_path': os.environ['RUNTIME_PATH'],
+                  'task_id': os.environ['SERVICE_TASK_ID'],
+                  'target_health': 'healthy',
+              },
+              'safety': {
+                  'contains_credentials': False,
+                  'contains_raw_aws_payloads': False,
+                  'contains_cloudwatch_messages': False,
+                  'contains_event_or_device_ids': False,
+                  'contains_customer_or_order_data': False,
+                  'growthbook_mutations': False,
+                  'gtm_mutations': False,
+                  'meta_ads_mutations': False,
+                  'biznisweb_mutations': False,
+                  'commerce_mutations': False,
+              },
+          }
+          with open(os.environ['EVIDENCE_FILE'], 'w', encoding='utf-8', newline='\n') as handle:
+              json.dump(evidence, handle, ensure_ascii=True, separators=(',', ':'), sort_keys=True)
+              handle.write('\n')
+          print('PRODUCTION_AA_COLLECTOR_EVIDENCE_OK')
+          PY
+
+      - name: Upload sanitized Production collector activation evidence
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: vevo-growthbook-production-aa-collector-evidence-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Disable the public route if any post-activation step fails
+        if: ${{ failure() && env.ROUTE_ACTIVATED == 'true' }}
+        run: |
+          set -euo pipefail
+          CHANGE_SET="production-aa-rollback-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --change-set-type UPDATE \
+            --template-body file://infra/vevo-growthbook/template.yaml \
+            --parameters file://rollback-parameters.json --capabilities CAPABILITY_NAMED_IAM \
+            --description "Disable VEVO Production A/A collector route after failed activation ${GITHUB_SHA}" \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation describe-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --include-property-values \
+            --region "${AWS_REGION}" > rollback-change-set.json
+          python scripts/validate_growthbook_changeset.py --change-set rollback-change-set.json \
+            --change-set-type UPDATE --phase deactivate
+          aws cloudformation execute-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation wait stack-update-complete --stack-name "${STACK_NAME}" --region "${AWS_REGION}"
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > rollback-stack.json
+          python - <<'PY'
+          import json
+          stack = json.load(open('rollback-stack.json', encoding='utf-8'))['Stacks'][0]
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          if stack.get('StackStatus') != 'UPDATE_COMPLETE' or parameters.get('PublicRouteEnabled') != 'false':
+              raise SystemExit('Production A/A route rollback did not complete')
+          if 'CollectorEndpoint' in outputs:
+              raise SystemExit('Production A/A endpoint remains after route rollback')
+          print('PRODUCTION_AA_FAILED_ACTIVATION_ROUTE_ROLLBACK_OK')
+          PY
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          {
+            echo "## VEVO GrowthBook Production A/A collector"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- AWS account/region: \`${EXPECTED_ACCOUNT_ID}\` / \`${AWS_REGION}\`"
+            echo "- Service/path: \`${SERVICE_NAME}\` / \`${RUNTIME_PATH}\`"
+            echo "- Immutable image: \`${IMAGE_IDENTIFIER:-not-resolved}\`"
+            echo "- Host-gate task/IP: \`${HOST_GATE_TASK_ID:-not-run}\` / \`${HOST_GATE_PRIVATE_IP:-not-resolved}\`"
+            echo "- Route activated: \`${ROUTE_ACTIVATED:-false}\`"
+            echo "- GrowthBook/GTM/allocation: \`stopped\` / \`unpublished\` / \`0%\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
