@@ -223,6 +223,8 @@ The authoritative accepted-duplicate numerator and denominator come from the col
 
 The final evaluator input is assembled only through `build-vevo-growthbook-production-aa-snapshot.yml`. It consumes two separately produced canonical artifacts: automated aggregate Production evidence and manual GrowthBook/Tag Assistant/commerce QA evidence. Both are bound to independently recorded successful main-branch workflow run IDs, commits, and SHA-256 digests and must cover the identical frozen window. The assembler validates but strips infrastructure/provenance fields, uploads no source component, and emits only the exact PII-free snapshot plus the offline decision. Its manifest remains disabled until all Production rollout gates and both evidence producers are verified; a local component file or workflow input can never open the gate.
 
+Manual QA evidence is never a free-form workflow checkbox. After the real signed-in browser checks, record the exact canonical observation in `growthbook_aa_manual_qa_observation.json`, review its SHA-256 through Git, and only then open the separately versioned producer gate. The main-only producer verifies that Production A/A is the only running experiment, CTA still has no live rule, foundation/reader/clone are complete, allocation is 100%, and the observation contains no event/device/customer/order identity or unplanned mutation. It then injects its own run/commit provenance and uploads only the sanitized component needed by the snapshot assembler.
+
 ### 8. First A/B experiment
 
 Experiment ID: `vevo-sk-product-cta-color-001`

@@ -104,6 +104,12 @@ def main() -> int:
         growthbook_aa_snapshot_workflow = read(
             ".github/workflows/build-vevo-growthbook-production-aa-snapshot.yml"
         )
+        growthbook_aa_manual_qa_builder = read(
+            "scripts/build_growthbook_aa_manual_qa_evidence.py"
+        )
+        growthbook_aa_manual_qa_workflow = read(
+            ".github/workflows/verify-vevo-growthbook-production-aa-manual-qa.yml"
+        )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
         )
@@ -1240,6 +1246,15 @@ def main() -> int:
                 raise AssertionError(
                     f"GrowthBook A/A snapshot evidence opened early: {evidence_group}."
                 )
+        manual_qa_manifest = growthbook_aa_snapshot_manifest.get(
+            "manual_qa_evidence", {}
+        )
+        if (
+            manual_qa_manifest.get("producer_allowed") is not False
+            or manual_qa_manifest.get("observation_status") != "not_recorded"
+            or manual_qa_manifest.get("observation_sha256") is not None
+        ):
+            raise AssertionError("GrowthBook A/A manual QA producer opened early.")
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get("release_boundaries", {})
         for boundary in ("main_only", "github_artifact_reads_only"):
             if snapshot_boundaries.get(boundary) is not True:
@@ -1319,6 +1334,86 @@ def main() -> int:
                 "GrowthBook A/A snapshot workflow must remain artifact-read-only: "
                 f"{forbidden_snapshot_workflow_marker}",
             )
+        for forbidden_manual_qa_builder_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_aa_manual_qa_builder.lower(),
+                forbidden_manual_qa_builder_marker.lower(),
+                "GrowthBook A/A manual QA builder must remain offline: "
+                f"{forbidden_manual_qa_builder_marker}",
+            )
+        for required_manual_qa_builder_marker in (
+            "manual QA observation must use canonical JSON bytes",
+            "observation SHA-256 mismatch",
+            '"vevo_growthbook_aa_manual_qa_evidence"',
+            '"source_run_id": workflow_run_id',
+            '"source_main_commit": main_commit',
+            "frozen 100 percent Production allocation",
+            '"contains_event_or_device_ids"',
+            '"contains_customer_or_order_data"',
+            '"unplanned_mutation_observed"',
+        ):
+            require(
+                growthbook_aa_manual_qa_builder,
+                required_manual_qa_builder_marker,
+                "GrowthBook A/A manual QA builder lost safety marker: "
+                f"{required_manual_qa_builder_marker}",
+            )
+        for required_manual_qa_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "manual QA evidence producer gate is closed",
+            "reviewed browser QA observation is not recorded",
+            "Production A/A is not the only running experiment",
+            "CTA A/B must remain unstarted during manual A/A QA",
+            "PRODUCTION_AA_MANUAL_QA_LOCAL_GATE_OK:",
+            "scripts/build_growthbook_aa_manual_qa_evidence.py",
+            '--workflow-run-id "${GITHUB_RUN_ID}"',
+            '--main-commit "${GITHUB_SHA}"',
+            "uses: actions/upload-artifact@v4.6.2",
+            "winner=false:cta=unchanged",
+        ):
+            require(
+                growthbook_aa_manual_qa_workflow,
+                required_manual_qa_workflow_marker,
+                "GrowthBook A/A manual QA workflow lost safety marker: "
+                f"{required_manual_qa_workflow_marker}",
+            )
+        if growthbook_aa_manual_qa_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError("GrowthBook A/A manual QA must upload exactly one artifact.")
+        for forbidden_manual_qa_workflow_marker in (
+            "configure-aws-credentials",
+            "aws ",
+            "boto3",
+            "curl ",
+            "wget ",
+            "requests",
+            "httpx",
+            "playwright",
+            "selenium",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "gh api",
+            "gh run",
+        ):
+            forbid(
+                growthbook_aa_manual_qa_workflow.lower(),
+                forbidden_manual_qa_workflow_marker.lower(),
+                "GrowthBook A/A manual QA workflow must remain offline: "
+                f"{forbidden_manual_qa_workflow_marker}",
+            )
         preview_registry = growthbook_registry_config.get("environments", {}).get("preview", {})
         for experiment_id, weights in growthbook_reporting_config.get("expected_variation_weights", {}).items():
             registry_variations = preview_registry.get(experiment_id, {}).get("variations", [])
@@ -1355,6 +1450,7 @@ def main() -> int:
             "scripts/evaluate_growthbook_aa.py",
             "scripts/summarize_growthbook_receipts.py",
             "scripts/assemble_growthbook_aa_snapshot.py",
+            "scripts/build_growthbook_aa_manual_qa_evidence.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",
