@@ -11,6 +11,11 @@ on:
         options:
           - "false"
           - "true"
+      recovery_source_run_id:
+        description: Existing workflow run ID to verify without creating a second synthetic event
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -372,6 +377,8 @@ jobs:
 
       - name: Attach exact reporting policy and submit one synthetic event
         shell: bash
+        env:
+          RECOVERY_SOURCE_RUN_ID: ${{ inputs.recovery_source_run_id }}
         run: |
           set -euo pipefail
           POLICY_DEFAULT_VERSION="$(aws iam get-policy \
@@ -420,11 +427,16 @@ jobs:
           import hashlib
           import json
           import os
+          import re
           import uuid
           from datetime import datetime, timezone
 
           def deterministic_uuid4(label):
-              raw = bytearray(hashlib.sha256(f"{os.environ['GITHUB_RUN_ID']}:{label}".encode()).digest()[:16])
+              recovery_run_id = os.environ.get("RECOVERY_SOURCE_RUN_ID", "").strip()
+              if recovery_run_id and not re.fullmatch(r"[1-9][0-9]{5,19}", recovery_run_id):
+                  raise SystemExit("invalid recovery_source_run_id")
+              seed_run_id = recovery_run_id or os.environ["GITHUB_RUN_ID"]
+              raw = bytearray(hashlib.sha256(f"{seed_run_id}:{label}".encode()).digest()[:16])
               raw[6] = (raw[6] & 0x0F) | 0x40
               raw[8] = (raw[8] & 0x3F) | 0x80
               return str(uuid.UUID(bytes=bytes(raw)))
@@ -457,6 +469,8 @@ jobs:
               handle.write(f"SYNTHETIC_EVENT_ID={event_id}\n")
               handle.write(f"SYNTHETIC_DEVICE_ID={device_id}\n")
               handle.write(f"SYNTHETIC_EVENT_DATE={event_date}\n")
+              handle.write(f"RECOVERY_MODE={'true' if os.environ.get('RECOVERY_SOURCE_RUN_ID', '').strip() else 'false'}\n")
+              handle.write(f"RECOVERY_SOURCE_RUN_ID_EFFECTIVE={os.environ.get('RECOVERY_SOURCE_RUN_ID', '').strip()}\n")
           PY
           set -a
           source "${GITHUB_ENV}"
@@ -464,22 +478,62 @@ jobs:
 
           RAW_KEY="experiment-events/raw/event_date=${SYNTHETIC_EVENT_DATE}/${SYNTHETIC_EVENT_ID}.json"
           DEVICE_KEY="experiment-events/curated/device_facts/experiment_id=vevo-sk-aa-001/${SYNTHETIC_DEVICE_ID}.json"
-          if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${RAW_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-            echo "Synthetic raw key already exists before this run" >&2
-            exit 1
-          fi
-          if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${DEVICE_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-            echo "Synthetic device fact already exists before this run" >&2
-            exit 1
-          fi
+          if [[ "${RECOVERY_MODE}" == "true" ]]; then
+            if ! aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${RAW_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              echo "Recovery source raw event does not exist; refusing to create a second event" >&2
+              exit 1
+            fi
+            aws s3 cp "s3://${EVENT_BUCKET}/${RAW_KEY}" raw-synthetic-event.json --only-show-errors
+            python3 <<'PY'
+          import json
+          import os
 
-          HTTP_STATUS="$(curl -sS -o collector-response.json -w '%{http_code}' \
-            -X POST "${COLLECTOR_ENDPOINT}" \
-            -H 'Origin: https://www.vevo.sk' \
-            -H 'Content-Type: application/json' \
-            --data-binary @synthetic-event.json)"
-          export HTTP_STATUS
-          python3 <<'PY'
+          record = json.load(open("raw-synthetic-event.json", encoding="utf-8"))
+          expected = {
+              "schema_version": 1,
+              "event_id": os.environ["SYNTHETIC_EVENT_ID"],
+              "event_name": "experiment_exposure",
+              "device_id": os.environ["SYNTHETIC_DEVICE_ID"],
+              "page_path": "/",
+              "page_type": "home",
+              "consent_state": "analytics_granted",
+              "experiment_id": "vevo-sk-aa-001",
+              "variation_id": "control",
+              "utm_source": "meta",
+              "utm_medium": "paid_social",
+              "meta_campaign_id": "900000000001",
+              "meta_adset_id": "900000000002",
+              "meta_ad_id": "900000000003",
+              "meta_placement": "instagram_feed",
+          }
+          if any(record.get(key) != value for key, value in expected.items()):
+              raise SystemExit("recovery source raw event identity drift")
+          client_fields = {
+              key: value
+              for key, value in record.items()
+              if key not in {"received_at", "event_date", "collector_version", "risk_result"}
+          }
+          with open("synthetic-event.json", "w", encoding="utf-8") as handle:
+              json.dump(client_fields, handle, separators=(",", ":"), sort_keys=True)
+          PY
+            echo "SYNTHETIC_RAW_EVENT_RECOVERY_OK:${RECOVERY_SOURCE_RUN_ID}:${SYNTHETIC_EVENT_ID}"
+          else
+            if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${RAW_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              echo "Synthetic raw key already exists before a non-recovery run" >&2
+              exit 1
+            fi
+            if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${DEVICE_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              echo "Synthetic device fact already exists before a non-recovery run" >&2
+              exit 1
+            fi
+
+            HTTP_STATUS="$(curl -sS -o collector-response.json -w '%{http_code}' \
+              -X POST "${COLLECTOR_ENDPOINT}" \
+              -H 'Origin: https://www.vevo.sk' \
+              -H 'Content-Type: application/json' \
+              --data-binary @synthetic-event.json)"
+            export HTTP_STATUS
+            python3 <<'PY'
           import json
           import os
 
@@ -491,6 +545,7 @@ jobs:
           }:
               raise SystemExit("synthetic collector response drift")
           PY
+          fi
 
           for _ in $(seq 1 30); do
             if aws s3api head-object \
@@ -528,6 +583,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          DEVICE_KEY="experiment-events/curated/device_facts/experiment_id=vevo-sk-aa-001/${SYNTHETIC_DEVICE_ID}.json"
+          if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${DEVICE_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            if [[ "${RECOVERY_MODE}" != "true" ]]; then
+              echo "Curated device fact already exists outside recovery mode" >&2
+              exit 1
+            fi
+            {
+              echo "RECONCILE_TASK_ID=reused-from-run-${RECOVERY_SOURCE_RUN_ID_EFFECTIVE:-unknown}"
+              echo "RECONCILE_PRIVATE_IP=not-applicable-recovery"
+            } >> "${GITHUB_ENV}"
+            echo "GROWTHBOOK_RECONCILE_REUSED_EXISTING_FACT:${SYNTHETIC_DEVICE_ID}"
+            exit 0
+          fi
           python3 <<'PY' > reconcile-overrides.json
           import json
           import os
@@ -697,13 +765,30 @@ jobs:
           aws s3 cp "s3://${EVENT_BUCKET}/${DEVICE_KEY}" curated-device-fact.json --only-show-errors
 
           python3 <<'PY'
+          import ast
           import json
           import os
+          from pathlib import Path
 
-          from reporting_core.experiments import DEVICE_FACT_FIELDS
+          tree = ast.parse(Path("reporting_core/experiments.py").read_text(encoding="utf-8"))
+          fields_node = None
+          for node in tree.body:
+              if not isinstance(node, ast.Assign):
+                  continue
+              if any(isinstance(target, ast.Name) and target.id == "DEVICE_FACT_FIELDS" for target in node.targets):
+                  fields_node = node.value
+                  break
+          if not (
+              isinstance(fields_node, ast.Call)
+              and isinstance(fields_node.func, ast.Name)
+              and fields_node.func.id == "frozenset"
+              and len(fields_node.args) == 1
+          ):
+              raise SystemExit("could not statically resolve DEVICE_FACT_FIELDS")
+          device_fact_fields = set(ast.literal_eval(fields_node.args[0]))
 
           fact = json.load(open("curated-device-fact.json", encoding="utf-8"))
-          if set(fact) != DEVICE_FACT_FIELDS - {"experiment_id"}:
+          if set(fact) != device_fact_fields - {"experiment_id"}:
               raise SystemExit("curated device fact field set drift")
           expected = {
               "device_id": os.environ["SYNTHETIC_DEVICE_ID"],
