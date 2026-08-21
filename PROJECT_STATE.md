@@ -61,6 +61,13 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- ROY SD-card purchase-cost correction is in progress (`2026-08-21`):
+  - branch `codex/roy-sd-card-purchase-costs`
+  - requested net purchase costs are mapped by exact reporting SKU: `F_206` = `4.50 EUR` and `12876` = `13.50 EUR`
+  - regression coverage verifies that these current import-code mappings take precedence over the older EAN mappings for the same catalog items
+  - verification and production deployment are pending
+  - Next exact step: run focused/full reporting checks, commit and push, open/merge a PR, then perform the production infra hard-gate and host verification before the UI readback
+
 - VEVO GrowthBook Pro rollout has a concrete, read-only preflight, dated baseline, and execution contract on branch `codex/vevo-growthbook` (`2026-08-20`):
   - the goal is to validate the complete GrowthBook → Meta dimensions → reporting chain with an invisible site-wide A/A and then finish one non-price product-detail CTA-color A/B test; script installation alone is explicitly not completion
   - confirmed scope is the Slovak `www.vevo.sk` storefront; all other languages, prices, product content, cart, checkout, payments, and stock remain out of scope
