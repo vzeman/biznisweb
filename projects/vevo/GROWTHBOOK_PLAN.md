@@ -217,6 +217,8 @@ Pass gates:
 
 An apparent A/A business-metric winner is investigated, never promoted. Any failed data-quality gate stops the rollout and restarts A/A only after a versioned fix.
 
+The machine-readable decision contract is frozen in `growthbook_aa_acceptance.json` and evaluated only from an aggregate, PII-free snapshot by `scripts/evaluate_growthbook_aa.py`. The evaluator independently recomputes SRM, local-calendar duration, split, count differences, duplicate and exact-join rates, and performance deltas. It also requires the consent, privacy, Meta-dimension, desktop/mobile, commerce-health, purchase-duplication, and rollback gates. Its only valid conclusions are `PASS`, `FAIL`, and `NOT_READY`; `winner_calls_allowed` is always false. Production activation and the later CTA A/B remain separate reviewed actions even after an A/A `PASS`.
+
 ### 8. First A/B experiment
 
 Experiment ID: `vevo-sk-product-cta-color-001`
