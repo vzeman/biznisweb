@@ -103,7 +103,29 @@ def validate(payload: dict[str, Any], phase: str) -> list[dict[str, str]]:
             }
         )
 
-    if phase == "activate":
+    if phase == "production-foundation":
+        if change_set_type != "CREATE":
+            raise AssertionError("Production foundation must be a CREATE change set")
+        resources = {row["logical_id"]: row["resource_type"] for row in normalized}
+        if len(resources) != len(normalized):
+            raise AssertionError("Production foundation repeats a logical resource")
+        if resources != EXPECTED_CREATE_RESOURCES:
+            missing = sorted(EXPECTED_CREATE_RESOURCES.keys() - resources.keys())
+            extra = sorted(resources.keys() - EXPECTED_CREATE_RESOURCES.keys())
+            wrong_type = sorted(
+                logical_id
+                for logical_id in resources.keys() & EXPECTED_CREATE_RESOURCES.keys()
+                if resources[logical_id] != EXPECTED_CREATE_RESOURCES[logical_id]
+            )
+            raise AssertionError(
+                "Production foundation CREATE resource contract mismatch: "
+                f"missing={missing} extra={extra} wrong_type={wrong_type}"
+            )
+        if any(row["action"] != "Add" or row["replacement"] != "False" for row in normalized):
+            raise AssertionError(
+                "Production foundation must contain only non-replacement Add changes"
+            )
+    elif phase == "activate":
         if change_set_type != "UPDATE":
             raise AssertionError("route activation must be an UPDATE change set")
         logical_ids = {row["logical_id"] for row in normalized}
@@ -163,7 +185,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Fail closed on unsafe GrowthBook change sets")
     parser.add_argument("--change-set", type=Path, required=True)
     parser.add_argument("--change-set-type", choices=("CREATE", "UPDATE"), required=True)
-    parser.add_argument("--phase", choices=("candidate", "activate"), required=True)
+    parser.add_argument(
+        "--phase",
+        choices=("candidate", "activate", "production-foundation"),
+        required=True,
+    )
     args = parser.parse_args()
     payload = with_change_set_type(_load(args.change_set), args.change_set_type)
     normalized = validate(payload, args.phase)
