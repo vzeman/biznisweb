@@ -1,8 +1,8 @@
 # VEVO GrowthBook Pro workspace contract
 
-Status: GrowthBook Preview drafts initialized; active collector and Athena reader verified; data-source connection pending
+Status: GrowthBook Preview data source connected; synthetic curated-fact verification pending
 
-Last reviewed: 2026-08-20
+Last reviewed: 2026-08-21
 
 This is the operator handoff for the target GrowthBook Pro rollout. The authenticated workspace currently reports the `Starter` plan; no paid upgrade was accepted. The machine-readable source of truth is `growthbook_workspace.json`; the SQL pasted into GrowthBook must come from `growthbook_sql/` without manual edits.
 
@@ -14,12 +14,13 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 4. **Completed:** string features `vevo-sk-aa-assignment` and `vevo-sk-product-cta-color` exist with default `control`, enabled for staging and disabled for production. The A/A and CTA experiments are unstarted drafts with 100% experiment traffic, a 50/50 split, exact string feature values, and rules limited to staging. Nothing was published.
 5. **Completed:** the dedicated non-root ECS/Fargate collector passed the direct localhost host gate, the public route was added through a route-only change set, and run `32400301619` independently verified the active task/digest, exact CORS and route isolation, plus an unchanged raw-S3 snapshot after invalid probes.
 6. **Completed:** run `32401658468` repeated the exact Fargate localhost gate and created `vevo-growthbook-preview-reader` with only the stack's `vevo-growthbook-readonly-preview` policy and one active access key. The key was delivered only as a one-day CMS-encrypted artifact, decrypted locally, and the cloud artifact was deleted immediately. No credential material is committed or logged.
-7. **Current step:** the `VEVO Preview Experiment Facts` Athena form is prepared for project `VEVO SK Web` with the exact region, workgroup, catalog, database, and S3 results URL. Browser entry of the AWS key/secret and the connection test remain pending the required action-time approval to transmit those credentials to GrowthBook Cloud.
-8. Paste `growthbook_sql/assignment.sql` as the assignment query. Its preview must return exactly `device_id`, `timestamp`, `experiment_id`, `variation_id`, and the four approved Meta dimensions.
-9. Create the two fact tables from `growthbook_sql/device_outcomes.sql` and `growthbook_sql/performance_vitals.sql`.
-10. Create the eleven metrics exactly as listed in `growthbook_workspace.json`. Outcome metrics use GrowthBook window `None` because the authoritative 24-hour and seven-day windows are already frozen upstream. Performance p75 metrics use an event-level quantile of `0.75`, do not group by experiment user, do not ignore zeros, and use a 24-hour conversion window.
-11. **Completed as drafts only:** invisible A/A `vevo-sk-aa-001` and CTA A/B `vevo-sk-product-cta-color-001` exist. Neither experiment is started. The A/B experiment remains unstarted until A/A passes and its final sample is recomputed and frozen.
-12. Before A/A Production traffic, clone the verified Preview data-source/fact/metric objects onto the separate Production Athena database and workgroup. Never repoint the Preview connection in place.
+7. **Completed:** `VEVO Preview Experiment Facts` (`ds_19g6mmt2c4dmn`) is connected to the exact Preview region, workgroup, catalog, database, and S3 results URL and is scoped only to project `VEVO SK Web`. GrowthBook's connection test passed, and the temporary local credential/private-key handoff was deleted immediately afterward.
+8. **Completed structurally:** the data source has exactly one `device_id` identifier and one `VEVO consented devices` assignment query copied from `growthbook_sql/assignment.sql`. Athena executed the query without an SQL/IAM error; it returned no rows because no synthetic Preview fact has been published yet.
+9. **Current step:** merge and run the protected `Verify VEVO GrowthBook Preview Facts` workflow. It must pass the exact Fargate localhost/marker gate before accepting one anonymous synthetic A/A exposure, publish one curated device fact through the real reporting reconciler, and prove the exact row through the GrowthBook Athena workgroup.
+10. Create the two fact tables from `growthbook_sql/device_outcomes.sql` and `growthbook_sql/performance_vitals.sql`.
+11. Create the eleven metrics exactly as listed in `growthbook_workspace.json`. Outcome metrics use GrowthBook window `None` because the authoritative 24-hour and seven-day windows are already frozen upstream. Performance p75 metrics use an event-level quantile of `0.75`, do not group by experiment user, do not ignore zeros, and use a 24-hour conversion window.
+12. **Completed as drafts only:** invisible A/A `vevo-sk-aa-001` and CTA A/B `vevo-sk-product-cta-color-001` exist. Neither experiment is started. The A/B experiment remains unstarted until A/A passes and its final sample is recomputed and frozen.
+13. Before A/A Production traffic, clone the verified Preview data-source/fact/metric objects onto the separate Production Athena database and workgroup. Never repoint the Preview connection in place.
 
 ## Exact analytical behavior
 
@@ -36,8 +37,8 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 
 - The authenticated GrowthBook workspace is on Starter. The observed upgrade flow requires a paid Pro upgrade; it was cancelled without accepting a charge.
 - `staging` is the Preview alias until a paid plan is explicitly authorized and a custom `Preview` environment is genuinely needed.
-- GrowthBook Cloud credential entry and connection testing require explicit action-time approval because they transmit the dedicated AWS key and secret to `app.growthbook.io`.
 - Curated fact tables are structurally deployed but remain empty until a separately gated synthetic/Preview reconciliation is published.
+- The protected synthetic-fact workflow is versioned but has not yet been merged or dispatched; no accepted synthetic event or curated row is claimed until its AWS and GrowthBook readback gates pass.
 - Production feature allocation and the collector Production registry remain hard-disabled.
 
 The GrowthBook Web SDK returns the actual string feature value in `ExperimentResult.value`; its `key` is a variation tracking key that defaults to a numeric string such as `"0"` or `"1"`. The storefront therefore validates and stores `result.value` (`control`, `variant`, or `brand_contrast`) and uses numeric metadata only as a fail-closed fallback. See the official [GrowthBook JavaScript SDK source](https://github.com/growthbook/growthbook/blob/main/packages/sdk-js/src/types/growthbook.ts) and [feature implementation guide](https://docs.growthbook.io/lib/js#tracking-callback).

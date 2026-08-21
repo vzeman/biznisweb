@@ -1,0 +1,830 @@
+name: Verify VEVO GrowthBook Preview Facts
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_synthetic_publish:
+        description: Publish exactly one anonymous synthetic Preview exposure and its curated fact
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-preview-fact-verification
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: "919341186960"
+  STACK_NAME: vevo-growthbook-preview
+  SCHEDULE_NAME: vevo-daily-report-email
+  EXPECTED_TASK_FAMILY: vevo-reporting-daily
+  EXPECTED_TASK_ROLE: BiznisWebReportingTaskRole-vevo
+  ECR_REPOSITORY: vevo-reporting
+  RUNTIME_PATH: /app
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  verify-preview-facts:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Require explicit synthetic publish confirmation
+        env:
+          CONFIRM_SYNTHETIC_PUBLISH: ${{ inputs.confirm_synthetic_publish }}
+        run: |
+          set -euo pipefail
+          if [[ "${CONFIRM_SYNTHETIC_PUBLISH}" != "true" ]]; then
+            echo "confirm_synthetic_publish must be true" >&2
+            exit 1
+          fi
+
+      - name: Checkout exact verification contract
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve exact stack, reporting runtime, and immutable image
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > stack.json
+          aws scheduler get-schedule \
+            --name "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > schedule.json
+
+          SOURCE_TASK_DEFINITION="$(python3 - <<'PY'
+          import json
+          import os
+
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          if schedule.get("State") != "ENABLED":
+              raise SystemExit("VEVO reporting schedule is not ENABLED")
+          target = schedule.get("Target") or {}
+          ecs = target.get("EcsParameters") or {}
+          task_definition = str(ecs.get("TaskDefinitionArn") or "")
+          if f"task-definition/{os.environ['EXPECTED_TASK_FAMILY']}:" not in task_definition:
+              raise SystemExit(f"unexpected VEVO task definition: {task_definition}")
+          print(task_definition)
+          PY
+          )"
+          aws ecs describe-task-definition \
+            --task-definition "${SOURCE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > source-task-definition.json
+
+          IMAGE_DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag=latest \
+            --region "${AWS_REGION}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Could not resolve an immutable reporting image digest" >&2
+            exit 1
+          fi
+          IMAGE_IDENTIFIER="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+
+          python3 - "${IMAGE_IDENTIFIER}" <<'PY' > candidate-task-definition.json
+          import copy
+          import json
+          import os
+          import sys
+
+          image = sys.argv[1]
+          source = json.load(open("source-task-definition.json", encoding="utf-8"))["taskDefinition"]
+          allowed = {
+              "family",
+              "taskRoleArn",
+              "executionRoleArn",
+              "networkMode",
+              "containerDefinitions",
+              "volumes",
+              "placementConstraints",
+              "requiresCompatibilities",
+              "cpu",
+              "memory",
+              "ipcMode",
+              "pidMode",
+              "proxyConfiguration",
+              "inferenceAccelerators",
+              "ephemeralStorage",
+              "runtimePlatform",
+          }
+          candidate = {
+              key: copy.deepcopy(value)
+              for key, value in source.items()
+              if key in allowed and value not in (None, [], {})
+          }
+          containers = candidate.get("containerDefinitions") or []
+          if len(containers) != 1:
+              raise SystemExit(f"expected one reporting container, got {len(containers)}")
+          container = containers[0]
+          container["image"] = image
+          secrets = {str(row.get("name") or "") for row in container.get("secrets") or []}
+          if "BIZNISWEB_API_TOKEN" not in secrets:
+              raise SystemExit("candidate task does not reuse the managed BiznisWeb token reference")
+          task_role = str(candidate.get("taskRoleArn") or "")
+          expected_role = f"arn:aws:iam::{os.environ['EXPECTED_ACCOUNT_ID']}:role/{os.environ['EXPECTED_TASK_ROLE']}"
+          if task_role != expected_role:
+              raise SystemExit(f"unexpected VEVO task role: {task_role}")
+          json.dump(candidate, sys.stdout)
+          PY
+
+          CANDIDATE_TASK_DEFINITION="$(aws ecs register-task-definition \
+            --cli-input-json file://candidate-task-definition.json \
+            --region "${AWS_REGION}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+          aws ecs describe-task-definition \
+            --task-definition "${CANDIDATE_TASK_DEFINITION}" \
+            --region "${AWS_REGION}" > candidate-task-definition-response.json
+
+          python3 <<'PY' > network.json
+          import json
+
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          raw = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
+          print(json.dumps({
+              "awsvpcConfiguration": {
+                  "subnets": raw.get("Subnets") or raw.get("subnets") or [],
+                  "securityGroups": raw.get("SecurityGroups") or raw.get("securityGroups") or [],
+                  "assignPublicIp": raw.get("AssignPublicIp") or raw.get("assignPublicIp") or "DISABLED",
+              }
+          }))
+          PY
+
+          python3 <<'PY' > runtime.env
+          import json
+          import os
+
+          stack = json.load(open("stack.json", encoding="utf-8"))["Stacks"][0]
+          if stack.get("StackStatus") != "UPDATE_COMPLETE":
+              raise SystemExit(f"GrowthBook stack is not UPDATE_COMPLETE: {stack.get('StackStatus')}")
+          parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack.get("Parameters") or []}
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs") or []}
+          if parameters.get("Environment") != "preview" or parameters.get("PublicRouteEnabled") != "true":
+              raise SystemExit("GrowthBook collector is not the active public Preview stack")
+          required = {
+              "CollectorEndpoint",
+              "EventBucketName",
+              "ExperimentDatabaseName",
+              "GrowthBookWorkGroupName",
+              "ReportingPolicyArn",
+          }
+          missing = sorted(required - outputs.keys())
+          if missing:
+              raise SystemExit(f"missing GrowthBook stack outputs: {missing}")
+
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          ecs = schedule["Target"]["EcsParameters"]
+          task = json.load(open("candidate-task-definition-response.json", encoding="utf-8"))["taskDefinition"]
+          container = task["containerDefinitions"][0]
+          log_options = (container.get("logConfiguration") or {}).get("options") or {}
+          values = {
+              "COLLECTOR_ENDPOINT": outputs["CollectorEndpoint"],
+              "EVENT_BUCKET": outputs["EventBucketName"],
+              "EXPERIMENT_DATABASE": outputs["ExperimentDatabaseName"],
+              "GROWTHBOOK_WORKGROUP": outputs["GrowthBookWorkGroupName"],
+              "REPORTING_POLICY_ARN": outputs["ReportingPolicyArn"],
+              "CLUSTER_ARN": schedule["Target"]["Arn"],
+              "LAUNCH_TYPE": ecs.get("LaunchType") or "FARGATE",
+              "PLATFORM_VERSION": ecs.get("PlatformVersion") or "",
+              "CONTAINER_NAME": container["name"],
+              "LOG_GROUP": log_options.get("awslogs-group") or "",
+              "LOG_PREFIX": log_options.get("awslogs-stream-prefix") or "",
+          }
+          if not values["LOG_GROUP"] or not values["LOG_PREFIX"]:
+              raise SystemExit("candidate task is missing CloudWatch log configuration")
+          for key, value in sorted(values.items()):
+              if "\n" in value or "\r" in value:
+                  raise SystemExit(f"invalid newline in {key}")
+              print(f"{key}={value}")
+          PY
+
+          cat runtime.env >> "${GITHUB_ENV}"
+          {
+            echo "SOURCE_TASK_DEFINITION=${SOURCE_TASK_DEFINITION}"
+            echo "CANDIDATE_TASK_DEFINITION=${CANDIDATE_TASK_DEFINITION}"
+            echo "IMAGE_DIGEST=${IMAGE_DIGEST}"
+            echo "IMAGE_IDENTIFIER=${IMAGE_IDENTIFIER}"
+          } >> "${GITHUB_ENV}"
+
+          echo "PREDEPLOY_CONTEXT_OK:instance-id=N/A:Fargate:service=${SCHEDULE_NAME}:path=${RUNTIME_PATH}:task-definition=${CANDIDATE_TASK_DEFINITION}:image=${IMAGE_IDENTIFIER}"
+
+      - name: Run exact Fargate localhost and marker hard gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY' > host-gate-overrides.json
+          import json
+          import os
+
+          print(json.dumps({
+              "containerOverrides": [{
+                  "name": os.environ["CONTAINER_NAME"],
+                  "command": ["/bin/bash", "/app/scripts/growthbook_preview_reconcile_host_gate.sh"],
+                  "environment": [
+                      {"name": "REPORT_PROJECT", "value": "vevo"},
+                      {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                      {"name": "GROWTHBOOK_RECONCILE_VERSION", "value": os.environ["IMAGE_DIGEST"]},
+                  ],
+              }]
+          }))
+          PY
+
+          RUN_ARGS=(
+            --cluster "${CLUSTER_ARN}"
+            --task-definition "${CANDIDATE_TASK_DEFINITION}"
+            --launch-type "${LAUNCH_TYPE}"
+            --network-configuration file://network.json
+            --overrides file://host-gate-overrides.json
+            --started-by "vevo-growthbook-host-${GITHUB_RUN_ID}"
+            --region "${AWS_REGION}"
+          )
+          if [[ -n "${PLATFORM_VERSION}" ]]; then
+            RUN_ARGS+=(--platform-version "${PLATFORM_VERSION}")
+          fi
+          aws ecs run-task "${RUN_ARGS[@]}" > host-gate-task.json
+          HOST_GATE_TASK_ARN="$(python3 - <<'PY'
+          import json
+          run = json.load(open("host-gate-task.json", encoding="utf-8"))
+          if run.get("failures"):
+              raise SystemExit(f"host-gate run-task failures: {run['failures']}")
+          tasks = run.get("tasks") or []
+          if len(tasks) != 1:
+              raise SystemExit(f"expected one host-gate task, got {len(tasks)}")
+          print(tasks[0]["taskArn"])
+          PY
+          )"
+          HOST_GATE_TASK_ID="${HOST_GATE_TASK_ARN##*/}"
+
+          HOST_GATE_PRIVATE_IP=""
+          for _ in $(seq 1 120); do
+            aws ecs describe-tasks \
+              --cluster "${CLUSTER_ARN}" \
+              --tasks "${HOST_GATE_TASK_ARN}" \
+              --region "${AWS_REGION}" > host-gate-task-state.json
+            readarray -t TASK_STATE < <(python3 - <<'PY'
+          import json
+
+          task = json.load(open("host-gate-task-state.json", encoding="utf-8"))["tasks"][0]
+          details = []
+          for attachment in task.get("attachments") or []:
+              details.extend(attachment.get("details") or [])
+          private_ip = next((row.get("value") for row in details if row.get("name") == "privateIPv4Address"), "")
+          print(task.get("lastStatus") or "")
+          print(private_ip)
+          PY
+            )
+            LAST_STATUS="${TASK_STATE[0]}"
+            if [[ -n "${TASK_STATE[1]:-}" ]]; then
+              HOST_GATE_PRIVATE_IP="${TASK_STATE[1]}"
+            fi
+            if [[ "${LAST_STATUS}" == "STOPPED" ]]; then
+              break
+            fi
+            sleep 5
+          done
+          if [[ "${LAST_STATUS}" != "STOPPED" ]]; then
+            echo "Host-gate task did not stop within 10 minutes" >&2
+            exit 1
+          fi
+
+          python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+
+          expected_digest = sys.argv[1]
+          task = json.load(open("host-gate-task-state.json", encoding="utf-8"))["tasks"][0]
+          containers = task.get("containers") or []
+          if len(containers) != 1:
+              raise SystemExit(f"expected one stopped host-gate container, got {len(containers)}")
+          container = containers[0]
+          if container.get("exitCode") != 0:
+              raise SystemExit(f"host-gate failed: {container}")
+          if container.get("imageDigest") != expected_digest:
+              raise SystemExit("host-gate task image digest drift")
+          PY
+
+          LOG_STREAM="${LOG_PREFIX}/${CONTAINER_NAME}/${HOST_GATE_TASK_ID}"
+          HOST_LOGS_READY="false"
+          for _ in $(seq 1 30); do
+            if aws logs get-log-events \
+              --log-group-name "${LOG_GROUP}" \
+              --log-stream-name "${LOG_STREAM}" \
+              --start-from-head \
+              --limit 1000 \
+              --region "${AWS_REGION}" > host-gate-logs.json 2>/dev/null; then
+              HOST_LOGS_READY="true"
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${HOST_LOGS_READY}" != "true" ]]; then
+            echo "Host-gate CloudWatch stream was not available" >&2
+            exit 1
+          fi
+          python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+
+          digest = sys.argv[1]
+          messages = [str(row.get("message") or "") for row in json.load(open("host-gate-logs.json"))["events"]]
+          expected = {
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:preview:{digest}",
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{digest}",
+          }
+          missing = sorted(marker for marker in expected if not any(marker in message for message in messages))
+          if missing:
+              raise SystemExit(f"host-gate markers missing: {missing}")
+          PY
+
+          if [[ -z "${HOST_GATE_PRIVATE_IP}" ]]; then
+            echo "Host-gate task private IP was not resolved" >&2
+            exit 1
+          fi
+          {
+            echo "HOST_GATE_TASK_ID=${HOST_GATE_TASK_ID}"
+            echo "HOST_GATE_PRIVATE_IP=${HOST_GATE_PRIVATE_IP}"
+          } >> "${GITHUB_ENV}"
+          echo "HARD_GATE_OK:instance-id=N/A:Fargate:private-ip=${HOST_GATE_PRIVATE_IP}:service=${SCHEDULE_NAME}:path=${RUNTIME_PATH}:task=${HOST_GATE_TASK_ID}:image=${IMAGE_IDENTIFIER}"
+
+      - name: Attach exact reporting policy and submit one synthetic event
+        shell: bash
+        run: |
+          set -euo pipefail
+          POLICY_DEFAULT_VERSION="$(aws iam get-policy \
+            --policy-arn "${REPORTING_POLICY_ARN}" \
+            --query 'Policy.DefaultVersionId' \
+            --output text)"
+          aws iam get-policy-version \
+            --policy-arn "${REPORTING_POLICY_ARN}" \
+            --version-id "${POLICY_DEFAULT_VERSION}" > reporting-policy.json
+          python3 <<'PY'
+          import json
+
+          document = json.load(open("reporting-policy.json", encoding="utf-8"))["PolicyVersion"]["Document"]
+          actions = {
+              str(action).lower()
+              for statement in document.get("Statement") or []
+              if statement.get("Effect") == "Allow"
+              for action in (
+                  statement.get("Action")
+                  if isinstance(statement.get("Action"), list)
+                  else [statement.get("Action")]
+              )
+          }
+          if any(action.startswith("s3:delete") for action in actions):
+              raise SystemExit("reporting policy unexpectedly grants S3 delete")
+          required = {"s3:getobject", "s3:putobject"}
+          if not required.issubset(actions):
+              raise SystemExit(f"reporting policy is missing required bounded actions: {sorted(required - actions)}")
+          PY
+
+          if ! aws iam list-attached-role-policies \
+            --role-name "${EXPECTED_TASK_ROLE}" \
+            --query 'AttachedPolicies[].PolicyArn' \
+            --output text | tr '\t' '\n' | grep -Fxq "${REPORTING_POLICY_ARN}"; then
+            aws iam attach-role-policy \
+              --role-name "${EXPECTED_TASK_ROLE}" \
+              --policy-arn "${REPORTING_POLICY_ARN}"
+          fi
+          aws iam list-attached-role-policies \
+            --role-name "${EXPECTED_TASK_ROLE}" \
+            --query 'AttachedPolicies[].PolicyArn' \
+            --output text | tr '\t' '\n' | grep -Fx "${REPORTING_POLICY_ARN}"
+          echo "REPORTING_POLICY_ATTACHED_OK:${EXPECTED_TASK_ROLE}:${REPORTING_POLICY_ARN}"
+
+          python3 <<'PY'
+          import hashlib
+          import json
+          import os
+          import uuid
+          from datetime import datetime, timezone
+
+          def deterministic_uuid4(label):
+              raw = bytearray(hashlib.sha256(f"{os.environ['GITHUB_RUN_ID']}:{label}".encode()).digest()[:16])
+              raw[6] = (raw[6] & 0x0F) | 0x40
+              raw[8] = (raw[8] & 0x3F) | 0x80
+              return str(uuid.UUID(bytes=bytes(raw)))
+
+          occurred_at = datetime.now(timezone.utc)
+          event_id = deterministic_uuid4("event")
+          device_id = deterministic_uuid4("device")
+          event_date = occurred_at.date().isoformat()
+          payload = {
+              "schema_version": 1,
+              "event_id": event_id,
+              "event_name": "experiment_exposure",
+              "occurred_at": occurred_at.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+              "device_id": device_id,
+              "page_path": "/",
+              "page_type": "home",
+              "consent_state": "analytics_granted",
+              "experiment_id": "vevo-sk-aa-001",
+              "variation_id": "control",
+              "utm_source": "meta",
+              "utm_medium": "paid_social",
+              "meta_campaign_id": "900000000001",
+              "meta_adset_id": "900000000002",
+              "meta_ad_id": "900000000003",
+              "meta_placement": "instagram_feed",
+          }
+          with open("synthetic-event.json", "w", encoding="utf-8") as handle:
+              json.dump(payload, handle, separators=(",", ":"), sort_keys=True)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"SYNTHETIC_EVENT_ID={event_id}\n")
+              handle.write(f"SYNTHETIC_DEVICE_ID={device_id}\n")
+              handle.write(f"SYNTHETIC_EVENT_DATE={event_date}\n")
+          PY
+          set -a
+          source "${GITHUB_ENV}"
+          set +a
+
+          RAW_KEY="experiment-events/raw/event_date=${SYNTHETIC_EVENT_DATE}/${SYNTHETIC_EVENT_ID}.json"
+          DEVICE_KEY="experiment-events/curated/device_facts/experiment_id=vevo-sk-aa-001/${SYNTHETIC_DEVICE_ID}.json"
+          if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${RAW_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Synthetic raw key already exists before this run" >&2
+            exit 1
+          fi
+          if aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${DEVICE_KEY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "Synthetic device fact already exists before this run" >&2
+            exit 1
+          fi
+
+          HTTP_STATUS="$(curl -sS -o collector-response.json -w '%{http_code}' \
+            -X POST "${COLLECTOR_ENDPOINT}" \
+            -H 'Origin: https://www.vevo.sk' \
+            -H 'Content-Type: application/json' \
+            --data-binary @synthetic-event.json)"
+          export HTTP_STATUS
+          python3 <<'PY'
+          import json
+          import os
+
+          if os.environ["HTTP_STATUS"] != "202":
+              raise SystemExit(f"synthetic collector status was {os.environ['HTTP_STATUS']}")
+          if json.load(open("collector-response.json", encoding="utf-8")) != {
+              "accepted": True,
+              "duplicate": False,
+          }:
+              raise SystemExit("synthetic collector response drift")
+          PY
+
+          for _ in $(seq 1 30); do
+            if aws s3api head-object \
+              --bucket "${EVENT_BUCKET}" \
+              --key "${RAW_KEY}" \
+              --region "${AWS_REGION}" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          aws s3api head-object \
+            --bucket "${EVENT_BUCKET}" \
+            --key "${RAW_KEY}" \
+            --region "${AWS_REGION}" >/dev/null
+          aws s3 cp "s3://${EVENT_BUCKET}/${RAW_KEY}" raw-synthetic-event.json --only-show-errors
+          python3 <<'PY'
+          import json
+          import os
+
+          payload = json.load(open("synthetic-event.json", encoding="utf-8"))
+          record = json.load(open("raw-synthetic-event.json", encoding="utf-8"))
+          server_fields = {"received_at", "event_date", "collector_version", "risk_result"}
+          if set(record) != set(payload) | server_fields:
+              raise SystemExit("persisted synthetic raw event field set drift")
+          if any(record.get(key) != value for key, value in payload.items()):
+              raise SystemExit("persisted synthetic raw event payload drift")
+          if record.get("event_date") != os.environ["SYNTHETIC_EVENT_DATE"]:
+              raise SystemExit("persisted synthetic event date drift")
+          if record.get("risk_result") != "accepted":
+              raise SystemExit("persisted synthetic event risk result drift")
+          PY
+          echo "SYNTHETIC_RAW_EVENT_OK:${SYNTHETIC_EVENT_DATE}:${SYNTHETIC_EVENT_ID}:${SYNTHETIC_DEVICE_ID}"
+
+      - name: Reconcile and publish the curated Preview fact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY' > reconcile-overrides.json
+          import json
+          import os
+
+          command = (
+              "cd /app && python scripts/reconcile_growthbook_facts.py "
+              "--project vevo "
+              "--event-from \"${SYNTHETIC_EVENT_DATE}\" "
+              "--event-through \"${SYNTHETIC_EVENT_DATE}\" "
+              "--bucket \"${GROWTHBOOK_EVENT_BUCKET}\" "
+              "--region \"${AWS_REGION}\" --publish"
+          )
+          print(json.dumps({
+              "containerOverrides": [{
+                  "name": os.environ["CONTAINER_NAME"],
+                  "command": ["/bin/bash", "-lc", command],
+                  "environment": [
+                      {"name": "REPORT_PROJECT", "value": "vevo"},
+                      {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                      {"name": "GROWTHBOOK_EVENT_BUCKET", "value": os.environ["EVENT_BUCKET"]},
+                      {"name": "GROWTHBOOK_FACT_PUBLISH_ENABLED", "value": "true"},
+                      {"name": "SYNTHETIC_EVENT_DATE", "value": os.environ["SYNTHETIC_EVENT_DATE"]},
+                      {"name": "AWS_REGION", "value": os.environ["AWS_REGION"]},
+                  ],
+              }]
+          }))
+          PY
+
+          RUN_ARGS=(
+            --cluster "${CLUSTER_ARN}"
+            --task-definition "${CANDIDATE_TASK_DEFINITION}"
+            --launch-type "${LAUNCH_TYPE}"
+            --network-configuration file://network.json
+            --overrides file://reconcile-overrides.json
+            --started-by "vevo-growthbook-facts-${GITHUB_RUN_ID}"
+            --region "${AWS_REGION}"
+          )
+          if [[ -n "${PLATFORM_VERSION}" ]]; then
+            RUN_ARGS+=(--platform-version "${PLATFORM_VERSION}")
+          fi
+          aws ecs run-task "${RUN_ARGS[@]}" > reconcile-task.json
+          RECONCILE_TASK_ARN="$(python3 - <<'PY'
+          import json
+          run = json.load(open("reconcile-task.json", encoding="utf-8"))
+          if run.get("failures"):
+              raise SystemExit(f"reconcile run-task failures: {run['failures']}")
+          tasks = run.get("tasks") or []
+          if len(tasks) != 1:
+              raise SystemExit(f"expected one reconciliation task, got {len(tasks)}")
+          print(tasks[0]["taskArn"])
+          PY
+          )"
+          RECONCILE_TASK_ID="${RECONCILE_TASK_ARN##*/}"
+          RECONCILE_PRIVATE_IP=""
+          for _ in $(seq 1 180); do
+            aws ecs describe-tasks \
+              --cluster "${CLUSTER_ARN}" \
+              --tasks "${RECONCILE_TASK_ARN}" \
+              --region "${AWS_REGION}" > reconcile-task-state.json
+            readarray -t TASK_STATE < <(python3 - <<'PY'
+          import json
+
+          task = json.load(open("reconcile-task-state.json", encoding="utf-8"))["tasks"][0]
+          details = []
+          for attachment in task.get("attachments") or []:
+              details.extend(attachment.get("details") or [])
+          private_ip = next((row.get("value") for row in details if row.get("name") == "privateIPv4Address"), "")
+          print(task.get("lastStatus") or "")
+          print(private_ip)
+          PY
+            )
+            LAST_STATUS="${TASK_STATE[0]}"
+            if [[ -n "${TASK_STATE[1]:-}" ]]; then
+              RECONCILE_PRIVATE_IP="${TASK_STATE[1]}"
+            fi
+            if [[ "${LAST_STATUS}" == "STOPPED" ]]; then
+              break
+            fi
+            sleep 5
+          done
+          if [[ "${LAST_STATUS}" != "STOPPED" ]]; then
+            echo "Reconciliation task did not stop within 15 minutes" >&2
+            exit 1
+          fi
+
+          python3 - "${IMAGE_DIGEST}" <<'PY'
+          import json
+          import sys
+
+          expected_digest = sys.argv[1]
+          task = json.load(open("reconcile-task-state.json", encoding="utf-8"))["tasks"][0]
+          containers = task.get("containers") or []
+          if len(containers) != 1:
+              raise SystemExit(f"expected one stopped reconciliation container, got {len(containers)}")
+          container = containers[0]
+          if container.get("exitCode") != 0:
+              raise SystemExit(f"reconciliation task failed: {container}")
+          if container.get("imageDigest") != expected_digest:
+              raise SystemExit("reconciliation task image digest drift")
+          PY
+
+          LOG_STREAM="${LOG_PREFIX}/${CONTAINER_NAME}/${RECONCILE_TASK_ID}"
+          RECONCILE_LOGS_READY="false"
+          for _ in $(seq 1 30); do
+            if aws logs get-log-events \
+              --log-group-name "${LOG_GROUP}" \
+              --log-stream-name "${LOG_STREAM}" \
+              --start-from-head \
+              --limit 2000 \
+              --region "${AWS_REGION}" > reconcile-logs.json 2>/dev/null; then
+              RECONCILE_LOGS_READY="true"
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${RECONCILE_LOGS_READY}" != "true" ]]; then
+            echo "Reconciliation CloudWatch stream was not available" >&2
+            exit 1
+          fi
+          python3 <<'PY'
+          import json
+
+          messages = [str(row.get("message") or "").strip() for row in json.load(open("reconcile-logs.json"))["events"]]
+          summaries = []
+          for message in messages:
+              try:
+                  value = json.loads(message)
+              except json.JSONDecodeError:
+                  continue
+              if isinstance(value, dict) and value.get("mode") == "publish":
+                  summaries.append(value)
+          if len(summaries) != 1:
+              raise SystemExit(f"expected one reconciliation summary, got {len(summaries)}")
+          summary = summaries[0]
+          expected = {
+              "raw_events": 1,
+              "completed_transaction_ids": 0,
+              "authoritative_orders": 0,
+              "device_facts": 1,
+              "performance_facts": 0,
+              "quality_reports": 2,
+              "published": {"device_facts": 1, "performance_facts": 0, "quality_reports": 2},
+          }
+          for key, value in expected.items():
+              if summary.get(key) != value:
+                  raise SystemExit(f"reconciliation summary drift for {key}: {summary.get(key)!r}")
+          print("GROWTHBOOK_RECONCILIATION_SUMMARY_OK")
+          PY
+          if [[ -z "${RECONCILE_PRIVATE_IP}" ]]; then
+            echo "Reconciliation task private IP was not resolved" >&2
+            exit 1
+          fi
+          {
+            echo "RECONCILE_TASK_ID=${RECONCILE_TASK_ID}"
+            echo "RECONCILE_PRIVATE_IP=${RECONCILE_PRIVATE_IP}"
+          } >> "${GITHUB_ENV}"
+          echo "GROWTHBOOK_RECONCILE_TASK_OK:instance-id=N/A:Fargate:private-ip=${RECONCILE_PRIVATE_IP}:service=${SCHEDULE_NAME}:path=${RUNTIME_PATH}:task=${RECONCILE_TASK_ID}"
+
+      - name: Verify exact raw, curated, reporting, and GrowthBook Athena identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_KEY="experiment-events/raw/event_date=${SYNTHETIC_EVENT_DATE}/${SYNTHETIC_EVENT_ID}.json"
+          DEVICE_KEY="experiment-events/curated/device_facts/experiment_id=vevo-sk-aa-001/${SYNTHETIC_DEVICE_ID}.json"
+          aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${RAW_KEY}" --region "${AWS_REGION}" >/dev/null
+          aws s3api head-object --bucket "${EVENT_BUCKET}" --key "${DEVICE_KEY}" --region "${AWS_REGION}" >/dev/null
+          aws s3 cp "s3://${EVENT_BUCKET}/${DEVICE_KEY}" curated-device-fact.json --only-show-errors
+
+          python3 <<'PY'
+          import json
+          import os
+
+          from reporting_core.experiments import DEVICE_FACT_FIELDS
+
+          fact = json.load(open("curated-device-fact.json", encoding="utf-8"))
+          if set(fact) != DEVICE_FACT_FIELDS - {"experiment_id"}:
+              raise SystemExit("curated device fact field set drift")
+          expected = {
+              "device_id": os.environ["SYNTHETIC_DEVICE_ID"],
+              "variation_id": "control",
+              "meta_campaign_id": "900000000001",
+              "meta_adset_id": "900000000002",
+              "meta_ad_id": "900000000003",
+              "meta_placement": "instagram_feed",
+              "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+              "eligible": 1,
+              "contaminated": 0,
+              "add_to_cart_24h": 0,
+              "purchase_converted": 0,
+              "net_revenue_eur": 0.0,
+              "cm1_eur": 0.0,
+          }
+          for key, value in expected.items():
+              if fact.get(key) != value:
+                  raise SystemExit(f"curated fact drift for {key}: {fact.get(key)!r}")
+          PY
+
+          aws s3api list-objects-v2 \
+            --bucket "${EVENT_BUCKET}" \
+            --prefix "experiment-events/raw/event_date=${SYNTHETIC_EVENT_DATE}/" \
+            --region "${AWS_REGION}" > raw-partition.json
+          python3 <<'PY'
+          import json
+          import os
+
+          suffix = f"/{os.environ['SYNTHETIC_EVENT_ID']}.json"
+          rows = [row for row in json.load(open("raw-partition.json")).get("Contents") or [] if row.get("Key", "").endswith(suffix)]
+          if len(rows) != 1:
+              raise SystemExit(f"synthetic raw event count is {len(rows)}, expected 1")
+          PY
+
+          python3 <<'PY' > athena-query.txt
+          import os
+
+          device_id = os.environ["SYNTHETIC_DEVICE_ID"]
+          print(
+              "SELECT device_id, CAST(from_iso8601_timestamp(first_exposure_at) AS timestamp) AS timestamp, "
+              "experiment_id, variation_id, meta_campaign_id, meta_adset_id, meta_ad_id, meta_placement "
+              "FROM experiment_device_facts "
+              f"WHERE experiment_id = 'vevo-sk-aa-001' AND device_id = '{device_id}'"
+          )
+          PY
+          QUERY_ID="$(aws athena start-query-execution \
+            --query-string "$(cat athena-query.txt)" \
+            --query-execution-context "Database=${EXPERIMENT_DATABASE},Catalog=AwsDataCatalog" \
+            --work-group "${GROWTHBOOK_WORKGROUP}" \
+            --region "${AWS_REGION}" \
+            --query 'QueryExecutionId' \
+            --output text)"
+          for _ in $(seq 1 60); do
+            QUERY_STATE="$(aws athena get-query-execution \
+              --query-execution-id "${QUERY_ID}" \
+              --region "${AWS_REGION}" \
+              --query 'QueryExecution.Status.State' \
+              --output text)"
+            if [[ "${QUERY_STATE}" == "SUCCEEDED" ]]; then
+              break
+            fi
+            if [[ "${QUERY_STATE}" == "FAILED" || "${QUERY_STATE}" == "CANCELLED" ]]; then
+              aws athena get-query-execution --query-execution-id "${QUERY_ID}" --region "${AWS_REGION}" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          if [[ "${QUERY_STATE}" != "SUCCEEDED" ]]; then
+            echo "GrowthBook workgroup query did not finish" >&2
+            exit 1
+          fi
+          aws athena get-query-results \
+            --query-execution-id "${QUERY_ID}" \
+            --region "${AWS_REGION}" > athena-results.json
+          python3 <<'PY'
+          import json
+          import os
+
+          rows = json.load(open("athena-results.json", encoding="utf-8"))["ResultSet"]["Rows"]
+          values = [[cell.get("VarCharValue", "") for cell in row.get("Data") or []] for row in rows]
+          expected_header = [
+              "device_id",
+              "timestamp",
+              "experiment_id",
+              "variation_id",
+              "meta_campaign_id",
+              "meta_adset_id",
+              "meta_ad_id",
+              "meta_placement",
+          ]
+          if len(values) != 2 or values[0] != expected_header:
+              raise SystemExit(f"unexpected GrowthBook Athena result shape: {values}")
+          expected_row = [
+              os.environ["SYNTHETIC_DEVICE_ID"],
+              values[1][1],
+              "vevo-sk-aa-001",
+              "control",
+              "900000000001",
+              "900000000002",
+              "900000000003",
+              "instagram_feed",
+          ]
+          if not values[1][1] or values[1] != expected_row:
+              raise SystemExit(f"GrowthBook Athena identity drift: {values[1]}")
+          print("GROWTHBOOK_ATHENA_SYNTHETIC_ROW_OK")
+          PY
+          echo "GROWTHBOOK_PREVIEW_FACT_CHAIN_OK:${SYNTHETIC_EVENT_ID}:${SYNTHETIC_DEVICE_ID}:${QUERY_ID}"
+
+      - name: Verification summary
+        if: always()
+        run: |
+          {
+            echo "## VEVO GrowthBook Preview synthetic fact verification"
+            echo
+            echo "- Instance ID: \`N/A (ECS/Fargate)\`"
+            echo "- Host-gate task/IP: \`${HOST_GATE_TASK_ID:-not-run}\` / \`${HOST_GATE_PRIVATE_IP:-not-resolved}\`"
+            echo "- Reconcile task/IP: \`${RECONCILE_TASK_ID:-not-run}\` / \`${RECONCILE_PRIVATE_IP:-not-resolved}\`"
+            echo "- Service/path: \`${SCHEDULE_NAME}\` / \`${RUNTIME_PATH}\`"
+            echo "- Immutable image: \`${IMAGE_IDENTIFIER:-not-resolved}\`"
+            echo "- Synthetic event/device: \`${SYNTHETIC_EVENT_ID:-not-created}\` / \`${SYNTHETIC_DEVICE_ID:-not-created}\`"
+            echo "- Production allocation: \`0%\` (unchanged)"
+            echo "- Scheduler target: unchanged"
+          } >> "${GITHUB_STEP_SUMMARY}"
