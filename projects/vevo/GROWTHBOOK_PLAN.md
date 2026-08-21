@@ -217,6 +217,7 @@ Pass gates:
 - no device is observed in both variations for the same experiment;
 - GrowthBook and VEVO reporting use the same exposure population and agree on variation counts within `2%`;
 - no PII is present in sampled payloads or stored rows;
+- at least one Meta exposure contains the complete stable campaign, ad-set, ad, and placement contract; source/medium/campaign-only traffic is insufficient and leaves A/A `NOT_READY`;
 - no material change in checkout health, Meta/GA4 purchase counts, or p75 LCP versus baseline.
 
 An apparent A/A business-metric winner is investigated, never promoted. Any failed data-quality gate stops the rollout and restarts A/A only after a versioned fix.
