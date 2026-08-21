@@ -214,7 +214,7 @@
     }
   },
   "population_audit": {
-    "status": "first_runtime_stopped_after_host_gate_diagnostic_fix_prepared",
+    "status": "second_runtime_root_cause_proven_module_entrypoint_fix_prepared",
     "workflow": ".github/workflows/audit-vevo-growthbook-meta-population.yml",
     "meta_audit_script": "scripts/audit_vevo_meta_dimensions.py",
     "population_sql": "projects/vevo/growthbook_sql/population_audit.sql",
@@ -242,7 +242,39 @@
       "athena_step_started": false,
       "external_mutation_observed": false
     },
-    "next_gate": "merge_writable_tmp_and_sanitized_marker_diagnostic_then_rerun_exact_digest"
+    "second_runtime_attempt": {
+      "workflow_run_id": "32462783153",
+      "workflow_run_url": "https://github.com/vzeman/biznisweb/actions/runs/32462783153",
+      "main_commit": "8f9b09d9c590e16b910a28bfd82bc782f711a7f8",
+      "reporting_image_digest": "sha256:2c20f38b1206458529749313b3ee643307c34dc5b73d6e0763e561882ac5b4a2",
+      "candidate_task_definition": "vevo-growthbook-meta-audit-preview:2",
+      "host_gate": {
+        "instance_id": "N/A:Fargate",
+        "private_ip": "172.31.17.16",
+        "service": "vevo-growthbook-meta-audit-preview",
+        "path": "/app",
+        "task_id": "0173cd46a9264bd78025bf12925cfb26"
+      },
+      "meta_task": {
+        "instance_id": "N/A:Fargate",
+        "private_ip": "172.31.9.105",
+        "service": "vevo-growthbook-meta-audit-preview",
+        "path": "/app",
+        "task_id": "767537f2aaba4b8992d1790f930d5882",
+        "exit_code": 1,
+        "stop_code": "EssentialContainerExited"
+      },
+      "sanitized_log_counts": {
+        "events": 4,
+        "start_markers": 0,
+        "success_markers": 0,
+        "failure_markers": 0
+      },
+      "root_cause": "script_path_entrypoint_excluded_repo_root_from_python_import_path",
+      "athena_step_started": false,
+      "external_mutation_observed": false
+    },
+    "next_gate": "merge_python_module_entrypoint_then_rerun_exact_digest"
   },
   "feature_flags": [
     {

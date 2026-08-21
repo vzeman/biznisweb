@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
 import unittest
 
 from scripts.audit_vevo_meta_dimensions import (
@@ -114,6 +119,35 @@ class VevoMetaDimensionAuditTests(unittest.TestCase):
             stderr.getvalue().strip(),
             FAIL_MARKER + "Meta Graph read failed during delivery insights",
         )
+
+    def test_module_entrypoint_reaches_sanitized_main_without_credentials(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as data_dir:
+            env = os.environ.copy()
+            env.update(
+                {
+                    "FACEBOOK_ACCESS_TOKEN": "",
+                    "FACEBOOK_AD_ACCOUNT_ID": "",
+                    "REPORT_DATA_DIR": data_dir,
+                }
+            )
+            completed = subprocess.run(
+                [sys.executable, "-m", "scripts.audit_vevo_meta_dimensions"],
+                cwd=root,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(completed.stdout.strip(), START_MARKER)
+        self.assertIn(
+            FAIL_MARKER + "Meta Ads credentials are not configured in the managed runtime",
+            completed.stderr,
+        )
+        self.assertNotIn("http://", completed.stderr.lower())
+        self.assertNotIn("https://", completed.stderr.lower())
 
 
 if __name__ == "__main__":
