@@ -221,7 +221,7 @@ def validate_plan(plan: Mapping[str, Any]) -> None:
         _require(all(value is None for value in final.values()), "pending CTA final plan must be empty")
         _require(
             root["next_gate"]
-            == "after_aa_pass_record_hash_bound_product_page_baseline_then_review_full_cta_decision_contract",
+            == "after_aa_pass_record_hash_bound_product_page_baseline_then_verify_lifecycle_reconciliation_before_activation",
             "pending CTA next gate drift",
         )
         return
@@ -246,7 +246,11 @@ def validate_plan(plan: Mapping[str, Any]) -> None:
     _require(final["target_rate_percent"] == round(100 * target, 6), "CTA final target drift")
     _require(final["sample_per_arm"] == expected_per_arm, "CTA final per-arm sample drift")
     _require(final["total_sample"] == 2 * expected_per_arm, "CTA final total sample drift")
-    _require(root["next_gate"] == "review_full_cta_decision_contract_before_activation", "frozen CTA next gate drift")
+    _require(
+        root["next_gate"]
+        == "verify_lifecycle_reconciliation_and_review_activation_before_launch",
+        "frozen CTA next gate drift",
+    )
 
 
 def validate_observation(observation: Mapping[str, Any], plan: Mapping[str, Any]) -> None:
@@ -387,7 +391,9 @@ def freeze_sample(
         "total_sample": 2 * per_arm,
         "frozen_at_utc": frozen_at_utc,
     }
-    updated_plan["next_gate"] = "review_full_cta_decision_contract_before_activation"
+    updated_plan["next_gate"] = (
+        "verify_lifecycle_reconciliation_and_review_activation_before_launch"
+    )
     validate_plan(updated_plan)
     updated_workspace = _updated_workspace(workspace, final=updated_plan["final"])
     return updated_plan, updated_workspace

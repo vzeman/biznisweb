@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+  "status": "pending_production_14d_refund_creditnote_value_reconciliation",
+  "verified": false,
+  "observation_path": null,
+  "observation_sha256": null,
+  "reporting_quality_object_key": null,
+  "reporting_quality_object_sha256": null,
+  "verified_at_utc": null,
+  "refund_creditnote_value_parity_verified": false,
+  "non_realized_value_policy_verified": false,
+  "customer_or_order_identity_in_evidence": false,
+  "activation_allowed": false
+}

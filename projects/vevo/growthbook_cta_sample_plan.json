@@ -38,5 +38,5 @@
     "frozen_at_utc": null
   },
   "activation_allowed": false,
-  "next_gate": "after_aa_pass_record_hash_bound_product_page_baseline_then_review_full_cta_decision_contract"
+  "next_gate": "after_aa_pass_record_hash_bound_product_page_baseline_then_verify_lifecycle_reconciliation_before_activation"
 }
