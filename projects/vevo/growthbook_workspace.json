@@ -450,6 +450,64 @@
       "foundation_deployment_status": "code_prepared_natural_run_gate_pending",
       "foundation_deployment_allowed": false,
       "credentials_created": false,
+      "reader_provisioning_workflow": ".github/workflows/provision-vevo-growthbook-production-reader.yml",
+      "reader_provisioning_status": "code_prepared_foundation_gate_pending",
+      "reader_provisioning_allowed": false,
+      "expected_iam_user_name": "vevo-growthbook-production-reader",
+      "expected_iam_user_path": "/vevo/growthbook/production/",
+      "successful_foundation_deployment": null,
+      "growthbook_clone": {
+        "status": "code_prepared_foundation_reader_gate_pending",
+        "clone_allowed": false,
+        "mutation_status": "not_started",
+        "source_data_source_id": "ds_19g6mmt2c4dmn",
+        "target_data_source_id": null,
+        "assignment_query_name": "VEVO consented devices",
+        "assignment_query_path": "projects/vevo/growthbook_sql/assignment.sql",
+        "source_fact_table_ids": {
+          "vevo_device_outcomes_v1": "ftb_19g6mmt2dhrdi",
+          "vevo_performance_vitals_v1": "ftb_19g6mmt2e0otd"
+        },
+        "target_fact_table_ids": {
+          "vevo_device_outcomes_v1": null,
+          "vevo_performance_vitals_v1": null
+        },
+        "source_metric_ids": {
+          "vevo_add_to_cart_24h": "fact__2CeFBdeQA6SLEMaRKd563q",
+          "vevo_purchase_conversion_7d": "fact__2CeFBgoFnykxPTRotYTDnB",
+          "vevo_revenue_per_exposed_device_7d": "fact__2CeFBwmv6pJ39DJbDfwwRQ",
+          "vevo_cm1_per_exposed_device_7d": "fact__2CeFBxixXV2373bgTrsXzS",
+          "vevo_average_order_value_7d": "fact__2CeFC1mPhy2axfQ61NCz45",
+          "vevo_cancelled_order_rate_14d": "fact__2CeFC3CdXkdH8zEzFu2CjP",
+          "vevo_refunded_order_rate_14d": "fact__2CeFCDRWDEiKt6p8C8mixz",
+          "vevo_client_error_device_rate_24h": "fact__2CeFCH8i2mUPmYAj1pmLZ2"
+        },
+        "target_metric_ids": {
+          "vevo_add_to_cart_24h": null,
+          "vevo_purchase_conversion_7d": null,
+          "vevo_revenue_per_exposed_device_7d": null,
+          "vevo_cm1_per_exposed_device_7d": null,
+          "vevo_average_order_value_7d": null,
+          "vevo_cancelled_order_rate_14d": null,
+          "vevo_refunded_order_rate_14d": null,
+          "vevo_client_error_device_rate_24h": null
+        },
+        "paid_pro_metric_keys": [
+          "vevo_lcp_p75_24h",
+          "vevo_inp_p75_24h",
+          "vevo_cls_p75_milli_24h"
+        ],
+        "paid_pro_upgrade_authorized": false,
+        "object_creation_order": [
+          "production_data_source",
+          "device_id_identifier",
+          "assignment_query",
+          "fact_tables",
+          "starter_compatible_metrics",
+          "paid_pro_quantile_metrics_after_authorized_upgrade"
+        ],
+        "preview_connection_repoint_allowed": false
+      },
       "first_preflight_attempt": {
         "workflow_run_id": "32465911390",
         "workflow_run_url": "https://github.com/vzeman/biznisweb/actions/runs/32465911390",

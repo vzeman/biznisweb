@@ -86,6 +86,9 @@ def main() -> int:
         growthbook_production_foundation_workflow = read(
             ".github/workflows/deploy-vevo-growthbook-production-foundation.yml"
         )
+        growthbook_production_reader_workflow = read(
+            ".github/workflows/provision-vevo-growthbook-production-reader.yml"
+        )
         growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
         growthbook_storefront = read("storefront/vevo-growthbook/vevo-growthbook.js")
         growthbook_gtm_builder = read("scripts/build_vevo_growthbook_gtm_tag.py")
@@ -831,6 +834,76 @@ def main() -> int:
                 growthbook_reader_workflow,
                 forbidden_reader_marker,
                 f"GrowthBook Preview reader workflow contains unsafe marker: {forbidden_reader_marker}",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "IAM_USER_NAME: vevo-growthbook-production-reader",
+            "IAM_USER_PATH: /vevo/growthbook/production/",
+            "first natural reconciliation must be verified before reader provisioning",
+            "Production foundation deployment is not recorded as verified",
+            "Production reader provisioning gate is false",
+            "GrowthBook clone must remain disabled during reader provisioning",
+            "PRODUCTION_READER_LOCAL_RELEASE_GATE_OK:",
+            "parameters.get('PublicRouteEnabled') != 'false'",
+            "PRODUCTION_READER_SERVICE_IDENTITY_OK:",
+            "PRODUCTION_READER_PREPROVISION_HARD_GATE_OK:",
+            "COLLECTOR_LOCALHOST_HEALTH_OK:production:",
+            "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:",
+            "if not set(resources) <= allowed_resources:",
+            "if observed_actions != allowed_actions:",
+            "if observed_resources != allowed_resources:",
+            "aws iam create-user",
+            "aws iam attach-user-policy",
+            "aws iam create-access-key",
+            "openssl cms -encrypt -binary -aes-256-cbc",
+            "retention-days: 1",
+            "GROWTHBOOK_PRODUCTION_READER_ACTIVE",
+            "GROWTHBOOK_PRODUCTION_READER_FAILED_RUN_REVOKED",
+            "GrowthBook control plane: `unchanged`",
+        ):
+            require(
+                growthbook_production_reader_workflow,
+                marker,
+                f"GrowthBook Production reader workflow lost safety marker: {marker}",
+            )
+        local_reader_gate = growthbook_production_reader_workflow.index(
+            "PRODUCTION_READER_LOCAL_RELEASE_GATE_OK:"
+        )
+        reader_credentials = growthbook_production_reader_workflow.index(
+            "Configure authenticated AWS reader-provisioning identity"
+        )
+        if local_reader_gate >= reader_credentials:
+            raise AssertionError(
+                "GrowthBook Production reader local release gate must precede AWS credentials."
+            )
+        for forbidden_production_reader_marker in (
+            "vevo-growthbook-preview-reader",
+            "/vevo/growthbook/preview/",
+            "cat ${CREDENTIAL_JSON}",
+            "cat \"${CREDENTIAL_JSON}\"",
+            "GITHUB_ENV} < ${CREDENTIAL_JSON}",
+            "GITHUB_OUTPUT} < ${CREDENTIAL_JSON}",
+            "s3:DeleteObject",
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "apigatewayv2 create-",
+            "apigatewayv2 update-",
+            "apigatewayv2 delete-",
+            "aws s3api put-",
+            "aws s3api delete-",
+            "aws scheduler create-",
+            "aws scheduler update-",
+            "aws scheduler delete-",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+        ):
+            forbid(
+                growthbook_production_reader_workflow.lower(),
+                forbidden_production_reader_marker.lower(),
+                "GrowthBook Production reader workflow contains unsafe marker: "
+                f"{forbidden_production_reader_marker}",
             )
         forbid(
             growthbook_template,
