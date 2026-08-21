@@ -8,19 +8,23 @@ import tempfile
 import unittest
 
 from scripts import freeze_growthbook_cta_sample as freezer
+from tests.test_growthbook_aa_evaluator import snapshot as aa_snapshot_fixture
 
 
 class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.plan = json.loads(freezer.DEFAULT_PLAN_PATH.read_text(encoding="utf-8"))
         self.workspace = json.loads(freezer.DEFAULT_WORKSPACE_PATH.read_text(encoding="utf-8"))
+        self.aa_snapshot = aa_snapshot_fixture()
+        snapshot_sha256 = hashlib.sha256(
+            freezer.canonical_json_bytes(self.aa_snapshot)
+        ).hexdigest()
         self.observation = {
             "schema_version": 1,
             "source_experiment_id": "vevo-sk-aa-001",
-            "aa_decision": "PASS",
-            "aa_snapshot_sha256": "a" * 64,
-            "aa_window_started_at_utc": "2026-08-22T00:00:00Z",
-            "aa_window_ended_at_utc": "2026-08-29T00:00:00Z",
+            "aa_snapshot_sha256": snapshot_sha256,
+            "aa_window_started_at_utc": "2026-08-22T22:00:00Z",
+            "aa_window_ended_at_utc": "2026-08-29T22:00:00Z",
             "population_definition": "first_valid_aa_product_page_exposure_proxy",
             "exposed_devices": 451,
             "converted_devices": 148,
@@ -30,6 +34,9 @@ class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
 
     def observation_hash(self, value: dict | None = None) -> str:
         return hashlib.sha256(freezer.canonical_json_bytes(value or self.observation)).hexdigest()
+
+    def snapshot_hash(self, value: dict | None = None) -> str:
+        return hashlib.sha256(freezer.canonical_json_bytes(value or self.aa_snapshot)).hexdigest()
 
     def test_checked_in_plan_is_pending_and_reproduces_provisional_target(self) -> None:
         freezer.validate_plan(self.plan)
@@ -51,8 +58,10 @@ class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
             self.plan,
             self.workspace,
             self.observation,
+            self.aa_snapshot,
             observation_sha256=self.observation_hash(),
-            frozen_at_utc="2026-08-29T00:00:00Z",
+            aa_snapshot_sha256=self.snapshot_hash(),
+            frozen_at_utc="2026-08-29T22:00:00Z",
         )
         freezer.validate_plan(plan)
         self.assertEqual("sample_frozen_activation_still_blocked", plan["status"])
@@ -77,13 +86,14 @@ class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
                 self.plan,
                 self.workspace,
                 self.observation,
+                self.aa_snapshot,
                 observation_sha256="b" * 64,
-                frozen_at_utc="2026-08-29T00:00:00Z",
+                aa_snapshot_sha256=self.snapshot_hash(),
+                frozen_at_utc="2026-08-29T22:00:00Z",
             )
 
-    def test_freeze_rejects_non_pass_or_identity_bearing_observation(self) -> None:
+    def test_freeze_rejects_identity_bearing_observation(self) -> None:
         for field, value, message in (
-            ("aa_decision", "FAIL", "before A/A PASS"),
             ("contains_device_or_event_identity", True, "contains identity"),
             ("contains_customer_or_order_data", True, "contains commerce data"),
         ):
@@ -95,9 +105,28 @@ class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
                         self.plan,
                         self.workspace,
                         altered,
+                        self.aa_snapshot,
                         observation_sha256=self.observation_hash(altered),
-                        frozen_at_utc="2026-08-29T00:00:00Z",
+                        aa_snapshot_sha256=self.snapshot_hash(),
+                        frozen_at_utc="2026-08-29T22:00:00Z",
                     )
+
+    def test_freeze_recomputes_and_requires_real_aa_pass(self) -> None:
+        failed = copy.deepcopy(self.aa_snapshot)
+        failed["privacy_audit"]["pii_finding_count"] = 1
+        failed_hash = self.snapshot_hash(failed)
+        observation = copy.deepcopy(self.observation)
+        observation["aa_snapshot_sha256"] = failed_hash
+        with self.assertRaisesRegex(freezer.CtaSampleFreezeError, "before A/A PASS"):
+            freezer.freeze_sample(
+                self.plan,
+                self.workspace,
+                observation,
+                failed,
+                observation_sha256=self.observation_hash(observation),
+                aa_snapshot_sha256=failed_hash,
+                frozen_at_utc="2026-08-29T22:00:00Z",
+            )
 
     def test_freeze_rejects_short_or_small_baseline(self) -> None:
         short = copy.deepcopy(self.observation)
@@ -127,8 +156,10 @@ class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
                         self.plan,
                         altered,
                         self.observation,
+                        self.aa_snapshot,
                         observation_sha256=self.observation_hash(),
-                        frozen_at_utc="2026-08-29T00:00:00Z",
+                        aa_snapshot_sha256=self.snapshot_hash(),
+                        frozen_at_utc="2026-08-29T22:00:00Z",
                     )
 
     def test_canonical_loader_and_separate_outputs(self) -> None:
@@ -143,8 +174,10 @@ class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
                 self.plan,
                 self.workspace,
                 loaded,
+                self.aa_snapshot,
                 observation_sha256=self.observation_hash(),
-                frozen_at_utc="2026-08-29T00:00:00Z",
+                aa_snapshot_sha256=self.snapshot_hash(),
+                frozen_at_utc="2026-08-29T22:00:00Z",
             )
             freezer._write_json(plan_output, plan)
             freezer._write_json(workspace_output, workspace)

@@ -20,6 +20,21 @@ from pathlib import Path
 from statistics import NormalDist
 from typing import Any, Mapping
 
+try:
+    from evaluate_growthbook_aa import (
+        AaEvaluationError,
+        DEFAULT_CONFIG_PATH as AA_CONFIG_PATH,
+        evaluate as evaluate_aa,
+        load_config as load_aa_config,
+    )
+except ModuleNotFoundError:  # Imported as scripts.freeze_growthbook_cta_sample.
+    from scripts.evaluate_growthbook_aa import (
+        AaEvaluationError,
+        DEFAULT_CONFIG_PATH as AA_CONFIG_PATH,
+        evaluate as evaluate_aa,
+        load_config as load_aa_config,
+    )
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
@@ -71,7 +86,6 @@ FINAL_KEYS = {
 OBSERVATION_KEYS = {
     "schema_version",
     "source_experiment_id",
-    "aa_decision",
     "aa_snapshot_sha256",
     "aa_window_started_at_utc",
     "aa_window_ended_at_utc",
@@ -239,7 +253,6 @@ def validate_observation(observation: Mapping[str, Any], plan: Mapping[str, Any]
     row = _exact_object(observation, OBSERVATION_KEYS, "CTA sample observation")
     _require(row["schema_version"] == 1, "CTA sample observation schema drift")
     _require(row["source_experiment_id"] == plan["source_experiment_id"], "CTA source experiment mismatch")
-    _require(row["aa_decision"] == "PASS", "CTA sample cannot be frozen before A/A PASS")
     _require(HASH_RE.fullmatch(str(row["aa_snapshot_sha256"] or "")) is not None, "A/A snapshot hash is invalid")
     _require(row["population_definition"] == plan["population_definition"], "CTA population mismatch")
     _require(row["contains_device_or_event_identity"] is False, "CTA observation contains identity")
@@ -265,14 +278,18 @@ def _load_object(path: Path, field: str) -> dict[str, Any]:
     return value
 
 
-def load_canonical_observation(path: Path) -> dict[str, Any]:
+def load_canonical_object(path: Path, field: str) -> dict[str, Any]:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        raise CtaSampleFreezeError("CTA sample observation cannot be read") from exc
-    observation = _load_object(path, "CTA sample observation")
-    _require(raw == canonical_json_bytes(observation), "CTA sample observation is not canonical")
-    return observation
+        raise CtaSampleFreezeError(f"{field} cannot be read") from exc
+    value = _load_object(path, field)
+    _require(raw == canonical_json_bytes(value), f"{field} is not canonical")
+    return value
+
+
+def load_canonical_observation(path: Path) -> dict[str, Any]:
+    return load_canonical_object(path, "CTA sample observation")
 
 
 def _updated_workspace(
@@ -307,8 +324,10 @@ def freeze_sample(
     plan: Mapping[str, Any],
     workspace: Mapping[str, Any],
     observation: Mapping[str, Any],
+    aa_snapshot: Mapping[str, Any],
     *,
     observation_sha256: str,
+    aa_snapshot_sha256: str,
     frozen_at_utc: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     validate_plan(plan)
@@ -318,6 +337,30 @@ def freeze_sample(
     _require(
         hashlib.sha256(canonical_json_bytes(observation)).hexdigest() == observation_sha256,
         "observation SHA-256 mismatch",
+    )
+    _require(HASH_RE.fullmatch(aa_snapshot_sha256) is not None, "A/A snapshot SHA-256 is invalid")
+    _require(
+        hashlib.sha256(canonical_json_bytes(aa_snapshot)).hexdigest() == aa_snapshot_sha256,
+        "A/A snapshot SHA-256 mismatch",
+    )
+    _require(
+        observation["aa_snapshot_sha256"] == aa_snapshot_sha256,
+        "CTA observation is not bound to the supplied A/A snapshot",
+    )
+    try:
+        aa_decision = evaluate_aa(aa_snapshot, load_aa_config(AA_CONFIG_PATH))
+    except AaEvaluationError as exc:
+        raise CtaSampleFreezeError(f"A/A snapshot is invalid: {exc}") from exc
+    _require(aa_decision["verdict"] == "PASS", "CTA sample cannot be frozen before A/A PASS")
+    _require(aa_decision["winner_calls_allowed"] is False, "A/A decision attempted a winner call")
+    _require(
+        aa_snapshot.get("full_allocation_started_at_utc")
+        == observation["aa_window_started_at_utc"],
+        "CTA observation start differs from the A/A snapshot",
+    )
+    _require(
+        aa_decision["evaluated_at_utc"] == observation["aa_window_ended_at_utc"],
+        "CTA observation end differs from the A/A decision",
     )
     frozen = _parse_utc(frozen_at_utc, "frozen_at_utc")
     ended = _parse_utc(observation["aa_window_ended_at_utc"], "aa_window_ended_at_utc")
@@ -367,6 +410,8 @@ def main() -> int:
     parser.add_argument("--workspace", type=Path, default=DEFAULT_WORKSPACE_PATH)
     parser.add_argument("--observation", type=Path, required=True)
     parser.add_argument("--observation-sha256", required=True)
+    parser.add_argument("--aa-snapshot", type=Path, required=True)
+    parser.add_argument("--aa-snapshot-sha256", required=True)
     parser.add_argument("--frozen-at-utc", required=True)
     parser.add_argument("--plan-output", type=Path, required=True)
     parser.add_argument("--workspace-output", type=Path, required=True)
@@ -375,11 +420,14 @@ def main() -> int:
         plan = _load_object(args.plan, "CTA sample plan")
         workspace = _load_object(args.workspace, "GrowthBook workspace")
         observation = load_canonical_observation(args.observation)
+        aa_snapshot = load_canonical_object(args.aa_snapshot, "A/A snapshot")
         updated_plan, updated_workspace = freeze_sample(
             plan,
             workspace,
             observation,
+            aa_snapshot,
             observation_sha256=args.observation_sha256,
+            aa_snapshot_sha256=args.aa_snapshot_sha256,
             frozen_at_utc=args.frozen_at_utc,
         )
         _require(args.plan_output.resolve() != args.workspace_output.resolve(), "output paths must differ")
