@@ -47,8 +47,26 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "exactly one success and zero failures",
             "NATURAL_RUNTIME_IDENTITY_OK:",
             "GROWTHBOOK_NATURAL_RECONCILIATION_OK:",
+            "GROWTHBOOK_NATURAL_EVIDENCE_READY:",
         ):
             self.assertIn(marker, self.workflow + (ROOT / "scripts" / "verify_growthbook_natural_reconciliation.py").read_text(encoding="utf-8"))
+
+    def test_uploads_only_the_sanitized_versioned_evidence_file_after_verification(self) -> None:
+        verifier = self.workflow.index("scripts/verify_growthbook_natural_reconciliation.py")
+        upload = self.workflow.index("Upload sanitized natural reconciliation evidence only")
+        for marker in (
+            "--evidence-output \"${EVIDENCE_FILE}\"",
+            "--workflow-run-id \"${GITHUB_RUN_ID}\"",
+            "--main-commit \"${GITHUB_SHA}\"",
+            "uses: actions/upload-artifact@v4.6.2",
+            "path: vevo-growthbook-natural-reconciliation-evidence.json",
+            "retention-days: 14",
+            "sanitized schema v1 only; no raw AWS payloads or credentials",
+        ):
+            self.assertIn(marker, self.workflow)
+        self.assertLess(verifier, upload)
+        self.assertEqual(1, self.workflow.count("uses: actions/upload-artifact@v4.6.2"))
+        self.assertNotIn("path: natural-", self.workflow)
 
     def test_workflow_contains_no_runtime_or_external_mutation(self) -> None:
         lowered = self.workflow.lower()

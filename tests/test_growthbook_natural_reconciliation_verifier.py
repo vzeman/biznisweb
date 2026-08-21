@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,7 @@ from scripts.verify_growthbook_natural_reconciliation import (
     VERIFY_NOT_BEFORE_UTC,
     VERIFY_BEFORE_UTC,
     VerificationError,
+    build_natural_reconciliation_evidence,
     verify_natural_reconciliation,
 )
 
@@ -298,6 +300,78 @@ class GrowthBookNaturalReconciliationVerifierTests(unittest.TestCase):
         self.assertEqual("172.31.10.20", result["private_ip"])
         self.assertTrue(result["generated_published_counts_match"])
         self.assertTrue(result["cloudtrail_scheduler_run_task_verified"])
+
+    def test_builds_exact_sanitized_versioned_handoff_evidence(self) -> None:
+        verified_at = VERIFY_NOT_BEFORE_UTC + timedelta(minutes=20)
+        result = self.verify(_base_payloads(), now=verified_at)
+        evidence = build_natural_reconciliation_evidence(
+            result,
+            verified_at=verified_at,
+            workflow_run_id="32470000000",
+            main_commit="f" * 40,
+        )
+        self.assertEqual(1, evidence["schema_version"])
+        self.assertEqual("passed", evidence["status"])
+        self.assertEqual("vzeman/biznisweb", evidence["repository"])
+        self.assertEqual("32470000000", evidence["workflow_run_id"])
+        self.assertEqual(TASK_ID, evidence["runtime"]["task_id"])
+        self.assertEqual(25, evidence["reconciliation"]["raw_events"])
+        self.assertEqual(40, evidence["reconciliation"]["partitions"])
+        self.assertEqual(
+            {
+                "contains_raw_aws_payloads": False,
+                "contains_cloudwatch_messages": False,
+                "contains_cloudtrail_payloads": False,
+                "contains_credentials": False,
+                "contains_customer_or_order_data": False,
+                "aws_mutations": False,
+                "growthbook_mutations": False,
+                "gtm_mutations": False,
+                "meta_ads_mutations": False,
+                "biznisweb_mutations": False,
+            },
+            evidence["safety"],
+        )
+        serialized = json.dumps(evidence, sort_keys=True)
+        canonical_file = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode(
+            "utf-8"
+        )
+        self.assertRegex(hashlib.sha256(canonical_file).hexdigest(), r"^[0-9a-f]{64}$")
+        for forbidden in (
+            "CloudTrailEvent",
+            "AccessKeyId",
+            "SecretAccessKey",
+            "customer_email",
+            "order_num",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_rejects_untrusted_evidence_identity_and_result_shape(self) -> None:
+        verified_at = VERIFY_NOT_BEFORE_UTC + timedelta(minutes=20)
+        result = self.verify(_base_payloads(), now=verified_at)
+        with self.assertRaisesRegex(VerificationError, "workflow run ID"):
+            build_natural_reconciliation_evidence(
+                result,
+                verified_at=verified_at,
+                workflow_run_id="0",
+                main_commit="f" * 40,
+            )
+        with self.assertRaisesRegex(VerificationError, "main commit"):
+            build_natural_reconciliation_evidence(
+                result,
+                verified_at=verified_at,
+                workflow_run_id="32470000000",
+                main_commit="main",
+            )
+        drifted = copy.deepcopy(result)
+        drifted["unexpected"] = True
+        with self.assertRaisesRegex(VerificationError, "field set drift"):
+            build_natural_reconciliation_evidence(
+                drifted,
+                verified_at=verified_at,
+                workflow_run_id="32470000000",
+                main_commit="f" * 40,
+            )
 
     def test_rejects_verification_before_hard_time_gate(self) -> None:
         with self.assertRaisesRegex(VerificationError, "not due yet"):

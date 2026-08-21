@@ -540,6 +540,13 @@ def main() -> int:
             "cloudtrail lookup-events",
             "sqs get-queue-attributes",
             "scripts/verify_growthbook_natural_reconciliation.py",
+            "--evidence-output \"${EVIDENCE_FILE}\"",
+            "--workflow-run-id \"${GITHUB_RUN_ID}\"",
+            "--main-commit \"${GITHUB_SHA}\"",
+            "Upload sanitized natural reconciliation evidence only",
+            "uses: actions/upload-artifact@v4.6.2",
+            "path: vevo-growthbook-natural-reconciliation-evidence.json",
+            "retention-days: 14",
             "AWS mutations: `none`",
         ):
             require(
@@ -574,6 +581,27 @@ def main() -> int:
                 growthbook_natural_reconciliation_workflow.lower(),
                 forbidden_action,
                 f"GrowthBook natural reconciliation verifier must remain read-only: {forbidden_action}",
+            )
+        for forbidden_artifact_path in (
+            "path: natural-stack.json",
+            "path: natural-schedule.json",
+            "path: natural-task-state.json",
+            "path: natural-task-logs.json",
+            "path: natural-cloudtrail.json",
+            "path: natural-dlq.json",
+            "path: source-schedule.json",
+        ):
+            forbid(
+                growthbook_natural_reconciliation_workflow,
+                forbidden_artifact_path,
+                "GrowthBook natural evidence must not upload raw AWS artifact: "
+                f"{forbidden_artifact_path}",
+            )
+        if growthbook_natural_reconciliation_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError(
+                "GrowthBook natural verifier must upload exactly one sanitized artifact."
             )
         for marker in (
             '"ScheduleState": "DISABLED"',
@@ -701,6 +729,13 @@ def main() -> int:
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "first natural reconciliation must be verified before foundation deploy",
+            "sanitized natural reconciliation evidence is absent",
+            "natural reconciliation artifact identity is incomplete",
+            "natural reconciliation evidence SHA-256 mismatch",
+            "natural reconciliation evidence identity/safety drift",
+            "natural reconciliation evidence timestamp schema drift",
+            "natural reconciliation sanitized count drift",
+            "natural reconciliation runtime/control evidence drift",
             "Production deployment gate is false",
             "Production foundation deployment gate is false",
             "successful read-only Production preflight evidence drift",

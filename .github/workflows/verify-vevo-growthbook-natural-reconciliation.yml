@@ -31,6 +31,7 @@ env:
   FIRST_RUN_DUE_UTC: '2026-08-22T01:30:00Z'
   VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'
   VERIFY_BEFORE_UTC: '2026-08-23T01:30:00Z'
+  EVIDENCE_FILE: vevo-growthbook-natural-reconciliation-evidence.json
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -233,7 +234,18 @@ jobs:
             --alarms natural-alarms.json \
             --dlq natural-dlq.json \
             --source-schedule source-schedule.json \
-            --cloudtrail natural-cloudtrail.json
+            --cloudtrail natural-cloudtrail.json \
+            --evidence-output "${EVIDENCE_FILE}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --main-commit "${GITHUB_SHA}"
+
+      - name: Upload sanitized natural reconciliation evidence only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-natural-reconciliation-evidence-${{ github.run_id }}
+          path: vevo-growthbook-natural-reconciliation-evidence.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Read-only verification summary
         if: ${{ always() }}
@@ -243,6 +255,7 @@ jobs:
             echo "- Schedule: \`${SCHEDULE_NAME}\`"
             echo "- Expected runtime: \`instance-id=N/A:Fargate / service=${SCHEDULE_NAME} / path=${RUNTIME_PATH}\`"
             echo '- AWS mutations: `none`'
+            echo '- Evidence artifact: `sanitized schema v1 only; no raw AWS payloads or credentials`'
             echo '- GrowthBook Production allocation: `0%` (unchanged)'
             echo '- GTM: `not_published` (unchanged)'
             echo '- Meta Ads and BiznisWeb commerce state: `unchanged`'

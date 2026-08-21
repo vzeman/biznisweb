@@ -359,6 +359,18 @@ def validate() -> None:
                 ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
             ),
             "natural_verifier_status": "prepared_not_run_before_time_gate",
+            "natural_evidence_schema_version": 1,
+            "natural_evidence_file": (
+                "vevo-growthbook-natural-reconciliation-evidence.json"
+            ),
+            "natural_evidence_retention_days": 14,
+            "natural_evidence_artifact_status": "code_prepared_pending_time_gate",
+            "natural_evidence_contains_raw_aws_payloads": False,
+            "natural_evidence_contains_credentials": False,
+            "natural_verifier_run_id": None,
+            "natural_verifier_main_commit": None,
+            "natural_evidence_artifact_sha256": None,
+            "natural_verifier_evidence": None,
             "natural_verifier_not_before_utc": "2026-08-22T01:40:00Z",
             "natural_verifier_before_utc": "2026-08-23T01:30:00Z",
             "natural_verifier_mutation_allowed": False,

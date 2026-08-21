@@ -24,6 +24,13 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
             "confirm_deploy:",
             "first natural reconciliation must be verified before foundation deploy",
             "protected natural reconciliation verifier has not passed",
+            "sanitized natural reconciliation evidence is absent",
+            "natural reconciliation artifact identity is incomplete",
+            "natural reconciliation evidence SHA-256 mismatch",
+            "natural reconciliation evidence identity/safety drift",
+            "natural reconciliation evidence timestamp schema drift",
+            "natural reconciliation sanitized count drift",
+            "natural reconciliation runtime/control evidence drift",
             "Production deployment gate is false",
             "Production foundation deployment gate is false",
             "successful read-only Production preflight evidence drift",
@@ -33,8 +40,29 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
         natural_gate = self.workflow.index(
             "first natural reconciliation must be verified before foundation deploy"
         )
+        evidence_gate = self.workflow.index(
+            "natural reconciliation runtime/control evidence drift"
+        )
         credentials = self.workflow.index("Configure authenticated AWS deployment identity")
         self.assertLess(natural_gate, credentials)
+        self.assertLess(natural_gate, evidence_gate)
+        self.assertLess(evidence_gate, credentials)
+
+    def test_requires_hash_bound_sanitized_natural_evidence(self) -> None:
+        for marker in (
+            "verified_downloaded_sha256_recorded",
+            "natural_evidence_artifact_sha256",
+            "re.fullmatch(r'[0-9a-f]{64}', evidence_sha256)",
+            "hashlib.sha256(canonical_evidence).hexdigest() != evidence_sha256",
+            "vevo_growthbook_first_natural_reconciliation",
+            "contains_raw_aws_payloads",
+            "contains_credentials",
+            "cloudtrail_scheduler_run_task_verified",
+            "vevo-growthbook-reconcile-preview:4",
+            "verification_window.get('not_before_utc') != '2026-08-22T01:40:00Z'",
+            "sha256:cabba3b0bd57f6be322f3a5ff62f0327c7cf8e7bb2b6b5e78686305339fdd041",
+        ):
+            self.assertIn(marker, self.workflow)
 
     def test_requires_preview_and_planned_production_hard_gate_before_create(self) -> None:
         preview = self.workflow.index("PREVIEW_RUNTIME_IDENTITY_OK:")
