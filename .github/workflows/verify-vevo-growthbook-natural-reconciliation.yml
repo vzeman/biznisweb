@@ -71,7 +71,9 @@ jobs:
           from datetime import datetime, timezone
 
           workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
-          recurring = workspace.get('workspace', {}).get('recurring_schedule', {})
+          recurring = workspace.get('reconciliation_checkpoint', {}).get(
+              'recurring_schedule', {}
+          )
           if recurring.get('first_natural_run_status') != 'pending':
               raise SystemExit('first natural-run status must remain pending before verification')
           if workspace.get('workspace', {}).get('production_allocation_percent') != 0:

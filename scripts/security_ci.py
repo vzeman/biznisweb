@@ -89,6 +89,9 @@ def main() -> int:
         growthbook_production_foundation_workflow = read(
             ".github/workflows/deploy-vevo-growthbook-production-foundation.yml"
         )
+        growthbook_production_foundation_recorder = read(
+            "scripts/record_growthbook_foundation_evidence.py"
+        )
         growthbook_production_reader_workflow = read(
             ".github/workflows/provision-vevo-growthbook-production-reader.yml"
         )
@@ -534,6 +537,7 @@ def main() -> int:
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'",
+            "workspace.get('reconciliation_checkpoint', {}).get(",
             "first natural-run verification is not due until",
             "cloudformation describe-stacks",
             "scheduler get-schedule",
@@ -758,6 +762,7 @@ def main() -> int:
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "first natural reconciliation must be verified before foundation deploy",
+            "workspace.get('reconciliation_checkpoint', {}).get(",
             "sanitized natural reconciliation evidence is absent",
             "natural reconciliation artifact identity is incomplete",
             "natural reconciliation evidence SHA-256 mismatch",
@@ -778,6 +783,10 @@ def main() -> int:
             "COLLECTOR_LOCALHOST_HEALTH_OK:production:",
             "COLLECTOR_LOCALHOST_MARKER_OK:/app:",
             "PRODUCTION_FOUNDATION_ROUTE_DISABLED_OK:",
+            "GROWTHBOOK_FOUNDATION_EVIDENCE_READY:",
+            "Upload sanitized Production foundation evidence only",
+            "path: vevo-growthbook-production-foundation-evidence.json",
+            "retention-days: 14",
             "GrowthBook reader credentials: `not created`",
         ):
             require(
@@ -809,6 +818,53 @@ def main() -> int:
                 growthbook_production_foundation_workflow.lower(),
                 forbidden_action,
                 f"GrowthBook Production foundation workflow violated its boundary: {forbidden_action}",
+            )
+        for forbidden_artifact_path in (
+            "path: deployed-production-stack.json",
+            "path: production-service.json",
+            "path: production-service-task.json",
+            "path: production-host-gate-task.json",
+            "path: production-host-gate.log",
+            "path: production-task-definition.json",
+        ):
+            forbid(
+                growthbook_production_foundation_workflow,
+                forbidden_artifact_path,
+                "GrowthBook Production foundation evidence must not upload raw AWS data: "
+                f"{forbidden_artifact_path}",
+            )
+        if growthbook_production_foundation_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError(
+                "GrowthBook Production foundation must upload exactly one sanitized artifact."
+            )
+        for marker in (
+            "The recorder is offline and fail closed.",
+            "validate_foundation_evidence",
+            "foundation evidence bytes are not canonical",
+            "foundation manifest change-set boundary drift",
+            "route=false:allocation=0:reader-ready=true:clone=false",
+        ):
+            require(
+                growthbook_production_foundation_recorder,
+                marker,
+                "GrowthBook Production foundation recorder lost safety marker: "
+                f"{marker}",
+            )
+        for forbidden_client in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "from facebook_ads",
+        ):
+            forbid(
+                growthbook_production_foundation_recorder,
+                forbidden_client,
+                "GrowthBook Production foundation recorder must remain offline: "
+                f"{forbidden_client}",
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
@@ -904,8 +960,14 @@ def main() -> int:
             "IAM_USER_NAME: vevo-growthbook-production-reader",
             "IAM_USER_PATH: /vevo/growthbook/production/",
             "first natural reconciliation must be verified before reader provisioning",
+            "workspace.get('reconciliation_checkpoint', {}).get(",
             "Production foundation deployment is not recorded as verified",
             "Production reader provisioning gate is false",
+            "verified_downloaded_sha256_recorded",
+            "foundation_evidence_artifact_sha256",
+            "validate_foundation_evidence",
+            "canonical_evidence_bytes",
+            "Production foundation redeployment gate must be closed",
             "GrowthBook clone must remain disabled during reader provisioning",
             "PRODUCTION_READER_LOCAL_RELEASE_GATE_OK:",
             "parameters.get('PublicRouteEnabled') != 'false'",
@@ -939,6 +1001,16 @@ def main() -> int:
         if local_reader_gate >= reader_credentials:
             raise AssertionError(
                 "GrowthBook Production reader local release gate must precede AWS credentials."
+            )
+        for stateful_workflow in (
+            growthbook_natural_reconciliation_workflow,
+            growthbook_production_foundation_workflow,
+            growthbook_production_reader_workflow,
+        ):
+            forbid(
+                stateful_workflow,
+                "workspace.get('workspace', {}).get('recurring_schedule'",
+                "GrowthBook workflow reads recurring state from a non-authoritative path.",
             )
         for forbidden_production_reader_marker in (
             "vevo-growthbook-preview-reader",

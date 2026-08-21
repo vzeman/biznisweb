@@ -59,11 +59,22 @@ jobs:
           python scripts/security_ci.py
           python scripts/validate_growthbook_workspace.py
           python - <<'PY'
+          import hashlib
           import json
+
+          from scripts.record_growthbook_foundation_evidence import (
+              FoundationEvidenceRecordingError,
+              validate_foundation_evidence,
+          )
+          from scripts.record_growthbook_natural_evidence import (
+              canonical_evidence_bytes,
+          )
 
           registry = json.load(open('growthbook_collector/experiments.json', encoding='utf-8'))
           workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
-          recurring = workspace.get('workspace', {}).get('recurring_schedule', {})
+          recurring = workspace.get('reconciliation_checkpoint', {}).get(
+              'recurring_schedule', {}
+          )
           production = workspace.get('athena', {}).get('production', {})
           deployment = production.get('successful_foundation_deployment')
           clone = production.get('growthbook_clone', {})
@@ -80,17 +91,49 @@ jobs:
               raise SystemExit('route-disabled Production foundation evidence is incomplete')
           if production.get('reader_provisioning_allowed') is not True:
               raise SystemExit('Production reader provisioning gate is false')
+          if production.get('deployment_allowed') is not False:
+              raise SystemExit('Production foundation redeployment gate must be closed')
+          if production.get('foundation_deployment_allowed') is not False:
+              raise SystemExit('Production foundation deploy gate must be closed')
           if production.get('credentials_created') is not False:
               raise SystemExit('Production reader credentials already exist')
           if not isinstance(deployment, dict):
               raise SystemExit('successful Production foundation deployment evidence is absent')
+          foundation_run_id = str(production.get('foundation_deployment_run_id') or '')
+          foundation_main_commit = str(
+              production.get('foundation_deployment_main_commit') or ''
+          )
+          foundation_sha256 = str(
+              production.get('foundation_evidence_artifact_sha256') or ''
+          )
+          try:
+              validate_foundation_evidence(
+                  deployment,
+                  expected_workflow_run_id=foundation_run_id,
+                  expected_main_commit=foundation_main_commit,
+                  expected_natural_run_id=recurring.get('natural_verifier_run_id'),
+                  expected_natural_main_commit=recurring.get(
+                      'natural_verifier_main_commit'
+                  ),
+                  expected_natural_sha256=recurring.get(
+                      'natural_evidence_artifact_sha256'
+                  ),
+              )
+          except FoundationEvidenceRecordingError as exc:
+              raise SystemExit(
+                  'successful Production foundation deployment evidence drift'
+              ) from exc
           if (
-              deployment.get('stack_status') != 'CREATE_COMPLETE'
-              or deployment.get('public_route_enabled') is not False
-              or deployment.get('api_route_count') != 0
-              or deployment.get('event_bucket_empty') is not True
-              or deployment.get('reader_credentials_created') is not False
-              or deployment.get('image_digest') != (
+              production.get('foundation_evidence_artifact_status')
+              != 'verified_downloaded_sha256_recorded'
+              or hashlib.sha256(canonical_evidence_bytes(deployment)).hexdigest()
+              != foundation_sha256
+              or deployment.get('aws', {}).get('stack_status') != 'CREATE_COMPLETE'
+              or deployment.get('deployment', {}).get('public_route_enabled') is not False
+              or deployment.get('deployment', {}).get('api_route_count') != 0
+              or deployment.get('deployment', {}).get('event_bucket_empty') is not True
+              or deployment.get('deployment', {}).get('reader_credentials_created') is not False
+              or deployment.get('host_gate', {}).get('image_digest') != (
                   'sha256:9478acd98a8caf06374b018c563ee51'
                   'fa896b9cc92148238579f04aa28a134e1'
               )

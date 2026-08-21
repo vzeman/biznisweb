@@ -21,6 +21,17 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_natural_evidence,
     )
 
+try:
+    from record_growthbook_foundation_evidence import (
+        FoundationEvidenceRecordingError,
+        validate_foundation_evidence,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.record_growthbook_foundation_evidence import (
+        FoundationEvidenceRecordingError,
+        validate_foundation_evidence,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -720,6 +731,17 @@ def validate() -> None:
         ),
         "foundation_deployment_status": "code_prepared_natural_run_gate_pending",
         "foundation_deployment_allowed": False,
+        "foundation_evidence_schema_version": 1,
+        "foundation_evidence_file": (
+            "vevo-growthbook-production-foundation-evidence.json"
+        ),
+        "foundation_evidence_retention_days": 14,
+        "foundation_evidence_artifact_status": "code_prepared_deployment_pending",
+        "foundation_evidence_contains_raw_aws_payloads": False,
+        "foundation_evidence_contains_credentials": False,
+        "foundation_deployment_run_id": None,
+        "foundation_deployment_main_commit": None,
+        "foundation_evidence_artifact_sha256": None,
         "credentials_created": False,
         "reader_provisioning_workflow": (
             ".github/workflows/provision-vevo-growthbook-production-reader.yml"
@@ -843,6 +865,71 @@ def validate() -> None:
                 ),
                 "foundation_deployment_allowed": True,
                 "next_gate": "dispatch_route_disabled_production_foundation_after_review",
+            }
+        )
+    actual_production_connection = athena.get("production") or {}
+    foundation_evidence = actual_production_connection.get(
+        "successful_foundation_deployment"
+    )
+    foundation_evidence_verified = isinstance(foundation_evidence, dict)
+    if foundation_evidence_verified:
+        if not natural_evidence_verified:
+            raise AssertionError(
+                "GrowthBook foundation evidence cannot precede natural evidence"
+            )
+        foundation_run_id = actual_production_connection.get(
+            "foundation_deployment_run_id"
+        )
+        foundation_main_commit = actual_production_connection.get(
+            "foundation_deployment_main_commit"
+        )
+        foundation_sha256 = actual_production_connection.get(
+            "foundation_evidence_artifact_sha256"
+        )
+        try:
+            validate_foundation_evidence(
+                foundation_evidence,
+                expected_workflow_run_id=foundation_run_id,
+                expected_main_commit=foundation_main_commit,
+                expected_natural_run_id=actual_recurring_schedule.get(
+                    "natural_verifier_run_id"
+                ),
+                expected_natural_main_commit=actual_recurring_schedule.get(
+                    "natural_verifier_main_commit"
+                ),
+                expected_natural_sha256=actual_recurring_schedule.get(
+                    "natural_evidence_artifact_sha256"
+                ),
+            )
+        except (FoundationEvidenceRecordingError, TypeError) as exc:
+            raise AssertionError(
+                "GrowthBook foundation evidence validation failed"
+            ) from exc
+        if (
+            not isinstance(foundation_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", foundation_sha256) is None
+            or hashlib.sha256(canonical_evidence_bytes(foundation_evidence)).hexdigest()
+            != foundation_sha256
+        ):
+            raise AssertionError("GrowthBook foundation evidence SHA-256 drift")
+        expected_production_connection.update(
+            {
+                "status": "route_disabled_foundation_deployed_verified",
+                "deployment_allowed": False,
+                "foundation_deployment_status": "deployed_route_disabled_verified",
+                "foundation_deployment_allowed": False,
+                "foundation_evidence_artifact_status": (
+                    "verified_downloaded_sha256_recorded"
+                ),
+                "foundation_deployment_run_id": foundation_run_id,
+                "foundation_deployment_main_commit": foundation_main_commit,
+                "foundation_evidence_artifact_sha256": foundation_sha256,
+                "reader_provisioning_status": (
+                    "foundation_verified_ready_for_reviewed_dispatch"
+                ),
+                "reader_provisioning_allowed": True,
+                "successful_foundation_deployment": foundation_evidence,
+                "next_gate": "dispatch_production_reader_after_review",
             }
         )
     if athena.get("production") != expected_production_connection:
