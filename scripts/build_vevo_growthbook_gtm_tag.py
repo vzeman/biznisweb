@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse
@@ -65,8 +66,23 @@ def validate_config(payload: object) -> dict:
     return payload
 
 
-def build_tag(config_path: Path, output_path: Path) -> str:
-    config = validate_config(json.loads(config_path.read_text(encoding="utf-8")))
+def build_tag(
+    config_path: Path,
+    output_path: Path,
+    *,
+    client_key_override: str | None = None,
+    collector_url_override: str | None = None,
+) -> str:
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    if client_key_override is not None or collector_url_override is not None:
+        if not isinstance(config_payload, dict):
+            raise ValueError("config must be a JSON object")
+        config_payload = dict(config_payload)
+    if client_key_override is not None:
+        config_payload["clientKey"] = client_key_override
+    if collector_url_override is not None:
+        config_payload["collectorUrl"] = collector_url_override
+    config = validate_config(config_payload)
     client = CLIENT_PATH.read_text(encoding="utf-8").strip()
     if "</script" in client.lower():
         raise ValueError("storefront client cannot be safely embedded in Custom HTML")
@@ -90,7 +106,12 @@ def main() -> int:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    digest = build_tag(args.config.resolve(), args.output.resolve())
+    digest = build_tag(
+        args.config.resolve(),
+        args.output.resolve(),
+        client_key_override=os.getenv("VEVO_GROWTHBOOK_PREVIEW_CLIENT_KEY"),
+        collector_url_override=os.getenv("VEVO_GROWTHBOOK_PREVIEW_COLLECTOR_URL"),
+    )
     print(f"VEVO_GROWTHBOOK_GTM_SHA256={digest}")
     return 0
 

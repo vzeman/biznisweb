@@ -66,6 +66,53 @@ class VevoGrowthBookGtmBuilderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_config(extra)
 
+    def test_accepts_client_key_from_environment_without_local_config_copy(self):
+        config_path = self.root / "preview.example.json"
+        output_path = self.root / "tag.html"
+        config = dict(self.config)
+        config["clientKey"] = "sdk-REPLACE_WITH_PREVIEW_CLIENT_KEY"
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        digest = build_tag(
+            config_path,
+            output_path,
+            client_key_override="sdk-secureenvironment123",
+            collector_url_override=(
+                "https://preview123.execute-api.eu-central-1.amazonaws.com/v1/events"
+            ),
+        )
+        artifact = output_path.read_text(encoding="utf-8")
+
+        self.assertEqual(hashlib.sha256(artifact.encode("utf-8")).hexdigest(), digest)
+        self.assertIn('"clientKey":"sdk-secureenvironment123"', artifact)
+        self.assertIn(
+            '"collectorUrl":"https://preview123.execute-api.eu-central-1.amazonaws.com/v1/events"',
+            artifact,
+        )
+        self.assertNotIn("REPLACE_WITH_PREVIEW_CLIENT_KEY", artifact)
+
+    def test_rejects_invalid_environment_client_key_override(self):
+        config_path = self.root / "preview.example.json"
+        output_path = self.root / "tag.html"
+        config = dict(self.config)
+        config["clientKey"] = "sdk-REPLACE_WITH_PREVIEW_CLIENT_KEY"
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        with self.assertRaises(ValueError):
+            build_tag(
+                config_path,
+                output_path,
+                client_key_override="not-a-client-key",
+            )
+
+        with self.assertRaises(ValueError):
+            build_tag(
+                config_path,
+                output_path,
+                client_key_override="sdk-secureenvironment123",
+                collector_url_override="https://example.com/v1/events",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

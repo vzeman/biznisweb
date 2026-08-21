@@ -30,11 +30,11 @@ The frozen CTA hypothesis is: replacing only the current orange/red/pink backgro
 
 ## Reproducible GTM Preview artifact
 
-1. Copy `config.preview.example.json` to an ignored/local deployment config and insert the actual Preview `sdk-...` client key plus the verified Preview collector endpoint. The builder deliberately rejects the `REPLACE` placeholder and requires Preview dev mode. The client key is public configuration, but AWS/runtime identifiers still belong in the reviewed deployment record.
-2. Build the Custom HTML artifact:
+1. Keep `config.preview.example.json` versioned with its placeholder. Pass the actual Preview `sdk-...` client key and the host-verified Preview collector endpoint only through the task-scoped `VEVO_GROWTHBOOK_PREVIEW_CLIENT_KEY` and `VEVO_GROWTHBOOK_PREVIEW_COLLECTOR_URL` environment variables; do not create a local config copy. The builder validates both overrides and still requires Preview dev mode. The client key is public configuration, but it must not become an unreviewed local or committed source of truth.
+2. Build the Custom HTML artifact outside the repository and remove it immediately after the exact content is pasted into the isolated GTM workspace:
 
 ```text
-python scripts/build_vevo_growthbook_gtm_tag.py --config <preview-config.json> --output <generated-preview-tag.html>
+python scripts/build_vevo_growthbook_gtm_tag.py --config storefront/vevo-growthbook/config.preview.example.json --output <temporary-generated-preview-tag.html>
 ```
 
 3. Record the printed SHA-256 marker. Paste the generated file unchanged into a GTM Custom HTML tag named `VEVO GrowthBook v1 - Loader - Preview`.
