@@ -49,7 +49,27 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):
-            with self.assertRaisesRegex(AssertionError, "staging-only draft"):
+            with self.assertRaisesRegex(AssertionError, "staging-only"):
+                validator.validate()
+
+    def test_validator_rejects_aa_analysis_setting_drift(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["experiments"][0]["analysis_settings"]["goal_metrics"] = [
+            "vevo_purchase_conversion_7d"
+        ]
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "A/A Preview running state drift"):
+                validator.validate()
+
+    def test_validator_rejects_started_cta_experiment(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["experiments"][1]["status"] = "running"
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "CTA A/B must remain"):
                 validator.validate()
 
     def test_validator_rejects_committed_or_production_sdk_connection(self) -> None:
@@ -83,11 +103,22 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "GTM Preview bridge is not fail closed"):
                 validator.validate()
 
-    def test_validator_rejects_claimed_tag_assistant_acceptance(self) -> None:
+    def test_validator_rejects_lost_tag_assistant_exposure_delivery(self) -> None:
         altered = copy.deepcopy(self.workspace)
         altered["gtm_preview_workspace"]["tag_assistant_preview"][
-            "draft_container_evaluated"
-        ] = True
+            "analytics_only_exposure_delivery_result"
+        ] = "failed"
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "GTM Tag Assistant Preview blocker state drift"):
+                validator.validate()
+
+    def test_validator_rejects_growthbook_before_analytics_consent(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["gtm_preview_workspace"]["tag_assistant_preview"][
+            "no_analytics_consent_growthbook_or_collector_asset_count"
+        ] = 1
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):
