@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "activation_type": "vevo_growthbook_production_aa",
+  "tracking_key": "vevo-sk-aa-001",
+  "feature_key": "vevo-sk-aa-assignment",
+  "variations": [
+    "control",
+    "variant"
+  ],
+  "variation_weights": [
+    0.5,
+    0.5
+  ],
+  "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
+  "status": "prepared_hard_disabled_clone_gate_pending",
+  "preconditions": {
+    "natural_reconciliation_verified": false,
+    "route_disabled_foundation_verified": false,
+    "production_reader_verified": false,
+    "growthbook_clone_verified": false
+  },
+  "collector": {
+    "deployment_workflow": ".github/workflows/deploy-vevo-growthbook-production-aa-collector.yml",
+    "deployment_allowed": false,
+    "registry_entry_present": false,
+    "public_route_enabled": false,
+    "workflow_run_id": null,
+    "main_commit": null,
+    "image_digest": null,
+    "task_definition": null,
+    "host_gate_task_id": null,
+    "host_gate_private_ip": null,
+    "service": "vevo-growthbook-collector-production",
+    "runtime_path": "/app",
+    "endpoint_host_sha256": null,
+    "evidence_sha256": null
+  },
+  "growthbook": {
+    "environment": "production",
+    "sdk_connection_created": false,
+    "sdk_client_key_committed": false,
+    "experiment_created": false,
+    "experiment_id": null,
+    "feature_rule_revision": null,
+    "status": "not_started",
+    "data_source_id": null,
+    "allocation_percent": 0
+  },
+  "gtm": {
+    "account_id": "6254499282",
+    "container_id": "198135331",
+    "public_container_id": "GTM-5ZB5LFGB",
+    "source_workspace_id": "16",
+    "production_tag_created": false,
+    "production_tag_id": null,
+    "artifact_sha256": null,
+    "publish_status": "not_published",
+    "container_version_id": null
+  },
+  "traffic": {
+    "activation_allowed": false,
+    "production_allocation_percent": 0,
+    "active_production_experiments": [],
+    "cta_experiment_started": false
+  },
+  "safety": {
+    "price_tests_allowed": false,
+    "meta_ads_mutated": false,
+    "biznisweb_mutated": false,
+    "cart_checkout_mutated": false,
+    "contains_credentials": false,
+    "contains_customer_or_order_data": false
+  },
+  "rollback": {
+    "order": [
+      "set_growthbook_allocation_to_zero",
+      "restore_previous_gtm_container_version",
+      "disable_collector_public_route"
+    ],
+    "drill_status": "not_run",
+    "verified_at_utc": null
+  },
+  "next_gate": "after_natural_foundation_reader_and_clone_evidence_open_collector_deployment_in_separate_review"
+}

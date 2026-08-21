@@ -60,6 +60,7 @@ WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 REPORTING_PATH = ROOT / "projects" / "vevo" / "growthbook_reporting.json"
 AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json"
 REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
+ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_production_aa_activation.json"
 
 EXPECTED_AA_ACCEPTANCE = {
     "schema_version": 1,
@@ -201,6 +202,7 @@ def validate() -> None:
     workspace = _load(WORKSPACE_PATH)
     reporting = _load(REPORTING_PATH)
     registry = _load(REGISTRY_PATH)
+    activation = json.loads(ACTIVATION_PATH.read_text(encoding="utf-8"))
     aa_acceptance = json.loads(AA_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
     if aa_acceptance != EXPECTED_AA_ACCEPTANCE:
         raise AssertionError("A/A acceptance thresholds changed")
@@ -1348,6 +1350,15 @@ def validate() -> None:
         != gates.get("exact_order_join_min_percent")
     ):
         raise AssertionError("A/A evaluator/workspace release gates differ")
+    try:
+        from scripts.validate_growthbook_production_aa_activation import (
+            validate_activation_handoff,
+        )
+    except ModuleNotFoundError:
+        from validate_growthbook_production_aa_activation import (
+            validate_activation_handoff,
+        )
+    validate_activation_handoff(activation, workspace, registry)
 
 
 def main() -> int:

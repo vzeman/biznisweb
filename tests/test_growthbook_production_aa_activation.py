@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+import copy
+import json
+import pathlib
+import textwrap
+import unittest
+
+import yaml
+
+from scripts import validate_growthbook_production_aa_activation as validator
+from scripts.validate_growthbook_changeset import validate as validate_change_set
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+WORKFLOW_PATH = (
+    ROOT
+    / ".github"
+    / "workflows"
+    / "deploy-vevo-growthbook-production-aa-collector.yml"
+)
+WORKFLOW = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+
+class GrowthBookProductionAaActivationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.activation = json.loads(validator.ACTIVATION_PATH.read_text(encoding="utf-8"))
+        self.workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
+        self.registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
+
+    def test_checked_in_handoff_is_valid_and_hard_disabled(self) -> None:
+        validator.validate_activation_handoff(
+            self.activation,
+            self.workspace,
+            self.registry,
+        )
+
+    def test_workflow_yaml_and_every_inline_python_block_compile(self) -> None:
+        payload = yaml.safe_load(WORKFLOW)
+        self.assertIsInstance(payload, dict)
+        lines = WORKFLOW.splitlines()
+        blocks: list[str] = []
+        index = 0
+        while index < len(lines):
+            if "python - <<'PY'" not in lines[index]:
+                index += 1
+                continue
+            index += 1
+            body: list[str] = []
+            while index < len(lines) and lines[index].strip() != "PY":
+                body.append(lines[index])
+                index += 1
+            self.assertLess(index, len(lines), "unterminated inline Python block")
+            blocks.append(textwrap.dedent("\n".join(body)))
+            index += 1
+        self.assertGreaterEqual(len(blocks), 12)
+        for block_index, source in enumerate(blocks):
+            compile(source, f"production-aa-collector-inline-{block_index}.py", "exec")
+
+    def test_local_gate_precedes_credentials_and_all_external_mutations(self) -> None:
+        gate = WORKFLOW.index("PRODUCTION_AA_COLLECTOR_LOCAL_GATE_OK:")
+        credentials = WORKFLOW.index(
+            "uses: aws-actions/configure-aws-credentials@v6.1.0"
+        )
+        image_push = WORKFLOW.index("docker push")
+        stack_update = WORKFLOW.index("aws cloudformation execute-change-set")
+        self.assertLess(gate, credentials)
+        self.assertLess(credentials, image_push)
+        self.assertLess(credentials, stack_update)
+
+    def test_workflow_keeps_growthbook_gtm_meta_and_commerce_out_of_mutation_path(self) -> None:
+        for forbidden in (
+            "api.growthbook.io",
+            "tagmanager.googleapis.com",
+            "graph.facebook.com",
+            "vevo.flox.sk/erp",
+            "updateProduct",
+        ):
+            self.assertNotIn(forbidden, WORKFLOW)
+        for marker in (
+            "growthbook_mutations': False",
+            "gtm_mutations': False",
+            "meta_ads_mutations': False",
+            "biznisweb_mutations': False",
+            "commerce_mutations': False",
+        ):
+            self.assertIn(marker, WORKFLOW)
+
+    def test_status_only_activation_is_rejected(self) -> None:
+        altered = copy.deepcopy(self.activation)
+        altered["status"] = "clone_verified_collector_deploy_ready"
+        with self.assertRaisesRegex(AssertionError, "hard-disabled"):
+            validator.validate_activation_handoff(altered, self.workspace, self.registry)
+
+    def test_any_open_collector_or_traffic_gate_is_rejected(self) -> None:
+        for path in (
+            ("collector", "deployment_allowed"),
+            ("collector", "public_route_enabled"),
+            ("traffic", "activation_allowed"),
+            ("traffic", "cta_experiment_started"),
+        ):
+            with self.subTest(path=path):
+                altered = copy.deepcopy(self.activation)
+                altered[path[0]][path[1]] = True
+                with self.assertRaisesRegex(AssertionError, "hard-disabled"):
+                    validator.validate_activation_handoff(
+                        altered,
+                        self.workspace,
+                        self.registry,
+                    )
+
+    def test_production_registry_or_workspace_allocation_cannot_open_early(self) -> None:
+        registry = copy.deepcopy(self.registry)
+        registry["environments"]["production"] = {
+            "vevo-sk-aa-001": copy.deepcopy(
+                registry["environments"]["preview"]["vevo-sk-aa-001"]
+            )
+        }
+        with self.assertRaisesRegex(AssertionError, "registry must remain empty"):
+            validator.validate_activation_handoff(
+                self.activation,
+                self.workspace,
+                registry,
+            )
+
+        workspace = copy.deepcopy(self.workspace)
+        workspace["workspace"]["production_allocation_percent"] = 1
+        with self.assertRaisesRegex(AssertionError, "zero workspace allocation"):
+            validator.validate_activation_handoff(
+                self.activation,
+                workspace,
+                self.registry,
+            )
+
+    def test_deactivation_change_set_cannot_touch_the_service(self) -> None:
+        payload = {
+            "Status": "CREATE_COMPLETE",
+            "ChangeSetType": "UPDATE",
+            "Changes": [
+                {
+                    "ResourceChange": {
+                        "Action": "Remove",
+                        "LogicalResourceId": "CollectorPostRoute",
+                        "Replacement": "False",
+                        "ResourceType": "AWS::ApiGatewayV2::Route",
+                    }
+                },
+                {
+                    "ResourceChange": {
+                        "Action": "Modify",
+                        "LogicalResourceId": "CollectorService",
+                        "Replacement": "False",
+                        "ResourceType": "AWS::ECS::Service",
+                    }
+                },
+            ],
+        }
+        with self.assertRaisesRegex(AssertionError, "unrelated changes"):
+            validate_change_set(payload, "deactivate")
+
+
+if __name__ == "__main__":
+    unittest.main()

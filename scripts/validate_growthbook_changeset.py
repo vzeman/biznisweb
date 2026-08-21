@@ -45,6 +45,7 @@ CANDIDATE_UPDATE_RESOURCES = {
     "CollectorTaskDefinition": "AWS::ECS::TaskDefinition",
 }
 ACTIVATION_ALLOWED_LOGICAL_IDS = {"CollectorPostRoute"}
+DEACTIVATION_ALLOWED_LOGICAL_IDS = {"CollectorPostRoute"}
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -92,7 +93,9 @@ def validate(payload: dict[str, Any], phase: str) -> list[dict[str, str]]:
         resource_type = str(change.get("ResourceType") or "")
         if not logical_id or not resource_type:
             raise AssertionError("change set resource identity is incomplete")
-        if action not in {"Add", "Modify"}:
+        if action not in {"Add", "Modify", "Remove"}:
+            raise AssertionError(f"destructive change rejected: {action} {logical_id}")
+        if action == "Remove" and phase != "deactivate":
             raise AssertionError(f"destructive change rejected: {action} {logical_id}")
         normalized.append(
             {
@@ -142,6 +145,23 @@ def validate(payload: dict[str, Any], phase: str) -> list[dict[str, str]]:
             }
         ]:
             raise AssertionError(f"unexpected route activation change set: {normalized}")
+    elif phase == "deactivate":
+        if change_set_type != "UPDATE":
+            raise AssertionError("route deactivation must be an UPDATE change set")
+        logical_ids = {row["logical_id"] for row in normalized}
+        if not logical_ids.issubset(DEACTIVATION_ALLOWED_LOGICAL_IDS):
+            raise AssertionError(
+                f"route deactivation contains unrelated changes: {sorted(logical_ids)}"
+            )
+        if normalized != [
+            {
+                "action": "Remove",
+                "logical_id": "CollectorPostRoute",
+                "replacement": "False",
+                "resource_type": "AWS::ApiGatewayV2::Route",
+            }
+        ]:
+            raise AssertionError(f"unexpected route deactivation change set: {normalized}")
     elif phase == "candidate":
         resources = {row["logical_id"]: row["resource_type"] for row in normalized}
         if len(resources) != len(normalized):
@@ -187,7 +207,7 @@ def main() -> int:
     parser.add_argument("--change-set-type", choices=("CREATE", "UPDATE"), required=True)
     parser.add_argument(
         "--phase",
-        choices=("candidate", "activate", "production-foundation"),
+        choices=("candidate", "activate", "deactivate", "production-foundation"),
         required=True,
     )
     args = parser.parse_args()
