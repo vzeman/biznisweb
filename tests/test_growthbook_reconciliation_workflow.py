@@ -17,6 +17,7 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_deploy:",
+            "python -m pip install -r requirements.txt cfn-lint==1.55.1",
             "ParameterKey=ScheduleState,ParameterValue=DISABLED",
             'schedule.get("State") != "DISABLED"',
             "--phase candidate",
