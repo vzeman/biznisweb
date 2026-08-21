@@ -1415,6 +1415,38 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
         self.assertEqual([6.6, 1.8], [row["total_expense"] for row in rows])
 
+    def test_roy_requested_sd_cards_use_current_sku_purchase_costs(self) -> None:
+        exporter = make_exporter(project_name="roy")
+        project_dir = Path(__file__).resolve().parents[1] / "projects" / "roy"
+        cost_map = json.loads((project_dir / "product_expenses.json").read_text(encoding="utf-8"))
+        exporter._rebuild_product_expense_indexes(cost_map)
+
+        cases = (
+            {
+                "label": "Micro SD KARTA 32GB s adaptérom",
+                "import_code": "F_206",
+                "ean": "23942440833",
+                "expected_cost": 4.5,
+            },
+            {
+                "label": "MicroSDXC 128GB + adapter SD",
+                "import_code": "12876",
+                "ean": "8806095464251",
+                "expected_cost": 13.5,
+            },
+        )
+
+        for case in cases:
+            with self.subTest(import_code=case["import_code"]):
+                cost, source = exporter._resolve_product_expense(
+                    case["import_code"],
+                    case["label"],
+                    import_code=case["import_code"],
+                    ean=case["ean"],
+                )
+                self.assertEqual(case["expected_cost"], cost)
+                self.assertEqual("mapped_product_identifier", source)
+
     def test_zero_revenue_gift_is_the_only_mapped_cost_exception(self) -> None:
         exporter = make_exporter(project_name="roy")
         exporter.product_expenses_exact["GIFT-KNIFE"] = 80.0
