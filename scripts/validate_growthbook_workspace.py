@@ -43,6 +43,17 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_reader_evidence,
     )
 
+try:
+    from record_growthbook_production_clone_evidence import (
+        CloneEvidenceRecordingError,
+        validate_clone_observation,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.record_growthbook_production_clone_evidence import (
+        CloneEvidenceRecordingError,
+        validate_clone_observation,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -806,6 +817,13 @@ def validate() -> None:
             "status": "code_prepared_foundation_reader_gate_pending",
             "clone_allowed": False,
             "mutation_status": "not_started",
+            "observation_schema_version": 1,
+            "observation_file": (
+                "vevo-growthbook-production-clone-observation.json"
+            ),
+            "observation_status": "not_recorded",
+            "observation_sha256": None,
+            "successful_clone_verification": None,
             "source_data_source_id": "ds_19g6mmt2c4dmn",
             "target_data_source_id": None,
             "assignment_query_name": "VEVO consented devices",
@@ -1050,6 +1068,58 @@ def validate() -> None:
                 "next_gate": (
                     "connect_production_reader_and_clone_growthbook_after_review"
                 ),
+            }
+        )
+    actual_clone = actual_production_connection.get("growthbook_clone") or {}
+    clone_observation = actual_clone.get("successful_clone_verification")
+    clone_observation_verified = isinstance(clone_observation, dict)
+    if clone_observation_verified:
+        if not reader_evidence_verified:
+            raise AssertionError(
+                "GrowthBook clone evidence cannot precede reader evidence"
+            )
+        clone_sha256 = actual_clone.get("observation_sha256")
+        try:
+            validate_clone_observation(clone_observation, workspace)
+        except (CloneEvidenceRecordingError, TypeError) as exc:
+            raise AssertionError(
+                "GrowthBook clone observation validation failed"
+            ) from exc
+        if (
+            not isinstance(clone_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", clone_sha256) is None
+            or hashlib.sha256(
+                canonical_evidence_bytes(clone_observation)
+            ).hexdigest()
+            != clone_sha256
+        ):
+            raise AssertionError("GrowthBook clone observation SHA-256 drift")
+        target_fact_tables = {
+            key: row["id"]
+            for key, row in clone_observation["production_fact_tables"].items()
+        }
+        target_metrics = {
+            key: row["id"]
+            for key, row in clone_observation["production_metrics"].items()
+        }
+        expected_clone = {
+            **expected_production_connection["growthbook_clone"],
+            "status": "verified_complete",
+            "clone_allowed": False,
+            "mutation_status": "created_and_query_verified",
+            "observation_status": "verified_canonical_sha256_recorded",
+            "observation_sha256": clone_sha256,
+            "successful_clone_verification": clone_observation,
+            "target_data_source_id": clone_observation[
+                "production_data_source"
+            ]["id"],
+            "target_fact_table_ids": target_fact_tables,
+            "target_metric_ids": target_metrics,
+        }
+        expected_production_connection.update(
+            {
+                "growthbook_clone": expected_clone,
+                "next_gate": "prepare_production_aa_activation_after_review",
             }
         )
     if athena.get("production") != expected_production_connection:

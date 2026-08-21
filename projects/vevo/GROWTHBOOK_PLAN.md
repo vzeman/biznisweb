@@ -154,6 +154,8 @@ No GrowthBook subscription purchase or paid upgrade is executed without the acco
 
 Production reader provisioning and Production GrowthBook cloning are two separate reviewed gates. A successful reader workflow must first produce both the one-day CMS-encrypted credential handoff and a canonical sanitized evidence artifact. The evidence is independently bound to the foundation artifact and exact workflow run/commit, contains no access-key ID or secret, and is recorded only by the offline hash-validating recorder. Recording may close the reader gate and make the clone contract reviewable, but it cannot create GrowthBook objects, repoint Preview, publish GTM, change Meta Ads or BiznisWeb, or move Production allocation above `0%`. The current evidence fields remain null/pending; no Production reader or clone is claimed.
 
+The later clone uses the versioned `GROWTHBOOK_PRODUCTION_CLONE_RUNBOOK.md`, not an undocumented UI session. After the reader gate, the operator creates a separate Production Athena connection, assignment query, two fact tables, and only the eight Starter-compatible metrics, then performs exact UI read-back with zero-row query results while the route and traffic remain disabled. The offline clone recorder binds the new unique object IDs to repository query and metric-contract hashes, requires unchanged Preview IDs, skips the unauthorized p75 metrics, and can update only the clone evidence/target-ID fields. The current canonical observation does not exist and all target IDs remain null.
+
 ### 4. Event collector and data contract
 
 - Implement the versioned events in `GROWTHBOOK_DATA_CONTRACT.md`.

@@ -98,6 +98,12 @@ def main() -> int:
         growthbook_production_reader_recorder = read(
             "scripts/record_growthbook_production_reader_evidence.py"
         )
+        growthbook_production_clone_recorder = read(
+            "scripts/record_growthbook_production_clone_evidence.py"
+        )
+        growthbook_production_clone_runbook = read(
+            "projects/vevo/GROWTHBOOK_PRODUCTION_CLONE_RUNBOOK.md"
+        )
         growthbook_workspace_config = json.loads(
             read("projects/vevo/growthbook_workspace.json")
         )
@@ -1159,6 +1165,77 @@ def main() -> int:
             raise AssertionError(
                 "GrowthBook Production reader evidence must remain pending in source control."
             )
+        for forbidden_production_clone_recorder_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_production_clone_recorder.lower(),
+                forbidden_production_clone_recorder_marker.lower(),
+                "GrowthBook Production clone evidence recorder must remain offline: "
+                f"{forbidden_production_clone_recorder_marker}",
+            )
+        for marker in (
+            '"vevo_growthbook_production_clone_observation"',
+            '"reader_evidence_provenance"',
+            '"Production clone manifest change-set boundary drift"',
+            '"clone observation bytes are not canonical"',
+            '"Production assignment query must remain empty before traffic"',
+            '"Preview connection was repointed"',
+            '"paid Pro upgrade was not authorized"',
+            '"production_allocation_percent": 0',
+            "clone=verified:production-aa=false",
+            "validate_reader_evidence",
+            "canonical_evidence_bytes",
+        ):
+            require(
+                growthbook_production_clone_recorder,
+                marker,
+                "GrowthBook Production clone evidence recorder lost safety marker: "
+                f"{marker}",
+            )
+        for marker in (
+            "Status: prepared, hard-disabled",
+            "vevo-growthbook-production-reader",
+            "Production allocation is `0%`",
+            "Preview connection repointing is forbidden",
+            "Do not create the three p75 Quantile metrics",
+            "record_growthbook_production_clone_evidence.py build",
+            "record_growthbook_production_clone_evidence.py record",
+            "Browser entry of these credentials requires a separate action-time confirmation",
+            "do not automatically delete or repoint anything",
+        ):
+            require(
+                growthbook_production_clone_runbook,
+                marker,
+                f"GrowthBook Production clone runbook lost safety marker: {marker}",
+            )
+        production_clone_state = production_reader_state.get("growthbook_clone", {})
+        if (
+            production_clone_state.get("status")
+            != "code_prepared_foundation_reader_gate_pending"
+            or production_clone_state.get("clone_allowed") is not False
+            or production_clone_state.get("mutation_status") != "not_started"
+            or production_clone_state.get("observation_status") != "not_recorded"
+            or production_clone_state.get("observation_sha256") is not None
+            or production_clone_state.get("successful_clone_verification") is not None
+            or production_clone_state.get("target_data_source_id") is not None
+            or any(
+                value is not None
+                for group in ("target_fact_table_ids", "target_metric_ids")
+                for value in (production_clone_state.get(group) or {}).values()
+            )
+        ):
+            raise AssertionError(
+                "GrowthBook Production clone evidence must remain pending in source control."
+            )
         forbid(
             growthbook_template,
             "s3:DeleteObject",
@@ -1636,6 +1713,7 @@ def main() -> int:
             "scripts/build_growthbook_aa_manual_qa_evidence.py",
             "scripts/build_growthbook_aa_automated_evidence.py",
             "scripts/record_growthbook_production_reader_evidence.py",
+            "scripts/record_growthbook_production_clone_evidence.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",
