@@ -57,7 +57,13 @@ The workflow must perform these operations in order:
 8. Verify exact CORS for `https://www.vevo.sk`, generic invalid-event rejection, attacker-origin rejection, public `404` for `/health` and `/marker.json`, and a byte-identical raw-S3 object snapshot before/after invalid probes.
 9. Upload only sanitized, credential-free activation evidence. Do not publish GTM or start GrowthBook.
 
-After the workflow succeeds, download and independently hash the evidence, record it through a reviewed manifest PR, close `collector.deployment_allowed`, and open only the UI preparation gate. Route availability by itself must receive no storefront traffic.
+After the workflow succeeds, download the exact evidence artifact and independently calculate its SHA-256. Record it only with the offline recorder below, using the exact successful workflow run ID and exact `main` commit:
+
+```text
+python scripts/record_growthbook_production_aa_collector_evidence.py --evidence <downloaded-evidence.json> --evidence-sha256 <independent-sha256> --workflow-run-id <successful-run-id> --main-commit <exact-main-commit> --output projects/vevo/growthbook_production_aa_activation.json
+```
+
+Then run the activation/workspace validators and merge the resulting manifest through a reviewed PR. The recorder may change only the collector evidence fields, close `collector.deployment_allowed`, set the verified public-route state, and open the zero-allocation UI preparation gate. It cannot publish GTM, start GrowthBook, change allocation, mutate Meta Ads/BiznisWeb, or call a network service. Route availability by itself must receive no storefront traffic.
 
 ## Phase 3 — prepare GrowthBook and GTM at zero allocation
 

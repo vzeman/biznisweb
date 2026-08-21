@@ -47,7 +47,7 @@ EXPECTED_ACTIVATION = {
         "host_gate_private_ip": None,
         "service": "vevo-growthbook-collector-production",
         "runtime_path": "/app",
-        "endpoint": None,
+        "endpoint_host_sha256": None,
         "evidence_sha256": None,
     },
     "growthbook": {

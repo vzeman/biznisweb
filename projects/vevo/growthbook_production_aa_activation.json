@@ -32,7 +32,7 @@
     "host_gate_private_ip": null,
     "service": "vevo-growthbook-collector-production",
     "runtime_path": "/app",
-    "endpoint": null,
+    "endpoint_host_sha256": null,
     "evidence_sha256": null
   },
   "growthbook": {

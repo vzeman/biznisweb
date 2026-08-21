@@ -92,7 +92,7 @@ jobs:
           require(collector.get('service') == 'vevo-growthbook-collector-production', 'collector service identity drift')
           require(collector.get('runtime_path') == '/app', 'collector runtime path drift')
           for key in ('workflow_run_id', 'main_commit', 'image_digest', 'task_definition',
-                      'host_gate_task_id', 'host_gate_private_ip', 'endpoint', 'evidence_sha256'):
+                      'host_gate_task_id', 'host_gate_private_ip', 'endpoint_host_sha256', 'evidence_sha256'):
               require(collector.get(key) is None, f'pending collector evidence field is populated: {key}')
 
           require(activation.get('growthbook') == {
@@ -172,6 +172,7 @@ jobs:
             tests.test_growthbook_collector_server \
             tests.test_growthbook_changeset \
             tests.test_growthbook_production_aa_activation \
+            tests.test_growthbook_production_aa_collector_evidence \
             tests.test_growthbook_workspace
           python scripts/validate_growthbook_workspace.py
           python scripts/security_ci.py
