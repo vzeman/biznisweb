@@ -66,6 +66,18 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         self.assertNotIn("ParameterKey=SubnetIds,ParameterValue=", self.workflow)
         self.assertIn("tests.test_growthbook_reconciliation_parameters", self.workflow)
 
+    def test_failed_stack_is_diagnosed_read_only_before_another_host_task(self) -> None:
+        preflight = self.workflow.index("reconciliation-stack-preflight.json")
+        failed_status = self.workflow.index(
+            "reconciliation stack requires read-only diagnosis before deploy", preflight
+        )
+        host_task = self.workflow.index("HARD_GATE_OK:", failed_status)
+        diagnostic = self.workflow.index("SANITIZED_RECONCILIATION_STACK_DIAGNOSTIC:", host_task)
+        self.assertLess(preflight, failed_status)
+        self.assertLess(failed_status, host_task)
+        self.assertLess(host_task, diagnostic)
+        self.assertNotIn("cloudformation delete-stack", self.workflow.lower())
+
     def test_source_schedule_and_production_boundaries_are_unchanged(self) -> None:
         lowered = self.workflow.lower()
         self.assertNotIn("scheduler update-schedule", lowered)
