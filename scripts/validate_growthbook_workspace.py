@@ -54,11 +54,23 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_clone_observation,
     )
 
+try:
+    from freeze_growthbook_cta_sample import (
+        CtaSampleFreezeError,
+        validate_plan as validate_cta_sample_plan,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.freeze_growthbook_cta_sample import (
+        CtaSampleFreezeError,
+        validate_plan as validate_cta_sample_plan,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 REPORTING_PATH = ROOT / "projects" / "vevo" / "growthbook_reporting.json"
 AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json"
+CTA_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
 REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
 ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_production_aa_activation.json"
 
@@ -204,8 +216,13 @@ def validate() -> None:
     registry = _load(REGISTRY_PATH)
     activation = json.loads(ACTIVATION_PATH.read_text(encoding="utf-8"))
     aa_acceptance = json.loads(AA_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
+    cta_sample_plan = json.loads(CTA_SAMPLE_PLAN_PATH.read_text(encoding="utf-8"))
     if aa_acceptance != EXPECTED_AA_ACCEPTANCE:
         raise AssertionError("A/A acceptance thresholds changed")
+    try:
+        validate_cta_sample_plan(cta_sample_plan)
+    except CtaSampleFreezeError as exc:
+        raise AssertionError(f"CTA sample plan is invalid: {exc}") from exc
 
     if (
         workspace.get("schema_version") != 1
@@ -1323,6 +1340,42 @@ def validate() -> None:
         or "analysis_settings" in cta_experiment
     ):
         raise AssertionError("GrowthBook CTA A/B must remain an unstarted draft")
+    if (
+        cta_sample_plan["experiment_id"] != cta_experiment.get("tracking_key")
+        or list(cta_sample_plan["expected_variation_weights"])
+        != cta_experiment.get("variations")
+        or list(cta_sample_plan["expected_variation_weights"].values())
+        != cta_experiment.get("variation_weights")
+        or cta_sample_plan["minimum_full_calendar_days"]
+        != cta_experiment.get("minimum_days")
+        or cta_sample_plan["maximum_full_calendar_days"]
+        != cta_experiment.get("maximum_days")
+        or cta_sample_plan["provisional"]["total_sample"]
+        != cta_experiment.get("provisional_total_sample")
+    ):
+        raise AssertionError("CTA sample plan/workspace contract differs")
+    if cta_sample_plan["status"] == "pending_aa_pass_and_final_sample_freeze":
+        if cta_experiment.get("final_sample_status") != "recompute_and_freeze_from_aa_before_launch":
+            raise AssertionError("CTA sample pending state differs from workspace")
+        forbidden_final_fields = {
+            "final_sample_per_arm",
+            "final_total_sample",
+            "sample_observation_sha256",
+            "aa_snapshot_sha256",
+        }
+        if forbidden_final_fields.intersection(cta_experiment):
+            raise AssertionError("CTA pending workspace contains frozen sample fields")
+    else:
+        final = cta_sample_plan["final"]
+        expected_final = {
+            "final_sample_status": "frozen_from_hash_bound_aa_activation_still_blocked",
+            "final_sample_per_arm": final["sample_per_arm"],
+            "final_total_sample": final["total_sample"],
+            "sample_observation_sha256": final["observation_sha256"],
+            "aa_snapshot_sha256": final["aa_snapshot_sha256"],
+        }
+        if any(cta_experiment.get(key) != value for key, value in expected_final.items()):
+            raise AssertionError("CTA frozen sample state differs from workspace")
     if aa_experiment.get("winner_calls_allowed") is not False:
         raise AssertionError("A/A must never be used for a winner call")
     if (
