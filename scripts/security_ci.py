@@ -490,13 +490,19 @@ def main() -> int:
             "--parameters file://activation-parameters.json",
             "GROWTHBOOK_RECONCILIATION_SCHEDULE_READBACK_OK",
             "VEVO reporting source schedule changed",
+            "reconciliation stack requires read-only diagnosis before deploy",
+            "SANITIZED_RECONCILIATION_STACK_DIAGNOSTIC:",
         ):
             require(
                 growthbook_reconciliation_workflow,
                 marker,
                 f"GrowthBook reconciliation workflow lost safety marker: {marker}",
             )
-        for forbidden_action in ("aws scheduler update-schedule", "s3api delete-object"):
+        for forbidden_action in (
+            "aws scheduler update-schedule",
+            "s3api delete-object",
+            "cloudformation delete-stack",
+        ):
             forbid(
                 growthbook_reconciliation_workflow,
                 forbidden_action,

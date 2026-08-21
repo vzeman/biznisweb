@@ -108,6 +108,18 @@ jobs:
             echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
             exit 1
           fi
+          if aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > reconciliation-stack-preflight.json 2>/dev/null; then
+            python3 <<'PY'
+          import json
+
+          stack = json.load(open("reconciliation-stack-preflight.json", encoding="utf-8"))["Stacks"][0]
+          status = str(stack.get("StackStatus") or "")
+          if status not in {"CREATE_COMPLETE", "UPDATE_COMPLETE"}:
+              raise SystemExit(f"reconciliation stack requires read-only diagnosis before deploy: {status}")
+          PY
+          fi
           aws cloudformation describe-stacks \
             --stack-name "${COLLECTOR_STACK_NAME}" \
             --region "${AWS_REGION}" > collector-stack.json
@@ -464,6 +476,96 @@ jobs:
               raise SystemExit("reconciliation schedule was not created disabled")
           PY
           echo "GROWTHBOOK_RECONCILIATION_DISABLED_STACK_OK:${STACK_NAME}:${CANDIDATE_TASK_DEFINITION}"
+
+      - name: Emit sanitized reconciliation stack diagnostics on failure
+        if: ${{ failure() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u -o pipefail
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > failed-stack.json 2>/dev/null || echo '{}' > failed-stack.json
+          aws cloudformation describe-stack-events \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > failed-stack-events.json 2>/dev/null || echo '{}' > failed-stack-events.json
+          aws cloudformation describe-stack-resources \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > failed-stack-resources.json 2>/dev/null || echo '{}' > failed-stack-resources.json
+          aws scheduler get-schedule \
+            --name "${SCHEDULE_NAME}" \
+            --region "${AWS_REGION}" > failed-schedule.json 2>/dev/null || echo '{}' > failed-schedule.json
+          aws scheduler get-schedule \
+            --name "${SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > failed-source-schedule.json 2>/dev/null || echo '{}' > failed-source-schedule.json
+          aws sqs get-queue-url \
+            --queue-name vevo-growthbook-reconcile-preview-dlq \
+            --region "${AWS_REGION}" > failed-queue.json 2>/dev/null || echo '{}' > failed-queue.json
+          aws iam get-role \
+            --role-name vevo-growthbook-reconcile-preview-scheduler \
+            --region "${AWS_REGION}" > failed-role.json 2>/dev/null || echo '{}' > failed-role.json
+          aws cloudwatch describe-alarms \
+            --alarm-names \
+              vevo-growthbook-reconcile-preview-failure \
+              vevo-growthbook-reconcile-preview-missing-success \
+              vevo-growthbook-reconcile-preview-dlq \
+            --region "${AWS_REGION}" > failed-alarms.json 2>/dev/null || echo '{}' > failed-alarms.json
+          python3 <<'PY'
+          import json
+
+          def load(path):
+              return json.load(open(path, encoding="utf-8"))
+
+          stacks = load("failed-stack.json").get("Stacks") or []
+          events = load("failed-stack-events.json").get("StackEvents") or []
+          resources = load("failed-stack-resources.json").get("StackResources") or []
+          schedule = load("failed-schedule.json")
+          source = load("failed-source-schedule.json")
+          queue = load("failed-queue.json")
+          role = load("failed-role.json")
+          alarms = load("failed-alarms.json").get("MetricAlarms") or []
+          failures = []
+          for event in events:
+              status = str(event.get("ResourceStatus") or "")
+              if "FAILED" in status or status.startswith("ROLLBACK"):
+                  failures.append({
+                      "logical_id": event.get("LogicalResourceId"),
+                      "resource_type": event.get("ResourceType"),
+                      "status": status,
+                      "reason": str(event.get("ResourceStatusReason") or "")[:500],
+                  })
+              if len(failures) >= 20:
+                  break
+          source_ecs = (source.get("Target") or {}).get("EcsParameters") or {}
+          diagnostic = {
+              "stack_status": (stacks[0].get("StackStatus") if stacks else "ABSENT"),
+              "failure_events": failures,
+              "resources": [
+                  {
+                      "logical_id": row.get("LogicalResourceId"),
+                      "resource_type": row.get("ResourceType"),
+                      "status": row.get("ResourceStatus"),
+                  }
+                  for row in resources
+              ],
+              "target_schedule": {
+                  "present": bool(schedule.get("Name")),
+                  "state": schedule.get("State"),
+              },
+              "source_schedule": {
+                  "name": source.get("Name"),
+                  "state": source.get("State"),
+                  "task_definition": source_ecs.get("TaskDefinitionArn"),
+              },
+              "retained_queue_present": bool(queue.get("QueueUrl")),
+              "scheduler_role_present": bool((role.get("Role") or {}).get("RoleName")),
+              "alarms": [
+                  {"name": row.get("AlarmName"), "state": row.get("StateValue")}
+                  for row in alarms
+              ],
+          }
+          print("SANITIZED_RECONCILIATION_STACK_DIAGNOSTIC:" + json.dumps(diagnostic, sort_keys=True))
+          PY
 
       - name: Run exact scheduled command once and verify success marker
         shell: bash
