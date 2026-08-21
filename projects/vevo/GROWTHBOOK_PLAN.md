@@ -225,6 +225,8 @@ The final evaluator input is assembled only through `build-vevo-growthbook-produ
 
 Manual QA evidence is never a free-form workflow checkbox. After the real signed-in browser checks, record the exact canonical observation in `growthbook_aa_manual_qa_observation.json`, review its SHA-256 through Git, and only then open the separately versioned producer gate. The main-only producer verifies that Production A/A is the only running experiment, CTA still has no live rule, foundation/reader/clone are complete, allocation is 100%, and the observation contains no event/device/customer/order identity or unplanned mutation. It then injects its own run/commit provenance and uploads only the sanitized component needed by the snapshot assembler.
 
+Automated evidence is also never accepted from workflow form numbers or a moving "latest" source. A reviewed manifest change must first freeze the complete Production A/A UTC window plus the exact curated reporting-quality object key and SHA-256. Only then may the main-only producer read the exact Production Fargate task and localhost-gated immutable image, verify the Glue schemas, reduce the bounded PII-free collector receipts, read that one hash-bound quality object, and run one aggregate-only Athena audit for pipeline, Meta, privacy, and consent counts. Temporary CloudWatch/AWS responses and query files are deleted before the single sanitized component is uploaded. The producer cannot deploy or mutate AWS resources, GrowthBook, GTM, Meta Ads, BiznisWeb, traffic, a winner, or the CTA experiment.
+
 ### 8. First A/B experiment
 
 Experiment ID: `vevo-sk-product-cta-color-001`

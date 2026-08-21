@@ -40,6 +40,7 @@ class GrowthBookAaManualQaWorkflowTests(unittest.TestCase):
             "Production foundation evidence is missing",
             "Production reader evidence is missing",
             "Production GrowthBook clone must be complete and re-closed",
+            "row.get('tracking_key'): row",
             "Production A/A is not the only running experiment",
             "CTA A/B must remain unstarted during manual A/A QA",
             "PRODUCTION_AA_MANUAL_QA_LOCAL_GATE_OK:",

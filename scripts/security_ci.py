@@ -110,6 +110,12 @@ def main() -> int:
         growthbook_aa_manual_qa_workflow = read(
             ".github/workflows/verify-vevo-growthbook-production-aa-manual-qa.yml"
         )
+        growthbook_aa_automated_builder = read(
+            "scripts/build_growthbook_aa_automated_evidence.py"
+        )
+        growthbook_aa_automated_workflow = read(
+            ".github/workflows/collect-vevo-growthbook-production-aa-evidence.yml"
+        )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
         )
@@ -1249,6 +1255,19 @@ def main() -> int:
         manual_qa_manifest = growthbook_aa_snapshot_manifest.get(
             "manual_qa_evidence", {}
         )
+        automated_manifest = growthbook_aa_snapshot_manifest.get(
+            "automated_evidence", {}
+        )
+        if (
+            automated_manifest.get("producer_allowed") is not False
+            or automated_manifest.get("window_status") != "not_recorded"
+            or automated_manifest.get("from_utc") is not None
+            or automated_manifest.get("through_utc") is not None
+            or automated_manifest.get("quality_report_status") != "not_recorded"
+            or automated_manifest.get("quality_report_key") is not None
+            or automated_manifest.get("quality_report_sha256") is not None
+        ):
+            raise AssertionError("GrowthBook A/A automated producer opened early.")
         if (
             manual_qa_manifest.get("producer_allowed") is not False
             or manual_qa_manifest.get("observation_status") != "not_recorded"
@@ -1372,6 +1391,7 @@ def main() -> int:
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "manual QA evidence producer gate is closed",
             "reviewed browser QA observation is not recorded",
+            "row.get('tracking_key'): row",
             "Production A/A is not the only running experiment",
             "CTA A/B must remain unstarted during manual A/A QA",
             "PRODUCTION_AA_MANUAL_QA_LOCAL_GATE_OK:",
@@ -1414,6 +1434,102 @@ def main() -> int:
                 "GrowthBook A/A manual QA workflow must remain offline: "
                 f"{forbidden_manual_qa_workflow_marker}",
             )
+        for forbidden_automated_builder_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_aa_automated_builder.lower(),
+                forbidden_automated_builder_marker.lower(),
+                "GrowthBook A/A automated evidence builder must remain offline: "
+                f"{forbidden_automated_builder_marker}",
+            )
+        for required_automated_builder_marker in (
+            "automated observation must use canonical JSON bytes",
+            "observation SHA-256 mismatch",
+            '"vevo_growthbook_aa_automated_evidence"',
+            '"source_run_id": workflow_run_id',
+            '"source_main_commit": main_commit',
+            "automated source must be read-only",
+            '"contains_raw_aws_payloads"',
+            '"contains_cloudwatch_messages"',
+            '"contains_event_or_device_ids"',
+            '"contains_customer_or_order_data"',
+            '"mutation_observed"',
+        ):
+            require(
+                growthbook_aa_automated_builder,
+                required_automated_builder_marker,
+                "GrowthBook A/A automated evidence builder lost safety marker: "
+                f"{required_automated_builder_marker}",
+            )
+        for required_automated_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "automated evidence producer gate is closed",
+            "frozen Production A/A evidence window is not recorded",
+            "canonical Production reporting quality is not recorded",
+            "Production localhost and marker hard gate is missing",
+            "Production GrowthBook clone must be complete and re-closed",
+            "row.get('tracking_key'): row",
+            "PRODUCTION_AA_AUTOMATED_LOCAL_GATE_OK:",
+            "PRODUCTION_AA_RUNTIME_HARD_GATE_OK:",
+            "PRODUCTION_AA_GLUE_SCHEMA_OK:",
+            "scripts/summarize_growthbook_receipts.py",
+            "aws s3api get-object",
+            "aws athena start-query-execution",
+            "aws athena get-query-results",
+            "scripts/build_growthbook_aa_automated_evidence.py",
+            '--workflow-run-id "${GITHUB_RUN_ID}"',
+            '--main-commit "${GITHUB_SHA}"',
+            "Remove all temporary AWS responses and aggregate query files",
+            "uses: actions/upload-artifact@v4.6.2",
+            "winner=false:cta=unchanged",
+        ):
+            require(
+                growthbook_aa_automated_workflow,
+                required_automated_workflow_marker,
+                "GrowthBook A/A automated evidence workflow lost safety marker: "
+                f"{required_automated_workflow_marker}",
+            )
+        if growthbook_aa_automated_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError("GrowthBook A/A automated evidence must upload exactly one artifact.")
+        for forbidden_automated_workflow_marker in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "register-task-definition",
+            "iam create-",
+            "iam update-",
+            "iam delete-",
+            "s3api put-object",
+            "s3api delete-object",
+            "glue create-",
+            "glue update-",
+            "glue delete-",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "curl ",
+            "wget ",
+        ):
+            forbid(
+                growthbook_aa_automated_workflow.lower(),
+                forbidden_automated_workflow_marker.lower(),
+                "GrowthBook A/A automated evidence workflow gained a mutation path: "
+                f"{forbidden_automated_workflow_marker}",
+            )
         preview_registry = growthbook_registry_config.get("environments", {}).get("preview", {})
         for experiment_id, weights in growthbook_reporting_config.get("expected_variation_weights", {}).items():
             registry_variations = preview_registry.get(experiment_id, {}).get("variations", [])
@@ -1451,6 +1567,7 @@ def main() -> int:
             "scripts/summarize_growthbook_receipts.py",
             "scripts/assemble_growthbook_aa_snapshot.py",
             "scripts/build_growthbook_aa_manual_qa_evidence.py",
+            "scripts/build_growthbook_aa_automated_evidence.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
             "scripts/validate_growthbook_workspace.py",
