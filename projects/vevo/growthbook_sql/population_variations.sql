@@ -12,4 +12,3 @@ WHERE metric_contract_version = 'vevo_cm1_v1_2026-08-20'
   AND contaminated = 0
 GROUP BY experiment_id, variation_id
 ORDER BY experiment_id, variation_id
-
