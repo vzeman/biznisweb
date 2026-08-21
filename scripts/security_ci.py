@@ -558,6 +558,7 @@ def main() -> int:
             "META_AUDIT_HARD_GATE_OK:",
             "META_AUDIT_TASK_STOPPED_READBACK:",
             "META_AUDIT_TASK_OK:",
+            "python -m scripts.audit_vevo_meta_dimensions",
             "VEVO_META_DIMENSION_AUDIT_OK:",
             "VEVO_META_DIMENSION_AUDIT_FAIL:",
             "VEVO_GROWTHBOOK_REPORTING_POPULATION_AUDIT_OK:",
