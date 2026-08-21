@@ -51,6 +51,9 @@ def main() -> int:
         growthbook_scheduled_reconciler = read(
             "scripts/run_scheduled_growthbook_reconciliation.py"
         )
+        growthbook_reconciliation_parameters = read(
+            "scripts/build_growthbook_reconciliation_parameters.py"
+        )
         growthbook_template = read("infra/vevo-growthbook/template.yaml")
         growthbook_reconciliation_template = read(
             "infra/vevo-growthbook-reconciliation/template.yaml"
@@ -478,11 +481,13 @@ def main() -> int:
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
-            "ParameterKey=ScheduleState,ParameterValue=DISABLED",
+            "--phase candidate > candidate-parameters.json",
+            "--parameters file://candidate-parameters.json",
             "GROWTHBOOK_RECONCILIATION_DISABLED_STACK_OK",
             "GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app",
             "GROWTHBOOK_RECONCILIATION_ONE_SHOT_OK",
-            "ParameterKey=ScheduleState,ParameterValue=ENABLED",
+            "--phase activate > activation-parameters.json",
+            "--parameters file://activation-parameters.json",
             "GROWTHBOOK_RECONCILIATION_SCHEDULE_READBACK_OK",
             "VEVO reporting source schedule changed",
         ):
@@ -496,6 +501,17 @@ def main() -> int:
                 growthbook_reconciliation_workflow,
                 forbidden_action,
                 f"GrowthBook reconciliation workflow must not use {forbidden_action}.",
+            )
+        for marker in (
+            '"ScheduleState": "DISABLED"',
+            '"ParameterValue": "ENABLED"',
+            '"UsePreviousValue": True',
+            '"SubnetIds": _required(environ, "SUBNET_IDS")',
+        ):
+            require(
+                growthbook_reconciliation_parameters,
+                marker,
+                f"GrowthBook reconciliation parameter builder lost safety marker: {marker}",
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
@@ -642,6 +658,7 @@ def main() -> int:
             "reporting_core/experiment_orders.py",
             "scripts/reconcile_growthbook_facts.py",
             "scripts/run_scheduled_growthbook_reconciliation.py",
+            "scripts/build_growthbook_reconciliation_parameters.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",
             "scripts/validate_growthbook_changeset.py",
             "scripts/validate_growthbook_reconciliation_changeset.py",
