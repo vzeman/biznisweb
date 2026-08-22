@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from scripts.verify_growthbook_natural_reconciliation import (
     EXPECTED_IMAGE_DIGEST,
-    FIRST_RUN_DUE_UTC,
+    TARGET_RUN_DUE_UTC,
     VERIFY_NOT_BEFORE_UTC,
     VERIFY_BEFORE_UTC,
     VerificationError,
@@ -151,9 +151,9 @@ def _base_payloads() -> dict[str, object]:
     success_marker = (
         "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:"
         "project=vevo:environment=preview:"
-        "event-from=2026-07-13:event-through=2026-08-21:partitions=40"
+        "event-from=2026-07-14:event-through=2026-08-22:partitions=40"
     )
-    marker_timestamp = int((FIRST_RUN_DUE_UTC + timedelta(minutes=6)).timestamp() * 1000)
+    marker_timestamp = int((TARGET_RUN_DUE_UTC + timedelta(minutes=6)).timestamp() * 1000)
     marker_events = {
         "events": [
             {
@@ -198,8 +198,8 @@ def _base_payloads() -> dict[str, object]:
                 "lastStatus": "STOPPED",
                 "desiredStatus": "STOPPED",
                 "stopCode": "EssentialContainerExited",
-                "startedAt": _iso(FIRST_RUN_DUE_UTC + timedelta(minutes=1)),
-                "stoppedAt": _iso(FIRST_RUN_DUE_UTC + timedelta(minutes=6)),
+                "startedAt": _iso(TARGET_RUN_DUE_UTC + timedelta(minutes=1)),
+                "stoppedAt": _iso(TARGET_RUN_DUE_UTC + timedelta(minutes=6)),
                 "overrides": schedule_input,
                 "attachments": [
                     {
@@ -312,7 +312,11 @@ class GrowthBookNaturalReconciliationVerifierTests(unittest.TestCase):
             workflow_run_id="32470000000",
             main_commit="f" * 40,
         )
-        self.assertEqual(1, evidence["schema_version"])
+        self.assertEqual(2, evidence["schema_version"])
+        self.assertEqual(
+            "vevo_growthbook_natural_reconciliation_retention_recovery",
+            evidence["evidence_type"],
+        )
         self.assertEqual("passed", evidence["status"])
         self.assertEqual("vzeman/biznisweb", evidence["repository"])
         self.assertEqual("32470000000", evidence["workflow_run_id"])
@@ -421,7 +425,7 @@ class GrowthBookNaturalReconciliationVerifierTests(unittest.TestCase):
         payloads = _base_payloads()
         payloads["marker_events_payload"]["events"].append(
             {
-                "timestamp": int(FIRST_RUN_DUE_UTC.timestamp() * 1000),
+                "timestamp": int(TARGET_RUN_DUE_UTC.timestamp() * 1000),
                 "message": "GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:RuntimeError",
                 "logStreamName": LOG_STREAM,
             }

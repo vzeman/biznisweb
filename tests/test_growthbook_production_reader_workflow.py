@@ -23,7 +23,7 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_identity:",
-            "first natural reconciliation must be verified before reader provisioning",
+            "natural retention recovery must be verified before reader provisioning",
             "Production foundation deployment is not recorded as verified",
             "Production reader provisioning gate is false",
             "successful Production foundation deployment evidence drift",

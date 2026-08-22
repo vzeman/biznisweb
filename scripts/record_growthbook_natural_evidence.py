@@ -25,8 +25,8 @@ from typing import Any, Mapping, Sequence
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 
-EXPECTED_SCHEMA_VERSION = 1
-EXPECTED_EVIDENCE_TYPE = "vevo_growthbook_first_natural_reconciliation"
+EXPECTED_SCHEMA_VERSION = 2
+EXPECTED_EVIDENCE_TYPE = "vevo_growthbook_natural_reconciliation_retention_recovery"
 EXPECTED_REPOSITORY = "vzeman/biznisweb"
 EXPECTED_WORKFLOW = ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
 EXPECTED_ACCOUNT_ID = "919341186960"
@@ -39,14 +39,14 @@ EXPECTED_IMAGE_DIGEST = (
     "sha256:cabba3b0bd57f6be322f3a5ff62f0327"
     "c7cf8e7bb2b6b5e78686305339fdd041"
 )
-EXPECTED_EVENT_FROM = "2026-07-13"
-EXPECTED_EVENT_THROUGH = "2026-08-21"
+EXPECTED_EVENT_FROM = "2026-07-14"
+EXPECTED_EVENT_THROUGH = "2026-08-22"
 EXPECTED_PARTITIONS = 40
 MAX_RAW_EVENTS = 50_000
 EXPECTED_VERIFICATION_WINDOW = {
-    "first_run_due_utc": "2026-08-22T01:30:00Z",
-    "not_before_utc": "2026-08-22T01:40:00Z",
-    "before_utc": "2026-08-23T01:30:00Z",
+    "target_run_due_utc": "2026-08-23T01:30:00Z",
+    "not_before_utc": "2026-08-23T01:40:00Z",
+    "before_utc": "2026-08-23T02:20:00Z",
 }
 EXPECTED_SAFETY = {
     "contains_raw_aws_payloads": False,
@@ -65,7 +65,7 @@ RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 TASK_ID_RE = re.compile(r"^[0-9a-f]{32}$")
-VERIFIED_AT_RE = re.compile(r"^2026-08-2[23]T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+VERIFIED_AT_RE = re.compile(r"^2026-08-23T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 EXPECTED_ROOT_KEYS = {
     "schema_version",
     "evidence_type",
@@ -282,8 +282,10 @@ def record_natural_evidence(
     _require(isinstance(production, dict), "Production state is missing")
 
     already_recorded = (
-        recurring.get("first_natural_run_status") == "verified"
-        and recurring.get("natural_verifier_status") == "passed"
+        recurring.get("first_natural_run_status")
+        == "verified_via_second_natural_run"
+        and recurring.get("natural_verifier_status")
+        == "passed_retention_recovery_run"
         and recurring.get("natural_evidence_artifact_status")
         == "verified_downloaded_sha256_recorded"
     )
@@ -297,7 +299,7 @@ def record_natural_evidence(
         )
         _require(
             checkpoint.get("recurring_schedule_status")
-            == "enabled_one_shot_and_first_natural_run_verified"
+            == "enabled_one_shot_and_natural_retention_recovery_verified"
             and production.get("status")
             == "natural_run_verified_foundation_deployment_ready"
             and production.get("deployment_allowed") is True
@@ -316,16 +318,22 @@ def record_natural_evidence(
 
     _require(
         checkpoint.get("recurring_schedule_status")
-        == "enabled_one_shot_verified_natural_run_pending",
+        == "enabled_one_shot_verified_natural_retention_recovery_pending",
         "recurring schedule checkpoint is not pending",
     )
-    _require(recurring.get("first_natural_run_status") == "pending", "natural run is not pending")
     _require(
-        recurring.get("natural_verifier_status") == "prepared_not_run_before_time_gate",
+        recurring.get("first_natural_run_status")
+        == "success_marker_observed_ecs_state_expired_recovery_pending",
+        "natural retention recovery is not pending",
+    )
+    _require(
+        recurring.get("natural_verifier_status")
+        == "prepared_second_natural_run_retention_recovery",
         "natural verifier state is not pending",
     )
     _require(
-        recurring.get("natural_evidence_artifact_status") == "code_prepared_pending_time_gate",
+        recurring.get("natural_evidence_artifact_status")
+        == "code_prepared_retention_recovery_pending",
         "natural evidence artifact state is not pending",
     )
     for key in (
@@ -355,9 +363,11 @@ def record_natural_evidence(
     clone = production.get("growthbook_clone") or {}
     _require(isinstance(clone, dict) and clone.get("clone_allowed") is False, "clone gate must remain closed")
 
-    checkpoint["recurring_schedule_status"] = "enabled_one_shot_and_first_natural_run_verified"
-    recurring["first_natural_run_status"] = "verified"
-    recurring["natural_verifier_status"] = "passed"
+    checkpoint["recurring_schedule_status"] = (
+        "enabled_one_shot_and_natural_retention_recovery_verified"
+    )
+    recurring["first_natural_run_status"] = "verified_via_second_natural_run"
+    recurring["natural_verifier_status"] = "passed_retention_recovery_run"
     recurring["natural_evidence_artifact_status"] = "verified_downloaded_sha256_recorded"
     recurring["natural_verifier_run_id"] = expected_workflow_run_id
     recurring["natural_verifier_main_commit"] = expected_main_commit

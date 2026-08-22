@@ -38,16 +38,16 @@ EXPECTED_IMAGE_DIGEST = (
 EXPECTED_RUNTIME_PATH = "/app"
 EXPECTED_REPOSITORY = "vzeman/biznisweb"
 EXPECTED_WORKFLOW = ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
-EVIDENCE_SCHEMA_VERSION = 1
+EVIDENCE_SCHEMA_VERSION = 2
 EXPECTED_SCHEDULE_EXPRESSION = "cron(30 3 * * ? *)"
 EXPECTED_SCHEDULE_TIMEZONE = "Europe/Bratislava"
-EXPECTED_EVENT_FROM = "2026-07-13"
-EXPECTED_EVENT_THROUGH = "2026-08-21"
+EXPECTED_EVENT_FROM = "2026-07-14"
+EXPECTED_EVENT_THROUGH = "2026-08-22"
 EXPECTED_PARTITIONS = 40
 MAX_RAW_EVENTS = 50_000
-FIRST_RUN_DUE_UTC = datetime(2026, 8, 22, 1, 30, tzinfo=timezone.utc)
-VERIFY_NOT_BEFORE_UTC = datetime(2026, 8, 22, 1, 40, tzinfo=timezone.utc)
-VERIFY_BEFORE_UTC = datetime(2026, 8, 23, 1, 30, tzinfo=timezone.utc)
+TARGET_RUN_DUE_UTC = datetime(2026, 8, 23, 1, 30, tzinfo=timezone.utc)
+VERIFY_NOT_BEFORE_UTC = datetime(2026, 8, 23, 1, 40, tzinfo=timezone.utc)
+VERIFY_BEFORE_UTC = datetime(2026, 8, 23, 2, 20, tzinfo=timezone.utc)
 EXPECTED_COMMAND = [
     "/bin/bash",
     "-lc",
@@ -294,7 +294,10 @@ def verify_natural_reconciliation(
     _require(len(successes) == 1, "natural-run window must contain exactly one success marker")
     success_event = successes[0]
     success_time = datetime.fromtimestamp(int(success_event.get("timestamp", 0)) / 1000, tz=timezone.utc)
-    _require(success_time >= FIRST_RUN_DUE_UTC, "success marker predates the first natural run")
+    _require(
+        success_time >= TARGET_RUN_DUE_UTC,
+        "success marker predates the retention-recovery natural run",
+    )
     _require(success_time <= now_utc, "success marker is in the future")
     success_text = str(success_event.get("message") or "")
     marker = SUCCESS_RE.search(success_text)
@@ -327,7 +330,10 @@ def verify_natural_reconciliation(
     _require(not started_by.startswith("vevo-growthbook-reconcile-once-"), "manual one-shot cannot prove natural run")
     started_at = _parse_utc(task.get("startedAt"), "task.startedAt")
     stopped_at = _parse_utc(task.get("stoppedAt"), "task.stoppedAt")
-    _require(FIRST_RUN_DUE_UTC <= started_at <= stopped_at <= now_utc, "natural task timing drift")
+    _require(
+        TARGET_RUN_DUE_UTC <= started_at <= stopped_at <= now_utc,
+        "natural task timing drift",
+    )
     actual_override = _normalized_override(task.get("overrides") or {})
     _require(actual_override == expected_override, "natural task overrides drift")
     task_containers = task.get("containers") or []
@@ -518,7 +524,7 @@ def build_natural_reconciliation_evidence(
     verified_utc = verified_at.astimezone(timezone.utc).replace(microsecond=0)
     return {
         "schema_version": EVIDENCE_SCHEMA_VERSION,
-        "evidence_type": "vevo_growthbook_first_natural_reconciliation",
+        "evidence_type": "vevo_growthbook_natural_reconciliation_retention_recovery",
         "status": "passed",
         "repository": EXPECTED_REPOSITORY,
         "workflow": EXPECTED_WORKFLOW,
@@ -526,7 +532,7 @@ def build_natural_reconciliation_evidence(
         "main_commit": commit,
         "verified_at_utc": verified_utc.isoformat().replace("+00:00", "Z"),
         "verification_window": {
-            "first_run_due_utc": FIRST_RUN_DUE_UTC.isoformat().replace("+00:00", "Z"),
+            "target_run_due_utc": TARGET_RUN_DUE_UTC.isoformat().replace("+00:00", "Z"),
             "not_before_utc": VERIFY_NOT_BEFORE_UTC.isoformat().replace("+00:00", "Z"),
             "before_utc": VERIFY_BEFORE_UTC.isoformat().replace("+00:00", "Z"),
         },

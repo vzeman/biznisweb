@@ -22,7 +22,7 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_deploy:",
-            "first natural reconciliation must be verified before foundation deploy",
+            "natural retention recovery must be verified before foundation deploy",
             "protected natural reconciliation verifier has not passed",
             "sanitized natural reconciliation evidence is absent",
             "natural reconciliation artifact identity is incomplete",
@@ -39,7 +39,7 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.workflow)
         natural_gate = self.workflow.index(
-            "first natural reconciliation must be verified before foundation deploy"
+            "natural retention recovery must be verified before foundation deploy"
         )
         evidence_gate = self.workflow.index(
             "natural reconciliation runtime/control evidence drift"
@@ -58,12 +58,17 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
             "natural_evidence_artifact_sha256",
             "re.fullmatch(r'[0-9a-f]{64}', evidence_sha256)",
             "hashlib.sha256(canonical_evidence).hexdigest() != evidence_sha256",
-            "vevo_growthbook_first_natural_reconciliation",
+            "natural_evidence.get('schema_version') != 2",
+            "vevo_growthbook_natural_reconciliation_retention_recovery",
             "contains_raw_aws_payloads",
             "contains_credentials",
             "cloudtrail_scheduler_run_task_verified",
             "vevo-growthbook-reconcile-preview:4",
-            "verification_window.get('not_before_utc') != '2026-08-22T01:40:00Z'",
+            "verification_window.get('target_run_due_utc') != '2026-08-23T01:30:00Z'",
+            "verification_window.get('not_before_utc') != '2026-08-23T01:40:00Z'",
+            "verification_window.get('before_utc') != '2026-08-23T02:20:00Z'",
+            "reconciliation.get('event_from') != '2026-07-14'",
+            "reconciliation.get('event_through') != '2026-08-22'",
             "sha256:cabba3b0bd57f6be322f3a5ff62f0327c7cf8e7bb2b6b5e78686305339fdd041",
         ):
             self.assertIn(marker, self.workflow)
