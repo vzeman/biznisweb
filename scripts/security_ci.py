@@ -599,6 +599,10 @@ def main() -> int:
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
+            "cron: '40 1 23 8 *'",
+            "EVENT_NAME: ${{ github.event_name }}",
+            "[[ \"${EVENT_NAME}\" == \"schedule\" ]]",
+            "[[ \"${CONFIRM_VERIFICATION}\" == \"true\" ]]",
             "VERIFY_NOT_BEFORE_UTC: '2026-08-23T01:40:00Z'",
             "EXPECTED_CLUSTER_ARN: arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster",
             "EXPECTED_CONTAINER_NAME: reporting",
