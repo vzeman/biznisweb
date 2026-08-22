@@ -22,9 +22,13 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_verification:",
-            "VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'",
-            "first natural-run verification is not due until",
-            "first natural-run live ECS evidence window has closed",
+            "TARGET_RUN_DUE_UTC: '2026-08-23T01:30:00Z'",
+            "VERIFY_NOT_BEFORE_UTC: '2026-08-23T01:40:00Z'",
+            "VERIFY_BEFORE_UTC: '2026-08-23T02:20:00Z'",
+            "2026-08-23T01:29:00+00:00",
+            "--start-time '2026-08-23T01:29:00Z'",
+            "natural retention-recovery verification is not due until",
+            "natural retention-recovery live ECS evidence window has closed",
             "workspace.get('reconciliation_checkpoint', {}).get(",
             "EXPECTED_CLUSTER_ARN: arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster",
             "EXPECTED_CONTAINER_NAME: reporting",
@@ -34,7 +38,9 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "Configure AWS credentials for read-only evidence",
         ):
             self.assertIn(marker, self.workflow)
-        gate = self.workflow.index("first natural-run verification is not due until")
+        gate = self.workflow.index(
+            "natural retention-recovery verification is not due until"
+        )
         credentials = self.workflow.index("Configure AWS credentials for read-only evidence")
         self.assertLess(gate, credentials)
         self.assertNotIn(
@@ -54,7 +60,7 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "cloudwatch describe-alarms",
             "scripts/summarize_growthbook_natural_task_readback.py",
             "scripts/verify_growthbook_natural_reconciliation.py",
-            "exactly one success and zero failures",
+            "retention-recovery window requires exactly one success and zero failures",
             "NATURAL_RUNTIME_IDENTITY_OK:",
             "GROWTHBOOK_NATURAL_RECONCILIATION_OK:",
             "GROWTHBOOK_NATURAL_EVIDENCE_READY:",
@@ -78,7 +84,7 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "uses: actions/upload-artifact@v4.6.2",
             "path: vevo-growthbook-natural-reconciliation-evidence.json",
             "retention-days: 14",
-            "sanitized schema v1 only; no raw AWS payloads or credentials",
+            "sanitized schema v2 only; no raw AWS payloads or credentials",
         ):
             self.assertIn(marker, self.workflow)
         self.assertLess(verifier, upload)

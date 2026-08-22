@@ -84,9 +84,12 @@ jobs:
 
           if registry.get('environments', {}).get('production') != {}:
               raise SystemExit('Production experiment registry must remain empty')
-          if recurring.get('first_natural_run_status') != 'verified':
-              raise SystemExit('first natural reconciliation must be verified before reader provisioning')
-          if recurring.get('natural_verifier_status') != 'passed':
+          if (
+              recurring.get('first_natural_run_status')
+              != 'verified_via_second_natural_run'
+          ):
+              raise SystemExit('natural retention recovery must be verified before reader provisioning')
+          if recurring.get('natural_verifier_status') != 'passed_retention_recovery_run':
               raise SystemExit('protected natural reconciliation verifier has not passed')
           if production.get('status') != 'route_disabled_foundation_deployed_verified':
               raise SystemExit('Production foundation deployment is not recorded as verified')

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_verification:
-        description: Type true to run the read-only first natural reconciliation verification
+        description: Type true to run the read-only natural retention-recovery verification
         required: true
         default: 'false'
         type: choice
@@ -32,9 +32,9 @@ env:
   TASK_DEFINITION: vevo-growthbook-reconcile-preview:4
   DLQ_NAME: vevo-growthbook-reconcile-preview-dlq
   RUNTIME_PATH: /app
-  FIRST_RUN_DUE_UTC: '2026-08-22T01:30:00Z'
-  VERIFY_NOT_BEFORE_UTC: '2026-08-22T01:40:00Z'
-  VERIFY_BEFORE_UTC: '2026-08-23T01:30:00Z'
+  TARGET_RUN_DUE_UTC: '2026-08-23T01:30:00Z'
+  VERIFY_NOT_BEFORE_UTC: '2026-08-23T01:40:00Z'
+  VERIFY_BEFORE_UTC: '2026-08-23T02:20:00Z'
   EVIDENCE_FILE: vevo-growthbook-natural-reconciliation-evidence.json
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -78,8 +78,11 @@ jobs:
           recurring = workspace.get('reconciliation_checkpoint', {}).get(
               'recurring_schedule', {}
           )
-          if recurring.get('first_natural_run_status') != 'pending':
-              raise SystemExit('first natural-run status must remain pending before verification')
+          if (
+              recurring.get('first_natural_run_status')
+              != 'success_marker_observed_ecs_state_expired_recovery_pending'
+          ):
+              raise SystemExit('natural retention-recovery status must remain pending')
           if workspace.get('workspace', {}).get('production_allocation_percent') != 0:
               raise SystemExit('GrowthBook Production allocation must remain zero')
           if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'not_published':
@@ -91,9 +94,9 @@ jobs:
           not_before = datetime.fromisoformat(os.environ['VERIFY_NOT_BEFORE_UTC'].replace('Z', '+00:00'))
           before = datetime.fromisoformat(os.environ['VERIFY_BEFORE_UTC'].replace('Z', '+00:00'))
           if now < not_before:
-              raise SystemExit(f'first natural-run verification is not due until {not_before.isoformat()}')
+              raise SystemExit(f'natural retention-recovery verification is not due until {not_before.isoformat()}')
           if now >= before:
-              raise SystemExit('first natural-run live ECS evidence window has closed')
+              raise SystemExit('natural retention-recovery live ECS evidence window has closed')
           print('NATURAL_RECONCILIATION_LOCAL_GATE_OK:allocation=0:gtm=not_published:mutation=none')
           PY
 
@@ -172,7 +175,7 @@ jobs:
 
           START_MS="$(python - <<'PY'
           from datetime import datetime
-          print(int(datetime.fromisoformat('2026-08-22T01:29:00+00:00').timestamp() * 1000))
+          print(int(datetime.fromisoformat('2026-08-23T01:29:00+00:00').timestamp() * 1000))
           PY
           )"
           END_MS="$(python - <<'PY'
@@ -208,7 +211,7 @@ jobs:
           successes = [row for row in events if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:' in str(row.get('message') or '')]
           failures = [row for row in events if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:' in str(row.get('message') or '')]
           if failures or len(successes) != 1:
-              raise SystemExit('first natural window requires exactly one success and zero failures')
+              raise SystemExit('retention-recovery window requires exactly one success and zero failures')
           stream = str(successes[0].get('logStreamName') or '')
           task_id = stream.rsplit('/', 1)[-1]
           if re.fullmatch(r'[0-9a-f]{32}', task_id) is None:
@@ -235,7 +238,7 @@ jobs:
             --region "${AWS_REGION}" > natural-task-logs.json
           aws cloudtrail lookup-events \
             --lookup-attributes AttributeKey=EventName,AttributeValue=RunTask \
-            --start-time '2026-08-22T01:29:00Z' \
+            --start-time '2026-08-23T01:29:00Z' \
             --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --max-results 50 \
             --region "${AWS_REGION}" > natural-cloudtrail.json
@@ -267,11 +270,11 @@ jobs:
         if: ${{ always() }}
         run: |
           {
-            echo '## VEVO GrowthBook first natural reconciliation'
+            echo '## VEVO GrowthBook natural reconciliation retention recovery'
             echo "- Schedule: \`${SCHEDULE_NAME}\`"
             echo "- Expected runtime: \`instance-id=N/A:Fargate / service=${SCHEDULE_NAME} / path=${RUNTIME_PATH}\`"
             echo '- AWS mutations: `none`'
-            echo '- Evidence artifact: `sanitized schema v1 only; no raw AWS payloads or credentials`'
+            echo '- Evidence artifact: `sanitized schema v2 only; no raw AWS payloads or credentials`'
             echo '- GrowthBook Production allocation: `0%` (unchanged)'
             echo '- GTM: `not_published` (unchanged)'
             echo '- Meta Ads and BiznisWeb commerce state: `unchanged`'

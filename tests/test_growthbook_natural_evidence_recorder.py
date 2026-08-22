@@ -38,8 +38,8 @@ def _evidence() -> dict[str, object]:
         "runtime_path": "/app",
         "task_definition": "vevo-growthbook-reconcile-preview:4",
         "image_digest": EXPECTED_IMAGE_DIGEST,
-        "event_from": "2026-07-13",
-        "event_through": "2026-08-21",
+        "event_from": "2026-07-14",
+        "event_through": "2026-08-22",
         "raw_events": 25,
         "device_facts": 5,
         "performance_facts": 8,
@@ -52,7 +52,7 @@ def _evidence() -> dict[str, object]:
     }
     return build_natural_reconciliation_evidence(
         result,
-        verified_at=datetime(2026, 8, 22, 2, 0, tzinfo=timezone.utc),
+        verified_at=datetime(2026, 8, 23, 2, 0, tzinfo=timezone.utc),
         workflow_run_id=RUN_ID,
         main_commit=MAIN_COMMIT,
     )
@@ -99,7 +99,14 @@ class GrowthBookNaturalEvidenceRecorderTests(unittest.TestCase):
         self.assertEqual(ALLOWED_CHANGED_PATHS, _changed_leaf_paths(self.workspace, recorded))
         recurring = recorded["reconciliation_checkpoint"]["recurring_schedule"]
         production = recorded["athena"]["production"]
-        self.assertEqual("verified", recurring["first_natural_run_status"])
+        self.assertEqual(
+            "verified_via_second_natural_run",
+            recurring["first_natural_run_status"],
+        )
+        self.assertEqual(
+            "passed_retention_recovery_run",
+            recurring["natural_verifier_status"],
+        )
         self.assertEqual(self.evidence_sha256, recurring["natural_evidence_artifact_sha256"])
         self.assertEqual(self.evidence, recurring["natural_verifier_evidence"])
         self.assertTrue(production["foundation_deployment_allowed"])

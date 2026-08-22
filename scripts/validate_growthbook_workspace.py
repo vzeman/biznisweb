@@ -492,7 +492,9 @@ def validate() -> None:
         "athena_assignment_query_id": "ef981af5-3c3f-4d32-813a-a546be77b79b",
         "raw_curated_reporting_athena_identity_verified": True,
         "production_allocation_percent": 0,
-        "recurring_schedule_status": "enabled_one_shot_verified_natural_run_pending",
+        "recurring_schedule_status": (
+            "enabled_one_shot_verified_natural_retention_recovery_pending"
+        ),
         "recurring_schedule": {
             "stack_name": "vevo-growthbook-reconciliation-preview",
             "workflow_run_id": "32459100570",
@@ -533,32 +535,39 @@ def validate() -> None:
             "three_alarms_verified": True,
             "source_reporting_schedule_unchanged": True,
             "first_natural_run_local": "2026-08-22 03:30 Europe/Bratislava",
-            "first_natural_run_status": "pending",
+            "first_natural_run_status": (
+                "success_marker_observed_ecs_state_expired_recovery_pending"
+            ),
             "natural_verifier_workflow": (
                 ".github/workflows/verify-vevo-growthbook-natural-reconciliation.yml"
             ),
-            "natural_verifier_status": "prepared_not_run_before_time_gate",
-            "natural_evidence_schema_version": 1,
+            "natural_verifier_status": (
+                "prepared_second_natural_run_retention_recovery"
+            ),
+            "natural_evidence_schema_version": 2,
             "natural_evidence_file": (
                 "vevo-growthbook-natural-reconciliation-evidence.json"
             ),
             "natural_evidence_retention_days": 14,
-            "natural_evidence_artifact_status": "code_prepared_pending_time_gate",
+            "natural_evidence_artifact_status": (
+                "code_prepared_retention_recovery_pending"
+            ),
             "natural_evidence_contains_raw_aws_payloads": False,
             "natural_evidence_contains_credentials": False,
             "natural_verifier_run_id": None,
             "natural_verifier_main_commit": None,
             "natural_evidence_artifact_sha256": None,
             "natural_verifier_evidence": None,
-            "natural_verifier_not_before_utc": "2026-08-22T01:40:00Z",
-            "natural_verifier_before_utc": "2026-08-23T01:30:00Z",
+            "natural_verifier_not_before_utc": "2026-08-23T01:40:00Z",
+            "natural_verifier_before_utc": "2026-08-23T02:20:00Z",
             "natural_verifier_mutation_allowed": False,
         },
     }
     actual_reconciliation_checkpoint = workspace.get("reconciliation_checkpoint") or {}
     actual_recurring_schedule = actual_reconciliation_checkpoint.get("recurring_schedule") or {}
     natural_evidence_verified = (
-        actual_recurring_schedule.get("first_natural_run_status") == "verified"
+        actual_recurring_schedule.get("first_natural_run_status")
+        == "verified_via_second_natural_run"
     )
     if natural_evidence_verified:
         run_id = actual_recurring_schedule.get("natural_verifier_run_id")
@@ -581,12 +590,12 @@ def validate() -> None:
         ):
             raise AssertionError("GrowthBook natural evidence SHA-256 drift")
         expected_reconciliation_checkpoint["recurring_schedule_status"] = (
-            "enabled_one_shot_and_first_natural_run_verified"
+            "enabled_one_shot_and_natural_retention_recovery_verified"
         )
         expected_reconciliation_checkpoint["recurring_schedule"].update(
             {
-                "first_natural_run_status": "verified",
-                "natural_verifier_status": "passed",
+                "first_natural_run_status": "verified_via_second_natural_run",
+                "natural_verifier_status": "passed_retention_recovery_run",
                 "natural_evidence_artifact_status": (
                     "verified_downloaded_sha256_recorded"
                 ),
