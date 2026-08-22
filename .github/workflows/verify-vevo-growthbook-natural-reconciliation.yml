@@ -224,6 +224,10 @@ jobs:
             --cluster "${CLUSTER_ARN}" \
             --tasks "${NATURAL_TASK_ID}" \
             --region "${AWS_REGION}" > natural-task-state.json
+          python scripts/summarize_growthbook_natural_task_readback.py \
+            --task-state natural-task-state.json \
+            --expected-task-id "${NATURAL_TASK_ID}" \
+            --expected-cluster-arn "${CLUSTER_ARN}"
           aws logs get-log-events \
             --log-group-name "${LOG_GROUP}" \
             --log-stream-name "${NATURAL_LOG_STREAM}" \
