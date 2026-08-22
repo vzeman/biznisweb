@@ -1,0 +1,102 @@
+{
+  "checked_count": 12,
+  "failure_count": 0,
+  "links": [
+    {
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "kind": "target_slug_precheck",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.iso.org/standard/9335.html",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/9335.html",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://store.astm.org/standards/d3776",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://store.astm.org/standards/d3776",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "kind": "article_link",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true,
+      "error": null
+    }
+  ]
+}

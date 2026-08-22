@@ -1,0 +1,290 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T17:24:46.819659+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-15-kids-cosmetic-stains-five-2026-06-16.json",
+  "article_count": 5,
+  "link_count": 24,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2140",
+      "slug": "ako-odstranit-zivicu-z-nohavic-bundy-a-detskeho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zivicu-z-nohavic-bundy-a-detskeho-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zivicu-z-nohavic-bundy-a-detskeho-oblecenia",
+      "title_present": true,
+      "required_fragments": [
+        "Kontrolný checklist pred praním",
+        "Odporúčané riešenie pre šetrné pranie po predčistení"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2218",
+      "slug": "ako-odstranit-zinkovu-mast-z-detskeho-body-a-prebalovacej-podlozky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zinkovu-mast-z-detskeho-body-a-prebalovacej-podlozky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zinkovu-mast-z-detskeho-body-a-prebalovacej-podlozky",
+      "title_present": true,
+      "required_fragments": [
+        "Kontrolný checklist pred praním",
+        "Odporúčané riešenie pre šetrné pranie po predčistení"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2213",
+      "slug": "ako-dostat-piesok-z-detskych-sortiek-a-tricka-po-plazi-pred-pranim",
+      "url": "https://www.vevo.sk/n/ako-dostat-piesok-z-detskych-sortiek-a-tricka-po-plazi-pred-pranim",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-dostat-piesok-z-detskych-sortiek-a-tricka-po-plazi-pred-pranim",
+      "title_present": true,
+      "required_fragments": [
+        "Kontrolný checklist pred praním",
+        "Odporúčané riešenie pre šetrné pranie po predčistení"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2160",
+      "slug": "ako-vyprat-granatove-jablko-z-oblecenia-bez-ruzovych-map",
+      "url": "https://www.vevo.sk/n/ako-vyprat-granatove-jablko-z-oblecenia-bez-ruzovych-map",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-granatove-jablko-z-oblecenia-bez-ruzovych-map",
+      "title_present": true,
+      "required_fragments": [
+        "Kontrolný checklist pred praním",
+        "Odporúčané riešenie pre šetrné pranie po predčistení"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2198",
+      "slug": "ako-odstranit-jod-a-dezinfekciu-z-oblecenia-bez-zvaecsenia-flaku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-jod-a-dezinfekciu-z-oblecenia-bez-zvaecsenia-flaku",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-jod-a-dezinfekciu-z-oblecenia-bez-zvaecsenia-flaku",
+      "title_present": true,
+      "required_fragments": [
+        "Kontrolný checklist pred praním",
+        "Odporúčané riešenie pre šetrné pranie po predčistení"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-ceresne-z-detskeho-tricka-a-letnych-siat",
+      "url": "https://www.vevo.sk/n/ako-odstranit-ceresne-z-detskeho-tricka-a-letnych-siat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-ceresne-z-detskeho-tricka-a-letnych-siat",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-krvave-skvrny-z-oblecenia-kompletny-sprievodca",
+      "url": "https://www.vevo.sk/n/ako-odstranit-krvave-skvrny-z-oblecenia-kompletny-sprievodca",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-krvave-skvrny-z-oblecenia-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-detske-deky-a-zavinovacky",
+      "url": "https://www.vevo.sk/n/ako-prat-detske-deky-a-zavinovacky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-detske-deky-a-zavinovacky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-detsku-postelnu-bielizen-bez-drazdenia-pokozky",
+      "url": "https://www.vevo.sk/n/ako-prat-detsku-postelnu-bielizen-bez-drazdenia-pokozky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-detsku-postelnu-bielizen-bez-drazdenia-pokozky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-oblecenie-po-dovolenke-pri-mori",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-dovolenke-pri-mori",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-dovolenke-pri-mori",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-oblecenie-po-rybacke-alebo-turistike",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-rybacke-alebo-turistike",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-rybacke-alebo-turistike",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-plazove-pareo-satku-a-lahku-tuniku-po-dovolenke",
+      "url": "https://www.vevo.sk/n/ako-prat-plazove-pareo-satku-a-lahku-tuniku-po-dovolenke",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-plazove-pareo-satku-a-lahku-tuniku-po-dovolenke",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-plazovu-tasku-od-piesku-soli-a-opalovacieho-kremu",
+      "url": "https://www.vevo.sk/n/ako-vycistit-plazovu-tasku-od-piesku-soli-a-opalovacieho-kremu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-plazovu-tasku-od-piesku-soli-a-opalovacieho-kremu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-detsku-vyzivu-a-mrkvove-prikrmy-z-podbradnikov",
+      "url": "https://www.vevo.sk/n/ako-vyprat-detsku-vyzivu-a-mrkvove-prikrmy-z-podbradnikov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-detsku-vyzivu-a-mrkvove-prikrmy-z-podbradnikov",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-krv-z-oblecenia-obliecok-a-matraca",
+      "url": "https://www.vevo.sk/n/ako-vyprat-krv-z-oblecenia-obliecok-a-matraca",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-krv-z-oblecenia-obliecok-a-matraca",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "url": "https://www.vevo.sk/n/ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-ovocne-skvrny-z-jahod-cucoriedok-a-malin",
+      "url": "https://www.vevo.sk/n/ako-vyprat-ovocne-skvrny-z-jahod-cucoriedok-a-malin",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-ovocne-skvrny-z-jahod-cucoriedok-a-malin",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "url": "https://www.vevo.sk/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "ok": true
+    },
+    {
+      "href": "/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "existing_count": 756,
+  "results": [
+    {
+      "title": "Ako vybrať vôňu do prania na zimu: deky, svetre, šály a sezónne textílie",
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Ako prevoňať bielizeň v malej kúpeľni: vlhkosť, sušenie a jemná vôňa bez zatuchnutia",
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "status": "review",
+      "clusters": [
+        {
+          "cluster": "fragrance_general",
+          "terms": [
+            "prevonat",
+            "vona"
+          ],
+          "intent_terms": [],
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles."
+        }
+      ],
+      "issues": [
+        {
+          "type": "cluster_overlap",
+          "severity": "review",
+          "cluster": "fragrance_general",
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles.",
+          "matches": [
+            {
+              "score": 0.167,
+              "title": "Ako prevoňať posteľnú bielizeň bez ťažkej vône",
+              "link": "https://www.vevo.sk/n/ako-prevonat-postelnu-bielizen-bez-tazkej-vone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Parfum do prania pri citlivej pokožke: kedy voliť jemnú vôňu a kedy radšej bez parfumácie",
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "status": "review",
+      "clusters": [
+        {
+          "cluster": "fragrance_general",
+          "terms": [
+            "parfum"
+          ],
+          "intent_terms": [],
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles."
+        }
+      ],
+      "issues": [
+        {
+          "type": "cluster_overlap",
+          "severity": "review",
+          "cluster": "fragrance_general",
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles.",
+          "matches": [
+            {
+              "score": 0.231,
+              "title": "Parfum do prania pri uterákoch: ako zachovať savosť a vôňu",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-pri-uterakoch-ako-zachovat-savost-a-vonu"
+            },
+            {
+              "score": 0.182,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.182,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.182,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.182,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

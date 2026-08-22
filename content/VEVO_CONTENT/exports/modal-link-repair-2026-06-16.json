@@ -1,0 +1,14 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T15:57:04.897980+00:00",
+  "updated_source_count": 1,
+  "live_updates": [
+    {
+      "post_id": "2239",
+      "slug": "modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "old_href": "/n/modal-v-obleceni-co-znamena-preco-je-makky-a-ako-ho-prat",
+      "new_href": "/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "response": "event: message\r\ndata: {\"jsonrpc\":\"2.0\",\"id\":2239,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"success\\\": true,\\n  \\\"news_post\\\": {\\n    \\\"id\\\": \\\"2239\\\",\\n    \\\"title\\\": \\\"Modal vs lyocell vs visk\\\\u00f3za: ako sa l\\\\u00ed\\\\u0161ia pri pran\\\\u00ed a nosen\\\\u00ed\\\",\\n    \\\"short\\\": \\\"Modal, lyocell a visk\\\\u00f3za patria medzi regenerovan\\\\u00e9 celul\\\\u00f3zov\\\\u00e9 vl\\\\u00e1kna. L\\\\u00ed\\\\u0161ia sa pocitom, spl\\\\u00fdvavos\\\\u0165ou, citlivos\\\\u0165ou na mokro a t\\\\u00fdm, ako ich treba pra\\\\u0165.\\\",\\n    \\\"long\\\": \\\"<p><strong>R\\\\u00fdchla odpove\\\\u010f:</strong> Modal, lyocell a visk\\\\u00f3za patria medzi regenerovan\\\\u00e9 celul\\\\u00f3zov\\\\u00e9 vl\\\\u00e1kna. L\\\\u00ed\\\\u0161ia sa pocitom, spl\\\\u00fdvavos\\\\u0165ou, citlivos\\\\u0165ou na mokro a t\\\\u00fdm, ako ich treba pra\\\\u0165.</p>\\\\n<p>Okrem hlavnej odpovede rozober\\\\u00e1me aj praktick\\\\u00e9 situ\\\\u00e1cie z dom\\\\u00e1cnosti: <strong>modal vs lyocell vs visk\\\\u00f3za, modal alebo lyocell, lyocell vs visk\\\\u00f3za, modal"
+    }
+  ]
+}
