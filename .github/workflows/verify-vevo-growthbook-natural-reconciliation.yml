@@ -1,6 +1,10 @@
 name: Verify VEVO GrowthBook Natural Reconciliation
 
 on:
+  # 2026-08-23 03:40 Europe/Bratislava. The exact UTC gate below fails closed
+  # if GitHub delivers this yearless cron occurrence outside the intended run.
+  schedule:
+    - cron: '40 1 23 8 *'
   workflow_dispatch:
     inputs:
       confirm_verification:
@@ -45,12 +49,20 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Require exact read-only verification confirmation
+      - name: Require exact cloud schedule or manual read-only confirmation
         env:
+          EVENT_NAME: ${{ github.event_name }}
           CONFIRM_VERIFICATION: ${{ inputs.confirm_verification }}
         run: |
           set -euo pipefail
-          [[ "${CONFIRM_VERIFICATION}" == "true" ]]
+          if [[ "${EVENT_NAME}" == "schedule" ]]; then
+            echo 'GitHub-hosted retention-recovery schedule accepted.'
+          elif [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            [[ "${CONFIRM_VERIFICATION}" == "true" ]]
+          else
+            echo "Unsupported verifier trigger: ${EVENT_NAME}" >&2
+            exit 1
+          fi
 
       - name: Checkout exact main commit
         uses: actions/checkout@v6.0.2

@@ -21,7 +21,12 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
     def test_is_main_only_explicit_and_time_gated_before_aws(self) -> None:
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
+            "schedule:",
+            "cron: '40 1 23 8 *'",
             "confirm_verification:",
+            "EVENT_NAME: ${{ github.event_name }}",
+            "[[ \"${EVENT_NAME}\" == \"schedule\" ]]",
+            "[[ \"${CONFIRM_VERIFICATION}\" == \"true\" ]]",
             "TARGET_RUN_DUE_UTC: '2026-08-23T01:30:00Z'",
             "VERIFY_NOT_BEFORE_UTC: '2026-08-23T01:40:00Z'",
             "VERIFY_BEFORE_UTC: '2026-08-23T02:20:00Z'",
@@ -46,6 +51,27 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
         self.assertNotIn(
             "workspace.get('workspace', {}).get('recurring_schedule'", self.workflow
         )
+
+    def test_cloud_schedule_is_pc_independent_and_manual_dispatch_stays_confirmed(self) -> None:
+        schedule = self.workflow.index("cron: '40 1 23 8 *'")
+        trigger_gate = self.workflow.index(
+            "Require exact cloud schedule or manual read-only confirmation"
+        )
+        time_gate = self.workflow.index(
+            "natural retention-recovery verification is not due until"
+        )
+        credentials = self.workflow.index(
+            "Configure AWS credentials for read-only evidence"
+        )
+        self.assertLess(schedule, trigger_gate)
+        self.assertLess(trigger_gate, time_gate)
+        self.assertLess(time_gate, credentials)
+        self.assertIn(
+            "GitHub-hosted retention-recovery schedule accepted.",
+            self.workflow,
+        )
+        self.assertIn('[[ "${EVENT_NAME}" == "workflow_dispatch" ]]', self.workflow)
+        self.assertIn("Unsupported verifier trigger", self.workflow)
 
     def test_requires_full_natural_scheduler_evidence_chain(self) -> None:
         for marker in (
