@@ -1745,6 +1745,7 @@ def main() -> int:
             "reporting_core/experiment_orders.py",
             "scripts/reconcile_growthbook_facts.py",
             "scripts/run_scheduled_growthbook_reconciliation.py",
+            "scripts/summarize_growthbook_natural_task_readback.py",
             "scripts/build_growthbook_reconciliation_parameters.py",
             "scripts/audit_vevo_meta_dimensions.py",
             "scripts/build_vevo_growthbook_gtm_tag.py",

@@ -52,6 +52,7 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "cloudtrail lookup-events",
             "sqs get-queue-attributes",
             "cloudwatch describe-alarms",
+            "scripts/summarize_growthbook_natural_task_readback.py",
             "scripts/verify_growthbook_natural_reconciliation.py",
             "exactly one success and zero failures",
             "NATURAL_RUNTIME_IDENTITY_OK:",
@@ -59,6 +60,13 @@ class GrowthBookNaturalReconciliationWorkflowTests(unittest.TestCase):
             "GROWTHBOOK_NATURAL_EVIDENCE_READY:",
         ):
             self.assertIn(marker, self.workflow + (ROOT / "scripts" / "verify_growthbook_natural_reconciliation.py").read_text(encoding="utf-8"))
+        summary = self.workflow.index(
+            "scripts/summarize_growthbook_natural_task_readback.py"
+        )
+        verifier = self.workflow.index(
+            "scripts/verify_growthbook_natural_reconciliation.py"
+        )
+        self.assertLess(summary, verifier)
 
     def test_uploads_only_the_sanitized_versioned_evidence_file_after_verification(self) -> None:
         verifier = self.workflow.index("scripts/verify_growthbook_natural_reconciliation.py")
