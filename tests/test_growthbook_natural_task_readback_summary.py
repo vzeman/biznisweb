@@ -53,10 +53,30 @@ class GrowthBookNaturalTaskReadbackSummaryTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            f"NATURAL_ECS_TASK_READBACK_EXPIRED:reason=MISSING:task={TASK_ID}:raw=false:evidence=false",
+            "NATURAL_ECS_TASK_READBACK_EXPIRED:reason=MISSING:"
+            f"identifier=cluster_task_arn:task={TASK_ID}:raw=false:evidence=false",
             marker,
         )
         self.assertNotIn("secret-shaped", marker)
+
+    def test_accepts_only_exact_equivalent_missing_identifier_shapes(self) -> None:
+        identifiers = {
+            TASK_ID: "task_id",
+            (
+                "arn:aws:ecs:eu-central-1:919341186960:task/" + TASK_ID
+            ): "legacy_task_arn",
+            TASK_ARN: "cluster_task_arn",
+        }
+
+        for identifier, expected_shape in identifiers.items():
+            with self.subTest(identifier=identifier):
+                marker = self.summarize(
+                    {
+                        "tasks": [],
+                        "failures": [{"arn": identifier, "reason": "MISSING"}],
+                    }
+                )
+                self.assertIn(f"identifier={expected_shape}", marker)
 
     def test_rejects_wrong_reason_task_or_root_shape(self) -> None:
         cases = [
@@ -66,7 +86,14 @@ class GrowthBookNaturalTaskReadbackSummaryTests(unittest.TestCase):
             },
             {
                 "tasks": [],
-                "failures": [{"arn": TASK_ARN[:-1] + "b", "reason": "MISSING"}],
+                "failures": [
+                    {
+                        "arn": (
+                            "arn:aws:ecs:eu-west-1:919341186960:task/" + TASK_ID
+                        ),
+                        "reason": "MISSING",
+                    }
+                ],
             },
             {"tasks": [], "failures": [], "raw_response": {}},
         ]

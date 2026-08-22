@@ -37,6 +37,21 @@ def _object(value: Any, field: str) -> Mapping[str, Any]:
     return value
 
 
+def _missing_identifier_shape(identifier: Any, task_id: str) -> str | None:
+    shapes = {
+        task_id: "task_id",
+        (
+            "arn:aws:ecs:eu-central-1:919341186960:"
+            f"task/{task_id}"
+        ): "legacy_task_arn",
+        (
+            "arn:aws:ecs:eu-central-1:919341186960:"
+            f"task/vevo-reporting-cluster/{task_id}"
+        ): "cluster_task_arn",
+    }
+    return shapes.get(identifier)
+
+
 def summarize_task_readback(
     payload: Mapping[str, Any],
     *,
@@ -76,14 +91,19 @@ def summarize_task_readback(
         set(failure).issubset({"arn", "detail", "reason"}),
         "task read-back failure keys drift",
     )
-    _require(failure.get("arn") == expected_task_arn, "missing task ARN drift")
+    identifier_shape = _missing_identifier_shape(
+        failure.get("arn"),
+        expected_task_id,
+    )
+    _require(identifier_shape is not None, "missing task identifier drift")
     _require(
         failure.get("reason") == "MISSING",
         "task read-back failure is not MISSING",
     )
     return (
         "NATURAL_ECS_TASK_READBACK_EXPIRED:reason=MISSING:"
-        f"task={expected_task_id}:raw=false:evidence=false"
+        f"identifier={identifier_shape}:task={expected_task_id}:"
+        "raw=false:evidence=false"
     )
 
 
