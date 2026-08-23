@@ -74,8 +74,8 @@
     "container_version_id": null
   },
   "tag_assistant_qa": {
-    "status": "desktop_observed_mobile_and_zero_assignment_readback_pending",
-    "observed_at_local_date": "2026-08-23",
+    "status": "mobile_zero_assignment_and_consent_observed_collector_and_storage_pending",
+    "observed_at_local_date": "2026-08-24",
     "workspace_id": "17",
     "session_connected": true,
     "desktop_consent_cycle_observed": true,
@@ -88,11 +88,11 @@
     "add_to_cart_text_unchanged": true,
     "preexisting_cart_item_count": 2,
     "cart_mutated": false,
-    "mobile_viewport_verified": false,
-    "zero_assignment_verified": false,
+    "mobile_viewport_verified": true,
+    "zero_assignment_verified": true,
     "zero_collector_request_verified": false,
     "owned_storage_cleanup_verified": false,
-    "ga4_meta_consent_behavior_verified": false
+    "ga4_meta_consent_behavior_verified": true
   },
   "traffic": {
     "activation_allowed": false,
