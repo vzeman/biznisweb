@@ -72,9 +72,12 @@ Bootstrap entrypoints:
   - the Production collector registry now contains only the exact Preview-matched invisible A/A contract `vevo-sk-aa-001`; all four reviewed evidence preconditions are true and only `collector.deployment_allowed` is open
   - GrowthBook remains unstarted, GTM remains unpublished, Production allocation remains `0%`, CTA remains stopped, and Meta Ads/BiznisWeb/cart/checkout remain unchanged
   - collector-gate preparation passes `589` Python tests, all `9` storefront JavaScript tests, activation/workspace/security validators, Ruff, and `git diff --check`
+  - collector deploy run `32644089503` stopped before image build/deploy at the predeploy identity hard-gate because sourced stack variables were not exported to its Python verifier (`KeyError: PRODUCTION_TASK_DEFINITION_ARN`); no service, image, route, GrowthBook, GTM, Meta Ads, BiznisWeb, or traffic mutation occurred
+  - branch `codex/vevo-growthbook-aa-hard-gate-env` exports only the generated non-secret stack identity variables for that verifier and adds regression/security assertions; the deploy must be retried only after reviewed CI from the new exact `main` commit
+  - the hard-gate fix passes the full `590`-test Python suite, all `9` storefront JavaScript tests, `34` focused activation/collector/workspace tests, activation/workspace/security validators, Ruff, and `git diff --check`
   - plaintext credentials, the RSA key/certificate, local encrypted credential artifact, and GitHub artifact `9486585740` were deleted after the successful connection; the sanitized evidence JSON was retained
   - no local dev server, worker, watcher, tunnel, or Docker process was started
-  - Next exact step: merge the collector deployment gate through reviewed CI, then dispatch `Deploy VEVO GrowthBook Production A/A Collector` from the exact merged `main` commit while GrowthBook/GTM/traffic remain disabled
+  - Next exact step: merge the predeploy environment-export fix through reviewed CI, then retry `Deploy VEVO GrowthBook Production A/A Collector` from the new exact merged `main` commit while GrowthBook/GTM/traffic remain disabled
 
 - ROY daily report email delivery is disabled, deployed, and host-verified as of `2026-08-21`:
   - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`

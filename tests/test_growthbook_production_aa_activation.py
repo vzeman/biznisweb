@@ -67,6 +67,14 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertLess(credentials, image_push)
         self.assertLess(credentials, stack_update)
 
+    def test_predeploy_identity_variables_are_exported_to_python(self) -> None:
+        export_block = "set -a\n          source production-stack.env\n          set +a"
+        self.assertEqual(1, WORKFLOW.count(export_block))
+        self.assertLess(
+            WORKFLOW.index(export_block),
+            WORKFLOW.index("workspace = json.load", WORKFLOW.index(export_block)),
+        )
+
     def test_workflow_keeps_growthbook_gtm_meta_and_commerce_out_of_mutation_path(self) -> None:
         for forbidden in (
             "api.growthbook.io",

@@ -229,6 +229,7 @@ def validate_activation_handoff(
         "--phase deactivate",
         "COLLECTOR_LOCALHOST_HEALTH_OK:production",
         "COLLECTOR_LOCALHOST_MARKER_OK:/app",
+        "set -a\n          source production-stack.env\n          set +a",
         "failure() && env.ROUTE_ACTIVATED == 'true'",
         "growthbook_mutations': False",
         "gtm_mutations': False",
