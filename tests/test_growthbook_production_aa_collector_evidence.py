@@ -97,7 +97,9 @@ def evidence() -> dict[str, object]:
 
 
 def ready_state() -> tuple[dict, dict, dict]:
-    activation = copy.deepcopy(activation_validator.EXPECTED_ACTIVATION)
+    activation = copy.deepcopy(
+        activation_validator.EXPECTED_COLLECTOR_VERIFIED_ACTIVATION
+    )
     activation["status"] = "clone_verified_collector_deploy_ready"
     activation["preconditions"] = {
         "natural_reconciliation_verified": True,
