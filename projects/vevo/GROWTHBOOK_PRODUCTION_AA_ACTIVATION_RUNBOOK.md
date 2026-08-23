@@ -1,6 +1,6 @@
 # VEVO GrowthBook Production A/A activation runbook
 
-Status: collector deployment gate prepared from verified natural reconciliation, route-disabled Production foundation, Production reader, and GrowthBook clone evidence; GrowthBook, GTM, and traffic remain disabled.
+Status: Production collector deployment and public-isolation evidence verified; the route is available without storefront traffic, while GrowthBook, GTM, and Production allocation remain disabled.
 
 This runbook activates only the invisible A/A experiment `vevo-sk-aa-001`. It does not activate the CTA A/B, change a price, reorder products, edit BiznisWeb content, change Meta Ads delivery, or alter cart, checkout, payment, stock, or order behavior.
 

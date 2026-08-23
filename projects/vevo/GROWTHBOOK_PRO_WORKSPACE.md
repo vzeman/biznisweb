@@ -1,6 +1,6 @@
 # VEVO GrowthBook Pro workspace contract
 
-Status: A/A is configured and running only in staging; the unpublished Preview runtime, natural reconciliation, and same-population Meta/reporting audit are verified end to end. The route-disabled Production foundation, dedicated reader, separate GrowthBook connection, `device_id`, assignment query, two fact tables, and eight Starter-compatible metrics are verified. The Production collector registry contains only `vevo-sk-aa-001` and its deployment gate is prepared; Production allocation remains `0%`, GTM is unpublished, no Production experiment is running, and three paid-Pro p75 metrics remain pending.
+Status: A/A is configured and running only in staging; the unpublished Preview runtime, natural reconciliation, and same-population Meta/reporting audit are verified end to end. The Production foundation, dedicated reader, separate GrowthBook connection, `device_id`, assignment query, two fact tables, eight Starter-compatible metrics, collector runtime, localhost marker, healthy target, public-isolation boundary, and sanitized collector evidence are verified. The route is available without storefront traffic; Production allocation remains `0%`, GTM is unpublished, no Production experiment is running, and three paid-Pro p75 metrics remain pending.
 
 Last reviewed: 2026-08-23
 
@@ -61,7 +61,7 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 
 ## Next exact step
 
-Merge the collector deployment gate through reviewed CI, then dispatch `Deploy VEVO GrowthBook Production A/A Collector` only from the exact merged `main` commit. Do not click GTM `Submit`, start A/A/CTA, change Meta Ads, accept a paid Pro upgrade, create the three p75 metrics, repoint Preview, or move Production allocation above `0%` during the collector rollout.
+Merge the exact collector evidence through reviewed CI. Then prepare the separate Production GrowthBook SDK connection, A/A experiment, feature rule, and GTM tags only at `0%` allocation in an unpublished workspace. Do not click GTM `Submit`, start A/A/CTA, change Meta Ads, accept a paid Pro upgrade, create the three p75 metrics, repoint Preview, or send storefront traffic during zero-allocation preparation.
 
 After Production A/A has genuinely run, evaluate only the protected aggregate snapshot and require `PASS` explicitly:
 

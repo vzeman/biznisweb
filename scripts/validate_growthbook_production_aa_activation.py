@@ -25,7 +25,7 @@ EXPECTED_ACTIVATION = {
     "variations": ["control", "variant"],
     "variation_weights": [0.5, 0.5],
     "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-    "status": "clone_verified_collector_deploy_ready",
+    "status": "collector_verified_ui_preparation_ready",
     "preconditions": {
         "natural_reconciliation_verified": True,
         "route_disabled_foundation_verified": True,
@@ -36,19 +36,25 @@ EXPECTED_ACTIVATION = {
         "deployment_workflow": (
             ".github/workflows/deploy-vevo-growthbook-production-aa-collector.yml"
         ),
-        "deployment_allowed": True,
+        "deployment_allowed": False,
         "registry_entry_present": True,
-        "public_route_enabled": False,
-        "workflow_run_id": None,
-        "main_commit": None,
-        "image_digest": None,
-        "task_definition": None,
-        "host_gate_task_id": None,
-        "host_gate_private_ip": None,
+        "public_route_enabled": True,
+        "workflow_run_id": "32644408714",
+        "main_commit": "57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2",
+        "image_digest": (
+            "sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058"
+        ),
+        "task_definition": "vevo-growthbook-collector-production:2",
+        "host_gate_task_id": "53b11cab55a94f69938121ce61243015",
+        "host_gate_private_ip": "172.31.13.22",
         "service": "vevo-growthbook-collector-production",
         "runtime_path": "/app",
-        "endpoint_host_sha256": None,
-        "evidence_sha256": None,
+        "endpoint_host_sha256": (
+            "679ab80bc9487c08c6c2e6782abc4492a59cd04d920885082f38e8e6e29e95dc"
+        ),
+        "evidence_sha256": (
+            "1e156ebdd94f88f7858c0e0b2ddb443fdabe01787ee6f7d673ac80197492ab88"
+        ),
     },
     "growthbook": {
         "environment": "production",
@@ -95,7 +101,7 @@ EXPECTED_ACTIVATION = {
         "drill_status": "not_run",
         "verified_at_utc": None,
     },
-    "next_gate": "dispatch_production_aa_collector_after_review",
+    "next_gate": "prepare_growthbook_and_gtm_zero_allocation_after_review",
 }
 
 
