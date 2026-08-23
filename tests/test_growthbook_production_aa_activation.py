@@ -49,6 +49,29 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
         self.assertFalse(self.activation["traffic"]["activation_allowed"])
 
+    def test_tag_assistant_qa_remains_fail_closed_until_all_gates_pass(self) -> None:
+        qa = self.activation["tag_assistant_qa"]
+        self.assertEqual(
+            "desktop_observed_mobile_and_zero_assignment_readback_pending",
+            qa["status"],
+        )
+        self.assertTrue(qa["desktop_consent_cycle_observed"])
+        self.assertTrue(qa["original_consent_categories_restored"])
+        self.assertEqual("connected", qa["sdk_connection_status_after_grant"])
+        self.assertEqual(0, qa["console_error_count"])
+        self.assertFalse(qa["cta_class_applied"])
+        self.assertFalse(qa["cart_mutated"])
+        for pending in (
+            "mobile_viewport_verified",
+            "zero_assignment_verified",
+            "zero_collector_request_verified",
+            "owned_storage_cleanup_verified",
+            "ga4_meta_consent_behavior_verified",
+        ):
+            self.assertFalse(qa[pending])
+        self.assertFalse(self.activation["traffic"]["activation_allowed"])
+        self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
+
     def test_workflow_yaml_and_every_inline_python_block_compile(self) -> None:
         payload = yaml.safe_load(WORKFLOW)
         self.assertIsInstance(payload, dict)

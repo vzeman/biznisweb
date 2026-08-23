@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "activation_type": "vevo_growthbook_production_aa",
   "tracking_key": "vevo-sk-aa-001",
   "feature_key": "vevo-sk-aa-assignment",
@@ -12,7 +12,7 @@
     0.5
   ],
   "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-  "status": "growthbook_gtm_zero_allocation_prepared",
+  "status": "tag_assistant_qa_in_progress",
   "preconditions": {
     "natural_reconciliation_verified": true,
     "route_disabled_foundation_verified": true,
@@ -73,6 +73,27 @@
     "publish_status": "not_published",
     "container_version_id": null
   },
+  "tag_assistant_qa": {
+    "status": "desktop_observed_mobile_and_zero_assignment_readback_pending",
+    "observed_at_local_date": "2026-08-23",
+    "workspace_id": "17",
+    "session_connected": true,
+    "desktop_consent_cycle_observed": true,
+    "original_consent_categories_restored": true,
+    "sdk_connection_status_after_grant": "connected",
+    "experiment_status_after_grant": "draft_not_started",
+    "console_error_count": 0,
+    "product_path": "/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+    "cta_class_applied": false,
+    "add_to_cart_text_unchanged": true,
+    "preexisting_cart_item_count": 2,
+    "cart_mutated": false,
+    "mobile_viewport_verified": false,
+    "zero_assignment_verified": false,
+    "zero_collector_request_verified": false,
+    "owned_storage_cleanup_verified": false,
+    "ga4_meta_consent_behavior_verified": false
+  },
   "traffic": {
     "activation_allowed": false,
     "production_allocation_percent": 0,
@@ -96,5 +117,5 @@
     "drill_status": "not_run",
     "verified_at_utc": null
   },
-  "next_gate": "run_tag_assistant_zero_traffic_qa_after_review"
+  "next_gate": "complete_tag_assistant_zero_traffic_qa"
 }
