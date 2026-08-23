@@ -76,7 +76,7 @@ def _natural_evidence() -> dict[str, object]:
     )
 
 
-def _reader_ready_workspace() -> dict[str, object]:
+def _foundation_ready_workspace() -> dict[str, object]:
     workspace = pending_natural_evidence_workspace(
         json.loads(workspace_validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
     )
@@ -110,6 +110,14 @@ def _reader_ready_workspace() -> dict[str, object]:
         expected_workflow_run_id=FOUNDATION_RUN_ID,
         expected_main_commit=FOUNDATION_MAIN_COMMIT,
     )
+    return workspace
+
+
+def _reader_ready_workspace() -> dict[str, object]:
+    workspace = _foundation_ready_workspace()
+    foundation_sha = workspace["athena"]["production"][
+        "foundation_evidence_artifact_sha256"
+    ]
     reader = build_reader_evidence(
         verified_at=datetime(2026, 8, 22, 4, 0, tzinfo=timezone.utc),
         workflow_run_id=READER_RUN_ID,
@@ -193,9 +201,7 @@ class GrowthBookProductionCloneEvidenceRecorderTests(unittest.TestCase):
             self.assertNotIn(forbidden, serialized)
 
     def test_builder_is_hard_disabled_before_reader_evidence(self) -> None:
-        pending = json.loads(
-            workspace_validator.WORKSPACE_PATH.read_text(encoding="utf-8")
-        )
+        pending = _foundation_ready_workspace()
         with self.assertRaisesRegex(CloneEvidenceRecordingError, "reader provenance"):
             build_clone_observation(
                 pending,

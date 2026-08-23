@@ -1421,22 +1421,31 @@ def main() -> int:
         production_reader_state = growthbook_workspace_config.get("athena", {}).get(
             "production", {}
         )
+        recorded_reader = production_reader_state.get("successful_reader_provisioning")
         if (
-            production_reader_state.get("reader_evidence_artifact_status")
-            != "code_prepared_provisioning_pending"
+            production_reader_state.get("credentials_created") is not True
+            or production_reader_state.get("reader_provisioning_status")
+            != "verified_active_encrypted_handoff_ready_for_growthbook"
+            or production_reader_state.get("reader_provisioning_allowed") is not False
+            or production_reader_state.get("reader_evidence_artifact_status")
+            != "verified_downloaded_sha256_recorded"
             or production_reader_state.get("reader_evidence_contains_credentials") is not False
-            or any(
-                production_reader_state.get(field) is not None
-                for field in (
-                    "reader_provisioning_run_id",
-                    "reader_provisioning_main_commit",
-                    "reader_evidence_artifact_sha256",
-                    "successful_reader_provisioning",
-                )
-            )
+            or production_reader_state.get("reader_provisioning_run_id") != "32614706434"
+            or production_reader_state.get("reader_provisioning_main_commit")
+            != "79f1eb4b1b29bb65efbdbe310b0033e1a5a1f594"
+            or production_reader_state.get("reader_evidence_artifact_sha256")
+            != "1715f2b41a1bfd1d58524bdbad8369afc63b76a30d145f959a9cc742370b01d7"
+            or not isinstance(recorded_reader, dict)
+            or recorded_reader.get("workflow_run_id") != "32614706434"
+            or recorded_reader.get("main_commit")
+            != "79f1eb4b1b29bb65efbdbe310b0033e1a5a1f594"
+            or recorded_reader.get("safety", {}).get("contains_plaintext_credentials")
+            is not False
+            or recorded_reader.get("safety", {}).get("contains_access_key_id") is not False
+            or recorded_reader.get("safety", {}).get("contains_secret_access_key") is not False
         ):
             raise AssertionError(
-                "GrowthBook Production reader evidence must remain pending in source control."
+                "GrowthBook Production reader evidence must remain exact and secret-free in source control."
             )
         for forbidden_production_clone_recorder_marker in (
             "import boto3",
@@ -1475,14 +1484,14 @@ def main() -> int:
                 f"{marker}",
             )
         for marker in (
-            "Status: prepared, hard-disabled",
+            "Status: Production foundation and reader evidence verified; reviewed UI clone allowed but not started",
             "vevo-growthbook-production-reader",
             "Production allocation is `0%`",
             "Preview connection repointing is forbidden",
             "Do not create the three p75 Quantile metrics",
             "record_growthbook_production_clone_evidence.py build",
             "record_growthbook_production_clone_evidence.py record",
-            "Browser entry of these credentials requires a separate action-time confirmation",
+            "Browser entry of these credentials requires explicit action-time confirmation",
             "do not automatically delete or repoint anything",
         ):
             require(
@@ -1493,8 +1502,8 @@ def main() -> int:
         production_clone_state = production_reader_state.get("growthbook_clone", {})
         if (
             production_clone_state.get("status")
-            != "code_prepared_foundation_reader_gate_pending"
-            or production_clone_state.get("clone_allowed") is not False
+            != "reader_verified_ready_for_reviewed_growthbook_clone"
+            or production_clone_state.get("clone_allowed") is not True
             or production_clone_state.get("mutation_status") != "not_started"
             or production_clone_state.get("observation_status") != "not_recorded"
             or production_clone_state.get("observation_sha256") is not None
@@ -1507,7 +1516,7 @@ def main() -> int:
             )
         ):
             raise AssertionError(
-                "GrowthBook Production clone evidence must remain pending in source control."
+                "GrowthBook Production clone must remain reader-ready and unexecuted in source control."
             )
         forbid(
             growthbook_template,
