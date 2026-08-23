@@ -89,6 +89,9 @@ def main() -> int:
         growthbook_production_foundation_workflow = read(
             ".github/workflows/deploy-vevo-growthbook-production-foundation.yml"
         )
+        growthbook_host_gate_runtime_resolver = read(
+            "scripts/resolve_growthbook_host_gate_runtime.py"
+        )
         growthbook_production_foundation_recorder = read(
             "scripts/record_growthbook_foundation_evidence.py"
         )
@@ -852,6 +855,9 @@ def main() -> int:
             "PREVIEW_RUNTIME_IDENTITY_OK:",
             "PLANNED_PRODUCTION_IDENTITY:",
             "PREDEPLOY_PRODUCTION_MODE_HARD_GATE_OK:",
+            "scripts/resolve_growthbook_host_gate_runtime.py",
+            "--expected-log-prefix collector",
+            "--expected-private-cidr 172.31.0.0/16",
             "--change-set-type CREATE",
             "--phase production-foundation",
             "'PublicRouteEnabled': 'false'",
@@ -869,6 +875,19 @@ def main() -> int:
                 growthbook_production_foundation_workflow,
                 marker,
                 f"GrowthBook Production foundation workflow lost safety marker: {marker}",
+            )
+        for marker in (
+            "optional_absent_taskdef_bound",
+            "host-gate ECS log stream contradicts task definition",
+            "task.get(\"clusterArn\") == expected_cluster_arn",
+            "container.get(\"imageDigest\") == expected_image_digest",
+            "private_ip in private_network",
+            "raw=false",
+        ):
+            require(
+                growthbook_host_gate_runtime_resolver,
+                marker,
+                f"GrowthBook host-gate resolver lost safety marker: {marker}",
             )
         for forbidden_action in (
             "--change-set-type update",
