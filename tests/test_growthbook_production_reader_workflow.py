@@ -49,6 +49,9 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
 
     def test_confirms_exact_route_disabled_runtime_before_iam_creation(self) -> None:
         service_gate = self.workflow.index("PRODUCTION_READER_SERVICE_IDENTITY_OK:")
+        bucket_summary = self.workflow.index(
+            "python scripts/summarize_growthbook_foundation_bucket.py"
+        )
         host_gate = self.workflow.index(
             "PRODUCTION_READER_PREPROVISION_HARD_GATE_OK:", service_gate
         )
@@ -62,12 +65,51 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
             "Production public collector endpoint must not exist",
             "Production API unexpectedly has a route",
             "Production experiment bucket is not empty",
+            "scripts/summarize_growthbook_foundation_bucket.py",
+            "s3api list-multipart-uploads",
+            "Production experiment bucket has incomplete multipart uploads",
+            "scripts/resolve_growthbook_host_gate_runtime.py",
+            "--expected-private-cidr 172.31.0.0/16",
+            "log-stream-source=${PRODUCTION_READER_HOST_LOG_STREAM_SOURCE}",
             "COLLECTOR_LOCALHOST_HEALTH_OK:production:",
             "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:",
         ):
             self.assertIn(marker, self.workflow)
+        self.assertNotIn("bucket.get('KeyCount') != 0", self.workflow)
+        self.assertLess(bucket_summary, service_gate)
         self.assertLess(service_gate, host_gate)
         self.assertLess(host_gate, create_user)
+
+    def test_iam_absence_is_proven_fail_closed_twice_before_creation(self) -> None:
+        pre_host = self.workflow.index(
+            "PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-host:"
+        )
+        host_gate = self.workflow.index("PRODUCTION_READER_PREPROVISION_HARD_GATE_OK:")
+        pre_create = self.workflow.index(
+            "PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-create:"
+        )
+        create_user = self.workflow.index("aws iam create-user")
+        for marker in (
+            "production-reader-user-preprovision.err",
+            "production-reader-user-final-check.err",
+            '[[ "${READER_LOOKUP_STATUS}" -ne 254 ]]',
+            "grep -Fq 'NoSuchEntity'",
+            "Production GrowthBook reader absence could not be proven before host gate.",
+            "Production GrowthBook reader absence could not be proven immediately before creation.",
+            "PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-host:",
+            "PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-create:",
+        ):
+            self.assertIn(marker, self.workflow)
+        self.assertEqual(2, self.workflow.count("READER_LOOKUP_STATUS=$?"))
+        self.assertEqual(2, self.workflow.count("grep -Fq 'NoSuchEntity'"))
+        self.assertEqual(2, self.workflow.count('[[ "${READER_LOOKUP_STATUS}" -ne 254 ]]'))
+        self.assertNotIn(
+            'if aws iam get-user --user-name "${IAM_USER_NAME}" >/dev/null 2>&1;',
+            self.workflow,
+        )
+        self.assertLess(pre_host, host_gate)
+        self.assertLess(host_gate, pre_create)
+        self.assertLess(pre_create, create_user)
 
     def test_provisions_only_one_separate_least_privilege_reader(self) -> None:
         for marker in (
@@ -127,6 +169,18 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.workflow)
 
+    def test_failure_cleanup_can_revoke_only_an_identity_created_by_this_run(self) -> None:
+        cleanup_start = self.workflow.index("cleanup_failed_provision() {")
+        cleanup_end = self.workflow.index("trap cleanup_failed_provision ERR", cleanup_start)
+        cleanup = self.workflow[cleanup_start:cleanup_end]
+        marker_guard = cleanup.index('if [[ -f "${CREATED_MARKER}" ]]')
+        delete_key = cleanup.index("aws iam delete-access-key", marker_guard)
+        detach_policy = cleanup.index("aws iam detach-user-policy", delete_key)
+        delete_user = cleanup.index("aws iam delete-user", detach_policy)
+        self.assertLess(marker_guard, delete_key)
+        self.assertLess(delete_key, detach_policy)
+        self.assertLess(detach_policy, delete_user)
+
     def test_does_not_mutate_growthbook_gtm_meta_biznisweb_or_foundation(self) -> None:
         lowered = self.workflow.lower()
         for forbidden in (
@@ -165,7 +219,7 @@ class GrowthBookProductionReaderWorkflowTests(unittest.TestCase):
             self.assertLess(index, len(lines), "unterminated inline Python block")
             blocks.append(textwrap.dedent("\n".join(body)))
             index += 1
-        self.assertGreaterEqual(len(blocks), 7)
+        self.assertGreaterEqual(len(blocks), 6)
         for block_index, source in enumerate(blocks):
             compile(source, f"production-reader-inline-{block_index}.py", "exec")
 

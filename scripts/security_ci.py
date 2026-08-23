@@ -1251,6 +1251,16 @@ def main() -> int:
             "parameters.get('PublicRouteEnabled') != 'false'",
             "PRODUCTION_READER_SERVICE_IDENTITY_OK:",
             "PRODUCTION_READER_PREPROVISION_HARD_GATE_OK:",
+            "scripts/summarize_growthbook_foundation_bucket.py",
+            "s3api list-multipart-uploads",
+            "Production experiment bucket has incomplete multipart uploads",
+            "scripts/resolve_growthbook_host_gate_runtime.py",
+            "--expected-private-cidr 172.31.0.0/16",
+            "log-stream-source=${PRODUCTION_READER_HOST_LOG_STREAM_SOURCE}",
+            "Production GrowthBook reader absence could not be proven before host gate.",
+            "Production GrowthBook reader absence could not be proven immediately before creation.",
+            "PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-host:",
+            "PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-create:",
             "COLLECTOR_LOCALHOST_HEALTH_OK:production:",
             "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:",
             "if not set(resources) <= allowed_resources:",
@@ -1316,6 +1326,23 @@ def main() -> int:
             raise AssertionError(
                 "GrowthBook Production reader local release gate must precede AWS credentials."
             )
+        cleanup_start = growthbook_production_reader_workflow.index(
+            "cleanup_failed_provision() {"
+        )
+        cleanup_end = growthbook_production_reader_workflow.index(
+            "trap cleanup_failed_provision ERR", cleanup_start
+        )
+        cleanup_block = growthbook_production_reader_workflow[cleanup_start:cleanup_end]
+        marker_guard = cleanup_block.index('if [[ -f "${CREATED_MARKER}" ]]')
+        for cleanup_action in (
+            "aws iam delete-access-key",
+            "aws iam detach-user-policy",
+            "aws iam delete-user",
+        ):
+            if cleanup_block.index(cleanup_action) <= marker_guard:
+                raise AssertionError(
+                    "Production reader cleanup can revoke only an identity created by this run."
+                )
         for stateful_workflow in (
             growthbook_natural_reconciliation_workflow,
             growthbook_production_foundation_workflow,
