@@ -79,9 +79,11 @@ Bootstrap entrypoints:
   - the downloaded artifact is schema-valid and secret-free but uses deterministic compact JSON from the workflow while the offline recorder requires the shared pretty canonical encoding; its exact raw SHA-256 is `1e156ebdd94f88f7858c0e0b2ddb443fdabe01787ee6f7d673ac80197492ab88`, and no manifest field was recorded after the fail-closed rejection
   - branch `codex/vevo-growthbook-aa-evidence-format-recovery` changes future artifacts to the shared canonical format and permits the compact form only for the exact run `32644408714`, main commit `57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2`, and pinned raw SHA-256; other compact artifacts remain rejected
   - evidence-format recovery passes the full `591`-test Python suite, all `9` storefront JavaScript tests, `35` focused collector/activation/workspace tests, activation/workspace/security validators, Ruff, `git diff --check`, and an offline dry-run against the exact downloaded artifact
+  - the exact downloaded artifact is now recorded in `growthbook_production_aa_activation.json`: deploy gate closed, route verified active, workflow run `32644408714`, main commit `57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2`, task definition `vevo-growthbook-collector-production:2`, host-gate task/IP, immutable image digest, endpoint-host hash, and evidence SHA-256 are bound; GrowthBook/GTM/traffic remain disabled
+  - the local temporary artifact download and recorder dry-run output were deleted after the exact hash/run/commit boundary was recorded; the sanitized GitHub artifact `9494569621` remains retained until `2026-09-06`
   - plaintext credentials, the RSA key/certificate, local encrypted credential artifact, and GitHub artifact `9486585740` were deleted after the successful connection; the sanitized evidence JSON was retained
   - no local dev server, worker, watcher, tunnel, or Docker process was started
-  - Next exact step: merge the pinned evidence-format recovery through reviewed CI, then record the exact downloaded run `32644408714` artifact and SHA-256 through the offline recorder while GrowthBook/GTM/traffic remain disabled
+  - Next exact step: merge the exact collector evidence through reviewed CI, then prepare the separate Production GrowthBook SDK/A/A/GTM objects only at `0%` in the unpublished GTM workspace; do not publish or start traffic
 
 - ROY daily report email delivery is disabled, deployed, and host-verified as of `2026-08-21`:
   - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`

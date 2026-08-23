@@ -107,6 +107,18 @@ def ready_state() -> tuple[dict, dict, dict]:
     }
     activation["collector"]["deployment_allowed"] = True
     activation["collector"]["registry_entry_present"] = True
+    activation["collector"]["public_route_enabled"] = False
+    for key in (
+        "workflow_run_id",
+        "main_commit",
+        "image_digest",
+        "task_definition",
+        "host_gate_task_id",
+        "host_gate_private_ip",
+        "endpoint_host_sha256",
+        "evidence_sha256",
+    ):
+        activation["collector"][key] = None
     activation["growthbook"]["data_source_id"] = "ds_Production123"
     activation["next_gate"] = "dispatch_production_aa_collector_after_review"
 

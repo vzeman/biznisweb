@@ -12,7 +12,7 @@
     0.5
   ],
   "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-  "status": "clone_verified_collector_deploy_ready",
+  "status": "collector_verified_ui_preparation_ready",
   "preconditions": {
     "natural_reconciliation_verified": true,
     "route_disabled_foundation_verified": true,
@@ -21,19 +21,19 @@
   },
   "collector": {
     "deployment_workflow": ".github/workflows/deploy-vevo-growthbook-production-aa-collector.yml",
-    "deployment_allowed": true,
+    "deployment_allowed": false,
     "registry_entry_present": true,
-    "public_route_enabled": false,
-    "workflow_run_id": null,
-    "main_commit": null,
-    "image_digest": null,
-    "task_definition": null,
-    "host_gate_task_id": null,
-    "host_gate_private_ip": null,
+    "public_route_enabled": true,
+    "workflow_run_id": "32644408714",
+    "main_commit": "57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2",
+    "image_digest": "sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058",
+    "task_definition": "vevo-growthbook-collector-production:2",
+    "host_gate_task_id": "53b11cab55a94f69938121ce61243015",
+    "host_gate_private_ip": "172.31.13.22",
     "service": "vevo-growthbook-collector-production",
     "runtime_path": "/app",
-    "endpoint_host_sha256": null,
-    "evidence_sha256": null
+    "endpoint_host_sha256": "679ab80bc9487c08c6c2e6782abc4492a59cd04d920885082f38e8e6e29e95dc",
+    "evidence_sha256": "1e156ebdd94f88f7858c0e0b2ddb443fdabe01787ee6f7d673ac80197492ab88"
   },
   "growthbook": {
     "environment": "production",
@@ -80,5 +80,5 @@
     "drill_status": "not_run",
     "verified_at_utc": null
   },
-  "next_gate": "dispatch_production_aa_collector_after_review"
+  "next_gate": "prepare_growthbook_and_gtm_zero_allocation_after_review"
 }

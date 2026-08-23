@@ -27,7 +27,7 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         self.registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
 
-    def test_checked_in_handoff_is_collector_ready_and_traffic_disabled(self) -> None:
+    def test_checked_in_handoff_is_collector_verified_and_traffic_disabled(self) -> None:
         validator.validate_activation_handoff(
             self.activation,
             self.workspace,
@@ -95,14 +95,14 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
 
     def test_status_only_activation_is_rejected(self) -> None:
         altered = copy.deepcopy(self.activation)
-        altered["status"] = "prepared_hard_disabled_clone_gate_pending"
+        altered["status"] = "clone_verified_collector_deploy_ready"
         with self.assertRaisesRegex(AssertionError, "reviewed collector deployment gate"):
             validator.validate_activation_handoff(altered, self.workspace, self.registry)
 
     def test_any_unreviewed_gate_change_is_rejected(self) -> None:
         for path, value in (
-            (("collector", "deployment_allowed"), False),
-            (("collector", "public_route_enabled"), True),
+            (("collector", "deployment_allowed"), True),
+            (("collector", "public_route_enabled"), False),
             (("traffic", "activation_allowed"), True),
             (("traffic", "cta_experiment_started"), True),
         ):
