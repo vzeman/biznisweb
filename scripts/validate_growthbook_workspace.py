@@ -1230,6 +1230,21 @@ def validate() -> None:
         try:
             validate_clone_observation(clone_observation, workspace)
         except (CloneEvidenceRecordingError, TypeError) as exc:
+            cm1_metric = next(
+                (
+                    row
+                    for row in workspace.get("metrics", [])
+                    if isinstance(row, dict)
+                    and row.get("key") == "vevo_cm1_per_exposed_device_7d"
+                ),
+                {},
+            )
+            if cm1_metric.get("metric_contract_version") != reporting.get(
+                "metric_contract_version"
+            ):
+                raise AssertionError(
+                    "GrowthBook and reporting CM1 contracts differ"
+                ) from exc
             raise AssertionError(
                 "GrowthBook clone observation validation failed"
             ) from exc

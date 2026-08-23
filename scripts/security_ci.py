@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import py_compile
@@ -118,6 +119,18 @@ def main() -> int:
         )
         growthbook_production_clone_runbook = read(
             "projects/vevo/GROWTHBOOK_PRODUCTION_CLONE_RUNBOOK.md"
+        )
+        growthbook_production_clone_observation_bytes = (
+            ROOT
+            / "projects"
+            / "vevo"
+            / "vevo-growthbook-production-clone-observation.json"
+        ).read_bytes()
+        normalized_growthbook_production_clone_observation_bytes = (
+            growthbook_production_clone_observation_bytes.replace(b"\r\n", b"\n")
+        )
+        growthbook_production_clone_observation = json.loads(
+            growthbook_production_clone_observation_bytes
         )
         growthbook_production_device_outcomes_sql = read(
             "projects/vevo/growthbook_sql/device_outcomes_production.sql"
@@ -1490,7 +1503,7 @@ def main() -> int:
                 f"{marker}",
             )
         for marker in (
-            "Status: Production foundation and reader evidence verified; UI clone in progress with a reviewed schema-probe recovery required before fact-table completion",
+            "Status: Production clone verified complete; Production A/A activation remains a separate reviewed gate",
             "vevo-growthbook-production-reader",
             "Production allocation is `0%`",
             "Preview connection repointing is forbidden",
@@ -1524,21 +1537,41 @@ def main() -> int:
         production_clone_state = production_reader_state.get("growthbook_clone", {})
         if (
             production_clone_state.get("status")
-            != "reader_verified_ready_for_reviewed_growthbook_clone"
-            or production_clone_state.get("clone_allowed") is not True
-            or production_clone_state.get("mutation_status") != "not_started"
-            or production_clone_state.get("observation_status") != "not_recorded"
-            or production_clone_state.get("observation_sha256") is not None
-            or production_clone_state.get("successful_clone_verification") is not None
-            or production_clone_state.get("target_data_source_id") is not None
-            or any(
-                value is not None
-                for group in ("target_fact_table_ids", "target_metric_ids")
-                for value in (production_clone_state.get(group) or {}).values()
-            )
+            != "verified_complete"
+            or production_clone_state.get("clone_allowed") is not False
+            or production_clone_state.get("mutation_status")
+            != "created_and_query_verified"
+            or production_clone_state.get("observation_status")
+            != "verified_canonical_sha256_recorded"
+            or production_clone_state.get("observation_sha256")
+            != "b2f96b7047321f11da4f00c7886c4b9422d7759428534f8fd5534ee1299f2030"
+            or hashlib.sha256(
+                normalized_growthbook_production_clone_observation_bytes
+            ).hexdigest()
+            != production_clone_state.get("observation_sha256")
+            or production_clone_state.get("successful_clone_verification")
+            != growthbook_production_clone_observation
+            or production_clone_state.get("target_data_source_id")
+            != "ds_19g6mmt5stlp6"
+            or production_clone_state.get("target_fact_table_ids")
+            != {
+                "vevo_device_outcomes_v1": "ftb_19g6mmt5tg48t",
+                "vevo_performance_vitals_v1": "ftb_19g6lmt5ueyhu",
+            }
+            or production_clone_state.get("target_metric_ids")
+            != {
+                "vevo_add_to_cart_24h": "fact__2CeKm6X4Ez3PK8cRiuiKCL",
+                "vevo_purchase_conversion_7d": "fact__2CeKm9AKQS2TwG6zRP2qBh",
+                "vevo_revenue_per_exposed_device_7d": "fact__2CeKmFKftMtEguy95LunK5",
+                "vevo_cm1_per_exposed_device_7d": "fact__2CeKmHDNgQ79FAHCSdZbU7",
+                "vevo_average_order_value_7d": "fact__2CeKmKu3wGQyMM3eGPzSrE",
+                "vevo_cancelled_order_rate_14d": "fact__2CeKmPJ6cGJsgkMnNvWgcn",
+                "vevo_refunded_order_rate_14d": "fact__2CeKmSCrBNLu3xJXCT3zaf",
+                "vevo_client_error_device_rate_24h": "fact__2CeKmUx5FqfRes5CGS6WAH",
+            }
         ):
             raise AssertionError(
-                "GrowthBook Production clone must remain reader-ready and unexecuted in source control."
+                "GrowthBook Production clone evidence must remain exact, canonical, and traffic-disabled."
             )
         forbid(
             growthbook_template,
