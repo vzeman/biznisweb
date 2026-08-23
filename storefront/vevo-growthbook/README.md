@@ -1,10 +1,11 @@
 # VEVO GrowthBook storefront integration
 
-Status: versioned Preview implementation only. Nothing in this directory has been published to GTM, BiznisWeb, GrowthBook, or AWS.
+Status: versioned Preview implementation plus a reviewed, build-time-only Production gate. The committed client remains Production-disabled. Nothing in this directory is itself published to GTM or BiznisWeb.
 
 ## Safety properties
 
 - The client is inert on non-Slovak or non-`www.vevo.sk` pages, before analytical consent, with malformed config, when the SDK/payload fails, and for Production. `PRODUCTION_ACTIVATION` remains `false` in source.
+- A Production artifact can be generated only from `config.production.example.json`, with `enableDevMode=false`, a task-scoped Production SDK key, and a collector hostname whose SHA-256 matches the reviewed activation evidence. The builder changes the single compile-time marker only in the temporary artifact; committed source remains disabled.
 - Analytical consent is read from BiznisWeb's public runtime bitmask: `FloxSettings.options.consent & FloxSettings.options.ANALYTIC`. The client also reacts to the existing `cookie_consent` data-layer event through the small bridge tag.
 - No identifier, SDK, feature fetch, exposure, Meta dimension, or experiment storage is created before analytical consent. Withdrawal restores the CTA control class and deletes only `vevo_exp_*` / `vevo_gb_*` storage owned by this integration.
 - The GrowthBook SDK is pinned to `@growthbook/growthbook@1.7.0` and loaded from the documented jsDelivr bundle with SHA-384 SRI. The manual bundle is used instead of `auto.min.js`, preventing GrowthBook's automatic GA4/GTM exposure forwarding and keeping the PII-free collector as the one exposure source.
@@ -46,6 +47,18 @@ python scripts/build_vevo_growthbook_gtm_tag.py --config storefront/vevo-growthb
    - `add_to_cart` → `gtm-add-to-cart-bridge.html`;
    - `purchase` → `gtm-purchase-bridge.html`.
 6. During Preview, `window.VevoGrowthBook.getState()` exposes only status, page type, client version, and assigned variation keys; it does not expose the device ID or any order/customer value.
+
+## Reproducible GTM Production draft artifact
+
+1. Use only the separately reviewed `config.production.example.json`. Pass the actual Production SDK key and collector endpoint through `VEVO_GROWTHBOOK_PRODUCTION_CLIENT_KEY` and `VEVO_GROWTHBOOK_PRODUCTION_COLLECTOR_URL`. Never create or commit a filled config file.
+2. Build outside the repository from the exact reviewed `main` commit. The builder rejects Preview dev mode, non-Production config, a non-`eu-central-1` API Gateway host, or a collector hostname that does not match `growthbook_production_aa_activation.json`.
+
+```text
+python scripts/build_vevo_growthbook_gtm_tag.py --config storefront/vevo-growthbook/config.production.example.json --output <temporary-generated-production-tag.html>
+```
+
+3. Record only the printed SHA-256 and GTM object IDs. Paste the artifact unchanged into the isolated GTM workspace, keep the loader and three Production bridge tags unpublished, and delete the temporary artifact immediately after read-back verification. The SDK key must never enter Git, activation evidence, screenshots, or task output.
+4. The temporary artifact changes the single `PRODUCTION_ACTIVATION` marker to `true`; the committed storefront source must remain `false`. GrowthBook Production stays at `0%` until the separate activation phase.
 
 ## Preview acceptance before any publish
 

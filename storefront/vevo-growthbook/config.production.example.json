@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "environment": "production",
+  "clientKey": "sdk-REPLACE_WITH_PRODUCTION_CLIENT_KEY",
+  "apiHost": "https://cdn.growthbook.io",
+  "collectorUrl": "https://REPLACE_WITH_PRODUCTION_COLLECTOR.execute-api.eu-central-1.amazonaws.com/v1/events",
+  "allowedHost": "www.vevo.sk",
+  "gtmContainerId": "GTM-5ZB5LFGB",
+  "enableDevMode": false
+}

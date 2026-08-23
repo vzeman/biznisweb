@@ -41,9 +41,48 @@ class VevoGrowthBookGtmBuilderTests(unittest.TestCase):
         self.assertIn('credentials: "omit"', artifact)
         self.assertNotIn("auto.min.js", artifact)
 
-    def test_rejects_non_preview_or_non_allowlisted_configuration(self):
+    def test_builds_production_only_with_reviewed_collector_host(self):
+        production = dict(self.config)
+        production.update(
+            {
+                "environment": "production",
+                "clientKey": "sdk-production12345678",
+                "collectorUrl": (
+                    "https://prod123.execute-api.eu-central-1.amazonaws.com/v1/events"
+                ),
+                "enableDevMode": False,
+            }
+        )
+        config_path = self.root / "production.json"
+        output_path = self.root / "production-tag.html"
+        config_path.write_text(json.dumps(production), encoding="utf-8")
+        expected_host_digest = hashlib.sha256(
+            b"prod123.execute-api.eu-central-1.amazonaws.com"
+        ).hexdigest()
+
+        digest = build_tag(
+            config_path,
+            output_path,
+            expected_production_collector_host_sha256=expected_host_digest,
+        )
+        artifact = output_path.read_text(encoding="utf-8")
+
+        self.assertEqual(hashlib.sha256(artifact.encode("utf-8")).hexdigest(), digest)
+        self.assertIn('"environment":"production"', artifact)
+        self.assertIn('"enableDevMode":false', artifact)
+        self.assertIn("var PRODUCTION_ACTIVATION = true;", artifact)
+        self.assertNotIn("var PRODUCTION_ACTIVATION = false;", artifact)
+
+        with self.assertRaisesRegex(ValueError, "reviewed evidence"):
+            build_tag(
+                config_path,
+                output_path,
+                expected_production_collector_host_sha256="0" * 64,
+            )
+
+    def test_rejects_unknown_environment_or_non_allowlisted_configuration(self):
         invalid_overrides = [
-            {"environment": "production"},
+            {"environment": "unknown"},
             {"collectorUrl": "https://example.com/v1/events"},
             {"collectorUrl": "https://abc123.execute-api.eu-west-1.amazonaws.com/v1/events"},
             {"collectorUrl": "https://abc123.execute-api.eu-central-1.amazonaws.com:444/v1/events"},
@@ -60,6 +99,16 @@ class VevoGrowthBookGtmBuilderTests(unittest.TestCase):
                 payload.update(overrides)
                 with self.assertRaises(ValueError):
                     validate_config(payload)
+
+        production_dev_mode = dict(self.config)
+        production_dev_mode.update(
+            {
+                "environment": "production",
+                "enableDevMode": True,
+            }
+        )
+        with self.assertRaises(ValueError):
+            validate_config(production_dev_mode)
 
         extra = dict(self.config)
         extra["unexpected"] = "field"

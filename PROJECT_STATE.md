@@ -5391,3 +5391,21 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - scheduler `vevo-daily-report-email` was promoted to task definition `:30`; authenticated App Runner production-board and VEVO accounting gates passed on the exact image digest, followed by `APP_RUNNER_DEPLOY_OK`
 - Next exact step:
   - collect 14 days of orders under the new two-Shot exact label, then compare units, AOV, contribution profit, orders above the free-shipping threshold, and cannibalization against the immediately preceding matched-weekday window
+
+# 2026-08-23 — VEVO GrowthBook Production zero-allocation UI preparation
+
+- GrowthBook external state created and reloaded one object at a time:
+  - separate Production JavaScript SDK connection `sdk_19g6lmt5wnngy`, version `1.7.0`, project `VEVO SK Web`, environment `production`, API host `https://cdn.growthbook.io`; the task-scoped client key was not recorded
+  - Production A/A draft `exp_19g6mmt5wugpk` with tracking key `vevo-sk-aa-001`, assignment attribute `id`, `control`/`variant` at `50/50`, Production source `ds_19g6mmt5stlp6`, exact one goal/six secondary/one guardrail Production metrics, Bayesian statistics, and no activation metric
+  - feature `vevo-sk-aa-assignment` live revision `2` remains Production-disabled and staging-enabled; draft revision `3` contains the new Production-only experiment rule but is unpublished
+- Safety read-back:
+  - Production experiment status is `Draft`; it was not started
+  - Production SDK reports `Not connected`; no GTM loader points to it
+  - Production live allocation remains `0%`; Preview/staging remains on live revision `2`; CTA stays draft/stopped
+  - no GTM publish, Meta Ads mutation, BiznisWeb mutation, price/cart/checkout/order change, or paid upgrade occurred
+- Implementation gate opened on `codex/vevo-growthbook-production-ui-gate`:
+  - the committed storefront remains compile-time Production-disabled
+  - the reproducible builder can produce a temporary Production artifact only with dev mode off and an API Gateway hostname matching the reviewed collector evidence hash
+  - SDK key and collector URL remain task-scoped environment inputs and are never committed
+- Next exact step:
+  - merge the reviewed Production builder, generate the exact temporary artifact from that `main` commit, create four new unpublished Production GTM tags in workspace `16`, read back their IDs, delete the artifact, and record only the tag IDs and SHA-256

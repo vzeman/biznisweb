@@ -173,6 +173,9 @@ def main() -> int:
         growthbook_preview_config = json.loads(
             read("storefront/vevo-growthbook/config.preview.example.json")
         )
+        growthbook_production_config = json.loads(
+            read("storefront/vevo-growthbook/config.production.example.json")
+        )
         gitleaks_ignore_entries = {
             line.strip()
             for line in read(".gitleaksignore").splitlines()
@@ -495,13 +498,34 @@ def main() -> int:
                 forbidden_storefront_marker,
                 f"GrowthBook storefront contains forbidden marker: {forbidden_storefront_marker}",
             )
-        require(
-            growthbook_gtm_builder,
-            'payload["environment"] != "preview"',
-            "GrowthBook GTM builder must remain Preview-only.",
-        )
-        if growthbook_preview_config.get("environment") != "preview":
-            raise AssertionError("GrowthBook example config must remain Preview-only.")
+        for marker in (
+            "VEVO_GROWTHBOOK_PRODUCTION_CLIENT_KEY",
+            "VEVO_GROWTHBOOK_PRODUCTION_COLLECTOR_URL",
+            "expected_production_collector_host_sha256",
+            "Production collector host does not match reviewed evidence",
+            "client.replace(",
+            "PRODUCTION_DISABLED_MARKER",
+            "PRODUCTION_ENABLED_MARKER",
+        ):
+            require(
+                growthbook_gtm_builder,
+                marker,
+                f"GrowthBook Production GTM builder lost safety marker: {marker}",
+            )
+        if (
+            growthbook_preview_config.get("environment") != "preview"
+            or growthbook_preview_config.get("enableDevMode") is not True
+        ):
+            raise AssertionError("GrowthBook Preview example config drifted.")
+        if (
+            growthbook_production_config.get("environment") != "production"
+            or growthbook_production_config.get("enableDevMode") is not False
+            or "REPLACE_WITH_PRODUCTION_CLIENT_KEY"
+            not in str(growthbook_production_config.get("clientKey"))
+            or "REPLACE_WITH_PRODUCTION_COLLECTOR"
+            not in str(growthbook_production_config.get("collectorUrl"))
+        ):
+            raise AssertionError("GrowthBook Production example config drifted.")
         require(
             growthbook_reporting,
             "authoritative order must use the exact PII-free schema",
