@@ -98,6 +98,12 @@ def main() -> int:
         growthbook_foundation_bucket_summarizer = read(
             "scripts/summarize_growthbook_foundation_bucket.py"
         )
+        growthbook_foundation_recovery_workflow = read(
+            ".github/workflows/recover-vevo-growthbook-production-foundation-evidence.yml"
+        )
+        growthbook_foundation_recovery_verifier = read(
+            "scripts/verify_growthbook_foundation_recovery.py"
+        )
         growthbook_production_foundation_recorder = read(
             "scripts/record_growthbook_foundation_evidence.py"
         )
@@ -1003,8 +1009,111 @@ def main() -> int:
                 f"GrowthBook foundation diagnostic must remain read-only: {forbidden_action}",
             )
         for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "RECOVER_32612205628",
+            "GITHUB_RUN_ATTEMPT",
+            "actions: read",
+            "foundation evidence is already recorded",
+            "Production allocation must remain zero",
+            "Production experiment registry must remain empty",
+            "scripts/verify_growthbook_foundation_recovery.py",
+            "a successful foundation evidence recovery already exists",
+            "FOUNDATION_RECOVERY_SINGLE_SUCCESS_GATE_OK:",
+            "cloudformation list-stack-resources",
+            "scripts/resolve_growthbook_host_gate_runtime.py",
+            "aws ecs run-task",
+            "COLLECTOR_LOCALHOST_HEALTH_OK:production:",
+            "COLLECTOR_LOCALHOST_MARKER_OK:/app:",
+            "FOUNDATION_RECOVERY_HOST_GATE_OK:",
+            "scripts/summarize_growthbook_foundation_bucket.py",
+            "s3api list-multipart-uploads",
+            "bucket has incomplete multipart uploads",
+            "Production GrowthBook reader absence could not be proven.",
+            "FOUNDATION_RECOVERY_READER_ABSENCE_OK:",
+            "FOUNDATION_RECOVERY_RUNTIME_OK:",
+            "route=false:bucket=empty:credentials=none:allocation=0",
+            "build_foundation_recovery_evidence",
+            "schema=2",
+            "Upload sanitized Production foundation recovery evidence only",
+            "path: vevo-growthbook-production-foundation-evidence.json",
+            "retention-days: 14",
+        ):
+            require(
+                growthbook_foundation_recovery_workflow,
+                marker,
+                f"GrowthBook foundation recovery lost safety marker: {marker}",
+            )
+        if growthbook_foundation_recovery_workflow.lower().count("aws ecs run-task") != 1:
+            raise AssertionError(
+                "GrowthBook foundation recovery must run exactly one temporary ECS host gate."
+            )
+        for forbidden_action in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "s3api put-",
+            "s3api delete-",
+            "iam create-",
+            "iam attach-",
+            "iam put-",
+            "iam delete-",
+            "athena start-query-execution",
+            "scheduler create-",
+            "scheduler update-",
+            "scheduler delete-",
+            "docker push",
+            "ads_update",
+            "adcreatives_create",
+            "submit",
+        ):
+            forbid(
+                growthbook_foundation_recovery_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook foundation recovery violated its boundary: {forbidden_action}",
+            )
+        for raw_artifact_path in (
+            "path: creation-run.json",
+            "path: creation-jobs.json",
+            "path: prior-recovery-runs.json",
+            "path: recovery-stack.json",
+            "path: recovery-stack-resources.json",
+            "path: recovery-service-task.json",
+            "path: recovery-host-gate.log",
+            "path: recovery-bucket-listing.json",
+            "path: recovery-multipart-uploads.json",
+        ):
+            forbid(
+                growthbook_foundation_recovery_workflow,
+                raw_artifact_path,
+                "GrowthBook foundation recovery must not upload raw state: "
+                f"{raw_artifact_path}",
+            )
+        if growthbook_foundation_recovery_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError(
+                "GrowthBook foundation recovery must upload exactly one sanitized artifact."
+            )
+        for marker in (
+            "EXPECTED_CREATION_RUN_ID = 32612205628",
+            "EXPECTED_CREATION_MAIN_COMMIT",
+            "EXPECTED_STEP_CONCLUSIONS",
+            "creation run conclusion drift",
+            "live stack resource allowlist drift",
+            "CollectorPostRoute",
+            "raw=false",
+        ):
+            require(
+                growthbook_foundation_recovery_verifier,
+                marker,
+                f"GrowthBook foundation recovery verifier lost safety marker: {marker}",
+            )
+        for marker in (
             "The recorder is offline and fail closed.",
             "validate_foundation_evidence",
+            "build_foundation_recovery_evidence",
+            "foundation creation provenance mismatch",
+            "ecs_run_task_for_localhost_verification_only",
             "foundation evidence bytes are not canonical",
             "foundation manifest change-set boundary drift",
             "route=false:allocation=0:reader-ready=true:clone=false",
@@ -1210,6 +1319,7 @@ def main() -> int:
         for stateful_workflow in (
             growthbook_natural_reconciliation_workflow,
             growthbook_production_foundation_workflow,
+            growthbook_foundation_recovery_workflow,
             growthbook_production_reader_workflow,
         ):
             forbid(
@@ -1851,6 +1961,9 @@ def main() -> int:
             "scripts/build_growthbook_aa_manual_qa_evidence.py",
             "scripts/build_growthbook_aa_automated_evidence.py",
             "scripts/record_growthbook_production_reader_evidence.py",
+            "scripts/record_growthbook_foundation_evidence.py",
+            "scripts/summarize_growthbook_foundation_bucket.py",
+            "scripts/verify_growthbook_foundation_recovery.py",
             "scripts/record_growthbook_production_clone_evidence.py",
             "scripts/evaluate_growthbook_cta.py",
             "scripts/record_growthbook_cta_lifecycle_reconciliation.py",

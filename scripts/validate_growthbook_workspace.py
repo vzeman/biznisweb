@@ -1099,6 +1099,9 @@ def validate() -> None:
                 "foundation_evidence_artifact_status": (
                     "verified_downloaded_sha256_recorded"
                 ),
+                "foundation_evidence_schema_version": foundation_evidence.get(
+                    "schema_version"
+                ),
                 "foundation_deployment_run_id": foundation_run_id,
                 "foundation_deployment_main_commit": foundation_main_commit,
                 "foundation_evidence_artifact_sha256": foundation_sha256,

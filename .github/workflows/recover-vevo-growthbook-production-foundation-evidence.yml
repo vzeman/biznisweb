@@ -1,0 +1,521 @@
+name: Recover VEVO GrowthBook Production Foundation Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_recovery:
+        description: Select the exact failed-after-CREATE run whose evidence is being recovered
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'RECOVER_32612205628'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-foundation-evidence-recovery
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  CREATION_RUN_ID: '32612205628'
+  CREATION_MAIN_COMMIT: 82d1f04c85f43d007f03090eefbeb0feb09fc140
+  PRODUCTION_STACK_NAME: vevo-growthbook-production
+  PRODUCTION_SERVICE_NAME: vevo-growthbook-collector-production
+  EXPECTED_IMAGE_DIGEST: sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1
+  EXPECTED_IMAGE_IDENTIFIER: 919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-growthbook-collector@sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1
+  COLLECTOR_VERSION: git-92a315adbbfc4ed0f7bd175c9f3d3782f3146c4d
+  EXPECTED_READER_USER: vevo-growthbook-production-reader
+  RUNTIME_PATH: /app
+  FOUNDATION_EVIDENCE_FILE: vevo-growthbook-production-foundation-evidence.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  recover-foundation-evidence:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Require exact evidence-recovery confirmation
+        env:
+          CONFIRM_RECOVERY: ${{ inputs.confirm_recovery }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_RECOVERY}" == "RECOVER_${CREATION_RUN_ID}" ]]
+          [[ "${GITHUB_RUN_ATTEMPT}" == '1' ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce pending evidence and zero-activation gates before external access
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_foundation_bucket_summary \
+            tests.test_growthbook_foundation_recovery \
+            tests.test_growthbook_production_foundation_recovery_workflow \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+          python - <<'PY'
+          import hashlib
+          import json
+
+          from scripts.record_growthbook_natural_evidence import (
+              canonical_evidence_bytes,
+              validate_natural_evidence,
+          )
+
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          registry = json.load(open('growthbook_collector/experiments.json', encoding='utf-8'))
+          recurring = workspace.get('reconciliation_checkpoint', {}).get('recurring_schedule', {})
+          production = workspace.get('athena', {}).get('production', {})
+          natural = recurring.get('natural_verifier_evidence')
+          validate_natural_evidence(
+              natural,
+              expected_workflow_run_id=recurring.get('natural_verifier_run_id'),
+              expected_main_commit=recurring.get('natural_verifier_main_commit'),
+          )
+          if hashlib.sha256(canonical_evidence_bytes(natural)).hexdigest() != recurring.get('natural_evidence_artifact_sha256'):
+              raise SystemExit('natural evidence hash drift before foundation recovery')
+          if production.get('status') != 'natural_run_verified_foundation_deployment_ready':
+              raise SystemExit('Production foundation recovery state drift')
+          if production.get('foundation_deployment_status') != 'natural_run_verified_ready_for_reviewed_dispatch':
+              raise SystemExit('Production foundation deployment gate state drift')
+          if production.get('successful_foundation_deployment') is not None:
+              raise SystemExit('foundation evidence is already recorded')
+          if production.get('foundation_evidence_artifact_status') != 'code_prepared_deployment_pending':
+              raise SystemExit('foundation evidence status is not pending')
+          if production.get('credentials_created') is not False or production.get('reader_provisioning_allowed') is not False:
+              raise SystemExit('Production reader state unexpectedly opened')
+          if production.get('growthbook_clone', {}).get('clone_allowed') is not False:
+              raise SystemExit('GrowthBook clone gate unexpectedly opened')
+          if workspace.get('workspace', {}).get('production_allocation_percent') != 0:
+              raise SystemExit('GrowthBook Production allocation must remain zero')
+          if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'not_published':
+              raise SystemExit('GTM workspace must remain unpublished')
+          if workspace.get('decision_gates', {}).get('production_activation_allowed') is not False:
+              raise SystemExit('Production activation gate must remain false')
+          if registry.get('environments', {}).get('production') != {}:
+              raise SystemExit('Production experiment registry must remain empty')
+          print('FOUNDATION_RECOVERY_LOCAL_GATE_OK:allocation=0:registry=empty:reader=false:clone=false')
+          PY
+
+      - name: Verify exact historical CREATE run without reading its logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CREATION_RUN_ID}" > creation-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CREATION_RUN_ID}/jobs?per_page=100" > creation-jobs.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CREATION_RUN_ID}/artifacts?per_page=100" > creation-artifacts.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/recover-vevo-growthbook-production-foundation-evidence.yml/runs?branch=main&status=success&per_page=100" > prior-recovery-runs.json
+          python - <<'PY'
+          import json
+
+          artifacts = json.load(open('creation-artifacts.json', encoding='utf-8'))
+          if artifacts.get('total_count') != 0 or artifacts.get('artifacts') not in (None, []):
+              raise SystemExit('historical CREATE run unexpectedly has an artifact')
+          prior = json.load(open('prior-recovery-runs.json', encoding='utf-8'))
+          if prior.get('total_count') != 0 or prior.get('workflow_runs') not in (None, []):
+              raise SystemExit('a successful foundation evidence recovery already exists')
+          print('FOUNDATION_RECOVERY_ARTIFACT_ABSENCE_OK:creation-run=32612205628:artifact=false')
+          print('FOUNDATION_RECOVERY_SINGLE_SUCCESS_GATE_OK:prior-success=false:run-attempt=1')
+          PY
+
+      - name: Configure authenticated AWS recovery identity
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm exact live stack, service, task definition, and network
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+          aws cloudformation describe-stacks \
+            --stack-name "${PRODUCTION_STACK_NAME}" \
+            --region "${AWS_REGION}" > recovery-stack.json
+          aws cloudformation list-stack-resources \
+            --stack-name "${PRODUCTION_STACK_NAME}" \
+            --region "${AWS_REGION}" > recovery-stack-resources.json
+          python scripts/verify_growthbook_foundation_recovery.py \
+            --creation-run creation-run.json \
+            --creation-jobs creation-jobs.json \
+            --stack-resources recovery-stack-resources.json
+          python - <<'PY' > recovery-runtime.env
+          import json
+          import os
+
+          stack = json.load(open('recovery-stack.json', encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackName') != os.environ['PRODUCTION_STACK_NAME']:
+              raise SystemExit('Production recovery stack identity drift')
+          if stack.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production recovery stack is not CREATE_COMPLETE')
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          expected_parameters = {
+              'AllowedOrigin': 'https://www.vevo.sk',
+              'CollectorImageUri': os.environ['EXPECTED_IMAGE_IDENTIFIER'],
+              'CollectorVersion': os.environ['COLLECTOR_VERSION'],
+              'Environment': 'production',
+              'PublicRouteEnabled': 'false',
+          }
+          for key, value in expected_parameters.items():
+              if parameters.get(key) != value:
+                  raise SystemExit(f'Production recovery stack parameter drift: {key}')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorApiBaseUrl', 'CollectorClusterArn', 'CollectorContainerLogGroup',
+              'CollectorServiceArn', 'CollectorServiceName', 'CollectorTaskDefinitionArn',
+              'EventBucketName', 'ExperimentDatabaseName', 'GrowthBookReadOnlyPolicyArn',
+              'GrowthBookWorkGroupName',
+          }
+          if not required.issubset(outputs):
+              raise SystemExit('Production recovery outputs are incomplete')
+          if outputs['CollectorServiceName'] != os.environ['PRODUCTION_SERVICE_NAME']:
+              raise SystemExit('Production recovery service output drift')
+          values = {
+              'RECOVERY_API_BASE_URL': outputs['CollectorApiBaseUrl'],
+              'RECOVERY_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'RECOVERY_LOG_GROUP': outputs['CollectorContainerLogGroup'],
+              'RECOVERY_SERVICE_ARN': outputs['CollectorServiceArn'],
+              'RECOVERY_TASK_DEFINITION_ARN': outputs['CollectorTaskDefinitionArn'],
+              'RECOVERY_EVENT_BUCKET': outputs['EventBucketName'],
+          }
+          for key, value in values.items():
+              if not value or '\n' in value or '\r' in value:
+                  raise SystemExit(f'Production recovery output drift: {key}')
+              print(f'{key}={value}')
+          PY
+          cat recovery-runtime.env >> "${GITHUB_ENV}"
+          set -a
+          source recovery-runtime.env
+          set +a
+          aws ecs describe-services \
+            --cluster "${RECOVERY_CLUSTER_ARN}" \
+            --services "${RECOVERY_SERVICE_ARN}" \
+            --region "${AWS_REGION}" > recovery-service.json
+          python - <<'PY' > recovery-network.json
+          import json
+          import os
+
+          service = json.load(open('recovery-service.json', encoding='utf-8'))['services'][0]
+          if service.get('serviceName') != os.environ['PRODUCTION_SERVICE_NAME']:
+              raise SystemExit('Production recovery service identity drift')
+          if service.get('taskDefinition') != os.environ['RECOVERY_TASK_DEFINITION_ARN']:
+              raise SystemExit('Production recovery service task definition drift')
+          if service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Production recovery service is not healthy 1/1')
+          if len(service.get('deployments') or []) != 1:
+              raise SystemExit('Production recovery service deployment count drift')
+          print(json.dumps(service['networkConfiguration'], separators=(',', ':')))
+          PY
+          aws ecs describe-task-definition \
+            --task-definition "${RECOVERY_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > recovery-task-definition.json
+          python - <<'PY'
+          import json
+          import os
+
+          task = json.load(open('recovery-task-definition.json', encoding='utf-8'))['taskDefinition']
+          containers = task.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != 'collector':
+              raise SystemExit('Production recovery task container drift')
+          container = containers[0]
+          if container.get('image') != os.environ['EXPECTED_IMAGE_IDENTIFIER']:
+              raise SystemExit('Production recovery image URI drift')
+          if container.get('readonlyRootFilesystem') is not True or container.get('user') != '10001:10001':
+              raise SystemExit('Production recovery container hardening drift')
+          environment = {row.get('name'): row.get('value') for row in container.get('environment') or []}
+          expected = {
+              'GROWTHBOOK_ENVIRONMENT': 'production',
+              'GROWTHBOOK_ALLOWED_ORIGINS': 'https://www.vevo.sk',
+              'GROWTHBOOK_COLLECTOR_VERSION': os.environ['COLLECTOR_VERSION'],
+              'GROWTHBOOK_EVENT_BUCKET': os.environ['RECOVERY_EVENT_BUCKET'],
+              'GROWTHBOOK_EXPERIMENT_REGISTRY_PATH': '/app/growthbook_collector/experiments.json',
+          }
+          for key, value in expected.items():
+              if environment.get(key) != value:
+                  raise SystemExit(f'Production recovery task environment drift: {key}')
+          PY
+
+      - name: Run exact Production Fargate localhost and marker recovery gate
+        run: |
+          set -euo pipefail
+          python - <<'PY' > recovery-host-gate-overrides.json
+          import json
+          json.dump(
+              {'containerOverrides': [{
+                  'name': 'collector',
+                  'command': ['/bin/sh', '/app/growthbook_collector/host_gate.sh'],
+              }]},
+              open('recovery-host-gate-overrides.json', 'w', encoding='utf-8'),
+              separators=(',', ':'),
+          )
+          PY
+          HOST_GATE_TASK_ARN="$(aws ecs run-task \
+            --cluster "${RECOVERY_CLUSTER_ARN}" \
+            --task-definition "${RECOVERY_TASK_DEFINITION_ARN}" \
+            --launch-type FARGATE \
+            --network-configuration file://recovery-network.json \
+            --overrides file://recovery-host-gate-overrides.json \
+            --group vevo-growthbook-production-foundation-evidence-recovery \
+            --started-by "vevo-gb-foundation-recovery-${GITHUB_RUN_ID}" \
+            --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          if [[ -z "${HOST_GATE_TASK_ARN}" || "${HOST_GATE_TASK_ARN}" == 'None' ]]; then
+            echo 'Production recovery host-gate task did not start.' >&2
+            exit 1
+          fi
+          aws ecs wait tasks-stopped \
+            --cluster "${RECOVERY_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}"
+          aws ecs describe-tasks \
+            --cluster "${RECOVERY_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" \
+            --region "${AWS_REGION}" > recovery-host-gate-task.json
+          python scripts/resolve_growthbook_host_gate_runtime.py \
+            --task-state recovery-host-gate-task.json \
+            --task-definition recovery-task-definition.json \
+            --expected-cluster-arn "${RECOVERY_CLUSTER_ARN}" \
+            --expected-task-definition-arn "${RECOVERY_TASK_DEFINITION_ARN}" \
+            --expected-container-name collector \
+            --expected-log-group "${RECOVERY_LOG_GROUP}" \
+            --expected-log-region "${AWS_REGION}" \
+            --expected-log-prefix collector \
+            --expected-image-digest "${EXPECTED_IMAGE_DIGEST}" \
+            --expected-private-cidr 172.31.0.0/16 \
+            --env-prefix RECOVERY_HOST \
+            --env-output recovery-host-gate.env
+          cat recovery-host-gate.env >> "${GITHUB_ENV}"
+          set -a
+          source recovery-host-gate.env
+          set +a
+          HOST_LOG_READY=false
+          for attempt in $(seq 1 12); do
+            aws logs get-log-events \
+              --log-group-name "${RECOVERY_LOG_GROUP}" \
+              --log-stream-name "${RECOVERY_HOST_LOG_STREAM}" \
+              --start-from-head \
+              --region "${AWS_REGION}" \
+              --query 'events[].message' \
+              --output text > recovery-host-gate.log 2>/dev/null || true
+            if grep -Fq "COLLECTOR_LOCALHOST_HEALTH_OK:production:${COLLECTOR_VERSION}" recovery-host-gate.log && \
+               grep -Fq "COLLECTOR_LOCALHOST_MARKER_OK:/app:${COLLECTOR_VERSION}" recovery-host-gate.log; then
+              HOST_LOG_READY=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "${HOST_LOG_READY}" != 'true' ]]; then
+            echo 'Production recovery localhost health/marker did not arrive.' >&2
+            exit 1
+          fi
+          grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:production:${COLLECTOR_VERSION}" recovery-host-gate.log
+          grep -F "COLLECTOR_LOCALHOST_MARKER_OK:/app:${COLLECTOR_VERSION}" recovery-host-gate.log
+          echo "FOUNDATION_RECOVERY_HOST_GATE_OK:instance-id=N/A:Fargate:private-ip=${RECOVERY_HOST_PRIVATE_IP}:service=${PRODUCTION_SERVICE_NAME}:path=${RUNTIME_PATH}:task=${RECOVERY_HOST_TASK_ID}:image=${EXPECTED_IMAGE_DIGEST}:log-stream-source=${RECOVERY_HOST_LOG_STREAM_SOURCE}"
+
+      - name: Verify route-disabled live state and build canonical recovery evidence
+        run: |
+          set -euo pipefail
+          SERVICE_TASK_ARN="$(aws ecs list-tasks \
+            --cluster "${RECOVERY_CLUSTER_ARN}" \
+            --service-name "${PRODUCTION_SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" \
+            --query 'taskArns[0]' \
+            --output text)"
+          if [[ -z "${SERVICE_TASK_ARN}" || "${SERVICE_TASK_ARN}" == 'None' ]]; then
+            echo 'Production recovery service task missing.' >&2
+            exit 1
+          fi
+          aws ecs describe-tasks \
+            --cluster "${RECOVERY_CLUSTER_ARN}" \
+            --tasks "${SERVICE_TASK_ARN}" \
+            --region "${AWS_REGION}" > recovery-service-task.json
+          TARGET_GROUP_ARN="$(python - <<'PY'
+          import json
+          service = json.load(open('recovery-service.json', encoding='utf-8'))['services'][0]
+          groups = service.get('loadBalancers') or []
+          if len(groups) != 1:
+              raise SystemExit('Production recovery target-group boundary drift')
+          print(groups[0]['targetGroupArn'])
+          PY
+          )"
+          aws elbv2 describe-target-health \
+            --target-group-arn "${TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > recovery-target-health.json
+          RECOVERY_API_ID="$(python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          host = urlparse(os.environ['RECOVERY_API_BASE_URL']).hostname or ''
+          api_id = host.split('.', 1)[0]
+          if not api_id:
+              raise SystemExit('Production recovery API ID missing')
+          print(api_id)
+          PY
+          )"
+          aws apigatewayv2 get-routes \
+            --api-id "${RECOVERY_API_ID}" \
+            --region "${AWS_REGION}" > recovery-routes.json
+          aws s3api get-public-access-block \
+            --bucket "${RECOVERY_EVENT_BUCKET}" \
+            --region "${AWS_REGION}" > recovery-public-access.json
+          aws s3api get-bucket-policy-status \
+            --bucket "${RECOVERY_EVENT_BUCKET}" \
+            --region "${AWS_REGION}" > recovery-policy-status.json
+          aws s3api get-bucket-encryption \
+            --bucket "${RECOVERY_EVENT_BUCKET}" \
+            --region "${AWS_REGION}" > recovery-encryption.json
+          aws s3api list-objects-v2 \
+            --bucket "${RECOVERY_EVENT_BUCKET}" \
+            --max-keys 1000 \
+            --region "${AWS_REGION}" > recovery-bucket-listing.json
+          aws s3api list-multipart-uploads \
+            --bucket "${RECOVERY_EVENT_BUCKET}" \
+            --max-uploads 1000 \
+            --region "${AWS_REGION}" > recovery-multipart-uploads.json
+          python scripts/summarize_growthbook_foundation_bucket.py \
+            --listing recovery-bucket-listing.json
+          set +e
+          aws iam get-user \
+            --user-name "${EXPECTED_READER_USER}" \
+            --output json > recovery-reader-user.json 2> recovery-reader-user.err
+          READER_LOOKUP_STATUS=$?
+          set -e
+          if [[ "${READER_LOOKUP_STATUS}" -eq 0 ]]; then
+            echo 'Production GrowthBook reader identity unexpectedly exists.' >&2
+            exit 1
+          fi
+          if [[ "${READER_LOOKUP_STATUS}" -ne 254 ]] || ! grep -Fq 'NoSuchEntity' recovery-reader-user.err; then
+            echo 'Production GrowthBook reader absence could not be proven.' >&2
+            exit 1
+          fi
+          echo 'FOUNDATION_RECOVERY_READER_ABSENCE_OK:user=false:credentials=none:raw=false'
+          ROUTE_STATUS="$(curl -sS -o recovery-route-body.txt -w '%{http_code}' \
+            "${RECOVERY_API_BASE_URL}/v1/events")"
+          python - "${ROUTE_STATUS}" <<'PY'
+          import ipaddress
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from scripts.record_growthbook_foundation_evidence import (
+              build_foundation_recovery_evidence,
+          )
+          from scripts.record_growthbook_natural_evidence import canonical_evidence_bytes
+          from scripts.summarize_growthbook_foundation_bucket import summarize_bucket_listing
+
+          task = json.load(open('recovery-service-task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['RECOVERY_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('Production recovery service task identity drift')
+          container = containers[0]
+          if container.get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+              raise SystemExit('Production recovery service image digest drift')
+          details = [
+              row
+              for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip_text = str(next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), ''))
+          if ipaddress.ip_address(private_ip_text) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('Production recovery service private IP drift')
+          health = json.load(open('recovery-target-health.json', encoding='utf-8'))['TargetHealthDescriptions']
+          if [row['TargetHealth']['State'] for row in health] != ['healthy']:
+              raise SystemExit('Production recovery target is not healthy')
+          if json.load(open('recovery-routes.json', encoding='utf-8')).get('Items') not in (None, []):
+              raise SystemExit('Production recovery API unexpectedly has a route')
+          public_access = json.load(open('recovery-public-access.json', encoding='utf-8'))['PublicAccessBlockConfiguration']
+          if set(public_access.values()) != {True} or len(public_access) != 4:
+              raise SystemExit('Production recovery bucket public-access drift')
+          if json.load(open('recovery-policy-status.json', encoding='utf-8')).get('PolicyStatus', {}).get('IsPublic') is not False:
+              raise SystemExit('Production recovery bucket policy is public')
+          encryption = json.load(open('recovery-encryption.json', encoding='utf-8'))
+          rules = encryption.get('ServerSideEncryptionConfiguration', {}).get('Rules') or []
+          if len(rules) != 1:
+              raise SystemExit('Production recovery bucket encryption drift')
+          default_encryption = rules[0].get('ApplyServerSideEncryptionByDefault') or {}
+          if default_encryption != {'SSEAlgorithm': 'AES256'} or rules[0].get('BucketKeyEnabled') is not False:
+              raise SystemExit('Production recovery bucket encryption boundary drift')
+          summary = summarize_bucket_listing(
+              json.load(open('recovery-bucket-listing.json', encoding='utf-8'))
+          )
+          if summary != {'total': 0, 'raw_events': 0, 'athena_results': 0, 'unexpected': 0}:
+              raise SystemExit('Production recovery bucket is not empty')
+          multipart = json.load(open('recovery-multipart-uploads.json', encoding='utf-8'))
+          if multipart.get('Uploads') not in (None, []) or multipart.get('IsTruncated') is not False:
+              raise SystemExit('Production recovery bucket has incomplete multipart uploads')
+          if sys.argv[1] != '404':
+              raise SystemExit(f'Production recovery route returned {sys.argv[1]}, expected 404')
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          recurring = workspace['reconciliation_checkpoint']['recurring_schedule']
+          evidence = build_foundation_recovery_evidence(
+              verified_at=datetime.now(timezone.utc),
+              workflow_run_id=os.environ['GITHUB_RUN_ID'],
+              main_commit=os.environ['GITHUB_SHA'],
+              natural_workflow_run_id=recurring['natural_verifier_run_id'],
+              natural_main_commit=recurring['natural_verifier_main_commit'],
+              natural_evidence_sha256=recurring['natural_evidence_artifact_sha256'],
+              host_task_id=os.environ['RECOVERY_HOST_TASK_ID'],
+              host_private_ip=os.environ['RECOVERY_HOST_PRIVATE_IP'],
+              service_task_id=task['taskArn'].rsplit('/', 1)[-1],
+              service_private_ip=private_ip_text,
+              task_definition=os.environ['RECOVERY_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1],
+          )
+          Path(os.environ['FOUNDATION_EVIDENCE_FILE']).write_bytes(
+              canonical_evidence_bytes(evidence)
+          )
+          print(
+              'FOUNDATION_RECOVERY_RUNTIME_OK:'
+              f"instance-id=N/A:Fargate:private-ip={private_ip_text}:"
+              f"service={os.environ['PRODUCTION_SERVICE_NAME']}:path=/app:"
+              f"task={task['taskArn'].rsplit('/', 1)[-1]}:target=healthy:"
+              'route=false:bucket=empty:credentials=none:allocation=0'
+          )
+          print(
+              'GROWTHBOOK_FOUNDATION_EVIDENCE_READY:'
+              f"schema=2:file={os.environ['FOUNDATION_EVIDENCE_FILE']}:"
+              'raw=false:credentials=false'
+          )
+          PY
+
+      - name: Upload sanitized Production foundation recovery evidence only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-production-foundation-evidence-${{ github.run_id }}
+          path: vevo-growthbook-production-foundation-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Production foundation evidence-recovery summary
+        if: always()
+        run: |
+          {
+            echo '## VEVO GrowthBook Production foundation evidence recovery'
+            echo "- Historical CREATE: `run=${CREATION_RUN_ID} / main=${CREATION_MAIN_COMMIT}`"
+            echo "- Runtime hard gate: `instance-id=N/A:Fargate / service=${PRODUCTION_SERVICE_NAME} / path=${RUNTIME_PATH}`"
+            echo '- Live route: `disabled`; allocation: `0%`; reader credentials: `absent`'
+            echo '- Recovery AWS mutation: `one stopped Fargate localhost-verification task only`'
+            echo '- CloudFormation, GrowthBook, GTM, Meta Ads, BiznisWeb, prices, cart, checkout, orders: `unchanged`'
+          } >> "${GITHUB_STEP_SUMMARY}"
