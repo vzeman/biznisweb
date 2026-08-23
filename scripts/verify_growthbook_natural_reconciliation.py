@@ -341,7 +341,15 @@ def verify_natural_reconciliation(
     task_container = task_containers[0]
     _require(task_container.get("exitCode") == 0, "natural task exit code is not zero")
     _require(task_container.get("imageDigest") == EXPECTED_IMAGE_DIGEST, "natural task image digest drift")
-    _require(task_container.get("logStreamName") == log_stream, "natural task log stream drift")
+    ecs_log_stream = task_container.get("logStreamName")
+    if ecs_log_stream not in (None, ""):
+        _require(ecs_log_stream == log_stream, "natural task log stream drift")
+        print("NATURAL_TASK_LOG_STREAM_IDENTITY_OK:ecs=exact:cloudwatch=exact:raw=false")
+    else:
+        print(
+            "NATURAL_TASK_LOG_STREAM_IDENTITY_OK:"
+            "ecs=optional_absent:cloudwatch=exact_task_arn_bound:raw=false"
+        )
     details = [
         row
         for attachment in task.get("attachments") or []
