@@ -48,6 +48,12 @@ EXPECTED_RUNTIME_PATH = "/app"
 EXPECTED_TRACKING_KEY = "vevo-sk-aa-001"
 NOT_BEFORE_UTC = datetime(2026, 8, 22, 1, 40, tzinfo=timezone.utc)
 
+LEGACY_COMPACT_WORKFLOW_RUN_ID = "32644408714"
+LEGACY_COMPACT_MAIN_COMMIT = "57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2"
+LEGACY_COMPACT_EVIDENCE_SHA256 = (
+    "1e156ebdd94f88f7858c0e0b2ddb443fdabe01787ee6f7d673ac80197492ab88"
+)
+
 RUN_ID_RE = re.compile(r"^[1-9][0-9]{5,19}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -150,6 +156,37 @@ def _parse_timestamp(value: Any) -> datetime:
     _require(parsed >= NOT_BEFORE_UTC, "collector evidence predates the natural-run gate")
     _require(parsed <= datetime.now(timezone.utc), "collector evidence timestamp is in the future")
     return parsed
+
+
+def _legacy_compact_evidence_bytes(evidence: Mapping[str, Any]) -> bytes:
+    return (
+        json.dumps(
+            evidence,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _accepted_evidence_serializations(
+    evidence: Mapping[str, Any],
+    *,
+    expected_workflow_run_id: str,
+    expected_main_commit: str,
+) -> tuple[bytes, ...]:
+    canonical = canonical_evidence_bytes(evidence)
+    legacy = _legacy_compact_evidence_bytes(evidence)
+    if (
+        expected_workflow_run_id == LEGACY_COMPACT_WORKFLOW_RUN_ID
+        and expected_main_commit == LEGACY_COMPACT_MAIN_COMMIT
+        and evidence.get("workflow_run_id") == LEGACY_COMPACT_WORKFLOW_RUN_ID
+        and evidence.get("main_commit") == LEGACY_COMPACT_MAIN_COMMIT
+        and hashlib.sha256(legacy).hexdigest() == LEGACY_COMPACT_EVIDENCE_SHA256
+    ):
+        return canonical, legacy
+    return (canonical,)
 
 
 def _validate_runtime(
@@ -267,9 +304,14 @@ def record_collector_activation_evidence(
         expected_workflow_run_id=expected_workflow_run_id,
         expected_main_commit=expected_main_commit,
     )
+    accepted_serializations = _accepted_evidence_serializations(
+        evidence,
+        expected_workflow_run_id=expected_workflow_run_id,
+        expected_main_commit=expected_main_commit,
+    )
     _require(
-        hashlib.sha256(canonical_evidence_bytes(evidence)).hexdigest()
-        == evidence_sha256,
+        evidence_sha256
+        in {hashlib.sha256(payload).hexdigest() for payload in accepted_serializations},
         "collector evidence SHA-256 mismatch",
     )
 
@@ -409,7 +451,15 @@ def load_validate_and_record(
     _require(isinstance(activation, dict), "activation manifest must contain an object")
     _require(isinstance(workspace, dict), "workspace manifest must contain an object")
     _require(isinstance(registry, dict), "registry manifest must contain an object")
-    _require(raw == canonical_evidence_bytes(evidence), "collector evidence bytes are not canonical")
+    accepted_serializations = _accepted_evidence_serializations(
+        evidence,
+        expected_workflow_run_id=expected_workflow_run_id,
+        expected_main_commit=expected_main_commit,
+    )
+    _require(
+        raw in accepted_serializations,
+        "collector evidence bytes are not canonical or the pinned legacy artifact",
+    )
     _require(
         hashlib.sha256(raw).hexdigest() == expected_evidence_sha256,
         "collector evidence independent SHA-256 mismatch",
