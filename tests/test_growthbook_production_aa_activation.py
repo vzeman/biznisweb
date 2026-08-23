@@ -27,7 +27,7 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         self.registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
 
-    def test_checked_in_handoff_is_valid_and_hard_disabled(self) -> None:
+    def test_checked_in_handoff_is_collector_ready_and_traffic_disabled(self) -> None:
         validator.validate_activation_handoff(
             self.activation,
             self.workspace,
@@ -87,35 +87,33 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
 
     def test_status_only_activation_is_rejected(self) -> None:
         altered = copy.deepcopy(self.activation)
-        altered["status"] = "clone_verified_collector_deploy_ready"
-        with self.assertRaisesRegex(AssertionError, "hard-disabled"):
+        altered["status"] = "prepared_hard_disabled_clone_gate_pending"
+        with self.assertRaisesRegex(AssertionError, "reviewed collector deployment gate"):
             validator.validate_activation_handoff(altered, self.workspace, self.registry)
 
-    def test_any_open_collector_or_traffic_gate_is_rejected(self) -> None:
-        for path in (
-            ("collector", "deployment_allowed"),
-            ("collector", "public_route_enabled"),
-            ("traffic", "activation_allowed"),
-            ("traffic", "cta_experiment_started"),
+    def test_any_unreviewed_gate_change_is_rejected(self) -> None:
+        for path, value in (
+            (("collector", "deployment_allowed"), False),
+            (("collector", "public_route_enabled"), True),
+            (("traffic", "activation_allowed"), True),
+            (("traffic", "cta_experiment_started"), True),
         ):
             with self.subTest(path=path):
                 altered = copy.deepcopy(self.activation)
-                altered[path[0]][path[1]] = True
-                with self.assertRaisesRegex(AssertionError, "hard-disabled"):
+                altered[path[0]][path[1]] = value
+                with self.assertRaisesRegex(
+                    AssertionError, "reviewed collector deployment gate"
+                ):
                     validator.validate_activation_handoff(
                         altered,
                         self.workspace,
                         self.registry,
                     )
 
-    def test_production_registry_or_workspace_allocation_cannot_open_early(self) -> None:
+    def test_production_registry_or_workspace_allocation_cannot_drift(self) -> None:
         registry = copy.deepcopy(self.registry)
-        registry["environments"]["production"] = {
-            "vevo-sk-aa-001": copy.deepcopy(
-                registry["environments"]["preview"]["vevo-sk-aa-001"]
-            )
-        }
-        with self.assertRaisesRegex(AssertionError, "registry must remain empty"):
+        registry["environments"]["production"] = {}
+        with self.assertRaisesRegex(AssertionError, "only the exact A/A contract"):
             validator.validate_activation_handoff(
                 self.activation,
                 self.workspace,
@@ -125,6 +123,18 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         workspace = copy.deepcopy(self.workspace)
         workspace["workspace"]["production_allocation_percent"] = 1
         with self.assertRaisesRegex(AssertionError, "zero workspace allocation"):
+            validator.validate_activation_handoff(
+                self.activation,
+                workspace,
+                self.registry,
+            )
+
+    def test_manifest_preconditions_require_matching_workspace_evidence(self) -> None:
+        workspace = copy.deepcopy(self.workspace)
+        workspace["athena"]["production"]["growthbook_clone"][
+            "observation_status"
+        ] = "not_recorded"
+        with self.assertRaisesRegex(AssertionError, "clone evidence is not verified"):
             validator.validate_activation_handoff(
                 self.activation,
                 workspace,

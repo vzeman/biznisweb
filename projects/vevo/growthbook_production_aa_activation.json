@@ -12,17 +12,17 @@
     0.5
   ],
   "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-  "status": "prepared_hard_disabled_clone_gate_pending",
+  "status": "clone_verified_collector_deploy_ready",
   "preconditions": {
-    "natural_reconciliation_verified": false,
-    "route_disabled_foundation_verified": false,
-    "production_reader_verified": false,
-    "growthbook_clone_verified": false
+    "natural_reconciliation_verified": true,
+    "route_disabled_foundation_verified": true,
+    "production_reader_verified": true,
+    "growthbook_clone_verified": true
   },
   "collector": {
     "deployment_workflow": ".github/workflows/deploy-vevo-growthbook-production-aa-collector.yml",
-    "deployment_allowed": false,
-    "registry_entry_present": false,
+    "deployment_allowed": true,
+    "registry_entry_present": true,
     "public_route_enabled": false,
     "workflow_run_id": null,
     "main_commit": null,
@@ -43,7 +43,7 @@
     "experiment_id": null,
     "feature_rule_revision": null,
     "status": "not_started",
-    "data_source_id": null,
+    "data_source_id": "ds_19g6mmt5stlp6",
     "allocation_percent": 0
   },
   "gtm": {
@@ -80,5 +80,5 @@
     "drill_status": "not_run",
     "verified_at_utc": null
   },
-  "next_gate": "after_natural_foundation_reader_and_clone_evidence_open_collector_deployment_in_separate_review"
+  "next_gate": "dispatch_production_aa_collector_after_review"
 }

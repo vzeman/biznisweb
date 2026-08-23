@@ -69,9 +69,12 @@ Bootstrap entrypoints:
   - every outcome column and `vital_value` was manually typed and read back; the source reports exactly two fact tables and eight Starter-compatible metrics, all with unique Production IDs and matching type/filter/aggregation/goal/window contracts
   - Preview data source `ds_19g6mmt2c4dmn`, fact-table IDs, metric IDs, and exact probe-free SQL were read back unchanged; no paid-Pro p75 metric was created or upgrade accepted
   - sanitized canonical evidence `vevo-growthbook-production-clone-observation.json` has SHA-256 `b2f96b7047321f11da4f00c7886c4b9422d7759428534f8fd5534ee1299f2030`; it contains no credential, query result, event/device ID, order, or customer data
+  - the Production collector registry now contains only the exact Preview-matched invisible A/A contract `vevo-sk-aa-001`; all four reviewed evidence preconditions are true and only `collector.deployment_allowed` is open
+  - GrowthBook remains unstarted, GTM remains unpublished, Production allocation remains `0%`, CTA remains stopped, and Meta Ads/BiznisWeb/cart/checkout remain unchanged
+  - collector-gate preparation passes `589` Python tests, all `9` storefront JavaScript tests, activation/workspace/security validators, Ruff, and `git diff --check`
   - plaintext credentials, the RSA key/certificate, local encrypted credential artifact, and GitHub artifact `9486585740` were deleted after the successful connection; the sanitized evidence JSON was retained
   - no local dev server, worker, watcher, tunnel, or Docker process was started
-  - Next exact step: merge the canonical clone evidence through reviewed CI, then prepare the separate reviewed Production A/A activation gate while allocation remains `0%`
+  - Next exact step: merge the collector deployment gate through reviewed CI, then dispatch `Deploy VEVO GrowthBook Production A/A Collector` from the exact merged `main` commit while GrowthBook/GTM/traffic remain disabled
 
 - ROY daily report email delivery is disabled, deployed, and host-verified as of `2026-08-21`:
   - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`

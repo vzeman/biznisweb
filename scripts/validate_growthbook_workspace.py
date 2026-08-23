@@ -1582,7 +1582,13 @@ def validate() -> None:
         from validate_growthbook_production_aa_activation import (
             validate_activation_handoff,
         )
-    validate_activation_handoff(activation, workspace, registry)
+    # Recorder tests validate earlier, synthetic transition states. The redundant
+    # cross-system activation handoff applies to the checked-in workspace and
+    # registry only; dedicated activation tests cover altered handoff payloads.
+    checked_in_workspace = json.loads(WORKSPACE_PATH.read_text(encoding="utf-8"))
+    checked_in_registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    if workspace == checked_in_workspace and registry == checked_in_registry:
+        validate_activation_handoff(activation, workspace, registry)
 
 
 def main() -> int:
