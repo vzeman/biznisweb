@@ -279,7 +279,7 @@ ARTICLES: list[dict[str, object]] = [
             "Pokrčený vzhľad nemusí znamenať zanedbanie. Môže vzniknúť rozdielnym napätím priadzí, zmršťovacou úpravou alebo reakciou vrstiev pri dokončení a praní. Pri kúpe sa preto pýtajte, či je reliéf trvalou vlastnosťou, aké zloženie má každá vrstva a či bol výrobok predzrazený. Marketingové slovo „praný“ alebo „stonewashed“ samo neurčuje budúcu rozmerovú stabilitu.",
         ],
         "table1_heading": "Jednoduchý, dvojitý a viacvrstvový mušelín",
-        "table1_intro": "Rozdiel nie je iba v hrúbka. Počet vrstiev ovplyvňuje správanie pri namočení, prúdenie vzduchu, zachytávanie nečistôt aj kontrolu schnutia.",
+        "table1_intro": "Rozdiel nie je iba v hrúbke. Počet vrstiev ovplyvňuje správanie pri namočení, prúdenie vzduchu, zachytávanie nečistôt aj kontrolu schnutia.",
         "table1_headers": ["Konštrukcia", "Typické použitie", "Silná stránka", "Riziko pri starostlivosti"],
         "table1_rows": [
             ("Jednovrstvová jemná tkanina", "Šatky, ľahké odevy, skúšobné modely a dekoračné použitie.", "Nízka hmotnosť a prúdenie vzduchu podľa hustoty.", "Zachytenie voľnej nite, presvitanie, deformácia a strapkanie rezu."),
