@@ -136,7 +136,7 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
 
     def test_validator_rejects_production_foundation_activation_drift(self) -> None:
         altered = copy.deepcopy(self.workspace)
-        altered["athena"]["production"]["deployment_allowed"] = True
+        altered["athena"]["production"]["deployment_allowed"] = False
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):

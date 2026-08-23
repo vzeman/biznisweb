@@ -599,9 +599,7 @@ def main() -> int:
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
-            "cron: '40 1 23 8 *'",
-            "EVENT_NAME: ${{ github.event_name }}",
-            "[[ \"${EVENT_NAME}\" == \"schedule\" ]]",
+            "Require exact manual read-only confirmation",
             "[[ \"${CONFIRM_VERIFICATION}\" == \"true\" ]]",
             "VERIFY_NOT_BEFORE_UTC: '2026-08-23T01:40:00Z'",
             "EXPECTED_CLUSTER_ARN: arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster",
@@ -631,6 +629,13 @@ def main() -> int:
                 growthbook_natural_reconciliation_workflow,
                 marker,
                 f"GrowthBook natural reconciliation verifier lost safety marker: {marker}",
+            )
+        for removed_schedule_marker in ("schedule:", "cron:", "EVENT_NAME"):
+            forbid(
+                growthbook_natural_reconciliation_workflow,
+                removed_schedule_marker,
+                "GrowthBook natural verifier one-time cloud schedule was not removed: "
+                f"{removed_schedule_marker}",
             )
         for forbidden_action in (
             "aws cloudformation create-",

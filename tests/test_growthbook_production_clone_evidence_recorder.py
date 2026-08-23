@@ -38,6 +38,7 @@ from scripts.verify_growthbook_natural_reconciliation import (
     EXPECTED_IMAGE_DIGEST as NATURAL_IMAGE_DIGEST,
     build_natural_reconciliation_evidence,
 )
+from tests.growthbook_test_state import pending_natural_evidence_workspace
 
 
 NATURAL_RUN_ID = "32490000000"
@@ -76,7 +77,9 @@ def _natural_evidence() -> dict[str, object]:
 
 
 def _reader_ready_workspace() -> dict[str, object]:
-    workspace = json.loads(workspace_validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
+    workspace = pending_natural_evidence_workspace(
+        json.loads(workspace_validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
+    )
     natural = _natural_evidence()
     natural_sha = hashlib.sha256(canonical_evidence_bytes(natural)).hexdigest()
     workspace = record_natural_evidence(
