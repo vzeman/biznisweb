@@ -1,0 +1,270 @@
+name: Diagnose VEVO GrowthBook Production Foundation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_diagnostic:
+        description: Type true to run the read-only post-CREATE foundation diagnostic
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-foundation-diagnostic
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  PRODUCTION_STACK_NAME: vevo-growthbook-production
+  PRODUCTION_SERVICE_NAME: vevo-growthbook-collector-production
+  EXPECTED_IMAGE_DIGEST: sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1
+  RUNTIME_PATH: /app
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  diagnose-production-foundation:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Require exact read-only diagnostic confirmation
+        env:
+          CONFIRM_DIAGNOSTIC: ${{ inputs.confirm_diagnostic }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_DIAGNOSTIC}" == "true" ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce pending-evidence and no-activation gates before AWS
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_foundation_bucket_summary \
+            tests.test_growthbook_production_foundation_diagnostic_workflow \
+            tests.test_growthbook_workspace
+          python scripts/security_ci.py
+          python scripts/validate_growthbook_workspace.py
+          python - <<'PY'
+          import json
+
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          registry = json.load(open('growthbook_collector/experiments.json', encoding='utf-8'))
+          production = workspace.get('athena', {}).get('production', {})
+          if production.get('successful_foundation_deployment') is not None:
+              raise SystemExit('foundation evidence is already recorded')
+          if production.get('foundation_evidence_artifact_status') != 'code_prepared_deployment_pending':
+              raise SystemExit('foundation evidence status is not pending')
+          if production.get('credentials_created') is not False:
+              raise SystemExit('Production reader credentials unexpectedly exist')
+          if production.get('reader_provisioning_allowed') is not False:
+              raise SystemExit('Production reader gate unexpectedly opened')
+          if workspace.get('workspace', {}).get('production_allocation_percent') != 0:
+              raise SystemExit('GrowthBook Production allocation must remain zero')
+          if workspace.get('gtm_preview_workspace', {}).get('publish_status') != 'not_published':
+              raise SystemExit('GTM Preview workspace must remain unpublished')
+          if workspace.get('decision_gates', {}).get('production_activation_allowed') is not False:
+              raise SystemExit('Production activation gate must remain false')
+          if registry.get('environments', {}).get('production') != {}:
+              raise SystemExit('Production experiment registry must remain empty')
+          print('FOUNDATION_DIAGNOSTIC_LOCAL_GATE_OK:mutation=none:allocation=0:registry=empty')
+          PY
+
+      - name: Configure AWS credentials for read-only diagnostic
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read exact stack, service, route, target, bucket, and object-class state
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "${ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "AWS account mismatch: ${ACCOUNT_ID}" >&2
+            exit 1
+          fi
+
+          aws cloudformation describe-stacks \
+            --stack-name "${PRODUCTION_STACK_NAME}" \
+            --region "${AWS_REGION}" > diagnostic-stack.json
+          python - <<'PY' > diagnostic-runtime.env
+          import json
+          import os
+
+          stack = json.load(open('diagnostic-stack.json', encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackName') != os.environ['PRODUCTION_STACK_NAME']:
+              raise SystemExit('Production diagnostic stack identity drift')
+          if stack.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production diagnostic stack is not CREATE_COMPLETE')
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          if parameters.get('Environment') != 'production' or parameters.get('PublicRouteEnabled') != 'false':
+              raise SystemExit('Production diagnostic route boundary drift')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorApiBaseUrl', 'CollectorClusterArn', 'CollectorServiceArn',
+              'CollectorServiceName', 'CollectorTaskDefinitionArn', 'EventBucketName',
+          }
+          if not required.issubset(outputs):
+              raise SystemExit('Production diagnostic outputs are incomplete')
+          if outputs['CollectorServiceName'] != os.environ['PRODUCTION_SERVICE_NAME']:
+              raise SystemExit('Production diagnostic service output drift')
+          values = {
+              'DIAGNOSTIC_API_BASE_URL': outputs['CollectorApiBaseUrl'],
+              'DIAGNOSTIC_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'DIAGNOSTIC_SERVICE_ARN': outputs['CollectorServiceArn'],
+              'DIAGNOSTIC_TASK_DEFINITION_ARN': outputs['CollectorTaskDefinitionArn'],
+              'DIAGNOSTIC_EVENT_BUCKET': outputs['EventBucketName'],
+          }
+          for key, value in values.items():
+              if not value or '\n' in value or '\r' in value:
+                  raise SystemExit(f'Production diagnostic output drift: {key}')
+              print(f'{key}={value}')
+          PY
+          cat diagnostic-runtime.env >> "${GITHUB_ENV}"
+          set -a
+          source diagnostic-runtime.env
+          set +a
+
+          aws ecs describe-services \
+            --cluster "${DIAGNOSTIC_CLUSTER_ARN}" \
+            --services "${DIAGNOSTIC_SERVICE_ARN}" \
+            --region "${AWS_REGION}" > diagnostic-service.json
+          SERVICE_TASK_ARN="$(aws ecs list-tasks \
+            --cluster "${DIAGNOSTIC_CLUSTER_ARN}" \
+            --service-name "${PRODUCTION_SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" \
+            --query 'taskArns[0]' \
+            --output text)"
+          if [[ -z "${SERVICE_TASK_ARN}" || "${SERVICE_TASK_ARN}" == 'None' ]]; then
+            echo 'Production diagnostic service task missing.' >&2
+            exit 1
+          fi
+          aws ecs describe-tasks \
+            --cluster "${DIAGNOSTIC_CLUSTER_ARN}" \
+            --tasks "${SERVICE_TASK_ARN}" \
+            --region "${AWS_REGION}" > diagnostic-service-task.json
+          TARGET_GROUP_ARN="$(python - <<'PY'
+          import json
+          service = json.load(open('diagnostic-service.json', encoding='utf-8'))['services'][0]
+          groups = service.get('loadBalancers') or []
+          if len(groups) != 1:
+              raise SystemExit('Production diagnostic target-group boundary drift')
+          print(groups[0]['targetGroupArn'])
+          PY
+          )"
+          aws elbv2 describe-target-health \
+            --target-group-arn "${TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > diagnostic-target-health.json
+          DIAGNOSTIC_API_ID="$(python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          host = urlparse(os.environ['DIAGNOSTIC_API_BASE_URL']).hostname or ''
+          api_id = host.split('.', 1)[0]
+          if not api_id:
+              raise SystemExit('Production diagnostic API ID missing')
+          print(api_id)
+          PY
+          )"
+          aws apigatewayv2 get-routes \
+            --api-id "${DIAGNOSTIC_API_ID}" \
+            --region "${AWS_REGION}" > diagnostic-routes.json
+          aws s3api get-public-access-block \
+            --bucket "${DIAGNOSTIC_EVENT_BUCKET}" \
+            --region "${AWS_REGION}" > diagnostic-public-access.json
+          aws s3api get-bucket-policy-status \
+            --bucket "${DIAGNOSTIC_EVENT_BUCKET}" \
+            --region "${AWS_REGION}" > diagnostic-policy-status.json
+          aws s3api get-bucket-encryption \
+            --bucket "${DIAGNOSTIC_EVENT_BUCKET}" \
+            --region "${AWS_REGION}" > diagnostic-encryption.json
+          aws s3api list-objects-v2 \
+            --bucket "${DIAGNOSTIC_EVENT_BUCKET}" \
+            --max-keys 1000 \
+            --region "${AWS_REGION}" > diagnostic-bucket-listing.json
+          ROUTE_STATUS="$(curl -sS -o diagnostic-route-body.txt -w '%{http_code}' \
+            "${DIAGNOSTIC_API_BASE_URL}/v1/events")"
+
+          python scripts/summarize_growthbook_foundation_bucket.py \
+            --listing diagnostic-bucket-listing.json
+          python - "${ROUTE_STATUS}" <<'PY'
+          import ipaddress
+          import json
+          import os
+          import sys
+
+          service = json.load(open('diagnostic-service.json', encoding='utf-8'))['services'][0]
+          if (
+              service.get('serviceName') != os.environ['PRODUCTION_SERVICE_NAME']
+              or service.get('taskDefinition') != os.environ['DIAGNOSTIC_TASK_DEFINITION_ARN']
+              or service.get('desiredCount') != 1
+              or service.get('runningCount') != 1
+          ):
+              raise SystemExit('Production diagnostic service state drift')
+          task = json.load(open('diagnostic-service-task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['DIAGNOSTIC_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('Production diagnostic task identity drift')
+          if containers[0].get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+              raise SystemExit('Production diagnostic task image drift')
+          details = [
+              row
+              for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip_text = str(next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), ''))
+          if ipaddress.ip_address(private_ip_text) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('Production diagnostic private IP drift')
+          health = json.load(open('diagnostic-target-health.json', encoding='utf-8'))['TargetHealthDescriptions']
+          if [row['TargetHealth']['State'] for row in health] != ['healthy']:
+              raise SystemExit('Production diagnostic target is not healthy')
+          if json.load(open('diagnostic-routes.json', encoding='utf-8')).get('Items') not in (None, []):
+              raise SystemExit('Production diagnostic API unexpectedly has a route')
+          public_access = json.load(open('diagnostic-public-access.json', encoding='utf-8'))['PublicAccessBlockConfiguration']
+          if set(public_access.values()) != {True} or len(public_access) != 4:
+              raise SystemExit('Production diagnostic bucket public-access drift')
+          if json.load(open('diagnostic-policy-status.json', encoding='utf-8')).get('PolicyStatus', {}).get('IsPublic') is not False:
+              raise SystemExit('Production diagnostic bucket policy is public')
+          encryption = json.load(open('diagnostic-encryption.json', encoding='utf-8'))
+          rules = encryption.get('ServerSideEncryptionConfiguration', {}).get('Rules') or []
+          if len(rules) != 1:
+              raise SystemExit('Production diagnostic bucket encryption drift')
+          if sys.argv[1] != '404':
+              raise SystemExit(f'Production diagnostic route returned {sys.argv[1]}, expected 404')
+          print(
+              'FOUNDATION_DIAGNOSTIC_RUNTIME_OK:'
+              f"instance-id=N/A:Fargate:private-ip={private_ip_text}:"
+              f"service={os.environ['PRODUCTION_SERVICE_NAME']}:path=/app:"
+              f"task={task['taskArn'].rsplit('/', 1)[-1]}:"
+              'target=healthy:route=false:bucket-public=false:mutation=none'
+          )
+          PY
+
+      - name: Read-only diagnostic summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## VEVO GrowthBook Production foundation read-only diagnostic'
+            echo "- Expected runtime: \`instance-id=N/A:Fargate / service=${PRODUCTION_SERVICE_NAME} / path=${RUNTIME_PATH}\`"
+            echo '- Public route: `disabled`'
+            echo '- Bucket output: `class counts only; no keys or content`'
+            echo '- AWS mutations: `none`'
+            echo '- GrowthBook, GTM, Meta Ads, BiznisWeb, prices, cart, checkout, orders: `unchanged`'
+          } >> "${GITHUB_STEP_SUMMARY}"

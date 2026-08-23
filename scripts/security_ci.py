@@ -92,6 +92,12 @@ def main() -> int:
         growthbook_host_gate_runtime_resolver = read(
             "scripts/resolve_growthbook_host_gate_runtime.py"
         )
+        growthbook_foundation_diagnostic_workflow = read(
+            ".github/workflows/diagnose-vevo-growthbook-production-foundation.yml"
+        )
+        growthbook_foundation_bucket_summarizer = read(
+            "scripts/summarize_growthbook_foundation_bucket.py"
+        )
         growthbook_production_foundation_recorder = read(
             "scripts/record_growthbook_foundation_evidence.py"
         )
@@ -933,6 +939,68 @@ def main() -> int:
         ) != 1:
             raise AssertionError(
                 "GrowthBook Production foundation must upload exactly one sanitized artifact."
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "confirm_diagnostic:",
+            "foundation evidence is already recorded",
+            "GrowthBook Production allocation must remain zero",
+            "Production experiment registry must remain empty",
+            "Configure AWS credentials for read-only diagnostic",
+            "cloudformation describe-stacks",
+            "ecs describe-services",
+            "elbv2 describe-target-health",
+            "apigatewayv2 get-routes",
+            "s3api get-public-access-block",
+            "s3api get-bucket-policy-status",
+            "s3api get-bucket-encryption",
+            "s3api list-objects-v2",
+            "scripts/summarize_growthbook_foundation_bucket.py",
+            "FOUNDATION_DIAGNOSTIC_RUNTIME_OK:",
+            "target=healthy:route=false:bucket-public=false:mutation=none",
+            "AWS mutations: `none`",
+            "no keys or content",
+        ):
+            require(
+                growthbook_foundation_diagnostic_workflow,
+                marker,
+                f"GrowthBook foundation diagnostic lost safety marker: {marker}",
+            )
+        for marker in (
+            "Return only safe class counts; never return or print object keys.",
+            "bucket listing is truncated",
+            "bucket listing count mismatch",
+            "raw-events=",
+            "athena-results=",
+            "unexpected=",
+            "keys=false:content=false",
+        ):
+            require(
+                growthbook_foundation_bucket_summarizer,
+                marker,
+                f"GrowthBook foundation bucket summarizer lost safety marker: {marker}",
+            )
+        for forbidden_action in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation execute-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "s3api put-",
+            "s3api delete-",
+            "iam create-",
+            "iam delete-",
+            "athena start-query-execution",
+            "scheduler update-",
+            "ads_update",
+            "submit",
+            "upload-artifact",
+        ):
+            forbid(
+                growthbook_foundation_diagnostic_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook foundation diagnostic must remain read-only: {forbidden_action}",
             )
         for marker in (
             "The recorder is offline and fail closed.",
