@@ -37,6 +37,18 @@ def pending_natural_evidence_workspace(
         "code_prepared_natural_run_gate_pending"
     )
     production["foundation_deployment_allowed"] = False
+    production["foundation_evidence_schema_version"] = 1
+    production["foundation_evidence_artifact_status"] = (
+        "code_prepared_deployment_pending"
+    )
+    production["foundation_deployment_run_id"] = None
+    production["foundation_deployment_main_commit"] = None
+    production["foundation_evidence_artifact_sha256"] = None
+    production["successful_foundation_deployment"] = None
+    production["reader_provisioning_status"] = (
+        "code_prepared_foundation_gate_pending"
+    )
+    production["reader_provisioning_allowed"] = False
     production["next_gate"] = (
         "verify_first_natural_reconciliation_then_prepare_route_disabled_deployment"
     )
