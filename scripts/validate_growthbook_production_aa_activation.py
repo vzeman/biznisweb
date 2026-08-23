@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any, Mapping
@@ -18,14 +19,14 @@ STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 
 
 EXPECTED_ACTIVATION = {
-    "schema_version": 1,
+    "schema_version": 2,
     "activation_type": "vevo_growthbook_production_aa",
     "tracking_key": "vevo-sk-aa-001",
     "feature_key": "vevo-sk-aa-assignment",
     "variations": ["control", "variant"],
     "variation_weights": [0.5, 0.5],
     "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-    "status": "collector_verified_ui_preparation_ready",
+    "status": "growthbook_gtm_zero_allocation_prepared",
     "preconditions": {
         "natural_reconciliation_verified": True,
         "route_disabled_foundation_verified": True,
@@ -58,12 +59,14 @@ EXPECTED_ACTIVATION = {
     },
     "growthbook": {
         "environment": "production",
-        "sdk_connection_created": False,
+        "sdk_connection_created": True,
+        "sdk_connection_id": "sdk_19g6lmt5wnngy",
         "sdk_client_key_committed": False,
-        "experiment_created": False,
-        "experiment_id": None,
-        "feature_rule_revision": None,
-        "status": "not_started",
+        "experiment_created": True,
+        "experiment_id": "exp_19g6mmt5wugpk",
+        "feature_rule_revision": 3,
+        "production_rule_publish_status": "draft_not_published",
+        "status": "draft_not_started",
         "data_source_id": "ds_19g6mmt5stlp6",
         "allocation_percent": 0,
     },
@@ -72,9 +75,25 @@ EXPECTED_ACTIVATION = {
         "container_id": "198135331",
         "public_container_id": "GTM-5ZB5LFGB",
         "source_workspace_id": "16",
-        "production_tag_created": False,
-        "production_tag_id": None,
-        "artifact_sha256": None,
+        "production_workspace_id": "17",
+        "production_workspace_name": "VEVO GrowthBook Production A/A",
+        "production_tag_created": True,
+        "production_tag_ids": {
+            "loader": "54",
+            "consent_bridge": "51",
+            "add_to_cart_bridge": "55",
+            "purchase_bridge": "53",
+        },
+        "artifact_source_commit": "1a24b4fe657c546b6fcf71a336b9d4220622a74e",
+        "artifact_sha256": (
+            "d6861bcbe002a96f82a4a29882723002cd6c797177194bdd93f67e6cf2eba8df"
+        ),
+        "setup_tag_sequencing_verified": True,
+        "unprocessed_changes": {
+            "added": 5,
+            "modified": 0,
+            "removed": 0,
+        },
         "publish_status": "not_published",
         "container_version_id": None,
     },
@@ -101,8 +120,45 @@ EXPECTED_ACTIVATION = {
         "drill_status": "not_run",
         "verified_at_utc": None,
     },
-    "next_gate": "prepare_growthbook_and_gtm_zero_allocation_after_review",
+    "next_gate": "run_tag_assistant_zero_traffic_qa_after_review",
 }
+
+
+def _collector_verified_activation() -> dict[str, Any]:
+    """Return the immutable pre-UI boundary used by the collector recorder."""
+
+    activation = copy.deepcopy(EXPECTED_ACTIVATION)
+    activation["schema_version"] = 1
+    activation["status"] = "collector_verified_ui_preparation_ready"
+    activation["growthbook"] = {
+        "environment": "production",
+        "sdk_connection_created": False,
+        "sdk_client_key_committed": False,
+        "experiment_created": False,
+        "experiment_id": None,
+        "feature_rule_revision": None,
+        "status": "not_started",
+        "data_source_id": "ds_19g6mmt5stlp6",
+        "allocation_percent": 0,
+    }
+    activation["gtm"] = {
+        "account_id": "6254499282",
+        "container_id": "198135331",
+        "public_container_id": "GTM-5ZB5LFGB",
+        "source_workspace_id": "16",
+        "production_tag_created": False,
+        "production_tag_id": None,
+        "artifact_sha256": None,
+        "publish_status": "not_published",
+        "container_version_id": None,
+    }
+    activation["next_gate"] = (
+        "prepare_growthbook_and_gtm_zero_allocation_after_review"
+    )
+    return activation
+
+
+EXPECTED_COLLECTOR_VERIFIED_ACTIVATION = _collector_verified_activation()
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -119,7 +175,7 @@ def validate_activation_handoff(
 ) -> None:
     if dict(activation) != EXPECTED_ACTIVATION:
         raise AssertionError(
-            "Production A/A activation must match the reviewed collector deployment gate"
+            "Production A/A activation must match the reviewed zero-allocation UI gate"
         )
 
     if workspace.get("workspace", {}).get("production_allocation_percent") != 0:

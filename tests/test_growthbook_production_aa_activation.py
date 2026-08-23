@@ -27,12 +27,27 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         self.registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
 
-    def test_checked_in_handoff_is_collector_verified_and_traffic_disabled(self) -> None:
+    def test_checked_in_handoff_is_zero_allocation_prepared(self) -> None:
         validator.validate_activation_handoff(
             self.activation,
             self.workspace,
             self.registry,
         )
+
+    def test_growthbook_and_gtm_draft_evidence_is_exact(self) -> None:
+        self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
+        self.assertEqual(
+            "draft_not_published",
+            self.activation["growthbook"]["production_rule_publish_status"],
+        )
+        self.assertEqual("not_published", self.activation["gtm"]["publish_status"])
+        self.assertEqual(
+            {"added": 5, "modified": 0, "removed": 0},
+            self.activation["gtm"]["unprocessed_changes"],
+        )
+        self.assertTrue(self.activation["gtm"]["setup_tag_sequencing_verified"])
+        self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
+        self.assertFalse(self.activation["traffic"]["activation_allowed"])
 
     def test_workflow_yaml_and_every_inline_python_block_compile(self) -> None:
         payload = yaml.safe_load(WORKFLOW)
@@ -96,7 +111,7 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
     def test_status_only_activation_is_rejected(self) -> None:
         altered = copy.deepcopy(self.activation)
         altered["status"] = "clone_verified_collector_deploy_ready"
-        with self.assertRaisesRegex(AssertionError, "reviewed collector deployment gate"):
+        with self.assertRaisesRegex(AssertionError, "reviewed zero-allocation UI gate"):
             validator.validate_activation_handoff(altered, self.workspace, self.registry)
 
     def test_any_unreviewed_gate_change_is_rejected(self) -> None:
@@ -110,7 +125,7 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
                 altered = copy.deepcopy(self.activation)
                 altered[path[0]][path[1]] = value
                 with self.assertRaisesRegex(
-                    AssertionError, "reviewed collector deployment gate"
+                    AssertionError, "reviewed zero-allocation UI gate"
                 ):
                     validator.validate_activation_handoff(
                         altered,
