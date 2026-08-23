@@ -1,0 +1,148 @@
+{
+  "observation_type": "vevo_growthbook_production_clone_observation",
+  "observed_at_utc": "2026-08-23T13:42:24Z",
+  "organization_id": "org_19g6mmt1q79o1",
+  "paid_pro_quantile_metrics": {
+    "creation_skipped": true,
+    "target_metric_ids": {
+      "vevo_cls_p75_milli_24h": null,
+      "vevo_inp_p75_24h": null,
+      "vevo_lcp_p75_24h": null
+    },
+    "upgrade_authorized": false
+  },
+  "production_data_source": {
+    "assignment_query_name": "VEVO consented devices",
+    "assignment_query_result_row_count": 0,
+    "assignment_query_sha256": "3774afcd5e940ca626dc99d66322475a8f32189c0cc1a02e0f35fd9072e1811f",
+    "assignment_query_test_passed": true,
+    "connection_test_passed": true,
+    "database": "vevo_growthbook_production",
+    "id": "ds_19g6mmt5stlp6",
+    "identifier_type": "device_id",
+    "name": "VEVO Production Experiment Facts",
+    "type": "athena",
+    "workgroup": "vevo-growthbook-readonly-production"
+  },
+  "production_fact_tables": {
+    "vevo_device_outcomes_v1": {
+      "configuration_readback_match": true,
+      "curated_result_row_count": 0,
+      "growthbook_ui_query_result_row_count": 1,
+      "id": "ftb_19g6mmt5tg48t",
+      "identifier_type": "device_id",
+      "name": "VEVO Device Outcomes v1",
+      "query_sha256": "cadef07e2d402893665338000a9825985916cf01ff64a7f53d265c7d44e20ff3",
+      "query_test_passed": true,
+      "schema_probe_excluded_from_named_experiments": true,
+      "schema_probe_result_row_count": 1
+    },
+    "vevo_performance_vitals_v1": {
+      "configuration_readback_match": true,
+      "curated_result_row_count": 0,
+      "growthbook_ui_query_result_row_count": 1,
+      "id": "ftb_19g6lmt5ueyhu",
+      "identifier_type": "device_id",
+      "name": "VEVO Performance Vitals v1",
+      "query_sha256": "6a32d0377cb225196d1ab5ccca429fee27e5c589af7b900183399372a0362617",
+      "query_test_passed": true,
+      "schema_probe_excluded_from_named_experiments": true,
+      "schema_probe_result_row_count": 1
+    }
+  },
+  "production_metrics": {
+    "vevo_add_to_cart_24h": {
+      "configuration_readback_match": true,
+      "contract_sha256": "f395d5435eb2f2458efd34d04476cff5e6d929fcbecc14ccaeea7dc9ae09ccbb",
+      "id": "fact__2CeKm6X4Ez3PK8cRiuiKCL",
+      "name": "VEVO Add to cart within 24h"
+    },
+    "vevo_average_order_value_7d": {
+      "configuration_readback_match": true,
+      "contract_sha256": "71e9b9b76aac8cfe1013310fe6c19f595a0e357d4edec6fbeb6d2758871f3f7e",
+      "id": "fact__2CeKmKu3wGQyMM3eGPzSrE",
+      "name": "VEVO Average order value within 7d"
+    },
+    "vevo_cancelled_order_rate_14d": {
+      "configuration_readback_match": true,
+      "contract_sha256": "594b1b41b84c7af4b4814737d3f5990cd0b02f970583a0b30c3e221bed5331f4",
+      "id": "fact__2CeKmPJ6cGJsgkMnNvWgcn",
+      "name": "VEVO Cancelled order rate at 14d maturity"
+    },
+    "vevo_client_error_device_rate_24h": {
+      "configuration_readback_match": true,
+      "contract_sha256": "7b781f3839e06b72d629aa718503721ae6478d9891d0e7fbcc8f602227599ecb",
+      "id": "fact__2CeKmUx5FqfRes5CGS6WAH",
+      "name": "VEVO Client error device rate within 24h"
+    },
+    "vevo_cm1_per_exposed_device_7d": {
+      "configuration_readback_match": true,
+      "contract_sha256": "6a770a1c2569d5e23acba7a34e32097c9a26b61873d7c5d3963927bfe836da46",
+      "id": "fact__2CeKmHDNgQ79FAHCSdZbU7",
+      "name": "VEVO CM1 per exposed device within 7d"
+    },
+    "vevo_purchase_conversion_7d": {
+      "configuration_readback_match": true,
+      "contract_sha256": "dfeda36e289edca728121ea305398cfec3f2029c083f878cace2d007ca2925b6",
+      "id": "fact__2CeKm9AKQS2TwG6zRP2qBh",
+      "name": "VEVO Purchase conversion within 7d"
+    },
+    "vevo_refunded_order_rate_14d": {
+      "configuration_readback_match": true,
+      "contract_sha256": "7feb44d6f176ad6d8e507ddb49664e5af16fbee977903df5c942153b13252d8b",
+      "id": "fact__2CeKmSCrBNLu3xJXCT3zaf",
+      "name": "VEVO Refunded order rate at 14d maturity"
+    },
+    "vevo_revenue_per_exposed_device_7d": {
+      "configuration_readback_match": true,
+      "contract_sha256": "6a72b56b5b937e5b5cf6271dcea0b39538d2443092d5495ccec2f7e9f0d0c084",
+      "id": "fact__2CeKmFKftMtEguy95LunK5",
+      "name": "VEVO Net revenue per exposed device within 7d"
+    }
+  },
+  "project_id": "prj_2CeEJc6J9FwQFix9UhsnKr",
+  "reader_evidence_provenance": {
+    "artifact_sha256": "1715f2b41a1bfd1d58524bdbad8369afc63b76a30d145f959a9cc742370b01d7",
+    "main_commit": "79f1eb4b1b29bb65efbdbe310b0033e1a5a1f594",
+    "workflow_run_id": "32614706434"
+  },
+  "safety": {
+    "biznisweb_mutated": false,
+    "contains_credentials": false,
+    "contains_customer_or_order_data": false,
+    "contains_event_or_device_ids": false,
+    "contains_query_results": false,
+    "gtm_published": false,
+    "meta_ads_mutated": false,
+    "paid_upgrade_accepted": false,
+    "preview_repointed": false,
+    "production_allocation_percent": 0,
+    "production_experiment_started": false
+  },
+  "schema_version": 2,
+  "source_preview_readback": {
+    "connection_repointed": false,
+    "data_source_id": "ds_19g6mmt2c4dmn",
+    "fact_table_ids": {
+      "vevo_device_outcomes_v1": "ftb_19g6mmt2dhrdi",
+      "vevo_performance_vitals_v1": "ftb_19g6mmt2e0otd"
+    },
+    "metric_ids": {
+      "vevo_add_to_cart_24h": "fact__2CeFBdeQA6SLEMaRKd563q",
+      "vevo_average_order_value_7d": "fact__2CeFC1mPhy2axfQ61NCz45",
+      "vevo_cancelled_order_rate_14d": "fact__2CeFC3CdXkdH8zEzFu2CjP",
+      "vevo_client_error_device_rate_24h": "fact__2CeFCH8i2mUPmYAj1pmLZ2",
+      "vevo_cm1_per_exposed_device_7d": "fact__2CeFBxixXV2373bgTrsXzS",
+      "vevo_purchase_conversion_7d": "fact__2CeFBgoFnykxPTRotYTDnB",
+      "vevo_refunded_order_rate_14d": "fact__2CeFCDRWDEiKt6p8C8mixz",
+      "vevo_revenue_per_exposed_device_7d": "fact__2CeFBwmv6pJ39DJbDfwwRQ"
+    },
+    "objects_unchanged": true,
+    "query_sha256": {
+      "assignment": "3774afcd5e940ca626dc99d66322475a8f32189c0cc1a02e0f35fd9072e1811f",
+      "vevo_device_outcomes_v1": "d1261842927818d8e8024a02d797d6e8e3f76610265d0ee01365c1acc58ba0fa",
+      "vevo_performance_vitals_v1": "36465155fb0eba6369b3aec63a95ddbee48690484c2b878213b570da05c40ff8"
+    }
+  },
+  "status": "passed"
+}

@@ -1,6 +1,6 @@
 # VEVO GrowthBook Production clone runbook
 
-Status: Production foundation and reader evidence verified; UI clone in progress with a reviewed schema-probe recovery required before fact-table completion
+Status: Production clone verified complete; Production A/A activation remains a separate reviewed gate
 
 This runbook creates a separate Production Athena data source, two fact tables, and eight Starter-compatible metrics in GrowthBook. It never repoints or edits the verified Preview objects. It does not publish GTM, start an experiment, change Meta Ads or BiznisWeb, accept a paid upgrade, or move Production allocation above `0%`.
 

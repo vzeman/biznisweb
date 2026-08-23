@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-21
+Last updated: 2026-08-23
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -61,16 +61,17 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
-- VEVO GrowthBook Production clone is partially created and safely paused on a versioned schema-probe recovery (`2026-08-23`):
+- VEVO GrowthBook Production clone is verified complete and still hard-disabled for traffic (`2026-08-23`):
   - authenticated GrowthBook connection `ds_19g6mmt5stlp6` passed against database `vevo_growthbook_production` and workgroup `vevo-growthbook-readonly-production`
   - the source retains exactly `device_id` and `VEVO consented devices`; GrowthBook-generated demo `user_id` and `Logged-in Users` objects were deleted after explicit confirmation and the surviving configuration was reloaded
   - assignment SQL executed without SQL error and returned exactly zero rows; Production allocation remains `0%`, GTM remains unpublished, and no Production experiment is running
-  - Device Outcomes shell `ftb_19g6mmt5tg48t` exists; no Performance Vitals fact table or Production metric exists yet
-  - GrowthBook 5.0.1 refuses to create or update a fact table after an empty test with `SQL did not return any columns`; a one-row anonymous literal query proved schema inference without reading or writing AWS data
-  - the recovery branch adds a metadata-only probe guarded by exact wildcard `experimentId='%'`; named experiment IDs exclude it, metric values are null, and the curated Production branch remains empty
+  - Device Outcomes `ftb_19g6mmt5tg48t` and Performance Vitals `ftb_19g6lmt5ueyhu` store the exact merged Production SQL; each UI test returns the one metadata-only probe while an independent curated-only test returns zero rows without SQL error
+  - every outcome column and `vital_value` was manually typed and read back; the source reports exactly two fact tables and eight Starter-compatible metrics, all with unique Production IDs and matching type/filter/aggregation/goal/window contracts
+  - Preview data source `ds_19g6mmt2c4dmn`, fact-table IDs, metric IDs, and exact probe-free SQL were read back unchanged; no paid-Pro p75 metric was created or upgrade accepted
+  - sanitized canonical evidence `vevo-growthbook-production-clone-observation.json` has SHA-256 `b2f96b7047321f11da4f00c7886c4b9422d7759428534f8fd5534ee1299f2030`; it contains no credential, query result, event/device ID, order, or customer data
   - plaintext credentials, the RSA key/certificate, local encrypted credential artifact, and GitHub artifact `9486585740` were deleted after the successful connection; the sanitized evidence JSON was retained
   - no local dev server, worker, watcher, tunnel, or Docker process was started
-  - Next exact step: merge the guarded schema-probe contract through reviewed CI, apply the exact merged SQL to `ftb_19g6mmt5tg48t`, create Performance Vitals and the eight Starter metrics, then record the complete clone observation while allocation stays `0%`
+  - Next exact step: merge the canonical clone evidence through reviewed CI, then prepare the separate reviewed Production A/A activation gate while allocation remains `0%`
 
 - ROY daily report email delivery is disabled, deployed, and host-verified as of `2026-08-21`:
   - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`
