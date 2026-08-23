@@ -249,7 +249,9 @@ jobs:
           PY
           cat production-stack.env >> "${GITHUB_ENV}"
           # shellcheck disable=SC1091
+          set -a
           source production-stack.env
+          set +a
           aws ecs describe-services \
             --cluster "${PRODUCTION_CLUSTER_ARN}" \
             --services "${PRODUCTION_SERVICE_ARN}" \
