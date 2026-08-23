@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť",
+      "slug": "co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+      "body_length": 32798,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-45-2026-08-23-articles.json"
+    },
+    {
+      "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+      "slug": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "body_length": 32156,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-45-2026-08-23-articles.json"
+    },
+    {
+      "title": "Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť",
+      "slug": "co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+      "body_length": 33507,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-45-2026-08-23-articles.json"
+    },
+    {
+      "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+      "slug": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+      "body_length": 33456,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-45-2026-08-23-articles.json"
+    }
+  ]
+}

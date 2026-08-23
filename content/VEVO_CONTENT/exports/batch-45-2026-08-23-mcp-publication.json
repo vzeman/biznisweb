@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-08-23T17:08:46+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "D:\\CodexWorktrees\\Playground-vevo-b45\\content\\VEVO_CONTENT\\imports\\batch-45-2026-08-23-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť",
+      "slug": "co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+      "post_id": "3176",
+      "create": {
+        "post_id": "3176",
+        "title": "Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť",
+        "link": "co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+        "active": "0",
+        "short_length": 160,
+        "long_length": 32796,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3176",
+        "title": "Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť",
+        "link": "co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+        "active": "1",
+        "short_length": 160,
+        "long_length": 32798,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+        "status_code": 200,
+        "location": null,
+        "body_length": 149357
+      }
+    },
+    {
+      "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+      "slug": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "post_id": "3177",
+      "create": {
+        "post_id": "3177",
+        "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+        "link": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+        "active": "0",
+        "short_length": 151,
+        "long_length": 32154,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3177",
+        "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+        "link": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+        "active": "1",
+        "short_length": 151,
+        "long_length": 32156,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 148577
+      }
+    },
+    {
+      "title": "Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť",
+      "slug": "co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+      "post_id": "3178",
+      "create": {
+        "post_id": "3178",
+        "title": "Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť",
+        "link": "co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+        "active": "0",
+        "short_length": 158,
+        "long_length": 33505,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3178",
+        "title": "Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť",
+        "link": "co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+        "active": "1",
+        "short_length": 158,
+        "long_length": 33507,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+        "status_code": 200,
+        "location": null,
+        "body_length": 149996
+      }
+    },
+    {
+      "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+      "slug": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+      "url": "https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+      "post_id": "3179",
+      "create": {
+        "post_id": "3179",
+        "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+        "link": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+        "active": "0",
+        "short_length": 160,
+        "long_length": 33454,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3179",
+        "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+        "link": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+        "active": "1",
+        "short_length": 160,
+        "long_length": 33456,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+        "status_code": 200,
+        "location": null,
+        "body_length": 150017
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-08-23T17:09:49+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 578,
+  "preflight": [
+    {
+      "title": "Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť",
+      "slug": "co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124969
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+      "slug": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124949
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť",
+      "slug": "co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124963
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+      "slug": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124975
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-08-23T17:09:43+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-08-23T17:11:06+02:00"
+}

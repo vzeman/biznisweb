@@ -1,10 +1,10 @@
 # VEVO_CONTENT Project State
 
-Date: 2026-08-20
+Date: 2026-08-23
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-44
+Branch: codex/vevo-content-batch-45
 
 ## Current State
 
@@ -1880,6 +1880,34 @@ Branch: codex/vevo-content-batch-44
   - `imports/verify_batch_44_public.py`;
   - corresponding candidate-scan, duplicate, link, wording, depth, HTML, MCP smoke, MCP publication, and independent public verification reports under `exports/`.
 
+## Batch 45 Fabric Structures - Published 2026-08-23
+
+- Status: complete; all four articles were published through the repo-local slug-safe MCP/API workflow, independently verified on the public website, and checked at a mobile breakpoint.
+- An eight-topic exploratory scan was narrowed to four distinct construction- and surface-level intents. The final titles and exact slugs returned `ok` against `831` merged Blog, FAQ, glossary, and local records; the live catalog has zero duplicate-title groups and zero invalid slugs:
+  - `Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť`;
+  - `Čo je keper alebo twill: šikmá väzba, odolnosť a pranie`;
+  - `Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť`;
+  - `Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia`.
+- Gabardine was deliberately kept out of this batch because it is a member of the twill family and would overlap with the keper article. Neoprene remains in the backlog because its care and product boundaries require a separate technical article.
+- Prepared quality: visible word counts `3443`, `3481`, `3567`, and `3498`; H2 counts `31`, `31`, `32`, and `32`; every article has two responsive tables, eleven styled blocks, a concrete product card, a category card, eight reader-facing FAQ questions, and zero short or one-character paragraphs.
+- Link preflight checked all future targets and `25` unique outgoing destinations with zero failures. The four exact future slugs return `404`; existing VEVO links and current authoritative CottonWorks, Cotton Incorporated, AATCC, ASTM, Woolmark, GINETEX, EU, and ISO links passed. Host-specific ISO `403` and EUR-Lex `202` automated responses are accepted only for those authoritative hosts.
+- Public wording, depth, and HTML safety guards pass with zero fixed prices, forbidden workflow wording, escaped HTML, malformed links, or structural failures. The complete project check passed `38/38` tests with project audit `block_count=0`.
+- The read-only MCP preflight found all four exact titles and slugs free in the `578`-record admin Blog catalog. Disposable hidden smoke post `3175` preserved its explicit slug and rich HTML, remained public `404`, and was deleted; the follow-up admin lookup found zero matches and the public URL remained `404`.
+- Live posts and canonical public URLs:
+  - post `3176`: `https://www.vevo.sk/n/co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost`;
+  - post `3177`: `https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie`;
+  - post `3178`: `https://www.vevo.sk/n/co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost`;
+  - post `3179`: `https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia`.
+- Hidden-first publication preserved exact titles, clean slugs, metadata, and `32156-33507` characters of rich HTML. Every final record has active state `1`, retained the same slug, and returned public HTTP `200`; `exports/batch-45-2026-08-23-mcp-publication.json` reports `record_count=4`, `public_ok_count=4`, and `all_ok=true`.
+- Independent public verification measured `3445`, `3483`, `3569`, and `3500` visible words; H2 counts `31`, `31`, `32`, and `32`; two responsive tables, eleven styled blocks, two product/category action buttons, and zero short paragraphs in every article. All `30` unique target and outgoing destinations passed, with host-specific ISO and EUR-Lex automated responses accepted only for those authoritative hosts.
+- Mobile QA at `390x844` confirmed a `351px` article column, both `680px` tables safely contained by `overflow-x:auto` wrappers, all eleven styled article blocks contained, both action buttons contained, zero one-character paragraphs, and no page-level horizontal overflow. A single visible copy error (`v hrúbka`) was corrected to `v hrúbke` through the same MCP readback without changing post `3176` title, date, active state, or URL; the public verifier then passed again. The temporary viewport override was reset and the QA tab was closed.
+- Final post-publication project check passed `38/38` tests with project audit `block_count=0`, live catalog `record_count=832`, zero duplicate-title groups, zero invalid slugs, and all content/depth/HTML gates green.
+- Durable artifacts:
+  - `content-plan/batch-45-fabric-structures-2026-08-23.md`;
+  - `batches/batch-45-candidate-scan-2026-08-23.txt` and `batches/batch-45-candidates-2026-08-23.txt`;
+  - `imports/build_batch_45_fabric_structures.py` and `imports/batch-45-2026-08-23-articles.json`;
+  - corresponding candidate-scan, duplicate, link, wording, depth, and HTML reports under `exports/`.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -1894,6 +1922,7 @@ Branch: codex/vevo-content-batch-44
 - Batch 42 is complete; post IDs `2345-2348` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 42 title, intent, or slug.
 - Batch 43 is complete; post IDs `3166-3169` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 43 title, intent, or slug.
 - Batch 44 is complete; post IDs `3171-3174` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 44 title, intent, or slug.
+- Batch 45 is complete; post IDs `3176-3179` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 45 title, intent, or slug.
 - VEVO admin browser automation can be unstable on long loops. Use short stepwise source-mode saves, verify public URLs after each small block, and avoid relying on generic hidden-field selectors when old ExtJS form instances remain in the DOM.
 - The VEVO admin browser session was recovered on `2026-07-06` and used to finish batch 33 publication; no batch 33 publication blocker remains.
 - Batch 32 robot-vacuum batch is now published and verified; no batch 32 publication blocker remains.
@@ -1903,8 +1932,8 @@ Branch: codex/vevo-content-batch-44
 
 For the next VEVO work:
 
-1. Select a small batch 45 from an unfilled content-plan cluster and run the duplicate guard against Blog block `765`, FAQ block `774`, glossary block `1905`, and all local prepared batches before drafting.
-2. Keep `codex/vevo-content-batch-44` stacked on the still-open batch 43 branch until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
+1. Select a small batch 46 from an unfilled content-plan cluster and run the duplicate guard against Blog block `765`, FAQ block `774`, glossary block `1905`, and all local prepared batches before drafting.
+2. Keep `codex/vevo-content-batch-45` stacked on the still-open batch 44 branch until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
 3. Resolve the older batch 31 hidden posts `2278` and `2279` separately, preserving their prepared titles and slugs and checking first that no public/canonical replacement already exists.
 4. Never use legacy remote `biznisweb-add_news_post`/`biznisweb-update_news_post` as the final VEVO new-article path. The approved API path is repo-local `biznisweb-vevo-content` with hidden-first creation, explicit slug, readback, resumable report, and independent public verification.
 
