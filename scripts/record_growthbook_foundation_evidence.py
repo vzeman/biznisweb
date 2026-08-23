@@ -2,9 +2,10 @@
 """Validate and record VEVO's route-disabled Production foundation evidence.
 
 The recorder is offline and fail closed.  It accepts only the sanitized,
-canonical artifact emitted after the CREATE-only foundation workflow passes
-both localhost markers and the route-disabled service checks.  It cannot call
-AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, or any network service.
+canonical artifact emitted either by the CREATE-only foundation workflow or by
+the exact schema-v2 post-CREATE recovery workflow after both localhost markers
+and the route-disabled service checks pass.  It cannot call AWS, GrowthBook,
+GTM, Meta Ads, BiznisWeb, or any network service.
 """
 
 from __future__ import annotations
@@ -39,9 +40,25 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 
 EXPECTED_SCHEMA_VERSION = 1
+RECOVERY_SCHEMA_VERSION = 2
 EXPECTED_EVIDENCE_TYPE = "vevo_growthbook_route_disabled_production_foundation"
 EXPECTED_REPOSITORY = "vzeman/biznisweb"
 EXPECTED_WORKFLOW = ".github/workflows/deploy-vevo-growthbook-production-foundation.yml"
+EXPECTED_RECOVERY_WORKFLOW = (
+    ".github/workflows/recover-vevo-growthbook-production-foundation-evidence.yml"
+)
+EXPECTED_CREATION_PROVENANCE = {
+    "workflow": EXPECTED_WORKFLOW,
+    "workflow_run_id": "32612205628",
+    "main_commit": "82d1f04c85f43d007f03090eefbeb0feb09fc140",
+    "workflow_conclusion": "failure",
+    "create_step_conclusion": "success",
+    "post_create_runtime_step_conclusion": "success",
+    "post_create_host_gate_step_conclusion": "success",
+    "final_state_gate_conclusion": "failure",
+    "foundation_artifact_uploaded": False,
+    "allowed_aws_mutation": "cloudformation_create_route_disabled_foundation_only",
+}
 EXPECTED_ACCOUNT_ID = "919341186960"
 EXPECTED_REGION = "eu-central-1"
 EXPECTED_STACK_NAME = "vevo-growthbook-production"
@@ -78,6 +95,10 @@ EXPECTED_SAFETY = {
     "meta_ads_mutations": False,
     "biznisweb_mutations": False,
 }
+EXPECTED_RECOVERY_SAFETY = {
+    **EXPECTED_SAFETY,
+    "allowed_aws_mutation": "ecs_run_task_for_localhost_verification_only",
+}
 
 RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -103,6 +124,7 @@ EXPECTED_ROOT_KEYS = {
     "service_runtime",
     "safety",
 }
+EXPECTED_RECOVERY_ROOT_KEYS = EXPECTED_ROOT_KEYS | {"creation_provenance"}
 EXPECTED_PROVENANCE_KEYS = {
     "workflow_run_id",
     "main_commit",
@@ -135,6 +157,9 @@ ALLOWED_CHANGED_PATHS = {
     "athena.production.reader_provisioning_status",
     "athena.production.reader_provisioning_allowed",
     "athena.production.next_gate",
+}
+RECOVERY_ALLOWED_CHANGED_PATHS = ALLOWED_CHANGED_PATHS | {
+    "athena.production.foundation_evidence_schema_version",
 }
 
 
@@ -209,16 +234,42 @@ def validate_foundation_evidence(
     _require(COMMIT_RE.fullmatch(natural_main_commit) is not None, "natural main commit is invalid")
     _require(SHA256_RE.fullmatch(natural_sha256) is not None, "natural evidence SHA-256 is invalid")
 
-    root = _require_exact_keys(evidence, EXPECTED_ROOT_KEYS, "foundation evidence")
-    _require(type(root["schema_version"]) is int, "foundation schema type drift")
-    _require(root["schema_version"] == EXPECTED_SCHEMA_VERSION, "foundation schema drift")
+    _require(isinstance(evidence, dict), "foundation evidence must be an object")
+    schema_version = evidence.get("schema_version")
+    _require(type(schema_version) is int, "foundation schema type drift")
+    _require(
+        schema_version in {EXPECTED_SCHEMA_VERSION, RECOVERY_SCHEMA_VERSION},
+        "foundation schema drift",
+    )
+    expected_root_keys = (
+        EXPECTED_ROOT_KEYS
+        if schema_version == EXPECTED_SCHEMA_VERSION
+        else EXPECTED_RECOVERY_ROOT_KEYS
+    )
+    root = _require_exact_keys(evidence, expected_root_keys, "foundation evidence")
     _require(root["evidence_type"] == EXPECTED_EVIDENCE_TYPE, "foundation evidence type drift")
     _require(root["status"] == "passed", "foundation evidence status is not passed")
     _require(root["repository"] == EXPECTED_REPOSITORY, "foundation repository drift")
-    _require(root["workflow"] == EXPECTED_WORKFLOW, "foundation workflow drift")
+    expected_workflow = (
+        EXPECTED_WORKFLOW
+        if schema_version == EXPECTED_SCHEMA_VERSION
+        else EXPECTED_RECOVERY_WORKFLOW
+    )
+    _require(root["workflow"] == expected_workflow, "foundation workflow drift")
     _require(root["workflow_run_id"] == run_id, "foundation workflow run ID mismatch")
     _require(root["main_commit"] == main_commit, "foundation main commit mismatch")
     _require(_parse_utc(root["verified_at_utc"], "verified_at_utc") >= NOT_BEFORE_UTC, "foundation evidence predates the natural gate")
+
+    if schema_version == RECOVERY_SCHEMA_VERSION:
+        creation = _require_exact_keys(
+            root["creation_provenance"],
+            set(EXPECTED_CREATION_PROVENANCE),
+            "foundation creation provenance",
+        )
+        _require(
+            creation == EXPECTED_CREATION_PROVENANCE,
+            "foundation creation provenance mismatch",
+        )
 
     provenance = _require_exact_keys(
         root["natural_evidence_provenance"],
@@ -256,7 +307,14 @@ def validate_foundation_evidence(
         host["task_definition"] == service["task_definition"],
         "foundation runtime task definitions differ",
     )
-    _require(root["safety"] == EXPECTED_SAFETY, "foundation safety boundary drift")
+    expected_safety = (
+        EXPECTED_SAFETY
+        if schema_version == EXPECTED_SCHEMA_VERSION
+        else EXPECTED_RECOVERY_SAFETY
+    )
+    _require(root["safety"] == expected_safety, "foundation safety boundary drift")
+    if schema_version == RECOVERY_SCHEMA_VERSION:
+        _require(host["task_id"] != service["task_id"], "recovery host and service tasks must differ")
 
 
 def build_foundation_evidence(
@@ -332,6 +390,82 @@ def build_foundation_evidence(
     return evidence
 
 
+def build_foundation_recovery_evidence(
+    *,
+    verified_at: datetime,
+    workflow_run_id: str,
+    main_commit: str,
+    natural_workflow_run_id: str,
+    natural_main_commit: str,
+    natural_evidence_sha256: str,
+    host_task_id: str,
+    host_private_ip: str,
+    service_task_id: str,
+    service_private_ip: str,
+    task_definition: str,
+) -> dict[str, Any]:
+    """Build schema-v2 proof for the one-time post-CREATE evidence recovery."""
+
+    _require(
+        verified_at.tzinfo is not None and verified_at.utcoffset() is not None,
+        "foundation evidence clock must be timezone-aware",
+    )
+    verified_utc = verified_at.astimezone(timezone.utc).replace(microsecond=0)
+    runtime_common = {
+        "instance_id": "N/A:Fargate",
+        "service": EXPECTED_SERVICE_NAME,
+        "runtime_path": EXPECTED_RUNTIME_PATH,
+        "task_definition": task_definition,
+        "image_digest": EXPECTED_IMAGE_DIGEST,
+    }
+    evidence = {
+        "schema_version": RECOVERY_SCHEMA_VERSION,
+        "evidence_type": EXPECTED_EVIDENCE_TYPE,
+        "status": "passed",
+        "repository": EXPECTED_REPOSITORY,
+        "workflow": EXPECTED_RECOVERY_WORKFLOW,
+        "workflow_run_id": str(workflow_run_id),
+        "main_commit": str(main_commit),
+        "verified_at_utc": verified_utc.isoformat().replace("+00:00", "Z"),
+        "creation_provenance": copy.deepcopy(EXPECTED_CREATION_PROVENANCE),
+        "natural_evidence_provenance": {
+            "workflow_run_id": str(natural_workflow_run_id),
+            "main_commit": str(natural_main_commit),
+            "artifact_sha256": str(natural_evidence_sha256),
+        },
+        "aws": {
+            "account_id": EXPECTED_ACCOUNT_ID,
+            "region": EXPECTED_REGION,
+            "stack_name": EXPECTED_STACK_NAME,
+            "stack_status": "CREATE_COMPLETE",
+        },
+        "deployment": copy.deepcopy(EXPECTED_DEPLOYMENT),
+        "host_gate": {
+            **runtime_common,
+            "private_ip": host_private_ip,
+            "task_id": host_task_id,
+            "localhost_health_marker_verified": True,
+            "localhost_runtime_marker_verified": True,
+        },
+        "service_runtime": {
+            **runtime_common,
+            "private_ip": service_private_ip,
+            "task_id": service_task_id,
+            "target_health": "healthy",
+        },
+        "safety": copy.deepcopy(EXPECTED_RECOVERY_SAFETY),
+    }
+    validate_foundation_evidence(
+        evidence,
+        expected_workflow_run_id=str(workflow_run_id),
+        expected_main_commit=str(main_commit),
+        expected_natural_run_id=str(natural_workflow_run_id),
+        expected_natural_main_commit=str(natural_main_commit),
+        expected_natural_sha256=str(natural_evidence_sha256),
+    )
+    return evidence
+
+
 def record_foundation_evidence(
     workspace: Mapping[str, Any],
     evidence: Mapping[str, Any],
@@ -379,6 +513,8 @@ def record_foundation_evidence(
         _require(
             production.get("foundation_evidence_artifact_status")
             == "verified_downloaded_sha256_recorded"
+            and production.get("foundation_evidence_schema_version")
+            == evidence.get("schema_version")
             and production.get("foundation_deployment_run_id")
             == str(expected_workflow_run_id)
             and production.get("foundation_deployment_main_commit")
@@ -438,6 +574,7 @@ def record_foundation_evidence(
     production["foundation_evidence_artifact_status"] = (
         "verified_downloaded_sha256_recorded"
     )
+    production["foundation_evidence_schema_version"] = evidence["schema_version"]
     production["foundation_deployment_run_id"] = str(expected_workflow_run_id)
     production["foundation_deployment_main_commit"] = str(expected_main_commit)
     production["foundation_evidence_artifact_sha256"] = evidence_sha256
@@ -448,8 +585,13 @@ def record_foundation_evidence(
     production["reader_provisioning_allowed"] = True
     production["next_gate"] = "dispatch_production_reader_after_review"
 
+    allowed_changed_paths = (
+        ALLOWED_CHANGED_PATHS
+        if evidence["schema_version"] == EXPECTED_SCHEMA_VERSION
+        else RECOVERY_ALLOWED_CHANGED_PATHS
+    )
     _require(
-        _changed_leaf_paths(workspace, result) == ALLOWED_CHANGED_PATHS,
+        _changed_leaf_paths(workspace, result) == allowed_changed_paths,
         "foundation manifest change-set boundary drift",
     )
     return result
