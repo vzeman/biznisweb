@@ -433,6 +433,22 @@ class GrowthBookNaturalReconciliationVerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(VerificationError, "failure marker"):
             self.verify(payloads)
 
+    def test_accepts_optional_absent_ecs_log_stream_with_exact_task_binding(self) -> None:
+        payloads = _base_payloads()
+        del payloads["task_state_payload"]["tasks"][0]["containers"][0][
+            "logStreamName"
+        ]
+        result = self.verify(payloads)
+        self.assertEqual("a" * 32, result["task_id"])
+
+    def test_rejects_contradictory_nonempty_ecs_log_stream(self) -> None:
+        payloads = _base_payloads()
+        payloads["task_state_payload"]["tasks"][0]["containers"][0][
+            "logStreamName"
+        ] = f"{LOG_PREFIX}/reporting/{'b' * 32}"
+        with self.assertRaisesRegex(VerificationError, "log stream drift"):
+            self.verify(payloads)
+
     def test_rejects_known_manual_one_shot_identity(self) -> None:
         payloads = _base_payloads()
         payloads["task_state_payload"]["tasks"][0]["startedBy"] = (
