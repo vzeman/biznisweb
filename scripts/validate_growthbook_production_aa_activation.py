@@ -98,8 +98,11 @@ EXPECTED_ACTIVATION = {
         "container_version_id": None,
     },
     "tag_assistant_qa": {
-        "status": "desktop_observed_mobile_and_zero_assignment_readback_pending",
-        "observed_at_local_date": "2026-08-23",
+        "status": (
+            "mobile_zero_assignment_and_consent_observed_"
+            "collector_and_storage_pending"
+        ),
+        "observed_at_local_date": "2026-08-24",
         "workspace_id": "17",
         "session_connected": True,
         "desktop_consent_cycle_observed": True,
@@ -114,11 +117,11 @@ EXPECTED_ACTIVATION = {
         "add_to_cart_text_unchanged": True,
         "preexisting_cart_item_count": 2,
         "cart_mutated": False,
-        "mobile_viewport_verified": False,
-        "zero_assignment_verified": False,
+        "mobile_viewport_verified": True,
+        "zero_assignment_verified": True,
         "zero_collector_request_verified": False,
         "owned_storage_cleanup_verified": False,
-        "ga4_meta_consent_behavior_verified": False,
+        "ga4_meta_consent_behavior_verified": True,
     },
     "traffic": {
         "activation_allowed": False,
