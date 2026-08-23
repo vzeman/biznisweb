@@ -1,6 +1,6 @@
 # VEVO GrowthBook Pro workspace contract
 
-Status: A/A is configured and running only in staging; the unpublished Preview runtime, natural reconciliation, and same-population Meta/reporting audit are verified end to end. The route-disabled Production foundation, dedicated reader, separate GrowthBook connection, `device_id`, assignment query, two fact tables, and eight Starter-compatible metrics are verified. Production allocation remains `0%`, GTM is unpublished, no Production experiment is running, and three paid-Pro p75 metrics remain pending.
+Status: A/A is configured and running only in staging; the unpublished Preview runtime, natural reconciliation, and same-population Meta/reporting audit are verified end to end. The route-disabled Production foundation, dedicated reader, separate GrowthBook connection, `device_id`, assignment query, two fact tables, and eight Starter-compatible metrics are verified. The Production collector registry contains only `vevo-sk-aa-001` and its deployment gate is prepared; Production allocation remains `0%`, GTM is unpublished, no Production experiment is running, and three paid-Pro p75 metrics remain pending.
 
 Last reviewed: 2026-08-23
 
@@ -61,7 +61,7 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 
 ## Next exact step
 
-Merge the canonical Production clone evidence through reviewed CI. Then prepare the separate reviewed Production A/A activation gate; do not click GTM `Submit`, start A/A/CTA, change Meta Ads, accept a paid Pro upgrade, create the three p75 metrics, repoint Preview, or move Production allocation above `0%` during the evidence merge.
+Merge the collector deployment gate through reviewed CI, then dispatch `Deploy VEVO GrowthBook Production A/A Collector` only from the exact merged `main` commit. Do not click GTM `Submit`, start A/A/CTA, change Meta Ads, accept a paid Pro upgrade, create the three p75 metrics, repoint Preview, or move Production allocation above `0%` during the collector rollout.
 
 After Production A/A has genuinely run, evaluate only the protected aggregate snapshot and require `PASS` explicitly:
 

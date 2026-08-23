@@ -418,11 +418,18 @@ def main() -> int:
             "curl -fsS http://127.0.0.1:8080/marker.json",
             "GrowthBook collector must prove its marker with curl on localhost.",
         )
-        require(
-            growthbook_registry,
-            '"production": {}',
-            "GrowthBook production registry must remain empty before rollout approval.",
+        preview_aa_registry = growthbook_registry_config.get("environments", {}).get(
+            "preview", {}
+        ).get("vevo-sk-aa-001")
+        production_registry = growthbook_registry_config.get("environments", {}).get(
+            "production"
         )
+        if production_registry != {"vevo-sk-aa-001": preview_aa_registry}:
+            raise AssertionError(
+                "GrowthBook Production registry must contain only the exact reviewed A/A contract."
+            )
+        if "vevo-sk-product-cta-color-001" in production_registry:
+            raise AssertionError("GrowthBook CTA registry entry is forbidden in Production.")
         require(
             growthbook_storefront,
             "var PRODUCTION_ACTIVATION = false;",

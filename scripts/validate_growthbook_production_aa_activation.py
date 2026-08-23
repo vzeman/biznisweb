@@ -25,19 +25,19 @@ EXPECTED_ACTIVATION = {
     "variations": ["control", "variant"],
     "variation_weights": [0.5, 0.5],
     "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-    "status": "prepared_hard_disabled_clone_gate_pending",
+    "status": "clone_verified_collector_deploy_ready",
     "preconditions": {
-        "natural_reconciliation_verified": False,
-        "route_disabled_foundation_verified": False,
-        "production_reader_verified": False,
-        "growthbook_clone_verified": False,
+        "natural_reconciliation_verified": True,
+        "route_disabled_foundation_verified": True,
+        "production_reader_verified": True,
+        "growthbook_clone_verified": True,
     },
     "collector": {
         "deployment_workflow": (
             ".github/workflows/deploy-vevo-growthbook-production-aa-collector.yml"
         ),
-        "deployment_allowed": False,
-        "registry_entry_present": False,
+        "deployment_allowed": True,
+        "registry_entry_present": True,
         "public_route_enabled": False,
         "workflow_run_id": None,
         "main_commit": None,
@@ -58,7 +58,7 @@ EXPECTED_ACTIVATION = {
         "experiment_id": None,
         "feature_rule_revision": None,
         "status": "not_started",
-        "data_source_id": None,
+        "data_source_id": "ds_19g6mmt5stlp6",
         "allocation_percent": 0,
     },
     "gtm": {
@@ -95,10 +95,7 @@ EXPECTED_ACTIVATION = {
         "drill_status": "not_run",
         "verified_at_utc": None,
     },
-    "next_gate": (
-        "after_natural_foundation_reader_and_clone_evidence_open_"
-        "collector_deployment_in_separate_review"
-    ),
+    "next_gate": "dispatch_production_aa_collector_after_review",
 }
 
 
@@ -115,7 +112,9 @@ def validate_activation_handoff(
     registry: Mapping[str, Any],
 ) -> None:
     if dict(activation) != EXPECTED_ACTIVATION:
-        raise AssertionError("Production A/A activation must remain hard-disabled")
+        raise AssertionError(
+            "Production A/A activation must match the reviewed collector deployment gate"
+        )
 
     if workspace.get("workspace", {}).get("production_allocation_percent") != 0:
         raise AssertionError("Production A/A activation requires zero workspace allocation")
@@ -141,9 +140,50 @@ def validate_activation_handoff(
     if cta.get("status") != "draft" or cta.get("production_allocation_percent") != 0:
         raise AssertionError("CTA experiment must remain stopped before Production A/A")
 
+    natural = workspace.get("reconciliation_checkpoint", {}).get(
+        "recurring_schedule", {}
+    )
+    production = workspace.get("athena", {}).get("production", {})
+    clone = production.get("growthbook_clone", {})
+    if (
+        natural.get("natural_verifier_status") != "passed_retention_recovery_run"
+        or natural.get("natural_evidence_artifact_status")
+        != "verified_downloaded_sha256_recorded"
+    ):
+        raise AssertionError("Natural reconciliation evidence is not verified")
+    if (
+        production.get("status") != "route_disabled_foundation_deployed_verified"
+        or production.get("foundation_evidence_artifact_status")
+        != "verified_downloaded_sha256_recorded"
+    ):
+        raise AssertionError("Production foundation evidence is not verified")
+    if (
+        production.get("reader_provisioning_status")
+        != "verified_active_encrypted_handoff_ready_for_growthbook"
+        or production.get("reader_evidence_artifact_status")
+        != "verified_downloaded_sha256_recorded"
+    ):
+        raise AssertionError("Production reader evidence is not verified")
+    if (
+        clone.get("status") != "verified_complete"
+        or clone.get("mutation_status") != "created_and_query_verified"
+        or clone.get("observation_status")
+        != "verified_canonical_sha256_recorded"
+    ):
+        raise AssertionError("Production GrowthBook clone evidence is not verified")
+    if EXPECTED_ACTIVATION["growthbook"]["data_source_id"] != clone.get(
+        "target_data_source_id"
+    ):
+        raise AssertionError("Production GrowthBook data source ID drift")
+
     environments = registry.get("environments") or {}
-    if environments.get("production") != {}:
-        raise AssertionError("Production collector registry must remain empty before its reviewed gate")
+    preview_aa = (environments.get("preview") or {}).get("vevo-sk-aa-001")
+    if environments.get("production") != {"vevo-sk-aa-001": preview_aa}:
+        raise AssertionError(
+            "Production collector registry must contain only the exact A/A contract"
+        )
+    if "vevo-sk-product-cta-color-001" in environments.get("production", {}):
+        raise AssertionError("CTA experiment is forbidden in the Production registry")
 
     storefront = STOREFRONT_PATH.read_text(encoding="utf-8")
     if storefront.count("var PRODUCTION_ACTIVATION = false;") != 1:

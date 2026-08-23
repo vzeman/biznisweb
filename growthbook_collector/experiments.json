@@ -47,6 +47,31 @@
         ]
       }
     },
-    "production": {}
+    "production": {
+      "vevo-sk-aa-001": {
+        "variations": [
+          "control",
+          "variant"
+        ],
+        "exposure_page_types": [
+          "home",
+          "product",
+          "category"
+        ],
+        "health_page_types": [
+          "home",
+          "product",
+          "category",
+          "checkout_success"
+        ],
+        "allowed_events": [
+          "experiment_exposure",
+          "add_to_cart",
+          "order_completed",
+          "performance_vital",
+          "client_error_observed"
+        ]
+      }
+    }
   }
 }
