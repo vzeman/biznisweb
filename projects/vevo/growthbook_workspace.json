@@ -526,18 +526,83 @@
       "foundation_deployment_run_id": "32613802790",
       "foundation_deployment_main_commit": "4aefe8b43a3c17756ab127303e2c59bce71be546",
       "foundation_evidence_artifact_sha256": "bfc6ea2f0033d6ff8ce07cf3131ce114e9e6ed4f64afb86141ad12d44e259828",
-      "credentials_created": false,
+      "credentials_created": true,
       "reader_provisioning_workflow": ".github/workflows/provision-vevo-growthbook-production-reader.yml",
-      "reader_provisioning_status": "foundation_verified_ready_for_reviewed_dispatch",
-      "reader_provisioning_allowed": true,
+      "reader_provisioning_status": "verified_active_encrypted_handoff_ready_for_growthbook",
+      "reader_provisioning_allowed": false,
       "reader_evidence_schema_version": 1,
       "reader_evidence_file": "vevo-growthbook-production-reader-evidence.json",
-      "reader_evidence_artifact_status": "code_prepared_provisioning_pending",
+      "reader_evidence_artifact_status": "verified_downloaded_sha256_recorded",
       "reader_evidence_contains_credentials": false,
-      "reader_provisioning_run_id": null,
-      "reader_provisioning_main_commit": null,
-      "reader_evidence_artifact_sha256": null,
-      "successful_reader_provisioning": null,
+      "reader_provisioning_run_id": "32614706434",
+      "reader_provisioning_main_commit": "79f1eb4b1b29bb65efbdbe310b0033e1a5a1f594",
+      "reader_evidence_artifact_sha256": "1715f2b41a1bfd1d58524bdbad8369afc63b76a30d145f959a9cc742370b01d7",
+      "successful_reader_provisioning": {
+        "aws": {
+          "account_id": "919341186960",
+          "region": "eu-central-1",
+          "stack_name": "vevo-growthbook-production"
+        },
+        "data_access": {
+          "curated_prefix_only": true,
+          "database": "vevo_growthbook_production",
+          "raw_prefix_access": false,
+          "s3_results_url": "s3://vevo-growthbook-production-experimentdatabucket-kmclx1gbpx2z/athena-results/growthbook/",
+          "workgroup": "vevo-growthbook-readonly-production"
+        },
+        "evidence_type": "vevo_growthbook_production_reader_evidence",
+        "foundation_evidence_provenance": {
+          "artifact_sha256": "bfc6ea2f0033d6ff8ce07cf3131ce114e9e6ed4f64afb86141ad12d44e259828",
+          "main_commit": "4aefe8b43a3c17756ab127303e2c59bce71be546",
+          "workflow_run_id": "32613802790"
+        },
+        "host_gate": {
+          "image_digest": "sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1",
+          "instance_id": "N/A:Fargate",
+          "localhost_health_marker_verified": true,
+          "localhost_runtime_marker_verified": true,
+          "private_ip": "172.31.28.57",
+          "runtime_path": "/app",
+          "service": "vevo-growthbook-collector-production",
+          "task_definition": "vevo-growthbook-collector-production:1",
+          "task_id": "2c33ccdc1a1148758fe3c5fac162fb11"
+        },
+        "iam_identity": {
+          "active_access_key_count": 1,
+          "attached_policy_count": 1,
+          "exact_tags": {
+            "Environment": "production",
+            "ManagedBy": "GitHubActions",
+            "Project": "VEVO",
+            "Purpose": "GrowthBookAthena"
+          },
+          "group_count": 0,
+          "inline_policy_count": 0,
+          "policy_arn": "arn:aws:iam::919341186960:policy/vevo-growthbook-readonly-production",
+          "user_name": "vevo-growthbook-production-reader",
+          "user_path": "/vevo/growthbook/production/"
+        },
+        "main_commit": "79f1eb4b1b29bb65efbdbe310b0033e1a5a1f594",
+        "repository": "vzeman/biznisweb",
+        "safety": {
+          "artifact_retention_days": 1,
+          "biznisweb_mutated": false,
+          "contains_access_key_id": false,
+          "contains_customer_or_order_data": false,
+          "contains_plaintext_credentials": false,
+          "contains_secret_access_key": false,
+          "encrypted_handoff_created": true,
+          "growthbook_control_plane_mutated": false,
+          "gtm_mutated": false,
+          "meta_ads_mutated": false,
+          "production_allocation_mutated": false
+        },
+        "schema_version": 1,
+        "status": "passed",
+        "verified_at_utc": "2026-08-23T03:12:21Z",
+        "workflow": ".github/workflows/provision-vevo-growthbook-production-reader.yml",
+        "workflow_run_id": "32614706434"
+      },
       "expected_iam_user_name": "vevo-growthbook-production-reader",
       "expected_iam_user_path": "/vevo/growthbook/production/",
       "successful_foundation_deployment": {
@@ -622,8 +687,8 @@
         "workflow_run_id": "32613802790"
       },
       "growthbook_clone": {
-        "status": "code_prepared_foundation_reader_gate_pending",
-        "clone_allowed": false,
+        "status": "reader_verified_ready_for_reviewed_growthbook_clone",
+        "clone_allowed": true,
         "mutation_status": "not_started",
         "observation_schema_version": 1,
         "observation_file": "vevo-growthbook-production-clone-observation.json",
@@ -712,7 +777,7 @@
         "preview_image_digest": "sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1",
         "external_mutation_observed": false
       },
-      "next_gate": "dispatch_production_reader_after_review"
+      "next_gate": "connect_production_reader_and_clone_growthbook_after_review"
     },
     "assignment_query": "projects/vevo/growthbook_sql/assignment.sql"
   },

@@ -1,6 +1,6 @@
 # VEVO GrowthBook Production clone runbook
 
-Status: prepared, hard-disabled until the Production foundation and reader evidence are verified
+Status: Production foundation and reader evidence verified; reviewed UI clone allowed but not started
 
 This runbook creates a separate Production Athena data source, two fact tables, and eight Starter-compatible metrics in GrowthBook. It never repoints or edits the verified Preview objects. It does not publish GTM, start an experiment, change Meta Ads or BiznisWeb, accept a paid upgrade, or move Production allocation above `0%`.
 
@@ -23,7 +23,7 @@ Do not start the GrowthBook UI work until every item below is true in the review
 5. Production registry is empty, Production allocation is `0%`, GTM is `not_published`, and `production_activation_allowed=false`.
 6. The GrowthBook workspace is still Starter and `paid_pro_upgrade_authorized=false`.
 
-The CMS credential artifact stays outside Git. Decrypt it only locally, enter the access-key ID and secret only into the authenticated GrowthBook Athena connection, and never print, screenshot, paste into chat, or store either value in the observation. Browser entry of these credentials requires a separate action-time confirmation immediately before transmission to GrowthBook.
+The CMS credential artifact stays outside Git. Decrypt it only locally, enter the access-key ID and secret only into the authenticated GrowthBook Athena connection, and never print, screenshot, paste into chat, or store either value in the observation. Browser entry of these credentials requires explicit action-time confirmation immediately before transmission to GrowthBook; record that confirmation in the active task, never in the source manifest.
 
 ## Frozen source objects
 
