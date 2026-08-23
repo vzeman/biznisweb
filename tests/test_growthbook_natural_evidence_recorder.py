@@ -23,6 +23,7 @@ from scripts.verify_growthbook_natural_reconciliation import (
     EXPECTED_IMAGE_DIGEST,
     build_natural_reconciliation_evidence,
 )
+from tests.growthbook_test_state import pending_natural_evidence_workspace
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -60,8 +61,8 @@ def _evidence() -> dict[str, object]:
 
 class GrowthBookNaturalEvidenceRecorderTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.workspace = json.loads(
-            workspace_validator.WORKSPACE_PATH.read_text(encoding="utf-8")
+        self.workspace = pending_natural_evidence_workspace(
+            json.loads(workspace_validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         )
         self.reporting = json.loads(
             workspace_validator.REPORTING_PATH.read_text(encoding="utf-8")
