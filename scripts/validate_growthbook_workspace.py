@@ -144,6 +144,10 @@ EXPECTED_FACT_TABLES = {
     "vevo_device_outcomes_v1": "projects/vevo/growthbook_sql/device_outcomes.sql",
     "vevo_performance_vitals_v1": "projects/vevo/growthbook_sql/performance_vitals.sql",
 }
+EXPECTED_PRODUCTION_FACT_TABLES = {
+    "vevo_device_outcomes_v1": "projects/vevo/growthbook_sql/device_outcomes_production.sql",
+    "vevo_performance_vitals_v1": "projects/vevo/growthbook_sql/performance_vitals_production.sql",
+}
 EXPECTED_METRICS = {
     "vevo_add_to_cart_24h",
     "vevo_purchase_conversion_7d",
@@ -187,6 +191,8 @@ EXPECTED_OUTCOME_NUMERIC_COLUMNS = [
     "unmatched_transaction_count",
     "ambiguous_transaction_count",
 ]
+EXPECTED_SCHEMA_PROBE_EXPERIMENT_ID = "__growthbook_schema_only__"
+EXPECTED_SCHEMA_PROBE_DEVICE_ID = "00000000-0000-4000-8000-000000000000"
 EXPECTED_FEATURES = {
     "vevo-sk-aa-001": "vevo-sk-aa-assignment",
     "vevo-sk-product-cta-color-001": "vevo-sk-product-cta-color",
@@ -218,7 +224,14 @@ def _read_repo_path(value: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _validate_sql(name: str, sql: str, *, table: str, experiment_filter: bool) -> None:
+def _validate_sql(
+    name: str,
+    sql: str,
+    *,
+    table: str,
+    experiment_filter: bool,
+    schema_probe: bool = False,
+) -> None:
     lowered = sql.lower()
     if not re.search(r"\bselect\b", lowered) or not re.search(r"\bfrom\b", lowered):
         raise AssertionError(f"{name} must be a SELECT query")
@@ -246,6 +259,28 @@ def _validate_sql(name: str, sql: str, *, table: str, experiment_filter: bool) -
     has_experiment_filter = "experiment_id like '{{ experimentid }}'" in lowered
     if has_experiment_filter != experiment_filter:
         raise AssertionError(f"{name} experiment filter does not match its contract")
+    if schema_probe:
+        probe_marker_counts = {
+            "union all": 1,
+            EXPECTED_SCHEMA_PROBE_EXPERIMENT_ID: 1,
+            EXPECTED_SCHEMA_PROBE_DEVICE_ID: (
+                1 if table == "experiment_device_facts" else 2
+            ),
+            "cast(current_timestamp as timestamp)": 1,
+            "from (values (1)) as schema_seed(x)": 1,
+            "where '{{ experimentid }}' = '%'": 1,
+        }
+        for marker, expected_count in probe_marker_counts.items():
+            if lowered.count(marker) != expected_count:
+                raise AssertionError(f"{name} schema probe marker drift: {marker}")
+        union_index = lowered.index("union all")
+        guard_index = lowered.index("where '{{ experimentid }}' = '%'")
+        if guard_index <= union_index:
+            raise AssertionError(f"{name} schema probe is not isolated after UNION ALL")
+        if "or '{{ experimentid }}' = '%'" in lowered:
+            raise AssertionError(f"{name} schema probe may not widen the curated fact branch")
+    elif "__growthbook_schema_only__" in lowered or "where '{{ experimentid }}' = '%'" in lowered:
+        raise AssertionError(f"{name} must not contain a Production schema probe")
 
 
 def validate() -> None:
@@ -926,7 +961,7 @@ def validate() -> None:
             "status": "code_prepared_foundation_reader_gate_pending",
             "clone_allowed": False,
             "mutation_status": "not_started",
-            "observation_schema_version": 1,
+            "observation_schema_version": 2,
             "observation_file": (
                 "vevo-growthbook-production-clone-observation.json"
             ),
@@ -941,6 +976,7 @@ def validate() -> None:
                 "vevo_device_outcomes_v1": "ftb_19g6mmt2dhrdi",
                 "vevo_performance_vitals_v1": "ftb_19g6mmt2e0otd",
             },
+            "target_fact_table_query_paths": EXPECTED_PRODUCTION_FACT_TABLES,
             "target_fact_table_ids": {
                 "vevo_device_outcomes_v1": None,
                 "vevo_performance_vitals_v1": None,
@@ -1243,6 +1279,7 @@ def validate() -> None:
         assignment_sql,
         table="experiment_device_facts",
         experiment_filter=False,
+        schema_probe=False,
     )
     for dimension in ("meta_campaign_id", "meta_adset_id", "meta_ad_id", "meta_placement"):
         if dimension not in assignment_sql:
@@ -1264,7 +1301,33 @@ def validate() -> None:
             if key == "vevo_device_outcomes_v1"
             else "experiment_performance_facts"
         )
-        _validate_sql(expected_path, sql, table=table, experiment_filter=True)
+        _validate_sql(
+            expected_path,
+            sql,
+            table=table,
+            experiment_filter=True,
+            schema_probe=False,
+        )
+    production_fact_paths = (
+        ((athena.get("production") or {}).get("growthbook_clone") or {}).get(
+            "target_fact_table_query_paths"
+        )
+    )
+    if production_fact_paths != EXPECTED_PRODUCTION_FACT_TABLES:
+        raise AssertionError("Production fact-table query-path contract changed")
+    for key, expected_path in EXPECTED_PRODUCTION_FACT_TABLES.items():
+        table = (
+            "experiment_device_facts"
+            if key == "vevo_device_outcomes_v1"
+            else "experiment_performance_facts"
+        )
+        _validate_sql(
+            expected_path,
+            _read_repo_path(expected_path),
+            table=table,
+            experiment_filter=True,
+            schema_probe=True,
+        )
     if (
         fact_map["vevo_device_outcomes_v1"].get("growthbook_id") != "ftb_19g6mmt2dhrdi"
         or fact_map["vevo_device_outcomes_v1"].get("status")

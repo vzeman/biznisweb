@@ -10,6 +10,12 @@ POPULATION_SQL = ROOT / "projects" / "vevo" / "growthbook_sql" / "population_aud
 VARIATIONS_SQL = ROOT / "projects" / "vevo" / "growthbook_sql" / "population_variations.sql"
 ASSIGNMENT_SQL = ROOT / "projects" / "vevo" / "growthbook_sql" / "assignment.sql"
 OUTCOME_SQL = ROOT / "projects" / "vevo" / "growthbook_sql" / "device_outcomes.sql"
+PRODUCTION_OUTCOME_SQL = (
+    ROOT / "projects" / "vevo" / "growthbook_sql" / "device_outcomes_production.sql"
+)
+PRODUCTION_PERFORMANCE_SQL = (
+    ROOT / "projects" / "vevo" / "growthbook_sql" / "performance_vitals_production.sql"
+)
 
 
 class GrowthBookMetaPopulationAuditWorkflowTests(unittest.TestCase):
@@ -65,6 +71,33 @@ class GrowthBookMetaPopulationAuditWorkflowTests(unittest.TestCase):
                 "contaminated = 0",
             ):
                 self.assertEqual(sql.count(predicate), 1)
+
+    def test_fact_queries_expose_only_a_wildcard_schema_probe(self) -> None:
+        for sql_path in (PRODUCTION_OUTCOME_SQL, PRODUCTION_PERFORMANCE_SQL):
+            sql = sql_path.read_text(encoding="utf-8").lower()
+            marker_counts = {
+                "union all": 1,
+                "__growthbook_schema_only__": 1,
+                "00000000-0000-4000-8000-000000000000": (
+                    1 if sql_path == PRODUCTION_OUTCOME_SQL else 2
+                ),
+                "cast(current_timestamp as timestamp)": 1,
+                "from (values (1)) as schema_seed(x)": 1,
+                "where '{{ experimentid }}' = '%'": 1,
+            }
+            for marker, expected_count in marker_counts.items():
+                self.assertEqual(expected_count, sql.count(marker), (sql_path, marker))
+            self.assertGreater(
+                sql.index("where '{{ experimentid }}' = '%'"),
+                sql.index("union all"),
+            )
+            self.assertNotIn("or '{{ experimentid }}' = '%'", sql)
+            self.assertIn("cast(null as", sql)
+
+    def test_preview_fact_query_remains_probe_free(self) -> None:
+        sql = OUTCOME_SQL.read_text(encoding="utf-8").lower()
+        self.assertNotIn("__growthbook_schema_only__", sql)
+        self.assertNotIn("where '{{ experimentid }}' = '%'", sql)
 
 
 if __name__ == "__main__":
