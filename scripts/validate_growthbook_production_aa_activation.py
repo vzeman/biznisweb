@@ -19,14 +19,14 @@ STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 
 
 EXPECTED_ACTIVATION = {
-    "schema_version": 2,
+    "schema_version": 3,
     "activation_type": "vevo_growthbook_production_aa",
     "tracking_key": "vevo-sk-aa-001",
     "feature_key": "vevo-sk-aa-assignment",
     "variations": ["control", "variant"],
     "variation_weights": [0.5, 0.5],
     "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-    "status": "growthbook_gtm_zero_allocation_prepared",
+    "status": "tag_assistant_qa_in_progress",
     "preconditions": {
         "natural_reconciliation_verified": True,
         "route_disabled_foundation_verified": True,
@@ -97,6 +97,29 @@ EXPECTED_ACTIVATION = {
         "publish_status": "not_published",
         "container_version_id": None,
     },
+    "tag_assistant_qa": {
+        "status": "desktop_observed_mobile_and_zero_assignment_readback_pending",
+        "observed_at_local_date": "2026-08-23",
+        "workspace_id": "17",
+        "session_connected": True,
+        "desktop_consent_cycle_observed": True,
+        "original_consent_categories_restored": True,
+        "sdk_connection_status_after_grant": "connected",
+        "experiment_status_after_grant": "draft_not_started",
+        "console_error_count": 0,
+        "product_path": (
+            "/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute"
+        ),
+        "cta_class_applied": False,
+        "add_to_cart_text_unchanged": True,
+        "preexisting_cart_item_count": 2,
+        "cart_mutated": False,
+        "mobile_viewport_verified": False,
+        "zero_assignment_verified": False,
+        "zero_collector_request_verified": False,
+        "owned_storage_cleanup_verified": False,
+        "ga4_meta_consent_behavior_verified": False,
+    },
     "traffic": {
         "activation_allowed": False,
         "production_allocation_percent": 0,
@@ -120,7 +143,7 @@ EXPECTED_ACTIVATION = {
         "drill_status": "not_run",
         "verified_at_utc": None,
     },
-    "next_gate": "run_tag_assistant_zero_traffic_qa_after_review",
+    "next_gate": "complete_tag_assistant_zero_traffic_qa",
 }
 
 
@@ -152,6 +175,7 @@ def _collector_verified_activation() -> dict[str, Any]:
         "publish_status": "not_published",
         "container_version_id": None,
     }
+    activation.pop("tag_assistant_qa", None)
     activation["next_gate"] = (
         "prepare_growthbook_and_gtm_zero_allocation_after_review"
     )
