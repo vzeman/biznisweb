@@ -771,7 +771,13 @@ jobs:
               },
           }
           with open(os.environ['EVIDENCE_FILE'], 'w', encoding='utf-8', newline='\n') as handle:
-              json.dump(evidence, handle, ensure_ascii=True, separators=(',', ':'), sort_keys=True)
+              json.dump(
+                  evidence,
+                  handle,
+                  ensure_ascii=False,
+                  indent=2,
+                  sort_keys=True,
+              )
               handle.write('\n')
           print('PRODUCTION_AA_COLLECTOR_EVIDENCE_OK')
           PY

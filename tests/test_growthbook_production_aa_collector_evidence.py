@@ -14,6 +14,8 @@ from scripts.record_growthbook_natural_evidence import (
 from scripts.record_growthbook_production_aa_collector_evidence import (
     ALLOWED_CHANGED_PATHS,
     CollectorActivationEvidenceError,
+    _accepted_evidence_serializations,
+    _legacy_compact_evidence_bytes,
     record_collector_activation_evidence,
     validate_collector_activation_evidence,
 )
@@ -236,6 +238,44 @@ class GrowthBookProductionAaCollectorEvidenceTests(unittest.TestCase):
                 expected_workflow_run_id=RUN_ID,
                 expected_main_commit=COMMIT,
             )
+
+    def test_compact_artifact_recovery_is_bound_to_one_exact_run(self) -> None:
+        observed = evidence()
+        legacy_bytes = _legacy_compact_evidence_bytes(observed)
+        legacy_hash = hashlib.sha256(legacy_bytes).hexdigest()
+        with (
+            mock.patch.object(recorder, "LEGACY_COMPACT_WORKFLOW_RUN_ID", RUN_ID),
+            mock.patch.object(recorder, "LEGACY_COMPACT_MAIN_COMMIT", COMMIT),
+            mock.patch.object(
+                recorder,
+                "LEGACY_COMPACT_EVIDENCE_SHA256",
+                legacy_hash,
+            ),
+        ):
+            accepted = _accepted_evidence_serializations(
+                observed,
+                expected_workflow_run_id=RUN_ID,
+                expected_main_commit=COMMIT,
+            )
+            self.assertEqual((canonical_evidence_bytes(observed), legacy_bytes), accepted)
+            self.assertEqual(
+                (canonical_evidence_bytes(observed),),
+                _accepted_evidence_serializations(
+                    observed,
+                    expected_workflow_run_id="99999999999",
+                    expected_main_commit=COMMIT,
+                ),
+            )
+
+        self.assertEqual("32644408714", recorder.LEGACY_COMPACT_WORKFLOW_RUN_ID)
+        self.assertEqual(
+            "57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2",
+            recorder.LEGACY_COMPACT_MAIN_COMMIT,
+        )
+        self.assertEqual(
+            "1e156ebdd94f88f7858c0e0b2ddb443fdabe01787ee6f7d673ac80197492ab88",
+            recorder.LEGACY_COMPACT_EVIDENCE_SHA256,
+        )
 
 
 if __name__ == "__main__":
