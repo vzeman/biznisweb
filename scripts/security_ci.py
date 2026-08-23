@@ -119,6 +119,12 @@ def main() -> int:
         growthbook_production_clone_runbook = read(
             "projects/vevo/GROWTHBOOK_PRODUCTION_CLONE_RUNBOOK.md"
         )
+        growthbook_production_device_outcomes_sql = read(
+            "projects/vevo/growthbook_sql/device_outcomes_production.sql"
+        )
+        growthbook_production_performance_vitals_sql = read(
+            "projects/vevo/growthbook_sql/performance_vitals_production.sql"
+        )
         growthbook_workspace_config = json.loads(
             read("projects/vevo/growthbook_workspace.json")
         )
@@ -1484,7 +1490,7 @@ def main() -> int:
                 f"{marker}",
             )
         for marker in (
-            "Status: Production foundation and reader evidence verified; reviewed UI clone allowed but not started",
+            "Status: Production foundation and reader evidence verified; UI clone in progress with a reviewed schema-probe recovery required before fact-table completion",
             "vevo-growthbook-production-reader",
             "Production allocation is `0%`",
             "Preview connection repointing is forbidden",
@@ -1499,6 +1505,22 @@ def main() -> int:
                 marker,
                 f"GrowthBook Production clone runbook lost safety marker: {marker}",
             )
+        for production_sql_name, production_sql in (
+            ("device outcomes", growthbook_production_device_outcomes_sql),
+            ("performance vitals", growthbook_production_performance_vitals_sql),
+        ):
+            for marker in (
+                "UNION ALL",
+                "__growthbook_schema_only__",
+                "FROM (VALUES (1)) AS schema_seed(x)",
+                "WHERE '{{ experimentId }}' = '%'",
+            ):
+                require(
+                    production_sql,
+                    marker,
+                    "GrowthBook Production "
+                    f"{production_sql_name} SQL lost schema-probe safety marker: {marker}",
+                )
         production_clone_state = production_reader_state.get("growthbook_clone", {})
         if (
             production_clone_state.get("status")

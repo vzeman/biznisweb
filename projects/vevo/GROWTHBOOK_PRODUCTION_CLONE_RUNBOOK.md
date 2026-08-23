@@ -1,6 +1,6 @@
 # VEVO GrowthBook Production clone runbook
 
-Status: Production foundation and reader evidence verified; reviewed UI clone allowed but not started
+Status: Production foundation and reader evidence verified; UI clone in progress with a reviewed schema-probe recovery required before fact-table completion
 
 This runbook creates a separate Production Athena data source, two fact tables, and eight Starter-compatible metrics in GrowthBook. It never repoints or edits the verified Preview objects. It does not publish GTM, start an experiment, change Meta Ads or BiznisWeb, accept a paid upgrade, or move Production allocation above `0%`.
 
@@ -49,9 +49,9 @@ Perform one object at a time in this exact order. After each save, reload the ob
 3. Run the GrowthBook connection test. It must pass using the curated-only reader.
 4. Add identifier type `device_id`.
 5. Add assignment query `VEVO consented devices` from `growthbook_sql/assignment.sql`. Compare the exact UI read-back with the repository file and run the query test. Before traffic it must succeed with exactly `0` rows.
-6. Create fact table `VEVO Device Outcomes v1` from `growthbook_sql/device_outcomes.sql` and identifier `device_id`.
-7. Create fact table `VEVO Performance Vitals v1` from `growthbook_sql/performance_vitals.sql` and identifier `device_id`.
-8. For both fact tables, compare the exact query with the repository file, verify the configured column types, and run the query test. Each must succeed with exactly `0` rows before traffic. If the empty result prevents automatic type inference, set the types manually from the verified Preview contract and read them back.
+6. Create fact table `VEVO Device Outcomes v1` from the Production-only `growthbook_sql/device_outcomes_production.sql` and identifier `device_id`.
+7. Create fact table `VEVO Performance Vitals v1` from the Production-only `growthbook_sql/performance_vitals_production.sql` and identifier `device_id`.
+8. For both fact tables, compare the exact query with the Production-only repository file, verify the configured column types, and run the query test. GrowthBook 5.0.1 must return exactly `1` metadata-only `__growthbook_schema_only__` row because the UI refuses to save an empty result. Independently verify that the curated table branch returns exactly `0` rows before traffic. The schema probe must remain guarded by the exact test-only predicate `WHERE '{{ experimentId }}' = '%'`, and the read-back must prove it cannot enter any named experiment. Set numeric types manually from the verified Preview contract and read them back. Re-read the frozen Preview SQL/IDs afterward and confirm they remain unchanged and probe-free.
 9. Create only these eight Starter-compatible metrics, matching every field in the corresponding `metrics` row of `growthbook_workspace.json`:
    - `vevo_add_to_cart_24h`
    - `vevo_purchase_conversion_7d`
@@ -79,7 +79,7 @@ The builder fills affirmative read-back assertions. Run it only after every chec
 python scripts/record_growthbook_production_clone_evidence.py build --workspace projects/vevo/growthbook_workspace.json --observed-at-utc <YYYY-MM-DDTHH:MM:SSZ> --data-source-id <ds_target> --fact-table-id vevo_device_outcomes_v1=<ftb_target> --fact-table-id vevo_performance_vitals_v1=<ftb_target> --metric-id vevo_add_to_cart_24h=<fact__target> --metric-id vevo_purchase_conversion_7d=<fact__target> --metric-id vevo_revenue_per_exposed_device_7d=<fact__target> --metric-id vevo_cm1_per_exposed_device_7d=<fact__target> --metric-id vevo_average_order_value_7d=<fact__target> --metric-id vevo_cancelled_order_rate_14d=<fact__target> --metric-id vevo_refunded_order_rate_14d=<fact__target> --metric-id vevo_client_error_device_rate_24h=<fact__target> --output projects/vevo/vevo-growthbook-production-clone-observation.json
 ```
 
-Review the entire canonical JSON. It may contain only the exact reader run/commit/artifact hash, GrowthBook object IDs, fixed configuration hashes, zero-row outcomes, and explicit safety booleans. It must contain no credential, query result row, event/device identity, order/customer data, or paid-Pro target ID.
+Review the entire canonical JSON. It may contain only the exact reader run/commit/artifact hash, GrowthBook object IDs, fixed configuration hashes, the zero-row assignment and curated-branch counts, the one-row schema-probe counts, and explicit safety booleans. It must contain no credential, query result row contents, event/device identity, order/customer data, or paid-Pro target ID.
 
 Compute its SHA-256 independently:
 

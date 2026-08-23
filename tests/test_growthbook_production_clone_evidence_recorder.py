@@ -186,6 +186,11 @@ class GrowthBookProductionCloneEvidenceRecorderTests(unittest.TestCase):
     def test_builds_exact_sanitized_clone_observation(self) -> None:
         validate_clone_observation(self.observation, self.workspace)
         self.assertEqual(0, self.observation["production_data_source"]["assignment_query_result_row_count"])
+        for row in self.observation["production_fact_tables"].values():
+            self.assertEqual(1, row["growthbook_ui_query_result_row_count"])
+            self.assertEqual(1, row["schema_probe_result_row_count"])
+            self.assertEqual(0, row["curated_result_row_count"])
+            self.assertTrue(row["schema_probe_excluded_from_named_experiments"])
         self.assertEqual(
             {key: None for key in PAID_PRO_METRIC_KEYS},
             self.observation["paid_pro_quantile_metrics"]["target_metric_ids"],
@@ -259,9 +264,16 @@ class GrowthBookProductionCloneEvidenceRecorderTests(unittest.TestCase):
             self.record(paid)
 
         nonempty = copy.deepcopy(self.observation)
-        nonempty["production_fact_tables"][FACT_TABLE_KEYS[0]]["query_result_row_count"] = 1
+        nonempty["production_fact_tables"][FACT_TABLE_KEYS[0]]["curated_result_row_count"] = 1
         with self.assertRaisesRegex(CloneEvidenceRecordingError, "empty before traffic"):
             self.record(nonempty)
+
+        leaking_probe = copy.deepcopy(self.observation)
+        leaking_probe["production_fact_tables"][FACT_TABLE_KEYS[0]][
+            "schema_probe_excluded_from_named_experiments"
+        ] = False
+        with self.assertRaisesRegex(CloneEvidenceRecordingError, "not excluded"):
+            self.record(leaking_probe)
 
     def test_rejects_contract_drift_or_unverified_readback(self) -> None:
         metric_drift = copy.deepcopy(self.observation)

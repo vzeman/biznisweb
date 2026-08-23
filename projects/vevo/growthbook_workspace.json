@@ -690,7 +690,7 @@
         "status": "reader_verified_ready_for_reviewed_growthbook_clone",
         "clone_allowed": true,
         "mutation_status": "not_started",
-        "observation_schema_version": 1,
+        "observation_schema_version": 2,
         "observation_file": "vevo-growthbook-production-clone-observation.json",
         "observation_status": "not_recorded",
         "observation_sha256": null,
@@ -702,6 +702,10 @@
         "source_fact_table_ids": {
           "vevo_device_outcomes_v1": "ftb_19g6mmt2dhrdi",
           "vevo_performance_vitals_v1": "ftb_19g6mmt2e0otd"
+        },
+        "target_fact_table_query_paths": {
+          "vevo_device_outcomes_v1": "projects/vevo/growthbook_sql/device_outcomes_production.sql",
+          "vevo_performance_vitals_v1": "projects/vevo/growthbook_sql/performance_vitals_production.sql"
         },
         "target_fact_table_ids": {
           "vevo_device_outcomes_v1": null,

@@ -46,7 +46,7 @@ except ModuleNotFoundError:  # Imported as scripts.record_growthbook_production_
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 
-EXPECTED_SCHEMA_VERSION = 1
+EXPECTED_SCHEMA_VERSION = 2
 EXPECTED_OBSERVATION_TYPE = "vevo_growthbook_production_clone_observation"
 EXPECTED_ORGANIZATION_ID = "org_19g6mmt1q79o1"
 EXPECTED_PROJECT_ID = "prj_2CeEJc6J9FwQFix9UhsnKr"
@@ -129,7 +129,10 @@ FACT_TABLE_KEYS_SET = {
     "identifier_type",
     "query_sha256",
     "query_test_passed",
-    "query_result_row_count",
+    "growthbook_ui_query_result_row_count",
+    "curated_result_row_count",
+    "schema_probe_result_row_count",
+    "schema_probe_excluded_from_named_experiments",
     "configuration_readback_match",
 }
 METRIC_KEYS_SET = {
@@ -263,10 +266,16 @@ def _fact_contracts(workspace: Mapping[str, Any]) -> dict[str, dict[str, str]]:
         if isinstance(row, dict) and row.get("key") in FACT_TABLE_KEYS
     }
     _require(set(rows) == set(FACT_TABLE_KEYS), "fact-table contract drift")
+    clone = _clone_contract(workspace)
+    query_paths = clone.get("target_fact_table_query_paths")
+    _require(
+        isinstance(query_paths, dict) and set(query_paths) == set(FACT_TABLE_KEYS),
+        "Production fact-table query-path drift",
+    )
     result: dict[str, dict[str, str]] = {}
     for key in FACT_TABLE_KEYS:
         row = rows[key]
-        query_path = str(row.get("query") or "")
+        query_path = str(query_paths.get(key) or "")
         _require(row.get("identifier") == EXPECTED_IDENTIFIER_TYPE, "fact identifier drift")
         result[key] = {
             "name": str(row.get("name") or ""),
@@ -309,11 +318,16 @@ def _reader_provenance(workspace: Mapping[str, Any]) -> dict[str, str]:
 def _query_hashes(workspace: Mapping[str, Any]) -> dict[str, str]:
     production = (workspace.get("athena") or {}).get("production") or {}
     clone = production.get("growthbook_clone") or {}
-    fact_contracts = _fact_contracts(workspace)
+    fact_rows = {
+        row.get("key"): row
+        for row in workspace.get("fact_tables", [])
+        if isinstance(row, dict) and row.get("key") in FACT_TABLE_KEYS
+    }
+    _require(set(fact_rows) == set(FACT_TABLE_KEYS), "Preview fact-table contract drift")
     return {
         "assignment": _repo_file_sha256(str(clone.get("assignment_query_path") or "")),
         **{
-            key: fact_contracts[key]["query_sha256"]
+            key: _repo_file_sha256(str(fact_rows[key].get("query") or ""))
             for key in FACT_TABLE_KEYS
         },
     }
@@ -420,9 +434,23 @@ def validate_clone_observation(
         )
         _require(row["query_test_passed"] is True, f"fact query test missing: {key}")
         _require(
-            row["query_result_row_count"] == 0
-            and type(row["query_result_row_count"]) is int,
-            f"Production fact table must remain empty before traffic: {key}",
+            row["growthbook_ui_query_result_row_count"] == 1
+            and type(row["growthbook_ui_query_result_row_count"]) is int,
+            f"GrowthBook fact query must return exactly one schema probe: {key}",
+        )
+        _require(
+            row["schema_probe_result_row_count"] == 1
+            and type(row["schema_probe_result_row_count"]) is int,
+            f"GrowthBook schema-probe count drift: {key}",
+        )
+        _require(
+            row["curated_result_row_count"] == 0
+            and type(row["curated_result_row_count"]) is int,
+            f"Production curated fact table must remain empty before traffic: {key}",
+        )
+        _require(
+            row["schema_probe_excluded_from_named_experiments"] is True,
+            f"GrowthBook schema probe is not excluded from named experiments: {key}",
         )
         _require(
             row["configuration_readback_match"] is True,
@@ -520,7 +548,10 @@ def build_clone_observation(
                 "identifier_type": EXPECTED_IDENTIFIER_TYPE,
                 "query_sha256": fact_contracts[key]["query_sha256"],
                 "query_test_passed": True,
-                "query_result_row_count": 0,
+                "growthbook_ui_query_result_row_count": 1,
+                "curated_result_row_count": 0,
+                "schema_probe_result_row_count": 1,
+                "schema_probe_excluded_from_named_experiments": True,
                 "configuration_readback_match": True,
             }
             for key in FACT_TABLE_KEYS
