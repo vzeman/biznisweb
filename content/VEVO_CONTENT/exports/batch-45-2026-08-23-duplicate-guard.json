@@ -1,0 +1,40 @@
+{
+  "existing_count": 831,
+  "excluded_batch": 45,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je mušelín: vzdušná gázovina, zrážanie a správna starostlivosť",
+      "slug": "co-je-muselin-vzdusna-gazovina-zrazanie-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+      "slug": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je velúr: vlasový povrch, rozdiel od zamatu a starostlivosť",
+      "slug": "co-je-velur-vlasovy-povrch-rozdiel-od-zamatu-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+      "slug": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
