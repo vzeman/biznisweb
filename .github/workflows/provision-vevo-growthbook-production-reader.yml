@@ -292,16 +292,37 @@ jobs:
             --region "${AWS_REGION}" > production-routes.json
           aws s3api list-objects-v2 \
             --bucket "${ACTIVE_EVENT_BUCKET}" \
+            --max-keys 1000 \
             --region "${AWS_REGION}" > production-bucket-objects.json
+          aws s3api list-multipart-uploads \
+            --bucket "${ACTIVE_EVENT_BUCKET}" \
+            --max-uploads 1000 \
+            --region "${AWS_REGION}" > production-bucket-multipart-uploads.json
+          python scripts/summarize_growthbook_foundation_bucket.py \
+            --listing production-bucket-objects.json
 
-          if aws iam get-user --user-name "${IAM_USER_NAME}" >/dev/null 2>&1; then
+          set +e
+          aws iam get-user \
+            --user-name "${IAM_USER_NAME}" \
+            --output json > production-reader-user-preprovision.json 2> production-reader-user-preprovision.err
+          READER_LOOKUP_STATUS=$?
+          set -e
+          if [[ "${READER_LOOKUP_STATUS}" -eq 0 ]]; then
             echo 'Dedicated Production GrowthBook IAM user already exists; refusing to rotate or replace it.' >&2
             exit 1
           fi
+          if [[ "${READER_LOOKUP_STATUS}" -ne 254 ]] || \
+             ! grep -Fq 'NoSuchEntity' production-reader-user-preprovision.err; then
+            echo 'Production GrowthBook reader absence could not be proven before host gate.' >&2
+            exit 1
+          fi
+          echo 'PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-host:user=false:credentials=none:raw=false'
 
           python - <<'PY'
           import json
           import os
+
+          from scripts.summarize_growthbook_foundation_bucket import summarize_bucket_listing
 
           service = json.load(open('production-service.json', encoding='utf-8'))['services'][0]
           if service.get('serviceName') != os.environ['SERVICE_NAME']:
@@ -335,9 +356,14 @@ jobs:
               raise SystemExit(f'Production collector private IP unresolved: {private_ips}')
           if json.load(open('production-routes.json', encoding='utf-8')).get('Items') not in (None, []):
               raise SystemExit('Production API unexpectedly has a route')
-          bucket = json.load(open('production-bucket-objects.json', encoding='utf-8'))
-          if bucket.get('KeyCount') != 0 or bucket.get('Contents'):
+          bucket_summary = summarize_bucket_listing(
+              json.load(open('production-bucket-objects.json', encoding='utf-8'))
+          )
+          if bucket_summary != {'total': 0, 'raw_events': 0, 'athena_results': 0, 'unexpected': 0}:
               raise SystemExit('Production experiment bucket is not empty')
+          multipart = json.load(open('production-bucket-multipart-uploads.json', encoding='utf-8'))
+          if multipart.get('Uploads') not in (None, []) or multipart.get('IsTruncated') is not False:
+              raise SystemExit('Production experiment bucket has incomplete multipart uploads')
 
           document = json.load(open('production-policy.json', encoding='utf-8'))['PolicyVersion']['Document']
           allowed_actions = {
@@ -433,35 +459,19 @@ jobs:
             --cluster "${ACTIVE_CLUSTER_ARN}" \
             --tasks "${HOST_GATE_TASK_ARN}" \
             --region "${AWS_REGION}" > production-reader-host-task.json
-          python - <<'PY' > production-reader-host.env
-          import json
-          import os
-
-          task = json.load(open('production-reader-host-task.json', encoding='utf-8'))['tasks'][0]
-          containers = task.get('containers') or []
-          if task.get('taskDefinitionArn') != os.environ['ACTIVE_TASK_DEFINITION'] or len(containers) != 1:
-              raise SystemExit('Production reader host-gate identity drift')
-          container = containers[0]
-          if container.get('exitCode') != 0:
-              raise SystemExit(f"Production reader host-gate failed: exit={container.get('exitCode')}")
-          if container.get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
-              raise SystemExit('Production reader host-gate image digest drift')
-          details = [
-              row
-              for attachment in task.get('attachments') or []
-              for row in attachment.get('details') or []
-          ]
-          private_ip = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
-          if not private_ip:
-              raise SystemExit('Production reader host-gate private IP missing')
-          task_id = task['taskArn'].rsplit('/', 1)[-1]
-          log_stream = str(container.get('logStreamName') or '')
-          if not log_stream:
-              raise SystemExit('Production reader host-gate log stream missing')
-          print(f'PRODUCTION_READER_HOST_TASK_ID={task_id}')
-          print(f'PRODUCTION_READER_HOST_PRIVATE_IP={private_ip}')
-          print(f'PRODUCTION_READER_HOST_LOG_STREAM={log_stream}')
-          PY
+          python scripts/resolve_growthbook_host_gate_runtime.py \
+            --task-state production-reader-host-task.json \
+            --task-definition production-task-definition.json \
+            --expected-cluster-arn "${ACTIVE_CLUSTER_ARN}" \
+            --expected-task-definition-arn "${ACTIVE_TASK_DEFINITION}" \
+            --expected-container-name collector \
+            --expected-log-group "${ACTIVE_LOG_GROUP}" \
+            --expected-log-region "${AWS_REGION}" \
+            --expected-log-prefix collector \
+            --expected-image-digest "${EXPECTED_IMAGE_DIGEST}" \
+            --expected-private-cidr 172.31.0.0/16 \
+            --env-prefix PRODUCTION_READER_HOST \
+            --env-output production-reader-host.env
           cat production-reader-host.env >> "${GITHUB_ENV}"
           set -a
           source production-reader-host.env
@@ -489,7 +499,7 @@ jobs:
           fi
           grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:production:${ACTIVE_VERSION}" production-reader-host.log
           grep -F "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:${ACTIVE_VERSION}" production-reader-host.log
-          echo "PRODUCTION_READER_PREPROVISION_HARD_GATE_OK:instance-id=N/A:Fargate:private-ip=${PRODUCTION_READER_HOST_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${PRODUCTION_READER_HOST_TASK_ID}:image=${EXPECTED_IMAGE_DIGEST}"
+          echo "PRODUCTION_READER_PREPROVISION_HARD_GATE_OK:instance-id=N/A:Fargate:private-ip=${PRODUCTION_READER_HOST_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${PRODUCTION_READER_HOST_TASK_ID}:image=${EXPECTED_IMAGE_DIGEST}:log-stream-source=${PRODUCTION_READER_HOST_LOG_STREAM_SOURCE}"
 
       - name: Create one dedicated encrypted Production credential handoff
         env:
@@ -506,24 +516,38 @@ jobs:
 
           cleanup_failed_provision() {
             set +e
-            if [[ -f "${ACCESS_KEY_ID_FILE}" ]]; then
-              aws iam delete-access-key \
+            if [[ -f "${CREATED_MARKER}" ]]; then
+              if [[ -f "${ACCESS_KEY_ID_FILE}" ]]; then
+                aws iam delete-access-key \
+                  --user-name "${IAM_USER_NAME}" \
+                  --access-key-id "$(<"${ACCESS_KEY_ID_FILE}")"
+              fi
+              aws iam detach-user-policy \
                 --user-name "${IAM_USER_NAME}" \
-                --access-key-id "$(<"${ACCESS_KEY_ID_FILE}")"
+                --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" 2>/dev/null || true
+              aws iam delete-user --user-name "${IAM_USER_NAME}" 2>/dev/null || true
             fi
-            aws iam detach-user-policy \
-              --user-name "${IAM_USER_NAME}" \
-              --policy-arn "${ACTIVE_GROWTHBOOK_POLICY_ARN}" 2>/dev/null || true
-            aws iam delete-user --user-name "${IAM_USER_NAME}" 2>/dev/null || true
             rm -f "${CREDENTIAL_JSON}" "${ACCESS_KEY_ID_FILE}" "${CREATED_MARKER}" \
               "${RECIPIENT_CERT}" "${ENCRYPTED_HANDOFF}" "${SAFE_MANIFEST}"
           }
           trap cleanup_failed_provision ERR
 
-          if aws iam get-user --user-name "${IAM_USER_NAME}" >/dev/null 2>&1; then
+          set +e
+          aws iam get-user \
+            --user-name "${IAM_USER_NAME}" \
+            --output json > production-reader-user-final-check.json 2> production-reader-user-final-check.err
+          READER_LOOKUP_STATUS=$?
+          set -e
+          if [[ "${READER_LOOKUP_STATUS}" -eq 0 ]]; then
             echo 'Dedicated Production GrowthBook IAM user already exists; refusing to rotate or replace it.' >&2
             exit 1
           fi
+          if [[ "${READER_LOOKUP_STATUS}" -ne 254 ]] || \
+             ! grep -Fq 'NoSuchEntity' production-reader-user-final-check.err; then
+            echo 'Production GrowthBook reader absence could not be proven immediately before creation.' >&2
+            exit 1
+          fi
+          echo 'PRODUCTION_READER_IAM_ABSENCE_OK:phase=pre-create:user=false:credentials=none:raw=false'
           printf '%s' "${RECIPIENT_CERTIFICATE_B64}" | base64 --decode > "${RECIPIENT_CERT}"
           openssl x509 -in "${RECIPIENT_CERT}" -noout -checkend 3600 >/dev/null
           if ! openssl x509 -in "${RECIPIENT_CERT}" -pubkey -noout | \
