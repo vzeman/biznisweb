@@ -90,11 +90,34 @@ class GrowthBookProductionFoundationWorkflowTests(unittest.TestCase):
             "Preview target is not healthy",
             "COLLECTOR_LOCALHOST_HEALTH_OK:production:",
             "COLLECTOR_LOCALHOST_MARKER_OK:/app:",
+            "scripts/resolve_growthbook_host_gate_runtime.py",
+            "--expected-log-prefix collector",
+            "--expected-private-cidr 172.31.0.0/16",
         ):
             self.assertIn(marker, self.workflow)
         self.assertLess(preview, planned)
         self.assertLess(planned, production_mode_host)
         self.assertLess(production_mode_host, create)
+
+    def test_host_gate_log_stream_is_exactly_task_definition_bound(self) -> None:
+        resolver = (
+            ROOT / "scripts" / "resolve_growthbook_host_gate_runtime.py"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            "optional_absent_taskdef_bound",
+            "host-gate ECS log stream contradicts task definition",
+            'constructed_log_stream = f"{expected_log_prefix}/{expected_container_name}/{task_id}"',
+            "task.get(\"clusterArn\") == expected_cluster_arn",
+            "task.get(\"taskDefinitionArn\") == expected_task_definition_arn",
+            "container.get(\"imageDigest\") == expected_image_digest",
+            "private_ip in private_network",
+            "raw=false",
+        ):
+            self.assertIn(marker, resolver)
+        self.assertEqual(
+            2,
+            self.workflow.count("scripts/resolve_growthbook_host_gate_runtime.py"),
+        )
 
     def test_is_create_only_route_disabled_and_reuses_verified_image(self) -> None:
         for marker in (
