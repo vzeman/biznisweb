@@ -1,0 +1,254 @@
+{
+  "batch": "batch-46",
+  "checked_at": "2026-08-24T00:02:43.936725+00:00",
+  "target_count": 4,
+  "outgoing_count": 26,
+  "check_count": 30,
+  "failure_count": 0,
+  "checks": [
+    {
+      "url": "https://cottonworks.com/encyclopedia-item/boucle/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/encyclopedia-item/boucle/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cottonworks.com/wp-content/uploads/2017/11/Textile_Yarns.pdf",
+      "status": 200,
+      "final_url": "https://cottonworks.com/wp-content/uploads/2017/11/Textile_Yarns.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02011R1007-20180215",
+      "status": 200,
+      "final_url": "https://eur-lex.europa.eu:443/TodayOJ/index.html?uri=CELEX%3A02011R1007-20180215",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm135/543/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm135/543/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d1424-25.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d1424-25.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d3512_d3512m-22.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d3512_d3512m-22.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d3939_d3939m-26.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d3939_d3939m-26.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://ww2.scubapro.com/media/806065/11900-j-o-wetsuit-eng.pdf",
+      "status": 200,
+      "final_url": "https://scubapro.johnsonoutdoors.com/us",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.fitnyc.edu/museum/exhibitions/fabric-in-fashion.php",
+      "status": 200,
+      "final_url": "https://www.fitnyc.edu/museum/exhibitions/fabric-in-fashion.php",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.trelleborg.com/en/engineered-coated-fabrics/solutions/coatings/cr",
+      "status": 200,
+      "final_url": "https://www.trelleborg.com/en/engineered-coated-fabrics/solutions/coatings/cr",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-krep-zrnity-povrch-krcivost-a-spravna-starostlivost",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-krep-zrnity-povrch-krcivost-a-spravna-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-neopren-penovy-material-zapach-cistenie-a-susenie",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-neopren-penovy-material-zapach-cistenie-a-susenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-sifon-jemna-priesvitna-latka-a-bezpecna-starostlivost",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-sifon-jemna-priesvitna-latka-a-bezpecna-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    }
+  ]
+}

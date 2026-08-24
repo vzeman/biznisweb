@@ -1,0 +1,40 @@
+{
+  "existing_count": 835,
+  "excluded_batch": null,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je neoprén: penový materiál, zápach, čistenie a sušenie",
+      "slug": "co-je-neopren-penovy-material-zapach-cistenie-a-susenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je šifón: jemná priesvitná látka a bezpečná starostlivosť",
+      "slug": "co-je-sifon-jemna-priesvitna-latka-a-bezpecna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je buklé: slučkový povrch, žmolky a šetrné čistenie",
+      "slug": "co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je krep: zrnitý povrch, krčivosť a správna starostlivosť",
+      "slug": "co-je-krep-zrnity-povrch-krcivost-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
