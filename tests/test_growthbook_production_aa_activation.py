@@ -86,7 +86,8 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         preflight = self.activation["activation_preflight"]
         live = preflight["live_readback"]
         self.assertEqual(
-            "gtm_consent_metadata_review_required", preflight["status"]
+            "gtm_consent_verified_ready_for_zero_allocation_publish",
+            preflight["status"],
         )
         self.assertEqual(2, live["feature_live_revision"])
         self.assertFalse(live["feature_live_production_enabled"])
@@ -108,7 +109,8 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
             self.activation["gtm"]["unprocessed_changes"],
             live["gtm_unprocessed_changes"],
         )
-        self.assertEqual(5, live["gtm_consent_warning_unconfigured_tag_count"])
+        self.assertEqual(1, live["gtm_consent_warning_unconfigured_tag_count"])
+        self.assertEqual(["43"], live["gtm_consent_unconfigured_tag_ids"])
 
         consent = preflight["gtm_consent_metadata"]
         self.assertEqual(
@@ -122,17 +124,45 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertEqual(
             "no_additional_consent_required", consent["required_setting"]
         )
-        self.assertEqual([], consent["verified_target_tag_ids"])
+        self.assertEqual(
+            ["54", "51", "55", "53"], consent["verified_target_tag_ids"]
+        )
+        self.assertEqual(
+            {
+                "54": "no_additional_consent_required",
+                "51": "no_additional_consent_required",
+                "55": "no_additional_consent_required",
+                "53": "no_additional_consent_required",
+            },
+            consent["verified_setting_by_tag_id"],
+        )
         self.assertEqual(
             ["43"], consent["expected_remaining_unconfigured_tag_ids"]
         )
-        self.assertFalse(consent["publish_allowed"])
+        self.assertEqual(
+            ["43"], consent["verified_remaining_unconfigured_tag_ids"]
+        )
+        qa = consent["preview_qa"]
+        self.assertEqual(7, qa["denied_signal_count"])
+        self.assertEqual(7, qa["granted_signal_count"])
+        self.assertTrue(qa["original_consent_categories_restored"])
+        self.assertTrue(qa["loader_success_on_denied"])
+        self.assertTrue(qa["loader_success_on_granted"])
+        self.assertEqual(0, qa["growthbook_sdk_script_count_on_denied"])
+        self.assertEqual(["29", "31"], qa["meta_pageview_tag_ids_blocked_on_denied"])
+        self.assertEqual(["29", "31"], qa["meta_pageview_tag_ids_success_on_granted"])
+        self.assertEqual(0, qa["tag_assistant_console_error_count"])
+        self.assertTrue(qa["unattributed_consent_timing_diagnostic_observed"])
+        self.assertFalse(qa["growthbook_client_uses_gtm_consent_api"])
+        self.assertFalse(qa["cta_experiment_class_applied"])
+        self.assertFalse(qa["cart_mutated"])
+        self.assertTrue(consent["publish_allowed"])
 
         scope = preflight["mutation_scope"]
-        self.assertTrue(
+        self.assertFalse(
             scope["configure_gtm_consent_metadata_for_tags_54_51_55_53"]
         )
-        self.assertFalse(scope["publish_gtm_workspace_17"])
+        self.assertTrue(scope["publish_gtm_workspace_17"])
         self.assertFalse(
             scope["start_growthbook_experiment_exp_19g6mmt5wugpk"]
         )
