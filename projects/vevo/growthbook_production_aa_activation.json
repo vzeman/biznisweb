@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "activation_type": "vevo_growthbook_production_aa",
   "tracking_key": "vevo-sk-aa-001",
   "feature_key": "vevo-sk-aa-assignment",
@@ -12,7 +12,7 @@
     0.5
   ],
   "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-  "status": "tag_assistant_qa_in_progress",
+  "status": "zero_traffic_qa_verified_activation_review_pending",
   "preconditions": {
     "natural_reconciliation_verified": true,
     "route_disabled_foundation_verified": true,
@@ -74,7 +74,7 @@
     "container_version_id": null
   },
   "tag_assistant_qa": {
-    "status": "mobile_zero_assignment_consent_and_storage_observed_collector_pending",
+    "status": "zero_traffic_qa_verified",
     "observed_at_local_date": "2026-08-24",
     "workspace_id": "17",
     "session_connected": true,
@@ -90,9 +90,31 @@
     "cart_mutated": false,
     "mobile_viewport_verified": true,
     "zero_assignment_verified": true,
-    "zero_collector_request_verified": false,
+    "zero_collector_request_verified": true,
     "owned_storage_cleanup_verified": true,
-    "ga4_meta_consent_behavior_verified": true
+    "ga4_meta_consent_behavior_verified": true,
+    "zero_collector_observation": {
+      "status": "verified_zero_requests_and_receipts",
+      "workflow_run_id": "32692688625",
+      "main_commit": "bed02cd3176c960d7423d97486bc67d649601241",
+      "artifact_sha256": "43140aa030225ac927fd6ddd92904fe8d730230174afe7525371c235accfb745",
+      "from_utc": "2026-08-24T04:30:00Z",
+      "through_utc": "2026-08-24T04:50:00Z",
+      "observed_at_utc": "2026-08-24T05:12:49Z",
+      "api_request_count": 0,
+      "accepted_receipt_count": 0,
+      "runtime": {
+        "instance_id": "N/A:Fargate",
+        "private_ip": "172.31.21.213",
+        "service": "vevo-growthbook-collector-production",
+        "runtime_path": "/app",
+        "runtime_path_verification": "immutable_image_prior_localhost_marker",
+        "task_id": "a3abdbcdd3914c95bb08f03b83eab5fe",
+        "task_definition": "vevo-growthbook-collector-production:2",
+        "image_digest": "sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058",
+        "target_health": "healthy"
+      }
+    }
   },
   "traffic": {
     "activation_allowed": false,
@@ -117,5 +139,5 @@
     "drill_status": "not_run",
     "verified_at_utc": null
   },
-  "next_gate": "complete_tag_assistant_zero_traffic_qa"
+  "next_gate": "review_controlled_production_aa_activation"
 }
