@@ -52,8 +52,8 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
     def test_tag_assistant_qa_remains_fail_closed_until_all_gates_pass(self) -> None:
         qa = self.activation["tag_assistant_qa"]
         self.assertEqual(
-            "mobile_zero_assignment_and_consent_observed_"
-            "collector_and_storage_pending",
+            "mobile_zero_assignment_consent_and_storage_observed_"
+            "collector_pending",
             qa["status"],
         )
         self.assertTrue(qa["desktop_consent_cycle_observed"])
@@ -65,14 +65,11 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         for verified in (
             "mobile_viewport_verified",
             "zero_assignment_verified",
+            "owned_storage_cleanup_verified",
             "ga4_meta_consent_behavior_verified",
         ):
             self.assertTrue(qa[verified])
-        for pending in (
-            "zero_collector_request_verified",
-            "owned_storage_cleanup_verified",
-        ):
-            self.assertFalse(qa[pending])
+        self.assertFalse(qa["zero_collector_request_verified"])
         self.assertFalse(self.activation["traffic"]["activation_allowed"])
         self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
 

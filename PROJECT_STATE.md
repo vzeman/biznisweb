@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -92,12 +92,15 @@ Bootstrap entrypoints:
   - Chrome communication was restored after reinstalling the ChatGPT browser extension; mobile Production Preview was verified at an explicit `390x844` viewport (`390` inner width, `375` document width, `844` inner height), with the product CTA still exactly `Pridať do košíka`, no experiment class, cart count `2`, and no cart mutation
   - GrowthBook Production was read back again as `Draft`; the linked feature change remains a draft with `Environments (0/2)`, so zero Production assignment is explicitly verified while traffic remains `0%`
   - the mobile consent cycle is complete: all seven Consent Mode signals became `Zamietnuté`, both Meta pageview tags were blocked, and GA4 continued only in consent-mode behavior; after regrant, every signal returned to `Udelené` and GA4 plus both Meta tags fired again, with all five user-facing consent categories restored
-  - explicit zero-collector-request observation and runtime owned-storage cleanup remain unverified; the browser safety boundary prevents direct local-storage inspection, local AWS credentials are unavailable for a read-only collector log query, and the activation manifest keeps both fields `false`, GTM unpublished, traffic at `0%`, and controlled activation closed
+  - runtime owned-storage cleanup is now user-visibly verified in the exact Production workspace `17` Preview: with all five optional consent categories granted, the connected Preview target loaded the GrowthBook SDK once; analytical withdrawal was then applied from a separate same-origin tab while Tag Assistant stayed connected, and the reloaded product target contained zero GrowthBook SDK script elements
+  - the post-withdrawal Chrome Application view filtered by `vevo_` showed only the unrelated `_lhis_history` entry; `vevo_exp_device_v1` and `vevo_gb_features_v1` were absent without manual deletion, proving the integration removed its owned experiment/device and feature-cache storage; all five original consent categories were restored afterward
+  - the earlier `0 / 167` Network screenshot is intentionally not accepted as zero-collector evidence because it was captured after the workspace Preview session had disconnected; `zero_collector_request_verified` remains `false`, GTM remains unpublished, traffic remains at `0%`, and controlled activation remains closed
+  - branch `codex/vevo-growthbook-owned-storage-qa` passes the full `594`-test Python suite, all `9` storefront JavaScript tests, the exact activation and workspace validators, focused Ruff and Python compile, JSON parsing, and `git diff --check`
   - branch `codex/vevo-growthbook-mobile-consent-qa` passes the full `594`-test Python suite, all `9` storefront JavaScript tests, `12` focused activation tests, the exact activation validator, Ruff, Python compile, JSON parsing, and `git diff --check`
   - branch `codex/vevo-growthbook-desktop-qa-evidence` passes the full `594`-test Python suite, all `9` storefront JavaScript tests, `22` focused activation/collector/builder tests, activation/workspace/security validators, changed-file Ruff and Python compile, JSON parsing, and `git diff --check`
   - plaintext credentials, the RSA key/certificate, local encrypted credential artifact, and GitHub artifact `9486585740` were deleted after the successful connection; the sanitized evidence JSON was retained
   - no local dev server, worker, watcher, tunnel, or Docker process was started
-  - Next exact step: obtain a bounded read-only zero-request collector log observation and a user-visible owned-storage cleanup observation; do not publish GTM, start the A/A, or raise Production allocation above `0%`
+  - Next exact step: obtain a bounded read-only zero-request collector log observation while the exact workspace `17` Preview Loader is demonstrably active; do not publish GTM, start the A/A, or raise Production allocation above `0%`
 
 - ROY daily report email delivery is disabled, deployed, and host-verified as of `2026-08-21`:
   - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`
