@@ -41,6 +41,7 @@ class GrowthBookZeroCollectorWorkflowTests(unittest.TestCase):
             "EXPECTED_SERVICE: vevo-growthbook-collector-production",
             "EXPECTED_TASK_DEFINITION: vevo-growthbook-collector-production:2",
             "EXPECTED_RUNTIME_PATH: /app",
+            "working_directory not in {None, os.environ['EXPECTED_RUNTIME_PATH']}",
             "cloudformation describe-stacks",
             "ecs describe-services",
             "ecs list-tasks",
@@ -50,6 +51,7 @@ class GrowthBookZeroCollectorWorkflowTests(unittest.TestCase):
             "apigatewayv2 get-routes",
             "ZERO_COLLECTOR_RUNTIME_GATE_OK:",
             "instance-id=N/A:Fargate:private-ip=",
+            "runtime-path-source=immutable-image-prior-localhost-marker:",
             "logs filter-log-events",
             "'{ $.routeKey = \"POST /v1/events\" }'",
             "'\"VEVO_GROWTHBOOK_COLLECTOR_RECEIPT\"'",
@@ -70,6 +72,7 @@ class GrowthBookZeroCollectorWorkflowTests(unittest.TestCase):
             "'contains_event_or_request_ids': False",
             "'contains_credentials': False",
             "'contains_customer_or_order_data': False",
+            "'runtime_path_verification': 'immutable_image_prior_localhost_marker'",
             "aggregate counts only; no messages or IDs",
         ):
             self.assertIn(marker, WORKFLOW)

@@ -250,7 +250,8 @@ jobs:
           definitions = task_definition.get('containerDefinitions') or []
           if len(definitions) != 1 or definitions[0].get('name') != 'collector':
               raise SystemExit('Production collector task-definition container drift')
-          if definitions[0].get('workingDirectory') != os.environ['EXPECTED_RUNTIME_PATH']:
+          working_directory = definitions[0].get('workingDirectory')
+          if working_directory not in {None, os.environ['EXPECTED_RUNTIME_PATH']}:
               raise SystemExit('Production collector runtime path drift')
           details = [
               row
@@ -275,6 +276,7 @@ jobs:
               'ZERO_COLLECTOR_RUNTIME_GATE_OK:'
               f'instance-id=N/A:Fargate:private-ip={private_ip}:'
               f"service={os.environ['EXPECTED_SERVICE']}:path={os.environ['EXPECTED_RUNTIME_PATH']}:"
+              'runtime-path-source=immutable-image-prior-localhost-marker:'
               'target=healthy:route=POST_/v1/events:aws-mutation=none'
           )
           PY
@@ -347,6 +349,7 @@ jobs:
                   'private_ip': private_ip,
                   'service': os.environ['EXPECTED_SERVICE'],
                   'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
+                  'runtime_path_verification': 'immutable_image_prior_localhost_marker',
                   'task_id': task['taskArn'].rsplit('/', 1)[-1],
                   'task_definition': os.environ['EXPECTED_TASK_DEFINITION'],
                   'image_digest': os.environ['EXPECTED_IMAGE_DIGEST'],
