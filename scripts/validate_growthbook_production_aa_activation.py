@@ -19,14 +19,14 @@ STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 
 
 EXPECTED_ACTIVATION = {
-    "schema_version": 7,
+    "schema_version": 8,
     "activation_type": "vevo_growthbook_production_aa",
     "tracking_key": "vevo-sk-aa-001",
     "feature_key": "vevo-sk-aa-assignment",
     "variations": ["control", "variant"],
     "variation_weights": [0.5, 0.5],
     "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-    "status": "zero_traffic_qa_verified_activation_review_pending",
+    "status": "gtm_published_zero_allocation_verification_pending",
     "preconditions": {
         "natural_reconciliation_verified": True,
         "route_disabled_foundation_verified": True,
@@ -90,12 +90,12 @@ EXPECTED_ACTIVATION = {
         ),
         "setup_tag_sequencing_verified": True,
         "unprocessed_changes": {
-            "added": 5,
+            "added": 0,
             "modified": 0,
             "removed": 0,
         },
-        "publish_status": "not_published",
-        "container_version_id": None,
+        "publish_status": "published_zero_allocation",
+        "container_version_id": "15",
     },
     "tag_assistant_qa": {
         "status": "zero_traffic_qa_verified",
@@ -149,7 +149,7 @@ EXPECTED_ACTIVATION = {
         "ga4_meta_consent_behavior_verified": True,
     },
     "activation_preflight": {
-        "status": "gtm_consent_verified_ready_for_zero_allocation_publish",
+        "status": "gtm_published_zero_allocation_collector_readback_pending",
         "reviewed_at_local_date": "2026-08-24",
         "source_main_commit": "b00b76244c6758a8af4009aff3523966f1ec4b22",
         "live_readback": {
@@ -174,11 +174,11 @@ EXPECTED_ACTIVATION = {
             "production_experiment_environment": "production_only",
             "production_experiment_traffic_percent": 100,
             "production_experiment_variation_weights": [0.5, 0.5],
-            "gtm_live_container_version_id": "14",
+            "gtm_live_container_version_id": "15",
             "gtm_workspace_id": "17",
             "gtm_workspace_name": "VEVO GrowthBook Production A/A",
             "gtm_unprocessed_changes": {
-                "added": 5,
+                "added": 0,
                 "modified": 0,
                 "removed": 0,
             },
@@ -253,11 +253,45 @@ EXPECTED_ACTIVATION = {
                     "draft_not_started"
                 ),
             },
-            "publish_allowed": True,
+            "publish_allowed": False,
+        },
+        "post_publish_readback": {
+            "status": "public_runtime_verified_collector_pending",
+            "observed_at_utc": "2026-08-24T14:34:24Z",
+            "source_main_commit": "aa1d4a17a24f64808de3ebdd6441ddc375a0f15c",
+            "gtm_live_container_version_id": "15",
+            "gtm_rollback_container_version_id": "14",
+            "public_gtm_http_status": 200,
+            "public_gtm_bytes": 499401,
+            "public_gtm_sha256": (
+                "48816d60331c6df39c15161df4b6b0222b0313382c5b0600fdfd34dfbd11b481"
+            ),
+            "public_gtm_marker_counts": {
+                "vevo_growthbook": 13,
+                "client_version": 2,
+                "consent_bridge": 3,
+                "add_to_cart_bridge": 3,
+                "purchase_bridge": 3,
+                "growthbook_api_host": 2,
+            },
+            "production_sdk_key_count": 1,
+            "production_sdk_key_recorded": False,
+            "growthbook_feature_payload_http_status": 200,
+            "growthbook_feature_payload_bytes": 69,
+            "growthbook_feature_payload_sha256": (
+                "8a85bd5f83d171e3906117b8b6d8fc5d58fea784ad2e1f8fc27745a911537b89"
+            ),
+            "growthbook_feature_count": 0,
+            "target_feature_present": False,
+            "target_feature_rule_count": 0,
+            "production_assignment_possible": False,
+            "zero_collector_request_verified": False,
+            "zero_collector_observation": None,
+            "growthbook_start_allowed": False,
         },
         "mutation_scope": {
             "configure_gtm_consent_metadata_for_tags_54_51_55_53": False,
-            "publish_gtm_workspace_17": True,
+            "publish_gtm_workspace_17": False,
             "start_growthbook_experiment_exp_19g6mmt5wugpk": False,
             "publish_growthbook_feature_revision_3": False,
             "meta_ads": False,
@@ -268,12 +302,9 @@ EXPECTED_ACTIVATION = {
             "collector_infrastructure": False,
         },
         "ordered_operations": [
-            (
-                "publish_gtm_workspace_17_from_live_version_14_while_"
-                "growthbook_live_revision_2_keeps_production_disabled"
-            ),
-            "verify_new_gtm_live_version_and_zero_production_exposures",
-            "record_zero_allocation_gtm_publish_readback_in_git_before_growthbook_start",
+            "run_protected_post_publish_zero_collector_observation_for_gtm_version_15",
+            "record_sanitized_zero_request_and_receipt_evidence_in_git",
+            "open_separate_growthbook_start_gate_only_after_post_publish_evidence_merge",
         ],
         "rollback": {
             "first": "stop_growthbook_production_aa_and_verify_zero_assignment",
@@ -307,7 +338,7 @@ EXPECTED_ACTIVATION = {
         "drill_status": "not_run",
         "verified_at_utc": None,
     },
-    "next_gate": "review_controlled_production_aa_activation",
+    "next_gate": "verify_post_publish_zero_collector",
 }
 
 

@@ -20,10 +20,13 @@ class GrowthBookZeroCollectorWorkflowTests(unittest.TestCase):
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_observation:",
             '[[ "${CONFIRM_OBSERVATION}" == \'true\' ]]',
-            "OBSERVATION_FROM_UTC: '2026-08-24T04:30:00Z'",
-            "OBSERVATION_THROUGH_UTC: '2026-08-24T04:50:00Z'",
-            "owned-storage cleanup evidence is missing",
-            "zero-collector observation is already recorded",
+            "OBSERVATION_FROM_UTC: '2026-08-24T14:34:30Z'",
+            "OBSERVATION_THROUGH_UTC: '2026-08-24T14:38:00Z'",
+            "post-publish zero-collector observation is already recorded",
+            "public GTM payload hash drift",
+            "Production GrowthBook payload hash drift",
+            "published_zero_allocation",
+            "gtm_live_container_version_id",
             "python scripts/validate_growthbook_production_aa_activation.py",
             "ZERO_COLLECTOR_LOCAL_GATE_OK:",
             "Configure AWS credentials for bounded read-only observation",
@@ -66,7 +69,10 @@ class GrowthBookZeroCollectorWorkflowTests(unittest.TestCase):
 
     def test_uploads_one_sanitized_artifact_and_no_raw_aws_payload(self) -> None:
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))
-        self.assertIn("path: vevo-growthbook-zero-collector-observation.json", WORKFLOW)
+        self.assertIn(
+            "path: vevo-growthbook-post-publish-zero-collector-observation.json",
+            WORKFLOW,
+        )
         for marker in (
             "'contains_cloudwatch_messages': False",
             "'contains_event_or_request_ids': False",

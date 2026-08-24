@@ -27,24 +27,27 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         self.registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
 
-    def test_checked_in_handoff_is_zero_allocation_prepared(self) -> None:
+    def test_checked_in_handoff_is_published_at_zero_allocation(self) -> None:
         validator.validate_activation_handoff(
             self.activation,
             self.workspace,
             self.registry,
         )
 
-    def test_growthbook_and_gtm_draft_evidence_is_exact(self) -> None:
+    def test_growthbook_draft_and_live_gtm_evidence_is_exact(self) -> None:
         self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
         self.assertEqual(
             "draft_not_published",
             self.activation["growthbook"]["production_rule_publish_status"],
         )
-        self.assertEqual("not_published", self.activation["gtm"]["publish_status"])
         self.assertEqual(
-            {"added": 5, "modified": 0, "removed": 0},
+            "published_zero_allocation", self.activation["gtm"]["publish_status"]
+        )
+        self.assertEqual(
+            {"added": 0, "modified": 0, "removed": 0},
             self.activation["gtm"]["unprocessed_changes"],
         )
+        self.assertEqual("15", self.activation["gtm"]["container_version_id"])
         self.assertTrue(self.activation["gtm"]["setup_tag_sequencing_verified"])
         self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
         self.assertFalse(self.activation["traffic"]["activation_allowed"])
@@ -76,17 +79,17 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         )
         self.assertFalse(self.activation["traffic"]["activation_allowed"])
         self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
-        self.assertEqual("not_published", self.activation["gtm"]["publish_status"])
-        self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
         self.assertEqual(
-            "review_controlled_production_aa_activation", self.activation["next_gate"]
+            "published_zero_allocation", self.activation["gtm"]["publish_status"]
         )
+        self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
+        self.assertEqual("verify_post_publish_zero_collector", self.activation["next_gate"])
 
     def test_controlled_activation_preflight_is_exact_and_narrow(self) -> None:
         preflight = self.activation["activation_preflight"]
         live = preflight["live_readback"]
         self.assertEqual(
-            "gtm_consent_verified_ready_for_zero_allocation_publish",
+            "gtm_published_zero_allocation_collector_readback_pending",
             preflight["status"],
         )
         self.assertEqual(2, live["feature_live_revision"])
@@ -104,7 +107,7 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertEqual(
             [0.5, 0.5], live["production_experiment_variation_weights"]
         )
-        self.assertEqual("14", live["gtm_live_container_version_id"])
+        self.assertEqual("15", live["gtm_live_container_version_id"])
         self.assertEqual(
             self.activation["gtm"]["unprocessed_changes"],
             live["gtm_unprocessed_changes"],
@@ -156,13 +159,31 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertFalse(qa["growthbook_client_uses_gtm_consent_api"])
         self.assertFalse(qa["cta_experiment_class_applied"])
         self.assertFalse(qa["cart_mutated"])
-        self.assertTrue(consent["publish_allowed"])
+        self.assertFalse(consent["publish_allowed"])
+
+        post_publish = preflight["post_publish_readback"]
+        self.assertEqual(
+            "public_runtime_verified_collector_pending", post_publish["status"]
+        )
+        self.assertEqual("15", post_publish["gtm_live_container_version_id"])
+        self.assertEqual("14", post_publish["gtm_rollback_container_version_id"])
+        self.assertEqual(200, post_publish["public_gtm_http_status"])
+        self.assertEqual(499401, post_publish["public_gtm_bytes"])
+        self.assertEqual(1, post_publish["production_sdk_key_count"])
+        self.assertFalse(post_publish["production_sdk_key_recorded"])
+        self.assertEqual(0, post_publish["growthbook_feature_count"])
+        self.assertFalse(post_publish["target_feature_present"])
+        self.assertEqual(0, post_publish["target_feature_rule_count"])
+        self.assertFalse(post_publish["production_assignment_possible"])
+        self.assertFalse(post_publish["zero_collector_request_verified"])
+        self.assertIsNone(post_publish["zero_collector_observation"])
+        self.assertFalse(post_publish["growthbook_start_allowed"])
 
         scope = preflight["mutation_scope"]
         self.assertFalse(
             scope["configure_gtm_consent_metadata_for_tags_54_51_55_53"]
         )
-        self.assertTrue(scope["publish_gtm_workspace_17"])
+        self.assertFalse(scope["publish_gtm_workspace_17"])
         self.assertFalse(
             scope["start_growthbook_experiment_exp_19g6mmt5wugpk"]
         )
@@ -184,7 +205,7 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         altered = copy.deepcopy(self.activation)
         altered["activation_preflight"]["live_readback"][
             "gtm_live_container_version_id"
-        ] = "15"
+        ] = "14"
         with self.assertRaisesRegex(AssertionError, "reviewed zero-allocation UI gate"):
             validator.validate_activation_handoff(
                 altered,
