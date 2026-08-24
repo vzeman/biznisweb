@@ -96,6 +96,9 @@ def main() -> int:
         growthbook_foundation_diagnostic_workflow = read(
             ".github/workflows/diagnose-vevo-growthbook-production-foundation.yml"
         )
+        growthbook_zero_collector_workflow = read(
+            ".github/workflows/verify-vevo-growthbook-zero-collector.yml"
+        )
         growthbook_foundation_bucket_summarizer = read(
             "scripts/summarize_growthbook_foundation_bucket.py"
         )
@@ -1057,6 +1060,55 @@ def main() -> int:
                 growthbook_foundation_diagnostic_workflow.lower(),
                 forbidden_action,
                 f"GrowthBook foundation diagnostic must remain read-only: {forbidden_action}",
+            )
+        for marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "OBSERVATION_FROM_UTC: '2026-08-24T04:30:00Z'",
+            "OBSERVATION_THROUGH_UTC: '2026-08-24T04:50:00Z'",
+            "ZERO_COLLECTOR_LOCAL_GATE_OK:",
+            "Configure AWS credentials for bounded read-only observation",
+            "ZERO_COLLECTOR_RUNTIME_GATE_OK:",
+            "instance-id=N/A:Fargate:private-ip=",
+            "logs filter-log-events",
+            "--query 'events[].eventId'",
+            "ZERO_COLLECTOR_OBSERVATION_OK:",
+            "contains_cloudwatch_messages",
+            "contains_event_or_request_ids",
+            "AWS mutations: `none`",
+        ):
+            require(
+                growthbook_zero_collector_workflow,
+                marker,
+                f"GrowthBook zero-collector workflow lost safety marker: {marker}",
+            )
+        for forbidden_action in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation execute-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "logs put-",
+            "logs delete-",
+            "s3api put-",
+            "s3api delete-",
+            "iam create-",
+            "iam delete-",
+            "athena start-query-execution",
+            "scheduler update-",
+            "ads_update",
+            "submit",
+        ):
+            forbid(
+                growthbook_zero_collector_workflow.lower(),
+                forbidden_action,
+                f"GrowthBook zero-collector workflow must remain read-only: {forbidden_action}",
+            )
+        if growthbook_zero_collector_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError(
+                "GrowthBook zero-collector workflow must upload one sanitized artifact."
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
