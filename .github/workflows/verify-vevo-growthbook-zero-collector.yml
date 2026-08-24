@@ -1,0 +1,407 @@
+name: Verify VEVO GrowthBook Zero Collector Traffic
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_observation:
+        description: Type true to run the frozen read-only zero-collector observation
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-zero-collector-observation
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  EXPECTED_STACK: vevo-growthbook-production
+  EXPECTED_SERVICE: vevo-growthbook-collector-production
+  EXPECTED_TASK_DEFINITION: vevo-growthbook-collector-production:2
+  EXPECTED_IMAGE_DIGEST: sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058
+  EXPECTED_RUNTIME_PATH: /app
+  EXPECTED_API_LOG_GROUP: /aws/apigateway/vevo-growthbook-collector-production
+  EXPECTED_CONTAINER_LOG_GROUP: /ecs/vevo-growthbook-collector-production
+  OBSERVATION_FROM_UTC: '2026-08-24T04:30:00Z'
+  OBSERVATION_THROUGH_UTC: '2026-08-24T04:50:00Z'
+  EVIDENCE_FILE: vevo-growthbook-zero-collector-observation.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  verify-zero-collector:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Require exact read-only observation confirmation
+        env:
+          CONFIRM_OBSERVATION: ${{ inputs.confirm_observation }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_OBSERVATION}" == 'true' ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce frozen fail-closed gate before AWS
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_production_aa_activation \
+            tests.test_growthbook_zero_collector_workflow
+          python scripts/validate_growthbook_production_aa_activation.py
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+
+          activation = json.load(
+              open('projects/vevo/growthbook_production_aa_activation.json', encoding='utf-8')
+          )
+          qa = activation.get('tag_assistant_qa') or {}
+          collector = activation.get('collector') or {}
+          growthbook = activation.get('growthbook') or {}
+          gtm = activation.get('gtm') or {}
+          traffic = activation.get('traffic') or {}
+
+          if qa.get('owned_storage_cleanup_verified') is not True:
+              raise SystemExit('owned-storage cleanup evidence is missing')
+          if qa.get('zero_collector_request_verified') is not False:
+              raise SystemExit('zero-collector observation is already recorded')
+          if growthbook.get('status') != 'draft_not_started':
+              raise SystemExit('GrowthBook Production experiment must remain Draft')
+          if growthbook.get('allocation_percent') != 0:
+              raise SystemExit('GrowthBook Production allocation must remain zero')
+          if gtm.get('production_workspace_id') != '17' or gtm.get('publish_status') != 'not_published':
+              raise SystemExit('exact Production GTM workspace must remain unpublished')
+          if traffic.get('activation_allowed') is not False or traffic.get('production_allocation_percent') != 0:
+              raise SystemExit('Production traffic gate must remain closed at zero percent')
+          if collector.get('service') != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('collector service identity drift')
+          if collector.get('runtime_path') != os.environ['EXPECTED_RUNTIME_PATH']:
+              raise SystemExit('collector runtime path drift')
+          if collector.get('task_definition') != os.environ['EXPECTED_TASK_DEFINITION']:
+              raise SystemExit('collector task-definition identity drift')
+          if collector.get('image_digest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+              raise SystemExit('collector image identity drift')
+
+          start = datetime.fromisoformat(os.environ['OBSERVATION_FROM_UTC'].replace('Z', '+00:00'))
+          through = datetime.fromisoformat(os.environ['OBSERVATION_THROUGH_UTC'].replace('Z', '+00:00'))
+          if start.tzinfo != timezone.utc or through.tzinfo != timezone.utc or through <= start:
+              raise SystemExit('frozen zero-collector UTC window is invalid')
+          if through > datetime.now(timezone.utc):
+              raise SystemExit('frozen zero-collector UTC window is incomplete')
+          print(
+              'ZERO_COLLECTOR_LOCAL_GATE_OK:'
+              'workspace=17:gtm=unpublished:growthbook=draft:allocation=0:'
+              'storage=true:collector=false:aws-mutation=none'
+          )
+          PY
+
+      - name: Configure AWS credentials for bounded read-only observation
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify exact runtime and reduce the frozen request window
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMP_DIR="${RUNNER_TEMP}/vevo-zero-collector-${GITHUB_RUN_ID}"
+          mkdir -m 700 "${TEMP_DIR}"
+          cleanup() {
+            rm -rf "${TEMP_DIR}"
+          }
+          trap cleanup EXIT
+
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+
+          aws cloudformation describe-stacks \
+            --stack-name "${EXPECTED_STACK}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/stack.json"
+          python - <<'PY' > "${TEMP_DIR}/runtime.env"
+          import json
+          import os
+
+          stack = json.load(open(f"{os.environ['RUNNER_TEMP']}/vevo-zero-collector-{os.environ['GITHUB_RUN_ID']}/stack.json", encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackName') != os.environ['EXPECTED_STACK'] or stack.get('StackStatus') != 'UPDATE_COMPLETE':
+              raise SystemExit('Production collector stack identity or status drift')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorApiBaseUrl', 'CollectorClusterArn', 'CollectorServiceName',
+              'CollectorTaskDefinitionArn', 'CollectorContainerLogGroup',
+          }
+          if not required.issubset(outputs):
+              raise SystemExit('Production collector outputs are incomplete')
+          if outputs['CollectorServiceName'] != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('Production collector service output drift')
+          if not outputs['CollectorTaskDefinitionArn'].endswith('/' + os.environ['EXPECTED_TASK_DEFINITION']):
+              raise SystemExit('Production collector task-definition output drift')
+          if outputs['CollectorContainerLogGroup'] != os.environ['EXPECTED_CONTAINER_LOG_GROUP']:
+              raise SystemExit('Production collector log-group output drift')
+          values = {
+              'COLLECTOR_API_BASE_URL': outputs['CollectorApiBaseUrl'],
+              'COLLECTOR_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'COLLECTOR_SERVICE_NAME': outputs['CollectorServiceName'],
+              'COLLECTOR_TASK_DEFINITION_ARN': outputs['CollectorTaskDefinitionArn'],
+              'COLLECTOR_CONTAINER_LOG_GROUP': outputs['CollectorContainerLogGroup'],
+          }
+          for key, value in values.items():
+              if not value or '\n' in value or '\r' in value:
+                  raise SystemExit(f'unsafe runtime output: {key}')
+              print(f'{key}={value}')
+          PY
+          set -a
+          source "${TEMP_DIR}/runtime.env"
+          set +a
+
+          aws ecs describe-services \
+            --cluster "${COLLECTOR_CLUSTER_ARN}" \
+            --services "${COLLECTOR_SERVICE_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/service.json"
+          aws ecs list-tasks \
+            --cluster "${COLLECTOR_CLUSTER_ARN}" \
+            --service-name "${COLLECTOR_SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task-list.json"
+          TASK_ARN="$(python - <<'PY'
+          import json
+          import os
+          path = f"{os.environ['RUNNER_TEMP']}/vevo-zero-collector-{os.environ['GITHUB_RUN_ID']}/task-list.json"
+          tasks = json.load(open(path, encoding='utf-8')).get('taskArns') or []
+          if len(tasks) != 1:
+              raise SystemExit('exactly one Production collector task is required')
+          print(tasks[0])
+          PY
+          )"
+          aws ecs describe-tasks \
+            --cluster "${COLLECTOR_CLUSTER_ARN}" \
+            --tasks "${TASK_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task.json"
+          aws ecs describe-task-definition \
+            --task-definition "${COLLECTOR_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task-definition.json"
+          TARGET_GROUP_ARN="$(python - <<'PY'
+          import json
+          import os
+          path = f"{os.environ['RUNNER_TEMP']}/vevo-zero-collector-{os.environ['GITHUB_RUN_ID']}/service.json"
+          services = json.load(open(path, encoding='utf-8')).get('services') or []
+          groups = services[0].get('loadBalancers') or [] if len(services) == 1 else []
+          if len(groups) != 1:
+              raise SystemExit('Production collector target-group boundary drift')
+          print(groups[0]['targetGroupArn'])
+          PY
+          )"
+          aws elbv2 describe-target-health \
+            --target-group-arn "${TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/target-health.json"
+          API_ID="$(python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          host = urlparse(os.environ['COLLECTOR_API_BASE_URL']).hostname or ''
+          api_id = host.split('.', 1)[0]
+          if not api_id:
+              raise SystemExit('Production collector API ID missing')
+          print(api_id)
+          PY
+          )"
+          aws apigatewayv2 get-routes \
+            --api-id "${API_ID}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/routes.json"
+          aws logs describe-log-groups \
+            --log-group-name-prefix "${EXPECTED_API_LOG_GROUP}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/api-log-groups.json"
+
+          python - <<'PY'
+          import ipaddress
+          import json
+          import os
+
+          base = f"{os.environ['RUNNER_TEMP']}/vevo-zero-collector-{os.environ['GITHUB_RUN_ID']}"
+          service = json.load(open(f'{base}/service.json', encoding='utf-8'))['services'][0]
+          if (
+              service.get('serviceName') != os.environ['EXPECTED_SERVICE']
+              or service.get('taskDefinition') != os.environ['COLLECTOR_TASK_DEFINITION_ARN']
+              or service.get('desiredCount') != 1
+              or service.get('runningCount') != 1
+          ):
+              raise SystemExit('Production collector service state drift')
+          task = json.load(open(f'{base}/task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['COLLECTOR_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('Production collector task identity drift')
+          container = containers[0]
+          if container.get('name') != 'collector' or container.get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+              raise SystemExit('Production collector image identity drift')
+          task_definition = json.load(open(f'{base}/task-definition.json', encoding='utf-8'))['taskDefinition']
+          definitions = task_definition.get('containerDefinitions') or []
+          if len(definitions) != 1 or definitions[0].get('name') != 'collector':
+              raise SystemExit('Production collector task-definition container drift')
+          if definitions[0].get('workingDirectory') != os.environ['EXPECTED_RUNTIME_PATH']:
+              raise SystemExit('Production collector runtime path drift')
+          details = [
+              row
+              for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip = str(next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), ''))
+          if ipaddress.ip_address(private_ip) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('Production collector private IP drift')
+          health = json.load(open(f'{base}/target-health.json', encoding='utf-8')).get('TargetHealthDescriptions') or []
+          if len(health) != 1 or health[0].get('TargetHealth', {}).get('State') != 'healthy':
+              raise SystemExit('Production collector target is not healthy')
+          if health[0].get('Target', {}).get('Id') != private_ip:
+              raise SystemExit('Production collector target/IP identity mismatch')
+          routes = json.load(open(f'{base}/routes.json', encoding='utf-8')).get('Items') or []
+          if len(routes) != 1 or routes[0].get('RouteKey') != 'POST /v1/events' or routes[0].get('AuthorizationType') != 'NONE':
+              raise SystemExit('Production collector route identity drift')
+          groups = [row.get('logGroupName') for row in json.load(open(f'{base}/api-log-groups.json', encoding='utf-8')).get('logGroups') or []]
+          if groups != [os.environ['EXPECTED_API_LOG_GROUP']]:
+              raise SystemExit('Production API access log-group identity drift')
+          print(
+              'ZERO_COLLECTOR_RUNTIME_GATE_OK:'
+              f'instance-id=N/A:Fargate:private-ip={private_ip}:'
+              f"service={os.environ['EXPECTED_SERVICE']}:path={os.environ['EXPECTED_RUNTIME_PATH']}:"
+              'target=healthy:route=POST_/v1/events:aws-mutation=none'
+          )
+          PY
+
+          read START_MS THROUGH_MS < <(python - <<'PY'
+          import os
+          from datetime import datetime
+          start = datetime.fromisoformat(os.environ['OBSERVATION_FROM_UTC'].replace('Z', '+00:00'))
+          through = datetime.fromisoformat(os.environ['OBSERVATION_THROUGH_UTC'].replace('Z', '+00:00'))
+          print(int(start.timestamp() * 1000), int(through.timestamp() * 1000))
+          PY
+          )
+          aws logs filter-log-events \
+            --log-group-name "${EXPECTED_API_LOG_GROUP}" \
+            --start-time "${START_MS}" \
+            --end-time "${THROUGH_MS}" \
+            --filter-pattern '{ $.routeKey = "POST /v1/events" }' \
+            --region "${AWS_REGION}" \
+            --query 'events[].eventId' \
+            --output json > "${TEMP_DIR}/api-event-ids.json"
+          aws logs filter-log-events \
+            --log-group-name "${COLLECTOR_CONTAINER_LOG_GROUP}" \
+            --start-time "${START_MS}" \
+            --end-time "${THROUGH_MS}" \
+            --filter-pattern '"VEVO_GROWTHBOOK_COLLECTOR_RECEIPT"' \
+            --region "${AWS_REGION}" \
+            --query 'events[].eventId' \
+            --output json > "${TEMP_DIR}/receipt-event-ids.json"
+
+          python - <<'PY'
+          import hashlib
+          import ipaddress
+          import json
+          import os
+          from datetime import datetime, timezone
+
+          base = f"{os.environ['RUNNER_TEMP']}/vevo-zero-collector-{os.environ['GITHUB_RUN_ID']}"
+          api_ids = json.load(open(f'{base}/api-event-ids.json', encoding='utf-8'))
+          receipt_ids = json.load(open(f'{base}/receipt-event-ids.json', encoding='utf-8'))
+          for label, values in (('API request', api_ids), ('collector receipt', receipt_ids)):
+              if not isinstance(values, list) or any(not isinstance(value, str) or not value for value in values):
+                  raise SystemExit(f'{label} ID reduction is malformed')
+              if len(values) != len(set(values)):
+                  raise SystemExit(f'{label} ID reduction contains duplicates')
+          request_count = len(api_ids)
+          receipt_count = len(receipt_ids)
+          if request_count != 0 or receipt_count != 0:
+              raise SystemExit(
+                  f'zero-collector observation failed: requests={request_count}, receipts={receipt_count}'
+              )
+
+          task = json.load(open(f'{base}/task.json', encoding='utf-8'))['tasks'][0]
+          details = [
+              row
+              for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip = str(next(row.get('value') for row in details if row.get('name') == 'privateIPv4Address'))
+          ipaddress.ip_address(private_ip)
+          evidence = {
+              'schema_version': 1,
+              'evidence_type': 'vevo_growthbook_zero_collector_observation',
+              'from_utc': os.environ['OBSERVATION_FROM_UTC'],
+              'through_utc': os.environ['OBSERVATION_THROUGH_UTC'],
+              'api_request_count': request_count,
+              'accepted_receipt_count': receipt_count,
+              'route_key': 'POST /v1/events',
+              'runtime': {
+                  'instance_id': 'N/A:Fargate',
+                  'private_ip': private_ip,
+                  'service': os.environ['EXPECTED_SERVICE'],
+                  'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
+                  'task_id': task['taskArn'].rsplit('/', 1)[-1],
+                  'task_definition': os.environ['EXPECTED_TASK_DEFINITION'],
+                  'image_digest': os.environ['EXPECTED_IMAGE_DIGEST'],
+                  'target_health': 'healthy',
+              },
+              'source': {
+                  'workspace_id': '17',
+                  'gtm_publish_status': 'not_published',
+                  'growthbook_status': 'draft_not_started',
+                  'production_allocation_percent': 0,
+              },
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'main_commit': os.environ['GITHUB_SHA'],
+              'observed_at_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+              'safety': {
+                  'contains_cloudwatch_messages': False,
+                  'contains_event_or_request_ids': False,
+                  'contains_credentials': False,
+                  'contains_customer_or_order_data': False,
+                  'aws_mutations': False,
+                  'growthbook_mutations': False,
+                  'gtm_mutations': False,
+                  'meta_ads_mutations': False,
+                  'biznisweb_mutations': False,
+                  'commerce_mutations': False,
+              },
+          }
+          payload = (json.dumps(evidence, ensure_ascii=True, indent=2, sort_keys=True) + '\n').encode('utf-8')
+          open(os.environ['EVIDENCE_FILE'], 'wb').write(payload)
+          print(
+              'ZERO_COLLECTOR_OBSERVATION_OK:'
+              f'requests={request_count}:receipts={receipt_count}:'
+              f'sha256={hashlib.sha256(payload).hexdigest()}:raw=false:aws-mutation=none'
+          )
+          PY
+
+      - name: Upload sanitized zero-collector evidence only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-zero-collector-observation-${{ github.run_id }}
+          path: vevo-growthbook-zero-collector-observation.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Read-only observation summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## VEVO GrowthBook zero-collector observation'
+            echo "- Frozen UTC window: \`${OBSERVATION_FROM_UTC}..${OBSERVATION_THROUGH_UTC}\`"
+            echo "- Runtime hard gate: \`instance-id=N/A:Fargate / service=${EXPECTED_SERVICE} / path=${EXPECTED_RUNTIME_PATH}\`"
+            echo '- CloudWatch output: `aggregate counts only; no messages or IDs`'
+            echo '- AWS mutations: `none`'
+            echo '- GrowthBook, GTM, Meta Ads, BiznisWeb, prices, cart, checkout, orders: `unchanged`'
+          } >> "${GITHUB_STEP_SUMMARY}"
