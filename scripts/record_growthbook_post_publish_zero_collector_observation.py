@@ -166,7 +166,26 @@ def _parse_utc(value: Any, field: str) -> datetime:
 def expected_pending_activation() -> dict[str, Any]:
     """Return the exact schema-8 post-publish collector-pending gate."""
 
-    return copy.deepcopy(activation_validator.EXPECTED_ACTIVATION)
+    pending = copy.deepcopy(activation_validator.EXPECTED_ACTIVATION)
+    pending["schema_version"] = 8
+    pending["status"] = "gtm_published_zero_allocation_verification_pending"
+    preflight = pending["activation_preflight"]
+    preflight["status"] = "gtm_published_zero_allocation_collector_readback_pending"
+    post_publish = preflight["post_publish_readback"]
+    post_publish["status"] = "public_runtime_verified_collector_pending"
+    post_publish["zero_collector_request_verified"] = False
+    post_publish["zero_collector_observation"] = None
+    post_publish["growthbook_start_allowed"] = False
+    scope = preflight["mutation_scope"]
+    scope["start_growthbook_experiment_exp_19g6mmt5wugpk"] = False
+    scope["publish_growthbook_feature_revision_3"] = False
+    preflight["ordered_operations"] = [
+        "run_protected_post_publish_zero_collector_observation_for_gtm_version_15",
+        "record_sanitized_zero_request_and_receipt_evidence_in_git",
+        "open_separate_growthbook_start_gate_only_after_post_publish_evidence_merge",
+    ]
+    pending["next_gate"] = "verify_post_publish_zero_collector"
+    return pending
 
 
 def validate_post_publish_zero_collector_observation(
