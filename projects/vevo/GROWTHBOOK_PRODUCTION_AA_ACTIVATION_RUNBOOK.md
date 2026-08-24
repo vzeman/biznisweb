@@ -93,11 +93,24 @@ Require all of the following on desktop and mobile:
 
 Any failure stops the rollout. Restore the GTM workspace draft; do not compensate by changing consent categories or BiznisWeb commerce behavior.
 
+### GTM consent-metadata hard gate
+
+Before Phase 5, GTM Consent Overview must be read back for the exact four new
+GrowthBook tags `54`, `51`, `55`, and `53`. Their custom code already owns the
+consent checks, withdrawal handling, and owned-storage cleanup, so each must be
+explicitly marked `no additional consent required`. This metadata does not grant
+consent and must not change the tag triggers or code.
+
+The pre-existing Microsoft Clarity tag `43` is unrelated and out of scope. Do
+not modify it. Reload each GrowthBook tag after save, repeat the Preview consent
+cycle, and require Consent Overview to retain at most the unrelated tag `43`
+warning. Record that read-back through Git before GTM publishing is allowed.
+
 ## Phase 5 — controlled A/A activation
 
 Use one reviewed maintenance window and this exact order:
 
-0. Require the merged schema-`5` `activation_preflight` in `projects/vevo/growthbook_production_aa_activation.json`. Its exact source main commit, zero-traffic evidence SHA-256, GTM artifact SHA-256, GrowthBook clone evidence SHA-256, live feature revision `2`, draft revision `3`, GTM workspace `17`, and rollback target container version `14` must all match the authenticated UI read-back. The preflight authorizes only the ordered GTM publish and Production A/A start below; it does not mark Production traffic active.
+0. Require a merged schema-`6` `activation_preflight` in `projects/vevo/growthbook_production_aa_activation.json` whose consent-metadata read-back is verified and whose `publish_allowed` gate has been reopened in a separate reviewed change. Its exact source main commit, zero-traffic evidence SHA-256, GTM artifact SHA-256, GrowthBook clone evidence SHA-256, live feature revision `2`, draft revision `3`, GTM workspace `17`, and rollback target container version `14` must all match the authenticated UI read-back. The preflight authorizes only the ordered GTM publish and Production A/A start below; it does not mark Production traffic active.
 1. Publish the reviewed GTM container version while GrowthBook allocation remains `0%`.
 2. Verify the live container version and repeat reject/accept/withdrawal smoke. Confirm zero A/A exposures at `0%`.
 3. Start only `vevo-sk-aa-001` and set its Production rule to `100%` experiment traffic with the frozen `50/50` split.

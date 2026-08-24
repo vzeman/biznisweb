@@ -85,7 +85,9 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
     def test_controlled_activation_preflight_is_exact_and_narrow(self) -> None:
         preflight = self.activation["activation_preflight"]
         live = preflight["live_readback"]
-        self.assertEqual("reviewed_ready_for_ordered_phase_5", preflight["status"])
+        self.assertEqual(
+            "gtm_consent_metadata_review_required", preflight["status"]
+        )
         self.assertEqual(2, live["feature_live_revision"])
         self.assertFalse(live["feature_live_production_enabled"])
         self.assertTrue(live["feature_live_staging_enabled"])
@@ -106,13 +108,35 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
             self.activation["gtm"]["unprocessed_changes"],
             live["gtm_unprocessed_changes"],
         )
+        self.assertEqual(5, live["gtm_consent_warning_unconfigured_tag_count"])
+
+        consent = preflight["gtm_consent_metadata"]
+        self.assertEqual(
+            ["43", "54", "51", "55", "53"],
+            consent["observed_unconfigured_tag_ids"],
+        )
+        self.assertEqual(["43"], consent["unrelated_existing_tag_ids"])
+        self.assertEqual(
+            ["54", "51", "55", "53"], consent["growthbook_target_tag_ids"]
+        )
+        self.assertEqual(
+            "no_additional_consent_required", consent["required_setting"]
+        )
+        self.assertEqual([], consent["verified_target_tag_ids"])
+        self.assertEqual(
+            ["43"], consent["expected_remaining_unconfigured_tag_ids"]
+        )
+        self.assertFalse(consent["publish_allowed"])
 
         scope = preflight["mutation_scope"]
-        self.assertTrue(scope["publish_gtm_workspace_17"])
         self.assertTrue(
+            scope["configure_gtm_consent_metadata_for_tags_54_51_55_53"]
+        )
+        self.assertFalse(scope["publish_gtm_workspace_17"])
+        self.assertFalse(
             scope["start_growthbook_experiment_exp_19g6mmt5wugpk"]
         )
-        self.assertTrue(scope["publish_growthbook_feature_revision_3"])
+        self.assertFalse(scope["publish_growthbook_feature_revision_3"])
         for forbidden_scope in (
             "meta_ads",
             "biznisweb",
