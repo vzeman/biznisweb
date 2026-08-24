@@ -1069,6 +1069,7 @@ def main() -> int:
             "Configure AWS credentials for bounded read-only observation",
             "ZERO_COLLECTOR_RUNTIME_GATE_OK:",
             "instance-id=N/A:Fargate:private-ip=",
+            "runtime-path-source=immutable-image-prior-localhost-marker:",
             "logs filter-log-events",
             "--query 'events[].eventId'",
             "ZERO_COLLECTOR_OBSERVATION_OK:",
