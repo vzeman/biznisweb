@@ -99,8 +99,8 @@ EXPECTED_ACTIVATION = {
     },
     "tag_assistant_qa": {
         "status": (
-            "mobile_zero_assignment_and_consent_observed_"
-            "collector_and_storage_pending"
+            "mobile_zero_assignment_consent_and_storage_observed_"
+            "collector_pending"
         ),
         "observed_at_local_date": "2026-08-24",
         "workspace_id": "17",
@@ -120,7 +120,7 @@ EXPECTED_ACTIVATION = {
         "mobile_viewport_verified": True,
         "zero_assignment_verified": True,
         "zero_collector_request_verified": False,
-        "owned_storage_cleanup_verified": False,
+        "owned_storage_cleanup_verified": True,
         "ga4_meta_consent_behavior_verified": True,
     },
     "traffic": {

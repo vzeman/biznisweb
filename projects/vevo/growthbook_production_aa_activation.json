@@ -74,7 +74,7 @@
     "container_version_id": null
   },
   "tag_assistant_qa": {
-    "status": "mobile_zero_assignment_and_consent_observed_collector_and_storage_pending",
+    "status": "mobile_zero_assignment_consent_and_storage_observed_collector_pending",
     "observed_at_local_date": "2026-08-24",
     "workspace_id": "17",
     "session_connected": true,
@@ -91,7 +91,7 @@
     "mobile_viewport_verified": true,
     "zero_assignment_verified": true,
     "zero_collector_request_verified": false,
-    "owned_storage_cleanup_verified": false,
+    "owned_storage_cleanup_verified": true,
     "ga4_meta_consent_behavior_verified": true
   },
   "traffic": {
