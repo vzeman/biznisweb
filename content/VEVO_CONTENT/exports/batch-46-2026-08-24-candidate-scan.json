@@ -1,0 +1,109 @@
+{
+  "existing_count": 835,
+  "excluded_batch": null,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je neoprén: penový materiál, zápach, čistenie a sušenie",
+      "slug": "co-je-neopren-penovy-material-zapach-cistenie-a-susenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je šifón: jemná priesvitná látka a bezpečná starostlivosť",
+      "slug": "co-je-sifon-jemna-priesvitna-latka-a-bezpecna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je buklé: slučkový povrch, žmolky a šetrné čistenie",
+      "slug": "co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+      "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je tyl: sieťovaná látka, zatrhnutie a šetrné pranie",
+              "slug": "co-je-tyl-sietovana-latka-zatrhnutie-a-setrne-pranie",
+              "score": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je taft: hladká pevná tkanina, šušťanie a starostlivosť",
+      "slug": "co-je-taft-hladka-pevna-tkanina-sustanie-a-starostlivost",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+              "link": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+              "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+              "sources": [
+                "local:batch-44-2026-08-20-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je krep: zrnitý povrch, krčivosť a správna starostlivosť",
+      "slug": "co-je-krep-zrnity-povrch-krcivost-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je tyl: sieťovaná látka, zatrhnutie a šetrné pranie",
+      "slug": "co-je-tyl-sietovana-latka-zatrhnutie-a-setrne-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+              "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "score": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je scuba úplet: pevný dvojitý úplet, pot a pranie",
+      "slug": "co-je-scuba-uplet-pevny-dvojity-uplet-pot-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
