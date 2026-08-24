@@ -82,6 +82,62 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
             "review_controlled_production_aa_activation", self.activation["next_gate"]
         )
 
+    def test_controlled_activation_preflight_is_exact_and_narrow(self) -> None:
+        preflight = self.activation["activation_preflight"]
+        live = preflight["live_readback"]
+        self.assertEqual("reviewed_ready_for_ordered_phase_5", preflight["status"])
+        self.assertEqual(2, live["feature_live_revision"])
+        self.assertFalse(live["feature_live_production_enabled"])
+        self.assertTrue(live["feature_live_staging_enabled"])
+        self.assertEqual(
+            {"production": 0, "staging": 1},
+            live["feature_live_rule_count_by_environment"],
+        )
+        self.assertEqual(3, live["draft_feature_revision"])
+        self.assertEqual(
+            "production_only", live["production_experiment_environment"]
+        )
+        self.assertEqual(100, live["production_experiment_traffic_percent"])
+        self.assertEqual(
+            [0.5, 0.5], live["production_experiment_variation_weights"]
+        )
+        self.assertEqual("14", live["gtm_live_container_version_id"])
+        self.assertEqual(
+            self.activation["gtm"]["unprocessed_changes"],
+            live["gtm_unprocessed_changes"],
+        )
+
+        scope = preflight["mutation_scope"]
+        self.assertTrue(scope["publish_gtm_workspace_17"])
+        self.assertTrue(
+            scope["start_growthbook_experiment_exp_19g6mmt5wugpk"]
+        )
+        self.assertTrue(scope["publish_growthbook_feature_revision_3"])
+        for forbidden_scope in (
+            "meta_ads",
+            "biznisweb",
+            "prices_or_product_content",
+            "cart_checkout_or_orders",
+            "cta_experiment",
+            "collector_infrastructure",
+        ):
+            self.assertFalse(scope[forbidden_scope])
+
+        self.assertFalse(self.activation["traffic"]["activation_allowed"])
+        self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
+
+    def test_activation_preflight_drift_is_rejected(self) -> None:
+        altered = copy.deepcopy(self.activation)
+        altered["activation_preflight"]["live_readback"][
+            "gtm_live_container_version_id"
+        ] = "15"
+        with self.assertRaisesRegex(AssertionError, "reviewed zero-allocation UI gate"):
+            validator.validate_activation_handoff(
+                altered,
+                self.workspace,
+                self.registry,
+            )
+
     def test_workflow_yaml_and_every_inline_python_block_compile(self) -> None:
         payload = yaml.safe_load(WORKFLOW)
         self.assertIsInstance(payload, dict)

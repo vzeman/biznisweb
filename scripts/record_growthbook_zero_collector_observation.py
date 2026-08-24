@@ -163,10 +163,19 @@ def _parse_utc(value: Any, field: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def expected_post_observation_activation() -> dict[str, Any]:
+    """Return the frozen schema-4 state before the later activation preflight."""
+
+    post_observation = copy.deepcopy(activation_validator.EXPECTED_ACTIVATION)
+    post_observation["schema_version"] = 4
+    post_observation.pop("activation_preflight", None)
+    return post_observation
+
+
 def expected_pending_activation() -> dict[str, Any]:
     """Return the exact manifest state that existed before this observation."""
 
-    pending = copy.deepcopy(activation_validator.EXPECTED_ACTIVATION)
+    pending = expected_post_observation_activation()
     pending["schema_version"] = 3
     pending["status"] = "tag_assistant_qa_in_progress"
     qa = pending["tag_assistant_qa"]
@@ -297,7 +306,7 @@ def record_zero_collector_observation(
     )
 
     current = copy.deepcopy(dict(activation))
-    if current == activation_validator.EXPECTED_ACTIVATION:
+    if current == expected_post_observation_activation():
         _require(
             current["tag_assistant_qa"].get("zero_collector_observation") == record,
             "recorded zero-collector provenance drift",
@@ -333,7 +342,7 @@ def record_zero_collector_observation(
     qa["zero_collector_observation"] = record
     result["next_gate"] = "review_controlled_production_aa_activation"
     _require(
-        result == activation_validator.EXPECTED_ACTIVATION,
+        result == expected_post_observation_activation(),
         "recorded activation does not match the reviewed post-observation gate",
     )
     _require(

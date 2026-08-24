@@ -16,6 +16,7 @@ from scripts.record_growthbook_zero_collector_observation import (
     EXPECTED_IMAGE_DIGEST,
     ZeroCollectorEvidenceError,
     expected_pending_activation,
+    expected_post_observation_activation,
     load_validate_and_record,
     record_zero_collector_observation,
     validate_zero_collector_observation,
@@ -110,7 +111,7 @@ class GrowthBookZeroCollectorObservationRecorderTests(unittest.TestCase):
 
     def test_post_observation_manifest_is_exact_and_idempotent(self) -> None:
         result = self.record()
-        self.assertEqual(validator.EXPECTED_ACTIVATION, result)
+        self.assertEqual(expected_post_observation_activation(), result)
         rerun = record_zero_collector_observation(
             result,
             evidence(),
@@ -120,11 +121,13 @@ class GrowthBookZeroCollectorObservationRecorderTests(unittest.TestCase):
         )
         self.assertEqual(result, rerun)
 
-    def test_activation_validator_accepts_recorded_closed_state(self) -> None:
+    def test_historical_recorded_state_does_not_include_later_preflight(self) -> None:
         result = self.record()
         workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
-        validator.validate_activation_handoff(result, workspace, registry)
+        self.assertNotIn("activation_preflight", result)
+        with self.assertRaisesRegex(AssertionError, "reviewed zero-allocation UI gate"):
+            validator.validate_activation_handoff(result, workspace, registry)
 
     def test_rejects_any_nonzero_request_or_receipt_count(self) -> None:
         for field in ("api_request_count", "accepted_receipt_count"):
