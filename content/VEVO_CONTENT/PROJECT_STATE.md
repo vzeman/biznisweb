@@ -4,7 +4,7 @@ Date: 2026-08-24
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-46
+Branch: codex/vevo-content-batch-47
 
 ## Current State
 
@@ -1937,6 +1937,24 @@ Branch: codex/vevo-content-batch-46
   - `imports/verify_batch_46_public.py`;
   - candidate-scan, duplicate, link-preflight, MCP smoke, MCP publication, and independent public verification reports under `exports/`.
 
+## Batch 47 Distinct Materials - Prepared 2026-08-24
+
+- Status: prepared and pushed pending the hidden-first production smoke and publication. No live record has been created at this checkpoint.
+- Eight material intents were explored. Tulle was excluded because VEVO already has a detailed tulle washing guide and the exploratory guard identified an internal overlap with organza. Gabardine remains excluded because it is constructionally close to the recently published twill guide. Taffeta and lamé remain on review because their proposed titles were close to existing poplin and bouclé title patterns. The four final titles returned `ok` against `839` merged Blog, FAQ, glossary, RSS, and local records:
+  - `Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie`;
+  - `Čo je scuba úplet: pevný dvojitý úplet, pot a pranie`;
+  - `Čo je piké: reliéfna pletenina, pórovitosť a správne pranie`;
+  - `Čo je lurex: metalická priadza, zatrhávanie a správna starostlivosť`.
+- Prepared quality: visible word counts `3679`, `3588`, `3519`, and `3616`; every article has `32` H2 headings, two responsive tables, eleven styled blocks, one concrete product card, one category card, at least nine reader-facing FAQ questions, and zero short or one-character paragraphs.
+- Link preflight passed with zero failures after rejecting an assumed Ponte di Roma internal URL that returned `404`; the article now uses only the verified CottonWorks source and an existing VEVO comparison article. All four exact future slugs return `404`, and every current internal, product, category, FIT, CottonWorks, Lurex, AATCC, ASTM, GINETEX, and EU destination returned the expected response.
+- Public wording, depth, and HTML safety guards pass with zero fixed prices, internal workflow wording, escaped HTML, malformed links, or structural failures. The project check passes `38/38` tests with audit `block_count=0`; its two expected pre-publication warnings are the missing batch 47 public report and the known stale global MCP registration, which is bypassed with the explicit repo-local MCP script.
+- A seven-word-shingle comparison measured pairwise overlap from `0.1064` to `0.1102`. Shared wording is confined to the common safety and layout framework; material definitions, diagnostics, tables, procedures, and expert sections are specific to organza, scuba, piké, and Lurex.
+- Durable prepared artifacts:
+  - `content-plan/batch-47-distinct-materials-2026-08-24.md`;
+  - `batches/batch-47-candidate-scan-2026-08-24.txt` and `batches/batch-47-candidates-2026-08-24.txt`;
+  - `imports/build_batch_47_distinct_materials.py`, `imports/batch-47-2026-08-24-articles.json`, and `imports/verify_batch_47_public.py`;
+  - candidate-scan, duplicate, link-preflight, wording, depth, and HTML reports under `exports/`.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -1953,6 +1971,7 @@ Branch: codex/vevo-content-batch-46
 - Batch 44 is complete; post IDs `3171-3174` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 44 title, intent, or slug.
 - Batch 45 is complete; post IDs `3176-3179` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 45 title, intent, or slug.
 - Batch 46 is complete; post IDs `3181-3184` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 46 title, intent, or slug.
+- Batch 47 is prepared but not yet published. Do not create its final records outside the guarded hidden-first MCP workflow.
 - VEVO admin browser automation can be unstable on long loops. Use short stepwise source-mode saves, verify public URLs after each small block, and avoid relying on generic hidden-field selectors when old ExtJS form instances remain in the DOM.
 - The VEVO admin browser session was recovered on `2026-07-06` and used to finish batch 33 publication; no batch 33 publication blocker remains.
 - Batch 32 robot-vacuum batch is now published and verified; no batch 32 publication blocker remains.
@@ -1962,8 +1981,8 @@ Branch: codex/vevo-content-batch-46
 
 For the next VEVO work:
 
-1. Select a small batch 47 from an unfilled content-plan cluster and run the duplicate guard against Blog block `765`, FAQ block `774`, glossary block `1905`, and all local prepared batches before drafting.
-2. Keep `codex/vevo-content-batch-46` stacked on the still-open batch 45 branch until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
+1. Run the read-only batch 47 MCP preflight against VEVO account `vevo.flox.sk`, Slovak Blog page `309`, news block `765`; then create and delete one hidden exact-slug smoke post before publishing the four final records hidden-first.
+2. Keep `codex/vevo-content-batch-47` stacked on batch 46 until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
 3. Resolve the older batch 31 hidden posts `2278` and `2279` separately, preserving their prepared titles and slugs and checking first that no public/canonical replacement already exists.
 4. Never use legacy remote `biznisweb-add_news_post`/`biznisweb-update_news_post` as the final VEVO new-article path. The approved API path is repo-local `biznisweb-vevo-content` with hidden-first creation, explicit slug, readback, resumable report, and independent public verification.
 

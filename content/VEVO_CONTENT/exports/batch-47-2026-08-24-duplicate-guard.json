@@ -1,0 +1,40 @@
+{
+  "existing_count": 839,
+  "excluded_batch": 47,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+      "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je scuba úplet: pevný dvojitý úplet, pot a pranie",
+      "slug": "co-je-scuba-uplet-pevny-dvojity-uplet-pot-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je piké: reliéfna pletenina, pórovitosť a správne pranie",
+      "slug": "co-je-pike-reliefna-pletenina-porovitost-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je lurex: metalická priadza, zatrhávanie a správna starostlivosť",
+      "slug": "co-je-lurex-metalicka-priadza-zatrhavanie-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

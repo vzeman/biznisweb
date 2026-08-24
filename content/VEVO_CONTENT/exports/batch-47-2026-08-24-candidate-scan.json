@@ -1,0 +1,126 @@
+{
+  "existing_count": 839,
+  "excluded_batch": 47,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+      "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je tyl: sieťovaná látka, zatrhnutie a šetrné pranie",
+              "slug": "co-je-tyl-sietovana-latka-zatrhnutie-a-setrne-pranie",
+              "score": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je scuba úplet: pevný dvojitý úplet, pot a pranie",
+      "slug": "co-je-scuba-uplet-pevny-dvojity-uplet-pot-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je piké: reliéfna pletenina, pórovitosť a správne pranie",
+      "slug": "co-je-pike-reliefna-pletenina-porovitost-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je lurex: metalická priadza, zatrhávanie a správna starostlivosť",
+      "slug": "co-je-lurex-metalicka-priadza-zatrhavanie-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je tyl: sieťovaná látka, zatrhnutie a šetrné pranie",
+      "slug": "co-je-tyl-sietovana-latka-zatrhnutie-a-setrne-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+              "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "score": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je gabardén: hustá keprová tkanina, škvrny a správna starostlivosť",
+      "slug": "co-je-gabarden-husta-keprova-tkanina-skvrny-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je taft: hladká pevná tkanina, šušťanie a starostlivosť",
+      "slug": "co-je-taft-hladka-pevna-tkanina-sustanie-a-starostlivost",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+              "link": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+              "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+              "sources": [
+                "local:batch-44-2026-08-20-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je lamé: kovový lesk, citlivý povrch a šetrné čistenie",
+      "slug": "co-je-lame-kovovy-lesk-citlivy-povrch-a-setrne-cistenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je buklé: slučkový povrch, žmolky a šetrné čistenie",
+              "link": "https://www.vevo.sk/n/co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+              "slug": "co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+              "sources": [
+                "local:batch-46-2026-08-24-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

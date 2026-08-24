@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+      "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+      "body_length": 34018,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-47-2026-08-24-articles.json"
+    },
+    {
+      "title": "Čo je scuba úplet: pevný dvojitý úplet, pot a pranie",
+      "slug": "co-je-scuba-uplet-pevny-dvojity-uplet-pot-a-pranie",
+      "body_length": 33416,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-47-2026-08-24-articles.json"
+    },
+    {
+      "title": "Čo je piké: reliéfna pletenina, pórovitosť a správne pranie",
+      "slug": "co-je-pike-reliefna-pletenina-porovitost-a-spravne-pranie",
+      "body_length": 32636,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-47-2026-08-24-articles.json"
+    },
+    {
+      "title": "Čo je lurex: metalická priadza, zatrhávanie a správna starostlivosť",
+      "slug": "co-je-lurex-metalicka-priadza-zatrhavanie-a-spravna-starostlivost",
+      "body_length": 33628,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-47-2026-08-24-articles.json"
+    }
+  ]
+}
