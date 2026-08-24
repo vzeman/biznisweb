@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "activation_type": "vevo_growthbook_production_aa",
   "tracking_key": "vevo-sk-aa-001",
   "feature_key": "vevo-sk-aa-assignment",
@@ -117,9 +117,9 @@
     }
   },
   "activation_preflight": {
-    "status": "gtm_consent_metadata_review_required",
+    "status": "gtm_consent_verified_ready_for_zero_allocation_publish",
     "reviewed_at_local_date": "2026-08-24",
-    "source_main_commit": "a37ac43189898550e7fa2cf31f842c1985704bd7",
+    "source_main_commit": "b00b76244c6758a8af4009aff3523966f1ec4b22",
     "live_readback": {
       "growthbook_build": "5.0.1+8f1db44",
       "feature_live_revision": 2,
@@ -156,7 +156,10 @@
         "modified": 0,
         "removed": 0
       },
-      "gtm_consent_warning_unconfigured_tag_count": 5,
+      "gtm_consent_warning_unconfigured_tag_count": 1,
+      "gtm_consent_unconfigured_tag_ids": [
+        "43"
+      ],
       "gtm_growthbook_objects": {
         "trigger": "50",
         "loader": "54",
@@ -190,15 +193,65 @@
         "53"
       ],
       "required_setting": "no_additional_consent_required",
-      "verified_target_tag_ids": [],
+      "verified_target_tag_ids": [
+        "54",
+        "51",
+        "55",
+        "53"
+      ],
+      "verified_setting_by_tag_id": {
+        "54": "no_additional_consent_required",
+        "51": "no_additional_consent_required",
+        "55": "no_additional_consent_required",
+        "53": "no_additional_consent_required"
+      },
       "expected_remaining_unconfigured_tag_ids": [
         "43"
       ],
-      "publish_allowed": false
+      "verified_remaining_unconfigured_tag_ids": [
+        "43"
+      ],
+      "verified_at_local_datetime": "2026-08-24T15:43:07+02:00",
+      "preview_qa": {
+        "workspace_id": "17",
+        "consent_signal_types": [
+          "ad_storage",
+          "analytics_storage",
+          "ad_user_data",
+          "ad_personalization",
+          "functionality_storage",
+          "personalization_storage",
+          "security_storage"
+        ],
+        "denied_signal_count": 7,
+        "granted_signal_count": 7,
+        "original_consent_categories_restored": true,
+        "loader_success_on_denied": true,
+        "loader_success_on_granted": true,
+        "growthbook_sdk_script_count_on_denied": 0,
+        "meta_pageview_tag_ids_blocked_on_denied": [
+          "29",
+          "31"
+        ],
+        "meta_pageview_tag_ids_success_on_granted": [
+          "29",
+          "31"
+        ],
+        "tag_assistant_console_error_count": 0,
+        "unattributed_consent_timing_diagnostic_observed": true,
+        "growthbook_client_uses_gtm_consent_api": false,
+        "add_to_cart_text_unchanged": true,
+        "cta_experiment_class_applied": false,
+        "preexisting_cart_item_count": 2,
+        "cart_mutated": false,
+        "growthbook_live_production_rule_count": 0,
+        "growthbook_draft_production_experiment_status": "draft_not_started"
+      },
+      "publish_allowed": true
     },
     "mutation_scope": {
-      "configure_gtm_consent_metadata_for_tags_54_51_55_53": true,
-      "publish_gtm_workspace_17": false,
+      "configure_gtm_consent_metadata_for_tags_54_51_55_53": false,
+      "publish_gtm_workspace_17": true,
       "start_growthbook_experiment_exp_19g6mmt5wugpk": false,
       "publish_growthbook_feature_revision_3": false,
       "meta_ads": false,
@@ -209,10 +262,9 @@
       "collector_infrastructure": false
     },
     "ordered_operations": [
-      "set_no_additional_consent_required_only_for_gtm_tags_54_51_55_53",
-      "reload_and_read_back_consent_metadata_for_exactly_tags_54_51_55_53",
-      "repeat_preview_consent_qa_and_require_only_unrelated_tag_43_warning_to_remain",
-      "record_verified_consent_metadata_preflight_in_git_before_gtm_publish"
+      "publish_gtm_workspace_17_from_live_version_14_while_growthbook_live_revision_2_keeps_production_disabled",
+      "verify_new_gtm_live_version_and_zero_production_exposures",
+      "record_zero_allocation_gtm_publish_readback_in_git_before_growthbook_start"
     ],
     "rollback": {
       "first": "stop_growthbook_production_aa_and_verify_zero_assignment",
