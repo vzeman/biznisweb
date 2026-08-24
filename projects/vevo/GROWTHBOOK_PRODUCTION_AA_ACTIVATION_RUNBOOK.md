@@ -97,6 +97,7 @@ Any failure stops the rollout. Restore the GTM workspace draft; do not compensat
 
 Use one reviewed maintenance window and this exact order:
 
+0. Require the merged schema-`5` `activation_preflight` in `projects/vevo/growthbook_production_aa_activation.json`. Its exact source main commit, zero-traffic evidence SHA-256, GTM artifact SHA-256, GrowthBook clone evidence SHA-256, live feature revision `2`, draft revision `3`, GTM workspace `17`, and rollback target container version `14` must all match the authenticated UI read-back. The preflight authorizes only the ordered GTM publish and Production A/A start below; it does not mark Production traffic active.
 1. Publish the reviewed GTM container version while GrowthBook allocation remains `0%`.
 2. Verify the live container version and repeat reject/accept/withdrawal smoke. Confirm zero A/A exposures at `0%`.
 3. Start only `vevo-sk-aa-001` and set its Production rule to `100%` experiment traffic with the frozen `50/50` split.

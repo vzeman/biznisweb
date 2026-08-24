@@ -19,7 +19,7 @@ STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 
 
 EXPECTED_ACTIVATION = {
-    "schema_version": 4,
+    "schema_version": 5,
     "activation_type": "vevo_growthbook_production_aa",
     "tracking_key": "vevo-sk-aa-001",
     "feature_key": "vevo-sk-aa-assignment",
@@ -148,6 +148,102 @@ EXPECTED_ACTIVATION = {
         "owned_storage_cleanup_verified": True,
         "ga4_meta_consent_behavior_verified": True,
     },
+    "activation_preflight": {
+        "status": "reviewed_ready_for_ordered_phase_5",
+        "reviewed_at_local_date": "2026-08-24",
+        "source_main_commit": "a37ac43189898550e7fa2cf31f842c1985704bd7",
+        "live_readback": {
+            "growthbook_build": "5.0.1+8f1db44",
+            "feature_live_revision": 2,
+            "feature_live_production_enabled": False,
+            "feature_live_staging_enabled": True,
+            "feature_live_rule_count_by_environment": {
+                "production": 0,
+                "staging": 1,
+            },
+            "preview_experiment_id": "exp_19g6mmt1qsqm9",
+            "preview_experiment_status": "running_staging_only",
+            "draft_feature_revision": 3,
+            "draft_feature_enabled_environments": ["production", "staging"],
+            "draft_rule_count_by_environment": {
+                "production": 1,
+                "staging": 1,
+            },
+            "production_experiment_id": "exp_19g6mmt5wugpk",
+            "production_experiment_status": "draft_not_started",
+            "production_experiment_environment": "production_only",
+            "production_experiment_traffic_percent": 100,
+            "production_experiment_variation_weights": [0.5, 0.5],
+            "gtm_live_container_version_id": "14",
+            "gtm_workspace_id": "17",
+            "gtm_workspace_name": "VEVO GrowthBook Production A/A",
+            "gtm_unprocessed_changes": {
+                "added": 5,
+                "modified": 0,
+                "removed": 0,
+            },
+            "gtm_growthbook_objects": {
+                "trigger": "50",
+                "loader": "54",
+                "consent_bridge": "51",
+                "add_to_cart_bridge": "55",
+                "purchase_bridge": "53",
+            },
+        },
+        "evidence_bindings": {
+            "zero_traffic_workflow_run_id": "32692688625",
+            "zero_traffic_artifact_sha256": (
+                "43140aa030225ac927fd6ddd92904fe8d730230174afe7525371c235accfb745"
+            ),
+            "gtm_artifact_source_commit": (
+                "1a24b4fe657c546b6fcf71a336b9d4220622a74e"
+            ),
+            "gtm_artifact_sha256": (
+                "d6861bcbe002a96f82a4a29882723002cd6c797177194bdd93f67e6cf2eba8df"
+            ),
+            "production_clone_observation_sha256": (
+                "b2f96b7047321f11da4f00c7886c4b9422d7759428534f8fd5534ee1299f2030"
+            ),
+        },
+        "mutation_scope": {
+            "publish_gtm_workspace_17": True,
+            "start_growthbook_experiment_exp_19g6mmt5wugpk": True,
+            "publish_growthbook_feature_revision_3": True,
+            "meta_ads": False,
+            "biznisweb": False,
+            "prices_or_product_content": False,
+            "cart_checkout_or_orders": False,
+            "cta_experiment": False,
+            "collector_infrastructure": False,
+        },
+        "ordered_operations": [
+            (
+                "publish_gtm_workspace_17_from_live_version_14_while_"
+                "growthbook_live_revision_2_keeps_production_disabled"
+            ),
+            "verify_new_gtm_live_version_and_zero_production_exposures",
+            (
+                "start_only_growthbook_experiment_exp_19g6mmt5wugpk_and_"
+                "auto_publish_feature_revision_3"
+            ),
+            (
+                "verify_production_100_percent_traffic_50_50_split_and_one_"
+                "consented_sticky_exposure"
+            ),
+            (
+                "record_activation_observation_in_git_before_marking_"
+                "production_running"
+            ),
+        ],
+        "rollback": {
+            "first": "stop_growthbook_production_aa_and_verify_zero_assignment",
+            "second": "restore_gtm_container_version_14_and_verify_loader_absent",
+            "third": (
+                "disable_only_collector_public_route_after_loader_is_absent"
+            ),
+            "delete_data_or_objects": False,
+        },
+    },
     "traffic": {
         "activation_allowed": False,
         "production_allocation_percent": 0,
@@ -180,6 +276,7 @@ def _collector_verified_activation() -> dict[str, Any]:
 
     activation = copy.deepcopy(EXPECTED_ACTIVATION)
     activation["schema_version"] = 1
+    activation.pop("activation_preflight", None)
     activation["status"] = "collector_verified_ui_preparation_ready"
     activation["growthbook"] = {
         "environment": "production",
