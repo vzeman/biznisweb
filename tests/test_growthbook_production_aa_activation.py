@@ -49,13 +49,9 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
         self.assertFalse(self.activation["traffic"]["activation_allowed"])
 
-    def test_tag_assistant_qa_remains_fail_closed_until_all_gates_pass(self) -> None:
+    def test_tag_assistant_zero_traffic_qa_is_verified_but_activation_is_closed(self) -> None:
         qa = self.activation["tag_assistant_qa"]
-        self.assertEqual(
-            "mobile_zero_assignment_consent_and_storage_observed_"
-            "collector_pending",
-            qa["status"],
-        )
+        self.assertEqual("zero_traffic_qa_verified", qa["status"])
         self.assertTrue(qa["desktop_consent_cycle_observed"])
         self.assertTrue(qa["original_consent_categories_restored"])
         self.assertEqual("connected", qa["sdk_connection_status_after_grant"])
@@ -69,9 +65,22 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
             "ga4_meta_consent_behavior_verified",
         ):
             self.assertTrue(qa[verified])
-        self.assertFalse(qa["zero_collector_request_verified"])
+        self.assertTrue(qa["zero_collector_request_verified"])
+        observation = qa["zero_collector_observation"]
+        self.assertEqual("32692688625", observation["workflow_run_id"])
+        self.assertEqual(0, observation["api_request_count"])
+        self.assertEqual(0, observation["accepted_receipt_count"])
+        self.assertEqual(
+            "43140aa030225ac927fd6ddd92904fe8d730230174afe7525371c235accfb745",
+            observation["artifact_sha256"],
+        )
         self.assertFalse(self.activation["traffic"]["activation_allowed"])
         self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
+        self.assertEqual("not_published", self.activation["gtm"]["publish_status"])
+        self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
+        self.assertEqual(
+            "review_controlled_production_aa_activation", self.activation["next_gate"]
+        )
 
     def test_workflow_yaml_and_every_inline_python_block_compile(self) -> None:
         payload = yaml.safe_load(WORKFLOW)

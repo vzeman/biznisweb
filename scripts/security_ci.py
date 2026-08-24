@@ -99,6 +99,9 @@ def main() -> int:
         growthbook_zero_collector_workflow = read(
             ".github/workflows/verify-vevo-growthbook-zero-collector.yml"
         )
+        growthbook_zero_collector_recorder = read(
+            "scripts/record_growthbook_zero_collector_observation.py"
+        )
         growthbook_foundation_bucket_summarizer = read(
             "scripts/summarize_growthbook_foundation_bucket.py"
         )
@@ -1110,6 +1113,37 @@ def main() -> int:
         ) != 1:
             raise AssertionError(
                 "GrowthBook zero-collector workflow must upload one sanitized artifact."
+            )
+        for marker in (
+            "EXPECTED_SAFETY =",
+            "ALLOWED_CHANGED_PATHS =",
+            "canonical_evidence_bytes",
+            "_changed_leaf_paths",
+            '"api_request_count"',
+            '"accepted_receipt_count"',
+            '"zero_collector_request_verified"] = True',
+            '"activation_allowed"',
+            '"production_allocation_percent"',
+        ):
+            require(
+                growthbook_zero_collector_recorder,
+                marker,
+                f"GrowthBook zero-collector recorder lost safety marker: {marker}",
+            )
+        for forbidden_client in (
+            "import boto3",
+            "from boto3",
+            "import requests",
+            "urllib.request",
+            "import subprocess",
+            "import socket",
+            "selenium",
+            "playwright",
+        ):
+            forbid(
+                growthbook_zero_collector_recorder.lower(),
+                forbidden_client,
+                f"GrowthBook zero-collector recorder must remain offline: {forbidden_client}",
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
