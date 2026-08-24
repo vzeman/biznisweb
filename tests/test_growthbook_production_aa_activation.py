@@ -83,13 +83,15 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
             "published_zero_allocation", self.activation["gtm"]["publish_status"]
         )
         self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
-        self.assertEqual("verify_post_publish_zero_collector", self.activation["next_gate"])
+        self.assertEqual(
+            "review_growthbook_production_aa_start", self.activation["next_gate"]
+        )
 
     def test_controlled_activation_preflight_is_exact_and_narrow(self) -> None:
         preflight = self.activation["activation_preflight"]
         live = preflight["live_readback"]
         self.assertEqual(
-            "gtm_published_zero_allocation_collector_readback_pending",
+            "gtm_live_zero_allocation_verified_growthbook_start_review_pending",
             preflight["status"],
         )
         self.assertEqual(2, live["feature_live_revision"])
@@ -162,9 +164,7 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertFalse(consent["publish_allowed"])
 
         post_publish = preflight["post_publish_readback"]
-        self.assertEqual(
-            "public_runtime_verified_collector_pending", post_publish["status"]
-        )
+        self.assertEqual("verified_zero_requests_and_receipts", post_publish["status"])
         self.assertEqual("15", post_publish["gtm_live_container_version_id"])
         self.assertEqual("14", post_publish["gtm_rollback_container_version_id"])
         self.assertEqual(200, post_publish["public_gtm_http_status"])
@@ -175,19 +175,36 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertFalse(post_publish["target_feature_present"])
         self.assertEqual(0, post_publish["target_feature_rule_count"])
         self.assertFalse(post_publish["production_assignment_possible"])
-        self.assertFalse(post_publish["zero_collector_request_verified"])
-        self.assertIsNone(post_publish["zero_collector_observation"])
-        self.assertFalse(post_publish["growthbook_start_allowed"])
+        self.assertTrue(post_publish["zero_collector_request_verified"])
+        observation = post_publish["zero_collector_observation"]
+        self.assertEqual("32741487449", observation["workflow_run_id"])
+        self.assertEqual(
+            "cfe10bd1f53b0b3f41433cd503b543cf242c95e3",
+            observation["main_commit"],
+        )
+        self.assertEqual(
+            "1cbfcbe6673822210cf36f771c1449c4bafa83d0ef2f8c84102285e5296e6a8b",
+            observation["artifact_sha256"],
+        )
+        self.assertEqual(0, observation["api_request_count"])
+        self.assertEqual(0, observation["accepted_receipt_count"])
+        self.assertEqual("N/A:Fargate", observation["runtime"]["instance_id"])
+        self.assertEqual(
+            "vevo-growthbook-collector-production",
+            observation["runtime"]["service"],
+        )
+        self.assertEqual("/app", observation["runtime"]["runtime_path"])
+        self.assertTrue(post_publish["growthbook_start_allowed"])
 
         scope = preflight["mutation_scope"]
         self.assertFalse(
             scope["configure_gtm_consent_metadata_for_tags_54_51_55_53"]
         )
         self.assertFalse(scope["publish_gtm_workspace_17"])
-        self.assertFalse(
+        self.assertTrue(
             scope["start_growthbook_experiment_exp_19g6mmt5wugpk"]
         )
-        self.assertFalse(scope["publish_growthbook_feature_revision_3"])
+        self.assertTrue(scope["publish_growthbook_feature_revision_3"])
         for forbidden_scope in (
             "meta_ads",
             "biznisweb",

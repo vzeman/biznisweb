@@ -19,14 +19,14 @@ STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 
 
 EXPECTED_ACTIVATION = {
-    "schema_version": 8,
+    "schema_version": 9,
     "activation_type": "vevo_growthbook_production_aa",
     "tracking_key": "vevo-sk-aa-001",
     "feature_key": "vevo-sk-aa-assignment",
     "variations": ["control", "variant"],
     "variation_weights": [0.5, 0.5],
     "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-    "status": "gtm_published_zero_allocation_verification_pending",
+    "status": "gtm_live_zero_allocation_verified_growthbook_start_review_pending",
     "preconditions": {
         "natural_reconciliation_verified": True,
         "route_disabled_foundation_verified": True,
@@ -149,7 +149,7 @@ EXPECTED_ACTIVATION = {
         "ga4_meta_consent_behavior_verified": True,
     },
     "activation_preflight": {
-        "status": "gtm_published_zero_allocation_collector_readback_pending",
+        "status": "gtm_live_zero_allocation_verified_growthbook_start_review_pending",
         "reviewed_at_local_date": "2026-08-24",
         "source_main_commit": "b00b76244c6758a8af4009aff3523966f1ec4b22",
         "live_readback": {
@@ -256,7 +256,7 @@ EXPECTED_ACTIVATION = {
             "publish_allowed": False,
         },
         "post_publish_readback": {
-            "status": "public_runtime_verified_collector_pending",
+            "status": "verified_zero_requests_and_receipts",
             "observed_at_utc": "2026-08-24T14:34:24Z",
             "source_main_commit": "aa1d4a17a24f64808de3ebdd6441ddc375a0f15c",
             "gtm_live_container_version_id": "15",
@@ -285,15 +285,42 @@ EXPECTED_ACTIVATION = {
             "target_feature_present": False,
             "target_feature_rule_count": 0,
             "production_assignment_possible": False,
-            "zero_collector_request_verified": False,
-            "zero_collector_observation": None,
-            "growthbook_start_allowed": False,
+            "zero_collector_request_verified": True,
+            "zero_collector_observation": {
+                "status": "verified_zero_requests_and_receipts",
+                "workflow_run_id": "32741487449",
+                "main_commit": "cfe10bd1f53b0b3f41433cd503b543cf242c95e3",
+                "artifact_sha256": (
+                    "1cbfcbe6673822210cf36f771c1449c4bafa83d0ef2f8c84102285e5296e6a8b"
+                ),
+                "from_utc": "2026-08-24T14:34:30Z",
+                "through_utc": "2026-08-24T14:38:00Z",
+                "observed_at_utc": "2026-08-24T14:53:50Z",
+                "api_request_count": 0,
+                "accepted_receipt_count": 0,
+                "runtime": {
+                    "image_digest": (
+                        "sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058"
+                    ),
+                    "instance_id": "N/A:Fargate",
+                    "private_ip": "172.31.21.213",
+                    "runtime_path": "/app",
+                    "runtime_path_verification": (
+                        "immutable_image_prior_localhost_marker"
+                    ),
+                    "service": "vevo-growthbook-collector-production",
+                    "target_health": "healthy",
+                    "task_definition": "vevo-growthbook-collector-production:2",
+                    "task_id": "a3abdbcdd3914c95bb08f03b83eab5fe",
+                },
+            },
+            "growthbook_start_allowed": True,
         },
         "mutation_scope": {
             "configure_gtm_consent_metadata_for_tags_54_51_55_53": False,
             "publish_gtm_workspace_17": False,
-            "start_growthbook_experiment_exp_19g6mmt5wugpk": False,
-            "publish_growthbook_feature_revision_3": False,
+            "start_growthbook_experiment_exp_19g6mmt5wugpk": True,
+            "publish_growthbook_feature_revision_3": True,
             "meta_ads": False,
             "biznisweb": False,
             "prices_or_product_content": False,
@@ -302,9 +329,10 @@ EXPECTED_ACTIVATION = {
             "collector_infrastructure": False,
         },
         "ordered_operations": [
-            "run_protected_post_publish_zero_collector_observation_for_gtm_version_15",
-            "record_sanitized_zero_request_and_receipt_evidence_in_git",
-            "open_separate_growthbook_start_gate_only_after_post_publish_evidence_merge",
+            "start_only_growthbook_experiment_exp_19g6mmt5wugpk",
+            "publish_only_growthbook_feature_revision_3_with_production_aa_rule",
+            "verify_live_100_percent_aa_50_50_sticky_assignment_and_collector_delivery",
+            "record_production_aa_activation_readback_in_git",
         ],
         "rollback": {
             "first": "stop_growthbook_production_aa_and_verify_zero_assignment",
@@ -338,7 +366,7 @@ EXPECTED_ACTIVATION = {
         "drill_status": "not_run",
         "verified_at_utc": None,
     },
-    "next_gate": "verify_post_publish_zero_collector",
+    "next_gate": "review_growthbook_production_aa_start",
 }
 
 
