@@ -24,10 +24,12 @@ class GrowthBookZeroCollectorWorkflowTests(unittest.TestCase):
             "OBSERVATION_THROUGH_UTC: '2026-08-24T04:50:00Z'",
             "owned-storage cleanup evidence is missing",
             "zero-collector observation is already recorded",
+            "python scripts/validate_growthbook_production_aa_activation.py",
             "ZERO_COLLECTOR_LOCAL_GATE_OK:",
             "Configure AWS credentials for bounded read-only observation",
         ):
             self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("python -m unittest", WORKFLOW)
         self.assertLess(
             WORKFLOW.index("ZERO_COLLECTOR_LOCAL_GATE_OK:"),
             WORKFLOW.index("Configure AWS credentials for bounded read-only observation"),
