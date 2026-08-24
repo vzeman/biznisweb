@@ -102,6 +102,9 @@ def main() -> int:
         growthbook_zero_collector_recorder = read(
             "scripts/record_growthbook_zero_collector_observation.py"
         )
+        growthbook_post_publish_zero_collector_recorder = read(
+            "scripts/record_growthbook_post_publish_zero_collector_observation.py"
+        )
         growthbook_foundation_bucket_summarizer = read(
             "scripts/summarize_growthbook_foundation_bucket.py"
         )
@@ -1066,8 +1069,10 @@ def main() -> int:
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
-            "OBSERVATION_FROM_UTC: '2026-08-24T04:30:00Z'",
-            "OBSERVATION_THROUGH_UTC: '2026-08-24T04:50:00Z'",
+            "OBSERVATION_FROM_UTC: '2026-08-24T14:34:30Z'",
+            "OBSERVATION_THROUGH_UTC: '2026-08-24T14:38:00Z'",
+            "gtm_published_zero_allocation_verification_pending",
+            "vevo_growthbook_post_publish_zero_collector_observation",
             "ZERO_COLLECTOR_LOCAL_GATE_OK:",
             "Configure AWS credentials for bounded read-only observation",
             "ZERO_COLLECTOR_RUNTIME_GATE_OK:",
@@ -1144,6 +1149,44 @@ def main() -> int:
                 growthbook_zero_collector_recorder.lower(),
                 forbidden_client,
                 f"GrowthBook zero-collector recorder must remain offline: {forbidden_client}",
+            )
+        for marker in (
+            "EXPECTED_SOURCE =",
+            "EXPECTED_SAFETY =",
+            "ALLOWED_CHANGED_PATHS =",
+            "canonical_evidence_bytes",
+            "_changed_leaf_paths",
+            'post_publish["zero_collector_request_verified"] = True',
+            'post_publish["growthbook_start_allowed"] = True',
+            'scope["start_growthbook_experiment_exp_19g6mmt5wugpk"] = True',
+            'scope["publish_growthbook_feature_revision_3"] = True',
+            '"production_allocation_percent": 0',
+        ):
+            require(
+                growthbook_post_publish_zero_collector_recorder,
+                marker,
+                (
+                    "GrowthBook post-publish zero-collector recorder lost "
+                    f"safety marker: {marker}"
+                ),
+            )
+        for forbidden_client in (
+            "import boto3",
+            "from boto3",
+            "import requests",
+            "urllib.request",
+            "import subprocess",
+            "import socket",
+            "selenium",
+            "playwright",
+        ):
+            forbid(
+                growthbook_post_publish_zero_collector_recorder.lower(),
+                forbidden_client,
+                (
+                    "GrowthBook post-publish zero-collector recorder must remain "
+                    f"offline: {forbidden_client}"
+                ),
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",

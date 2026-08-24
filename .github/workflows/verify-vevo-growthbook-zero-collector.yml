@@ -1,10 +1,10 @@
-name: Verify VEVO GrowthBook Zero Collector Traffic
+name: Verify VEVO GrowthBook Post-Publish Zero Collector Traffic
 
 on:
   workflow_dispatch:
     inputs:
       confirm_observation:
-        description: Type true to run the frozen read-only zero-collector observation
+        description: Type true to run the frozen post-publish zero-collector observation
         required: true
         default: 'false'
         type: choice
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vevo-growthbook-zero-collector-observation
+  group: vevo-growthbook-post-publish-zero-collector-observation
   cancel-in-progress: false
 
 env:
@@ -29,9 +29,9 @@ env:
   EXPECTED_RUNTIME_PATH: /app
   EXPECTED_API_LOG_GROUP: /aws/apigateway/vevo-growthbook-collector-production
   EXPECTED_CONTAINER_LOG_GROUP: /ecs/vevo-growthbook-collector-production
-  OBSERVATION_FROM_UTC: '2026-08-24T04:30:00Z'
-  OBSERVATION_THROUGH_UTC: '2026-08-24T04:50:00Z'
-  EVIDENCE_FILE: vevo-growthbook-zero-collector-observation.json
+  OBSERVATION_FROM_UTC: '2026-08-24T14:34:30Z'
+  OBSERVATION_THROUGH_UTC: '2026-08-24T14:38:00Z'
+  EVIDENCE_FILE: vevo-growthbook-post-publish-zero-collector-observation.json
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -68,22 +68,54 @@ jobs:
           activation = json.load(
               open('projects/vevo/growthbook_production_aa_activation.json', encoding='utf-8')
           )
-          qa = activation.get('tag_assistant_qa') or {}
           collector = activation.get('collector') or {}
           growthbook = activation.get('growthbook') or {}
           gtm = activation.get('gtm') or {}
           traffic = activation.get('traffic') or {}
+          preflight = activation.get('activation_preflight') or {}
+          post_publish = preflight.get('post_publish_readback') or {}
 
-          if qa.get('owned_storage_cleanup_verified') is not True:
-              raise SystemExit('owned-storage cleanup evidence is missing')
-          if qa.get('zero_collector_request_verified') is not False:
-              raise SystemExit('zero-collector observation is already recorded')
+          if activation.get('schema_version') != 8:
+              raise SystemExit('post-publish activation schema drift')
+          if activation.get('status') != 'gtm_published_zero_allocation_verification_pending':
+              raise SystemExit('post-publish activation status drift')
+          if preflight.get('status') != 'gtm_published_zero_allocation_collector_readback_pending':
+              raise SystemExit('post-publish preflight status drift')
+          if post_publish.get('status') != 'public_runtime_verified_collector_pending':
+              raise SystemExit('post-publish runtime read-back is not pending collector proof')
+          if post_publish.get('zero_collector_request_verified') is not False:
+              raise SystemExit('post-publish zero-collector observation is already recorded')
+          if post_publish.get('zero_collector_observation') is not None:
+              raise SystemExit('post-publish collector evidence must remain absent before this run')
+          if post_publish.get('gtm_live_container_version_id') != '15':
+              raise SystemExit('post-publish GTM version drift')
+          if post_publish.get('gtm_rollback_container_version_id') != '14':
+              raise SystemExit('post-publish GTM rollback version drift')
+          if post_publish.get('public_gtm_sha256') != '48816d60331c6df39c15161df4b6b0222b0313382c5b0600fdfd34dfbd11b481':
+              raise SystemExit('public GTM payload hash drift')
+          if post_publish.get('growthbook_feature_payload_sha256') != '8a85bd5f83d171e3906117b8b6d8fc5d58fea784ad2e1f8fc27745a911537b89':
+              raise SystemExit('Production GrowthBook payload hash drift')
+          if (
+              post_publish.get('production_sdk_key_count') != 1
+              or post_publish.get('production_sdk_key_recorded') is not False
+              or post_publish.get('growthbook_feature_count') != 0
+              or post_publish.get('target_feature_present') is not False
+              or post_publish.get('target_feature_rule_count') != 0
+              or post_publish.get('production_assignment_possible') is not False
+              or post_publish.get('growthbook_start_allowed') is not False
+          ):
+              raise SystemExit('Production GrowthBook zero-allocation payload drift')
           if growthbook.get('status') != 'draft_not_started':
               raise SystemExit('GrowthBook Production experiment must remain Draft')
           if growthbook.get('allocation_percent') != 0:
               raise SystemExit('GrowthBook Production allocation must remain zero')
-          if gtm.get('production_workspace_id') != '17' or gtm.get('publish_status') != 'not_published':
-              raise SystemExit('exact Production GTM workspace must remain unpublished')
+          if (
+              gtm.get('production_workspace_id') != '17'
+              or gtm.get('publish_status') != 'published_zero_allocation'
+              or gtm.get('container_version_id') != '15'
+              or gtm.get('unprocessed_changes') != {'added': 0, 'modified': 0, 'removed': 0}
+          ):
+              raise SystemExit('exact Production GTM zero-allocation version drift')
           if traffic.get('activation_allowed') is not False or traffic.get('production_allocation_percent') != 0:
               raise SystemExit('Production traffic gate must remain closed at zero percent')
           if collector.get('service') != os.environ['EXPECTED_SERVICE']:
@@ -103,8 +135,8 @@ jobs:
               raise SystemExit('frozen zero-collector UTC window is incomplete')
           print(
               'ZERO_COLLECTOR_LOCAL_GATE_OK:'
-              'workspace=17:gtm=unpublished:growthbook=draft:allocation=0:'
-              'storage=true:collector=false:aws-mutation=none'
+              'workspace=17:gtm=version-15:growthbook=draft:allocation=0:'
+              'public-feature-count=0:collector=false:aws-mutation=none'
           )
           PY
 
@@ -338,7 +370,7 @@ jobs:
           ipaddress.ip_address(private_ip)
           evidence = {
               'schema_version': 1,
-              'evidence_type': 'vevo_growthbook_zero_collector_observation',
+              'evidence_type': 'vevo_growthbook_post_publish_zero_collector_observation',
               'from_utc': os.environ['OBSERVATION_FROM_UTC'],
               'through_utc': os.environ['OBSERVATION_THROUGH_UTC'],
               'api_request_count': request_count,
@@ -357,7 +389,8 @@ jobs:
               },
               'source': {
                   'workspace_id': '17',
-                  'gtm_publish_status': 'not_published',
+                  'gtm_publish_status': 'published_zero_allocation',
+                  'gtm_live_container_version_id': '15',
                   'growthbook_status': 'draft_not_started',
                   'production_allocation_percent': 0,
               },
@@ -389,8 +422,8 @@ jobs:
       - name: Upload sanitized zero-collector evidence only
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: vevo-growthbook-zero-collector-observation-${{ github.run_id }}
-          path: vevo-growthbook-zero-collector-observation.json
+          name: vevo-growthbook-post-publish-zero-collector-observation-${{ github.run_id }}
+          path: vevo-growthbook-post-publish-zero-collector-observation.json
           if-no-files-found: error
           retention-days: 14
 
@@ -398,7 +431,7 @@ jobs:
         if: ${{ always() }}
         run: |
           {
-            echo '## VEVO GrowthBook zero-collector observation'
+            echo '## VEVO GrowthBook post-publish zero-collector observation'
             echo "- Frozen UTC window: \`${OBSERVATION_FROM_UTC}..${OBSERVATION_THROUGH_UTC}\`"
             echo "- Runtime hard gate: \`instance-id=N/A:Fargate / service=${EXPECTED_SERVICE} / path=${EXPECTED_RUNTIME_PATH}\`"
             echo '- CloudWatch output: `aggregate counts only; no messages or IDs`'
