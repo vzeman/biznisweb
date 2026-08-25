@@ -43,6 +43,9 @@ def main() -> int:
         from scripts.record_growthbook_cta_activation import (
             validate_manifest as validate_cta_activation_manifest,
         )
+        from scripts.validate_growthbook_cta_measurement_window import (
+            validate_manifest as validate_cta_measurement_manifest,
+        )
 
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
@@ -229,8 +232,20 @@ def main() -> int:
         growthbook_cta_runtime_workflow = read(
             ".github/workflows/deploy-vevo-growthbook-production-cta-runtime.yml"
         )
+        growthbook_cta_measurement_validator = read(
+            "scripts/validate_growthbook_cta_measurement_window.py"
+        )
+        growthbook_cta_checkpoint_recorder = read(
+            "scripts/record_growthbook_cta_window_checkpoint.py"
+        )
+        growthbook_cta_checkpoint_workflow = read(
+            ".github/workflows/check-vevo-growthbook-production-cta-window.yml"
+        )
         growthbook_cta_activation_manifest = json.loads(
             read("projects/vevo/growthbook_cta_activation.json")
+        )
+        growthbook_cta_measurement_manifest = json.loads(
+            read("projects/vevo/growthbook_cta_measurement_window.json")
         )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
@@ -2056,6 +2071,13 @@ def main() -> int:
         validate_aa_completion()
         validate_cta_baseline_manifest(growthbook_cta_baseline_manifest)
         validate_cta_activation_manifest(growthbook_cta_activation_manifest)
+        validate_cta_measurement_manifest(
+            growthbook_cta_measurement_manifest,
+            growthbook_cta_activation_manifest,
+            json.loads(read("projects/vevo/growthbook_cta_sample_plan.json")),
+            json.loads(read("projects/vevo/growthbook_cta_decision_contract.json")),
+            growthbook_production_reconciliation_evidence,
+        )
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
             "release_boundaries", {}
         )
@@ -2754,6 +2776,99 @@ def main() -> int:
                 "GrowthBook A/A window checkpoint workflow mutation path detected: "
                 f"{forbidden_checkpoint_workflow_marker}",
             )
+        for offline_cta_checkpoint_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            for source, label in (
+                (growthbook_cta_measurement_validator, "validator"),
+                (growthbook_cta_checkpoint_recorder, "recorder"),
+            ):
+                forbid(
+                    source.lower(),
+                    offline_cta_checkpoint_marker.lower(),
+                    "GrowthBook CTA checkpoint "
+                    f"{label} must remain offline: {offline_cta_checkpoint_marker}",
+                )
+        for required_cta_checkpoint_marker in (
+            "waiting_for_verified_cta_start",
+            "after_14_full_local_days_open_manual_stop_at_first_post_reconciliation_checkpoint_with_target_first_n_or_at_42_full_local_days",
+            "cumulative_eligible_first_exposed_devices_without_arm_or_outcome_readback",
+            "open_manual_stop_review_target_reached",
+            "open_manual_stop_review_maximum_duration_reached",
+            "automatic_stop_allowed",
+            "winner_calls_allowed",
+        ):
+            require(
+                growthbook_cta_measurement_validator
+                + growthbook_cta_checkpoint_recorder,
+                required_cta_checkpoint_marker,
+                "GrowthBook CTA checkpoint contract lost safety marker: "
+                f"{required_cta_checkpoint_marker}",
+            )
+        for required_cta_checkpoint_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:",
+            "PRODUCTION_CTA_WINDOW_RUNTIME_GATE_OK:",
+            "PRODUCTION_CTA_WINDOW_CONTROL_GATE_OK:",
+            "experiment_id = 'vevo-sk-product-cta-color-001'",
+            "SELECT COUNT(DISTINCT device_id) AS eligible_devices",
+            "arm_counts_read': False",
+            "arm_outcomes_read': False",
+            "outcome_metrics_read': False",
+            "assignment_stopped': False",
+            "validate_checkpoint_evidence(evidence, expected, index)",
+            "Remove every temporary AWS response and query file",
+            "Assignment stop/winner/external mutation gates changed: `none`",
+        ):
+            require(
+                growthbook_cta_checkpoint_workflow,
+                required_cta_checkpoint_workflow_marker,
+                "GrowthBook CTA window checkpoint workflow lost safety marker: "
+                f"{required_cta_checkpoint_workflow_marker}",
+            )
+        if (
+            growthbook_cta_checkpoint_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook CTA window checkpoint must upload exactly one artifact."
+            )
+        for forbidden_cta_checkpoint_workflow_marker in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "ecs stop-task",
+            "register-task-definition",
+            "scheduler update-schedule",
+            "scheduler create-schedule",
+            "s3api put-object",
+            "s3api delete-object",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "curl ",
+            "wget ",
+        ):
+            forbid(
+                growthbook_cta_checkpoint_workflow.lower(),
+                forbidden_cta_checkpoint_workflow_marker.lower(),
+                "GrowthBook CTA window checkpoint workflow mutation path detected: "
+                f"{forbidden_cta_checkpoint_workflow_marker}",
+            )
         if (
             growthbook_aa_automated_workflow.count(
                 "uses: actions/upload-artifact@v4.6.2"
@@ -2843,6 +2958,8 @@ def main() -> int:
             "scripts/record_growthbook_cta_activation.py",
             "scripts/validate_growthbook_cta_runtime_release.py",
             "scripts/build_growthbook_cta_runtime_readiness.py",
+            "scripts/validate_growthbook_cta_measurement_window.py",
+            "scripts/record_growthbook_cta_window_checkpoint.py",
             "growthbook_collector/runtime_marker.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",
