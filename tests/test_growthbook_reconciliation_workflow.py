@@ -152,6 +152,24 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.workflow)
 
+    def test_exact_reporting_policy_is_attached_before_task_registration(self) -> None:
+        document_gate = self.workflow.index("REPORTING_POLICY_DOCUMENT_EXACT_OK")
+        attachment = self.workflow.index("aws iam attach-role-policy", document_gate)
+        readback = self.workflow.index("REPORTING_POLICY_ATTACHED_OK", attachment)
+        task_registration = self.workflow.index("aws ecs register-task-definition", readback)
+        self.assertLess(document_gate, attachment)
+        self.assertLess(attachment, readback)
+        self.assertLess(readback, task_registration)
+        for marker in (
+            '"ReportingWorkGroupName"',
+            '"ExperimentDatabaseName"',
+            '"document_exactly_verified": True',
+            '"attached_by_run": policy_attached_by_run == "true"',
+            '"attachment_readback_verified": True',
+        ):
+            self.assertIn(marker, self.workflow)
+        self.assertNotIn("aws iam detach-role-policy", self.workflow)
+
     def test_generic_host_gate_keeps_the_legacy_preview_entrypoint(self) -> None:
         generic = (
             ROOT / "scripts/growthbook_reconcile_host_gate.sh"
