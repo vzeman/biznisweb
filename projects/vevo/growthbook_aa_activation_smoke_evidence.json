@@ -1,0 +1,54 @@
+{
+  "accepted_collector_delivery_verified": true,
+  "assignment": {
+    "observed_variations": [
+      "variant"
+    ],
+    "product_exposure_count": 3,
+    "repeat_exposed_device_count": 1,
+    "sticky_consistent_repeat_device_count": 1,
+    "sticky_inconsistent_device_count": 0,
+    "target_exposure_count": 4,
+    "unique_exposed_device_count": 1,
+    "variation_exposure_counts": {
+      "control": 0,
+      "variant": 4
+    }
+  },
+  "aws_mutation_performed": false,
+  "biznisweb_mutation_performed": false,
+  "browser_observation_sha256": "451e6489df351cc2318751a9d4bd727d107d8aaf9763e406c595fc5824ec8705",
+  "cart_checkout_or_order_mutated": false,
+  "collector": {
+    "accepted_receipt_count": 8,
+    "api_request_count": 8,
+    "raw_event_count": 8
+  },
+  "contains_cloudwatch_messages": false,
+  "contains_customer_or_order_data": false,
+  "contains_event_or_device_ids": false,
+  "contains_raw_aws_payloads": false,
+  "cta_experiment_started": false,
+  "evidence_type": "vevo_growthbook_production_aa_activation_smoke",
+  "from_utc": "2026-08-25T05:34:30Z",
+  "growthbook_mutation_performed": false,
+  "gtm_mutation_performed": false,
+  "meta_ads_mutation_performed": false,
+  "runtime": {
+    "collector_version": "git-57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2",
+    "image_digest": "sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058",
+    "instance_id": "N/A:Fargate",
+    "private_ip": "172.31.21.213",
+    "route_key": "POST /v1/events",
+    "runtime_path": "/app",
+    "runtime_path_verification": "immutable_image_prior_localhost_marker",
+    "service": "vevo-growthbook-collector-production",
+    "target_health": "healthy",
+    "task_definition": "vevo-growthbook-collector-production:2"
+  },
+  "schema_version": 1,
+  "source_main_commit": "1965091059e5a35518265aafd282db842f8ea5d3",
+  "source_run_id": "32815955896",
+  "sticky_assignment_verified": true,
+  "through_utc": "2026-08-25T05:44:30Z"
+}

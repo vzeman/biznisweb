@@ -27,21 +27,22 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         self.registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
 
-    def test_checked_in_handoff_is_published_at_zero_allocation(self) -> None:
+    def test_checked_in_handoff_is_running_at_full_aa_allocation(self) -> None:
         validator.validate_activation_handoff(
             self.activation,
             self.workspace,
             self.registry,
         )
 
-    def test_growthbook_draft_and_live_gtm_evidence_is_exact(self) -> None:
-        self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
+    def test_growthbook_running_and_live_gtm_evidence_is_exact(self) -> None:
+        self.assertEqual("running", self.activation["growthbook"]["status"])
         self.assertEqual(
-            "draft_not_published",
+            "live_published",
             self.activation["growthbook"]["production_rule_publish_status"],
         )
         self.assertEqual(
-            "published_zero_allocation", self.activation["gtm"]["publish_status"]
+            "published_production_loader_active",
+            self.activation["gtm"]["publish_status"],
         )
         self.assertEqual(
             {"added": 0, "modified": 0, "removed": 0},
@@ -49,10 +50,25 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         )
         self.assertEqual("15", self.activation["gtm"]["container_version_id"])
         self.assertTrue(self.activation["gtm"]["setup_tag_sequencing_verified"])
-        self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
-        self.assertFalse(self.activation["traffic"]["activation_allowed"])
+        self.assertEqual(100, self.activation["traffic"]["production_allocation_percent"])
+        self.assertTrue(self.activation["traffic"]["activation_allowed"])
 
-    def test_tag_assistant_zero_traffic_qa_is_verified_but_activation_is_closed(self) -> None:
+    def test_activation_readback_is_hash_bound_and_identity_free(self) -> None:
+        readback = self.activation["activation_readback"]
+        self.assertEqual("verified_running_production_aa", readback["status"])
+        self.assertEqual("32815955896", readback["workflow_run_id"])
+        self.assertEqual(
+            "c21d7418656ad0841851a8afbc642a6ea39328e2151e6dc647ce8c59c06c1823",
+            readback["smoke_evidence_sha256"],
+        )
+        self.assertEqual(8, readback["collector"]["accepted_receipt_count"])
+        self.assertEqual(1, readback["collector"]["repeat_exposed_device_count"])
+        self.assertEqual(0, readback["collector"]["sticky_inconsistent_device_count"])
+        self.assertEqual(["variant"], readback["collector"]["observed_variations"])
+        self.assertFalse(readback["commerce"]["cart_checkout_or_order_mutated"])
+        self.assertFalse(self.activation["traffic"]["cta_experiment_started"])
+
+    def test_historical_zero_traffic_qa_is_retained_after_activation(self) -> None:
         qa = self.activation["tag_assistant_qa"]
         self.assertEqual("zero_traffic_qa_verified", qa["status"])
         self.assertTrue(qa["desktop_consent_cycle_observed"])
@@ -77,14 +93,16 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
             "43140aa030225ac927fd6ddd92904fe8d730230174afe7525371c235accfb745",
             observation["artifact_sha256"],
         )
-        self.assertFalse(self.activation["traffic"]["activation_allowed"])
-        self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
+        self.assertTrue(self.activation["traffic"]["activation_allowed"])
+        self.assertEqual(100, self.activation["traffic"]["production_allocation_percent"])
         self.assertEqual(
-            "published_zero_allocation", self.activation["gtm"]["publish_status"]
+            "published_production_loader_active",
+            self.activation["gtm"]["publish_status"],
         )
-        self.assertEqual("draft_not_started", self.activation["growthbook"]["status"])
+        self.assertEqual("running", self.activation["growthbook"]["status"])
         self.assertEqual(
-            "review_growthbook_production_aa_start", self.activation["next_gate"]
+            "collect_7_full_days_and_1000_eligible_devices",
+            self.activation["next_gate"],
         )
 
     def test_controlled_activation_preflight_is_exact_and_narrow(self) -> None:
@@ -215,15 +233,15 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         ):
             self.assertFalse(scope[forbidden_scope])
 
-        self.assertFalse(self.activation["traffic"]["activation_allowed"])
-        self.assertEqual(0, self.activation["traffic"]["production_allocation_percent"])
+        self.assertTrue(self.activation["traffic"]["activation_allowed"])
+        self.assertEqual(100, self.activation["traffic"]["production_allocation_percent"])
 
     def test_activation_preflight_drift_is_rejected(self) -> None:
         altered = copy.deepcopy(self.activation)
         altered["activation_preflight"]["live_readback"][
             "gtm_live_container_version_id"
         ] = "14"
-        with self.assertRaisesRegex(AssertionError, "reviewed zero-allocation UI gate"):
+        with self.assertRaisesRegex(AssertionError, "reviewed running evidence gate"):
             validator.validate_activation_handoff(
                 altered,
                 self.workspace,
@@ -292,21 +310,21 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
     def test_status_only_activation_is_rejected(self) -> None:
         altered = copy.deepcopy(self.activation)
         altered["status"] = "clone_verified_collector_deploy_ready"
-        with self.assertRaisesRegex(AssertionError, "reviewed zero-allocation UI gate"):
+        with self.assertRaisesRegex(AssertionError, "reviewed running evidence gate"):
             validator.validate_activation_handoff(altered, self.workspace, self.registry)
 
     def test_any_unreviewed_gate_change_is_rejected(self) -> None:
         for path, value in (
             (("collector", "deployment_allowed"), True),
             (("collector", "public_route_enabled"), False),
-            (("traffic", "activation_allowed"), True),
+            (("traffic", "activation_allowed"), False),
             (("traffic", "cta_experiment_started"), True),
         ):
             with self.subTest(path=path):
                 altered = copy.deepcopy(self.activation)
                 altered[path[0]][path[1]] = value
                 with self.assertRaisesRegex(
-                    AssertionError, "reviewed zero-allocation UI gate"
+                    AssertionError, "reviewed running evidence gate"
                 ):
                     validator.validate_activation_handoff(
                         altered,
@@ -325,8 +343,8 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
             )
 
         workspace = copy.deepcopy(self.workspace)
-        workspace["workspace"]["production_allocation_percent"] = 1
-        with self.assertRaisesRegex(AssertionError, "zero workspace allocation"):
+        workspace["workspace"]["production_allocation_percent"] = 99
+        with self.assertRaisesRegex(AssertionError, "full workspace allocation"):
             validator.validate_activation_handoff(
                 self.activation,
                 workspace,

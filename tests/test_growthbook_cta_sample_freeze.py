@@ -8,13 +8,16 @@ import tempfile
 import unittest
 
 from scripts import freeze_growthbook_cta_sample as freezer
+from tests.growthbook_test_state import cta_sample_freeze_ready_workspace
 from tests.test_growthbook_aa_evaluator import snapshot as aa_snapshot_fixture
 
 
 class GrowthBookCtaSampleFreezeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.plan = json.loads(freezer.DEFAULT_PLAN_PATH.read_text(encoding="utf-8"))
-        self.workspace = json.loads(freezer.DEFAULT_WORKSPACE_PATH.read_text(encoding="utf-8"))
+        self.workspace = cta_sample_freeze_ready_workspace(
+            json.loads(freezer.DEFAULT_WORKSPACE_PATH.read_text(encoding="utf-8"))
+        )
         self.aa_snapshot = aa_snapshot_fixture()
         snapshot_sha256 = hashlib.sha256(
             freezer.canonical_json_bytes(self.aa_snapshot)

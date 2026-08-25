@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Mapping
@@ -16,9 +17,15 @@ REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
 RUNBOOK_PATH = ROOT / "projects" / "vevo" / "GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md"
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "deploy-vevo-growthbook-production-aa-collector.yml"
 STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
+ACTIVATION_SMOKE_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_aa_activation_smoke_evidence.json"
+)
+BROWSER_OBSERVATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_aa_activation_browser_observation.json"
+)
 
 
-EXPECTED_ACTIVATION = {
+EXPECTED_PRE_ACTIVATION = {
     "schema_version": 9,
     "activation_type": "vevo_growthbook_production_aa",
     "tracking_key": "vevo-sk-aa-001",
@@ -370,10 +377,96 @@ EXPECTED_ACTIVATION = {
 }
 
 
+FINAL_ACTIVATION_READBACK = {
+    "status": "verified_running_production_aa",
+    "observed_at_utc": "2026-08-25T05:43:54Z",
+    "browser_observation_path": (
+        "projects/vevo/growthbook_aa_activation_browser_observation.json"
+    ),
+    "browser_observation_sha256": (
+        "451e6489df351cc2318751a9d4bd727d107d8aaf9763e406c595fc5824ec8705"
+    ),
+    "smoke_evidence_path": (
+        "projects/vevo/growthbook_aa_activation_smoke_evidence.json"
+    ),
+    "smoke_evidence_sha256": (
+        "c21d7418656ad0841851a8afbc642a6ea39328e2151e6dc647ce8c59c06c1823"
+    ),
+    "workflow_run_id": "32815955896",
+    "main_commit": "1965091059e5a35518265aafd282db842f8ea5d3",
+    "growthbook": {
+        "experiment_status": "running",
+        "environment": "production_only",
+        "traffic_percent": 100,
+        "variation_weights": [0.5, 0.5],
+        "feature_revision": 3,
+        "feature_revision_status": "live",
+        "statistics_engine": "bayesian_default",
+        "cuped_enabled": False,
+        "post_stratification_enabled": False,
+        "activation_metric": None,
+        "goal_metric_count": 1,
+        "secondary_metric_count": 6,
+        "guardrail_metric_count": 1,
+    },
+    "tag_assistant": {
+        "connected": True,
+        "container_id": "GTM-5ZB5LFGB",
+        "detected_google_tag_count": 4,
+        "production_loader_fired": True,
+        "console_error_count": 0,
+    },
+    "collector": {
+        "api_request_count": 8,
+        "accepted_receipt_count": 8,
+        "raw_event_count": 8,
+        "target_exposure_count": 4,
+        "product_exposure_count": 3,
+        "repeat_exposed_device_count": 1,
+        "sticky_consistent_repeat_device_count": 1,
+        "sticky_inconsistent_device_count": 0,
+        "observed_variations": ["variant"],
+    },
+    "commerce": {
+        "cta_text_unchanged": True,
+        "cta_experiment_class_applied": False,
+        "preexisting_cart_item_count": 2,
+        "cart_checkout_or_order_mutated": False,
+    },
+}
+
+
+def _running_activation() -> dict[str, Any]:
+    activation = copy.deepcopy(EXPECTED_PRE_ACTIVATION)
+    activation["schema_version"] = 10
+    activation["status"] = "production_aa_running_activation_verified"
+    activation["growthbook"].update(
+        {
+            "production_rule_publish_status": "live_published",
+            "status": "running",
+            "allocation_percent": 100,
+        }
+    )
+    activation["gtm"]["publish_status"] = "published_production_loader_active"
+    activation["activation_readback"] = copy.deepcopy(FINAL_ACTIVATION_READBACK)
+    activation["traffic"].update(
+        {
+            "activation_allowed": True,
+            "production_allocation_percent": 100,
+            "active_production_experiments": ["vevo-sk-aa-001"],
+        }
+    )
+    activation["next_gate"] = "collect_7_full_days_and_1000_eligible_devices"
+    return activation
+
+
+EXPECTED_ACTIVATION = _running_activation()
+
+
 def _collector_verified_activation() -> dict[str, Any]:
     """Return the immutable pre-UI boundary used by the collector recorder."""
 
-    activation = copy.deepcopy(EXPECTED_ACTIVATION)
+    activation = copy.deepcopy(EXPECTED_PRE_ACTIVATION)
     activation["schema_version"] = 1
     activation.pop("activation_preflight", None)
     activation["status"] = "collector_verified_ui_preparation_ready"
@@ -416,6 +509,76 @@ def _load(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _validate_activation_evidence(activation: Mapping[str, Any]) -> None:
+    readback = activation.get("activation_readback") or {}
+    smoke_raw = ACTIVATION_SMOKE_PATH.read_bytes()
+    browser_raw = BROWSER_OBSERVATION_PATH.read_bytes()
+    if hashlib.sha256(smoke_raw).hexdigest() != readback.get(
+        "smoke_evidence_sha256"
+    ):
+        raise AssertionError("Production A/A smoke evidence SHA-256 drift")
+    if hashlib.sha256(browser_raw).hexdigest() != readback.get(
+        "browser_observation_sha256"
+    ):
+        raise AssertionError("Production A/A browser observation SHA-256 drift")
+
+    smoke = json.loads(smoke_raw)
+    browser = json.loads(browser_raw)
+    if (
+        smoke.get("source_run_id") != readback.get("workflow_run_id")
+        or smoke.get("source_main_commit") != readback.get("main_commit")
+        or smoke.get("browser_observation_sha256")
+        != readback.get("browser_observation_sha256")
+    ):
+        raise AssertionError("Production A/A activation evidence provenance drift")
+    if smoke.get("collector") != {
+        "api_request_count": 8,
+        "accepted_receipt_count": 8,
+        "raw_event_count": 8,
+    }:
+        raise AssertionError("Production A/A collector smoke counts drift")
+    assignment = smoke.get("assignment") or {}
+    expected_assignment = {
+        "target_exposure_count": 4,
+        "product_exposure_count": 3,
+        "repeat_exposed_device_count": 1,
+        "sticky_consistent_repeat_device_count": 1,
+        "sticky_inconsistent_device_count": 0,
+        "observed_variations": ["variant"],
+    }
+    if any(assignment.get(key) != value for key, value in expected_assignment.items()):
+        raise AssertionError("Production A/A sticky assignment evidence drift")
+    if (
+        smoke.get("accepted_collector_delivery_verified") is not True
+        or smoke.get("sticky_assignment_verified") is not True
+        or smoke.get("cta_experiment_started") is not False
+        or smoke.get("cart_checkout_or_order_mutated") is not False
+    ):
+        raise AssertionError("Production A/A smoke safety state drift")
+    for boundary in (
+        "contains_raw_aws_payloads",
+        "contains_cloudwatch_messages",
+        "contains_event_or_device_ids",
+        "contains_customer_or_order_data",
+        "aws_mutation_performed",
+        "growthbook_mutation_performed",
+        "gtm_mutation_performed",
+        "meta_ads_mutation_performed",
+        "biznisweb_mutation_performed",
+    ):
+        if smoke.get(boundary) is not False:
+            raise AssertionError(f"Production A/A smoke boundary drift: {boundary}")
+    if (
+        browser.get("growthbook", {}).get("status") != "running"
+        or browser.get("growthbook", {}).get("feature_revision") != 3
+        or browser.get("growthbook", {}).get("traffic_percent") != 100
+        or browser.get("growthbook", {}).get("cta_experiment_status") != "draft"
+        or browser.get("browser_qa", {}).get("console_error_count") != 0
+        or browser.get("browser_qa", {}).get("cart_mutated") is not False
+    ):
+        raise AssertionError("Production A/A browser readback drift")
+
+
 def validate_activation_handoff(
     activation: Mapping[str, Any],
     workspace: Mapping[str, Any],
@@ -423,13 +586,14 @@ def validate_activation_handoff(
 ) -> None:
     if dict(activation) != EXPECTED_ACTIVATION:
         raise AssertionError(
-            "Production A/A activation must match the reviewed zero-allocation UI gate"
+            "Production A/A activation must match the reviewed running evidence gate"
         )
+    _validate_activation_evidence(activation)
 
-    if workspace.get("workspace", {}).get("production_allocation_percent") != 0:
-        raise AssertionError("Production A/A activation requires zero workspace allocation")
-    if workspace.get("decision_gates", {}).get("production_activation_allowed") is not False:
-        raise AssertionError("Production A/A activation decision gate must remain false")
+    if workspace.get("workspace", {}).get("production_allocation_percent") != 100:
+        raise AssertionError("Production A/A activation requires full workspace allocation")
+    if workspace.get("decision_gates", {}).get("production_activation_allowed") is not True:
+        raise AssertionError("Production A/A activation decision gate must be true")
     if workspace.get("gtm_preview_workspace", {}).get("publish_status") != "not_published":
         raise AssertionError("Production A/A activation requires unpublished GTM")
 
@@ -444,10 +608,17 @@ def validate_activation_handoff(
         aa.get("feature_key") != EXPECTED_ACTIVATION["feature_key"]
         or aa.get("variations") != EXPECTED_ACTIVATION["variations"]
         or aa.get("variation_weights") != EXPECTED_ACTIVATION["variation_weights"]
-        or aa.get("production_allocation_percent") != 0
+        or aa.get("production_allocation_percent") != 100
+        or aa.get("status") != "running_production_aa_only"
+        or aa.get("feature_rule_environments") != ["production"]
+        or aa.get("feature_rule_revision") != 3
     ):
         raise AssertionError("Production A/A activation experiment contract drift")
-    if cta.get("status") != "draft" or cta.get("production_allocation_percent") != 0:
+    if (
+        cta.get("status") != "unstarted_draft"
+        or cta.get("feature_rule_status") != "no_live_rules"
+        or cta.get("production_allocation_percent") != 0
+    ):
         raise AssertionError("CTA experiment must remain stopped before Production A/A")
 
     natural = workspace.get("reconciliation_checkpoint", {}).get(

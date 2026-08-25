@@ -1,5 +1,5 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "activation_type": "vevo_growthbook_production_aa",
   "tracking_key": "vevo-sk-aa-001",
   "feature_key": "vevo-sk-aa-assignment",
@@ -12,7 +12,7 @@
     0.5
   ],
   "runbook": "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md",
-  "status": "gtm_live_zero_allocation_verified_growthbook_start_review_pending",
+  "status": "production_aa_running_activation_verified",
   "preconditions": {
     "natural_reconciliation_verified": true,
     "route_disabled_foundation_verified": true,
@@ -43,10 +43,10 @@
     "experiment_created": true,
     "experiment_id": "exp_19g6mmt5wugpk",
     "feature_rule_revision": 3,
-    "production_rule_publish_status": "draft_not_published",
-    "status": "draft_not_started",
+    "production_rule_publish_status": "live_published",
+    "status": "running",
     "data_source_id": "ds_19g6mmt5stlp6",
-    "allocation_percent": 0
+    "allocation_percent": 100
   },
   "gtm": {
     "account_id": "6254499282",
@@ -70,7 +70,7 @@
       "modified": 0,
       "removed": 0
     },
-    "publish_status": "published_zero_allocation",
+    "publish_status": "published_production_loader_active",
     "container_version_id": "15"
   },
   "tag_assistant_qa": {
@@ -325,10 +325,66 @@
       "delete_data_or_objects": false
     }
   },
+  "activation_readback": {
+    "status": "verified_running_production_aa",
+    "observed_at_utc": "2026-08-25T05:43:54Z",
+    "browser_observation_path": "projects/vevo/growthbook_aa_activation_browser_observation.json",
+    "browser_observation_sha256": "451e6489df351cc2318751a9d4bd727d107d8aaf9763e406c595fc5824ec8705",
+    "smoke_evidence_path": "projects/vevo/growthbook_aa_activation_smoke_evidence.json",
+    "smoke_evidence_sha256": "c21d7418656ad0841851a8afbc642a6ea39328e2151e6dc647ce8c59c06c1823",
+    "workflow_run_id": "32815955896",
+    "main_commit": "1965091059e5a35518265aafd282db842f8ea5d3",
+    "growthbook": {
+      "experiment_status": "running",
+      "environment": "production_only",
+      "traffic_percent": 100,
+      "variation_weights": [
+        0.5,
+        0.5
+      ],
+      "feature_revision": 3,
+      "feature_revision_status": "live",
+      "statistics_engine": "bayesian_default",
+      "cuped_enabled": false,
+      "post_stratification_enabled": false,
+      "activation_metric": null,
+      "goal_metric_count": 1,
+      "secondary_metric_count": 6,
+      "guardrail_metric_count": 1
+    },
+    "tag_assistant": {
+      "connected": true,
+      "container_id": "GTM-5ZB5LFGB",
+      "detected_google_tag_count": 4,
+      "production_loader_fired": true,
+      "console_error_count": 0
+    },
+    "collector": {
+      "api_request_count": 8,
+      "accepted_receipt_count": 8,
+      "raw_event_count": 8,
+      "target_exposure_count": 4,
+      "product_exposure_count": 3,
+      "repeat_exposed_device_count": 1,
+      "sticky_consistent_repeat_device_count": 1,
+      "sticky_inconsistent_device_count": 0,
+      "observed_variations": [
+        "variant"
+      ]
+    },
+    "commerce": {
+      "cta_text_unchanged": true,
+      "cta_experiment_class_applied": false,
+      "preexisting_cart_item_count": 2,
+      "cart_checkout_or_order_mutated": false
+    }
+  },
   "traffic": {
-    "activation_allowed": false,
-    "production_allocation_percent": 0,
-    "active_production_experiments": [],
+    "activation_allowed": true,
+    "production_allocation_percent": 100,
+    "active_production_experiments": [
+      "vevo-sk-aa-001"
+    ],
     "cta_experiment_started": false
   },
   "safety": {
@@ -348,5 +404,5 @@
     "drill_status": "not_run",
     "verified_at_utc": null
   },
-  "next_gate": "review_growthbook_production_aa_start"
+  "next_gate": "collect_7_full_days_and_1000_eligible_devices"
 }

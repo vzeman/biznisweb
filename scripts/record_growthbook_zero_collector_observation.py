@@ -166,7 +166,9 @@ def _parse_utc(value: Any, field: str) -> datetime:
 def expected_post_observation_activation() -> dict[str, Any]:
     """Return the frozen schema-4 state before the later activation preflight."""
 
-    post_observation = copy.deepcopy(activation_validator.EXPECTED_ACTIVATION)
+    post_observation = copy.deepcopy(
+        activation_validator.EXPECTED_PRE_ACTIVATION
+    )
     post_observation["schema_version"] = 4
     post_observation["status"] = "zero_traffic_qa_verified_activation_review_pending"
     post_observation.pop("activation_preflight", None)
