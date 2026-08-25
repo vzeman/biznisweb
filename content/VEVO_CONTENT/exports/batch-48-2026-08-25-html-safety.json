@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie",
+      "slug": "co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "body_length": 31161,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-48-2026-08-25-articles.json"
+    },
+    {
+      "title": "Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť",
+      "slug": "co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "body_length": 31504,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-48-2026-08-25-articles.json"
+    },
+    {
+      "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+      "slug": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "body_length": 31077,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-48-2026-08-25-articles.json"
+    },
+    {
+      "title": "Čo je canvas: pevné plátno, škvrny a správne pranie",
+      "slug": "co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "body_length": 31598,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-48-2026-08-25-articles.json"
+    }
+  ]
+}

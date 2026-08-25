@@ -1,10 +1,10 @@
 # VEVO_CONTENT Project State
 
-Date: 2026-08-24
+Date: 2026-08-25
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-47
+Branch: codex/vevo-content-batch-48
 
 ## Current State
 
@@ -1965,6 +1965,24 @@ Branch: codex/vevo-content-batch-47
   - `imports/build_batch_47_distinct_materials.py`, `imports/batch-47-2026-08-24-articles.json`, and `imports/verify_batch_47_public.py`;
   - candidate-scan, duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, and independent public verification reports under `exports/`.
 
+## Batch 48 Underused Materials - Prepared 2026-08-25
+
+- Status: prepared and not yet published. Four distinct material intents were selected after a twelve-topic exploration and an exact final duplicate guard against `843` merged Blog, FAQ, glossary, RSS and local records:
+  - `Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie`;
+  - `Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť`;
+  - `Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie`;
+  - `Čo je canvas: pevné plátno, škvrny a správne pranie`.
+- Taffeta and jacquard were excluded after title-review findings. Lame, brocade and sherpa were kept out because of semantic proximity to the published Lurex, fleece and boucle coverage. Gabardine remains excluded because it belongs to the twill family already covered by the keper guide.
+- Prepared quality: visible word counts `3339`, `3250`, `3243`, and `3265`; every article has `30` H2 headings, two responsive tables, eleven styled blocks, one concrete product card, one category card, at least nine reader-facing FAQ questions, and zero short or one-character paragraphs.
+- Link preflight passed after rejecting one assumed but nonexistent generic-wool URL and replacing it with the verified VEVO wool-coat guide. All four exact future slugs return `404`; all current VEVO, product, category, EU, GINETEX, AATCC, ASTM, CottonWorks, Asahi Kasei, Woolmark, Harris Tweed Authority and J-STAGE destinations pass.
+- Public wording, depth and HTML safety guards pass with zero fixed prices, internal workflow wording, escaped HTML, malformed links or structural failures. The complete project check passed `38/38` tests with project audit `block_count=0`; the known stale global MCP registration remains safely bypassed by the explicit repo-local script.
+- A seven-word-shingle comparison measured pairwise overlap from `0.1161` to `0.1197`. Shared wording is confined to the common safety and layout framework; the fibre definitions, product boundaries, diagnostics, procedures, tables and expert sections are material-specific.
+- Durable prepared artifacts:
+  - `content-plan/batch-48-underused-materials-2026-08-25.md`;
+  - `batches/batch-48-candidate-scan-2026-08-25.txt` and `batches/batch-48-candidates-2026-08-25.txt`;
+  - `imports/build_batch_48_underused_materials.py`, `imports/batch-48-2026-08-25-articles.json`, and `imports/verify_batch_48_public.py`;
+  - duplicate, link-preflight, wording, depth and HTML reports under `exports/`.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -1991,10 +2009,11 @@ Branch: codex/vevo-content-batch-47
 
 For the next VEVO work:
 
-1. Select a small batch 48 from an unfilled content-plan cluster and run the duplicate guard against Blog block `765`, FAQ block `774`, glossary block `1905`, and all local prepared batches before drafting.
-2. Keep `codex/vevo-content-batch-47` stacked on batch 46 until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
-3. Resolve the older batch 31 hidden posts `2278` and `2279` separately, preserving their prepared titles and slugs and checking first that no public/canonical replacement already exists.
-4. Never use legacy remote `biznisweb-add_news_post`/`biznisweb-update_news_post` as the final VEVO new-article path. The approved API path is repo-local `biznisweb-vevo-content` with hidden-first creation, explicit slug, readback, resumable report, and independent public verification.
+1. Run the read-only repo-local MCP preflight for batch 48 against account `vevo.flox.sk`, language `SK`, Blog page `309`, news block `765`, then complete a disposable hidden smoke create/readback/public-404/delete cycle.
+2. If the smoke passes, publish the four batch 48 records hidden first with exact titles and slugs, read them back, explicitly activate them, and run the independent public and mobile verification.
+3. Keep `codex/vevo-content-batch-48` stacked on batch 47 until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
+4. Resolve the older batch 31 hidden posts `2278` and `2279` separately, preserving their prepared titles and slugs and checking first that no public/canonical replacement already exists.
+5. Never use legacy remote `biznisweb-add_news_post`/`biznisweb-update_news_post` as the final VEVO new-article path. The approved API path is repo-local `biznisweb-vevo-content` with hidden-first creation, explicit slug, readback, resumable report, and independent public verification.
 
 ## Handoff Template
 
