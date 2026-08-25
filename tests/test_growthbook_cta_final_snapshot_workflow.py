@@ -72,6 +72,8 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
             "service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}",
             "no successful post-due Production reconciliation task exists",
             "source reporting schedule drift",
+            "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
+            "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
             "not str(task.get('startedBy') or '').startswith('cta-final-')",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
             "CTA_FINAL_RECONCILIATION_GATE_OK:marker=true:parity=true:alarms=clear:dlq=empty",

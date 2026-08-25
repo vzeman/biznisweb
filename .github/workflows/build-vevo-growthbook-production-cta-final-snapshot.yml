@@ -175,7 +175,7 @@ jobs:
           reconciliation = json.load(open(root / 'reconciliation-stack.json', encoding='utf-8'))['Stacks'][0]
           schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
           source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
-          if collector.get('StackStatus') != 'CREATE_COMPLETE' or reconciliation.get('StackStatus') != 'CREATE_COMPLETE':
+          if collector.get('StackStatus') != 'UPDATE_COMPLETE' or reconciliation.get('StackStatus') != 'UPDATE_COMPLETE':
               raise SystemExit('Production GrowthBook stack state drift')
           collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
           reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}

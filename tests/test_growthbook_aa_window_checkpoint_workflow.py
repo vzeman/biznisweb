@@ -60,6 +60,8 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "cron(45 3 * * ? *)",
             "Europe/Bratislava",
             "vevo-reporting-daily:33",
+            "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
+            "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
             "task.get('group') == os.environ['EXPECTED_SERVICE']",
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
