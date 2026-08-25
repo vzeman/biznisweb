@@ -1,0 +1,536 @@
+name: Verify VEVO GrowthBook Production A/A Activation Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_observation:
+        description: Type true to run the frozen read-only Production A/A activation smoke
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-aa-activation-smoke
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  EXPECTED_STACK: vevo-growthbook-production
+  EXPECTED_SERVICE: vevo-growthbook-collector-production
+  EXPECTED_TASK_DEFINITION: vevo-growthbook-collector-production:2
+  EXPECTED_IMAGE_DIGEST: sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058
+  EXPECTED_RUNTIME_PATH: /app
+  EXPECTED_API_LOG_GROUP: /aws/apigateway/vevo-growthbook-collector-production
+  EXPECTED_CONTAINER_LOG_GROUP: /ecs/vevo-growthbook-collector-production
+  OBSERVATION_FROM_UTC: '2026-08-25T05:34:30Z'
+  OBSERVATION_THROUGH_UTC: '2026-08-25T05:44:30Z'
+  BROWSER_OBSERVATION: projects/vevo/growthbook_aa_activation_browser_observation.json
+  EVIDENCE_FILE: vevo-growthbook-production-aa-activation-smoke.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  verify-activation-smoke:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Require exact read-only observation confirmation
+        env:
+          CONFIRM_OBSERVATION: ${{ inputs.confirm_observation }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_OBSERVATION}" == 'true' ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce frozen activation gate before AWS credentials
+        run: |
+          set -euo pipefail
+          python scripts/validate_growthbook_production_aa_activation.py
+          python -m unittest \
+            tests.test_growthbook_activation_smoke_reducer \
+            tests.test_growthbook_activation_smoke_workflow \
+            tests.test_growthbook_production_aa_activation
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from datetime import datetime, timezone
+
+          activation = json.load(
+              open('projects/vevo/growthbook_production_aa_activation.json', encoding='utf-8')
+          )
+          observation_path = os.environ['BROWSER_OBSERVATION']
+          observation_raw = open(observation_path, 'rb').read()
+          observation = json.loads(observation_raw)
+          growthbook = observation.get('growthbook') or {}
+          browser = observation.get('browser_qa') or {}
+          pending = observation.get('pending_backend_proof') or {}
+          scope = ((activation.get('activation_preflight') or {}).get('mutation_scope') or {})
+
+          if activation.get('schema_version') != 9:
+              raise SystemExit('schema-9 activation gate is required')
+          if activation.get('status') != 'gtm_live_zero_allocation_verified_growthbook_start_review_pending':
+              raise SystemExit('activation handoff status drift')
+          if scope.get('start_growthbook_experiment_exp_19g6mmt5wugpk') is not True:
+              raise SystemExit('Production A/A start was not reviewed')
+          if scope.get('publish_growthbook_feature_revision_3') is not True:
+              raise SystemExit('feature revision 3 publish was not reviewed')
+          for forbidden in (
+              'meta_ads', 'biznisweb', 'prices_or_product_content',
+              'cart_checkout_or_orders', 'cta_experiment', 'collector_infrastructure',
+          ):
+              if scope.get(forbidden) is not False:
+                  raise SystemExit(f'forbidden activation scope opened: {forbidden}')
+
+          expected_growthbook = {
+              'experiment_id': 'exp_19g6mmt5wugpk',
+              'tracking_key': 'vevo-sk-aa-001',
+              'status': 'running',
+              'feature_key': 'vevo-sk-aa-assignment',
+              'feature_revision': 3,
+              'feature_status': 'live',
+              'environment': 'production',
+              'environment_count': 1,
+              'available_environment_count': 2,
+              'traffic_percent': 100,
+              'variation_weights': [0.5, 0.5],
+              'variations': ['control', 'variant'],
+              'data_source_id': 'ds_19g6mmt5stlp6',
+              'statistics_engine': 'bayesian_default',
+              'cuped_enabled': False,
+              'post_stratification_enabled': False,
+              'activation_metric': None,
+              'goal_metric_count': 1,
+              'secondary_metric_count': 6,
+              'guardrail_metric_count': 1,
+              'cta_experiment_id': 'exp_19g6mmt1qxzrp',
+              'cta_experiment_status': 'draft',
+          }
+          for field, expected in expected_growthbook.items():
+              if growthbook.get(field) != expected:
+                  raise SystemExit(f'GrowthBook browser read-back drift: {field}')
+          expected_browser = {
+              'tag_assistant_connected': True,
+              'detected_google_tag_count': 4,
+              'gtm_container_id': 'GTM-5ZB5LFGB',
+              'production_loader_fired': True,
+              'production_loader_fires_per_observed_page': 1,
+              'observed_page_load_count': 2,
+              'sticky_reload_executed': True,
+              'sticky_assignment_value_recorded': False,
+              'console_error_count': 0,
+              'analytics_selection_saved': True,
+              'add_to_cart_text_unchanged': True,
+              'cta_experiment_class_applied': False,
+              'preexisting_cart_item_count': 2,
+              'cart_mutated': False,
+              'checkout_mutated': False,
+              'order_mutated': False,
+          }
+          for field, expected in expected_browser.items():
+              if browser.get(field) != expected:
+                  raise SystemExit(f'browser QA read-back drift: {field}')
+          if pending != {
+              'accepted_collector_delivery_verified': False,
+              'sticky_assignment_verified': False,
+              'variation_value_recorded': False,
+          }:
+              raise SystemExit('backend proof must be pending before the read-only smoke')
+          for boundary in (
+              'contains_credentials', 'contains_event_or_device_ids',
+              'contains_customer_or_order_data', 'growthbook_mutated_after_start',
+              'gtm_mutated', 'meta_ads_mutated', 'biznisweb_mutated', 'commerce_mutated',
+          ):
+              if observation.get(boundary) is not False:
+                  raise SystemExit(f'browser observation boundary drift: {boundary}')
+          if not re.fullmatch(rb'[\x09\x0a\x0d\x20-\x7e]+', observation_raw):
+              raise SystemExit('browser observation contains unexpected bytes')
+
+          start = datetime.fromisoformat(os.environ['OBSERVATION_FROM_UTC'].replace('Z', '+00:00'))
+          through = datetime.fromisoformat(os.environ['OBSERVATION_THROUGH_UTC'].replace('Z', '+00:00'))
+          if start.tzinfo != timezone.utc or through.tzinfo != timezone.utc or through <= start:
+              raise SystemExit('frozen activation smoke window is invalid')
+          if through > datetime.now(timezone.utc):
+              raise SystemExit('frozen activation smoke window is incomplete')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f"BROWSER_OBSERVATION_SHA256={hashlib.sha256(observation_raw).hexdigest()}\n")
+          print(
+              'PRODUCTION_AA_ACTIVATION_LOCAL_GATE_OK:'
+              'experiment=exp_19g6mmt5wugpk:feature-revision=3:traffic=100:split=50-50:'
+              'cta=draft:collector-read-only=true'
+          )
+          PY
+
+      - name: Configure AWS credentials for bounded read-only smoke
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify exact Production runtime and reduce accepted events
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMP_DIR="${RUNNER_TEMP}/vevo-aa-activation-smoke-${GITHUB_RUN_ID}"
+          RAW_DIR="${TEMP_DIR}/raw"
+          mkdir -m 700 -p "${RAW_DIR}"
+          cleanup() {
+            rm -rf "${TEMP_DIR}"
+          }
+          trap cleanup EXIT
+
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          aws cloudformation describe-stacks \
+            --stack-name "${EXPECTED_STACK}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/stack.json"
+          python - <<'PY' > "${TEMP_DIR}/runtime.env"
+          import json
+          import os
+
+          root = f"{os.environ['RUNNER_TEMP']}/vevo-aa-activation-smoke-{os.environ['GITHUB_RUN_ID']}"
+          stacks = json.load(open(f'{root}/stack.json', encoding='utf-8')).get('Stacks') or []
+          if len(stacks) != 1:
+              raise SystemExit('Production stack identity drift')
+          stack = stacks[0]
+          if stack.get('StackName') != os.environ['EXPECTED_STACK'] or stack.get('StackStatus') != 'UPDATE_COMPLETE':
+              raise SystemExit('Production stack status drift')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorApiBaseUrl', 'CollectorClusterArn', 'CollectorServiceName',
+              'CollectorTaskDefinitionArn', 'CollectorContainerLogGroup', 'EventBucketName',
+          }
+          if not required.issubset(outputs):
+              raise SystemExit('Production stack outputs are incomplete')
+          if outputs['CollectorServiceName'] != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('Production service output drift')
+          if not outputs['CollectorTaskDefinitionArn'].endswith('/' + os.environ['EXPECTED_TASK_DEFINITION']):
+              raise SystemExit('Production task definition output drift')
+          if outputs['CollectorContainerLogGroup'] != os.environ['EXPECTED_CONTAINER_LOG_GROUP']:
+              raise SystemExit('Production collector log group drift')
+          values = {
+              'COLLECTOR_API_BASE_URL': outputs['CollectorApiBaseUrl'],
+              'COLLECTOR_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'COLLECTOR_SERVICE_NAME': outputs['CollectorServiceName'],
+              'COLLECTOR_TASK_DEFINITION_ARN': outputs['CollectorTaskDefinitionArn'],
+              'COLLECTOR_CONTAINER_LOG_GROUP': outputs['CollectorContainerLogGroup'],
+              'EVENT_BUCKET_NAME': outputs['EventBucketName'],
+          }
+          for key, value in values.items():
+              if not value or '\n' in value or '\r' in value:
+                  raise SystemExit(f'unsafe runtime output: {key}')
+              print(f'{key}={value}')
+          PY
+          set -a
+          source "${TEMP_DIR}/runtime.env"
+          set +a
+
+          aws ecs describe-services \
+            --cluster "${COLLECTOR_CLUSTER_ARN}" \
+            --services "${COLLECTOR_SERVICE_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/service.json"
+          aws ecs list-tasks \
+            --cluster "${COLLECTOR_CLUSTER_ARN}" \
+            --service-name "${COLLECTOR_SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task-list.json"
+          TASK_ARN="$(python - <<'PY'
+          import json
+          import os
+          root = f"{os.environ['RUNNER_TEMP']}/vevo-aa-activation-smoke-{os.environ['GITHUB_RUN_ID']}"
+          tasks = json.load(open(f'{root}/task-list.json', encoding='utf-8')).get('taskArns') or []
+          if len(tasks) != 1:
+              raise SystemExit('exactly one running Production collector task is required')
+          print(tasks[0])
+          PY
+          )"
+          aws ecs describe-tasks \
+            --cluster "${COLLECTOR_CLUSTER_ARN}" \
+            --tasks "${TASK_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task.json"
+          aws ecs describe-task-definition \
+            --task-definition "${COLLECTOR_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task-definition.json"
+          TARGET_GROUP_ARN="$(python - <<'PY'
+          import json
+          import os
+          root = f"{os.environ['RUNNER_TEMP']}/vevo-aa-activation-smoke-{os.environ['GITHUB_RUN_ID']}"
+          services = json.load(open(f'{root}/service.json', encoding='utf-8')).get('services') or []
+          groups = services[0].get('loadBalancers') or [] if len(services) == 1 else []
+          if len(groups) != 1:
+              raise SystemExit('Production target group boundary drift')
+          print(groups[0]['targetGroupArn'])
+          PY
+          )"
+          aws elbv2 describe-target-health \
+            --target-group-arn "${TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/target-health.json"
+          API_ID="$(python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          host = urlparse(os.environ['COLLECTOR_API_BASE_URL']).hostname or ''
+          api_id = host.split('.', 1)[0]
+          if not api_id:
+              raise SystemExit('Production collector API ID missing')
+          print(api_id)
+          PY
+          )"
+          aws apigatewayv2 get-routes \
+            --api-id "${API_ID}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/routes.json"
+
+          python - <<'PY' > "${TEMP_DIR}/runtime.json"
+          import ipaddress
+          import json
+          import os
+
+          root = f"{os.environ['RUNNER_TEMP']}/vevo-aa-activation-smoke-{os.environ['GITHUB_RUN_ID']}"
+          service = json.load(open(f'{root}/service.json', encoding='utf-8'))['services'][0]
+          if (
+              service.get('serviceName') != os.environ['EXPECTED_SERVICE']
+              or service.get('taskDefinition') != os.environ['COLLECTOR_TASK_DEFINITION_ARN']
+              or service.get('desiredCount') != 1
+              or service.get('runningCount') != 1
+          ):
+              raise SystemExit('Production collector service drift')
+          task = json.load(open(f'{root}/task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['COLLECTOR_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('Production collector task identity drift')
+          container = containers[0]
+          if container.get('name') != 'collector' or container.get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+              raise SystemExit('Production collector image identity drift')
+          definition = json.load(open(f'{root}/task-definition.json', encoding='utf-8'))['taskDefinition']
+          definitions = definition.get('containerDefinitions') or []
+          if len(definitions) != 1 or definitions[0].get('name') != 'collector':
+              raise SystemExit('Production task-definition container drift')
+          if definitions[0].get('workingDirectory') not in {None, os.environ['EXPECTED_RUNTIME_PATH']}:
+              raise SystemExit('Production runtime path drift')
+          details = [
+              row
+              for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip = str(next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), ''))
+          if ipaddress.ip_address(private_ip) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('Production private IP drift')
+          health = json.load(open(f'{root}/target-health.json', encoding='utf-8')).get('TargetHealthDescriptions') or []
+          if (
+              len(health) != 1
+              or health[0].get('TargetHealth', {}).get('State') != 'healthy'
+              or health[0].get('Target', {}).get('Id') != private_ip
+          ):
+              raise SystemExit('Production collector target health drift')
+          routes = json.load(open(f'{root}/routes.json', encoding='utf-8')).get('Items') or []
+          if len(routes) != 1 or routes[0].get('RouteKey') != 'POST /v1/events' or routes[0].get('AuthorizationType') != 'NONE':
+              raise SystemExit('Production collector route drift')
+          runtime = {
+              'instance_id': 'N/A:Fargate',
+              'private_ip': private_ip,
+              'service': os.environ['EXPECTED_SERVICE'],
+              'task_definition': os.environ['EXPECTED_TASK_DEFINITION'],
+              'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
+              'runtime_path_verification': 'immutable_image_prior_localhost_marker',
+              'image_digest': os.environ['EXPECTED_IMAGE_DIGEST'],
+              'target_health': 'healthy',
+              'route_key': 'POST /v1/events',
+          }
+          print(json.dumps(runtime, sort_keys=True))
+          print(
+              'PRODUCTION_AA_ACTIVATION_RUNTIME_GATE_OK:'
+              f'instance-id=N/A:Fargate:private-ip={private_ip}:'
+              f"service={os.environ['EXPECTED_SERVICE']}:path={os.environ['EXPECTED_RUNTIME_PATH']}:"
+              'target=healthy:route=POST_/v1/events:aws-mutation=none',
+              file=os.sys.stderr,
+          )
+          PY
+
+          read START_MS THROUGH_MS < <(python - <<'PY'
+          import os
+          from datetime import datetime
+          start = datetime.fromisoformat(os.environ['OBSERVATION_FROM_UTC'].replace('Z', '+00:00'))
+          through = datetime.fromisoformat(os.environ['OBSERVATION_THROUGH_UTC'].replace('Z', '+00:00'))
+          print(int(start.timestamp() * 1000), int(through.timestamp() * 1000))
+          PY
+          )
+          aws logs filter-log-events \
+            --log-group-name "${EXPECTED_API_LOG_GROUP}" \
+            --start-time "${START_MS}" \
+            --end-time "${THROUGH_MS}" \
+            --filter-pattern '{ $.routeKey = "POST /v1/events" }' \
+            --region "${AWS_REGION}" \
+            --query 'events[].eventId' \
+            --output json > "${TEMP_DIR}/api-event-ids.json"
+          aws logs filter-log-events \
+            --log-group-name "${COLLECTOR_CONTAINER_LOG_GROUP}" \
+            --start-time "${START_MS}" \
+            --end-time "${THROUGH_MS}" \
+            --filter-pattern '"VEVO_GROWTHBOOK_COLLECTOR_RECEIPT"' \
+            --region "${AWS_REGION}" \
+            --query 'events[].eventId' \
+            --output json > "${TEMP_DIR}/receipt-event-ids.json"
+
+          aws s3api list-objects-v2 \
+            --bucket "${EVENT_BUCKET_NAME}" \
+            --prefix 'experiment-events/raw/event_date=2026-08-25/' \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/objects.json"
+          python - <<'PY' > "${TEMP_DIR}/selected-keys.txt"
+          import json
+          import os
+          import re
+          from datetime import datetime, timedelta
+
+          root = f"{os.environ['RUNNER_TEMP']}/vevo-aa-activation-smoke-{os.environ['GITHUB_RUN_ID']}"
+          listing = json.load(open(f'{root}/objects.json', encoding='utf-8'))
+          if listing.get('IsTruncated') is not False:
+              raise SystemExit('Production raw-object listing is truncated')
+          start = datetime.fromisoformat(os.environ['OBSERVATION_FROM_UTC'].replace('Z', '+00:00')) - timedelta(minutes=1)
+          through = datetime.fromisoformat(os.environ['OBSERVATION_THROUGH_UTC'].replace('Z', '+00:00')) + timedelta(minutes=2)
+          key_re = re.compile(r'^experiment-events/raw/event_date=2026-08-25/[0-9a-f-]{36}[.]json$')
+          selected = []
+          for row in listing.get('Contents') or []:
+              key = str(row.get('Key') or '')
+              modified = datetime.fromisoformat(str(row.get('LastModified') or '').replace('Z', '+00:00'))
+              if start <= modified < through:
+                  if key_re.fullmatch(key) is None or '\n' in key or '\r' in key:
+                      raise SystemExit('unsafe Production raw-object key')
+                  selected.append(key)
+          if not selected:
+              raise SystemExit('no Production raw objects in the frozen activation smoke window')
+          print('\n'.join(sorted(selected)))
+          PY
+          index=0
+          while IFS= read -r key; do
+            [[ -n "${key}" ]]
+            index=$((index + 1))
+            aws s3api get-object \
+              --bucket "${EVENT_BUCKET_NAME}" \
+              --key "${key}" \
+              --region "${AWS_REGION}" \
+              "${RAW_DIR}/${index}.json" > /dev/null
+          done < "${TEMP_DIR}/selected-keys.txt"
+
+          python scripts/summarize_growthbook_activation_smoke.py \
+            --raw-directory "${RAW_DIR}" \
+            --from-utc "${OBSERVATION_FROM_UTC}" \
+            --through-utc "${OBSERVATION_THROUGH_UTC}" \
+            --output "${TEMP_DIR}/reduction.json"
+
+          python - <<'PY'
+          import json
+          import os
+
+          root = f"{os.environ['RUNNER_TEMP']}/vevo-aa-activation-smoke-{os.environ['GITHUB_RUN_ID']}"
+          reduction = json.load(open(f'{root}/reduction.json', encoding='utf-8'))
+          runtime = json.load(open(f'{root}/runtime.json', encoding='utf-8'))
+          api_ids = json.load(open(f'{root}/api-event-ids.json', encoding='utf-8'))
+          receipt_ids = json.load(open(f'{root}/receipt-event-ids.json', encoding='utf-8'))
+          for label, values in (('API request', api_ids), ('collector receipt', receipt_ids)):
+              if not isinstance(values, list) or any(not isinstance(value, str) or not value for value in values):
+                  raise SystemExit(f'{label} reduction is malformed')
+              if len(values) != len(set(values)):
+                  raise SystemExit(f'{label} reduction contains duplicate log event IDs')
+          request_count = len(api_ids)
+          receipt_count = len(receipt_ids)
+          if request_count < 2 or receipt_count < 2:
+              raise SystemExit('collector delivery count is below the two-load smoke minimum')
+          if receipt_count < reduction['raw_event_count'] or request_count < receipt_count:
+              raise SystemExit('collector request/receipt/raw count ordering drift')
+          if reduction['target_exposure_count'] < 2 or reduction['product_exposure_count'] < 2:
+              raise SystemExit('two product A/A exposures were not persisted')
+          if reduction['repeat_exposed_device_count'] < 1:
+              raise SystemExit('no repeated anonymous assignment was observed')
+          if reduction['sticky_consistent_repeat_device_count'] < 1:
+              raise SystemExit('no sticky-consistent repeated assignment was observed')
+          if reduction['sticky_inconsistent_device_count'] != 0:
+              raise SystemExit('cross-variation sticky assignment conflict detected')
+          if not reduction['observed_variations']:
+              raise SystemExit('no A/A variation was observed')
+
+          evidence = {
+              'schema_version': 1,
+              'evidence_type': 'vevo_growthbook_production_aa_activation_smoke',
+              'source_run_id': os.environ['GITHUB_RUN_ID'],
+              'source_main_commit': os.environ['GITHUB_SHA'],
+              'browser_observation_sha256': os.environ['BROWSER_OBSERVATION_SHA256'],
+              'from_utc': os.environ['OBSERVATION_FROM_UTC'],
+              'through_utc': os.environ['OBSERVATION_THROUGH_UTC'],
+              'runtime': runtime,
+              'collector': {
+                  'api_request_count': request_count,
+                  'accepted_receipt_count': receipt_count,
+                  'raw_event_count': reduction['raw_event_count'],
+              },
+              'assignment': {
+                  key: reduction[key]
+                  for key in (
+                      'target_exposure_count', 'unique_exposed_device_count',
+                      'repeat_exposed_device_count', 'sticky_consistent_repeat_device_count',
+                      'sticky_inconsistent_device_count', 'variation_exposure_counts',
+                      'observed_variations', 'product_exposure_count',
+                  )
+              },
+              'accepted_collector_delivery_verified': True,
+              'sticky_assignment_verified': True,
+              'cta_experiment_started': False,
+              'cart_checkout_or_order_mutated': False,
+              'contains_raw_aws_payloads': False,
+              'contains_cloudwatch_messages': False,
+              'contains_event_or_device_ids': False,
+              'contains_customer_or_order_data': False,
+              'aws_mutation_performed': False,
+              'growthbook_mutation_performed': False,
+              'gtm_mutation_performed': False,
+              'meta_ads_mutation_performed': False,
+              'biznisweb_mutation_performed': False,
+          }
+          raw = (json.dumps(evidence, indent=2, sort_keys=True) + '\n').encode('utf-8')
+          open(os.environ['EVIDENCE_FILE'], 'wb').write(raw)
+          print(
+              'PRODUCTION_AA_ACTIVATION_SMOKE_OK:'
+              f"requests={request_count}:receipts={receipt_count}:"
+              f"exposures={reduction['target_exposure_count']}:"
+              f"repeat-devices={reduction['repeat_exposed_device_count']}:"
+              f"variations={','.join(reduction['observed_variations'])}:"
+              'identities=false:aws-mutation=none'
+          )
+          PY
+
+      - name: Upload sanitized activation smoke evidence only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-production-aa-activation-smoke
+          path: vevo-growthbook-production-aa-activation-smoke.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write sanitized activation smoke summary
+        run: |
+          set -euo pipefail
+          {
+            echo '## VEVO Production A/A activation smoke'
+            echo '- GrowthBook: `Running`, Production only, `100%`, `50/50`'
+            echo '- Feature revision: `3`, live'
+            echo '- Collector runtime: exact Fargate identity and healthy route verified'
+            echo '- Accepted delivery and repeated sticky assignment: `verified`'
+            echo '- CTA experiment: `Draft`; cart/checkout/orders: `unchanged`'
+            echo '- Event/device IDs, customer/order data and raw AWS payloads: `excluded`'
+            echo '- AWS/GrowthBook/GTM/Meta Ads/BiznisWeb mutation: `none`'
+          } >> "${GITHUB_STEP_SUMMARY}"
