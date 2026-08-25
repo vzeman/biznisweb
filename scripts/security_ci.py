@@ -621,7 +621,13 @@ def main() -> int:
         for marker in (
             "Default: DISABLED",
             "Type: AWS::Scheduler::Schedule",
-            "RoleName: vevo-growthbook-reconcile-preview-scheduler",
+            "AllowedPattern: '^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:task-definition/vevo-growthbook-reconcile-(preview|production):[1-9][0-9]*$'",
+            "IsProduction: !Equals [!Ref Environment, production]",
+            "QueueName: !Sub vevo-growthbook-reconcile-${Environment}-dlq",
+            "RoleName: !Sub vevo-growthbook-reconcile-${Environment}-scheduler",
+            "Name: !Sub vevo-growthbook-reconcile-${Environment}",
+            "- 'cron(30 3 * * ? *)'",
+            "- 'cron(45 3 * * ? *)'",
             "Action: ecs:RunTask",
             "Action: iam:PassRole",
             "EnableExecuteCommand: false",
@@ -629,6 +635,8 @@ def main() -> int:
             "MaximumRetryAttempts: 2",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK",
+            "ScheduledReconciliationProductionFailure",
+            "ScheduledReconciliationProductionSuccess",
             "schedule-group/default",
         ):
             require(
@@ -644,6 +652,8 @@ def main() -> int:
             )
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
+            "growthbook_reconciliation_production",
+            "IMAGE_TAG: git-${{ github.sha }}",
             "--phase candidate > candidate-parameters.json",
             "--parameters file://candidate-parameters.json",
             "GROWTHBOOK_RECONCILIATION_DISABLED_STACK_OK",
@@ -655,6 +665,9 @@ def main() -> int:
             "VEVO reporting source schedule changed",
             "reconciliation stack requires read-only diagnosis before deploy",
             "SANITIZED_RECONCILIATION_STACK_DIAGNOSTIC:",
+            "Upload sanitized deployment evidence only",
+            "uses: actions/upload-artifact@v4.6.2",
+            "path: ${{ env.EVIDENCE_FILE }}",
         ):
             require(
                 growthbook_reconciliation_workflow,

@@ -12,11 +12,22 @@ from reporting_core.experiments import ExperimentDataError
 from scripts import run_scheduled_growthbook_reconciliation as scheduled
 
 
-BASE_SETTINGS = {
+PREVIEW_SETTINGS = {
     "environment": "preview",
     "stack_name": "vevo-growthbook-reconciliation-preview",
     "schedule_name": "vevo-growthbook-reconcile-preview",
     "schedule_expression": "cron(30 3 * * ? *)",
+    "timezone": "Europe/Bratislava",
+    "rolling_partition_days": 40,
+    "max_raw_events": 50_000,
+    "source_task_family": "vevo-reporting-daily",
+}
+
+PRODUCTION_SETTINGS = {
+    "environment": "production",
+    "stack_name": "vevo-growthbook-reconciliation-production",
+    "schedule_name": "vevo-growthbook-reconcile-production",
+    "schedule_expression": "cron(45 3 * * ? *)",
     "timezone": "Europe/Bratislava",
     "rolling_partition_days": 40,
     "max_raw_events": 50_000,
@@ -42,14 +53,23 @@ class ScheduledGrowthBookReconciliationTests(unittest.TestCase):
             )
 
     def test_checked_in_schedule_identity_and_bounds_are_exact(self) -> None:
-        config = scheduled._load_schedule_settings()
-        self.assertEqual(BASE_SETTINGS, dict(config))
+        self.assertEqual(
+            PREVIEW_SETTINGS,
+            dict(scheduled._load_schedule_settings("preview")),
+        )
+        self.assertEqual(
+            PRODUCTION_SETTINGS,
+            dict(scheduled._load_schedule_settings("production")),
+        )
 
-        drifted = copy.deepcopy(BASE_SETTINGS)
+        drifted = copy.deepcopy(PREVIEW_SETTINGS)
         drifted["rolling_partition_days"] = 21
         with mock.patch("json.loads", return_value={"growthbook_reconciliation": drifted}):
             with self.assertRaisesRegex(ExperimentDataError, "between 22 and 60"):
-                scheduled._load_schedule_settings()
+                scheduled._load_schedule_settings("preview")
+
+        with self.assertRaisesRegex(ExperimentDataError, "unsupported"):
+            scheduled._load_schedule_settings("invalid")
 
     def test_run_requires_all_runtime_publish_gates(self) -> None:
         safe_env = {
@@ -77,7 +97,11 @@ class ScheduledGrowthBookReconciliationTests(unittest.TestCase):
         output = io.StringIO()
         with (
             mock.patch.dict(os.environ, safe_env, clear=True),
-            mock.patch.object(scheduled, "_load_schedule_settings", return_value=BASE_SETTINGS),
+            mock.patch.object(
+                scheduled,
+                "_load_schedule_settings",
+                return_value=PREVIEW_SETTINGS,
+            ),
             mock.patch.object(scheduled.reconcile_growthbook_facts, "run", return_value=0) as run,
             redirect_stdout(output),
         ):
@@ -93,6 +117,39 @@ class ScheduledGrowthBookReconciliationTests(unittest.TestCase):
         self.assertEqual("50000", args[args.index("--max-raw-events") + 1])
         self.assertIn("--publish", args)
         self.assertIn("GROWTHBOOK_SCHEDULED_RECONCILIATION_OK", output.getvalue())
+
+    def test_production_uses_the_isolated_contract_and_marker(self) -> None:
+        safe_env = {
+            "REPORT_PROJECT": "vevo",
+            "GROWTHBOOK_ENVIRONMENT": "production",
+            "GROWTHBOOK_FACT_PUBLISH_ENABLED": "true",
+            "GROWTHBOOK_EVENT_BUCKET": "vevo-growthbook-production-test",
+            "AWS_REGION": "eu-central-1",
+        }
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, safe_env, clear=True),
+            mock.patch.object(
+                scheduled,
+                "_load_schedule_settings",
+                return_value=PRODUCTION_SETTINGS,
+            ) as load_settings,
+            mock.patch.object(
+                scheduled.reconcile_growthbook_facts,
+                "run",
+                return_value=0,
+            ),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(
+                0,
+                scheduled.run(
+                    now=datetime(2026, 8, 21, 1, 15, tzinfo=timezone.utc)
+                ),
+            )
+
+        load_settings.assert_called_once_with("production")
+        self.assertIn("environment=production", output.getvalue())
 
     def test_run_rejects_all_user_arguments(self) -> None:
         with self.assertRaisesRegex(ExperimentDataError, "accepts no arguments"):

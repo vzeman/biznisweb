@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  Disabled-first EventBridge Scheduler boundary for the VEVO GrowthBook Preview
+  Disabled-first EventBridge Scheduler boundary for a VEVO GrowthBook
   rolling reconciliation task. The target reuses one exact host-verified VEVO
   reporting task definition and never changes the reporting schedule.
 
@@ -10,12 +10,13 @@ Parameters:
     Default: preview
     AllowedValues:
       - preview
+      - production
   ClusterArn:
     Type: String
     AllowedPattern: '^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:cluster/[A-Za-z0-9_-]+$'
   TaskDefinitionArn:
     Type: String
-    AllowedPattern: '^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:task-definition/vevo-growthbook-reconcile-preview:[1-9][0-9]*$'
+    AllowedPattern: '^arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:task-definition/vevo-growthbook-reconcile-(preview|production):[1-9][0-9]*$'
   TaskRoleArn:
     Type: String
     AllowedPattern: '^arn:aws[a-z-]*:iam::[0-9]{12}:role/BiznisWebReportingTaskRole-vevo$'
@@ -55,11 +56,15 @@ Parameters:
     Default: 'cron(30 3 * * ? *)'
     AllowedValues:
       - 'cron(30 3 * * ? *)'
+      - 'cron(45 3 * * ? *)'
   ScheduleTimezone:
     Type: String
     Default: Europe/Bratislava
     AllowedValues:
       - Europe/Bratislava
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
 
 Resources:
   ReconciliationDeadLetterQueue:
@@ -67,7 +72,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      QueueName: vevo-growthbook-reconcile-preview-dlq
+      QueueName: !Sub vevo-growthbook-reconcile-${Environment}-dlq
       MessageRetentionPeriod: 1209600
       SqsManagedSseEnabled: true
       Tags:
@@ -79,7 +84,7 @@ Resources:
   ReconciliationSchedulerRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: vevo-growthbook-reconcile-preview-scheduler
+      RoleName: !Sub vevo-growthbook-reconcile-${Environment}-scheduler
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -122,10 +127,13 @@ Resources:
   ReconciliationSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
-      Name: vevo-growthbook-reconcile-preview
-      Description: >-
-        Daily bounded reconciliation of complete UTC Preview event partitions;
-        Production GrowthBook allocation remains zero.
+      Name: !Sub vevo-growthbook-reconcile-${Environment}
+      Description: !If
+        - IsProduction
+        - Daily bounded reconciliation of complete UTC Production event partitions.
+        - >-
+          Daily bounded reconciliation of complete UTC Preview event partitions;
+          Production GrowthBook allocation remains zero.
       State: !Ref ScheduleState
       ScheduleExpression: !Ref ScheduleExpression
       ScheduleExpressionTimezone: !Ref ScheduleTimezone
@@ -145,23 +153,26 @@ Resources:
           PlatformVersion: !Ref PlatformVersion
           TaskCount: 1
           EnableExecuteCommand: false
-          Group: vevo-growthbook-reconcile-preview
+          Group: !Sub vevo-growthbook-reconcile-${Environment}
           NetworkConfiguration:
             AwsvpcConfiguration:
               AssignPublicIp: !Ref AssignPublicIp
               SecurityGroups: !Ref SecurityGroupIds
               Subnets: !Ref SubnetIds
         Input: !Sub >-
-          {"containerOverrides":[{"name":"${ContainerName}","command":["/bin/bash","-lc","cd /app && python scripts/run_scheduled_growthbook_reconciliation.py"],"environment":[{"name":"REPORT_PROJECT","value":"vevo"},{"name":"GROWTHBOOK_ENVIRONMENT","value":"preview"},{"name":"GROWTHBOOK_EVENT_BUCKET","value":"${EventBucketName}"},{"name":"GROWTHBOOK_FACT_PUBLISH_ENABLED","value":"true"},{"name":"AWS_REGION","value":"${AWS::Region}"}]}]}
+          {"containerOverrides":[{"name":"${ContainerName}","command":["/bin/bash","-lc","cd /app && python scripts/run_scheduled_growthbook_reconciliation.py"],"environment":[{"name":"REPORT_PROJECT","value":"vevo"},{"name":"GROWTHBOOK_ENVIRONMENT","value":"${Environment}"},{"name":"GROWTHBOOK_EVENT_BUCKET","value":"${EventBucketName}"},{"name":"GROWTHBOOK_FACT_PUBLISH_ENABLED","value":"true"},{"name":"AWS_REGION","value":"${AWS::Region}"}]}]}
 
   ReconciliationFailureMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterName: vevo-growthbook-reconcile-preview-failure
+      FilterName: !Sub vevo-growthbook-reconcile-${Environment}-failure
       FilterPattern: '"GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE"'
       LogGroupName: !Ref LogGroupName
       MetricTransformations:
-        - MetricName: ScheduledReconciliationFailure
+        - MetricName: !If
+            - IsProduction
+            - ScheduledReconciliationProductionFailure
+            - ScheduledReconciliationFailure
           MetricNamespace: VEVO/GrowthBook
           MetricValue: '1'
           Unit: Count
@@ -169,11 +180,14 @@ Resources:
   ReconciliationSuccessMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterName: vevo-growthbook-reconcile-preview-success
+      FilterName: !Sub vevo-growthbook-reconcile-${Environment}-success
       FilterPattern: '"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK"'
       LogGroupName: !Ref LogGroupName
       MetricTransformations:
-        - MetricName: ScheduledReconciliationSuccess
+        - MetricName: !If
+            - IsProduction
+            - ScheduledReconciliationProductionSuccess
+            - ScheduledReconciliationSuccess
           MetricNamespace: VEVO/GrowthBook
           MetricValue: '1'
           Unit: Count
@@ -181,10 +195,16 @@ Resources:
   ReconciliationFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: vevo-growthbook-reconcile-preview-failure
-      AlarmDescription: The scheduled Preview reconciler emitted an explicit failure marker.
+      AlarmName: !Sub vevo-growthbook-reconcile-${Environment}-failure
+      AlarmDescription: !If
+        - IsProduction
+        - The scheduled Production reconciler emitted an explicit failure marker.
+        - The scheduled Preview reconciler emitted an explicit failure marker.
       Namespace: VEVO/GrowthBook
-      MetricName: ScheduledReconciliationFailure
+      MetricName: !If
+        - IsProduction
+        - ScheduledReconciliationProductionFailure
+        - ScheduledReconciliationFailure
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -196,10 +216,16 @@ Resources:
   ReconciliationMissingSuccessAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: vevo-growthbook-reconcile-preview-missing-success
-      AlarmDescription: No successful scheduled Preview reconciliation was observed for two UTC days.
+      AlarmName: !Sub vevo-growthbook-reconcile-${Environment}-missing-success
+      AlarmDescription: !If
+        - IsProduction
+        - No successful scheduled Production reconciliation was observed for two UTC days.
+        - No successful scheduled Preview reconciliation was observed for two UTC days.
       Namespace: VEVO/GrowthBook
-      MetricName: ScheduledReconciliationSuccess
+      MetricName: !If
+        - IsProduction
+        - ScheduledReconciliationProductionSuccess
+        - ScheduledReconciliationSuccess
       Statistic: Sum
       Period: 86400
       EvaluationPeriods: 2
@@ -211,8 +237,11 @@ Resources:
   ReconciliationDeadLetterAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: vevo-growthbook-reconcile-preview-dlq
-      AlarmDescription: EventBridge Scheduler could not deliver the Preview reconciliation task.
+      AlarmName: !Sub vevo-growthbook-reconcile-${Environment}-dlq
+      AlarmDescription: !If
+        - IsProduction
+        - EventBridge Scheduler could not deliver the Production reconciliation task.
+        - EventBridge Scheduler could not deliver the Preview reconciliation task.
       Namespace: AWS/SQS
       MetricName: ApproximateNumberOfMessagesVisible
       Dimensions:

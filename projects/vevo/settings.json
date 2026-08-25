@@ -22,6 +22,16 @@
     "max_raw_events": 50000,
     "source_task_family": "vevo-reporting-daily"
   },
+  "growthbook_reconciliation_production": {
+    "environment": "production",
+    "stack_name": "vevo-growthbook-reconciliation-production",
+    "schedule_name": "vevo-growthbook-reconcile-production",
+    "schedule_expression": "cron(45 3 * * ? *)",
+    "timezone": "Europe/Bratislava",
+    "rolling_partition_days": 40,
+    "max_raw_events": 50000,
+    "source_task_family": "vevo-reporting-daily"
+  },
   "product_identity": {
     "prefer_import_code": true
   },

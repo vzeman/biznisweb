@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the reviewed VEVO GrowthBook Preview rolling reconciliation window.
+"""Run a reviewed VEVO GrowthBook rolling reconciliation window.
 
 The schedule has no user-controlled date arguments. It always processes a
 bounded set of complete UTC receipt partitions and retains the reconciler's
@@ -25,23 +25,42 @@ from scripts import reconcile_growthbook_facts
 
 
 PROJECT = "vevo"
-ENVIRONMENT = "preview"
 SETTINGS_PATH = REPO_ROOT / "projects" / PROJECT / "settings.json"
+ENVIRONMENT_CONTRACTS = {
+    "preview": {
+        "settings_key": "growthbook_reconciliation",
+        "stack_name": "vevo-growthbook-reconciliation-preview",
+        "schedule_name": "vevo-growthbook-reconcile-preview",
+        "schedule_expression": "cron(30 3 * * ? *)",
+    },
+    "production": {
+        "settings_key": "growthbook_reconciliation_production",
+        "stack_name": "vevo-growthbook-reconciliation-production",
+        "schedule_name": "vevo-growthbook-reconcile-production",
+        "schedule_expression": "cron(45 3 * * ? *)",
+    },
+}
 
 
-def _load_schedule_settings(path: Path = SETTINGS_PATH) -> Mapping[str, Any]:
+def _load_schedule_settings(
+    environment: str,
+    path: Path = SETTINGS_PATH,
+) -> Mapping[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ExperimentDataError("scheduled reconciliation settings are unreadable") from exc
-    config = payload.get("growthbook_reconciliation") if isinstance(payload, dict) else None
+    contract = ENVIRONMENT_CONTRACTS.get(environment)
+    if contract is None:
+        raise ExperimentDataError("scheduled reconciliation environment is unsupported")
+    config = payload.get(contract["settings_key"]) if isinstance(payload, dict) else None
     if not isinstance(config, dict):
         raise ExperimentDataError("scheduled reconciliation settings are missing")
     expected_identity = {
-        "environment": ENVIRONMENT,
-        "stack_name": "vevo-growthbook-reconciliation-preview",
-        "schedule_name": "vevo-growthbook-reconcile-preview",
-        "schedule_expression": "cron(30 3 * * ? *)",
+        "environment": environment,
+        "stack_name": contract["stack_name"],
+        "schedule_name": contract["schedule_name"],
+        "schedule_expression": contract["schedule_expression"],
         "timezone": "Europe/Bratislava",
         "source_task_family": "vevo-reporting-daily",
     }
@@ -101,8 +120,11 @@ def run(argv: Sequence[str] | None = None, *, now: datetime | None = None) -> in
         raise ExperimentDataError("scheduled reconciliation accepts no arguments")
     if os.getenv("REPORT_PROJECT") != PROJECT:
         raise ExperimentDataError("scheduled reconciliation requires REPORT_PROJECT=vevo")
-    if os.getenv("GROWTHBOOK_ENVIRONMENT") != ENVIRONMENT:
-        raise ExperimentDataError("scheduled reconciliation requires Preview")
+    environment = os.getenv("GROWTHBOOK_ENVIRONMENT", "").strip().lower()
+    if environment not in ENVIRONMENT_CONTRACTS:
+        raise ExperimentDataError(
+            "scheduled reconciliation requires preview or production"
+        )
     if os.getenv("GROWTHBOOK_FACT_PUBLISH_ENABLED", "").strip().lower() != "true":
         raise ExperimentDataError("scheduled reconciliation publish gate is disabled")
     bucket = os.getenv("GROWTHBOOK_EVENT_BUCKET", "").strip()
@@ -112,7 +134,7 @@ def run(argv: Sequence[str] | None = None, *, now: datetime | None = None) -> in
     if region != "eu-central-1":
         raise ExperimentDataError("scheduled reconciliation requires eu-central-1")
 
-    settings = _load_schedule_settings()
+    settings = _load_schedule_settings(environment)
     clock = now or datetime.now(timezone.utc)
     reconcile_args = build_reconcile_args(
         now=clock,
@@ -125,7 +147,7 @@ def run(argv: Sequence[str] | None = None, *, now: datetime | None = None) -> in
     event_through = reconcile_args[reconcile_args.index("--event-through") + 1]
     print(
         "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:"
-        f"project={PROJECT}:environment={ENVIRONMENT}:"
+        f"project={PROJECT}:environment={environment}:"
         f"event-from={event_from}:event-through={event_through}:"
         f"partitions={settings['rolling_partition_days']}"
     )

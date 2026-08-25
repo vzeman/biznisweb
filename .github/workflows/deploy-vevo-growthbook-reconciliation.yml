@@ -1,10 +1,18 @@
-name: Deploy VEVO GrowthBook Preview Reconciliation
+name: Deploy VEVO GrowthBook Reconciliation
 
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: Exact isolated GrowthBook environment to reconcile
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - preview
       confirm_deploy:
-        description: Type true to create/update the disabled-first Preview schedule stack
+        description: Type true to create/update the disabled-first selected schedule stack
         required: true
         default: 'false'
         type: choice
@@ -21,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vevo-growthbook-reconciliation-preview
+  group: vevo-growthbook-reconciliation-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
@@ -32,14 +40,21 @@ jobs:
     env:
       EXPECTED_ACCOUNT_ID: '919341186960'
       AWS_REGION: eu-central-1
-      COLLECTOR_STACK_NAME: vevo-growthbook-preview
-      STACK_NAME: vevo-growthbook-reconciliation-preview
+      RECONCILIATION_ENVIRONMENT: ${{ inputs.environment }}
+      COLLECTOR_STACK_NAME: ${{ inputs.environment == 'production' && 'vevo-growthbook-production' || 'vevo-growthbook-preview' }}
+      STACK_NAME: ${{ format('vevo-growthbook-reconciliation-{0}', inputs.environment) }}
       SOURCE_SCHEDULE: vevo-daily-report-email
       SOURCE_TASK_FAMILY: vevo-reporting-daily
-      TARGET_TASK_FAMILY: vevo-growthbook-reconcile-preview
+      TARGET_TASK_FAMILY: ${{ format('vevo-growthbook-reconcile-{0}', inputs.environment) }}
       EXPECTED_TASK_ROLE: BiznisWebReportingTaskRole-vevo
-      SCHEDULE_NAME: vevo-growthbook-reconcile-preview
+      SCHEDULE_NAME: ${{ format('vevo-growthbook-reconcile-{0}', inputs.environment) }}
+      SETTINGS_KEY: ${{ inputs.environment == 'production' && 'growthbook_reconciliation_production' || 'growthbook_reconciliation' }}
+      SCHEDULE_EXPRESSION: ${{ inputs.environment == 'production' && 'cron(45 3 * * ? *)' || 'cron(30 3 * * ? *)' }}
+      DLQ_NAME: ${{ format('vevo-growthbook-reconcile-{0}-dlq', inputs.environment) }}
+      SCHEDULER_ROLE_NAME: ${{ format('vevo-growthbook-reconcile-{0}-scheduler', inputs.environment) }}
       ECR_REPOSITORY: vevo-reporting
+      IMAGE_TAG: git-${{ github.sha }}
+      EVIDENCE_FILE: ${{ format('vevo-growthbook-{0}-reconciliation-deploy-evidence.json', inputs.environment) }}
       TEMPLATE_PATH: infra/vevo-growthbook-reconciliation/template.yaml
       SETTINGS_PATH: projects/vevo/settings.json
       RUNTIME_PATH: /app
@@ -77,12 +92,12 @@ jobs:
           import os
 
           settings = json.load(open(os.environ["SETTINGS_PATH"], encoding="utf-8"))
-          actual = settings.get("growthbook_reconciliation")
+          actual = settings.get(os.environ["SETTINGS_KEY"])
           expected = {
-              "environment": "preview",
+              "environment": os.environ["RECONCILIATION_ENVIRONMENT"],
               "stack_name": os.environ["STACK_NAME"],
               "schedule_name": os.environ["SCHEDULE_NAME"],
-              "schedule_expression": "cron(30 3 * * ? *)",
+              "schedule_expression": os.environ["SCHEDULE_EXPRESSION"],
               "timezone": "Europe/Bratislava",
               "rolling_partition_days": 40,
               "max_raw_events": 50000,
@@ -148,7 +163,7 @@ jobs:
 
           IMAGE_DIGEST="$(aws ecr describe-images \
             --repository-name "${ECR_REPOSITORY}" \
-            --image-ids imageTag=latest \
+            --image-ids imageTag="${IMAGE_TAG}" \
             --region "${AWS_REGION}" \
             --query 'imageDetails[0].imageDigest' \
             --output text)"
@@ -242,8 +257,11 @@ jobs:
               raise SystemExit(f"collector stack is not UPDATE_COMPLETE: {stack.get('StackStatus')}")
           parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack.get("Parameters") or []}
           outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs") or []}
-          if parameters.get("Environment") != "preview" or parameters.get("PublicRouteEnabled") != "true":
-              raise SystemExit("collector stack is not the active Preview boundary")
+          if (
+              parameters.get("Environment") != os.environ["RECONCILIATION_ENVIRONMENT"]
+              or parameters.get("PublicRouteEnabled") != "true"
+          ):
+              raise SystemExit("collector stack is not the selected active environment boundary")
           required_outputs = {"EventBucketName", "ReportingPolicyArn"}
           if not required_outputs.issubset(outputs):
               raise SystemExit("collector stack is missing reconciliation outputs")
@@ -328,10 +346,10 @@ jobs:
           import os
           print(json.dumps({"containerOverrides": [{
               "name": os.environ["CONTAINER_NAME"],
-              "command": ["/bin/bash", "/app/scripts/growthbook_preview_reconcile_host_gate.sh"],
+              "command": ["/bin/bash", "/app/scripts/growthbook_reconcile_host_gate.sh"],
               "environment": [
                   {"name": "REPORT_PROJECT", "value": "vevo"},
-                  {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                  {"name": "GROWTHBOOK_ENVIRONMENT", "value": os.environ["RECONCILIATION_ENVIRONMENT"]},
                   {"name": "GROWTHBOOK_RECONCILE_VERSION", "value": os.environ["IMAGE_DIGEST"]},
               ],
           }]}))
@@ -385,13 +403,14 @@ jobs:
               --log-stream-name "${HOST_LOG_STREAM}" \
               --start-from-head \
               --region "${AWS_REGION}" > host-gate-logs.json 2>/dev/null && \
-              python3 - "${IMAGE_DIGEST}" <<'PY'
+          python3 - "${IMAGE_DIGEST}" <<'PY'
           import json
+          import os
           import sys
           digest = sys.argv[1]
           messages = [row.get("message", "") for row in json.load(open("host-gate-logs.json", encoding="utf-8")).get("events") or []]
           required = {
-              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:preview:{digest}",
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:{os.environ['RECONCILIATION_ENVIRONMENT']}:{digest}",
               f"GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{digest}",
           }
           raise SystemExit(0 if all(any(marker in message for message in messages) for marker in required) else 1)
@@ -408,11 +427,12 @@ jobs:
           fi
           python3 - "${IMAGE_DIGEST}" <<'PY'
           import json
+          import os
           import sys
           digest = sys.argv[1]
           messages = [row.get("message", "") for row in json.load(open("host-gate-logs.json", encoding="utf-8")).get("events") or []]
           required = {
-              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:preview:{digest}",
+              f"GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:{os.environ['RECONCILIATION_ENVIRONMENT']}:{digest}",
               f"GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{digest}",
           }
           missing = sorted(marker for marker in required if not any(marker in message for message in messages))
@@ -499,16 +519,16 @@ jobs:
             --name "${SOURCE_SCHEDULE}" \
             --region "${AWS_REGION}" > failed-source-schedule.json 2>/dev/null || echo '{}' > failed-source-schedule.json
           aws sqs get-queue-url \
-            --queue-name vevo-growthbook-reconcile-preview-dlq \
+            --queue-name "${DLQ_NAME}" \
             --region "${AWS_REGION}" > failed-queue.json 2>/dev/null || echo '{}' > failed-queue.json
           aws iam get-role \
-            --role-name vevo-growthbook-reconcile-preview-scheduler \
+            --role-name "${SCHEDULER_ROLE_NAME}" \
             --region "${AWS_REGION}" > failed-role.json 2>/dev/null || echo '{}' > failed-role.json
           aws cloudwatch describe-alarms \
             --alarm-names \
-              vevo-growthbook-reconcile-preview-failure \
-              vevo-growthbook-reconcile-preview-missing-success \
-              vevo-growthbook-reconcile-preview-dlq \
+              "${SCHEDULE_NAME}-failure" \
+              "${SCHEDULE_NAME}-missing-success" \
+              "${SCHEDULE_NAME}-dlq" \
             --region "${AWS_REGION}" > failed-alarms.json 2>/dev/null || echo '{}' > failed-alarms.json
           python3 <<'PY'
           import json
@@ -579,7 +599,7 @@ jobs:
               "command": ["/bin/bash", "-lc", "cd /app && python scripts/run_scheduled_growthbook_reconciliation.py"],
               "environment": [
                   {"name": "REPORT_PROJECT", "value": "vevo"},
-                  {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                  {"name": "GROWTHBOOK_ENVIRONMENT", "value": os.environ["RECONCILIATION_ENVIRONMENT"]},
                   {"name": "GROWTHBOOK_EVENT_BUCKET", "value": os.environ["EVENT_BUCKET"]},
                   {"name": "GROWTHBOOK_FACT_PUBLISH_ENABLED", "value": "true"},
                   {"name": "AWS_REGION", "value": os.environ["AWS_REGION"]},
@@ -731,9 +751,9 @@ jobs:
           aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${AWS_REGION}" > deployed-stack.json
           aws cloudwatch describe-alarms \
             --alarm-names \
-              vevo-growthbook-reconcile-preview-failure \
-              vevo-growthbook-reconcile-preview-missing-success \
-              vevo-growthbook-reconcile-preview-dlq \
+              "${SCHEDULE_NAME}-failure" \
+              "${SCHEDULE_NAME}-missing-success" \
+              "${SCHEDULE_NAME}-dlq" \
             --region "${AWS_REGION}" > deployed-alarms.json
           python3 <<'PY'
           import json
@@ -748,7 +768,7 @@ jobs:
           expected_state = "ENABLED" if os.environ["ENABLE_SCHEDULE"] == "true" else "DISABLED"
           if schedule.get("Name") != os.environ["SCHEDULE_NAME"] or schedule.get("State") != expected_state:
               raise SystemExit("reconciliation schedule identity/state drift")
-          if schedule.get("ScheduleExpression") != "cron(30 3 * * ? *)":
+          if schedule.get("ScheduleExpression") != os.environ["SCHEDULE_EXPRESSION"]:
               raise SystemExit("reconciliation schedule expression drift")
           if schedule.get("ScheduleExpressionTimezone") != "Europe/Bratislava":
               raise SystemExit("reconciliation schedule timezone drift")
@@ -772,7 +792,7 @@ jobs:
                   "command": ["/bin/bash", "-lc", "cd /app && python scripts/run_scheduled_growthbook_reconciliation.py"],
                   "environment": [
                       {"name": "REPORT_PROJECT", "value": "vevo"},
-                      {"name": "GROWTHBOOK_ENVIRONMENT", "value": "preview"},
+                      {"name": "GROWTHBOOK_ENVIRONMENT", "value": os.environ["RECONCILIATION_ENVIRONMENT"]},
                       {"name": "GROWTHBOOK_EVENT_BUCKET", "value": os.environ["EVENT_BUCKET"]},
                       {"name": "GROWTHBOOK_FACT_PUBLISH_ENABLED", "value": "true"},
                       {"name": "AWS_REGION", "value": os.environ["AWS_REGION"]},
@@ -790,20 +810,120 @@ jobs:
               raise SystemExit("reconciliation stack task output drift")
           alarms = json.load(open("deployed-alarms.json", encoding="utf-8")).get("MetricAlarms") or []
           if {row.get("AlarmName") for row in alarms} != {
-              "vevo-growthbook-reconcile-preview-failure",
-              "vevo-growthbook-reconcile-preview-missing-success",
-              "vevo-growthbook-reconcile-preview-dlq",
+              f"{os.environ['SCHEDULE_NAME']}-failure",
+              f"{os.environ['SCHEDULE_NAME']}-missing-success",
+              f"{os.environ['SCHEDULE_NAME']}-dlq",
           }:
               raise SystemExit("reconciliation alarms missing")
           PY
           echo "GROWTHBOOK_RECONCILIATION_SCHEDULE_READBACK_OK:${SCHEDULE_NAME}:${CANDIDATE_TASK_DEFINITION}:${ENABLE_SCHEDULE}"
+
+      - name: Build sanitized deployment evidence
+        shell: bash
+        env:
+          ENABLE_SCHEDULE: ${{ inputs.enable_schedule }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def integer(name):
+              value = int(os.environ[name])
+              if value < 0:
+                  raise SystemExit(f"negative reconciliation evidence count: {name}")
+              return value
+
+          environment = os.environ["RECONCILIATION_ENVIRONMENT"]
+          if environment not in {"preview", "production"}:
+              raise SystemExit("reconciliation evidence environment drift")
+          evidence = {
+              "schema_version": 1,
+              "evidence_type": "vevo_growthbook_reconciliation_deploy",
+              "environment": environment,
+              "observed_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "source_run_id": os.environ["GITHUB_RUN_ID"],
+              "source_main_commit": os.environ["GITHUB_SHA"],
+              "aws": {
+                  "account_id": os.environ["EXPECTED_ACCOUNT_ID"],
+                  "region": os.environ["AWS_REGION"],
+                  "collector_stack": os.environ["COLLECTOR_STACK_NAME"],
+                  "reconciliation_stack": os.environ["STACK_NAME"],
+              },
+              "source_runtime": {
+                  "instance_id": "N/A:Fargate",
+                  "service": os.environ["SOURCE_SCHEDULE"],
+                  "task_definition": os.environ["SOURCE_TASK_DEFINITION"],
+                  "source_schedule_unchanged": True,
+              },
+              "host_gate": {
+                  "instance_id": "N/A:Fargate",
+                  "private_ip": os.environ["HOST_PRIVATE_IP"],
+                  "service": os.environ["SCHEDULE_NAME"],
+                  "task_id": os.environ["HOST_TASK_ID"],
+                  "runtime_path": os.environ["RUNTIME_PATH"],
+                  "localhost_health_verified": True,
+                  "localhost_marker_verified": True,
+              },
+              "reconciliation": {
+                  "task_definition": os.environ["CANDIDATE_TASK_DEFINITION"],
+                  "image_digest": os.environ["IMAGE_DIGEST"],
+                  "one_shot_task_id": os.environ["RECONCILIATION_TASK_ID"],
+                  "one_shot_private_ip": os.environ["RECONCILIATION_PRIVATE_IP"],
+                  "raw_events": integer("RAW_EVENTS"),
+                  "device_facts": integer("DEVICE_FACTS"),
+                  "performance_facts": integer("PERFORMANCE_FACTS"),
+                  "quality_reports": integer("QUALITY_REPORTS"),
+                  "curated_fact_publish_verified": True,
+              },
+              "schedule": {
+                  "name": os.environ["SCHEDULE_NAME"],
+                  "expression": os.environ["SCHEDULE_EXPRESSION"],
+                  "timezone": "Europe/Bratislava",
+                  "enabled": os.environ["ENABLE_SCHEDULE"] == "true",
+                  "dlq": os.environ["DLQ_NAME"],
+                  "failure_alarm": f"{os.environ['SCHEDULE_NAME']}-failure",
+                  "missing_success_alarm": f"{os.environ['SCHEDULE_NAME']}-missing-success",
+                  "dlq_alarm": f"{os.environ['SCHEDULE_NAME']}-dlq",
+              },
+              "boundaries": {
+                  "raw_event_delete_performed": False,
+                  "collector_mutated": False,
+                  "growthbook_experiment_mutated": False,
+                  "gtm_mutated": False,
+                  "meta_ads_mutated": False,
+                  "biznisweb_mutated": False,
+                  "price_product_cart_checkout_or_order_mutated": False,
+              },
+              "contains_raw_aws_payloads": False,
+              "contains_cloudwatch_messages": False,
+              "contains_event_device_customer_or_order_ids": False,
+              "contains_credentials": False,
+          }
+          output = Path(os.environ["EVIDENCE_FILE"])
+          output.write_text(
+              json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(f"GROWTHBOOK_RECONCILIATION_EVIDENCE_OK:{output}")
+          PY
+
+      - name: Upload sanitized deployment evidence only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ${{ format('vevo-growthbook-{0}-reconciliation-deploy', inputs.environment) }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Deployment summary
         if: ${{ always() }}
         shell: bash
         run: |
           {
-            echo "## VEVO GrowthBook Preview reconciliation"
+            echo "## VEVO GrowthBook ${RECONCILIATION_ENVIRONMENT} reconciliation"
             echo "- Instance: \`N/A (ECS/Fargate)\`"
             echo "- Service: \`${SCHEDULE_NAME}\`"
             echo "- Runtime: \`${RUNTIME_PATH}\`"
@@ -811,6 +931,6 @@ jobs:
             echo "- Reconcile task/IP: \`${RECONCILIATION_TASK_ID:-not-run}\` / \`${RECONCILIATION_PRIVATE_IP:-not-run}\`"
             echo "- Image: \`${IMAGE_IDENTIFIER:-not-resolved}\`"
             echo "- Raw/device/performance/quality: \`${RAW_EVENTS:-not-run}\` / \`${DEVICE_FACTS:-not-run}\` / \`${PERFORMANCE_FACTS:-not-run}\` / \`${QUALITY_REPORTS:-not-run}\`"
-            echo "- Production GrowthBook allocation: \`0%\` (unchanged)"
-            echo "- GTM: unpublished (unchanged)"
+            echo "- GrowthBook experiment allocation: unchanged"
+            echo "- GTM: unchanged"
           } >> "${GITHUB_STEP_SUMMARY}"
