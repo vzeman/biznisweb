@@ -44,6 +44,7 @@ HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_RE = re.compile(r"^[1-9][0-9]*$")
 TASK_RE = re.compile(r"^vevo-growthbook-collector-production:[1-9][0-9]*$")
+TASK_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 IMAGE_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 EXPECTED_PATHS = {
@@ -287,15 +288,20 @@ def validate_runtime_observation(observation: Mapping[str, Any], manifest: Mappi
     _require(isinstance(workflow["run_id"], str) and RUN_RE.fullmatch(workflow["run_id"]) is not None, "runtime workflow run ID is invalid")
     _require(isinstance(workflow["main_commit"], str) and COMMIT_RE.fullmatch(workflow["main_commit"]) is not None, "runtime workflow main commit is invalid")
     _require(workflow["conclusion"] == "success", "CTA runtime workflow did not succeed")
-    runtime = _exact_object(root["runtime"], {"instance_id", "private_ip", "service", "runtime_path", "task_definition", "image_digest", "localhost_marker_verified", "target_health"}, "runtime")
+    runtime = _exact_object(root["runtime"], {"instance_id", "private_ip", "service", "runtime_path", "task_definition", "image_digest", "host_gate_task_id", "host_gate_private_ip", "localhost_marker_verified", "target_health"}, "runtime")
     _require(runtime["instance_id"] == "N/A:Fargate", "CTA runtime instance drift")
     try:
         ipaddress.IPv4Address(runtime["private_ip"])
     except (ipaddress.AddressValueError, TypeError) as exc:
         raise CtaActivationRecordingError("CTA runtime private IP is invalid") from exc
+    try:
+        ipaddress.IPv4Address(runtime["host_gate_private_ip"])
+    except (ipaddress.AddressValueError, TypeError) as exc:
+        raise CtaActivationRecordingError("CTA host-gate private IP is invalid") from exc
     _require(runtime["service"] == "vevo-growthbook-collector-production", "CTA runtime service drift")
     _require(runtime["runtime_path"] == "/app", "CTA runtime path drift")
     _require(isinstance(runtime["task_definition"], str) and TASK_RE.fullmatch(runtime["task_definition"]) is not None, "CTA task definition is invalid")
+    _require(isinstance(runtime["host_gate_task_id"], str) and TASK_ID_RE.fullmatch(runtime["host_gate_task_id"]) is not None, "CTA host-gate task ID is invalid")
     _require(isinstance(runtime["image_digest"], str) and IMAGE_RE.fullmatch(runtime["image_digest"]) is not None, "CTA runtime image digest is invalid")
     _require(runtime["localhost_marker_verified"] is True, "CTA localhost marker is not verified")
     _require(runtime["target_health"] == "healthy", "CTA runtime target is not healthy")

@@ -7,6 +7,10 @@ import unittest
 from pathlib import Path
 
 from scripts import record_growthbook_cta_activation as recorder
+from scripts import build_growthbook_cta_runtime_readiness as runtime_builder
+from scripts import validate_growthbook_cta_runtime_release as release_validator
+from scripts.record_growthbook_aa_completion import canonical_json_bytes as aa_canonical_json_bytes
+from tests.test_growthbook_aa_completion_recorder import stop_observation
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,6 +123,8 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 "runtime_path": "/app",
                 "task_definition": "vevo-growthbook-collector-production:3",
                 "image_digest": "sha256:" + "e" * 64,
+                "host_gate_task_id": "a" * 32,
+                "host_gate_private_ip": "172.31.20.41",
                 "localhost_marker_verified": True,
                 "target_health": "healthy",
             },
@@ -142,6 +148,24 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 "price_product_cart_checkout_order_mutated": False,
             },
         }
+
+    def _release_stop_observation(self) -> tuple[dict, bytes]:
+        decision_hash = "f" * 64
+        self.completion["aa_pass"].update(
+            {
+                "decision_sha256": decision_hash,
+                "evaluated_at_utc": "2026-09-01T22:00:00Z",
+            }
+        )
+        observation = stop_observation(
+            snapshot_sha256=self.snapshot_artifact_hash,
+            decision_sha256=decision_hash,
+        )
+        raw = aa_canonical_json_bytes(observation)
+        self.completion["stop_readback"]["observation_sha256"] = hashlib.sha256(
+            raw
+        ).hexdigest()
+        return observation, raw
 
     def _start_observation(self) -> dict:
         return {
@@ -244,6 +268,83 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 if key != "manual_growthbook_start_allowed"
             )
         )
+
+    def test_runtime_release_gate_accepts_only_post_aa_cta_only_state(self) -> None:
+        observation, raw = self._release_stop_observation()
+        release_validator.validate_release_state(
+            manifest=self.activation,
+            completion=self.completion,
+            snapshot=self.snapshot,
+            sample=self.sample,
+            lifecycle=self.lifecycle,
+            workspace=self.workspace,
+            registry=self.registry,
+            stop_observation=observation,
+            stop_observation_raw=raw,
+            design_sha256=recorder.EXPECTED_STATIC_HASHES["design_contract"],
+            decision_sha256=recorder.EXPECTED_STATIC_HASHES["decision_contract"],
+            registry_sha256=self.registry_hash,
+            storefront_source="var PRODUCTION_ACTIVATION = false;\n",
+        )
+
+        unsafe = copy.deepcopy(observation)
+        unsafe["gtm"]["unprocessed_changes"]["added"] = 1
+        with self.assertRaisesRegex(Exception, "unprocessed changes"):
+            release_validator.validate_release_state(
+                manifest=self.activation,
+                completion=self.completion,
+                snapshot=self.snapshot,
+                sample=self.sample,
+                lifecycle=self.lifecycle,
+                workspace=self.workspace,
+                registry=self.registry,
+                stop_observation=unsafe,
+                stop_observation_raw=aa_canonical_json_bytes(unsafe),
+                design_sha256=recorder.EXPECTED_STATIC_HASHES["design_contract"],
+                decision_sha256=recorder.EXPECTED_STATIC_HASHES["decision_contract"],
+                registry_sha256=self.registry_hash,
+                storefront_source="var PRODUCTION_ACTIVATION = false;\n",
+            )
+
+    def test_runtime_observation_builder_is_canonical_contract_compatible(self) -> None:
+        registry_raw = recorder.canonical_json_bytes(self.registry)
+        built = runtime_builder.build_observation(
+            manifest=self.activation,
+            registry_raw=registry_raw,
+            registry=self.registry,
+            workflow_run_id="40000000001",
+            main_commit="d" * 40,
+            private_ip="172.31.20.40",
+            host_gate_task_id="a" * 32,
+            host_gate_private_ip="172.31.20.41",
+            task_definition="vevo-growthbook-collector-production:3",
+            image_digest="sha256:" + "e" * 64,
+            cta_events_before_start=0,
+            observed_at_utc="2026-09-04T06:00:00Z",
+        )
+        recorder.validate_runtime_observation(built, self.activation)
+        self.assertEqual(
+            hashlib.sha256(registry_raw).hexdigest(),
+            built["control_plane"]["registry_sha256"],
+        )
+        with self.assertRaisesRegex(
+            runtime_builder.CtaRuntimeObservationError,
+            "events exist",
+        ):
+            runtime_builder.build_observation(
+                manifest=self.activation,
+                registry_raw=registry_raw,
+                registry=self.registry,
+                workflow_run_id="40000000001",
+                main_commit="d" * 40,
+                private_ip="172.31.20.40",
+                host_gate_task_id="a" * 32,
+                host_gate_private_ip="172.31.20.41",
+                task_definition="vevo-growthbook-collector-production:3",
+                image_digest="sha256:" + "e" * 64,
+                cta_events_before_start=1,
+                observed_at_utc="2026-09-04T06:00:00Z",
+            )
 
     def test_open_review_binds_all_sources_and_only_manual_start(self) -> None:
         opened = self._open()

@@ -57,15 +57,23 @@ An A/A `PASS` is not a CTA winner and does not start the CTA automatically.
 
 The Production collector registry must be changed through Git/PR from the old
 A/A-only allowlist to exactly the reviewed Preview CTA contract. Build and
-deploy the immutable collector image through the protected deployment path.
+deploy the immutable collector image only through the main-only, explicitly
+confirmed workflow
+`.github/workflows/deploy-vevo-growthbook-production-cta-runtime.yml`. The
+workflow is intentionally unusable while this repository still contains the
+running-A/A state or A/A-only Production registry: its complete post-A/A gate
+runs before AWS credentials. The existing public `POST /v1/events` route must
+remain enabled and byte-identical; the rollout may change only the
+CloudFormation-managed collector task definition/service runtime.
 Before any UI action, apply the infrastructure hard gate and record:
 
 - instance ID: `N/A:Fargate`;
-- exact private IP of the running task;
+- exact private IP of the healthy service task;
 - service: `vevo-growthbook-collector-production`;
 - runtime path: `/app`;
 - exact task definition and immutable image digest;
-- direct `curl` to the task's localhost `/health` and `/marker.json`;
+- the separate exact host-gate task ID/private IP used for direct localhost
+  `curl` to `/health` and `/marker.json`;
 - marker/readback that the packaged Production registry contains only
   `vevo-sk-product-cta-color-001` and exactly matches the checked-in registry;
 - healthy target readback;
@@ -75,9 +83,20 @@ Before any UI action, apply the infrastructure hard gate and record:
 
 Only after those checks may a protected main-branch workflow emit the canonical,
 identity-free file
-`projects/vevo/growthbook_cta_runtime_readiness_observation.json`. Raw AWS,
+`vevo-growthbook-cta-runtime-readiness.json` as its only uploaded artifact. Raw AWS,
 CloudWatch, ECS, and query responses must remain temporary and must not be
-committed or uploaded with the canonical artifact.
+committed or uploaded with the canonical artifact. Independently download that
+artifact, verify the successful workflow run/main commit and SHA-256, then place
+the byte-identical file at
+`projects/vevo/growthbook_cta_runtime_readiness_observation.json` through a
+separate reviewed PR; do not copy fields from the GitHub UI or reconstruct it.
+
+If any post-update host, target, route, isolation, zero-event, canonical-build,
+cleanup, or upload gate fails, the workflow restores the exact preceding image
+and collector version through another validated CloudFormation candidate
+change set, preserves the public route, waits for a healthy service, and runs
+that preceding image's localhost health/`/app` marker gate. This rollback never
+changes GrowthBook, GTM, Meta Ads, BiznisWeb, prices, cart, checkout, or orders.
 
 ## Gate 3 — open the manual start review offline
 

@@ -1,0 +1,800 @@
+name: Deploy VEVO GrowthBook Production CTA Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: Confirm the reviewed CTA-only runtime rollout with zero GrowthBook allocation
+        required: true
+        default: false
+        type: boolean
+      expected_main_commit:
+        description: Exact reviewed 40-character main commit to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-cta-runtime
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: "919341186960"
+  STACK_NAME: vevo-growthbook-production
+  ECR_REPOSITORY: vevo-growthbook-collector
+  SERVICE_NAME: vevo-growthbook-collector-production
+  RUNTIME_PATH: /app
+  REGISTRY_MANIFEST: growthbook_collector/experiments.json
+  EVIDENCE_FILE: vevo-growthbook-cta-runtime-readiness.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy-cta-runtime:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout exact reviewed main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fail closed on all post-A/A CTA gates before AWS credentials
+        env:
+          CONFIRM_DEPLOY: ${{ inputs.confirm_deploy }}
+          EXPECTED_MAIN_COMMIT_INPUT: ${{ inputs.expected_main_commit }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_DEPLOY}" == "true" ]]
+          [[ "${EXPECTED_MAIN_COMMIT_INPUT}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${EXPECTED_MAIN_COMMIT_INPUT}" == "${GITHUB_SHA}" ]]
+          python scripts/validate_growthbook_cta_runtime_release.py
+          python scripts/validate_growthbook_workspace.py
+          python scripts/security_ci.py
+          python -m unittest \
+            tests.test_growthbook_collector \
+            tests.test_growthbook_collector_server \
+            tests.test_growthbook_collector_runtime_marker \
+            tests.test_growthbook_changeset \
+            tests.test_growthbook_cta_activation_recorder \
+            tests.test_growthbook_workspace
+          REGISTRY_SHA256="$(python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          print(hashlib.sha256(Path('growthbook_collector/experiments.json').read_bytes()).hexdigest())
+          PY
+          )"
+          export REGISTRY_SHA256
+          echo "REGISTRY_SHA256=${REGISTRY_SHA256}" >> "${GITHUB_ENV}"
+          docker build -f growthbook_collector/Dockerfile -t vevo-growthbook-collector:cta-runtime-preflight .
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            -e AWS_ACCESS_KEY_ID=preflight-placeholder \
+            -e AWS_SECRET_ACCESS_KEY=preflight-placeholder \
+            -e AWS_EC2_METADATA_DISABLED=true \
+            -e AWS_REGION=eu-central-1 \
+            -e GROWTHBOOK_ALLOWED_ORIGINS=https://www.vevo.sk \
+            -e GROWTHBOOK_COLLECTOR_VERSION="git-${GITHUB_SHA}" \
+            -e GROWTHBOOK_ENVIRONMENT=production \
+            -e GROWTHBOOK_EVENT_BUCKET=preflight-placeholder \
+            -e GROWTHBOOK_EXPERIMENT_REGISTRY_PATH=/app/growthbook_collector/experiments.json \
+            vevo-growthbook-collector:cta-runtime-preflight \
+            /bin/sh /app/growthbook_collector/host_gate.sh | tee cta-runtime-preflight.log
+          grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:production:git-${GITHUB_SHA}" cta-runtime-preflight.log
+          grep -F "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}" cta-runtime-preflight.log
+          grep -F "COLLECTOR_REGISTRY_OK:production:${REGISTRY_SHA256}:vevo-sk-product-cta-color-001" cta-runtime-preflight.log
+          echo "VEVO_CTA_RUNTIME_LOCAL_GATE_OK:aa=stopped:cta=zero:gtm=15-clean:registry=cta-only"
+
+      - name: Configure authenticated AWS deployment identity
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm exact current Fargate instance IP service and path before code deploy
+        run: |
+          set -euo pipefail
+          TEMP_DIR="${RUNNER_TEMP}/vevo-cta-runtime-${GITHUB_RUN_ID}"
+          export TEMP_DIR
+          mkdir -m 700 "${TEMP_DIR}"
+          echo "TEMP_DIR=${TEMP_DIR}" >> "${GITHUB_ENV}"
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/stack-before.json"
+          python - <<'PY' > "${TEMP_DIR}/stack.env"
+          import json
+          import os
+          import re
+          from urllib.parse import urlparse
+
+          base = os.environ['TEMP_DIR']
+          stack = json.load(open(f'{base}/stack-before.json', encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackName') != os.environ['STACK_NAME'] or stack.get('StackStatus') != 'UPDATE_COMPLETE':
+              raise SystemExit('Production collector stack identity/status drift')
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          if parameters.get('Environment') != 'production' or parameters.get('PublicRouteEnabled') != 'true':
+              raise SystemExit('Production collector route must already be enabled')
+          expected_parameter_keys = {
+              'AllowedOrigin', 'CollectorImageUri', 'CollectorVersion', 'CuratedRetentionDays',
+              'Environment', 'PublicRouteEnabled', 'QueryResultRetentionDays',
+              'RawProjectionStartDate', 'RawRetentionDays', 'ServiceSubnetIds',
+              'TaskAssignPublicIp', 'VpcId',
+          }
+          if set(parameters) != expected_parameter_keys or parameters['AllowedOrigin'] != 'https://www.vevo.sk':
+              raise SystemExit('Production stack parameter contract drift')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorApiBaseUrl', 'CollectorEndpoint', 'CollectorClusterArn',
+              'CollectorContainerLogGroup', 'CollectorHostMarkerPath', 'CollectorServiceArn',
+              'CollectorServiceName', 'CollectorTaskDefinitionArn', 'EventBucketName',
+              'ExperimentDatabaseName', 'ReportingWorkGroupName',
+          }
+          if not required.issubset(outputs):
+              raise SystemExit('Production stack outputs are incomplete')
+          if outputs['CollectorServiceName'] != os.environ['SERVICE_NAME']:
+              raise SystemExit('Production collector service output drift')
+          if outputs['CollectorHostMarkerPath'] != 'http://127.0.0.1:8080/marker.json':
+              raise SystemExit('Production collector localhost marker path drift')
+          endpoint = outputs['CollectorEndpoint']
+          api_base = outputs['CollectorApiBaseUrl']
+          if endpoint != f'{api_base}/v1/events':
+              raise SystemExit('Production collector endpoint drift')
+          api_id = (urlparse(api_base).hostname or '').split('.', 1)[0]
+          if not re.fullmatch(r'[a-z0-9]+', api_id):
+              raise SystemExit('Production API identity is invalid')
+          mapping = {
+              'PRODUCTION_API_BASE_URL': api_base,
+              'PRODUCTION_ENDPOINT': endpoint,
+              'PRODUCTION_API_ID': api_id,
+              'PRODUCTION_CLUSTER_ARN': outputs['CollectorClusterArn'],
+              'PRODUCTION_LOG_GROUP': outputs['CollectorContainerLogGroup'],
+              'PRODUCTION_SERVICE_ARN': outputs['CollectorServiceArn'],
+              'PRODUCTION_TASK_DEFINITION_ARN': outputs['CollectorTaskDefinitionArn'],
+              'PRODUCTION_EVENT_BUCKET': outputs['EventBucketName'],
+              'PRODUCTION_DATABASE': outputs['ExperimentDatabaseName'],
+              'PRODUCTION_WORKGROUP': outputs['ReportingWorkGroupName'],
+              'PREVIOUS_IMAGE_IDENTIFIER': parameters['CollectorImageUri'],
+              'PREVIOUS_COLLECTOR_VERSION': parameters['CollectorVersion'],
+          }
+          for key, value in mapping.items():
+              if '\n' in value or '\r' in value:
+                  raise SystemExit(f'unsafe stack value: {key}')
+              print(f'{key}={value}')
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+            echo "${key}=${value}" >> "${GITHUB_ENV}"
+          done < "${TEMP_DIR}/stack.env"
+          aws apigatewayv2 get-routes --api-id "${PRODUCTION_API_ID}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/routes-before.json"
+          aws ecs describe-services --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_ARN}" --region "${AWS_REGION}" \
+            > "${TEMP_DIR}/service-before.json"
+          CURRENT_TASK_ARN="$(aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" --desired-status RUNNING --region "${AWS_REGION}" \
+            --query 'taskArns[0]' --output text)"
+          [[ -n "${CURRENT_TASK_ARN}" && "${CURRENT_TASK_ARN}" != "None" ]]
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --tasks "${CURRENT_TASK_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task-before.json"
+          aws ecs describe-task-definition --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task-definition-before.json"
+          python - <<'PY' > "${TEMP_DIR}/predeploy.env"
+          import ipaddress
+          import json
+          import os
+          import re
+
+          base = os.environ['TEMP_DIR']
+          service = json.load(open(f'{base}/service-before.json', encoding='utf-8'))['services'][0]
+          task = json.load(open(f'{base}/task-before.json', encoding='utf-8'))['tasks'][0]
+          definition = json.load(open(f'{base}/task-definition-before.json', encoding='utf-8'))['taskDefinition']
+          routes = json.load(open(f'{base}/routes-before.json', encoding='utf-8')).get('Items') or []
+          if len(routes) != 1 or routes[0].get('RouteKey') != 'POST /v1/events' or routes[0].get('AuthorizationType') != 'NONE':
+              raise SystemExit('Production collector route identity drift')
+          if service.get('serviceName') != os.environ['SERVICE_NAME'] or service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Production collector service is not exact healthy 1/1')
+          if service.get('taskDefinition') != os.environ['PRODUCTION_TASK_DEFINITION_ARN']:
+              raise SystemExit('Production service task definition drift')
+          containers = definition.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != 'collector':
+              raise SystemExit('Production collector container definition drift')
+          container = containers[0]
+          if container.get('image') != os.environ['PREVIOUS_IMAGE_IDENTIFIER']:
+              raise SystemExit('Production stack/image definition drift')
+          environment = {row['name']: row['value'] for row in container.get('environment') or []}
+          if environment.get('GROWTHBOOK_ENVIRONMENT') != 'production' or environment.get('GROWTHBOOK_EXPERIMENT_REGISTRY_PATH') != '/app/growthbook_collector/experiments.json':
+              raise SystemExit('Production collector runtime path/environment drift')
+          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(task.get('containers') or []) != 1:
+              raise SystemExit('Production runtime task identity drift')
+          digest = task['containers'][0].get('imageDigest')
+          if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+              raise SystemExit('Production previous image digest is invalid')
+          if not os.environ['PREVIOUS_IMAGE_IDENTIFIER'].endswith(f'@{digest}'):
+              raise SystemExit('Production previous image is not digest-pinned')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit(f'Production previous task private IP drift: {private_ips}')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          print(f'PREVIOUS_IMAGE_DIGEST={digest}')
+          print(
+              'PREDEPLOY_MARKER=VEVO_CTA_PREDEPLOY_HARD_GATE_OK:'
+              f'instance-id=N/A:Fargate:private-ip={private_ips[0]}:'
+              f'service={os.environ["SERVICE_NAME"]}:path=/app:task={task_id}:'
+              f'task-definition={os.environ["PRODUCTION_TASK_DEFINITION_ARN"].rsplit("/", 1)[-1]}:'
+              f'image={digest}:route=POST_/v1/events:aa=0:cta=0'
+          )
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+            echo "${key}=${value}" >> "${GITHUB_ENV}"
+          done < "${TEMP_DIR}/predeploy.env"
+          echo "${PREDEPLOY_MARKER}"
+
+      - name: Build and publish the immutable CTA-only collector image
+        run: |
+          set -euo pipefail
+          aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/repository.json"
+          python - <<'PY'
+          import json
+          import os
+          repository = json.load(open(f"{os.environ['TEMP_DIR']}/repository.json", encoding='utf-8'))['repositories'][0]
+          expected_prefix = f"arn:aws:ecr:{os.environ['AWS_REGION']}:{os.environ['EXPECTED_ACCOUNT_ID']}:repository/"
+          if repository.get('repositoryName') != os.environ['ECR_REPOSITORY'] or not repository.get('repositoryArn', '').startswith(expected_prefix):
+              raise SystemExit('collector ECR repository identity drift')
+          if repository.get('imageTagMutability') != 'IMMUTABLE':
+              raise SystemExit('collector ECR tags are not immutable')
+          if repository.get('imageScanningConfiguration', {}).get('scanOnPush') is not True:
+              raise SystemExit('collector ECR scan-on-push drift')
+          if repository.get('encryptionConfiguration', {}).get('encryptionType') != 'AES256':
+              raise SystemExit('collector ECR encryption drift')
+          PY
+          REGISTRY="${EXPECTED_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          TAG="git-${GITHUB_SHA}"
+          TAGGED_IMAGE="${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+          aws ecr get-login-password --region "${AWS_REGION}" | \
+            docker login --username AWS --password-stdin "${REGISTRY}"
+          if ! aws ecr describe-images --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${TAG}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            docker build -f growthbook_collector/Dockerfile -t "${TAGGED_IMAGE}" .
+            docker push "${TAGGED_IMAGE}"
+          fi
+          IMAGE_DIGEST="$(aws ecr describe-images --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${TAG}" --query 'imageDetails[0].imageDigest' \
+            --output text --region "${AWS_REGION}")"
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          IMAGE_IDENTIFIER="${REGISTRY}/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> "${GITHUB_ENV}"
+          echo "IMAGE_IDENTIFIER=${IMAGE_IDENTIFIER}" >> "${GITHUB_ENV}"
+          echo "VEVO_CTA_COLLECTOR_IMAGE_OK:${TAG}:${IMAGE_DIGEST}"
+
+      - name: Prepare exact route-preserving candidate and rollback parameters
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          base = os.environ['TEMP_DIR']
+          stack = json.load(open(f'{base}/stack-before.json', encoding='utf-8'))['Stacks'][0]
+          previous = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          candidate = dict(previous)
+          candidate['CollectorImageUri'] = os.environ['IMAGE_IDENTIFIER']
+          candidate['CollectorVersion'] = f"git-{os.environ['GITHUB_SHA']}"
+          candidate['Environment'] = 'production'
+          candidate['PublicRouteEnabled'] = 'true'
+          if previous['PublicRouteEnabled'] != 'true':
+              raise SystemExit('rollback would not preserve the existing public route')
+          def write(name, payload):
+              rows = [{'ParameterKey': key, 'ParameterValue': value} for key, value in sorted(payload.items())]
+              with open(f'{base}/{name}', 'w', encoding='utf-8') as handle:
+                  json.dump(rows, handle, separators=(',', ':'))
+          write('candidate-parameters.json', candidate)
+          write('rollback-parameters.json', previous)
+          PY
+
+      - name: Update only the route-preserving collector runtime
+        run: |
+          set -euo pipefail
+          CHANGE_SET="production-cta-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --change-set-type UPDATE \
+            --template-body file://infra/vevo-growthbook/template.yaml \
+            --parameters "file://${TEMP_DIR}/candidate-parameters.json" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --description "Route-preserving VEVO CTA-only collector runtime ${GITHUB_SHA}" \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation describe-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --include-property-values \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/candidate-change-set.json"
+          if ! python scripts/validate_growthbook_changeset.py \
+            --change-set "${TEMP_DIR}/candidate-change-set.json" \
+            --change-set-type UPDATE --phase candidate; then
+            aws cloudformation delete-change-set --stack-name "${STACK_NAME}" \
+              --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}" || true
+            exit 1
+          fi
+          aws cloudformation execute-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation wait stack-update-complete --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}"
+          echo "RUNTIME_UPDATED=true" >> "${GITHUB_ENV}"
+
+      - name: Resolve candidate runtime and run the direct localhost registry hard gate
+        run: |
+          set -euo pipefail
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/stack-candidate.json"
+          aws ecs wait services-stable --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_ARN}" --region "${AWS_REGION}"
+          aws ecs describe-services --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_ARN}" --region "${AWS_REGION}" \
+            > "${TEMP_DIR}/service-candidate.json"
+          python - <<'PY'
+          import json
+          import os
+          base = os.environ['TEMP_DIR']
+          stack = json.load(open(f'{base}/stack-candidate.json', encoding='utf-8'))['Stacks'][0]
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          if stack.get('StackStatus') != 'UPDATE_COMPLETE' or parameters.get('PublicRouteEnabled') != 'true':
+              raise SystemExit('CTA candidate stack/route drift')
+          if parameters.get('CollectorImageUri') != os.environ['IMAGE_IDENTIFIER'] or parameters.get('CollectorVersion') != f"git-{os.environ['GITHUB_SHA']}":
+              raise SystemExit('CTA candidate image/version parameter drift')
+          if outputs.get('CollectorEndpoint') != os.environ['PRODUCTION_ENDPOINT']:
+              raise SystemExit('CTA rollout changed the public endpoint')
+          service = json.load(open(f'{base}/service-candidate.json', encoding='utf-8'))['services'][0]
+          if service.get('serviceName') != os.environ['SERVICE_NAME'] or service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('CTA candidate service is not exact healthy 1/1')
+          if service.get('taskDefinition') != outputs.get('CollectorTaskDefinitionArn'):
+              raise SystemExit('CTA candidate service/task-definition drift')
+          with open(f'{base}/network.json', 'w', encoding='utf-8') as handle:
+              json.dump(service['networkConfiguration'], handle, separators=(',', ':'))
+          with open(f'{base}/candidate-runtime.env', 'w', encoding='utf-8') as handle:
+              handle.write(f"PRODUCTION_TASK_DEFINITION_ARN={outputs['CollectorTaskDefinitionArn']}\n")
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+            echo "${key}=${value}" >> "${GITHUB_ENV}"
+          done < "${TEMP_DIR}/candidate-runtime.env"
+          aws ecs describe-task-definition --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/task-definition-candidate.json"
+          python - <<'PY'
+          import json
+          import os
+          task = json.load(open(f"{os.environ['TEMP_DIR']}/task-definition-candidate.json", encoding='utf-8'))['taskDefinition']
+          containers = task.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != 'collector':
+              raise SystemExit('CTA candidate container drift')
+          container = containers[0]
+          if container.get('image') != os.environ['IMAGE_IDENTIFIER']:
+              raise SystemExit('CTA candidate image is not digest-pinned')
+          if container.get('readonlyRootFilesystem') is not True or container.get('user') != '10001:10001':
+              raise SystemExit('CTA candidate container hardening drift')
+          environment = {row['name']: row['value'] for row in container.get('environment') or []}
+          if environment.get('GROWTHBOOK_ENVIRONMENT') != 'production' or environment.get('GROWTHBOOK_EXPERIMENT_REGISTRY_PATH') != '/app/growthbook_collector/experiments.json':
+              raise SystemExit('CTA candidate registry path/environment drift')
+          PY
+          python - <<'PY'
+          import json
+          import os
+          payload = {'containerOverrides': [{'name': 'collector', 'command': ['/bin/sh', '/app/growthbook_collector/host_gate.sh']}]}
+          with open(f"{os.environ['TEMP_DIR']}/host-gate-overrides.json", 'w', encoding='utf-8') as handle:
+              json.dump(payload, handle, separators=(',', ':'))
+          PY
+          HOST_GATE_TASK_ARN="$(aws ecs run-task --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" --launch-type FARGATE \
+            --network-configuration "file://${TEMP_DIR}/network.json" \
+            --overrides "file://${TEMP_DIR}/host-gate-overrides.json" \
+            --group vevo-growthbook-production-cta-host-gate \
+            --started-by "vevo-gb-cta-${GITHUB_RUN_ID}" --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' --output text)"
+          [[ -n "${HOST_GATE_TASK_ARN}" && "${HOST_GATE_TASK_ARN}" != "None" ]]
+          aws ecs wait tasks-stopped --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" --region "${AWS_REGION}"
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${HOST_GATE_TASK_ARN}" --region "${AWS_REGION}" \
+            > "${TEMP_DIR}/host-gate-task.json"
+          python - <<'PY' > "${TEMP_DIR}/host-gate.env"
+          import ipaddress
+          import json
+          import os
+          task = json.load(open(f"{os.environ['TEMP_DIR']}/host-gate-task.json", encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('CTA host-gate task identity drift')
+          container = containers[0]
+          if container.get('exitCode') != 0 or container.get('image') != os.environ['IMAGE_IDENTIFIER'] or container.get('imageDigest') != os.environ['IMAGE_DIGEST']:
+              raise SystemExit('CTA host-gate image or exit drift')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit(f'CTA host-gate private IP drift: {private_ips}')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          print(f'HOST_GATE_TASK_ID={task_id}')
+          print(f'HOST_GATE_PRIVATE_IP={private_ips[0]}')
+          print(f'HOST_GATE_LOG_STREAM=collector/collector/{task_id}')
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+            echo "${key}=${value}" >> "${GITHUB_ENV}"
+          done < "${TEMP_DIR}/host-gate.env"
+          for attempt in $(seq 1 12); do
+            aws logs get-log-events --log-group-name "${PRODUCTION_LOG_GROUP}" \
+              --log-stream-name "${HOST_GATE_LOG_STREAM}" --start-from-head \
+              --region "${AWS_REGION}" --query 'events[].message' --output text \
+              > "${TEMP_DIR}/host-gate.log" 2>/dev/null || true
+            if grep -Fq "COLLECTOR_LOCALHOST_HEALTH_OK:production:git-${GITHUB_SHA}" "${TEMP_DIR}/host-gate.log" && \
+               grep -Fq "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}" "${TEMP_DIR}/host-gate.log" && \
+               grep -Fq "COLLECTOR_REGISTRY_OK:production:${REGISTRY_SHA256}:vevo-sk-product-cta-color-001" "${TEMP_DIR}/host-gate.log"; then
+              break
+            fi
+            [[ "${attempt}" != "12" ]]
+            sleep 5
+          done
+          grep -F "COLLECTOR_LOCALHOST_HEALTH_OK:production:git-${GITHUB_SHA}" "${TEMP_DIR}/host-gate.log"
+          grep -F "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}" "${TEMP_DIR}/host-gate.log"
+          grep -F "COLLECTOR_REGISTRY_OK:production:${REGISTRY_SHA256}:vevo-sk-product-cta-color-001" "${TEMP_DIR}/host-gate.log"
+          echo "VEVO_CTA_HOST_GATE_OK:instance-id=N/A:Fargate:private-ip=${HOST_GATE_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:task=${HOST_GATE_TASK_ID}:registry=cta-only"
+
+      - name: Verify candidate service target route and public isolation after localhost gate
+        run: |
+          set -euo pipefail
+          SERVICE_TASK_ARN="$(aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" --desired-status RUNNING --region "${AWS_REGION}" \
+            --query 'taskArns[0]' --output text)"
+          [[ -n "${SERVICE_TASK_ARN}" && "${SERVICE_TASK_ARN}" != "None" ]]
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --tasks "${SERVICE_TASK_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/service-task.json"
+          TARGET_GROUP_ARN="$(python -c 'import json,os; print(json.load(open(os.environ["TEMP_DIR"]+"/service-candidate.json"))["services"][0]["loadBalancers"][0]["targetGroupArn"])')"
+          aws elbv2 describe-target-health --target-group-arn "${TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/target-health.json"
+          aws apigatewayv2 get-routes --api-id "${PRODUCTION_API_ID}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/routes-after.json"
+          python - <<'PY' > "${TEMP_DIR}/service-runtime.env"
+          import ipaddress
+          import json
+          import os
+          base = os.environ['TEMP_DIR']
+          task = json.load(open(f'{base}/service-task.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('CTA service task identity drift')
+          if containers[0].get('imageDigest') != os.environ['IMAGE_DIGEST']:
+              raise SystemExit('CTA service image digest drift')
+          states = [row['TargetHealth']['State'] for row in json.load(open(f'{base}/target-health.json', encoding='utf-8'))['TargetHealthDescriptions']]
+          if states != ['healthy']:
+              raise SystemExit(f'CTA service target health drift: {states}')
+          routes = json.load(open(f'{base}/routes-after.json', encoding='utf-8')).get('Items') or []
+          if len(routes) != 1 or routes[0].get('RouteKey') != 'POST /v1/events' or routes[0].get('AuthorizationType') != 'NONE':
+              raise SystemExit('CTA rollout changed the exact public route')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit(f'CTA service private IP drift: {private_ips}')
+          print(f'SERVICE_PRIVATE_IP={private_ips[0]}')
+          print(f'SERVICE_TASK_ID={task["taskArn"].rsplit("/", 1)[-1]}')
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+            echo "${key}=${value}" >> "${GITHUB_ENV}"
+          done < "${TEMP_DIR}/service-runtime.env"
+          CORS_STATUS="$(curl -sS -D "${TEMP_DIR}/cors-headers.txt" -o "${TEMP_DIR}/cors-body.txt" -w '%{http_code}' \
+            -X OPTIONS "${PRODUCTION_ENDPOINT}" -H 'Origin: https://www.vevo.sk' \
+            -H 'Access-Control-Request-Method: POST')"
+          [[ "${CORS_STATUS}" == "204" || "${CORS_STATUS}" == "200" ]]
+          curl -sS -D "${TEMP_DIR}/rejected-headers.txt" -o "${TEMP_DIR}/rejected-body.json" \
+            -X POST "${PRODUCTION_ENDPOINT}" -H 'Origin: https://www.vevo.sk' \
+            -H 'Content-Type: application/json' --data '{}'
+          REJECTED_STATUS="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "${TEMP_DIR}/rejected-headers.txt")"
+          [[ "${REJECTED_STATUS}" == "400" ]]
+          ATTACKER_STATUS="$(curl -sS -o "${TEMP_DIR}/attacker-body.json" -w '%{http_code}' \
+            -X POST "${PRODUCTION_ENDPOINT}" -H 'Origin: https://attacker.example' \
+            -H 'Content-Type: application/json' --data '{}')"
+          [[ "${ATTACKER_STATUS}" == "403" ]]
+          for path in health marker.json; do
+            STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "${PRODUCTION_API_BASE_URL}/${path}")"
+            [[ "${STATUS}" == "404" ]]
+          done
+          echo "VEVO_CTA_SERVICE_RUNTIME_OK:instance-id=N/A:Fargate:private-ip=${SERVICE_PRIVATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:target=healthy:route=unchanged"
+
+      - name: Prove zero CTA events before GrowthBook start with one aggregate-only query
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          query = """
+          SELECT COUNT(*) AS cta_events_before_start
+          FROM experiment_events_raw
+          WHERE experiment_id = 'vevo-sk-product-cta-color-001'
+          """.strip()
+          Path(os.environ['TEMP_DIR'], 'cta-zero.sql').write_text(query + '\n', encoding='utf-8')
+          PY
+          QUERY_ID="$(aws athena start-query-execution \
+            --query-string "file://${TEMP_DIR}/cta-zero.sql" \
+            --query-execution-context "Database=${PRODUCTION_DATABASE}" \
+            --work-group "${PRODUCTION_WORKGROUP}" --region "${AWS_REGION}" \
+            --query QueryExecutionId --output text)"
+          [[ -n "${QUERY_ID}" && "${QUERY_ID}" != "None" ]]
+          STATE=QUEUED
+          for attempt in $(seq 1 30); do
+            STATE="$(aws athena get-query-execution --query-execution-id "${QUERY_ID}" \
+              --region "${AWS_REGION}" --query 'QueryExecution.Status.State' --output text)"
+            [[ "${STATE}" != "FAILED" && "${STATE}" != "CANCELLED" ]]
+            [[ "${STATE}" == "SUCCEEDED" ]] && break
+            sleep 5
+          done
+          [[ "${STATE}" == "SUCCEEDED" ]]
+          aws athena get-query-results --query-execution-id "${QUERY_ID}" --max-results 2 \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/cta-zero-results.json"
+          python - <<'PY' > "${TEMP_DIR}/cta-zero.env"
+          import json
+          import os
+          rows = json.load(open(f"{os.environ['TEMP_DIR']}/cta-zero-results.json", encoding='utf-8')).get('ResultSet', {}).get('Rows') or []
+          if len(rows) != 2:
+              raise SystemExit('CTA zero-event aggregate result shape drift')
+          header = [cell.get('VarCharValue') for cell in rows[0].get('Data') or []]
+          values = [cell.get('VarCharValue') for cell in rows[1].get('Data') or []]
+          if header != ['cta_events_before_start'] or values != ['0']:
+              raise SystemExit(f'CTA events exist before start or result drift: header={header} values={values}')
+          print('CTA_EVENTS_BEFORE_START=0')
+          print('CTA_ZERO_MARKER=VEVO_CTA_ZERO_EVENTS_OK:count=0:identities=false:outcomes=false')
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+            echo "${key}=${value}" >> "${GITHUB_ENV}"
+          done < "${TEMP_DIR}/cta-zero.env"
+          echo "${CTA_ZERO_MARKER}"
+
+      - name: Build and validate the canonical identity-free readiness observation
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_runtime_readiness.py \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --main-commit "${GITHUB_SHA}" \
+            --private-ip "${SERVICE_PRIVATE_IP}" \
+            --host-gate-task-id "${HOST_GATE_TASK_ID}" \
+            --host-gate-private-ip "${HOST_GATE_PRIVATE_IP}" \
+            --task-definition "${PRODUCTION_TASK_DEFINITION_ARN##*/}" \
+            --image-digest "${IMAGE_DIGEST}" \
+            --cta-events-before-start "${CTA_EVENTS_BEFORE_START}" \
+            --output "${EVIDENCE_FILE}"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from scripts.record_growthbook_cta_activation import canonical_json_bytes, validate_runtime_observation
+          evidence_path = Path(os.environ['EVIDENCE_FILE'])
+          evidence = json.loads(evidence_path.read_text(encoding='utf-8'))
+          manifest = json.loads(Path('projects/vevo/growthbook_cta_activation.json').read_text(encoding='utf-8'))
+          if evidence_path.read_bytes() != canonical_json_bytes(evidence):
+              raise SystemExit('CTA runtime evidence is not canonical JSON')
+          validate_runtime_observation(evidence, manifest)
+          print(f"VEVO_CTA_RUNTIME_CANONICAL_OK:sha256={hashlib.sha256(evidence_path.read_bytes()).hexdigest()}:raw=false")
+          PY
+
+      - name: Remove all temporary AWS responses queries and logs
+        if: ${{ always() }}
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+          raw = os.environ.get('TEMP_DIR', '')
+          if not raw:
+              raise SystemExit(0)
+          value = Path(raw).resolve()
+          runner = Path(os.environ['RUNNER_TEMP']).resolve()
+          if value.parent != runner or not value.name.startswith('vevo-cta-runtime-'):
+              raise SystemExit('refusing unsafe temporary cleanup target')
+          shutil.rmtree(value, ignore_errors=True)
+          PY
+
+      - name: Upload only the sanitized canonical readiness observation
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-cta-runtime-readiness-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_FILE }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Restore the exact preceding collector runtime after a failed candidate gate
+        if: ${{ failure() && env.RUNTIME_UPDATED == 'true' }}
+        run: |
+          set -euo pipefail
+          TEMP_DIR="${RUNNER_TEMP}/vevo-cta-rollback-${GITHUB_RUN_ID}"
+          export TEMP_DIR
+          mkdir -m 700 "${TEMP_DIR}"
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/stack-failed.json"
+          python - <<'PY'
+          import json
+          import os
+          stack = json.load(open(f"{os.environ['TEMP_DIR']}/stack-failed.json", encoding='utf-8'))['Stacks'][0]
+          values = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          values['CollectorImageUri'] = os.environ['PREVIOUS_IMAGE_IDENTIFIER']
+          values['CollectorVersion'] = os.environ['PREVIOUS_COLLECTOR_VERSION']
+          values['Environment'] = 'production'
+          values['PublicRouteEnabled'] = 'true'
+          rows = [{'ParameterKey': key, 'ParameterValue': value} for key, value in sorted(values.items())]
+          with open(f"{os.environ['TEMP_DIR']}/rollback-parameters.json", 'w', encoding='utf-8') as handle:
+              json.dump(rows, handle, separators=(',', ':'))
+          PY
+          CHANGE_SET="production-cta-rollback-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws cloudformation create-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --change-set-type UPDATE \
+            --template-body file://infra/vevo-growthbook/template.yaml \
+            --parameters "file://${TEMP_DIR}/rollback-parameters.json" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --description "Restore preceding VEVO collector after CTA readiness failure ${GITHUB_SHA}" \
+            --region "${AWS_REGION}" >/dev/null
+          aws cloudformation wait change-set-create-complete --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation describe-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --include-property-values \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/rollback-change-set.json"
+          python scripts/validate_growthbook_changeset.py \
+            --change-set "${TEMP_DIR}/rollback-change-set.json" \
+            --change-set-type UPDATE --phase candidate
+          aws cloudformation execute-change-set --stack-name "${STACK_NAME}" \
+            --change-set-name "${CHANGE_SET}" --region "${AWS_REGION}"
+          aws cloudformation wait stack-update-complete --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}"
+          aws ecs wait services-stable --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_ARN}" --region "${AWS_REGION}"
+          aws cloudformation describe-stacks --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/stack-restored.json"
+          aws ecs describe-services --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_ARN}" --region "${AWS_REGION}" \
+            > "${TEMP_DIR}/service-restored.json"
+          ROLLBACK_SERVICE_TASK_ARN="$(aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --service-name "${SERVICE_NAME}" --desired-status RUNNING --region "${AWS_REGION}" \
+            --query 'taskArns[0]' --output text)"
+          [[ -n "${ROLLBACK_SERVICE_TASK_ARN}" && "${ROLLBACK_SERVICE_TASK_ARN}" != "None" ]]
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${ROLLBACK_SERVICE_TASK_ARN}" --region "${AWS_REGION}" \
+            > "${TEMP_DIR}/service-task-restored.json"
+          ROLLBACK_TARGET_GROUP_ARN="$(python -c 'import json,os; print(json.load(open(os.environ["TEMP_DIR"]+"/service-restored.json"))["services"][0]["loadBalancers"][0]["targetGroupArn"])')"
+          aws elbv2 describe-target-health --target-group-arn "${ROLLBACK_TARGET_GROUP_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_DIR}/target-health-restored.json"
+          python - <<'PY' > "${TEMP_DIR}/rollback.env"
+          import ipaddress
+          import json
+          import os
+          base = os.environ['TEMP_DIR']
+          stack = json.load(open(f'{base}/stack-restored.json', encoding='utf-8'))['Stacks'][0]
+          parameters = {row['ParameterKey']: row['ParameterValue'] for row in stack.get('Parameters') or []}
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          if stack.get('StackStatus') != 'UPDATE_COMPLETE' or parameters.get('PublicRouteEnabled') != 'true':
+              raise SystemExit('CTA rollback did not preserve the public route')
+          if parameters.get('CollectorImageUri') != os.environ['PREVIOUS_IMAGE_IDENTIFIER'] or parameters.get('CollectorVersion') != os.environ['PREVIOUS_COLLECTOR_VERSION']:
+              raise SystemExit('CTA rollback image/version drift')
+          if outputs.get('CollectorEndpoint') != os.environ['PRODUCTION_ENDPOINT']:
+              raise SystemExit('CTA rollback endpoint drift')
+          service = json.load(open(f'{base}/service-restored.json', encoding='utf-8'))['services'][0]
+          if service.get('desiredCount') != 1 or service.get('runningCount') != 1 or service.get('serviceName') != os.environ['SERVICE_NAME']:
+              raise SystemExit('CTA rollback service is not exact healthy 1/1')
+          if service.get('taskDefinition') != outputs.get('CollectorTaskDefinitionArn'):
+              raise SystemExit('CTA rollback service/task-definition drift')
+          task = json.load(open(f'{base}/service-task-restored.json', encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != outputs.get('CollectorTaskDefinitionArn') or len(containers) != 1:
+              raise SystemExit('CTA rollback running task identity drift')
+          if containers[0].get('imageDigest') != os.environ['PREVIOUS_IMAGE_DIGEST']:
+              raise SystemExit('CTA rollback running task image drift')
+          states = [row['TargetHealth']['State'] for row in json.load(open(f'{base}/target-health-restored.json', encoding='utf-8'))['TargetHealthDescriptions']]
+          if states != ['healthy']:
+              raise SystemExit(f'CTA rollback target health drift: {states}')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('CTA rollback service private IP drift')
+          print(f"ROLLBACK_TASK_DEFINITION_ARN={outputs['CollectorTaskDefinitionArn']}")
+          with open(f'{base}/rollback-network.json', 'w', encoding='utf-8') as handle:
+              json.dump(service['networkConfiguration'], handle, separators=(',', ':'))
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+          done < "${TEMP_DIR}/rollback.env"
+          python - <<'PY'
+          import json
+          import os
+          payload = {'containerOverrides': [{'name': 'collector', 'command': ['/bin/sh', '/app/growthbook_collector/host_gate.sh']}]}
+          with open(f"{os.environ['TEMP_DIR']}/rollback-overrides.json", 'w', encoding='utf-8') as handle:
+              json.dump(payload, handle, separators=(',', ':'))
+          PY
+          ROLLBACK_GATE_TASK="$(aws ecs run-task --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --task-definition "${ROLLBACK_TASK_DEFINITION_ARN}" --launch-type FARGATE \
+            --network-configuration "file://${TEMP_DIR}/rollback-network.json" \
+            --overrides "file://${TEMP_DIR}/rollback-overrides.json" \
+            --group vevo-growthbook-production-cta-rollback-host-gate \
+            --started-by "vevo-gb-cta-rb-${GITHUB_RUN_ID}" --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' --output text)"
+          [[ -n "${ROLLBACK_GATE_TASK}" && "${ROLLBACK_GATE_TASK}" != "None" ]]
+          aws ecs wait tasks-stopped --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${ROLLBACK_GATE_TASK}" --region "${AWS_REGION}"
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${ROLLBACK_GATE_TASK}" --region "${AWS_REGION}" \
+            > "${TEMP_DIR}/rollback-gate-task.json"
+          python - <<'PY' > "${TEMP_DIR}/rollback-gate.env"
+          import ipaddress
+          import json
+          import os
+          task = json.load(open(f"{os.environ['TEMP_DIR']}/rollback-gate-task.json", encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if task.get('taskDefinitionArn') != os.environ['ROLLBACK_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('CTA rollback host-gate identity drift')
+          container = containers[0]
+          if container.get('exitCode') != 0 or container.get('image') != os.environ['PREVIOUS_IMAGE_IDENTIFIER'] or container.get('imageDigest') != os.environ['PREVIOUS_IMAGE_DIGEST']:
+              raise SystemExit('CTA rollback localhost gate failed')
+          private_ips = [
+              detail['value']
+              for attachment in task.get('attachments') or []
+              for detail in attachment.get('details') or []
+              if detail.get('name') == 'privateIPv4Address' and detail.get('value')
+          ]
+          if len(private_ips) != 1 or ipaddress.ip_address(private_ips[0]) not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('CTA rollback host-gate private IP drift')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          print(f'ROLLBACK_GATE_IP={private_ips[0]}')
+          print(f'ROLLBACK_GATE_LOG_STREAM=collector/collector/{task_id}')
+          PY
+          source "${TEMP_DIR}/rollback-gate.env"
+          for attempt in $(seq 1 12); do
+            aws logs get-log-events --log-group-name "${PRODUCTION_LOG_GROUP}" \
+              --log-stream-name "${ROLLBACK_GATE_LOG_STREAM}" --start-from-head \
+              --region "${AWS_REGION}" --query 'events[].message' --output text \
+              > "${TEMP_DIR}/rollback-gate.log" 2>/dev/null || true
+            if grep -Fq "COLLECTOR_LOCALHOST_HEALTH_OK:production:${PREVIOUS_COLLECTOR_VERSION}" "${TEMP_DIR}/rollback-gate.log" && \
+               grep -Fq "COLLECTOR_LOCALHOST_MARKER_OK:/app:${PREVIOUS_COLLECTOR_VERSION}" "${TEMP_DIR}/rollback-gate.log"; then
+              break
+            fi
+            [[ "${attempt}" != "12" ]]
+            sleep 5
+          done
+          echo "VEVO_CTA_RUNTIME_ROLLBACK_OK:instance-id=N/A:Fargate:private-ip=${ROLLBACK_GATE_IP}:service=${SERVICE_NAME}:path=${RUNTIME_PATH}:image=${PREVIOUS_IMAGE_DIGEST}:route=preserved"
+
+      - name: CTA runtime deployment summary
+        if: ${{ always() }}
+        continue-on-error: true
+        run: |
+          {
+            echo "## VEVO GrowthBook CTA-only collector runtime"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Instance/service/path: \`N/A:Fargate\` / \`${SERVICE_NAME}\` / \`${RUNTIME_PATH}\`"
+            echo "- Candidate image: \`${IMAGE_DIGEST:-not-built}\`"
+            echo "- Host-gate task/IP: \`${HOST_GATE_TASK_ID:-not-run}\` / \`${HOST_GATE_PRIVATE_IP:-not-resolved}\`"
+            echo "- Service task/IP: \`${SERVICE_TASK_ID:-not-run}\` / \`${SERVICE_PRIVATE_IP:-not-resolved}\`"
+            echo "- Route: \`preserved POST /v1/events\`"
+            echo "- GrowthBook A/A/CTA allocation: \`0% / 0%\`"
+            echo "- GTM/Meta Ads/BiznisWeb/commerce mutations: \`none\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
