@@ -69,6 +69,7 @@ class GrowthBookAaMeasurementWindowTests(unittest.TestCase):
             "resolved_at_utc",
         ):
             self.assertIsNone(window[field])
+        self.assertEqual([], window["checkpoint_history"])
         self.assertFalse(window["post_hoc_window_change_allowed"])
         self.assertEqual(7, window["minimum_full_calendar_days"])
         self.assertEqual(1000, window["minimum_eligible_devices"])
@@ -99,7 +100,7 @@ class GrowthBookAaMeasurementWindowTests(unittest.TestCase):
     def test_component_windows_cannot_diverge(self) -> None:
         altered = copy.deepcopy(self.manifest)
         altered["automated_evidence"]["through_utc"] = "2026-09-01T22:00:00Z"
-        with self.assertRaisesRegex(MeasurementWindowError, "opened before"):
+        with self.assertRaisesRegex(MeasurementWindowError, "differs"):
             self.validate(altered)
 
     def test_window_cannot_be_resolved_before_the_sample_checkpoint(self) -> None:
@@ -107,7 +108,7 @@ class GrowthBookAaMeasurementWindowTests(unittest.TestCase):
         altered["measurement_window"]["resolved_through_utc"] = (
             "2026-09-01T22:00:00Z"
         )
-        with self.assertRaisesRegex(MeasurementWindowError, "measurement window drift"):
+        with self.assertRaisesRegex(MeasurementWindowError, "lifecycle drift"):
             self.validate(altered)
 
     def test_activation_or_reconciliation_provenance_drift_is_rejected(self) -> None:

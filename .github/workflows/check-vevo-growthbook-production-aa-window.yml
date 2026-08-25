@@ -1,0 +1,529 @@
+name: Check VEVO GrowthBook Production A/A Window
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_checkpoint:
+        description: Type true to run the outcome-blind read-only A/A sample checkpoint
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-aa-window-checkpoint
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  COLLECTOR_STACK: vevo-growthbook-production
+  RECONCILIATION_STACK: vevo-growthbook-reconciliation-production
+  EXPECTED_SERVICE: vevo-growthbook-reconcile-production
+  EXPECTED_SOURCE_SCHEDULE: vevo-daily-report-email
+  EXPECTED_DATABASE: vevo_growthbook_production
+  EXPECTED_WORKGROUP: vevo-growthbook-reporting-production
+  EXPECTED_RUNTIME_PATH: /app
+  SNAPSHOT_MANIFEST: projects/vevo/growthbook_aa_snapshot.json
+  DEPLOY_EVIDENCE: projects/vevo/growthbook_production_reconciliation_deploy_evidence.json
+  EVIDENCE_FILE: vevo-growthbook-aa-window-checkpoint.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  check-outcome-blind-sample:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Require exact read-only checkpoint confirmation
+        env:
+          CONFIRM_CHECKPOINT: ${{ inputs.confirm_checkpoint }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_CHECKPOINT}" == 'true' ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate outcome-blind checkpoint gate before AWS credentials
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_aa_measurement_window \
+            tests.test_growthbook_aa_window_checkpoint_recorder
+          python scripts/validate_growthbook_workspace.py
+          python scripts/validate_growthbook_aa_measurement_window.py
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+
+          from scripts.validate_growthbook_aa_measurement_window import (
+              _checkpoint_boundaries,
+              expected_measurement_window,
+          )
+
+          root = Path('.')
+          manifest = json.loads(Path(os.environ['SNAPSHOT_MANIFEST']).read_text(encoding='utf-8'))
+          activation = json.loads((root / 'projects/vevo/growthbook_production_aa_activation.json').read_text(encoding='utf-8'))
+          acceptance = json.loads((root / 'projects/vevo/growthbook_aa_acceptance.json').read_text(encoding='utf-8'))
+          reconciliation = json.loads(Path(os.environ['DEPLOY_EVIDENCE']).read_text(encoding='utf-8'))
+          workspace = json.loads((root / 'projects/vevo/growthbook_workspace.json').read_text(encoding='utf-8'))
+          window = manifest['measurement_window']
+          if window['resolution_status'] == 'resolved':
+              raise SystemExit('A/A window is already resolved')
+          if manifest.get('snapshot_build_allowed') is not False:
+              raise SystemExit('snapshot build opened before A/A window resolution')
+          for group in ('automated_evidence', 'manual_qa_evidence'):
+              if manifest[group].get('producer_allowed') is not False:
+                  raise SystemExit(f'{group} producer opened before A/A window resolution')
+          experiments = {row['tracking_key']: row for row in workspace['experiments']}
+          aa = experiments['vevo-sk-aa-001']
+          cta = experiments['vevo-sk-product-cta-color-001']
+          if (
+              workspace['workspace']['production_allocation_percent'] != 100
+              or aa['status'] != 'running_production_aa_only'
+              or aa['production_allocation_percent'] != 100
+              or aa['variation_weights'] != [0.5, 0.5]
+          ):
+              raise SystemExit('Production A/A allocation drift')
+          if cta['status'] != 'unstarted_draft' or cta['production_allocation_percent'] != 0:
+              raise SystemExit('CTA must remain unstarted during A/A checkpointing')
+
+          expected = expected_measurement_window(activation, acceptance, reconciliation)
+          checkpoint_index = len(window['checkpoint_history']) + 1
+          candidate_through, due, _, _ = _checkpoint_boundaries(expected, checkpoint_index)
+          now = datetime.now(UTC)
+          if not due.astimezone(UTC) <= now < (due + timedelta(days=1)).astimezone(UTC):
+              raise SystemExit('outcome-blind A/A checkpoint is outside its daily gate')
+          temporary = Path(os.environ['RUNNER_TEMP']) / f"vevo-aa-window-{os.environ['GITHUB_RUN_ID']}"
+          temporary.mkdir(mode=0o700)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f'CHECKPOINT_INDEX={checkpoint_index}\n')
+              handle.write(f'AA_FROM_UTC={expected["from_utc"]}\n')
+              handle.write(f'CANDIDATE_THROUGH_UTC={candidate_through.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")}\n')
+              handle.write(f'CHECKPOINT_DUE_LOCAL={due.isoformat(timespec="seconds")}\n')
+              handle.write(f'TEMP_CHECKPOINT_DIR={temporary}\n')
+          print('PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:outcome-read=false:mutation=none')
+          PY
+
+      - name: Configure AWS credentials for bounded read-only checkpoint
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read exact stack schedule and reconciliation task identity
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          ACTUAL_DEPLOY_SHA="$(sha256sum "${DEPLOY_EVIDENCE}" | cut -d' ' -f1)"
+          [[ "${ACTUAL_DEPLOY_SHA}" == '21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb' ]]
+          aws cloudformation describe-stacks --stack-name "${COLLECTOR_STACK}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/collector-stack.json"
+          aws cloudformation describe-stacks --stack-name "${RECONCILIATION_STACK}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/reconciliation-stack.json"
+          aws scheduler get-schedule --name "${EXPECTED_SERVICE}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/schedule.json"
+          aws scheduler get-schedule --name "${EXPECTED_SOURCE_SCHEDULE}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/source-schedule.json"
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/runtime.env"
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          collector = json.load(open(root / 'collector-stack.json', encoding='utf-8'))['Stacks'][0]
+          reconciliation = json.load(open(root / 'reconciliation-stack.json', encoding='utf-8'))['Stacks'][0]
+          schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
+          source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          if collector.get('StackStatus') != 'CREATE_COMPLETE' or reconciliation.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production GrowthBook stack state drift')
+          collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
+          reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}
+          if (
+              collector_outputs.get('ExperimentDatabaseName') != os.environ['EXPECTED_DATABASE']
+              or collector_outputs.get('ReportingWorkGroupName') != os.environ['EXPECTED_WORKGROUP']
+              or reconciliation_outputs.get('ScheduleName') != os.environ['EXPECTED_SERVICE']
+              or reconciliation_outputs.get('ScheduleState') != 'ENABLED'
+          ):
+              raise SystemExit('Production checkpoint stack output drift')
+          if (
+              schedule.get('Name') != os.environ['EXPECTED_SERVICE']
+              or schedule.get('State') != 'ENABLED'
+              or schedule.get('ScheduleExpression') != 'cron(45 3 * * ? *)'
+              or schedule.get('ScheduleExpressionTimezone') != 'Europe/Bratislava'
+              or schedule.get('FlexibleTimeWindow') != {'Mode': 'OFF'}
+              or schedule.get('Target', {}).get('Arn') != collector_outputs.get('CollectorClusterArn')
+              or schedule.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') != reconciliation_outputs.get('TargetTaskDefinitionArn')
+              or schedule.get('Target', {}).get('EcsParameters', {}).get('Group') != os.environ['EXPECTED_SERVICE']
+              or schedule.get('Target', {}).get('EcsParameters', {}).get('TaskCount') != 1
+              or schedule.get('Target', {}).get('EcsParameters', {}).get('EnableExecuteCommand') is not False
+          ):
+              raise SystemExit('Production reconciliation schedule drift')
+          target = schedule.get('Target') or {}
+          if (
+              target.get('RoleArn') != reconciliation_outputs.get('SchedulerRoleArn')
+              or target.get('DeadLetterConfig') != {'Arn': reconciliation_outputs.get('DeadLetterQueueArn')}
+              or target.get('RetryPolicy') != {'MaximumEventAgeInSeconds': 3600, 'MaximumRetryAttempts': 2}
+          ):
+              raise SystemExit('Production reconciliation schedule delivery boundary drift')
+          schedule_input = json.loads(target.get('Input') or '{}')
+          overrides = schedule_input.get('containerOverrides') or []
+          if len(overrides) != 1:
+              raise SystemExit('Production reconciliation schedule input drift')
+          override = overrides[0]
+          if (
+              override.get('command') != ['/bin/bash', '-lc', 'cd /app && python scripts/run_scheduled_growthbook_reconciliation.py']
+              or override.get('environment') != [
+                  {'name': 'REPORT_PROJECT', 'value': 'vevo'},
+                  {'name': 'GROWTHBOOK_ENVIRONMENT', 'value': 'production'},
+                  {'name': 'GROWTHBOOK_EVENT_BUCKET', 'value': collector_outputs.get('EventBucketName')},
+                  {'name': 'GROWTHBOOK_FACT_PUBLISH_ENABLED', 'value': 'true'},
+                  {'name': 'AWS_REGION', 'value': os.environ['AWS_REGION']},
+              ]
+              or not override.get('name')
+          ):
+              raise SystemExit('Production reconciliation scheduled command drift')
+          if source.get('State') != 'ENABLED' or not str(source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') or '').endswith('vevo-reporting-daily:33'):
+              raise SystemExit('source reporting schedule drift')
+          values = {
+              'PRODUCTION_CLUSTER_ARN': collector_outputs['CollectorClusterArn'],
+              'PRODUCTION_DATABASE': collector_outputs['ExperimentDatabaseName'],
+              'PRODUCTION_WORKGROUP': collector_outputs['ReportingWorkGroupName'],
+              'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
+              'RECONCILIATION_CONTAINER_NAME': override['name'],
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_CHECKPOINT_DIR}/runtime.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_CHECKPOINT_DIR}/runtime.env"
+          set +a
+
+          aws ecs describe-task-definition --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-definition.json"
+          aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-list.json"
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/task-arns.txt"
+          import json
+          import os
+          tasks = json.load(open(f"{os.environ['TEMP_CHECKPOINT_DIR']}/task-list.json", encoding='utf-8')).get('taskArns') or []
+          if not tasks:
+              raise SystemExit('scheduled reconciliation task list is empty')
+          print(' '.join(tasks))
+          PY
+          read -r -a TASK_ARNS < "${TEMP_CHECKPOINT_DIR}/task-arns.txt"
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/tasks.json"
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/selected-task.env"
+          import ipaddress
+          import json
+          import os
+          from datetime import datetime, timedelta
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          # Compare normalized epoch seconds so the runner's local timezone cannot affect selection.
+          lower = datetime.fromisoformat(os.environ['CHECKPOINT_DUE_LOCAL']).timestamp()
+          upper = lower + timedelta(hours=2).total_seconds()
+          definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
+          containers = definition.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']:
+              raise SystemExit('reconciliation task-definition container drift')
+          log_options = (containers[0].get('logConfiguration') or {}).get('options') or {}
+          log_group = log_options.get('awslogs-group')
+          if not log_group:
+              raise SystemExit('reconciliation log group missing')
+          candidates = []
+          for task in json.load(open(root / 'tasks.json', encoding='utf-8')).get('tasks') or []:
+              started_at = task.get('startedAt')
+              started_epoch = datetime.fromisoformat(started_at.replace('Z', '+00:00')).timestamp() if started_at else -1
+              task_containers = task.get('containers') or []
+              if (
+                  task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+                  and task.get('group') == os.environ['EXPECTED_SERVICE']
+                  and lower <= started_epoch < upper
+                  and len(task_containers) == 1
+                  and task_containers[0].get('exitCode') == 0
+              ):
+                  candidates.append(task)
+          if len(candidates) != 1:
+              raise SystemExit(f'expected one successful scheduled reconciliation task, found {len(candidates)}')
+          task = candidates[0]
+          container = task['containers'][0]
+          details = [row for attachment in task.get('attachments') or [] for row in attachment.get('details') or []]
+          private_ip_text = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+          private_ip = ipaddress.ip_address(private_ip_text)
+          if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('scheduled reconciliation task private IP drift')
+          expected_image = json.load(open(os.environ['DEPLOY_EVIDENCE'], encoding='utf-8'))['reconciliation']['image_digest']
+          if container.get('imageDigest') != expected_image:
+              raise SystemExit('scheduled reconciliation image differs from localhost-gated deploy evidence')
+          task_definition = os.environ['RECONCILIATION_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1]
+          values = {
+              'RECONCILIATION_TASK_ID': task['taskArn'].rsplit('/', 1)[-1],
+              'RECONCILIATION_PRIVATE_IP': private_ip_text,
+              'RECONCILIATION_TASK_DEFINITION': task_definition,
+              'RECONCILIATION_IMAGE_DIGEST': expected_image,
+              'RECONCILIATION_LOG_GROUP': log_group,
+              'RECONCILIATION_LOG_STREAM': container.get('logStreamName') or '',
+          }
+          if not values['RECONCILIATION_LOG_STREAM']:
+              raise SystemExit('scheduled reconciliation log stream missing')
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_CHECKPOINT_DIR}/selected-task.env" >> "${GITHUB_ENV}"
+          echo "PRODUCTION_AA_WINDOW_RUNTIME_GATE_OK:instance-id=N/A:Fargate:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}"
+
+      - name: Verify exact scheduled success marker alarms and DLQ
+        run: |
+          set -euo pipefail
+          aws logs get-log-events --log-group-name "${RECONCILIATION_LOG_GROUP}" --log-stream-name "${RECONCILIATION_LOG_STREAM}" --start-from-head --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-logs.json"
+          aws cloudwatch describe-alarms --alarm-names \
+            vevo-growthbook-reconcile-production-failure \
+            vevo-growthbook-reconcile-production-missing-success \
+            vevo-growthbook-reconcile-production-dlq \
+            --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/alarms.json"
+          aws sqs get-queue-url --queue-name vevo-growthbook-reconcile-production-dlq --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/queue-url.json"
+          QUEUE_URL="$(python - <<'PY'
+          import json
+          import os
+          print(json.load(open(f"{os.environ['TEMP_CHECKPOINT_DIR']}/queue-url.json", encoding='utf-8'))['QueueUrl'])
+          PY
+          )"
+          aws sqs get-queue-attributes --queue-url "${QUEUE_URL}" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesDelayed ApproximateNumberOfMessagesNotVisible --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/queue.json"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          messages = [str(row.get('message') or '').strip() for row in json.load(open(root / 'task-logs.json', encoding='utf-8')).get('events') or []]
+          markers = [row for row in messages if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:' in row]
+          summaries = [json.loads(row) for row in messages if row.startswith('{') and '"mode":"publish"' in row]
+          if len(markers) != 1 or len(summaries) != 1:
+              raise SystemExit('scheduled reconciliation marker/summary drift')
+          summary = summaries[0]
+          published = summary.get('published') or {}
+          expected = {key: summary.get(key) for key in ('device_facts', 'performance_facts', 'quality_reports')}
+          if published != expected or summary.get('event_partitions') != 40:
+              raise SystemExit('scheduled reconciliation generated/published parity drift')
+          alarms = json.load(open(root / 'alarms.json', encoding='utf-8')).get('MetricAlarms') or []
+          expected_alarms = {
+              'vevo-growthbook-reconcile-production-failure',
+              'vevo-growthbook-reconcile-production-missing-success',
+              'vevo-growthbook-reconcile-production-dlq',
+          }
+          if {row.get('AlarmName') for row in alarms} != expected_alarms or any(row.get('StateValue') != 'OK' for row in alarms):
+              raise SystemExit('Production reconciliation alarm gate failed')
+          queue = json.load(open(root / 'queue.json', encoding='utf-8')).get('Attributes') or {}
+          if any(int(queue.get(key, '-1')) != 0 for key in ('ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesDelayed', 'ApproximateNumberOfMessagesNotVisible')):
+              raise SystemExit('Production reconciliation DLQ is not empty')
+          control = {
+              'schedule_name': os.environ['EXPECTED_SERVICE'],
+              'schedule_due_local': os.environ['CHECKPOINT_DUE_LOCAL'],
+              'schedule_succeeded': True,
+              'success_marker_sha256': hashlib.sha256(markers[0].encode()).hexdigest(),
+              'publish_summary_sha256': hashlib.sha256((json.dumps(summary, sort_keys=True, separators=(',', ':')) + '\n').encode()).hexdigest(),
+              'generated_published_counts_match': True,
+              'dlq_empty': True,
+              'alarms_clear': True,
+              'source_schedule_name': os.environ['EXPECTED_SOURCE_SCHEDULE'],
+              'source_schedule_unchanged': True,
+          }
+          (root / 'control.json').write_text(json.dumps(control, sort_keys=True, separators=(',', ':')) + '\n', encoding='utf-8')
+          print('PRODUCTION_AA_WINDOW_CONTROL_GATE_OK:marker=true:parity=true:alarms=clear:dlq=empty')
+          PY
+
+      - name: Query only the cumulative eligible-device count
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          query = f"""
+          SELECT COUNT(DISTINCT device_id) AS eligible_devices
+          FROM experiment_device_facts
+          WHERE experiment_id = 'vevo-sk-aa-001'
+            AND metric_contract_version = 'vevo_cm1_v1_2026-08-20'
+            AND eligible = 1
+            AND contaminated = 0
+            AND from_iso8601_timestamp(first_exposure_at) >= from_iso8601_timestamp('{os.environ['AA_FROM_UTC']}')
+            AND from_iso8601_timestamp(first_exposure_at) < from_iso8601_timestamp('{os.environ['CANDIDATE_THROUGH_UTC']}')
+          """.strip()
+          Path(os.environ['TEMP_CHECKPOINT_DIR'], 'eligible-count.sql').write_text(query + '\n', encoding='utf-8')
+          PY
+          QUERY_ID="$(aws athena start-query-execution \
+            --query-string "file://${TEMP_CHECKPOINT_DIR}/eligible-count.sql" \
+            --query-execution-context "Database=${PRODUCTION_DATABASE}" \
+            --work-group "${PRODUCTION_WORKGROUP}" \
+            --region "${AWS_REGION}" \
+            --query QueryExecutionId \
+            --output text)"
+          [[ -n "${QUERY_ID}" && "${QUERY_ID}" != 'None' ]]
+          for _ in $(seq 1 30); do
+            STATE="$(aws athena get-query-execution --query-execution-id "${QUERY_ID}" --region "${AWS_REGION}" --query 'QueryExecution.Status.State' --output text)"
+            if [[ "${STATE}" == 'SUCCEEDED' ]]; then break; fi
+            if [[ "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then exit 1; fi
+            sleep 5
+          done
+          [[ "${STATE}" == 'SUCCEEDED' ]]
+          aws athena get-query-results --query-execution-id "${QUERY_ID}" --max-results 2 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/eligible-count-result.json"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          result_raw = (root / 'eligible-count-result.json').read_bytes()
+          payload = json.loads(result_raw)
+          rows = ((payload.get('ResultSet') or {}).get('Rows') or [])
+          if len(rows) != 2 or payload.get('NextToken'):
+              raise SystemExit('eligible-device aggregate result shape drift')
+          header = [cell.get('VarCharValue') for cell in rows[0].get('Data') or []]
+          values = [cell.get('VarCharValue') for cell in rows[1].get('Data') or []]
+          if header != ['eligible_devices'] or len(values) != 1 or not str(values[0]).isdigit():
+              raise SystemExit('eligible-device aggregate result schema drift')
+          population = {
+              'metric': 'cumulative_eligible_devices_without_arm_outcome_readback',
+              'eligible_devices': int(values[0]),
+              'database': os.environ['EXPECTED_DATABASE'],
+              'workgroup': os.environ['EXPECTED_WORKGROUP'],
+              'source_table': 'experiment_device_facts',
+              'aggregate_query_sha256': hashlib.sha256((root / 'eligible-count.sql').read_bytes()).hexdigest(),
+              'aggregate_result_sha256': hashlib.sha256(result_raw).hexdigest(),
+              'only_aggregate_count_retained': True,
+              'arm_counts_read': False,
+              'arm_outcomes_read': False,
+              'outcome_metrics_read': False,
+              'contains_event_or_device_ids': False,
+              'contains_customer_or_order_data': False,
+          }
+          (root / 'population.json').write_text(json.dumps(population, sort_keys=True, separators=(',', ':')) + '\n', encoding='utf-8')
+          print('PRODUCTION_AA_WINDOW_POPULATION_OK:aggregate-only=true:arm-outcomes=false')
+          PY
+
+      - name: Build and independently validate sanitized checkpoint evidence
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+
+          from scripts.validate_growthbook_aa_measurement_window import (
+              canonical_evidence_bytes,
+              expected_measurement_window,
+              validate_checkpoint_evidence,
+          )
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          activation = json.load(open('projects/vevo/growthbook_production_aa_activation.json', encoding='utf-8'))
+          acceptance = json.load(open('projects/vevo/growthbook_aa_acceptance.json', encoding='utf-8'))
+          reconciliation = json.load(open(os.environ['DEPLOY_EVIDENCE'], encoding='utf-8'))
+          expected = expected_measurement_window(activation, acceptance, reconciliation)
+          population = json.load(open(root / 'population.json', encoding='utf-8'))
+          index = int(os.environ['CHECKPOINT_INDEX'])
+          candidate_through = datetime.fromisoformat(os.environ['CANDIDATE_THROUGH_UTC'].replace('Z', '+00:00'))
+          due = datetime.fromisoformat(os.environ['CHECKPOINT_DUE_LOCAL'])
+          evidence = {
+              'schema_version': 1,
+              'evidence_type': 'vevo_growthbook_aa_window_checkpoint',
+              'status': 'passed',
+              'experiment_id': 'vevo-sk-aa-001',
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'workflow': '.github/workflows/check-vevo-growthbook-production-aa-window.yml',
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'main_commit': os.environ['GITHUB_SHA'],
+              'observed_at_utc': datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'window': {
+                  'timezone': 'Europe/Bratislava',
+                  'checkpoint_index': index,
+                  'from_utc': os.environ['AA_FROM_UTC'],
+                  'candidate_through_utc': os.environ['CANDIDATE_THROUGH_UTC'],
+                  'candidate_last_full_local_date': (candidate_through.astimezone(due.tzinfo).date() - timedelta(days=1)).isoformat(),
+                  'full_calendar_days': 7 + index - 1,
+                  'resolution_due_local': os.environ['CHECKPOINT_DUE_LOCAL'],
+              },
+              'runtime': {
+                  'instance_id': 'N/A:Fargate',
+                  'private_ip': os.environ['RECONCILIATION_PRIVATE_IP'],
+                  'service': os.environ['EXPECTED_SERVICE'],
+                  'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
+                  'task_id': os.environ['RECONCILIATION_TASK_ID'],
+                  'task_definition': os.environ['RECONCILIATION_TASK_DEFINITION'],
+                  'image_digest': os.environ['RECONCILIATION_IMAGE_DIGEST'],
+                  'host_gate_evidence_sha256': '21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb',
+                  'localhost_health_marker_inherited_from_deploy_evidence': True,
+                  'localhost_runtime_marker_inherited_from_deploy_evidence': True,
+              },
+              'control_plane': json.load(open(root / 'control.json', encoding='utf-8')),
+              'population': population,
+              'decision': 'resolve' if population['eligible_devices'] >= 1000 else 'extend_one_full_local_day',
+              'safety': {
+                  'contains_raw_aws_payloads': False,
+                  'contains_cloudwatch_messages': False,
+                  'contains_credentials': False,
+                  'aws_mutations': False,
+                  'growthbook_mutations': False,
+                  'gtm_mutations': False,
+                  'meta_ads_mutations': False,
+                  'biznisweb_mutations': False,
+                  'commerce_mutations': False,
+                  'winner_calls': False,
+                  'cta_activation': False,
+              },
+          }
+          validate_checkpoint_evidence(evidence, expected, index)
+          Path(os.environ['EVIDENCE_FILE']).write_bytes(canonical_evidence_bytes(evidence))
+          print('PRODUCTION_AA_WINDOW_EVIDENCE_OK:canonical=true:identity-free=true:winner=false')
+          PY
+
+      - name: Remove every temporary AWS response and query file
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          TARGET="${TEMP_CHECKPOINT_DIR:-}"
+          [[ -n "${TARGET}" && "${TARGET}" == "${RUNNER_TEMP}"/vevo-aa-window-* ]]
+          if [[ -d "${TARGET}" ]]; then
+            find "${TARGET}" -type f -exec shred -f -u -- {} + 2>/dev/null || find "${TARGET}" -type f -delete
+            rmdir "${TARGET}"
+          fi
+
+      - name: Upload only sanitized outcome-blind checkpoint evidence
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-aa-window-checkpoint
+          path: vevo-growthbook-aa-window-checkpoint.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish checkpoint summary
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+          import json
+          import os
+          evidence = json.load(open(os.environ['EVIDENCE_FILE'], encoding='utf-8'))
+          print('## VEVO Production A/A outcome-blind checkpoint')
+          print(f"- Checkpoint: `{evidence['window']['checkpoint_index']}`")
+          print(f"- Candidate through: `{evidence['window']['candidate_through_utc']}`")
+          print(f"- Eligible devices: `{evidence['population']['eligible_devices']}`")
+          print(f"- Decision: `{evidence['decision']}`")
+          print('- Arm counts/outcomes read: `false / false`')
+          print('- GrowthBook, GTM, Meta Ads, BiznisWeb and commerce mutation: `none`')
+          print('- Snapshot/producer/CTA/winner gates changed: `none`')
+          PY

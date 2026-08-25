@@ -174,6 +174,12 @@ def main() -> int:
         growthbook_aa_measurement_window_validator = read(
             "scripts/validate_growthbook_aa_measurement_window.py"
         )
+        growthbook_aa_window_checkpoint_recorder = read(
+            "scripts/record_growthbook_aa_window_checkpoint.py"
+        )
+        growthbook_aa_window_checkpoint_workflow = read(
+            ".github/workflows/check-vevo-growthbook-production-aa-window.yml"
+        )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
         )
@@ -1921,6 +1927,11 @@ def main() -> int:
             "source_reconciliation_main_commit": (
                 "cf92eb0e007fb9a9163068a2735e5becc0327f03"
             ),
+            "checkpoint_workflow": (
+                ".github/workflows/check-vevo-growthbook-production-aa-window.yml"
+            ),
+            "checkpoint_artifact_name": "vevo-growthbook-aa-window-checkpoint",
+            "checkpoint_file_name": "vevo-growthbook-aa-window-checkpoint.json",
             "first_full_local_date": "2026-08-26",
             "last_required_full_local_date": "2026-09-01",
             "minimum_full_calendar_days": 7,
@@ -1946,6 +1957,7 @@ def main() -> int:
             "resolved_full_calendar_days": None,
             "resolved_eligible_devices": None,
             "resolved_at_utc": None,
+            "checkpoint_history": [],
             "post_hoc_window_change_allowed": False,
         }
         if (
@@ -2258,6 +2270,97 @@ def main() -> int:
                 required_measurement_window_validator_marker,
                 "GrowthBook A/A measurement-window validator lost marker: "
                 f"{required_measurement_window_validator_marker}",
+            )
+        for offline_checkpoint_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_aa_window_checkpoint_recorder.lower(),
+                offline_checkpoint_marker.lower(),
+                "GrowthBook A/A window checkpoint recorder must remain offline: "
+                f"{offline_checkpoint_marker}",
+            )
+        for required_checkpoint_marker in (
+            "canonical_evidence_bytes",
+            "expected_workflow_run_id",
+            "expected_main_commit",
+            "expected_evidence_sha256",
+            "independently supplied evidence SHA-256 mismatch",
+            "evidence SHA-256 mismatch",
+            "A/A window is already resolved",
+            "resolved_by_preregistered_sample_stopping_rule",
+            "resolved_waiting_for_reviewed_producer_open",
+            "snapshot_build_allowed",
+            "producer_allowed",
+        ):
+            require(
+                growthbook_aa_window_checkpoint_recorder,
+                required_checkpoint_marker,
+                "GrowthBook A/A window checkpoint recorder lost safety marker: "
+                f"{required_checkpoint_marker}",
+            )
+        for required_checkpoint_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "outcome-blind A/A checkpoint is outside its daily gate",
+            "snapshot build opened before A/A window resolution",
+            "producer opened before A/A window resolution",
+            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:",
+            "PRODUCTION_AA_WINDOW_RUNTIME_GATE_OK:",
+            "PRODUCTION_AA_WINDOW_CONTROL_GATE_OK:",
+            "SELECT COUNT(DISTINCT device_id) AS eligible_devices",
+            "header != ['eligible_devices']",
+            "arm_counts_read': False",
+            "arm_outcomes_read': False",
+            "outcome_metrics_read': False",
+            "validate_checkpoint_evidence(evidence, expected, index)",
+            "Remove every temporary AWS response and query file",
+            "uses: actions/upload-artifact@v4.6.2",
+            "Snapshot/producer/CTA/winner gates changed: `none`",
+        ):
+            require(
+                growthbook_aa_window_checkpoint_workflow,
+                required_checkpoint_workflow_marker,
+                "GrowthBook A/A window checkpoint workflow lost safety marker: "
+                f"{required_checkpoint_workflow_marker}",
+            )
+        if growthbook_aa_window_checkpoint_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError(
+                "GrowthBook A/A window checkpoint must upload exactly one artifact."
+            )
+        for forbidden_checkpoint_workflow_marker in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "register-task-definition",
+            "scheduler update-schedule",
+            "scheduler create-schedule",
+            "s3api put-object",
+            "s3api delete-object",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "curl ",
+            "wget ",
+        ):
+            forbid(
+                growthbook_aa_window_checkpoint_workflow.lower(),
+                forbidden_checkpoint_workflow_marker.lower(),
+                "GrowthBook A/A window checkpoint workflow mutation path detected: "
+                f"{forbidden_checkpoint_workflow_marker}",
             )
         if growthbook_aa_automated_workflow.count(
             "uses: actions/upload-artifact@v4.6.2"
