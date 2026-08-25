@@ -84,12 +84,6 @@ raw_window AS (
     AND from_iso8601_timestamp(received_at) >= from_iso8601_timestamp('__CTA_STARTED_AT_UTC__')
     AND from_iso8601_timestamp(received_at) < from_iso8601_timestamp('__FOLLOWUP_THROUGH_UTC__')
 ),
-privacy_sample AS (
-  SELECT *
-  FROM raw_window
-  ORDER BY received_at, event_id
-  LIMIT 100
-),
 quality AS (
   SELECT
     (SELECT COUNT(*) FROM decision_cohort) AS reporting_device_count,
@@ -122,11 +116,11 @@ quality AS (
           '[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}|(?:[+]421|00421)[ 0-9-]{8,16}'
         )
       )
-      FROM privacy_sample
+      FROM raw_window
     ) AS pii_finding_count,
     (
       SELECT COUNT_IF(regexp_like(coalesce(page_path, ''), '(?i)^(?:https?://)|[?#]'))
-      FROM privacy_sample
+      FROM raw_window
     ) AS full_url_stored_count,
     (
       SELECT COUNT_IF(
@@ -135,7 +129,7 @@ quality AS (
           'fbclid|_fbp|_fbc'
         )
       )
-      FROM privacy_sample
+      FROM raw_window
     ) AS click_identifier_stored_count,
     (
       SELECT COUNT_IF(event_name = 'experiment_exposure' AND consent_state <> 'analytics_granted')
