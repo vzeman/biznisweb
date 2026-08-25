@@ -162,6 +162,23 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_manifest as validate_cta_completion_manifest,
     )
 
+try:
+    from build_growthbook_cta_final_snapshot import (
+        CtaFinalSnapshotError,
+        FOLLOWUP as CTA_FINAL_FOLLOWUP_STATUS,
+        RECORDED as CTA_FINAL_RECORDED_STATUS,
+        WAITING as CTA_FINAL_WAITING_STATUS,
+        validate_manifest as validate_cta_final_snapshot_manifest,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.build_growthbook_cta_final_snapshot import (
+        CtaFinalSnapshotError,
+        FOLLOWUP as CTA_FINAL_FOLLOWUP_STATUS,
+        RECORDED as CTA_FINAL_RECORDED_STATUS,
+        WAITING as CTA_FINAL_WAITING_STATUS,
+        validate_manifest as validate_cta_final_snapshot_manifest,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -174,6 +191,9 @@ CTA_MEASUREMENT_WINDOW_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_measurement_window.json"
 )
 CTA_COMPLETION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_completion.json"
+CTA_FINAL_SNAPSHOT_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_final_snapshot.json"
+)
 CTA_STOP_OBSERVATION_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_assignment_stop_observation.json"
 )
@@ -416,6 +436,9 @@ def validate() -> None:
         CTA_MEASUREMENT_WINDOW_PATH.read_text(encoding="utf-8")
     )
     cta_completion = json.loads(CTA_COMPLETION_PATH.read_text(encoding="utf-8"))
+    cta_final_snapshot = json.loads(
+        CTA_FINAL_SNAPSHOT_PATH.read_text(encoding="utf-8")
+    )
     cta_activation_observation = None
     if cta_activation.get("status") in {CTA_RUNNING_STATUS, CTA_STOPPED_STATUS}:
         observation_bytes = CTA_ACTIVATION_OBSERVATION_PATH.read_bytes()
@@ -585,6 +608,22 @@ def validate() -> None:
         )
     except CtaCompletionRecordingError as exc:
         raise AssertionError(f"CTA completion contract is invalid: {exc}") from exc
+    try:
+        validate_cta_final_snapshot_manifest(cta_final_snapshot)
+    except CtaFinalSnapshotError as exc:
+        raise AssertionError(f"CTA final snapshot contract is invalid: {exc}") from exc
+    final_snapshot_status = cta_final_snapshot.get("status")
+    completion_is_followup = cta_completion.get("status") == CTA_FOLLOWUP_STATUS
+    if completion_is_followup:
+        if final_snapshot_status not in {
+            CTA_FINAL_FOLLOWUP_STATUS,
+            CTA_FINAL_RECORDED_STATUS,
+        }:
+            raise AssertionError(
+                "CTA stopped completion must open or record the protected final snapshot"
+            )
+    elif final_snapshot_status != CTA_FINAL_WAITING_STATUS:
+        raise AssertionError("CTA final snapshot opened before verified stop")
     if (
         cta_decision_contract["decision_timing"]["minimum_full_calendar_days"]
         != cta_sample_plan["minimum_full_calendar_days"]
@@ -608,6 +647,8 @@ def validate() -> None:
     production_cta_stopped = workspace_state == (
         "production_cta_stopped_followup_pending_pro_quantiles_blocked"
     )
+    if production_cta_stopped is not completion_is_followup:
+        raise AssertionError("GrowthBook workspace/CTA completion lifecycle drift")
     production_post_aa = (
         production_aa_completed or production_cta_running or production_cta_stopped
     )

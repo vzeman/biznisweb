@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "producer_type": "vevo_growthbook_cta_protected_final_snapshot",
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "status": "waiting_for_verified_cta_stop_and_followup",
+  "workflow": ".github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml",
+  "workflow_name": "Build VEVO GrowthBook Production CTA Final Snapshot",
+  "source_bindings": {
+    "completion_path": "projects/vevo/growthbook_cta_completion.json",
+    "completion_sha256": null,
+    "activation_path": "projects/vevo/growthbook_cta_activation.json",
+    "activation_sha256": null,
+    "measurement_window_path": "projects/vevo/growthbook_cta_measurement_window.json",
+    "measurement_window_sha256": null,
+    "sample_plan_path": "projects/vevo/growthbook_cta_sample_plan.json",
+    "sample_plan_sha256": null,
+    "decision_contract_path": "projects/vevo/growthbook_cta_decision_contract.json",
+    "decision_contract_sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+    "lifecycle_reconciliation_path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
+    "lifecycle_reconciliation_sha256": null,
+    "stop_observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+    "stop_observation_sha256": null
+  },
+  "final_look": {
+    "timezone": "Europe/Bratislava",
+    "required_followup_days": 14,
+    "assignment_started_at_utc": null,
+    "assignment_ended_at_utc": null,
+    "snapshot_due_utc": null,
+    "target_total_sample": null,
+    "eligible_devices_seen_before_stop": null,
+    "one_final_look_only": true,
+    "protected_workflow_allowed": false,
+    "successful_run_id": null,
+    "main_commit": null,
+    "snapshot_sha256": null,
+    "decision_sha256": null,
+    "verdict": null,
+    "recommended_variation": null
+  },
+  "query_contract": {
+    "template_path": "projects/vevo/growthbook_sql/cta_final_snapshot_production.sql",
+    "template_sha256": "7102dd7593d64678054abbda6f8cf6cde37753a8c38e50affd000f7a67c1ff9d",
+    "database": "vevo_growthbook_production",
+    "workgroup": "vevo-growthbook-reporting-production",
+    "source_tables": [
+      "experiment_events_raw",
+      "experiment_device_facts",
+      "experiment_performance_facts"
+    ],
+    "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+    "selection_method": "first_n_eligible_devices_ordered_by_first_exposure_then_device_id",
+    "result_variations": [
+      "control",
+      "brand_contrast"
+    ],
+    "aggregate_rows_only": true,
+    "identity_columns_in_result_allowed": false
+  },
+  "runtime_gate": {
+    "instance_id": "N/A:Fargate",
+    "service": "vevo-growthbook-reconcile-production",
+    "runtime_path": "/app",
+    "successful_scheduled_reconciliation_required": true,
+    "localhost_health_marker_required": true,
+    "localhost_runtime_marker_required": true,
+    "generated_published_parity_required": true,
+    "alarms_clear_required": true,
+    "dlq_empty_required": true
+  },
+  "output": {
+    "artifact_name": "vevo-growthbook-cta-final-snapshot",
+    "snapshot_file_name": "vevo-growthbook-cta-final-snapshot.json",
+    "decision_file_name": "vevo-growthbook-cta-final-decision.json",
+    "retention_days": 90,
+    "canonical_json_required": true,
+    "contains_raw_aws_payloads": false,
+    "contains_event_or_device_ids": false,
+    "contains_customer_or_order_data": false
+  },
+  "release_boundaries": {
+    "main_only": true,
+    "diagnostic_host_gate_task_allowed": false,
+    "aws_aggregate_reads_allowed": false,
+    "outcome_metrics_read_allowed": false,
+    "automatic_growthbook_mutation_allowed": false,
+    "automatic_gtm_mutation_allowed": false,
+    "automatic_meta_ads_mutation_allowed": false,
+    "automatic_biznisweb_mutation_allowed": false,
+    "automatic_collector_or_reporting_mutation_allowed": false,
+    "price_product_cart_checkout_order_mutation_allowed": false,
+    "automatic_winner_application_allowed": false
+  },
+  "next_gate": "after_verified_manual_cta_stop_wait_exact_14_day_followup_then_open_one_protected_final_look"
+}

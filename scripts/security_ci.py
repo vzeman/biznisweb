@@ -49,6 +49,9 @@ def main() -> int:
         from scripts.validate_growthbook_cta_completion import (
             main as validate_cta_completion,
         )
+        from scripts.build_growthbook_cta_final_snapshot import (
+            validate_manifest as validate_cta_final_snapshot_manifest,
+        )
 
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
@@ -250,6 +253,18 @@ def main() -> int:
         growthbook_cta_completion_validator = read(
             "scripts/validate_growthbook_cta_completion.py"
         )
+        growthbook_cta_final_builder = read(
+            "scripts/build_growthbook_cta_final_snapshot.py"
+        )
+        growthbook_cta_final_validator = read(
+            "scripts/validate_growthbook_cta_final_snapshot.py"
+        )
+        growthbook_cta_final_recorder = read(
+            "scripts/record_growthbook_cta_final_snapshot.py"
+        )
+        growthbook_cta_final_workflow = read(
+            ".github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml"
+        )
         growthbook_cta_activation_manifest = json.loads(
             read("projects/vevo/growthbook_cta_activation.json")
         )
@@ -257,6 +272,9 @@ def main() -> int:
             read("projects/vevo/growthbook_cta_measurement_window.json")
         )
         json.loads(read("projects/vevo/growthbook_cta_completion.json"))
+        growthbook_cta_final_manifest = json.loads(
+            read("projects/vevo/growthbook_cta_final_snapshot.json")
+        )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
         )
@@ -2090,6 +2108,7 @@ def main() -> int:
         )
         if validate_cta_completion() != 0:
             raise AssertionError("GrowthBook CTA completion state is invalid.")
+        validate_cta_final_snapshot_manifest(growthbook_cta_final_manifest)
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
             "release_boundaries", {}
         )
@@ -2921,6 +2940,114 @@ def main() -> int:
                 "GrowthBook CTA completion lost safety marker: "
                 f"{required_cta_completion_marker}",
             )
+        for offline_cta_final_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            for source, label in (
+                (growthbook_cta_final_builder, "builder"),
+                (growthbook_cta_final_validator, "validator"),
+                (growthbook_cta_final_recorder, "recorder"),
+            ):
+                forbid(
+                    source.lower(),
+                    offline_cta_final_marker.lower(),
+                    "GrowthBook CTA final snapshot "
+                    f"{label} must remain offline: {offline_cta_final_marker}",
+                )
+        for required_cta_final_marker in (
+            "waiting_for_verified_cta_stop_and_followup",
+            "followup_pending_final_look_locked_until_due",
+            "final_snapshot_recorded_manual_action_pending",
+            "first_n_eligible_devices_ordered_by_first_exposure_then_device_id",
+            "one_final_look_only",
+            "diagnostic_host_gate_task_allowed",
+            "outcome_metrics_read_allowed",
+            "automatic_winner_application_allowed",
+            "manual_review_decision_before_any_external_mutation",
+        ):
+            require(
+                growthbook_cta_final_builder + growthbook_cta_final_recorder,
+                required_cta_final_marker,
+                "GrowthBook CTA final snapshot lost safety marker: "
+                f"{required_cta_final_marker}",
+            )
+        for required_cta_final_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "CTA 14-day outcome maturity is not complete",
+            "a prior CTA final outcome-query attempt already exists",
+            "CTA_FINAL_PREQUERY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=",
+            "source reporting schedule drift",
+            "not str(task.get('startedBy') or '').startswith('cta-final-')",
+            "CTA_FINAL_RECONCILIATION_GATE_OK:",
+            "/app/scripts/growthbook_reconcile_host_gate.sh",
+            "GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:production:",
+            "GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:",
+            "CTA_FINAL_HOST_GATE_OK:instance-id=N/A:Fargate:private-ip=",
+            "build_growthbook_cta_final_snapshot.py render-query",
+            "evaluate_growthbook_cta.py",
+            "--require-final",
+            "Remove every temporary AWS response query and host-gate file",
+            "Automatic winner application: `false`",
+        ):
+            require(
+                growthbook_cta_final_workflow,
+                required_cta_final_workflow_marker,
+                "GrowthBook CTA final workflow lost safety marker: "
+                f"{required_cta_final_workflow_marker}",
+            )
+        if growthbook_cta_final_workflow.count("aws ecs run-task") != 1:
+            raise AssertionError(
+                "GrowthBook CTA final workflow must run exactly one localhost host-gate task."
+            )
+        if growthbook_cta_final_workflow.count("aws athena start-query-execution") != 1:
+            raise AssertionError(
+                "GrowthBook CTA final workflow must run exactly one aggregate Athena query."
+            )
+        if (
+            growthbook_cta_final_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook CTA final workflow must upload exactly one artifact bundle."
+            )
+        for forbidden_cta_final_workflow_marker in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "ecs update-service",
+            "ecs stop-task",
+            "register-task-definition",
+            "scheduler update-schedule",
+            "scheduler create-schedule",
+            "s3api put-object",
+            "s3api delete-object",
+            "glue create-",
+            "glue update-",
+            "glue delete-",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "curl ",
+            "wget ",
+        ):
+            forbid(
+                growthbook_cta_final_workflow.lower(),
+                forbidden_cta_final_workflow_marker.lower(),
+                "GrowthBook CTA final workflow mutation path detected: "
+                f"{forbidden_cta_final_workflow_marker}",
+            )
         if (
             growthbook_aa_automated_workflow.count(
                 "uses: actions/upload-artifact@v4.6.2"
@@ -3014,6 +3141,9 @@ def main() -> int:
             "scripts/record_growthbook_cta_window_checkpoint.py",
             "scripts/record_growthbook_cta_completion.py",
             "scripts/validate_growthbook_cta_completion.py",
+            "scripts/build_growthbook_cta_final_snapshot.py",
+            "scripts/validate_growthbook_cta_final_snapshot.py",
+            "scripts/record_growthbook_cta_final_snapshot.py",
             "growthbook_collector/runtime_marker.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",

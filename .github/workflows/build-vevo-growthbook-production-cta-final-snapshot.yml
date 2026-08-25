@@ -1,0 +1,665 @@
+name: Build VEVO GrowthBook Production CTA Final Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_final_snapshot:
+        description: Type true to run the single protected aggregate CTA final look
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: vevo-growthbook-production-cta-final-snapshot
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  COLLECTOR_STACK: vevo-growthbook-production
+  RECONCILIATION_STACK: vevo-growthbook-reconciliation-production
+  EXPECTED_SERVICE: vevo-growthbook-reconcile-production
+  EXPECTED_SOURCE_SCHEDULE: vevo-daily-report-email
+  EXPECTED_DATABASE: vevo_growthbook_production
+  EXPECTED_WORKGROUP: vevo-growthbook-reporting-production
+  EXPECTED_RUNTIME_PATH: /app
+  FINAL_MANIFEST: projects/vevo/growthbook_cta_final_snapshot.json
+  SNAPSHOT_FILE: vevo-growthbook-cta-final-snapshot.json
+  DECISION_FILE: vevo-growthbook-cta-final-decision.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build-final-snapshot:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Require exact one-look confirmation
+        env:
+          CONFIRM_FINAL_SNAPSHOT: ${{ inputs.confirm_final_snapshot }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_FINAL_SNAPSHOT}" == 'true' ]]
+          [[ "${GITHUB_RUN_ATTEMPT}" == '1' ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate frozen final-look gate before credentials or outcomes
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_cta_final_snapshot_builder \
+            tests.test_growthbook_cta_final_snapshot_recorder
+          python scripts/validate_growthbook_cta_completion.py
+          python scripts/validate_growthbook_cta_measurement_window.py
+          python scripts/validate_growthbook_cta_final_snapshot.py
+          python scripts/validate_growthbook_workspace.py
+          python scripts/security_ci.py
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          manifest = json.loads(Path(os.environ['FINAL_MANIFEST']).read_text(encoding='utf-8'))
+          final = manifest.get('final_look') or {}
+          boundaries = manifest.get('release_boundaries') or {}
+          if manifest.get('status') != 'followup_pending_final_look_locked_until_due':
+              raise SystemExit('CTA final snapshot is not in its single open state')
+          if final.get('one_final_look_only') is not True or final.get('protected_workflow_allowed') is not True:
+              raise SystemExit('CTA one-look gate is closed')
+          due = datetime.fromisoformat(str(final.get('snapshot_due_utc') or '').replace('Z', '+00:00'))
+          if datetime.now(UTC) < due:
+              raise SystemExit('CTA 14-day outcome maturity is not complete')
+          required_true = {
+              'main_only',
+              'diagnostic_host_gate_task_allowed',
+              'aws_aggregate_reads_allowed',
+              'outcome_metrics_read_allowed',
+          }
+          if any(boundaries.get(field) is not True for field in required_true):
+              raise SystemExit('CTA final protected read boundary is closed')
+          forbidden = set(boundaries) - required_true
+          if any(boundaries.get(field) is not False for field in forbidden):
+              raise SystemExit('CTA final external mutation boundary drift')
+          temporary = Path(os.environ['RUNNER_TEMP']) / f"vevo-cta-final-{os.environ['GITHUB_RUN_ID']}"
+          temporary.mkdir(mode=0o700)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f'TEMP_FINAL_DIR={temporary}\n')
+              handle.write(f'FINAL_DUE_UTC={final["snapshot_due_utc"]}\n')
+          print('PRODUCTION_CTA_FINAL_LOCAL_GATE_OK:due=true:one-look=true:mutation=none')
+          PY
+
+      - name: Refuse any prior final outcome-query attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml/runs?branch=main&per_page=100" \
+            --jq '.workflow_runs[].id' > "${TEMP_FINAL_DIR}/prior-run-ids.txt"
+          while IFS= read -r PRIOR_RUN_ID; do
+            [[ -n "${PRIOR_RUN_ID}" ]] || continue
+            [[ "${PRIOR_RUN_ID}" != "${GITHUB_RUN_ID}" ]] || continue
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${PRIOR_RUN_ID}/jobs?per_page=100" \
+              > "${TEMP_FINAL_DIR}/prior-jobs.json"
+            PRIOR_RUN_ID="${PRIOR_RUN_ID}" python - <<'PY'
+          import json
+          import os
+
+          query_step = 'Run the single aggregate-only CTA outcome query'
+          jobs = json.load(open(f"{os.environ['TEMP_FINAL_DIR']}/prior-jobs.json", encoding='utf-8')).get('jobs') or []
+          attempted = []
+          for job in jobs:
+              for step in job.get('steps') or []:
+                  if (
+                      step.get('name') == query_step
+                      and step.get('status') in {'in_progress', 'completed'}
+                      and step.get('conclusion') != 'skipped'
+                  ):
+                      attempted.append(step)
+          if attempted:
+              raise SystemExit(
+                  f"a prior CTA final outcome-query attempt already exists: {os.environ['PRIOR_RUN_ID']}"
+              )
+          PY
+          done < "${TEMP_FINAL_DIR}/prior-run-ids.txt"
+          echo 'PRODUCTION_CTA_FINAL_SINGLE_LOOK_OK:prior-outcome-query-attempt=0'
+
+      - name: Configure AWS credentials for the bounded host gate and aggregate read
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm exact runtime identity and latest post-due reconciliation
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          aws cloudformation describe-stacks \
+            --stack-name "${COLLECTOR_STACK}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/collector-stack.json"
+          aws cloudformation describe-stacks \
+            --stack-name "${RECONCILIATION_STACK}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/reconciliation-stack.json"
+          aws scheduler get-schedule \
+            --name "${EXPECTED_SERVICE}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/schedule.json"
+          aws scheduler get-schedule \
+            --name "${EXPECTED_SOURCE_SCHEDULE}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/source-schedule.json"
+          python - <<'PY' > "${TEMP_FINAL_DIR}/runtime.env"
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_FINAL_DIR'])
+          collector = json.load(open(root / 'collector-stack.json', encoding='utf-8'))['Stacks'][0]
+          reconciliation = json.load(open(root / 'reconciliation-stack.json', encoding='utf-8'))['Stacks'][0]
+          schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
+          source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          if collector.get('StackStatus') != 'CREATE_COMPLETE' or reconciliation.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production GrowthBook stack state drift')
+          collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
+          reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}
+          target = schedule.get('Target') or {}
+          ecs = target.get('EcsParameters') or {}
+          network = (ecs.get('NetworkConfiguration') or {}).get('awsvpcConfiguration') or {}
+          if (
+              collector_outputs.get('ExperimentDatabaseName') != os.environ['EXPECTED_DATABASE']
+              or collector_outputs.get('ReportingWorkGroupName') != os.environ['EXPECTED_WORKGROUP']
+              or reconciliation_outputs.get('ScheduleName') != os.environ['EXPECTED_SERVICE']
+              or reconciliation_outputs.get('ScheduleState') != 'ENABLED'
+              or schedule.get('Name') != os.environ['EXPECTED_SERVICE']
+              or schedule.get('State') != 'ENABLED'
+              or schedule.get('ScheduleExpression') != 'cron(45 3 * * ? *)'
+              or schedule.get('ScheduleExpressionTimezone') != 'Europe/Bratislava'
+              or schedule.get('FlexibleTimeWindow') != {'Mode': 'OFF'}
+              or ecs.get('TaskDefinitionArn') != reconciliation_outputs.get('TargetTaskDefinitionArn')
+              or ecs.get('Group') != os.environ['EXPECTED_SERVICE']
+              or ecs.get('TaskCount') != 1
+              or ecs.get('EnableExecuteCommand') is not False
+              or target.get('Arn') != collector_outputs.get('CollectorClusterArn')
+              or target.get('RoleArn') != reconciliation_outputs.get('SchedulerRoleArn')
+              or target.get('DeadLetterConfig') != {'Arn': reconciliation_outputs.get('DeadLetterQueueArn')}
+              or target.get('RetryPolicy') != {'MaximumEventAgeInSeconds': 3600, 'MaximumRetryAttempts': 2}
+              or not network.get('subnets')
+              or not network.get('securityGroups')
+              or network.get('assignPublicIp') not in {'ENABLED', 'DISABLED'}
+          ):
+              raise SystemExit('Production reconciliation runtime identity drift')
+          schedule_input = json.loads(target.get('Input') or '{}')
+          overrides = schedule_input.get('containerOverrides') or []
+          if len(overrides) != 1 or not overrides[0].get('name'):
+              raise SystemExit('Production reconciliation container identity drift')
+          override = overrides[0]
+          if (
+              override.get('command') != ['/bin/bash', '-lc', 'cd /app && python scripts/run_scheduled_growthbook_reconciliation.py']
+              or override.get('environment') != [
+                  {'name': 'REPORT_PROJECT', 'value': 'vevo'},
+                  {'name': 'GROWTHBOOK_ENVIRONMENT', 'value': 'production'},
+                  {'name': 'GROWTHBOOK_EVENT_BUCKET', 'value': collector_outputs.get('EventBucketName')},
+                  {'name': 'GROWTHBOOK_FACT_PUBLISH_ENABLED', 'value': 'true'},
+                  {'name': 'AWS_REGION', 'value': os.environ['AWS_REGION']},
+              ]
+          ):
+              raise SystemExit('Production reconciliation scheduled command drift')
+          source_task = str(source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') or '')
+          if (
+              source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
+              or source.get('State') != 'ENABLED'
+              or not source_task.endswith('vevo-reporting-daily:33')
+          ):
+              raise SystemExit('source reporting schedule drift')
+          values = {
+              'PRODUCTION_CLUSTER_ARN': collector_outputs['CollectorClusterArn'],
+              'PRODUCTION_DATABASE': collector_outputs['ExperimentDatabaseName'],
+              'PRODUCTION_WORKGROUP': collector_outputs['ReportingWorkGroupName'],
+              'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
+              'RECONCILIATION_CONTAINER_NAME': override['name'],
+              'PLATFORM_VERSION': ecs.get('PlatformVersion') or 'LATEST',
+          }
+          network_payload = {
+              'awsvpcConfiguration': {
+                  'subnets': network['subnets'],
+                  'securityGroups': network['securityGroups'],
+                  'assignPublicIp': network['assignPublicIp'],
+              }
+          }
+          (root / 'network.json').write_text(json.dumps(network_payload, separators=(',', ':')), encoding='utf-8')
+          for key, value in values.items():
+              if not value or '\n' in value or '\r' in value:
+                  raise SystemExit(f'invalid runtime value: {key}')
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_FINAL_DIR}/runtime.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_FINAL_DIR}/runtime.env"
+          set +a
+          aws ecs describe-task-definition \
+            --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/task-definition.json"
+          aws ecs list-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --family "${EXPECTED_SERVICE}" \
+            --desired-status STOPPED \
+            --max-results 100 \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/task-list.json"
+          python - <<'PY' > "${TEMP_FINAL_DIR}/task-arns.txt"
+          import json
+          import os
+          tasks = json.load(open(f"{os.environ['TEMP_FINAL_DIR']}/task-list.json", encoding='utf-8')).get('taskArns') or []
+          if not tasks:
+              raise SystemExit('scheduled reconciliation task list is empty')
+          print(' '.join(tasks))
+          PY
+          read -r -a TASK_ARNS < "${TEMP_FINAL_DIR}/task-arns.txt"
+          aws ecs describe-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${TASK_ARNS[@]}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/tasks.json"
+          python - <<'PY' > "${TEMP_FINAL_DIR}/selected-task.env"
+          import ipaddress
+          import json
+          import os
+          from datetime import datetime
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_FINAL_DIR'])
+          due = datetime.fromisoformat(os.environ['FINAL_DUE_UTC'].replace('Z', '+00:00'))
+          definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
+          containers = definition.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']:
+              raise SystemExit('reconciliation task-definition container drift')
+          image = str(containers[0].get('image') or '')
+          if '@sha256:' not in image:
+              raise SystemExit('reconciliation task definition is not digest pinned')
+          image_digest = 'sha256:' + image.rsplit('@sha256:', 1)[1]
+          log_group = ((containers[0].get('logConfiguration') or {}).get('options') or {}).get('awslogs-group')
+          candidates = []
+          for task in json.load(open(root / 'tasks.json', encoding='utf-8')).get('tasks') or []:
+              started_at = task.get('startedAt')
+              stopped_at = task.get('stoppedAt')
+              started = datetime.fromisoformat(started_at.replace('Z', '+00:00')) if started_at else None
+              stopped = datetime.fromisoformat(stopped_at.replace('Z', '+00:00')) if stopped_at else None
+              task_containers = task.get('containers') or []
+              if (
+                  task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+                  and task.get('group') == os.environ['EXPECTED_SERVICE']
+                  and task.get('launchType') == 'FARGATE'
+                  and not str(task.get('startedBy') or '').startswith('cta-final-')
+                  and started is not None and started >= due
+                  and stopped is not None and stopped >= started
+                  and len(task_containers) == 1
+                  and task_containers[0].get('exitCode') == 0
+                  and task_containers[0].get('imageDigest') == image_digest
+              ):
+                  candidates.append((started, task))
+          if not candidates:
+              raise SystemExit('no successful post-due Production reconciliation task exists')
+          task = max(candidates, key=lambda row: row[0])[1]
+          container = task['containers'][0]
+          details = [row for attachment in task.get('attachments') or [] for row in attachment.get('details') or []]
+          private_ip_text = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+          private_ip = ipaddress.ip_address(private_ip_text)
+          if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('scheduled reconciliation task private IP drift')
+          values = {
+              'RECONCILIATION_TASK_ID': task['taskArn'].rsplit('/', 1)[-1],
+              'RECONCILIATION_PRIVATE_IP': private_ip_text,
+              'RECONCILIATION_IMAGE_DIGEST': image_digest,
+              'RECONCILIATION_LOG_GROUP': log_group,
+              'RECONCILIATION_LOG_STREAM': container.get('logStreamName') or '',
+          }
+          if not values['RECONCILIATION_LOG_GROUP'] or not values['RECONCILIATION_LOG_STREAM']:
+              raise SystemExit('scheduled reconciliation log identity missing')
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_FINAL_DIR}/selected-task.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_FINAL_DIR}/selected-task.env"
+          set +a
+          echo "CTA_FINAL_PREQUERY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:task=${RECONCILIATION_TASK_ID}:image=${RECONCILIATION_IMAGE_DIGEST}"
+
+      - name: Verify scheduled marker parity alarms and DLQ before outcomes
+        run: |
+          set -euo pipefail
+          aws logs get-log-events \
+            --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+            --log-stream-name "${RECONCILIATION_LOG_STREAM}" \
+            --start-from-head \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/scheduled-logs.json"
+          aws cloudwatch describe-alarms \
+            --alarm-names \
+              vevo-growthbook-reconcile-production-failure \
+              vevo-growthbook-reconcile-production-missing-success \
+              vevo-growthbook-reconcile-production-dlq \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/alarms.json"
+          aws sqs get-queue-url \
+            --queue-name vevo-growthbook-reconcile-production-dlq \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/queue-url.json"
+          QUEUE_URL="$(python - <<'PY'
+          import json
+          import os
+          print(json.load(open(f"{os.environ['TEMP_FINAL_DIR']}/queue-url.json", encoding='utf-8'))['QueueUrl'])
+          PY
+          )"
+          aws sqs get-queue-attributes \
+            --queue-url "${QUEUE_URL}" \
+            --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesDelayed ApproximateNumberOfMessagesNotVisible \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/queue.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_FINAL_DIR'])
+          messages = [str(row.get('message') or '').strip() for row in json.load(open(root / 'scheduled-logs.json', encoding='utf-8')).get('events') or []]
+          markers = [row for row in messages if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:' in row]
+          summaries = [json.loads(row) for row in messages if row.startswith('{') and '"mode":"publish"' in row]
+          if len(markers) != 1 or len(summaries) != 1:
+              raise SystemExit('scheduled reconciliation marker/summary drift')
+          summary = summaries[0]
+          published = summary.get('published') or {}
+          expected = {key: summary.get(key) for key in ('device_facts', 'performance_facts', 'quality_reports')}
+          if published != expected:
+              raise SystemExit('scheduled reconciliation generated/published parity drift')
+          alarms = json.load(open(root / 'alarms.json', encoding='utf-8')).get('MetricAlarms') or []
+          expected_alarms = {
+              'vevo-growthbook-reconcile-production-failure',
+              'vevo-growthbook-reconcile-production-missing-success',
+              'vevo-growthbook-reconcile-production-dlq',
+          }
+          if {row.get('AlarmName') for row in alarms} != expected_alarms or any(row.get('StateValue') != 'OK' for row in alarms):
+              raise SystemExit('Production reconciliation alarm gate failed')
+          queue = json.load(open(root / 'queue.json', encoding='utf-8')).get('Attributes') or {}
+          if any(int(queue.get(key, '-1')) != 0 for key in ('ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesDelayed', 'ApproximateNumberOfMessagesNotVisible')):
+              raise SystemExit('Production reconciliation DLQ is not empty')
+          print('CTA_FINAL_RECONCILIATION_GATE_OK:marker=true:parity=true:alarms=clear:dlq=empty')
+          PY
+
+      - name: Run exact Fargate localhost health and marker hard gate
+        run: |
+          set -euo pipefail
+          python - <<'PY' > "${TEMP_FINAL_DIR}/host-gate-overrides.json"
+          import json
+          import os
+          print(json.dumps({'containerOverrides': [{
+              'name': os.environ['RECONCILIATION_CONTAINER_NAME'],
+              'command': ['/bin/bash', '/app/scripts/growthbook_reconcile_host_gate.sh'],
+              'environment': [
+                  {'name': 'REPORT_PROJECT', 'value': 'vevo'},
+                  {'name': 'GROWTHBOOK_ENVIRONMENT', 'value': 'production'},
+                  {'name': 'GROWTHBOOK_RECONCILE_VERSION', 'value': os.environ['RECONCILIATION_IMAGE_DIGEST']},
+              ],
+          }]}))
+          PY
+          aws ecs run-task \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" \
+            --launch-type FARGATE \
+            --platform-version "${PLATFORM_VERSION}" \
+            --network-configuration "file://${TEMP_FINAL_DIR}/network.json" \
+            --overrides "file://${TEMP_FINAL_DIR}/host-gate-overrides.json" \
+            --group "${EXPECTED_SERVICE}" \
+            --started-by "cta-final-${GITHUB_RUN_ID}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/host-gate-task.json"
+          HOST_TASK_ARN="$(python - <<'PY'
+          import json
+          import os
+          run = json.load(open(f"{os.environ['TEMP_FINAL_DIR']}/host-gate-task.json", encoding='utf-8'))
+          if run.get('failures') or len(run.get('tasks') or []) != 1:
+              raise SystemExit('CTA final host gate failed to start')
+          print(run['tasks'][0]['taskArn'])
+          PY
+          )"
+          aws ecs wait tasks-stopped \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${HOST_TASK_ARN}" \
+            --region "${AWS_REGION}"
+          aws ecs describe-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${HOST_TASK_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/host-gate-state.json"
+          python - <<'PY' > "${TEMP_FINAL_DIR}/host-gate.env"
+          import ipaddress
+          import json
+          import os
+          task = json.load(open(f"{os.environ['TEMP_FINAL_DIR']}/host-gate-state.json", encoding='utf-8'))['tasks'][0]
+          containers = task.get('containers') or []
+          if len(containers) != 1 or containers[0].get('exitCode') != 0:
+              raise SystemExit('CTA final localhost host gate failed')
+          if containers[0].get('imageDigest') != os.environ['RECONCILIATION_IMAGE_DIGEST']:
+              raise SystemExit('CTA final host-gate image digest drift')
+          details = [row for attachment in task.get('attachments') or [] for row in attachment.get('details') or []]
+          private_ip_text = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+          private_ip = ipaddress.ip_address(private_ip_text)
+          if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('CTA final host-gate private IP drift')
+          print(f"HOST_TASK_ID={task['taskArn'].rsplit('/', 1)[-1]}")
+          print(f'HOST_PRIVATE_IP={private_ip_text}')
+          print(f"HOST_LOG_STREAM={containers[0].get('logStreamName') or ''}")
+          PY
+          cat "${TEMP_FINAL_DIR}/host-gate.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_FINAL_DIR}/host-gate.env"
+          set +a
+          [[ -n "${HOST_LOG_STREAM}" ]]
+          HOST_MARKERS_READY=false
+          for _ in $(seq 1 30); do
+            if aws logs get-log-events \
+              --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+              --log-stream-name "${HOST_LOG_STREAM}" \
+              --start-from-head \
+              --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/host-gate-logs.json" 2>/dev/null && \
+              python - <<'PY'
+          import json
+          import os
+          messages = [str(row.get('message') or '') for row in json.load(open(f"{os.environ['TEMP_FINAL_DIR']}/host-gate-logs.json", encoding='utf-8')).get('events') or []]
+          digest = os.environ['RECONCILIATION_IMAGE_DIGEST']
+          required = {
+              f'GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:production:{digest}',
+              f'GROWTHBOOK_RECONCILE_LOCALHOST_MARKER_OK:/app:{digest}',
+          }
+          raise SystemExit(0 if all(any(marker in message for message in messages) for marker in required) else 1)
+          PY
+            then
+              HOST_MARKERS_READY=true
+              break
+            fi
+            sleep 2
+          done
+          [[ "${HOST_MARKERS_READY}" == 'true' ]]
+          echo "CTA_FINAL_HOST_GATE_OK:instance-id=N/A:Fargate:private-ip=${HOST_PRIVATE_IP}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:task=${HOST_TASK_ID}:localhost-health=true:localhost-marker=true"
+
+      - name: Verify exact Production aggregate schemas
+        run: |
+          set -euo pipefail
+          for table in experiment_events_raw experiment_device_facts experiment_performance_facts; do
+            aws glue get-table \
+              --database-name "${PRODUCTION_DATABASE}" \
+              --name "${table}" \
+              --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/${table}-schema.json"
+          done
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_FINAL_DIR'])
+          expected = {
+              'experiment_events_raw': [
+                  'schema_version', 'event_id', 'event_name', 'occurred_at', 'received_at',
+                  'device_id', 'page_path', 'page_type', 'consent_state', 'experiment_id',
+                  'variation_id', 'utm_source', 'utm_medium', 'meta_campaign_id',
+                  'meta_adset_id', 'meta_ad_id', 'meta_placement', 'product_id',
+                  'transaction_id', 'page_load_id', 'vital_name', 'vital_value',
+                  'error_kind', 'collector_version', 'risk_result',
+              ],
+              'experiment_device_facts': [
+                  'metric_contract_version', 'device_id', 'first_exposure_at', 'variation_id',
+                  'meta_campaign_id', 'meta_adset_id', 'meta_ad_id', 'meta_placement',
+                  'add_to_cart_24h', 'purchase_converted', 'joined_order_count',
+                  'net_revenue_eur', 'cm1_eur', 'cancelled_order_count',
+                  'refunded_order_count', 'immature_order_count', 'client_error_observed',
+                  'contaminated', 'eligible', 'order_attribution_eligible',
+                  'order_attribution_issue', 'unmatched_transaction_count',
+                  'ambiguous_transaction_count', 'exclusion_reason', 'facts_generated_at',
+              ],
+              'experiment_performance_facts': [
+                  'metric_contract_version', 'device_id', 'variation_id', 'page_load_id',
+                  'vital_name', 'vital_value', 'measured_at', 'eligible',
+                  'exclusion_reason', 'facts_generated_at',
+              ],
+          }
+          partitions = {
+              'experiment_events_raw': ['event_date'],
+              'experiment_device_facts': ['experiment_id'],
+              'experiment_performance_facts': ['experiment_id'],
+          }
+          for table, columns in expected.items():
+              payload = json.load(open(root / f'{table}-schema.json', encoding='utf-8'))['Table']
+              actual = [row['Name'] for row in payload['StorageDescriptor']['Columns']]
+              actual_partitions = [row['Name'] for row in payload.get('PartitionKeys') or []]
+              if actual != columns or actual_partitions != partitions[table]:
+                  raise SystemExit(f'Production Glue schema drift: {table}')
+          print('CTA_FINAL_GLUE_SCHEMA_OK:pii-fields=absent:customer-fields=absent:ip-fields=absent')
+          PY
+
+      - name: Run the single aggregate-only CTA outcome query
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_final_snapshot.py render-query \
+            --output "${TEMP_FINAL_DIR}/cta-final.sql"
+          QUERY_ID="$(aws athena start-query-execution \
+            --query-string "file://${TEMP_FINAL_DIR}/cta-final.sql" \
+            --query-execution-context "Database=${PRODUCTION_DATABASE}" \
+            --work-group "${PRODUCTION_WORKGROUP}" \
+            --region "${AWS_REGION}" \
+            --query QueryExecutionId \
+            --output text)"
+          [[ -n "${QUERY_ID}" && "${QUERY_ID}" != 'None' ]]
+          STATE=QUEUED
+          for _ in $(seq 1 60); do
+            STATE="$(aws athena get-query-execution \
+              --query-execution-id "${QUERY_ID}" \
+              --region "${AWS_REGION}" \
+              --query 'QueryExecution.Status.State' \
+              --output text)"
+            if [[ "${STATE}" == 'SUCCEEDED' ]]; then break; fi
+            if [[ "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then exit 1; fi
+            sleep 5
+          done
+          [[ "${STATE}" == 'SUCCEEDED' ]]
+          aws athena get-query-results \
+            --query-execution-id "${QUERY_ID}" \
+            --max-results 3 \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/athena-results.json"
+          EVALUATED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python scripts/build_growthbook_cta_final_snapshot.py build \
+            --athena-results "${TEMP_FINAL_DIR}/athena-results.json" \
+            --evaluated-at-utc "${EVALUATED_AT_UTC}" \
+            --output "${SNAPSHOT_FILE}"
+          python scripts/evaluate_growthbook_cta.py \
+            --snapshot "${SNAPSHOT_FILE}" \
+            --output "${DECISION_FILE}" \
+            --require-final
+
+      - name: Validate only canonical identity-free final artifacts
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+
+          forbidden_keys = {
+              'device_id', 'event_id', 'transaction_id', 'customer_id', 'customer_email',
+              'email', 'phone', 'address', 'ip_address', 'raw_url', 'query_string',
+          }
+          def walk(value):
+              if isinstance(value, dict):
+                  if forbidden_keys.intersection(value):
+                      raise SystemExit('CTA final artifact contains an identity field')
+                  for nested in value.values():
+                      walk(nested)
+              elif isinstance(value, list):
+                  for nested in value:
+                      walk(nested)
+
+          for path in (os.environ['SNAPSHOT_FILE'], os.environ['DECISION_FILE']):
+              raw = open(path, 'rb').read()
+              payload = json.loads(raw.decode('utf-8'))
+              canonical = (json.dumps(payload, ensure_ascii=False, separators=(',', ':'), sort_keys=True) + '\n').encode('utf-8')
+              if raw != canonical:
+                  raise SystemExit('CTA final artifact is not canonical JSON')
+              walk(payload)
+              print(f"CTA_FINAL_ARTIFACT_OK:file={path}:sha256={hashlib.sha256(raw).hexdigest()}:identities=false")
+          decision = json.load(open(os.environ['DECISION_FILE'], encoding='utf-8'))
+          if decision.get('final_decision') is not True:
+              raise SystemExit('CTA final workflow did not produce one final decision')
+          if decision.get('verdict') not in {'WIN', 'LOSE', 'INCONCLUSIVE'}:
+              raise SystemExit('CTA final verdict drift')
+          if decision.get('automatic_mutation_allowed') is not False:
+              raise SystemExit('CTA final decision opened automatic mutation')
+          print(f"CTA_FINAL_DECISION_OK:verdict={decision['verdict']}:automatic-mutation=false")
+          PY
+
+      - name: Remove every temporary AWS response query and host-gate file
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          TARGET="${TEMP_FINAL_DIR:-}"
+          [[ -n "${TARGET}" && "${TARGET}" == "${RUNNER_TEMP}"/vevo-cta-final-* ]]
+          if [[ -d "${TARGET}" ]]; then
+            find "${TARGET}" -type f -exec shred -f -u -- {} + 2>/dev/null || find "${TARGET}" -type f -delete
+            rmdir "${TARGET}"
+          fi
+
+      - name: Upload only the aggregate snapshot and offline decision
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-cta-final-snapshot
+          path: |
+            vevo-growthbook-cta-final-snapshot.json
+            vevo-growthbook-cta-final-decision.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish sanitized final-look summary
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+          import hashlib
+          import json
+          import os
+          snapshot_raw = open(os.environ['SNAPSHOT_FILE'], 'rb').read()
+          decision_raw = open(os.environ['DECISION_FILE'], 'rb').read()
+          decision = json.loads(decision_raw)
+          print('## VEVO Production CTA protected final look')
+          print(f"- Verdict: `{decision['verdict']}`")
+          print(f"- Snapshot SHA-256: `{hashlib.sha256(snapshot_raw).hexdigest()}`")
+          print(f"- Decision SHA-256: `{hashlib.sha256(decision_raw).hexdigest()}`")
+          print('- Result rows: `two aggregate variation rows only`')
+          print('- Event/device/customer/order identities: `excluded`')
+          print('- GrowthBook, GTM, Meta Ads, BiznisWeb and commerce mutation: `none`')
+          print('- Automatic winner application: `false`')
+          PY

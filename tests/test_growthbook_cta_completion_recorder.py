@@ -46,6 +46,9 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         self.lifecycle = evaluator.lifecycle
         self.lifecycle_observation = evaluator.lifecycle_observation
         self.completion = load("projects/vevo/growthbook_cta_completion.json")
+        self.final_snapshot = load(
+            "projects/vevo/growthbook_cta_final_snapshot.json"
+        )
         self.stop_observation = self._stop_observation()
         self.stop_hash = hashlib.sha256(
             recorder.canonical_json_bytes(self.stop_observation)
@@ -170,6 +173,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             self.lifecycle_observation,
             self.reconciliation,
             self.workspace,
+            self.final_snapshot,
             self.start_observation,
             selected,
             stop_observation_sha256=digest,
@@ -190,7 +194,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         self.assertFalse(any(self.completion["release_boundaries"].values()))
 
     def test_stop_records_zero_allocation_and_exact_followup(self) -> None:
-        completion, activation, measurement, workspace = self._record()
+        completion, activation, measurement, workspace, final_snapshot = self._record()
         self.assertEqual(recorder.FOLLOWUP, completion["status"])
         self.assertEqual(recorder.CTA_STOPPED, activation["status"])
         self.assertEqual(window_validator.STOPPED, measurement["status"])
@@ -207,9 +211,25 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             workspace["state"],
         )
         self.assertEqual(0, workspace["workspace"]["production_allocation_percent"])
+        self.assertEqual(
+            "followup_pending_final_look_locked_until_due",
+            final_snapshot["status"],
+        )
+        self.assertEqual(
+            "2026-10-03T02:00:00Z",
+            final_snapshot["final_look"]["snapshot_due_utc"],
+        )
+        self.assertTrue(
+            final_snapshot["final_look"]["protected_workflow_allowed"]
+        )
+        self.assertTrue(
+            final_snapshot["release_boundaries"][
+                "diagnostic_host_gate_task_allowed"
+            ]
+        )
 
     def test_updated_measurement_binds_stopped_activation_hash(self) -> None:
-        completion, activation, measurement, _workspace = self._record()
+        completion, activation, measurement, _workspace, _final_snapshot = self._record()
         activation_hash = hashlib.sha256(
             recorder.pretty_json_bytes(activation)
         ).hexdigest()
@@ -250,6 +270,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
                 self.lifecycle_observation,
                 self.reconciliation,
                 self.workspace,
+                self.final_snapshot,
                 self.start_observation,
                 self.stop_observation,
                 stop_observation_sha256=self.stop_hash,
