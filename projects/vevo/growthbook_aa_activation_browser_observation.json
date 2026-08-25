@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "evidence_type": "vevo_growthbook_production_aa_activation_browser_observation",
+  "observed_at_utc": "2026-08-25T05:43:54Z",
+  "growthbook": {
+    "build": "5.0.1+bb61ccc",
+    "project": "VEVO SK Web",
+    "experiment_id": "exp_19g6mmt5wugpk",
+    "tracking_key": "vevo-sk-aa-001",
+    "status": "running",
+    "started_date": "2026-08-25",
+    "feature_key": "vevo-sk-aa-assignment",
+    "feature_revision": 3,
+    "feature_status": "live",
+    "environment": "production",
+    "environment_count": 1,
+    "available_environment_count": 2,
+    "traffic_percent": 100,
+    "variation_weights": [
+      0.5,
+      0.5
+    ],
+    "variations": [
+      "control",
+      "variant"
+    ],
+    "data_source_id": "ds_19g6mmt5stlp6",
+    "data_source_name": "VEVO Production Experiment Facts",
+    "assignment_table_name": "VEVO consented devices",
+    "statistics_engine": "bayesian_default",
+    "cuped_enabled": false,
+    "post_stratification_enabled": false,
+    "activation_metric": null,
+    "goal_metric_count": 1,
+    "secondary_metric_count": 6,
+    "guardrail_metric_count": 1,
+    "cta_experiment_id": "exp_19g6mmt1qxzrp",
+    "cta_experiment_status": "draft"
+  },
+  "browser_qa": {
+    "browser": "Chrome",
+    "product_path": "/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+    "tag_assistant_connected": true,
+    "detected_google_tag_count": 4,
+    "gtm_container_id": "GTM-5ZB5LFGB",
+    "production_loader_fired": true,
+    "production_loader_fires_per_observed_page": 1,
+    "observed_page_load_count": 2,
+    "sticky_reload_executed": true,
+    "sticky_assignment_value_recorded": false,
+    "console_error_count": 0,
+    "analytics_selection_saved": true,
+    "add_to_cart_text_unchanged": true,
+    "cta_experiment_class_applied": false,
+    "preexisting_cart_item_count": 2,
+    "cart_mutated": false,
+    "checkout_mutated": false,
+    "order_mutated": false
+  },
+  "pending_backend_proof": {
+    "accepted_collector_delivery_verified": false,
+    "sticky_assignment_verified": false,
+    "variation_value_recorded": false
+  },
+  "contains_credentials": false,
+  "contains_event_or_device_ids": false,
+  "contains_customer_or_order_data": false,
+  "growthbook_mutated_after_start": false,
+  "gtm_mutated": false,
+  "meta_ads_mutated": false,
+  "biznisweb_mutated": false,
+  "commerce_mutated": false
+}
