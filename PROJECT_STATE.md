@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -150,8 +150,13 @@ Bootstrap entrypoints:
   - policy-gate recovery PR `#387` merged as `36f121157c011f55309d38ffddc02316ac8a946f`; exact ECR build `32820337649` succeeded with digest `sha256:3293b36aa9f78d86ea35b4a9ca0a053494c777341fc2cc8dc05c71d7f2ec8b2f`
   - second protected Production run `32820526125` exactly verified and attached the Production reporting policy, registered task definition `vevo-growthbook-reconcile-production:2`, and passed the `/app` Fargate host gate at private IP `172.31.8.183` with task `ca3a0a39283a40adbddc1d64f4678deb`; it then stopped before change-set creation because the parameter builder's exact `GROWTHBOOK_ENVIRONMENT` input was not exported under that name
   - sanitized failure read-back shows reconciliation stack `ABSENT`, target schedule absent, no alarms/queue/role resources, source schedule `vevo-daily-report-email` still `ENABLED` on `vevo-reporting-daily:33`, and no one-shot reconciliation or evidence upload; branch `codex/vevo-growthbook-production-env-gate` exports the selected environment under both reviewed internal contracts and adds regression/security markers
-  - Production reconciliation is not deployed yet; GrowthBook allocation remains the already verified A/A-only `100%`, CTA remains stopped, and no Meta Ads, BiznisWeb, price, product-content, cart, checkout, or order mutation is introduced by this preparation
-  - Next exact step: merge the reviewed policy-gate recovery, wait for its exact merge-commit ECR image, redispatch the Production environment with the schedule enabled, require exact policy read-back plus the Fargate localhost/marker and one-shot gates and schedule/source read-back, independently hash and record the sanitized evidence, then begin the seven-full-day/1,000-device A/A window; no A/A winner call and no CTA start are allowed before that evidence passes
+  - environment-contract recovery PR `#388` merged as `cf92eb0e007fb9a9163068a2735e5becc0327f03`; its exact image is pinned by digest `sha256:51d70f4976083f86a0d7c5e542c21d93e5bbeff3d75d2af31f620b42df1a1b92`
+  - protected Production deploy run `32821210244` succeeded end to end: the exact reporting policy/document and attachment were re-read, task definition `vevo-growthbook-reconcile-production:3` was registered, and the Fargate localhost health plus `/app` marker hard gate passed on task `17d2ea85e2304d2ca0f16ef3ad32913d` at private IP `172.31.39.76`
+  - stack `vevo-growthbook-reconciliation-production` was created disabled-first; one-shot task `496df38886674a8885866016e82c5ae6` at `172.31.38.184` then passed curated publish parity with `0` raw events, `0` device facts, `0` performance facts, and `2` quality reports. The zero bootstrap is expected because the A/A began during the still-open current UTC partition and is not population-acceptance evidence
+  - only after the one-shot passed, schedule `vevo-growthbook-reconcile-production` was enabled on `cron(45 3 * * ? *)`, timezone `Europe/Bratislava`, with its retained encrypted DLQ and three alarms; source schedule `vevo-daily-report-email` remains unchanged on task definition `:33`
+  - the exact canonical sanitized artifact is recorded at `projects/vevo/growthbook_production_reconciliation_deploy_evidence.json` with SHA-256 `21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb`; it contains no credentials, raw AWS/CloudWatch payloads, event/device/customer/order IDs, or commerce/Meta/GTM/GrowthBook/BiznisWeb mutations
+  - Production A/A remains the only running Production experiment at `100%` traffic and frozen `50/50`; CTA remains stopped. The first server-side scheduled reconciliation is due `2026-08-26 03:45 Europe/Bratislava` and does not depend on this PC being powered on
+  - Next exact step: let the Production A/A collect at least seven full Europe/Bratislava calendar days and at least `1,000` eligible devices, monitor the daily reconciliation/alarms, then build the protected aggregate A/A snapshot. Require explicit `PASS`; do not call a winner, start CTA, change Meta Ads, or mutate BiznisWeb commerce before that gate passes
 
 - ROY daily report email delivery is disabled, deployed, and host-verified as of `2026-08-21`:
   - PR `#300` merged to `main` as `cd0d9d6a53d66bc90ed5ca777d2c3a4612d0cf8b`

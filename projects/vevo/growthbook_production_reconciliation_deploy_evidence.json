@@ -1,0 +1,70 @@
+{
+  "aws": {
+    "account_id": "919341186960",
+    "collector_stack": "vevo-growthbook-production",
+    "reconciliation_stack": "vevo-growthbook-reconciliation-production",
+    "region": "eu-central-1"
+  },
+  "boundaries": {
+    "biznisweb_mutated": false,
+    "collector_mutated": false,
+    "growthbook_experiment_mutated": false,
+    "gtm_mutated": false,
+    "meta_ads_mutated": false,
+    "price_product_cart_checkout_or_order_mutated": false,
+    "raw_event_delete_performed": false
+  },
+  "contains_cloudwatch_messages": false,
+  "contains_credentials": false,
+  "contains_event_device_customer_or_order_ids": false,
+  "contains_raw_aws_payloads": false,
+  "environment": "production",
+  "evidence_type": "vevo_growthbook_reconciliation_deploy",
+  "host_gate": {
+    "instance_id": "N/A:Fargate",
+    "localhost_health_verified": true,
+    "localhost_marker_verified": true,
+    "private_ip": "172.31.39.76",
+    "runtime_path": "/app",
+    "service": "vevo-growthbook-reconcile-production",
+    "task_id": "17d2ea85e2304d2ca0f16ef3ad32913d"
+  },
+  "observed_at_utc": "2026-08-25T07:28:18Z",
+  "reconciliation": {
+    "curated_fact_publish_verified": true,
+    "device_facts": 0,
+    "image_digest": "sha256:51d70f4976083f86a0d7c5e542c21d93e5bbeff3d75d2af31f620b42df1a1b92",
+    "one_shot_private_ip": "172.31.38.184",
+    "one_shot_task_id": "496df38886674a8885866016e82c5ae6",
+    "performance_facts": 0,
+    "quality_reports": 2,
+    "raw_events": 0,
+    "task_definition": "arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-growthbook-reconcile-production:3"
+  },
+  "reporting_policy": {
+    "arn": "arn:aws:iam::919341186960:policy/vevo-growthbook-reporting-production",
+    "attached_by_run": false,
+    "attachment_readback_verified": true,
+    "document_exactly_verified": true,
+    "task_role": "arn:aws:iam::919341186960:role/BiznisWebReportingTaskRole-vevo"
+  },
+  "schedule": {
+    "dlq": "vevo-growthbook-reconcile-production-dlq",
+    "dlq_alarm": "vevo-growthbook-reconcile-production-dlq",
+    "enabled": true,
+    "expression": "cron(45 3 * * ? *)",
+    "failure_alarm": "vevo-growthbook-reconcile-production-failure",
+    "missing_success_alarm": "vevo-growthbook-reconcile-production-missing-success",
+    "name": "vevo-growthbook-reconcile-production",
+    "timezone": "Europe/Bratislava"
+  },
+  "schema_version": 1,
+  "source_main_commit": "cf92eb0e007fb9a9163068a2735e5becc0327f03",
+  "source_run_id": "32821210244",
+  "source_runtime": {
+    "instance_id": "N/A:Fargate",
+    "service": "vevo-daily-report-email",
+    "source_schedule_unchanged": true,
+    "task_definition": "arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:33"
+  }
+}
