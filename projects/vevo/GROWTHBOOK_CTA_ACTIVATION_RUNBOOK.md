@@ -225,6 +225,38 @@ local day. At the target or day 42 it closes further checkpoints and opens only
 GrowthBook automatically, read an outcome, declare a winner, or mutate GTM,
 Meta Ads, BiznisWeb, collector/reporting, prices, cart, checkout, or orders.
 
+After the reviewed checkpoint opens the manual stop gate, stop only GrowthBook
+experiment `exp_19g6mmt1qxzrp`, remove only its Production live rule, preserve
+the staging rule, and leave GTM version `15`, Meta Ads, BiznisWeb, collector,
+reporting, prices, cart, checkout, payments, stock, and orders unchanged. Do not
+open any arm or outcome result during this operation. The canonical readback at
+`projects/vevo/growthbook_cta_assignment_stop_observation.json` must bind the
+last outcome-blind checkpoint SHA-256 and original CTA start-observation
+SHA-256, prove zero Production allocation/rules, an advanced feature revision,
+no active Production experiment, unchanged desktop/mobile commerce behavior,
+and at least 300 seconds with zero new CTA assignment or exposure.
+
+Independently hash that canonical readback, then record all versioned stopped
+states in one reviewed branch:
+
+```text
+python scripts/record_growthbook_cta_completion.py --stop-observation projects/vevo/growthbook_cta_assignment_stop_observation.json --stop-observation-sha256 <independent-sha256> --completion-output projects/vevo/growthbook_cta_completion.json --activation-output projects/vevo/growthbook_cta_activation.json --measurement-output projects/vevo/growthbook_cta_measurement_window.json --workspace-output projects/vevo/growthbook_workspace.json
+python scripts/validate_growthbook_cta_completion.py
+python scripts/validate_growthbook_cta_measurement_window.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_cta_completion_recorder tests.test_growthbook_cta_window_checkpoint tests.test_growthbook_workspace
+python scripts/security_ci.py
+git diff --check
+```
+
+The offline recorder first builds and validates the completion, historical
+activation, measurement-window, and workspace outputs, then records zero
+Production allocation and freezes `final_snapshot_due_utc` at exactly 14 days
+after `assignment_ended_at_utc`. The current completion manifest is deliberately
+`waiting_for_assignment_stop_review`; therefore no manual stop, follow-up, arm
+read, outcome read, winner call, or external mutation is currently authorized.
+The sole protected final-outcome snapshot path is a separate subsequent gate.
+
 ## Rollback
 
 For activation or runtime failure, use this order:

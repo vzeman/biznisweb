@@ -119,6 +119,7 @@ try:
     from record_growthbook_cta_activation import (
         CtaActivationRecordingError,
         RUNNING as CTA_RUNNING_STATUS,
+        STOPPED as CTA_STOPPED_STATUS,
         canonical_json_bytes as canonical_cta_activation_bytes,
         validate_runtime_observation as validate_cta_runtime_observation,
         validate_running_handoff as validate_cta_running_handoff,
@@ -128,6 +129,7 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
     from scripts.record_growthbook_cta_activation import (
         CtaActivationRecordingError,
         RUNNING as CTA_RUNNING_STATUS,
+        STOPPED as CTA_STOPPED_STATUS,
         canonical_json_bytes as canonical_cta_activation_bytes,
         validate_runtime_observation as validate_cta_runtime_observation,
         validate_running_handoff as validate_cta_running_handoff,
@@ -145,6 +147,21 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_manifest as validate_cta_measurement_manifest,
     )
 
+try:
+    from record_growthbook_cta_completion import (
+        CtaCompletionRecordingError,
+        FOLLOWUP as CTA_FOLLOWUP_STATUS,
+        canonical_json_bytes as canonical_cta_completion_bytes,
+        validate_manifest as validate_cta_completion_manifest,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.record_growthbook_cta_completion import (
+        CtaCompletionRecordingError,
+        FOLLOWUP as CTA_FOLLOWUP_STATUS,
+        canonical_json_bytes as canonical_cta_completion_bytes,
+        validate_manifest as validate_cta_completion_manifest,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -155,6 +172,10 @@ CTA_BASELINE_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_baseline.json"
 CTA_ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_activation.json"
 CTA_MEASUREMENT_WINDOW_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_measurement_window.json"
+)
+CTA_COMPLETION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_completion.json"
+CTA_STOP_OBSERVATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_assignment_stop_observation.json"
 )
 CTA_ACTIVATION_OBSERVATION_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_activation_observation.json"
@@ -394,8 +415,9 @@ def validate() -> None:
     cta_measurement_window = json.loads(
         CTA_MEASUREMENT_WINDOW_PATH.read_text(encoding="utf-8")
     )
+    cta_completion = json.loads(CTA_COMPLETION_PATH.read_text(encoding="utf-8"))
     cta_activation_observation = None
-    if cta_activation.get("status") == CTA_RUNNING_STATUS:
+    if cta_activation.get("status") in {CTA_RUNNING_STATUS, CTA_STOPPED_STATUS}:
         observation_bytes = CTA_ACTIVATION_OBSERVATION_PATH.read_bytes()
         cta_activation_observation = json.loads(observation_bytes.decode("utf-8"))
         if observation_bytes != canonical_cta_activation_bytes(
@@ -404,6 +426,14 @@ def validate() -> None:
             raise AssertionError("CTA activation observation is not canonical JSON")
     elif CTA_ACTIVATION_OBSERVATION_PATH.exists():
         raise AssertionError("CTA activation observation exists before verified start")
+    cta_stop_observation = None
+    if cta_completion.get("status") == CTA_FOLLOWUP_STATUS:
+        stop_bytes = CTA_STOP_OBSERVATION_PATH.read_bytes()
+        cta_stop_observation = json.loads(stop_bytes.decode("utf-8"))
+        if stop_bytes != canonical_cta_completion_bytes(cta_stop_observation):
+            raise AssertionError("CTA stop observation is not canonical JSON")
+    elif CTA_STOP_OBSERVATION_PATH.exists():
+        raise AssertionError("CTA stop observation exists before verified stop")
     cta_design = json.loads(CTA_DESIGN_PATH.read_text(encoding="utf-8"))
     cta_decision_contract = json.loads(
         CTA_DECISION_CONTRACT_PATH.read_text(encoding="utf-8")
@@ -492,24 +522,69 @@ def validate() -> None:
         )
     except CtaEvaluationError as exc:
         raise AssertionError(f"CTA decision contract is invalid: {exc}") from exc
+    cta_reconciliation_evidence_path = (
+        ROOT
+        / "projects"
+        / "vevo"
+        / "growthbook_production_reconciliation_deploy_evidence.json"
+    )
+    cta_reconciliation_evidence = json.loads(
+        cta_reconciliation_evidence_path.read_text(encoding="utf-8")
+    )
     try:
         validate_cta_measurement_manifest(
             cta_measurement_window,
             cta_activation,
             cta_sample_plan,
             cta_decision_contract,
-            json.loads(
-                (
-                    ROOT
-                    / "projects"
-                    / "vevo"
-                    / "growthbook_production_reconciliation_deploy_evidence.json"
-                ).read_text(encoding="utf-8")
-            ),
+            cta_reconciliation_evidence,
             cta_activation_observation,
+            cta_stop_observation,
         )
     except CtaMeasurementWindowError as exc:
         raise AssertionError(f"CTA measurement window is invalid: {exc}") from exc
+    completion_source_hashes = {
+        "activation": hashlib.sha256(CTA_ACTIVATION_PATH.read_bytes()).hexdigest(),
+        "measurement_window": hashlib.sha256(
+            CTA_MEASUREMENT_WINDOW_PATH.read_bytes()
+        ).hexdigest(),
+        "sample_plan": hashlib.sha256(CTA_SAMPLE_PLAN_PATH.read_bytes()).hexdigest(),
+        "decision_contract": hashlib.sha256(
+            CTA_DECISION_CONTRACT_PATH.read_bytes()
+        ).hexdigest(),
+        "lifecycle_reconciliation": hashlib.sha256(
+            CTA_LIFECYCLE_RECONCILIATION_PATH.read_bytes()
+        ).hexdigest(),
+        "start_observation": (
+            hashlib.sha256(CTA_ACTIVATION_OBSERVATION_PATH.read_bytes()).hexdigest()
+            if CTA_ACTIVATION_OBSERVATION_PATH.exists()
+            else ""
+        ),
+        "reconciliation_evidence": hashlib.sha256(
+            cta_reconciliation_evidence_path.read_bytes()
+        ).hexdigest(),
+    }
+    try:
+        validate_cta_completion_manifest(
+            cta_completion,
+            cta_activation,
+            cta_measurement_window,
+            cta_sample_plan,
+            cta_decision_contract,
+            cta_lifecycle_reconciliation,
+            cta_reconciliation_evidence,
+            lifecycle_observation=cta_lifecycle_observation,
+            start_observation=cta_activation_observation,
+            stop_observation=cta_stop_observation,
+            workspace=(
+                workspace
+                if cta_completion.get("status") == CTA_FOLLOWUP_STATUS
+                else None
+            ),
+            source_hashes=completion_source_hashes,
+        )
+    except CtaCompletionRecordingError as exc:
+        raise AssertionError(f"CTA completion contract is invalid: {exc}") from exc
     if (
         cta_decision_contract["decision_timing"]["minimum_full_calendar_days"]
         != cta_sample_plan["minimum_full_calendar_days"]
@@ -530,7 +605,12 @@ def validate() -> None:
     production_cta_running = workspace_state == (
         "production_cta_running_activation_verified_pro_quantiles_blocked"
     )
-    production_post_aa = production_aa_completed or production_cta_running
+    production_cta_stopped = workspace_state == (
+        "production_cta_stopped_followup_pending_pro_quantiles_blocked"
+    )
+    production_post_aa = (
+        production_aa_completed or production_cta_running or production_cta_stopped
+    )
     production_aa_lifecycle = production_aa_running or production_post_aa
     if workspace.get("schema_version") != 1 or workspace_state not in {
         "preview_aa_runtime_and_reconciliation_verified_"
@@ -538,6 +618,7 @@ def validate() -> None:
         "production_aa_running_activation_verified_pro_quantiles_blocked",
         "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked",
         "production_cta_running_activation_verified_pro_quantiles_blocked",
+        "production_cta_stopped_followup_pending_pro_quantiles_blocked",
     }:
         raise AssertionError("GrowthBook workspace lifecycle state drift")
     completion_finished = (
@@ -1786,19 +1867,27 @@ def validate() -> None:
         raise AssertionError("Historical Preview state contains activation evidence")
     cta_experiment = experiment_map["vevo-sk-product-cta-color-001"]
     expected_cta_status = (
-        "running_production_cta_only"
-        if production_cta_running
-        else ("unstarted_draft" if production_aa_running else "draft")
+        "stopped_production_cta_followup_pending"
+        if production_cta_stopped
+        else (
+            "running_production_cta_only"
+            if production_cta_running
+            else ("unstarted_draft" if production_aa_running else "draft")
+        )
     )
     expected_cta_rule_status = (
-        "live"
-        if production_cta_running
-        else ("no_live_rules" if production_aa_running else "draft")
+        "staging_only"
+        if production_cta_stopped
+        else (
+            "live"
+            if production_cta_running
+            else ("no_live_rules" if production_aa_running else "draft")
+        )
     )
     if (
         cta_experiment.get("status") != expected_cta_status
         or cta_experiment.get("feature_rule_status") != expected_cta_rule_status
-        or (("analysis_settings" in cta_experiment) is not production_cta_running)
+        or (("analysis_settings" in cta_experiment) is not (production_cta_running or production_cta_stopped))
     ):
         raise AssertionError(
             "GrowthBook CTA A/B must remain an unstarted draft or match the verified running handoff"
@@ -1833,7 +1922,7 @@ def validate() -> None:
         expected_final = {
             "final_sample_status": (
                 "frozen_from_hash_bound_aa_running_exact_first_n"
-                if production_cta_running
+                if production_cta_running or production_cta_stopped
                 else "frozen_from_hash_bound_aa_activation_still_blocked"
             ),
             "final_sample_per_arm": final["sample_per_arm"],

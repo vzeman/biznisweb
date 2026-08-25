@@ -37,7 +37,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
         start_hash = hashlib.sha256(
             activation_recorder.canonical_json_bytes(self.start_observation)
         ).hexdigest()
-        self.activation, _ = activation_recorder.record_start(
+        self.activation, self.running_workspace = activation_recorder.record_start(
             opened,
             source.workspace,
             source.registry,

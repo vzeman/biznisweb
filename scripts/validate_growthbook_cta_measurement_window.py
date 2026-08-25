@@ -23,6 +23,7 @@ try:
     from scripts.freeze_growthbook_cta_sample import validate_plan
     from scripts.record_growthbook_cta_activation import (
         RUNNING as CTA_RUNNING_STATUS,
+        STOPPED as CTA_STOPPED_STATUS,
         canonical_json_bytes as canonical_activation_bytes,
         validate_manifest as validate_activation_manifest,
         validate_start_observation,
@@ -32,6 +33,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
     from freeze_growthbook_cta_sample import validate_plan
     from record_growthbook_cta_activation import (
         RUNNING as CTA_RUNNING_STATUS,
+        STOPPED as CTA_STOPPED_STATUS,
         canonical_json_bytes as canonical_activation_bytes,
         validate_manifest as validate_activation_manifest,
         validate_start_observation,
@@ -52,6 +54,7 @@ RECONCILIATION_EVIDENCE_PATH = (
 WAITING = "waiting_for_verified_cta_start"
 RUNNING = "cta_running_outcome_blind_checkpoint_pending"
 RESOLVED = "cta_assignment_stop_review_open_by_preregistered_rule"
+STOPPED = "cta_assignment_stopped_verified_followup_pending"
 EXPERIMENT_ID = "vevo-sk-product-cta-color-001"
 TIMEZONE = "Europe/Bratislava"
 CHECKPOINT_TIME = time(hour=3, minute=45)
@@ -272,7 +275,10 @@ def expected_measurement_window(
     reconciliation: Mapping[str, Any],
 ) -> dict[str, Any]:
     validate_activation_manifest(activation)
-    _require(activation.get("status") == CTA_RUNNING_STATUS, "CTA start is not verified")
+    _require(
+        activation.get("status") in {CTA_RUNNING_STATUS, CTA_STOPPED_STATUS},
+        "CTA start is not verified",
+    )
     validate_start_observation(start_observation, activation)
     validate_plan(sample_plan)
     validate_contract(contract)
@@ -463,6 +469,7 @@ def validate_manifest(
     contract: Mapping[str, Any],
     reconciliation: Mapping[str, Any],
     start_observation: Mapping[str, Any] | None = None,
+    stop_observation: Mapping[str, Any] | None = None,
     *,
     source_hashes: Mapping[str, str] | None = None,
 ) -> None:
@@ -472,7 +479,10 @@ def validate_manifest(
     root = _exact_object(manifest, ROOT_KEYS, "CTA measurement manifest")
     _require(root["schema_version"] == 1, "CTA measurement schema drift")
     _require(root["experiment_id"] == EXPERIMENT_ID, "CTA measurement experiment drift")
-    _require(root["status"] in {WAITING, RUNNING, RESOLVED}, "CTA measurement status drift")
+    _require(
+        root["status"] in {WAITING, RUNNING, RESOLVED, STOPPED},
+        "CTA measurement status drift",
+    )
     bindings = _exact_object(root["source_bindings"], BINDING_KEYS, "CTA source bindings")
     expected_paths = {
         "activation_path": "projects/vevo/growthbook_cta_activation.json",
@@ -548,6 +558,13 @@ def validate_manifest(
     expected = expected_measurement_window(
         activation, start_observation, sample_plan, contract, reconciliation
     )
+    expected_activation_status = (
+        CTA_STOPPED_STATUS if root["status"] == STOPPED else CTA_RUNNING_STATUS
+    )
+    _require(
+        activation.get("status") == expected_activation_status,
+        "CTA activation/measurement lifecycle drift",
+    )
     _require(bindings["activation_sha256"] == actual_hashes["activation"], "CTA activation hash drift")
     _require(bindings["sample_plan_sha256"] == actual_hashes["sample_plan"], "CTA sample hash drift")
     _require(
@@ -616,9 +633,50 @@ def validate_manifest(
         "resolved_at_utc": final_evidence["observed_at_utc"],
     })
     _require(window == expected_resolved, "resolved CTA measurement window drift")
-    _require(stop == {"status": "manual_stop_review_open_assignment_still_running", "manual_review_allowed": True, "automatic_stop_allowed": False, "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json", "observation_sha256": None, "assignment_ended_at_utc": None}, "resolved CTA stop review drift")
-    _require(boundaries["read_only_checkpoint_allowed"] is False, "resolved CTA checkpoint gate remains open")
-    _require(root["next_gate"] == "manually_stop_only_cta_assignment_then_record_canonical_readback", "resolved CTA next gate drift")
+    if root["status"] == RESOLVED:
+        _require(stop == {"status": "manual_stop_review_open_assignment_still_running", "manual_review_allowed": True, "automatic_stop_allowed": False, "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json", "observation_sha256": None, "assignment_ended_at_utc": None}, "resolved CTA stop review drift")
+        _require(boundaries["read_only_checkpoint_allowed"] is False, "resolved CTA checkpoint gate remains open")
+        _require(root["next_gate"] == "manually_stop_only_cta_assignment_then_record_canonical_readback", "resolved CTA next gate drift")
+        return
+
+    _require(stop_observation is not None, "stopped CTA observation missing")
+    _require(
+        stop_observation.get("experiment_id") == EXPERIMENT_ID,
+        "CTA stop observation experiment drift",
+    )
+    ended = _parse_utc(
+        stop_observation.get("assignment_ended_at_utc"),
+        "assignment_ended_at_utc",
+    )
+    observed = _parse_utc(stop_observation.get("observed_at_utc"), "stop observed_at_utc")
+    _require(
+        _parse_utc(window["resolved_at_utc"], "resolved_at_utc") <= ended <= observed,
+        "CTA stop timestamps are outside the resolved window",
+    )
+    observation_sha256 = hashlib.sha256(
+        canonical_evidence_bytes(stop_observation)
+    ).hexdigest()
+    _require(
+        stop
+        == {
+            "status": "verified_manual_stop_readback_followup_pending",
+            "manual_review_allowed": False,
+            "automatic_stop_allowed": False,
+            "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+            "observation_sha256": observation_sha256,
+            "assignment_ended_at_utc": _utc_text(ended),
+        },
+        "stopped CTA readback drift",
+    )
+    _require(
+        boundaries["read_only_checkpoint_allowed"] is False,
+        "stopped CTA checkpoint gate remains open",
+    )
+    _require(
+        root["next_gate"]
+        == "wait_exact_14_day_followup_then_run_one_protected_final_snapshot",
+        "stopped CTA next gate drift",
+    )
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -635,6 +693,14 @@ def main() -> int:
             raw = START_OBSERVATION_PATH.read_bytes()
             start_observation = json.loads(raw.decode("utf-8"))
             _require(raw == canonical_activation_bytes(start_observation), "CTA start observation is not canonical JSON")
+        stop_observation = None
+        if manifest.get("status") == STOPPED:
+            raw_stop = (VEVO / "growthbook_cta_assignment_stop_observation.json").read_bytes()
+            stop_observation = json.loads(raw_stop.decode("utf-8"))
+            _require(
+                raw_stop == canonical_evidence_bytes(stop_observation),
+                "CTA stop observation is not canonical JSON",
+            )
         validate_manifest(
             manifest,
             _load(ACTIVATION_PATH),
@@ -642,6 +708,7 @@ def main() -> int:
             _load(DECISION_CONTRACT_PATH),
             _load(RECONCILIATION_EVIDENCE_PATH),
             start_observation,
+            stop_observation,
         )
         print("validate_growthbook_cta_measurement_window.py: OK")
         return 0

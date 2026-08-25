@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "completion_type": "vevo_growthbook_product_cta_assignment_completion",
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "status": "waiting_for_assignment_stop_review",
+  "source_bindings": {
+    "activation_path": "projects/vevo/growthbook_cta_activation.json",
+    "activation_sha256": null,
+    "measurement_window_path": "projects/vevo/growthbook_cta_measurement_window.json",
+    "measurement_window_sha256": null,
+    "sample_plan_path": "projects/vevo/growthbook_cta_sample_plan.json",
+    "sample_plan_sha256": null,
+    "decision_contract_path": "projects/vevo/growthbook_cta_decision_contract.json",
+    "decision_contract_sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+    "lifecycle_reconciliation_path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
+    "lifecycle_reconciliation_sha256": null
+  },
+  "stop_readback": {
+    "status": "not_recorded",
+    "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+    "observation_sha256": null,
+    "observed_at_utc": null,
+    "assignment_ended_at_utc": null,
+    "growthbook_build": null,
+    "feature_revision": null,
+    "gtm_container_version_id": null
+  },
+  "followup": {
+    "timezone": "Europe/Bratislava",
+    "required_days_after_assignment_stop": 14,
+    "assignment_ended_at_utc": null,
+    "final_snapshot_due_utc": null,
+    "status": "not_started",
+    "protected_final_snapshot_workflow_allowed": false,
+    "one_final_look_only": true
+  },
+  "release_boundaries": {
+    "manual_growthbook_stop_allowed": false,
+    "automatic_growthbook_mutation_allowed": false,
+    "automatic_gtm_mutation_allowed": false,
+    "automatic_meta_ads_mutation_allowed": false,
+    "automatic_biznisweb_mutation_allowed": false,
+    "automatic_collector_or_reporting_mutation_allowed": false,
+    "price_product_cart_checkout_order_mutation_allowed": false,
+    "outcome_metrics_read_outside_protected_final_snapshot_allowed": false,
+    "winner_calls_outside_offline_final_evaluator_allowed": false
+  },
+  "next_gate": "after_outcome_blind_window_resolution_manually_stop_only_exact_cta_then_record_canonical_readback"
+}
