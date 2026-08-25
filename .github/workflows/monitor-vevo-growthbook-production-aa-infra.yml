@@ -1,0 +1,550 @@
+name: Monitor VEVO GrowthBook Production A/A Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_health:
+        description: Type true to run the result-blind read-only infrastructure health check
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+  schedule:
+    # One of these is 04:15 Europe/Bratislava. The local gate skips the other
+    # without configuring AWS credentials, including across DST changes.
+    - cron: '15 2 * * *'
+    - cron: '15 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-aa-infra-health
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  COLLECTOR_STACK: vevo-growthbook-production
+  RECONCILIATION_STACK: vevo-growthbook-reconciliation-production
+  EXPECTED_SERVICE: vevo-growthbook-reconcile-production
+  EXPECTED_SOURCE_SCHEDULE: vevo-daily-report-email
+  EXPECTED_SOURCE_TASK_DEFINITION: vevo-reporting-daily:33
+  EXPECTED_DATABASE: vevo_growthbook_production
+  EXPECTED_WORKGROUP: vevo-growthbook-reporting-production
+  EXPECTED_RUNTIME_PATH: /app
+  DEPLOY_EVIDENCE: projects/vevo/growthbook_production_reconciliation_deploy_evidence.json
+  HEALTH_EVIDENCE_FILE: vevo-growthbook-production-aa-infra-health.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  monitor-result-blind-infrastructure:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate result-blind local and schedule gate before AWS credentials
+        env:
+          CONFIRM_HEALTH: ${{ github.event.inputs.confirm_health }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_aa_infra_health_evidence \
+            tests.test_growthbook_aa_infra_health_workflow
+          python scripts/validate_growthbook_workspace.py
+          python scripts/validate_growthbook_production_aa_activation.py
+          python scripts/validate_growthbook_aa_measurement_window.py
+          python scripts/security_ci.py
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime, time, timedelta
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          activation = json.loads(
+              Path('projects/vevo/growthbook_production_aa_activation.json').read_text(
+                  encoding='utf-8'
+              )
+          )
+          workspace = json.loads(
+              Path('projects/vevo/growthbook_workspace.json').read_text(encoding='utf-8')
+          )
+          snapshot = json.loads(
+              Path('projects/vevo/growthbook_aa_snapshot.json').read_text(encoding='utf-8')
+          )
+          if activation.get('status') != 'production_aa_running_activation_verified':
+              raise SystemExit('Production A/A activation state drift')
+          if workspace.get('state') != 'production_aa_running_activation_verified_pro_quantiles_blocked':
+              raise SystemExit('Production A/A workspace state drift')
+          experiments = {row['tracking_key']: row for row in workspace['experiments']}
+          aa = experiments['vevo-sk-aa-001']
+          cta = experiments['vevo-sk-product-cta-color-001']
+          if (
+              workspace['workspace']['production_allocation_percent'] != 100
+              or aa['status'] != 'running_production_aa_only'
+              or aa['production_allocation_percent'] != 100
+              or aa['variation_weights'] != [0.5, 0.5]
+          ):
+              raise SystemExit('Production A/A allocation drift')
+          if cta['status'] != 'unstarted_draft' or cta['production_allocation_percent'] != 0:
+              raise SystemExit('CTA must remain unstarted during A/A infrastructure monitoring')
+          if snapshot.get('snapshot_build_allowed') is not False:
+              raise SystemExit('A/A snapshot gate opened during infrastructure monitoring')
+
+          local_zone = ZoneInfo('Europe/Bratislava')
+          now = datetime.now(UTC)
+          now_local = now.astimezone(local_zone)
+          event_name = os.environ['EVENT_NAME']
+          should_run = True
+          if event_name == 'workflow_dispatch':
+              if os.environ.get('CONFIRM_HEALTH') != 'true':
+                  raise SystemExit('exact read-only health confirmation is required')
+          elif event_name == 'schedule':
+              offset_hours = int(now_local.utcoffset().total_seconds() // 3600)
+              expected_cron = '15 2 * * *' if offset_hours == 2 else '15 3 * * *'
+              should_run = os.environ.get('EVENT_SCHEDULE') == expected_cron
+          else:
+              raise SystemExit('unsupported infrastructure-health event')
+
+          first_due_text = activation['production_reconciliation'][
+              'first_scheduled_run_due_local'
+          ]
+          if first_due_text != '2026-08-26T03:45:00+02:00':
+              raise SystemExit('first natural reconciliation boundary drift')
+          first_due = datetime.fromisoformat(first_due_text)
+          candidate_date = now_local.date()
+          if now_local.timetz().replace(tzinfo=None) < time(3, 45):
+              candidate_date -= timedelta(days=1)
+          candidate_due = datetime.combine(candidate_date, time(3, 45), local_zone)
+          phase = (
+              'waiting_for_first_natural_run'
+              if candidate_due < first_due
+              else 'natural_reconciliation_verified'
+          )
+          checked_due = '' if phase == 'waiting_for_first_natural_run' else candidate_due.isoformat(timespec='seconds')
+          temporary = Path(os.environ['RUNNER_TEMP']) / f"vevo-aa-infra-{os.environ['GITHUB_RUN_ID']}"
+          if should_run:
+              temporary.mkdir(mode=0o700)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f"RUN_INFRA_HEALTH={'true' if should_run else 'false'}\n")
+              handle.write(f'HEALTH_PHASE={phase}\n')
+              handle.write(f'CHECKED_DUE_LOCAL={checked_due}\n')
+              handle.write(f'TEMP_HEALTH_DIR={temporary}\n')
+          print(
+              'PRODUCTION_AA_INFRA_LOCAL_GATE_OK:'
+              f"run={'true' if should_run else 'false'}:"
+              'population-read=false:outcome-read=false:mutation=none'
+          )
+          PY
+
+      - name: Configure AWS credentials for bounded read-only infrastructure health
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read exact stacks schedules task definition alarms and DLQ
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          ACTUAL_DEPLOY_SHA="$(sha256sum "${DEPLOY_EVIDENCE}" | cut -d' ' -f1)"
+          [[ "${ACTUAL_DEPLOY_SHA}" == '21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb' ]]
+          aws cloudformation describe-stacks --stack-name "${COLLECTOR_STACK}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/collector-stack.json"
+          aws cloudformation describe-stacks --stack-name "${RECONCILIATION_STACK}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/reconciliation-stack.json"
+          aws scheduler get-schedule --name "${EXPECTED_SERVICE}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/schedule.json"
+          aws scheduler get-schedule --name "${EXPECTED_SOURCE_SCHEDULE}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/source-schedule.json"
+          python - <<'PY' > "${TEMP_HEALTH_DIR}/runtime.env"
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_HEALTH_DIR'])
+          deploy = json.load(open(os.environ['DEPLOY_EVIDENCE'], encoding='utf-8'))
+          collector = json.load(open(root / 'collector-stack.json', encoding='utf-8'))['Stacks'][0]
+          reconciliation = json.load(open(root / 'reconciliation-stack.json', encoding='utf-8'))['Stacks'][0]
+          schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
+          source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          if collector.get('StackStatus') != 'CREATE_COMPLETE' or reconciliation.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production GrowthBook stack state drift')
+          collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
+          reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}
+          if (
+              collector_outputs.get('ExperimentDatabaseName') != os.environ['EXPECTED_DATABASE']
+              or collector_outputs.get('ReportingWorkGroupName') != os.environ['EXPECTED_WORKGROUP']
+              or reconciliation_outputs.get('ScheduleName') != os.environ['EXPECTED_SERVICE']
+              or reconciliation_outputs.get('ScheduleState') != 'ENABLED'
+          ):
+              raise SystemExit('Production infrastructure stack output drift')
+          target = schedule.get('Target') or {}
+          if (
+              schedule.get('Name') != os.environ['EXPECTED_SERVICE']
+              or schedule.get('State') != 'ENABLED'
+              or schedule.get('ScheduleExpression') != 'cron(45 3 * * ? *)'
+              or schedule.get('ScheduleExpressionTimezone') != 'Europe/Bratislava'
+              or schedule.get('FlexibleTimeWindow') != {'Mode': 'OFF'}
+              or target.get('Arn') != collector_outputs.get('CollectorClusterArn')
+              or target.get('EcsParameters', {}).get('TaskDefinitionArn') != reconciliation_outputs.get('TargetTaskDefinitionArn')
+              or target.get('EcsParameters', {}).get('Group') != os.environ['EXPECTED_SERVICE']
+              or target.get('EcsParameters', {}).get('TaskCount') != 1
+              or target.get('EcsParameters', {}).get('EnableExecuteCommand') is not False
+              or target.get('RoleArn') != reconciliation_outputs.get('SchedulerRoleArn')
+              or target.get('DeadLetterConfig') != {'Arn': reconciliation_outputs.get('DeadLetterQueueArn')}
+              or target.get('RetryPolicy') != {'MaximumEventAgeInSeconds': 3600, 'MaximumRetryAttempts': 2}
+          ):
+              raise SystemExit('Production reconciliation schedule drift')
+          schedule_input = json.loads(target.get('Input') or '{}')
+          overrides = schedule_input.get('containerOverrides') or []
+          if len(overrides) != 1:
+              raise SystemExit('Production reconciliation schedule input drift')
+          override = overrides[0]
+          if (
+              override.get('command') != ['/bin/bash', '-lc', 'cd /app && python scripts/run_scheduled_growthbook_reconciliation.py']
+              or override.get('environment') != [
+                  {'name': 'REPORT_PROJECT', 'value': 'vevo'},
+                  {'name': 'GROWTHBOOK_ENVIRONMENT', 'value': 'production'},
+                  {'name': 'GROWTHBOOK_EVENT_BUCKET', 'value': collector_outputs.get('EventBucketName')},
+                  {'name': 'GROWTHBOOK_FACT_PUBLISH_ENABLED', 'value': 'true'},
+                  {'name': 'AWS_REGION', 'value': os.environ['AWS_REGION']},
+              ]
+              or not override.get('name')
+          ):
+              raise SystemExit('Production reconciliation scheduled command drift')
+          expected_source = deploy['source_runtime']['task_definition']
+          if (
+              expected_source.rsplit('/', 1)[-1] != os.environ['EXPECTED_SOURCE_TASK_DEFINITION']
+              or source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
+              or source.get('State') != 'ENABLED'
+              or source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') != expected_source
+          ):
+              raise SystemExit('source reporting schedule drift')
+          values = {
+              'PRODUCTION_CLUSTER_ARN': collector_outputs['CollectorClusterArn'],
+              'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
+              'RECONCILIATION_CONTAINER_NAME': override['name'],
+              'SOURCE_TASK_DEFINITION': expected_source.rsplit('/', 1)[-1],
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_HEALTH_DIR}/runtime.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_HEALTH_DIR}/runtime.env"
+          set +a
+          aws ecs describe-task-definition --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/task-definition.json"
+          aws cloudwatch describe-alarms --alarm-names \
+            vevo-growthbook-reconcile-production-failure \
+            vevo-growthbook-reconcile-production-missing-success \
+            vevo-growthbook-reconcile-production-dlq \
+            --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/alarms.json"
+          aws sqs get-queue-url --queue-name vevo-growthbook-reconcile-production-dlq --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/queue-url.json"
+          QUEUE_URL="$(python - <<'PY'
+          import json
+          import os
+          print(json.load(open(f"{os.environ['TEMP_HEALTH_DIR']}/queue-url.json", encoding='utf-8'))['QueueUrl'])
+          PY
+          )"
+          aws sqs get-queue-attributes --queue-url "${QUEUE_URL}" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesDelayed ApproximateNumberOfMessagesNotVisible --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/queue.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_HEALTH_DIR'])
+          deploy = json.load(open(os.environ['DEPLOY_EVIDENCE'], encoding='utf-8'))
+          definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
+          containers = definition.get('containerDefinitions') or []
+          if len(containers) != 1 or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']:
+              raise SystemExit('reconciliation task-definition container drift')
+          container = containers[0]
+          expected_task_definition = deploy['reconciliation']['task_definition']
+          if definition.get('taskDefinitionArn') != expected_task_definition:
+              raise SystemExit('reconciliation task-definition identity drift')
+          expected_digest = deploy['reconciliation']['image_digest']
+          if not str(container.get('image') or '').endswith('@' + expected_digest):
+              raise SystemExit('reconciliation task-definition image drift')
+          if container.get('workingDirectory') not in (None, os.environ['EXPECTED_RUNTIME_PATH']):
+              raise SystemExit('reconciliation runtime path drift')
+          log_options = (container.get('logConfiguration') or {}).get('options') or {}
+          if not log_options.get('awslogs-group'):
+              raise SystemExit('reconciliation log group missing')
+          alarms = json.load(open(root / 'alarms.json', encoding='utf-8')).get('MetricAlarms') or []
+          expected_alarms = {
+              'vevo-growthbook-reconcile-production-failure',
+              'vevo-growthbook-reconcile-production-missing-success',
+              'vevo-growthbook-reconcile-production-dlq',
+          }
+          if {row.get('AlarmName') for row in alarms} != expected_alarms:
+              raise SystemExit('Production reconciliation alarm identity drift')
+          states = {row['AlarmName']: row.get('StateValue') for row in alarms}
+          allowed = {'OK'} if os.environ['HEALTH_PHASE'] == 'natural_reconciliation_verified' else {'OK', 'INSUFFICIENT_DATA'}
+          if any(state not in allowed for state in states.values()):
+              raise SystemExit('Production reconciliation alarm gate failed')
+          queue = json.load(open(root / 'queue.json', encoding='utf-8')).get('Attributes') or {}
+          if any(int(queue.get(key, '-1')) != 0 for key in ('ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesDelayed', 'ApproximateNumberOfMessagesNotVisible')):
+              raise SystemExit('Production reconciliation DLQ is not empty')
+          (root / 'alarm-states.json').write_text(
+              json.dumps(states, sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f"RECONCILIATION_IMAGE_DIGEST={expected_digest}\n")
+              handle.write(f"RECONCILIATION_LOG_GROUP={log_options['awslogs-group']}\n")
+          print('PRODUCTION_AA_INFRA_STRUCTURE_OK:instance-id=N/A:Fargate:service=vevo-growthbook-reconcile-production:path=/app:alarms=clear:dlq=empty')
+          PY
+
+      - name: Select exact successful natural reconciliation task
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' && env.HEALTH_PHASE == 'natural_reconciliation_verified' }}
+        run: |
+          set -euo pipefail
+          aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/task-list.json"
+          python - <<'PY' > "${TEMP_HEALTH_DIR}/task-arns.txt"
+          import json
+          import os
+          tasks = json.load(open(f"{os.environ['TEMP_HEALTH_DIR']}/task-list.json", encoding='utf-8')).get('taskArns') or []
+          if not tasks:
+              raise SystemExit('scheduled reconciliation task list is empty')
+          print(' '.join(tasks))
+          PY
+          read -r -a TASK_ARNS < "${TEMP_HEALTH_DIR}/task-arns.txt"
+          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/tasks.json"
+          python - <<'PY' > "${TEMP_HEALTH_DIR}/selected-task.env"
+          import ipaddress
+          import json
+          import os
+          from datetime import datetime, timedelta
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_HEALTH_DIR'])
+          lower = datetime.fromisoformat(os.environ['CHECKED_DUE_LOCAL']).timestamp()
+          upper = lower + timedelta(hours=2).total_seconds()
+          candidates = []
+          for task in json.load(open(root / 'tasks.json', encoding='utf-8')).get('tasks') or []:
+              started_at = task.get('startedAt')
+              started_epoch = datetime.fromisoformat(started_at.replace('Z', '+00:00')).timestamp() if started_at else -1
+              containers = task.get('containers') or []
+              if (
+                  task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+                  and task.get('group') == os.environ['EXPECTED_SERVICE']
+                  and lower <= started_epoch < upper
+                  and len(containers) == 1
+                  and containers[0].get('exitCode') == 0
+              ):
+                  candidates.append(task)
+          if len(candidates) != 1:
+              raise SystemExit(f'expected one successful scheduled reconciliation task, found {len(candidates)}')
+          task = candidates[0]
+          container = task['containers'][0]
+          details = [row for attachment in task.get('attachments') or [] for row in attachment.get('details') or []]
+          private_ip_text = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+          private_ip = ipaddress.ip_address(private_ip_text)
+          if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
+              raise SystemExit('scheduled reconciliation task private IP drift')
+          if container.get('imageDigest') != os.environ['RECONCILIATION_IMAGE_DIGEST']:
+              raise SystemExit('scheduled reconciliation image differs from localhost-gated deploy evidence')
+          values = {
+              'RECONCILIATION_TASK_ID': task['taskArn'].rsplit('/', 1)[-1],
+              'RECONCILIATION_PRIVATE_IP': private_ip_text,
+              'RECONCILIATION_LOG_STREAM': container.get('logStreamName') or '',
+          }
+          if not values['RECONCILIATION_LOG_STREAM']:
+              raise SystemExit('scheduled reconciliation log stream missing')
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_HEALTH_DIR}/selected-task.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_HEALTH_DIR}/selected-task.env"
+          set +a
+          echo "PRODUCTION_AA_INFRA_RUNTIME_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}"
+
+      - name: Verify natural success marker and generated published parity without emitting counts
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' && env.HEALTH_PHASE == 'natural_reconciliation_verified' }}
+        run: |
+          set -euo pipefail
+          aws logs get-log-events --log-group-name "${RECONCILIATION_LOG_GROUP}" --log-stream-name "${RECONCILIATION_LOG_STREAM}" --start-from-head --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/task-logs.json"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_HEALTH_DIR'])
+          messages = [str(row.get('message') or '').strip() for row in json.load(open(root / 'task-logs.json', encoding='utf-8')).get('events') or []]
+          markers = [row for row in messages if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:' in row]
+          summaries = [json.loads(row) for row in messages if row.startswith('{') and '"mode":"publish"' in row]
+          if len(markers) != 1 or len(summaries) != 1:
+              raise SystemExit('scheduled reconciliation marker/summary drift')
+          summary = summaries[0]
+          published = summary.get('published') or {}
+          expected = {key: summary.get(key) for key in ('device_facts', 'performance_facts', 'quality_reports')}
+          if published != expected or summary.get('event_partitions') != 40:
+              raise SystemExit('scheduled reconciliation generated/published parity drift')
+          control = {
+              'success_marker_sha256': hashlib.sha256(markers[0].encode()).hexdigest(),
+              'publish_summary_sha256': hashlib.sha256(
+                  (json.dumps(summary, sort_keys=True, separators=(',', ':')) + '\n').encode()
+              ).hexdigest(),
+          }
+          (root / 'natural-control.json').write_text(
+              json.dumps(control, sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          print('PRODUCTION_AA_INFRA_NATURAL_OK:marker=true:parity=true:row-counts-emitted=false')
+          PY
+
+      - name: Build and validate only canonical sanitized infrastructure-health evidence
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          from scripts.record_growthbook_natural_evidence import canonical_evidence_bytes
+
+          root = Path(os.environ['TEMP_HEALTH_DIR'])
+          deploy_path = Path(os.environ['DEPLOY_EVIDENCE'])
+          deploy_bytes = deploy_path.read_bytes()
+          deploy = json.loads(deploy_bytes)
+          schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
+          source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          alarm_states = json.load(open(root / 'alarm-states.json', encoding='utf-8'))
+          post_run = os.environ['HEALTH_PHASE'] == 'natural_reconciliation_verified'
+          natural = json.load(open(root / 'natural-control.json', encoding='utf-8')) if post_run else {}
+          task_definition = deploy['reconciliation']['task_definition'].rsplit('/', 1)[-1]
+          evidence = {
+              'schema_version': 1,
+              'evidence_type': 'vevo_growthbook_production_aa_infra_health',
+              'environment': 'production',
+              'observed_at_utc': datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'provenance': {
+                  'workflow': '.github/workflows/monitor-vevo-growthbook-production-aa-infra.yml',
+                  'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+                  'main_commit': os.environ['GITHUB_SHA'],
+                  'deploy_evidence_sha256': hashlib.sha256(deploy_bytes).hexdigest(),
+              },
+              'aws': deploy['aws'],
+              'phase': {
+                  'status': os.environ['HEALTH_PHASE'],
+                  'first_natural_run_due_local': '2026-08-26T03:45:00+02:00',
+                  'checked_due_local': os.environ['CHECKED_DUE_LOCAL'] if post_run else None,
+              },
+              'runtime': {
+                  'instance_id': 'N/A:Fargate',
+                  'task_id': os.environ.get('RECONCILIATION_TASK_ID') if post_run else None,
+                  'private_ip': os.environ.get('RECONCILIATION_PRIVATE_IP') if post_run else None,
+                  'service': os.environ['EXPECTED_SERVICE'],
+                  'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
+                  'task_definition': task_definition,
+                  'image_digest': deploy['reconciliation']['image_digest'],
+                  'localhost_marker_source': 'hash_bound_deploy_evidence_host_gate',
+              },
+              'control': {
+                  'schedule_name': schedule['Name'],
+                  'schedule_state': schedule['State'],
+                  'schedule_expression': schedule['ScheduleExpression'],
+                  'schedule_timezone': schedule['ScheduleExpressionTimezone'],
+                  'schedule_succeeded': post_run,
+                  'success_marker_sha256': natural.get('success_marker_sha256'),
+                  'publish_summary_sha256': natural.get('publish_summary_sha256'),
+                  'generated_published_parity_verified': True if post_run else None,
+                  'alarm_states': alarm_states,
+                  'alarms_clear': True,
+                  'dlq_empty': True,
+                  'source_schedule_name': source['Name'],
+                  'source_schedule_state': source['State'],
+                  'source_task_definition': deploy['source_runtime']['task_definition'].rsplit('/', 1)[-1],
+                  'source_schedule_unchanged': True,
+              },
+              'privacy': {
+                  'experimental_population_read': False,
+                  'arm_assignment_read': False,
+                  'outcome_metrics_read': False,
+                  'meta_dimensions_read': False,
+                  'performance_values_read': False,
+                  'reporting_row_counts_emitted': False,
+                  'contains_raw_aws_payloads': False,
+                  'contains_cloudwatch_messages': False,
+                  'contains_credentials': False,
+                  'contains_event_device_customer_or_order_ids': False,
+              },
+              'boundaries': {
+                  'aws_resource_mutated': False,
+                  'collector_or_reporting_mutated': False,
+                  'growthbook_mutated': False,
+                  'gtm_mutated': False,
+                  'meta_ads_mutated': False,
+                  'biznisweb_mutated': False,
+                  'price_product_stock_cart_checkout_payment_or_order_mutated': False,
+                  'workflow_or_experiment_gate_changed': False,
+              },
+          }
+          Path(os.environ['HEALTH_EVIDENCE_FILE']).write_bytes(canonical_evidence_bytes(evidence))
+          print('PRODUCTION_AA_INFRA_EVIDENCE_OK:canonical=true:identity-free=true:result-blind=true')
+          PY
+          python scripts/validate_growthbook_aa_infra_health_evidence.py \
+            --evidence "${HEALTH_EVIDENCE_FILE}" \
+            --deploy-evidence "${DEPLOY_EVIDENCE}"
+
+      - name: Remove every temporary AWS response and log message
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        run: |
+          set -euo pipefail
+          rm -rf "${TEMP_HEALTH_DIR}"
+          [[ ! -e "${TEMP_HEALTH_DIR}" ]]
+          python scripts/validate_growthbook_aa_infra_health_evidence.py \
+            --evidence "${HEALTH_EVIDENCE_FILE}" \
+            --deploy-evidence "${DEPLOY_EVIDENCE}"
+
+      - name: Upload only canonical sanitized infrastructure-health evidence
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-production-aa-infra-health
+          path: vevo-growthbook-production-aa-infra-health.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish result-blind infrastructure summary
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        run: |
+          python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+          import json
+          import os
+
+          evidence = json.load(open(os.environ['HEALTH_EVIDENCE_FILE'], encoding='utf-8'))
+          runtime = evidence['runtime']
+          control = evidence['control']
+          print('## VEVO Production A/A infrastructure health')
+          print(f"- Phase: `{evidence['phase']['status']}`")
+          print(f"- Instance: `{runtime['instance_id']}`")
+          print(f"- Private IP: `{runtime['private_ip'] or 'pending-first-natural-run'}`")
+          print(f"- Service/path: `{runtime['service']}` / `{runtime['runtime_path']}`")
+          print(f"- Task definition: `{runtime['task_definition']}`")
+          print(f"- Schedule success: `{control['schedule_succeeded']}`")
+          print(f"- Marker/parity: `{control['generated_published_parity_verified']}`")
+          print(f"- Alarms clear / DLQ empty: `{control['alarms_clear']}` / `{control['dlq_empty']}`")
+          print('- A/A population, arms, outcomes, Meta dimensions, and performance read: `none`')
+          print('- GrowthBook, GTM, Meta Ads, BiznisWeb, AWS resources, reporting, and commerce mutation: `none`')
+          PY
