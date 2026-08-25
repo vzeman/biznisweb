@@ -221,6 +221,176 @@ jobs:
           json.dump(candidate, sys.stdout)
           PY
 
+          python3 <<'PY' > reporting-policy-context.env
+          import json
+          import os
+
+          environment = os.environ["RECONCILIATION_ENVIRONMENT"]
+          stack = json.load(open("collector-stack.json", encoding="utf-8"))["Stacks"][0]
+          if stack.get("StackStatus") != "UPDATE_COMPLETE":
+              raise SystemExit(f"collector stack is not UPDATE_COMPLETE: {stack.get('StackStatus')}")
+          parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack.get("Parameters") or []}
+          if parameters.get("Environment") != environment or parameters.get("PublicRouteEnabled") != "true":
+              raise SystemExit("collector stack is not the selected active environment boundary")
+          outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs") or []}
+          required = {
+              "EventBucketName", "ExperimentDatabaseName", "ReportingPolicyArn",
+              "ReportingWorkGroupName",
+          }
+          if not required.issubset(outputs):
+              raise SystemExit(f"collector stack is missing policy outputs: {sorted(required - outputs.keys())}")
+          account = os.environ["EXPECTED_ACCOUNT_ID"]
+          expected_policy = f"arn:aws:iam::{account}:policy/vevo-growthbook-reporting-{environment}"
+          if outputs["ReportingPolicyArn"] != expected_policy:
+              raise SystemExit("collector reporting policy identity drift")
+          if outputs["ReportingWorkGroupName"] != f"vevo-growthbook-reporting-{environment}":
+              raise SystemExit("collector reporting workgroup identity drift")
+          if outputs["ExperimentDatabaseName"] != f"vevo_growthbook_{environment}":
+              raise SystemExit("collector experiment database identity drift")
+          if not outputs["EventBucketName"].startswith(f"vevo-growthbook-{environment}-"):
+              raise SystemExit("collector event bucket identity drift")
+
+          candidate = json.load(open("candidate-task-definition.json", encoding="utf-8"))
+          task_role_arn = str(candidate.get("taskRoleArn") or "")
+          expected_role_arn = f"arn:aws:iam::{account}:role/{os.environ['EXPECTED_TASK_ROLE']}"
+          if task_role_arn != expected_role_arn:
+              raise SystemExit("candidate task role identity drift before policy attachment")
+          values = {
+              "POLICY_DATABASE": outputs["ExperimentDatabaseName"],
+              "POLICY_EVENT_BUCKET": outputs["EventBucketName"],
+              "POLICY_TASK_ROLE_ARN": task_role_arn,
+              "POLICY_TASK_ROLE_NAME": os.environ["EXPECTED_TASK_ROLE"],
+              "POLICY_WORKGROUP": outputs["ReportingWorkGroupName"],
+              "REPORTING_POLICY_ARN": outputs["ReportingPolicyArn"],
+          }
+          for key, value in sorted(values.items()):
+              if not value or "\n" in value or "\r" in value:
+                  raise SystemExit(f"invalid policy context value: {key}")
+              print(f"{key}={value}")
+          PY
+          while IFS='=' read -r key value; do
+            export "${key}=${value}"
+          done < reporting-policy-context.env
+
+          POLICY_DEFAULT_VERSION="$(aws iam get-policy \
+            --policy-arn "${REPORTING_POLICY_ARN}" \
+            --query 'Policy.DefaultVersionId' \
+            --output text)"
+          aws iam get-policy-version \
+            --policy-arn "${REPORTING_POLICY_ARN}" \
+            --version-id "${POLICY_DEFAULT_VERSION}" > reporting-policy.json
+          python3 <<'PY'
+          import json
+          import os
+
+          def as_set(value):
+              rows = value if isinstance(value, list) else [value]
+              return {str(row) for row in rows}
+
+          account = os.environ["EXPECTED_ACCOUNT_ID"]
+          region = os.environ["AWS_REGION"]
+          bucket_arn = f"arn:aws:s3:::{os.environ['POLICY_EVENT_BUCKET']}"
+          database = os.environ["POLICY_DATABASE"]
+          expected = {
+              "ListOnlyExperimentPrefixes": {
+                  "actions": {"s3:ListBucket"},
+                  "resources": {bucket_arn},
+                  "condition": {"StringLike": {"s3:prefix": [
+                      "experiment-events/raw/*",
+                      "experiment-events/curated/*",
+                      "athena-results/reporting/*",
+                  ]}},
+              },
+              "LocateExperimentBucket": {
+                  "actions": {"s3:GetBucketLocation"},
+                  "resources": {bucket_arn},
+              },
+              "ReadRawExperimentEvents": {
+                  "actions": {"s3:GetObject"},
+                  "resources": {f"{bucket_arn}/experiment-events/raw/*"},
+              },
+              "PublishCuratedFactsAndReportingQueryResults": {
+                  "actions": {"s3:GetObject", "s3:PutObject", "s3:AbortMultipartUpload"},
+                  "resources": {
+                      f"{bucket_arn}/experiment-events/curated/*",
+                      f"{bucket_arn}/athena-results/reporting/*",
+                  },
+              },
+              "RunReportingAthenaQueries": {
+                  "actions": {
+                      "athena:GetQueryExecution", "athena:GetQueryResults", "athena:GetWorkGroup",
+                      "athena:StartQueryExecution", "athena:StopQueryExecution",
+                  },
+                  "resources": {
+                      f"arn:aws:athena:{region}:{account}:workgroup/{os.environ['POLICY_WORKGROUP']}"
+                  },
+              },
+              "ReadExperimentCatalog": {
+                  "actions": {
+                      "glue:GetDatabase", "glue:GetDatabases", "glue:GetPartition",
+                      "glue:GetPartitions", "glue:GetTable", "glue:GetTables",
+                  },
+                  "resources": {
+                      f"arn:aws:glue:{region}:{account}:catalog",
+                      f"arn:aws:glue:{region}:{account}:database/{database}",
+                      f"arn:aws:glue:{region}:{account}:table/{database}/*",
+                  },
+              },
+          }
+          document = json.load(open("reporting-policy.json", encoding="utf-8"))["PolicyVersion"]["Document"]
+          if document.get("Version") != "2012-10-17":
+              raise SystemExit("reporting policy version drift")
+          statements = document.get("Statement") or []
+          by_sid = {str(row.get("Sid") or ""): row for row in statements}
+          if len(statements) != len(expected) or set(by_sid) != set(expected):
+              raise SystemExit("reporting policy statement identity drift")
+          for sid, contract in expected.items():
+              statement = by_sid[sid]
+              expected_keys = {"Sid", "Effect", "Action", "Resource"}
+              if "condition" in contract:
+                  expected_keys.add("Condition")
+              if set(statement) != expected_keys or statement.get("Effect") != "Allow":
+                  raise SystemExit(f"reporting policy statement shape drift: {sid}")
+              if as_set(statement.get("Action")) != contract["actions"]:
+                  raise SystemExit(f"reporting policy action drift: {sid}")
+              if as_set(statement.get("Resource")) != contract["resources"]:
+                  raise SystemExit(f"reporting policy resource drift: {sid}")
+              if statement.get("Condition") != contract.get("condition"):
+                  raise SystemExit(f"reporting policy condition drift: {sid}")
+          print("REPORTING_POLICY_DOCUMENT_EXACT_OK")
+          PY
+
+          POLICY_ATTACHED_BY_RUN=false
+          if ! aws iam list-attached-role-policies \
+            --role-name "${POLICY_TASK_ROLE_NAME}" \
+            --query 'AttachedPolicies[].PolicyArn' \
+            --output text | tr '\t' '\n' | grep -Fxq "${REPORTING_POLICY_ARN}"; then
+            aws iam attach-role-policy \
+              --role-name "${POLICY_TASK_ROLE_NAME}" \
+              --policy-arn "${REPORTING_POLICY_ARN}"
+            POLICY_ATTACHED_BY_RUN=true
+          fi
+          POLICY_READBACK_OK=false
+          for _ in $(seq 1 30); do
+            if aws iam list-attached-role-policies \
+              --role-name "${POLICY_TASK_ROLE_NAME}" \
+              --query 'AttachedPolicies[].PolicyArn' \
+              --output text | tr '\t' '\n' | grep -Fxq "${REPORTING_POLICY_ARN}"; then
+              POLICY_READBACK_OK=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${POLICY_READBACK_OK}" != "true" ]]; then
+            echo "Exact GrowthBook reporting policy attachment did not become readable" >&2
+            exit 1
+          fi
+          {
+            cat reporting-policy-context.env
+            echo "POLICY_ATTACHED_BY_RUN=${POLICY_ATTACHED_BY_RUN}"
+          } >> "${GITHUB_ENV}"
+          echo "REPORTING_POLICY_ATTACHED_OK:${POLICY_TASK_ROLE_NAME}:${REPORTING_POLICY_ARN}:${POLICY_ATTACHED_BY_RUN}"
+
           CANDIDATE_TASK_DEFINITION="$(aws ecs register-task-definition \
             --cli-input-json file://candidate-task-definition.json \
             --region "${AWS_REGION}" \
@@ -839,6 +1009,9 @@ jobs:
           environment = os.environ["RECONCILIATION_ENVIRONMENT"]
           if environment not in {"preview", "production"}:
               raise SystemExit("reconciliation evidence environment drift")
+          policy_attached_by_run = os.environ["POLICY_ATTACHED_BY_RUN"]
+          if policy_attached_by_run not in {"true", "false"}:
+              raise SystemExit("reconciliation policy attachment evidence drift")
           evidence = {
               "schema_version": 1,
               "evidence_type": "vevo_growthbook_reconciliation_deploy",
@@ -857,6 +1030,13 @@ jobs:
                   "service": os.environ["SOURCE_SCHEDULE"],
                   "task_definition": os.environ["SOURCE_TASK_DEFINITION"],
                   "source_schedule_unchanged": True,
+              },
+              "reporting_policy": {
+                  "arn": os.environ["REPORTING_POLICY_ARN"],
+                  "task_role": os.environ["POLICY_TASK_ROLE_ARN"],
+                  "document_exactly_verified": True,
+                  "attached_by_run": policy_attached_by_run == "true",
+                  "attachment_readback_verified": True,
               },
               "host_gate": {
                   "instance_id": "N/A:Fargate",

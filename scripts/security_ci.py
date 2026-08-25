@@ -654,6 +654,9 @@ def main() -> int:
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "growthbook_reconciliation_production",
             "IMAGE_TAG: git-${{ github.sha }}",
+            "REPORTING_POLICY_DOCUMENT_EXACT_OK",
+            "aws iam attach-role-policy",
+            "REPORTING_POLICY_ATTACHED_OK",
             "--phase candidate > candidate-parameters.json",
             "--parameters file://candidate-parameters.json",
             "GROWTHBOOK_RECONCILIATION_DISABLED_STACK_OK",
@@ -678,6 +681,7 @@ def main() -> int:
             "aws scheduler update-schedule",
             "s3api delete-object",
             "cloudformation delete-stack",
+            "aws iam detach-role-policy",
         ):
             forbid(
                 growthbook_reconciliation_workflow,
