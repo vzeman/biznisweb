@@ -22,7 +22,7 @@ class GrowthBookAaSnapshotWorkflowTests(unittest.TestCase):
         cls.manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
     def test_manifest_is_disabled_and_closes_every_mutation_boundary(self) -> None:
-        self.assertEqual(1, self.manifest["schema_version"])
+        self.assertEqual(2, self.manifest["schema_version"])
         self.assertEqual("vevo-sk-aa-001", self.manifest["experiment_id"])
         self.assertFalse(self.manifest["snapshot_build_allowed"])
         self.assertEqual("not_recorded", self.manifest["automated_evidence"]["status"])
@@ -61,6 +61,8 @@ class GrowthBookAaSnapshotWorkflowTests(unittest.TestCase):
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_snapshot:",
             "snapshot_build_allowed') is not True",
+            "validate_growthbook_aa_measurement_window.py",
+            "pre-registered A/A stopping rule is not resolved",
             "production_allocation_percent') != 100",
             "Production foundation evidence is missing",
             "Production reader evidence is missing",

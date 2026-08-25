@@ -41,11 +41,11 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
         for block_index, source in enumerate(blocks):
             compile(source, f"automated-workflow-inline-{block_index}.py", "exec")
 
-    def test_producer_window_and_quality_source_are_closed_by_default(self) -> None:
+    def test_producer_is_closed_while_window_is_pre_registered(self) -> None:
         automated = MANIFEST["automated_evidence"]
         self.assertFalse(automated["producer_allowed"])
-        self.assertEqual("not_recorded", automated["window_status"])
-        self.assertIsNone(automated["from_utc"])
+        self.assertEqual("frozen_waiting_for_completion", automated["window_status"])
+        self.assertEqual("2026-08-25T22:00:00Z", automated["from_utc"])
         self.assertIsNone(automated["through_utc"])
         self.assertEqual("not_recorded", automated["quality_report_status"])
         self.assertIsNone(automated["quality_report_key"])
@@ -57,7 +57,9 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_collection:",
             "automated evidence producer gate is closed",
+            "validate_growthbook_aa_measurement_window.py",
             "frozen Production A/A evidence window is not recorded",
+            "pre-registered A/A stopping rule is not resolved",
             "canonical Production reporting quality is not recorded",
             "Production localhost and marker hard gate is missing",
             "Production reader evidence is missing",

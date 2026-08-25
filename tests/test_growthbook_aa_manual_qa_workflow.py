@@ -23,6 +23,9 @@ class GrowthBookAaManualQaWorkflowTests(unittest.TestCase):
     def test_producer_and_observation_are_disabled_and_absent_by_default(self) -> None:
         manual = MANIFEST["manual_qa_evidence"]
         self.assertFalse(manual["producer_allowed"])
+        self.assertEqual("frozen_waiting_for_completion", manual["window_status"])
+        self.assertEqual("2026-08-25T22:00:00Z", manual["from_utc"])
+        self.assertIsNone(manual["through_utc"])
         self.assertEqual("not_recorded", manual["observation_status"])
         self.assertIsNone(manual["observation_sha256"])
         self.assertEqual("not_recorded", manual["status"])
@@ -35,6 +38,10 @@ class GrowthBookAaManualQaWorkflowTests(unittest.TestCase):
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_manual_qa:",
             "manual QA evidence producer gate is closed",
+            "validate_growthbook_aa_measurement_window.py",
+            "pre-registered A/A stopping rule is not resolved",
+            "manual QA observation differs from the pre-registered window",
+            "manual QA evidence window is not complete",
             "reviewed browser QA observation is not recorded",
             "manual QA observation SHA-256 is missing",
             "Production foundation evidence is missing",

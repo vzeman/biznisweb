@@ -171,6 +171,9 @@ def main() -> int:
         growthbook_aa_automated_workflow = read(
             ".github/workflows/collect-vevo-growthbook-production-aa-evidence.yml"
         )
+        growthbook_aa_measurement_window_validator = read(
+            "scripts/validate_growthbook_aa_measurement_window.py"
+        )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
         )
@@ -1904,6 +1907,52 @@ def main() -> int:
             )
         if growthbook_aa_snapshot_manifest.get("snapshot_build_allowed") is not False:
             raise AssertionError("GrowthBook A/A snapshot build must remain disabled before evidence.")
+        if growthbook_aa_snapshot_manifest.get("schema_version") != 2:
+            raise AssertionError("GrowthBook A/A snapshot manifest schema drift.")
+        expected_measurement_window = {
+            "status": "frozen_start_and_stopping_rule_before_outcome_readback",
+            "timezone": "Europe/Bratislava",
+            "activation_observed_at_utc": "2026-08-25T05:43:54Z",
+            "source_activation_workflow_run_id": "32815955896",
+            "source_activation_main_commit": (
+                "1965091059e5a35518265aafd282db842f8ea5d3"
+            ),
+            "source_reconciliation_workflow_run_id": "32821210244",
+            "source_reconciliation_main_commit": (
+                "cf92eb0e007fb9a9163068a2735e5becc0327f03"
+            ),
+            "first_full_local_date": "2026-08-26",
+            "last_required_full_local_date": "2026-09-01",
+            "minimum_full_calendar_days": 7,
+            "minimum_eligible_devices": 1000,
+            "from_utc": "2026-08-25T22:00:00Z",
+            "minimum_through_utc": "2026-09-01T22:00:00Z",
+            "earliest_resolution_check_due_local": (
+                "2026-09-02T03:45:00+02:00"
+            ),
+            "resolution_checkpoint_time_local": "03:45:00",
+            "stopping_rule": (
+                "after_minimum_days_resolve_at_first_successful_daily_"
+                "reconciliation_with_minimum_eligible_devices"
+            ),
+            "stopping_rule_population_metric": (
+                "cumulative_eligible_devices_without_arm_outcome_readback"
+            ),
+            "whole_local_day_extensions_only": True,
+            "outcome_blind_resolution_required": True,
+            "resolution_status": "pending_minimum_window_and_sample",
+            "resolved_last_full_local_date": None,
+            "resolved_through_utc": None,
+            "resolved_full_calendar_days": None,
+            "resolved_eligible_devices": None,
+            "resolved_at_utc": None,
+            "post_hoc_window_change_allowed": False,
+        }
+        if (
+            growthbook_aa_snapshot_manifest.get("measurement_window")
+            != expected_measurement_window
+        ):
+            raise AssertionError("GrowthBook A/A pre-registered window drift.")
         for evidence_group in ("automated_evidence", "manual_qa_evidence"):
             evidence = growthbook_aa_snapshot_manifest.get(evidence_group, {})
             if evidence.get("status") != "not_recorded" or any(
@@ -1921,8 +1970,10 @@ def main() -> int:
         )
         if (
             automated_manifest.get("producer_allowed") is not False
-            or automated_manifest.get("window_status") != "not_recorded"
-            or automated_manifest.get("from_utc") is not None
+            or automated_manifest.get("window_status")
+            != "frozen_waiting_for_completion"
+            or automated_manifest.get("from_utc")
+            != expected_measurement_window["from_utc"]
             or automated_manifest.get("through_utc") is not None
             or automated_manifest.get("quality_report_status") != "not_recorded"
             or automated_manifest.get("quality_report_key") is not None
@@ -1931,6 +1982,11 @@ def main() -> int:
             raise AssertionError("GrowthBook A/A automated producer opened early.")
         if (
             manual_qa_manifest.get("producer_allowed") is not False
+            or manual_qa_manifest.get("window_status")
+            != "frozen_waiting_for_completion"
+            or manual_qa_manifest.get("from_utc")
+            != expected_measurement_window["from_utc"]
+            or manual_qa_manifest.get("through_utc") is not None
             or manual_qa_manifest.get("observation_status") != "not_recorded"
             or manual_qa_manifest.get("observation_sha256") is not None
         ):
@@ -1972,6 +2028,8 @@ def main() -> int:
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "permissions:\n  contents: read\n  actions: read",
             "snapshot_build_allowed') is not True",
+            "validate_growthbook_aa_measurement_window.py",
+            "pre-registered A/A stopping rule is not resolved",
             "Production GrowthBook clone must be complete and re-closed",
             "gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${AUTOMATED_RUN_ID}\"",
             "gh run download \"${AUTOMATED_RUN_ID}\"",
@@ -2051,6 +2109,10 @@ def main() -> int:
         for required_manual_qa_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "manual QA evidence producer gate is closed",
+            "validate_growthbook_aa_measurement_window.py",
+            "pre-registered A/A stopping rule is not resolved",
+            "manual QA observation differs from the pre-registered window",
+            "manual QA evidence window is not complete",
             "reviewed browser QA observation is not recorded",
             "row.get('tracking_key'): row",
             "Production A/A is not the only running experiment",
@@ -2134,7 +2196,9 @@ def main() -> int:
         for required_automated_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "automated evidence producer gate is closed",
+            "validate_growthbook_aa_measurement_window.py",
             "frozen Production A/A evidence window is not recorded",
+            "pre-registered A/A stopping rule is not resolved",
             "canonical Production reporting quality is not recorded",
             "Production localhost and marker hard gate is missing",
             "Production GrowthBook clone must be complete and re-closed",
@@ -2158,6 +2222,42 @@ def main() -> int:
                 required_automated_workflow_marker,
                 "GrowthBook A/A automated evidence workflow lost safety marker: "
                 f"{required_automated_workflow_marker}",
+            )
+        for forbidden_measurement_window_validator_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_aa_measurement_window_validator.lower(),
+                forbidden_measurement_window_validator_marker.lower(),
+                "GrowthBook A/A measurement-window validator must remain offline: "
+                f"{forbidden_measurement_window_validator_marker}",
+            )
+        for required_measurement_window_validator_marker in (
+            "frozen_start_and_stopping_rule_before_outcome_readback",
+            "first_full_local_date",
+            "minimum_full_calendar_days",
+            "minimum_eligible_devices",
+            "minimum_through_utc",
+            "outcome_blind_resolution_required",
+            "whole_local_day_extensions_only",
+            "cumulative_eligible_devices_without_arm_outcome_readback",
+            "post_hoc_window_change_allowed",
+            "Production reconciliation schedule drift",
+        ):
+            require(
+                growthbook_aa_measurement_window_validator,
+                required_measurement_window_validator_marker,
+                "GrowthBook A/A measurement-window validator lost marker: "
+                f"{required_measurement_window_validator_marker}",
             )
         if growthbook_aa_automated_workflow.count(
             "uses: actions/upload-artifact@v4.6.2"
