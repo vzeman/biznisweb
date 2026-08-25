@@ -40,7 +40,7 @@
   },
   "query_contract": {
     "template_path": "projects/vevo/growthbook_sql/cta_final_snapshot_production.sql",
-    "template_sha256": "7102dd7593d64678054abbda6f8cf6cde37753a8c38e50affd000f7a67c1ff9d",
+    "template_sha256": "d4a586e238e364c29281ffd1c6a736dd512fe25894c25bd36befe3014c46f913",
     "database": "vevo_growthbook_production",
     "workgroup": "vevo-growthbook-reporting-production",
     "source_tables": [

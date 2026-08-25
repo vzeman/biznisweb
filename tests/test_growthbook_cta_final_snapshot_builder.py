@@ -167,6 +167,9 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
         self.assertNotIn("__CTA_", query)
         self.assertNotIn("__FOLLOWUP_", query)
         self.assertNotIn("__TARGET_", query)
+        self.assertNotIn("privacy_sample AS", query)
+        self.assertNotIn("LIMIT 100", query)
+        self.assertEqual(6, query.count("FROM raw_window"))
 
     def test_builds_one_canonical_identity_free_snapshot_and_final_decision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
