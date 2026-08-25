@@ -61,6 +61,13 @@ Bootstrap entrypoints:
 
 ## 5) Current Verified State
 
+- GrowthBook plan and billing were reverified read-only on `2026-08-25`:
+  - the authenticated `Vevo` organization is still on `Starter Plan` with exactly one active seat
+  - the in-account Pro offer is `$40/month` for the current seat (`$40` per seat per month), including two million Global CDN requests and 20 GB bandwidth per month; listed overages are `$10` per additional million requests and `$1` per additional GB
+  - the current official GrowthBook plan comparison independently lists Pro at `$40` per seat per month and places Quantile Metrics in Pro, matching the existing UI blocker on the three LCP/INP/CLS p75 metrics
+  - the upgrade dialog was cancelled before `Continue`; no payment, subscription, trial, auto-renewal, GrowthBook object, experiment, traffic, GTM, Meta Ads, BiznisWeb, or commerce state was changed
+  - Production A/A remains on the frozen schedule; the independent aggregate final performance snapshot remains the fail-closed path until a paid Pro upgrade is explicitly authorized
+
 - VEVO GrowthBook Production clone is verified complete and still hard-disabled for traffic (`2026-08-23`):
   - authenticated GrowthBook connection `ds_19g6mmt5stlp6` passed against database `vevo_growthbook_production` and workgroup `vevo-growthbook-readonly-production`
   - the source retains exactly `device_id` and `VEVO consented devices`; GrowthBook-generated demo `user_id` and `Logged-in Users` objects were deleted after explicit confirmation and the surviving configuration was reloaded

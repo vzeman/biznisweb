@@ -65,7 +65,7 @@ This is the operator handoff for the target GrowthBook Pro rollout. The authenti
 
 ## Current blockers
 
-- The authenticated GrowthBook workspace is on Starter. The observed upgrade flow requires a paid Pro upgrade; it was cancelled without accepting a charge.
+- The authenticated GrowthBook workspace was read back again on `2026-08-25` and is still on Starter. Billing shows one active seat; the current Pro offer is `$40/month` (`$40` per seat per month), includes two million Global CDN requests and 20 GB bandwidth per month, and then charges `$10` per additional million requests plus `$1` per additional GB. The offer was cancelled before `Continue`; no charge, subscription, or auto-renewal was accepted.
 - `staging` is the Preview alias until a paid plan is explicitly authorized and a custom `Preview` environment is genuinely needed.
 - The controlled `2026-08-21` Preview partition is reconciled and identity-verified through the exact GrowthBook Athena workgroup. The same-population audit proves exact assignment/outcome agreement. The recurring schedule, protected one-shot, and second natural run are fully verified and recorded through canonical schema-v2 evidence from run `32611298457`.
 - The GrowthBook data source, assignment query, both fact tables, and all eight Starter-compatible outcome metrics are query-verified. The LCP, INP, and CLS p75 Quantile metrics are blocked until a paid Pro upgrade is explicitly authorized; their GrowthBook IDs remain `null` rather than claiming objects that do not exist.
