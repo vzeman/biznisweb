@@ -36,8 +36,10 @@ on:
       - templates/**
       - tests/**
       - scripts/reporting_qa_smoke.py
+      - scripts/growthbook_reconcile_host_gate.sh
       - scripts/growthbook_preview_reconcile_host_gate.sh
       - scripts/reconcile_growthbook_facts.py
+      - scripts/run_scheduled_growthbook_reconciliation.py
       - scripts/live_dashboard_refresh_gate.sh
       - scripts/dashboard_maintenance_state.py
       - .github/workflows/build-and-push-ecr.yml

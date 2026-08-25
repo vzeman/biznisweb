@@ -1,18 +1,21 @@
-# VEVO GrowthBook Preview recurring reconciliation
+# VEVO GrowthBook recurring reconciliation
 
 This stack creates only the scheduler boundary around the already deployed,
-PII-free Preview experiment dataset. It does not create or change a collector,
+PII-free Preview or Production experiment dataset. Each environment has its own
+stack, schedule, task family, event bucket, curated facts, monitoring, and DLQ.
+It does not create or change a collector,
 storefront tag, GrowthBook Production rule, Meta Ads object, BiznisWeb record,
 price, product, cart, checkout, order, or payment.
 
 ## Runtime contract
 
-- schedule: `vevo-growthbook-reconcile-preview` at `03:30 Europe/Bratislava`;
+- Preview schedule: `vevo-growthbook-reconcile-preview` at `03:30 Europe/Bratislava`;
+- Production schedule: `vevo-growthbook-reconcile-production` at `03:45 Europe/Bratislava`;
 - target: one exact immutable `vevo-reporting-daily` task-definition revision;
 - task command: `/app/scripts/run_scheduled_growthbook_reconciliation.py`;
 - processing window: the latest `40` complete UTC raw partitions;
 - raw object limit: `50,000`;
-- environment: `preview` only;
+- environment: exact `preview` or `production`, selected by the protected workflow;
 - publication requires both the runner's fixed `--publish` and
   `GROWTHBOOK_FACT_PUBLISH_ENABLED=true` from the reviewed target override;
 - source task secrets are inherited from the exact task definition; no secret is
@@ -37,7 +40,8 @@ authoritative outcomes without deleting prior facts.
 
 ## Deployment hard gate
 
-Use only the protected workflow. It must record the exact account, region,
+Use only the protected workflow with an explicit environment selection. It must
+record the exact account, region,
 source schedule, cluster, task-definition revision, image digest, task role,
 execution role, container, CloudWatch log group, VPC subnets/security groups,
 service name, and `/app` path before mutation. The workflow then:

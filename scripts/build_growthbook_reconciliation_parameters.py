@@ -25,6 +25,11 @@ PARAMETER_KEYS = (
     "ScheduleTimezone",
 )
 
+ENVIRONMENT_CONTRACTS = {
+    "preview": "cron(30 3 * * ? *)",
+    "production": "cron(45 3 * * ? *)",
+}
+
 
 def _required(environ: Mapping[str, str], key: str) -> str:
     value = environ.get(key, "")
@@ -34,8 +39,12 @@ def _required(environ: Mapping[str, str], key: str) -> str:
 
 
 def build_candidate_parameters(environ: Mapping[str, str]) -> list[dict[str, str]]:
+    environment = _required(environ, "GROWTHBOOK_ENVIRONMENT").strip().lower()
+    schedule_expression = ENVIRONMENT_CONTRACTS.get(environment)
+    if schedule_expression is None:
+        raise ValueError("unsupported reconciliation environment")
     values = {
-        "Environment": "preview",
+        "Environment": environment,
         "ClusterArn": _required(environ, "CLUSTER_ARN"),
         "TaskDefinitionArn": _required(environ, "CANDIDATE_TASK_DEFINITION"),
         "TaskRoleArn": _required(environ, "TASK_ROLE_ARN"),
@@ -48,7 +57,7 @@ def build_candidate_parameters(environ: Mapping[str, str]) -> list[dict[str, str
         "AssignPublicIp": _required(environ, "ASSIGN_PUBLIC_IP"),
         "PlatformVersion": _required(environ, "PLATFORM_VERSION"),
         "ScheduleState": "DISABLED",
-        "ScheduleExpression": "cron(30 3 * * ? *)",
+        "ScheduleExpression": schedule_expression,
         "ScheduleTimezone": "Europe/Bratislava",
     }
     if tuple(values) != PARAMETER_KEYS:
