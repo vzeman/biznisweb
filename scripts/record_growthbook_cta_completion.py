@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 try:
+    from scripts import build_growthbook_cta_final_snapshot as final_snapshot_builder
     from scripts.evaluate_growthbook_cta import (
         validate_contract,
         validate_lifecycle_manifest,
@@ -38,6 +39,8 @@ try:
         validate_manifest as validate_measurement_manifest,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct script execution
+    import build_growthbook_cta_final_snapshot as final_snapshot_builder
+
     from evaluate_growthbook_cta import validate_contract, validate_lifecycle_manifest
     from freeze_growthbook_cta_sample import validate_plan
     from record_growthbook_cta_activation import (
@@ -65,6 +68,7 @@ DECISION_CONTRACT_PATH = VEVO / "growthbook_cta_decision_contract.json"
 LIFECYCLE_PATH = VEVO / "growthbook_cta_lifecycle_reconciliation.json"
 RECONCILIATION_PATH = VEVO / "growthbook_production_reconciliation_deploy_evidence.json"
 WORKSPACE_PATH = VEVO / "growthbook_workspace.json"
+FINAL_SNAPSHOT_PATH = VEVO / "growthbook_cta_final_snapshot.json"
 
 WAITING = "waiting_for_assignment_stop_review"
 FOLLOWUP = "cta_assignment_stopped_verified_followup_pending"
@@ -667,12 +671,19 @@ def record_stop(
     lifecycle_observation: Mapping[str, Any] | None,
     reconciliation: Mapping[str, Any],
     workspace: Mapping[str, Any],
+    final_snapshot_manifest: Mapping[str, Any],
     start_observation: Mapping[str, Any],
     stop_observation: Mapping[str, Any],
     *,
     stop_observation_sha256: str,
     source_hashes: Mapping[str, str] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]:
     validate_manifest(
         completion,
         activation,
@@ -775,7 +786,23 @@ def record_stop(
         workspace=updated_workspace,
         source_hashes=final_source_hashes,
     )
-    return updated_completion, updated_activation, updated_measurement, updated_workspace
+    completion_bytes = pretty_json_bytes(updated_completion)
+    updated_final_snapshot = final_snapshot_builder.opened_manifest(
+        final_snapshot_manifest,
+        completion_bytes=completion_bytes,
+        activation_bytes=activation_bytes,
+        measurement_bytes=measurement_bytes,
+        sample_plan_bytes=pretty_json_bytes(sample),
+        lifecycle_bytes=pretty_json_bytes(lifecycle),
+        stop_observation_bytes=canonical_json_bytes(stop_observation),
+    )
+    return (
+        updated_completion,
+        updated_activation,
+        updated_measurement,
+        updated_workspace,
+        updated_final_snapshot,
+    )
 
 
 def _write_atomic(path: Path, value: Mapping[str, Any]) -> None:
@@ -806,6 +833,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--lifecycle-observation", type=Path)
     parser.add_argument("--reconciliation", type=Path, default=RECONCILIATION_PATH)
     parser.add_argument("--workspace", type=Path, default=WORKSPACE_PATH)
+    parser.add_argument(
+        "--final-snapshot-manifest", type=Path, default=FINAL_SNAPSHOT_PATH
+    )
     parser.add_argument("--start-observation", type=Path, default=START_OBSERVATION_PATH)
     parser.add_argument("--stop-observation", type=Path, default=STOP_OBSERVATION_PATH)
     parser.add_argument("--stop-observation-sha256", required=True)
@@ -813,6 +843,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--activation-output", type=Path, required=True)
     parser.add_argument("--measurement-output", type=Path, required=True)
     parser.add_argument("--workspace-output", type=Path, required=True)
+    parser.add_argument("--final-snapshot-output", type=Path, required=True)
     return parser
 
 
@@ -824,8 +855,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.activation_output.resolve(),
             args.measurement_output.resolve(),
             args.workspace_output.resolve(),
+            args.final_snapshot_output.resolve(),
         }
-        _require(len(outputs) == 4, "CTA stop output paths must be distinct")
+        _require(len(outputs) == 5, "CTA stop output paths must be distinct")
         stop_observation = load_canonical(
             args.stop_observation,
             args.stop_observation_sha256,
@@ -861,6 +893,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             lifecycle_observation,
             _load(args.reconciliation, "Production reconciliation evidence"),
             _load(args.workspace, "GrowthBook workspace"),
+            _load(args.final_snapshot_manifest, "CTA final snapshot manifest"),
             _load(args.start_observation, "CTA start observation"),
             stop_observation,
             stop_observation_sha256=args.stop_observation_sha256,
@@ -872,6 +905,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.activation_output,
                 args.measurement_output,
                 args.workspace_output,
+                args.final_snapshot_output,
             ),
             recorded,
             strict=True,

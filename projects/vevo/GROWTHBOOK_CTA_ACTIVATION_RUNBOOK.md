@@ -240,22 +240,77 @@ Independently hash that canonical readback, then record all versioned stopped
 states in one reviewed branch:
 
 ```text
-python scripts/record_growthbook_cta_completion.py --stop-observation projects/vevo/growthbook_cta_assignment_stop_observation.json --stop-observation-sha256 <independent-sha256> --completion-output projects/vevo/growthbook_cta_completion.json --activation-output projects/vevo/growthbook_cta_activation.json --measurement-output projects/vevo/growthbook_cta_measurement_window.json --workspace-output projects/vevo/growthbook_workspace.json
+python scripts/record_growthbook_cta_completion.py --stop-observation projects/vevo/growthbook_cta_assignment_stop_observation.json --stop-observation-sha256 <independent-sha256> --completion-output projects/vevo/growthbook_cta_completion.json --activation-output projects/vevo/growthbook_cta_activation.json --measurement-output projects/vevo/growthbook_cta_measurement_window.json --workspace-output projects/vevo/growthbook_workspace.json --final-snapshot-output projects/vevo/growthbook_cta_final_snapshot.json
 python scripts/validate_growthbook_cta_completion.py
+python scripts/validate_growthbook_cta_final_snapshot.py
 python scripts/validate_growthbook_cta_measurement_window.py
 python scripts/validate_growthbook_workspace.py
-python -m unittest tests.test_growthbook_cta_completion_recorder tests.test_growthbook_cta_window_checkpoint tests.test_growthbook_workspace
+python -m unittest tests.test_growthbook_cta_completion_recorder tests.test_growthbook_cta_final_snapshot_builder tests.test_growthbook_cta_final_snapshot_recorder tests.test_growthbook_cta_window_checkpoint tests.test_growthbook_workspace
 python scripts/security_ci.py
 git diff --check
 ```
 
 The offline recorder first builds and validates the completion, historical
-activation, measurement-window, and workspace outputs, then records zero
-Production allocation and freezes `final_snapshot_due_utc` at exactly 14 days
-after `assignment_ended_at_utc`. The current completion manifest is deliberately
-`waiting_for_assignment_stop_review`; therefore no manual stop, follow-up, arm
-read, outcome read, winner call, or external mutation is currently authorized.
-The sole protected final-outcome snapshot path is a separate subsequent gate.
+activation, measurement-window, workspace, and final-snapshot outputs before it
+writes any of them. It then records zero Production allocation, freezes
+`final_snapshot_due_utc` at exactly 14 days after `assignment_ended_at_utc`, and
+opens only the hash-bound protected final-snapshot workflow. The current
+completion and final-snapshot manifests are deliberately waiting; therefore no
+manual stop, follow-up, arm read, outcome read, winner call, or external
+mutation is currently authorized.
+
+## Protected final snapshot and offline decision
+
+At or after the exact recorded `final_snapshot_due_utc`, dispatch
+`.github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml` from
+the exact reviewed `main` commit with `confirm_final_snapshot=true`. Never run
+it early or a second time. Before AWS credentials it validates the source hashes,
+complete 14-day follow-up, main-only one-look gate, and absence of any prior
+outcome-query attempt in any earlier workflow, including a failed or cancelled
+run whose query step had already started. It then applies the infrastructure
+hard gate in this order:
+
+1. confirm account `919341186960`, instance `N/A:Fargate`, the exact
+   `vevo-growthbook-reconciliation-production` stack, service
+   `vevo-growthbook-reconcile-production`, runtime `/app`, schedule, task
+   definition, immutable image, reporting database/workgroup, and source-table
+   schemas;
+2. require a successful scheduled reconciliation after the due time, exact
+   generated/published marker parity, three clear alarms, and an empty DLQ;
+3. start one diagnostic task from that exact task definition and record its
+   private IP, then verify direct localhost `/health` and `/marker.json` with
+   the service and `/app` markers;
+4. only then run one Athena query that internally selects the frozen first-`N`
+   devices but returns exactly two aggregate variation rows.
+
+The workflow reads outcomes once and uploads only canonical
+`vevo-growthbook-cta-final-snapshot.json` and
+`vevo-growthbook-cta-final-decision.json`. It deletes temporary AWS, log, and
+query payloads and cannot deploy, edit GrowthBook/GTM/Meta Ads/BiznisWeb,
+change reporting/collector infrastructure, alter commerce, or apply a winner.
+The host gate is the runtime verification for this read-only operation; no UI
+test is applicable because the workflow makes no storefront or control-plane
+change.
+
+Independently download the sole artifact, verify the successful run, exact main
+commit, and both SHA-256 values, then record the result through a separate
+reviewed branch:
+
+```text
+python scripts/record_growthbook_cta_final_snapshot.py --snapshot <downloaded-vevo-growthbook-cta-final-snapshot.json> --snapshot-sha256 <independent-snapshot-sha256> --decision <downloaded-vevo-growthbook-cta-final-decision.json> --decision-sha256 <independent-decision-sha256> --workflow-run-id <successful-run-id> --main-commit <exact-main-commit> --output projects/vevo/growthbook_cta_final_snapshot.json
+python scripts/validate_growthbook_cta_final_snapshot.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_cta_final_snapshot_builder tests.test_growthbook_cta_final_snapshot_recorder tests.test_growthbook_cta_final_snapshot_workflow tests.test_growthbook_workspace
+python scripts/security_ci.py
+git diff --check
+```
+
+The offline recorder verifies canonical bytes, provenance, source hashes, and
+the lifecycle reconciliation, recomputes the decision byte-for-byte, records
+only `WIN`, `LOSE`, or `INCONCLUSIVE`, and immediately closes every final-look
+read gate. It never applies the recommendation. Any later GrowthBook, GTM, Meta
+Ads, BiznisWeb, collector/reporting, or commerce action requires a new explicit
+manual review and a separate versioned workflow.
 
 ## Rollback
 
