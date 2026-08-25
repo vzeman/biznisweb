@@ -13,7 +13,7 @@
     "required_completion_status": "production_aa_stopped_verified_cta_activation_blocked",
     "required_aa_verdict": "PASS",
     "required_stop_readback_status": "verified_zero_allocation",
-    "required_workspace_state": "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked",
+    "required_workspace_state": "production_aa_completed_cta_sample_freeze_pro_quantiles_verified",
     "minimum_followup_hours_after_aa_window": 24,
     "dispatch_policy": "main_manual_exact_confirmation_only"
   },

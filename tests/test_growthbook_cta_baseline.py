@@ -83,6 +83,9 @@ class GrowthBookCtaBaselineTests(unittest.TestCase):
                 canonical_json_bytes(self.stop_observation)
             ).hexdigest(),
         )
+        self.workspace["state"] = (
+            "production_aa_completed_cta_sample_freeze_pro_quantiles_verified"
+        )
         self.ready_at = datetime(2026, 9, 2, 22, 0, tzinfo=UTC)
 
     def ready_kwargs(self) -> dict[str, object]:

@@ -5535,3 +5535,36 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - SDK key and collector URL remain task-scoped environment inputs and are never committed
 - Next exact step:
   - merge the reviewed Production builder, generate the exact temporary artifact from that `main` commit, create four new unpublished Production GTM tags in workspace `16`, read back their IDs, delete the artifact, and record only the tag IDs and SHA-256
+
+## 2026-08-25 — VEVO GrowthBook Starter-to-Pro fail-closed transition
+
+Date: 2026-08-25
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-growthbook-pro-upgrade-gate`
+
+What changed:
+
+- Added the versioned `growthbook_pro_upgrade.json` state machine, offline hash-bound recorder/validator, and `GROWTHBOOK_PRO_UPGRADE_RUNBOOK.md`.
+- The paid review can open only after independently verified A/A `PASS` plus the reviewed zero-allocation stop; a fresh action-time confirmation must bind exactly one Pro seat at a `$40 USD` monthly recurring base price.
+- The verified transition requires six unique Preview/Production metric IDs for LCP, INP, and CLS p75, exact contract hashes, successful configuration read-back/query tests, and a canonical sanitized observation without payment, identity, customer, or order data.
+- CTA baseline, activation, running checkpoint, completion, workspace validation, and security CI now require the verified Pro/p75 lifecycle and exact four guardrails: client-error rate plus LCP/INP/CLS p75.
+- CTA remains draft at `0%`; automatic GrowthBook, GTM, Meta Ads, BiznisWeb, collector/reporting, price, product, stock, cart, checkout, payment, and order mutations remain closed.
+
+What is verified:
+
+- Full Python suite: `751` tests passed.
+- GrowthBook storefront JavaScript suite: `9` tests passed.
+- Focused Pro/CTA/workspace/workflow tests passed, including future verified-workspace observation validation.
+- `validate_growthbook_pro_upgrade.py`, `validate_growthbook_workspace.py`, `security_ci.py`, Ruff, Python compilation, JSON/YAML parsing, and `git diff --check` passed.
+- No live GrowthBook purchase, subscription, metric, experiment, GTM, Meta Ads, BiznisWeb, AWS, commerce, price, product, stock, cart, checkout, payment, or order mutation occurred.
+- No local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Known issues:
+
+- Production A/A is still inside its pre-registered blind measurement window; Pro authorization and metric creation remain intentionally unavailable now.
+- The first permitted population checkpoint remains `2026-09-02 03:45 Europe/Bratislava` after the natural daily reconciliation.
+
+Next exact step:
+
+- Verify the first natural Production reconciliation result-blind after `2026-08-26 03:45 Europe/Bratislava`; do not inspect population, arms, outcomes, Meta dimensions, or performance before the pre-registered `2026-09-02 03:45` checkpoint.
+- After an independently verified A/A `PASS` and zero-allocation stop read-back, obtain fresh action-time confirmation, open the reviewed one-seat `$40/month` Pro gate through a separate PR, then perform and record the manual Pro/p75 read-back before collecting the CTA baseline.

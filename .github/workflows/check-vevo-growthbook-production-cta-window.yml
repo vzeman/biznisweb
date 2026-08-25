@@ -107,7 +107,7 @@ jobs:
           ):
               raise SystemExit('A/A must remain stopped during CTA checkpointing')
           if (
-              workspace.get('state') != 'production_cta_running_activation_verified_pro_quantiles_blocked'
+              workspace.get('state') != 'production_cta_running_activation_verified_pro_quantiles_verified'
               or cta['status'] != 'running_production_cta_only'
               or cta['production_allocation_percent'] != 100
           ):

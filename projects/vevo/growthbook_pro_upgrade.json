@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "transition_type": "vevo_growthbook_pro_upgrade_and_quantile_metrics",
+  "status": "waiting_for_verified_aa_completion",
+  "source_bindings": {
+    "aa_completion": {
+      "path": "projects/vevo/growthbook_production_aa_completion.json",
+      "sha256": null
+    },
+    "workspace_before_upgrade": {
+      "path": "projects/vevo/growthbook_workspace.json",
+      "sha256": null
+    }
+  },
+  "target": {
+    "organization_name": "Vevo",
+    "project_name": "VEVO SK Web",
+    "from_plan": "starter",
+    "to_plan": "pro",
+    "seat_count": 1,
+    "currency": "USD",
+    "base_monthly_price": 40,
+    "billing_period": "monthly",
+    "recurring_subscription": true,
+    "official_pricing_url": "https://www.growthbook.io/pricing",
+    "quantile_metric_keys": [
+      "vevo_lcp_p75_24h",
+      "vevo_inp_p75_24h",
+      "vevo_cls_p75_milli_24h"
+    ],
+    "cta_guardrail_metrics": [
+      "vevo_client_error_device_rate_24h",
+      "vevo_lcp_p75_24h",
+      "vevo_inp_p75_24h",
+      "vevo_cls_p75_milli_24h"
+    ],
+    "metric_contract_sha256": {
+      "vevo_cls_p75_milli_24h": "d791195d01aa9c8eb802518331ae32792328a4722afd5b0a84c000ff86792d4f",
+      "vevo_inp_p75_24h": "9f645cff49e0b1104f8cd6c687f700c9de5a101e001e26bc6ae9df31eac814e7",
+      "vevo_lcp_p75_24h": "8b464c3d615eb8f2845b46c7cfe878d0b10f46bffe13ef74499e0d72238e064f"
+    }
+  },
+  "authorization": {
+    "status": "not_recorded",
+    "authorized_at_utc": null,
+    "confirmed_seat_count": null,
+    "confirmed_base_monthly_price": null,
+    "confirmed_recurring_subscription": null,
+    "action_time_confirmation_required": true
+  },
+  "verification": {
+    "status": "not_recorded",
+    "observation_file": "projects/vevo/growthbook_pro_upgrade_observation.json",
+    "observation_sha256": null,
+    "observed_at_utc": null,
+    "preview_metric_ids": {
+      "vevo_cls_p75_milli_24h": null,
+      "vevo_inp_p75_24h": null,
+      "vevo_lcp_p75_24h": null
+    },
+    "production_metric_ids": {
+      "vevo_cls_p75_milli_24h": null,
+      "vevo_inp_p75_24h": null,
+      "vevo_lcp_p75_24h": null
+    }
+  },
+  "release_boundaries": {
+    "manual_paid_upgrade_allowed": false,
+    "automatic_paid_upgrade_allowed": false,
+    "automatic_growthbook_mutation_allowed": false,
+    "cta_activation_allowed": false,
+    "gtm_mutation_allowed": false,
+    "meta_ads_mutation_allowed": false,
+    "biznisweb_mutation_allowed": false,
+    "collector_or_reporting_mutation_allowed": false,
+    "price_product_stock_cart_checkout_payment_or_order_mutation_allowed": false
+  },
+  "next_gate": "wait_for_verified_aa_pass_and_zero_allocation_stop_readback"
+}

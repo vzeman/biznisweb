@@ -132,8 +132,8 @@ After the reviewed `manual_cta_start_review_allowed` state is on `main`:
    A/A is stopped, and no other Production experiment is active.
 3. Confirm `100%` experiment traffic, exact `control`/`brand_contrast` `50/50`
    weights, assignment attribute `id`, the frozen first-`N` target, one goal,
-   six secondary metrics, one guardrail, Bayesian settings, and no activation
-   metric.
+   six secondary metrics, the client-error plus three verified Pro p75
+   guardrails, Bayesian settings, and no activation metric.
 4. Start only `vevo-sk-product-cta-color-001` and publish only its Production
    feature rule. Do not publish GTM, edit Meta Ads, or save BiznisWeb forms.
 5. Reload GrowthBook and read back that CTA is the only active Production

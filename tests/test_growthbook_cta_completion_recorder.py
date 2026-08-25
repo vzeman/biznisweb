@@ -207,7 +207,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         )
         self.assertFalse(any(completion["release_boundaries"].values()))
         self.assertEqual(
-            "production_cta_stopped_followup_pending_pro_quantiles_blocked",
+            "production_cta_stopped_followup_pro_quantiles_verified",
             workspace["state"],
         )
         self.assertEqual(0, workspace["workspace"]["production_allocation_percent"])

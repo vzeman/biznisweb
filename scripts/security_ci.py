@@ -40,6 +40,9 @@ def main() -> int:
         from scripts.build_growthbook_cta_baseline_observation import (
             validate_manifest as validate_cta_baseline_manifest,
         )
+        from scripts.validate_growthbook_pro_upgrade import (
+            main as validate_pro_upgrade,
+        )
         from scripts.record_growthbook_cta_activation import (
             validate_manifest as validate_cta_activation_manifest,
         )
@@ -565,12 +568,18 @@ def main() -> int:
                 raise AssertionError(
                     "GrowthBook Production registry must contain only the exact reviewed A/A contract while A/A is running."
                 )
-        elif workspace_state == "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked":
+        elif workspace_state in {
+            "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked",
+            "production_aa_completed_cta_sample_freeze_pro_quantiles_verified",
+        }:
             if production_registry not in (aa_only_registry, cta_only_registry):
                 raise AssertionError(
                     "Post-A/A Production registry must contain exactly one reviewed A/A or CTA contract."
                 )
-        elif workspace_state == "production_cta_running_activation_verified_pro_quantiles_blocked":
+        elif workspace_state in {
+            "production_cta_running_activation_verified_pro_quantiles_verified",
+            "production_cta_stopped_followup_pro_quantiles_verified",
+        }:
             if production_registry != cta_only_registry:
                 raise AssertionError(
                     "GrowthBook Production registry must contain only the exact reviewed CTA contract while CTA is running."
@@ -2097,6 +2106,8 @@ def main() -> int:
                 f"GrowthBook A/A manifest lifecycle is invalid: {exc}"
             ) from exc
         validate_aa_completion()
+        if validate_pro_upgrade() != 0:
+            raise AssertionError("GrowthBook Pro upgrade state is invalid.")
         validate_cta_baseline_manifest(growthbook_cta_baseline_manifest)
         validate_cta_activation_manifest(growthbook_cta_activation_manifest)
         validate_cta_measurement_manifest(
@@ -3133,6 +3144,8 @@ def main() -> int:
             "scripts/record_growthbook_aa_evidence_gates.py",
             "scripts/record_growthbook_aa_completion.py",
             "scripts/validate_growthbook_aa_completion.py",
+            "scripts/record_growthbook_pro_upgrade.py",
+            "scripts/validate_growthbook_pro_upgrade.py",
             "scripts/build_growthbook_cta_baseline_observation.py",
             "scripts/record_growthbook_cta_activation.py",
             "scripts/validate_growthbook_cta_runtime_release.py",
