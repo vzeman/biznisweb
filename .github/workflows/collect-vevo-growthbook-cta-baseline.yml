@@ -1,0 +1,349 @@
+name: Collect VEVO GrowthBook CTA Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_collection:
+        description: Type true to collect one aggregate-only post-A/A CTA baseline
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-cta-baseline
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  STACK_NAME: vevo-growthbook-production
+  EXPECTED_SERVICE: vevo-growthbook-collector-production
+  EXPECTED_DATABASE: vevo_growthbook_production
+  EXPECTED_WORKGROUP: vevo-growthbook-reporting-production
+  EXPECTED_RUNTIME_PATH: /app
+  BASELINE_FILE: vevo-growthbook-cta-baseline.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  collect-cta-baseline:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Require exact aggregate-only collection confirmation
+        env:
+          CONFIRM_COLLECTION: ${{ inputs.confirm_collection }}
+        run: |
+          set -euo pipefail
+          [[ "${CONFIRM_COLLECTION}" == 'true' ]]
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Require verified A/A completion before AWS credentials
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_baseline_observation.py validate
+          python scripts/validate_growthbook_aa_completion.py
+          python scripts/validate_growthbook_workspace.py
+          python scripts/security_ci.py
+          TEMPORARY="${RUNNER_TEMP}/vevo-growthbook-cta-baseline-${GITHUB_RUN_ID}"
+          mkdir -m 700 -- "${TEMPORARY}"
+          python scripts/build_growthbook_cta_baseline_observation.py render-query \
+            --output "${TEMPORARY}/cta-baseline.sql"
+          {
+            echo "TEMP_BASELINE_DIR=${TEMPORARY}"
+          } >> "${GITHUB_ENV}"
+          echo 'PRODUCTION_CTA_BASELINE_LOCAL_GATE_OK:aa-pass=true:aa-stopped=true:allocation=0:followup=24h:cta=draft'
+
+      - name: Configure AWS credentials for bounded aggregate reads
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read and verify exact Production runtime identity
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_BASELINE_DIR}/stack.json"
+          python - <<'PY' > "${TEMP_BASELINE_DIR}/runtime.env"
+          import json
+          import os
+
+          stack = json.load(open(f"{os.environ['TEMP_BASELINE_DIR']}/stack.json", encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production stack is not CREATE_COMPLETE')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorClusterArn', 'CollectorServiceName', 'CollectorTaskDefinitionArn',
+              'ExperimentDatabaseName', 'ReportingWorkGroupName',
+          }
+          if not required.issubset(outputs):
+              raise SystemExit('Production stack output set drift')
+          if outputs['CollectorServiceName'] != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('Production service output drift')
+          if outputs['ExperimentDatabaseName'] != os.environ['EXPECTED_DATABASE']:
+              raise SystemExit('Production database output drift')
+          if outputs['ReportingWorkGroupName'] != os.environ['EXPECTED_WORKGROUP']:
+              raise SystemExit('Production workgroup output drift')
+          for key, value in (
+              ('PRODUCTION_CLUSTER_ARN', outputs['CollectorClusterArn']),
+              ('PRODUCTION_SERVICE_NAME', outputs['CollectorServiceName']),
+              ('PRODUCTION_TASK_DEFINITION_ARN', outputs['CollectorTaskDefinitionArn']),
+              ('PRODUCTION_DATABASE', outputs['ExperimentDatabaseName']),
+              ('PRODUCTION_WORKGROUP', outputs['ReportingWorkGroupName']),
+          ):
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_BASELINE_DIR}/runtime.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_BASELINE_DIR}/runtime.env"
+          set +a
+          aws ecs describe-services \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_BASELINE_DIR}/service.json"
+          aws ecs list-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --service-name "${PRODUCTION_SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" > "${TEMP_BASELINE_DIR}/task-list.json"
+          TASK_ARN="$(python - <<'PY'
+          import json
+          import os
+          tasks = json.load(open(f"{os.environ['TEMP_BASELINE_DIR']}/task-list.json", encoding='utf-8')).get('taskArns') or []
+          if len(tasks) != 1:
+              raise SystemExit('Production must have exactly one collector task')
+          print(tasks[0])
+          PY
+          )"
+          aws ecs describe-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${TASK_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_BASELINE_DIR}/task.json"
+          aws ecs describe-task-definition \
+            --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_BASELINE_DIR}/task-definition.json"
+          python - <<'PY'
+          import ipaddress
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_BASELINE_DIR'])
+          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
+          foundation = workspace['athena']['production']['successful_foundation_deployment']
+          service = json.load(open(root / 'service.json', encoding='utf-8'))['services'][0]
+          task = json.load(open(root / 'task.json', encoding='utf-8'))['tasks'][0]
+          definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
+          if service.get('status') != 'ACTIVE' or service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Production collector service is not healthy 1/1')
+          if service.get('taskDefinition') != os.environ['PRODUCTION_TASK_DEFINITION_ARN']:
+              raise SystemExit('Production task definition drift')
+          if service.get('enableExecuteCommand') is not False:
+              raise SystemExit('Production execute-command boundary drift')
+          containers = task.get('containers') or []
+          definitions = definition.get('containerDefinitions') or []
+          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(containers) != 1:
+              raise SystemExit('Production task identity drift')
+          if len(definitions) != 1 or definitions[0].get('name') != 'collector':
+              raise SystemExit('Production container definition drift')
+          if definitions[0].get('readonlyRootFilesystem') is not True or definitions[0].get('user') != '10001:10001':
+              raise SystemExit('Production container hardening drift')
+          recorded = foundation['service_runtime']
+          image_digest = str(containers[0].get('imageDigest') or '')
+          task_definition = str(definition.get('taskDefinitionArn') or '').rsplit('/', 1)[-1]
+          if image_digest != recorded.get('image_digest') or task_definition != recorded.get('task_definition'):
+              raise SystemExit('Production runtime differs from localhost-gated foundation')
+          for runtime in (foundation['host_gate'], recorded):
+              if runtime.get('instance_id') != 'N/A:Fargate':
+                  raise SystemExit('Production foundation instance identity drift')
+              if runtime.get('service') != os.environ['EXPECTED_SERVICE']:
+                  raise SystemExit('Production foundation service identity drift')
+              if runtime.get('runtime_path') != os.environ['EXPECTED_RUNTIME_PATH']:
+                  raise SystemExit('Production foundation runtime path drift')
+          if foundation['host_gate'].get('localhost_health_marker_verified') is not True:
+              raise SystemExit('Production localhost health gate is missing')
+          if foundation['host_gate'].get('localhost_runtime_marker_verified') is not True:
+              raise SystemExit('Production localhost runtime marker gate is missing')
+          details = [
+              row for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+          parsed_ip = ipaddress.ip_address(private_ip)
+          if parsed_ip.version != 4 or not parsed_ip.is_private or not private_ip.startswith('172.31.'):
+              raise SystemExit('Production task IP is outside the VEVO private VPC')
+          task_id = task['taskArn'].rsplit('/', 1)[-1]
+          print(
+              'PRODUCTION_CTA_BASELINE_RUNTIME_HARD_GATE_OK:'
+              f'instance-id=N/A:Fargate:private-ip={private_ip}:'
+              f"service={os.environ['EXPECTED_SERVICE']}:path={os.environ['EXPECTED_RUNTIME_PATH']}:"
+              f'task={task_id}:image={image_digest}:localhost-marker=inherited-verified'
+          )
+          PY
+
+      - name: Verify exact aggregate source schemas
+        run: |
+          set -euo pipefail
+          for table in experiment_events_raw experiment_device_facts; do
+            aws glue get-table \
+              --database-name "${PRODUCTION_DATABASE}" \
+              --name "${table}" \
+              --region "${AWS_REGION}" > "${TEMP_BASELINE_DIR}/${table}-schema.json"
+          done
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_BASELINE_DIR'])
+          expected = {
+              'experiment_events_raw': [
+                  'schema_version', 'event_id', 'event_name', 'occurred_at', 'received_at',
+                  'device_id', 'page_path', 'page_type', 'consent_state', 'experiment_id',
+                  'variation_id', 'utm_source', 'utm_medium', 'meta_campaign_id',
+                  'meta_adset_id', 'meta_ad_id', 'meta_placement', 'product_id',
+                  'transaction_id', 'page_load_id', 'vital_name', 'vital_value',
+                  'error_kind', 'collector_version', 'risk_result',
+              ],
+              'experiment_device_facts': [
+                  'metric_contract_version', 'device_id', 'first_exposure_at', 'variation_id',
+                  'meta_campaign_id', 'meta_adset_id', 'meta_ad_id', 'meta_placement',
+                  'add_to_cart_24h', 'purchase_converted', 'joined_order_count',
+                  'net_revenue_eur', 'cm1_eur', 'cancelled_order_count',
+                  'refunded_order_count', 'immature_order_count', 'client_error_observed',
+                  'contaminated', 'eligible', 'order_attribution_eligible',
+                  'order_attribution_issue', 'unmatched_transaction_count',
+                  'ambiguous_transaction_count', 'exclusion_reason', 'facts_generated_at',
+              ],
+          }
+          partitions = {
+              'experiment_events_raw': ['event_date'],
+              'experiment_device_facts': ['experiment_id'],
+          }
+          for table, columns in expected.items():
+              payload = json.load(open(root / f'{table}-schema.json', encoding='utf-8'))['Table']
+              actual = [row['Name'] for row in payload['StorageDescriptor']['Columns']]
+              actual_partitions = [row['Name'] for row in payload.get('PartitionKeys') or []]
+              if actual != columns or actual_partitions != partitions[table]:
+                  raise SystemExit(f'Production Glue schema drift: {table}')
+          print('PRODUCTION_CTA_BASELINE_GLUE_SCHEMA_OK:pii-fields=absent:customer-fields=absent')
+          PY
+
+      - name: Run one aggregate-only Athena CTA baseline query
+        run: |
+          set -euo pipefail
+          QUERY_ID="$(aws athena start-query-execution \
+            --query-string "file://${TEMP_BASELINE_DIR}/cta-baseline.sql" \
+            --query-execution-context "Database=${PRODUCTION_DATABASE}" \
+            --work-group "${PRODUCTION_WORKGROUP}" \
+            --region "${AWS_REGION}" \
+            --query QueryExecutionId \
+            --output text)"
+          [[ -n "${QUERY_ID}" && "${QUERY_ID}" != 'None' ]]
+          STATE='QUEUED'
+          for attempt in $(seq 1 30); do
+            STATE="$(aws athena get-query-execution \
+              --query-execution-id "${QUERY_ID}" \
+              --region "${AWS_REGION}" \
+              --query 'QueryExecution.Status.State' \
+              --output text)"
+            if [[ "${STATE}" == 'SUCCEEDED' ]]; then
+              break
+            fi
+            if [[ "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then
+              echo "Aggregate-only CTA baseline failed safely: ${STATE}" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          [[ "${STATE}" == 'SUCCEEDED' ]]
+          aws athena get-query-results \
+            --query-execution-id "${QUERY_ID}" \
+            --max-results 2 \
+            --region "${AWS_REGION}" > "${TEMP_BASELINE_DIR}/athena-results.json"
+
+      - name: Build and verify canonical identity-free baseline
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_baseline_observation.py build-observation \
+            --athena-results "${TEMP_BASELINE_DIR}/athena-results.json" \
+            --output "${BASELINE_FILE}"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+
+          path = os.environ['BASELINE_FILE']
+          raw = open(path, 'rb').read()
+          value = json.loads(raw)
+          canonical = (json.dumps(value, ensure_ascii=False, separators=(',', ':'), sort_keys=True) + '\n').encode('utf-8')
+          if raw != canonical:
+              raise SystemExit('CTA baseline artifact is not canonical JSON')
+          if value.get('contains_device_or_event_identity') is not False:
+              raise SystemExit('CTA baseline contains identity')
+          if value.get('contains_customer_or_order_data') is not False:
+              raise SystemExit('CTA baseline contains commerce data')
+          if set(value) != {
+              'schema_version', 'source_experiment_id', 'aa_snapshot_sha256',
+              'aa_window_started_at_utc', 'aa_window_ended_at_utc',
+              'population_definition', 'exposed_devices', 'converted_devices',
+              'contains_device_or_event_identity', 'contains_customer_or_order_data',
+          }:
+              raise SystemExit('CTA baseline artifact field set drift')
+          print(
+              'PRODUCTION_CTA_BASELINE_ARTIFACT_OK:'
+              f"sha256={hashlib.sha256(raw).hexdigest()}:identities=false:commerce=false:"
+              'variation-breakdown=false:activation=false'
+          )
+          PY
+
+      - name: Remove all temporary AWS responses and aggregate query files
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          TARGET="${RUNNER_TEMP}/vevo-growthbook-cta-baseline-${GITHUB_RUN_ID}"
+          [[ "${TARGET}" == "${RUNNER_TEMP}/vevo-growthbook-cta-baseline-${GITHUB_RUN_ID}" ]]
+          rm -rf -- "${TARGET}"
+          [[ ! -e "${TARGET}" ]]
+
+      - name: Upload one canonical aggregate-only baseline
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-cta-baseline
+          path: vevo-growthbook-cta-baseline.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write aggregate-only collection summary
+        run: |
+          set -euo pipefail
+          {
+            echo '## VEVO CTA planning baseline'
+            echo '- A/A PASS and reviewed zero-allocation stop: `required before AWS credentials`'
+            echo '- Product exposure follow-up: `24 hours complete`'
+            echo '- Athena output: `exposed_devices + converted_devices only`'
+            echo '- Variation/arm breakdown and winner call: `excluded`'
+            echo '- Event/device identity and customer/order data: `excluded`'
+            echo '- GrowthBook, GTM, Meta Ads, BiznisWeb and commerce mutation: `none`'
+            echo '- CTA activation: `still blocked`'
+            echo '- UI test: `not applicable; read-only aggregate workflow makes no UI change`'
+          } >> "${GITHUB_STEP_SUMMARY}"

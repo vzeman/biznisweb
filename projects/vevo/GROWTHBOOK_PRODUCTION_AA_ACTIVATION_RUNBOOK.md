@@ -177,4 +177,24 @@ git diff --check
 
 This second transition closes the manual stop gate and records the workspace at zero Production allocation. It prepares only the CTA draft/sample-freeze state; CTA activation remains false. Next, produce the identity-free product-page baseline bound to the same A/A snapshot, freeze the final CTA sample through `freeze_growthbook_cta_sample.py`, and independently finish the 14-day lifecycle reconciliation before any CTA launch review.
 
+### Protected CTA baseline and offline sample freeze
+
+The machine-readable producer contract is `growthbook_cta_baseline.json`; its SHA-bound SQL is `growthbook_sql/cta_baseline_production.sql`. The query uses `received_at`, the exact resolved A/A window, eligible uncontaminated device facts, the first accepted product-page exposure, same-assignment integrity, and an accepted product-page `add_to_cart` no later than 24 hours afterward. It emits only `exposed_devices` and `converted_devices`. It never emits an arm/variation breakdown, raw row, event/device ID, customer/order data, or a winner call.
+
+Do not dispatch `.github/workflows/collect-vevo-growthbook-cta-baseline.yml` until the completed A/A stop/readback transition is merged and the exact resolved through-boundary is at least 24 hours old. The workflow renders the query before AWS credentials; therefore a missing A/A `PASS`, missing zero-allocation stop readback, running allocation, non-draft CTA, or incomplete follow-up fails before AWS. After that local gate it re-verifies the exact Production Fargate task/private IP/service/`/app` identity against the already localhost-marker-gated immutable foundation, checks the two Glue schemas, runs one aggregate-only Athena query, deletes every temporary AWS/schema/query response, and uploads exactly one canonical identity-free artifact for 14 days. It makes no UI or external-system mutation, so a UI test is not applicable to this read-only collection.
+
+After a successful `main` run, independently read its run ID and head SHA, download only artifact `vevo-growthbook-cta-baseline`, require that its ZIP contains only `vevo-growthbook-cta-baseline.json`, and calculate its SHA-256 outside the artifact. Separately download the exact A/A snapshot run already bound in `growthbook_production_aa_completion.json`, require its recorded canonical snapshot SHA-256, and freeze the sample offline on a new branch:
+
+```text
+python scripts/freeze_growthbook_cta_sample.py --observation <downloaded-baseline>/vevo-growthbook-cta-baseline.json --observation-sha256 <independent-baseline-sha256> --aa-snapshot <downloaded-aa-snapshot>/vevo-growthbook-aa-snapshot.json --aa-snapshot-sha256 <completion-manifest-snapshot-sha256> --frozen-at-utc <whole-second-UTC-Z> --plan-output projects/vevo/growthbook_cta_sample_plan.json --workspace-output projects/vevo/growthbook_workspace.json
+python scripts/build_growthbook_cta_baseline_observation.py validate
+python scripts/validate_growthbook_aa_completion.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_cta_baseline tests.test_growthbook_cta_baseline_workflow tests.test_growthbook_cta_sample_freeze tests.test_growthbook_workspace
+python scripts/security_ci.py
+git diff --check
+```
+
+Review and merge only the two versioned output files produced by the offline freeze. They may record the final sample and its hashes, but must keep CTA status/feature rule in draft, Production allocation `0%`, `activation_allowed=false`, prices unchanged, and all external mutation gates closed. CTA launch review remains separately blocked by lifecycle reconciliation and the rest of the pre-registered activation gates.
+
 An A/A pass never declares a winner. It only permits a separate reviewed preparation of the non-price CTA A/B. Prices remain out of scope.

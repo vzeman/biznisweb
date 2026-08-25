@@ -37,6 +37,9 @@ def main() -> int:
         from scripts.validate_growthbook_aa_completion import (
             validate as validate_aa_completion,
         )
+        from scripts.build_growthbook_cta_baseline_observation import (
+            validate_manifest as validate_cta_baseline_manifest,
+        )
 
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
@@ -201,6 +204,15 @@ def main() -> int:
         )
         growthbook_aa_completion_validator = read(
             "scripts/validate_growthbook_aa_completion.py"
+        )
+        growthbook_cta_baseline_builder = read(
+            "scripts/build_growthbook_cta_baseline_observation.py"
+        )
+        growthbook_cta_baseline_workflow = read(
+            ".github/workflows/collect-vevo-growthbook-cta-baseline.yml"
+        )
+        growthbook_cta_baseline_manifest = json.loads(
+            read("projects/vevo/growthbook_cta_baseline.json")
         )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
@@ -2002,6 +2014,7 @@ def main() -> int:
                 f"GrowthBook A/A manifest lifecycle is invalid: {exc}"
             ) from exc
         validate_aa_completion()
+        validate_cta_baseline_manifest(growthbook_cta_baseline_manifest)
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
             "release_boundaries", {}
         )
@@ -2406,6 +2419,97 @@ def main() -> int:
                 "GrowthBook A/A completion validator lost safety marker: "
                 f"{required_completion_validator_marker}",
             )
+        for offline_cta_baseline_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_cta_baseline_builder.lower(),
+                offline_cta_baseline_marker.lower(),
+                "GrowthBook CTA baseline builder must remain offline: "
+                f"{offline_cta_baseline_marker}",
+            )
+        for required_cta_baseline_marker in (
+            "CTA baseline requires verified A/A PASS and stop readback",
+            "CTA baseline 24-hour follow-up is incomplete",
+            "variation_breakdown_allowed",
+            "contains_device_or_event_identity",
+            "contains_customer_or_order_data",
+            "CTA SQL template SHA-256 drift",
+            "CTA baseline must not emit or filter an arm breakdown",
+            "CTA baseline must not select raw rows",
+            "VEVO_CTA_BASELINE_READY:",
+        ):
+            require(
+                growthbook_cta_baseline_builder,
+                required_cta_baseline_marker,
+                "GrowthBook CTA baseline builder lost safety marker: "
+                f"{required_cta_baseline_marker}",
+            )
+        for required_cta_baseline_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "Require verified A/A completion before AWS credentials",
+            "PRODUCTION_CTA_BASELINE_LOCAL_GATE_OK:",
+            "PRODUCTION_CTA_BASELINE_RUNTIME_HARD_GATE_OK:",
+            "instance-id=N/A:Fargate:private-ip=",
+            "localhost-marker=inherited-verified",
+            "Run one aggregate-only Athena CTA baseline query",
+            "--max-results 2",
+            "variation-breakdown=false:activation=false",
+            "Remove all temporary AWS responses and aggregate query files",
+            "UI test: `not applicable; read-only aggregate workflow makes no UI change`",
+        ):
+            require(
+                growthbook_cta_baseline_workflow,
+                required_cta_baseline_workflow_marker,
+                "GrowthBook CTA baseline workflow lost safety marker: "
+                f"{required_cta_baseline_workflow_marker}",
+            )
+        if (
+            growthbook_cta_baseline_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook CTA baseline must upload exactly one artifact."
+            )
+        for forbidden_cta_baseline_workflow_marker in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "register-task-definition",
+            "iam create-",
+            "iam update-",
+            "iam delete-",
+            "s3api put-object",
+            "s3api delete-object",
+            "glue create-",
+            "glue update-",
+            "glue delete-",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "curl ",
+            "wget ",
+        ):
+            forbid(
+                growthbook_cta_baseline_workflow.lower(),
+                forbidden_cta_baseline_workflow_marker.lower(),
+                "GrowthBook CTA baseline workflow mutation path detected: "
+                f"{forbidden_cta_baseline_workflow_marker}",
+            )
         for required_checkpoint_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "outcome-blind A/A checkpoint is outside its daily gate",
@@ -2548,6 +2652,7 @@ def main() -> int:
             "scripts/record_growthbook_aa_evidence_gates.py",
             "scripts/record_growthbook_aa_completion.py",
             "scripts/validate_growthbook_aa_completion.py",
+            "scripts/build_growthbook_cta_baseline_observation.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",
             "scripts/summarize_growthbook_foundation_bucket.py",

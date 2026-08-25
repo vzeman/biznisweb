@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "producer_type": "vevo_growthbook_cta_product_baseline",
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "source_experiment_id": "vevo-sk-aa-001",
+  "source_completion_manifest": "projects/vevo/growthbook_production_aa_completion.json",
+  "source_snapshot_manifest": "projects/vevo/growthbook_aa_snapshot.json",
+  "source_sample_plan": "projects/vevo/growthbook_cta_sample_plan.json",
+  "status": "prepared_runtime_gated_by_verified_aa_completion",
+  "workflow": ".github/workflows/collect-vevo-growthbook-cta-baseline.yml",
+  "workflow_name": "Collect VEVO GrowthBook CTA Baseline",
+  "collection_gate": {
+    "required_completion_status": "production_aa_stopped_verified_cta_activation_blocked",
+    "required_aa_verdict": "PASS",
+    "required_stop_readback_status": "verified_zero_allocation",
+    "required_workspace_state": "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked",
+    "minimum_followup_hours_after_aa_window": 24,
+    "dispatch_policy": "main_manual_exact_confirmation_only"
+  },
+  "query_contract": {
+    "template_path": "projects/vevo/growthbook_sql/cta_baseline_production.sql",
+    "template_sha256": "c5234e3f04b191cef58821ca334566e1885f2ba2bbcfba714f9d49f57e76e612",
+    "database": "vevo_growthbook_production",
+    "workgroup": "vevo-growthbook-reporting-production",
+    "source_tables": [
+      "experiment_events_raw",
+      "experiment_device_facts"
+    ],
+    "metric_contract_version": "vevo_cm1_v1_2026-08-20",
+    "event_time_field": "received_at",
+    "population_definition": "first_valid_aa_product_page_exposure_proxy",
+    "exposure_event": "experiment_exposure",
+    "exposure_page_type": "product",
+    "conversion_event": "add_to_cart",
+    "conversion_page_type": "product",
+    "followup_hours": 24,
+    "consent_state": "analytics_granted",
+    "risk_result": "accepted",
+    "eligible_only": true,
+    "contaminated_excluded": true,
+    "variation_breakdown_allowed": false,
+    "result_columns": [
+      "exposed_devices",
+      "converted_devices"
+    ]
+  },
+  "output": {
+    "artifact_name": "vevo-growthbook-cta-baseline",
+    "file_name": "vevo-growthbook-cta-baseline.json",
+    "retention_days": 14,
+    "canonical_json_required": true,
+    "contains_raw_aws_payloads": false,
+    "contains_event_or_device_ids": false,
+    "contains_customer_or_order_data": false
+  },
+  "release_boundaries": {
+    "main_only": true,
+    "aws_aggregate_reads_only": true,
+    "growthbook_mutation_allowed": false,
+    "gtm_mutation_allowed": false,
+    "meta_ads_mutation_allowed": false,
+    "biznisweb_mutation_allowed": false,
+    "collector_or_reporting_mutation_allowed": false,
+    "price_cart_checkout_order_mutation_allowed": false,
+    "winner_calls_allowed": false,
+    "cta_activation_allowed": false
+  },
+  "next_gate": "after_verified_aa_pass_and_stop_collect_one_hash_bound_aggregate_then_freeze_sample_offline_activation_still_blocked"
+}
