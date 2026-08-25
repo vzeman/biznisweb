@@ -1,0 +1,39 @@
+Exploratory VEVO batch 48 material scan, 2026-08-25
+
+REVIEW - Čo je taft: hladká šuštiaca tkanina, záhyby a šetrná starostlivosť
+Reason: title pattern is close to the existing poplin guide; keep outside this batch.
+
+OK / SELECTED - Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie
+Distinct intent: bast fibre identity, degumming, crisp hand, wrinkles, blends and drying.
+
+OK / SELECTED - Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť
+Distinct intent: regenerated cellulose, lining use, moisture behaviour, static and wet handling.
+
+REVIEW - Čo je žakár: vzor tkaný do látky, zatrhávanie a správna starostlivosť
+Reason: title pattern is close to the new Lurex snagging guide; revisit with a more distinct intent.
+
+OK / SELECTED - Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie
+Distinct intent: woven wool construction, brushing, airing, tailoring, pilling and Harris Tweed distinction.
+
+OK - Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky
+Reason not selected: useful future household-textile article, but canvas gives this batch a more distinct stain-and-structure intent.
+
+OK / SELECTED - Čo je canvas: pevné plátno, škvrny a správne pranie
+Distinct intent: heavy plain weave, bags, shoes, covers, coatings, abrasion and stain removal.
+
+OK - Čo je brokát: plastický vzor, kovové nite a šetrná starostlivosť
+Reason not selected: defer because metallic-yarn boundaries need separation from the Lurex article.
+
+OK - Čo je lamé: lesklá látka s kovovým efektom a bezpečné čistenie
+Reason not selected: semantic overlap with the published Lurex guide.
+
+OK - Čo je rips: priečne rebrovaná tkanina, oder a starostlivosť
+Reason not selected: retain for a later construction-focused batch.
+
+OK - Čo je kordura: odolná tkanina na tašky a outdoorové vybavenie, čistenie
+Reason not selected: branded-material and coating boundaries need separate research.
+
+OK - Čo je sherpa: huňatý syntetický povrch, žmolky a pranie
+Reason not selected: close to existing fleece and boucle surface-care coverage.
+
+Final exact-title guard result: all four selected titles OK against 843 merged Blog, FAQ, glossary, RSS and local records. Catalog health: zero duplicate-title groups and zero invalid slugs.

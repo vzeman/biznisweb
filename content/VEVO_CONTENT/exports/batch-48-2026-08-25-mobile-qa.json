@@ -1,0 +1,62 @@
+{
+  "batch": "batch-48",
+  "verified_at": "2026-08-25T07:27:00+02:00",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "document_client_width": 375,
+    "document_scroll_width": 375
+  },
+  "article_count": 4,
+  "all_ok": true,
+  "screenshot_capture": {
+    "ok": false,
+    "note": "Browser screenshot capture timed out twice; rendered DOM and computed layout checks completed."
+  },
+  "articles": [
+    {
+      "url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "article_width": 351,
+      "h2_count": 30,
+      "responsive_table_count": 2,
+      "table_widths": [680, 680],
+      "action_button_count": 2,
+      "one_character_paragraph_count": 0,
+      "uncontained_overflow_count": 0,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "article_width": 351,
+      "h2_count": 30,
+      "responsive_table_count": 2,
+      "table_widths": [680, 680],
+      "action_button_count": 2,
+      "one_character_paragraph_count": 0,
+      "uncontained_overflow_count": 0,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "article_width": 351,
+      "h2_count": 30,
+      "responsive_table_count": 2,
+      "table_widths": [680, 680],
+      "action_button_count": 2,
+      "one_character_paragraph_count": 0,
+      "uncontained_overflow_count": 0,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "article_width": 351,
+      "h2_count": 30,
+      "responsive_table_count": 2,
+      "table_widths": [680, 680],
+      "action_button_count": 2,
+      "one_character_paragraph_count": 0,
+      "uncontained_overflow_count": 0,
+      "ok": true
+    }
+  ]
+}

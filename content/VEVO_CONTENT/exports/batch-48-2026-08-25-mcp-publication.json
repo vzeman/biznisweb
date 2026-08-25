@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-08-25T07:20:55+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "D:\\CodexWorktrees\\Playground-vevo-b48\\content\\VEVO_CONTENT\\imports\\batch-48-2026-08-25-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie",
+      "slug": "co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "post_id": "3191",
+      "create": {
+        "post_id": "3191",
+        "title": "Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie",
+        "link": "co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+        "active": "0",
+        "short_length": 247,
+        "long_length": 31159,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3191",
+        "title": "Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie",
+        "link": "co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+        "active": "1",
+        "short_length": 247,
+        "long_length": 31161,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 147692
+      }
+    },
+    {
+      "title": "Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť",
+      "slug": "co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "post_id": "3192",
+      "create": {
+        "post_id": "3192",
+        "title": "Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť",
+        "link": "co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+        "active": "0",
+        "short_length": 238,
+        "long_length": 31500,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3192",
+        "title": "Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť",
+        "link": "co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+        "active": "1",
+        "short_length": 238,
+        "long_length": 31504,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+        "status_code": 200,
+        "location": null,
+        "body_length": 148199
+      }
+    },
+    {
+      "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+      "slug": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "post_id": "3193",
+      "create": {
+        "post_id": "3193",
+        "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+        "link": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+        "active": "0",
+        "short_length": 245,
+        "long_length": 31075,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3193",
+        "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+        "link": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+        "active": "1",
+        "short_length": 245,
+        "long_length": 31077,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 147662
+      }
+    },
+    {
+      "title": "Čo je canvas: pevné plátno, škvrny a správne pranie",
+      "slug": "co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "post_id": "3194",
+      "create": {
+        "post_id": "3194",
+        "title": "Čo je canvas: pevné plátno, škvrny a správne pranie",
+        "link": "co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+        "active": "0",
+        "short_length": 254,
+        "long_length": 31596,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3194",
+        "title": "Čo je canvas: pevné plátno, škvrny a správne pranie",
+        "link": "co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+        "active": "1",
+        "short_length": 254,
+        "long_length": 31598,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 148189
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-08-25T07:23:11+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 590,
+  "preflight": [
+    {
+      "title": "Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie",
+      "slug": "co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124947
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť",
+      "slug": "co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124981
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+      "slug": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124945
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je canvas: pevné plátno, škvrny a správne pranie",
+      "slug": "co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124941
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-08-25T07:21:02+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-08-25T07:24:33+02:00"
+}

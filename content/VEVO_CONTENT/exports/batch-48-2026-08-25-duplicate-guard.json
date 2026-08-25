@@ -1,0 +1,40 @@
+{
+  "existing_count": 843,
+  "excluded_batch": 48,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie",
+      "slug": "co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť",
+      "slug": "co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+      "slug": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je canvas: pevné plátno, škvrny a správne pranie",
+      "slug": "co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

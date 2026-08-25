@@ -1,0 +1,326 @@
+{
+  "batch": "batch-48",
+  "checked_at": "2026-08-25T05:18:46.768084+00:00",
+  "target_count": 4,
+  "outgoing_count": 35,
+  "check_count": 39,
+  "failure_count": 0,
+  "checks": [
+    {
+      "url": "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+      "status": 200,
+      "final_url": "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://eur-lex.europa.eu/legal-content/SK/TXT/?uri=CELEX%3A02011R1007-20180215",
+      "status": 200,
+      "final_url": "https://eur-lex.europa.eu/legal-content/SK/TXT/?uri=CELEX%3A02011R1007-20180215",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm135/543/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm135/543/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm215/3848/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm215/3848/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm61/495/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm61/495/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d1424-25.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d1424-25.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d3512_d3512m-22.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d3512_d3512m-22.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d4157-13r22.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d4157-13r22.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.asahi-kasei.co.jp/fibers/en/bemberg/pdf/archives/BBleaflet%20_low.pdf",
+      "status": 200,
+      "final_url": "https://www.asahi-kasei.co.jp/fibers/en/bemberg/pdf/archives/BBleaflet%20_low.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.asahi-kasei.co.jp/fibers/en/lp/bemberg/001/",
+      "status": 200,
+      "final_url": "https://www.asahi-kasei.co.jp/fibers/en/lp/bemberg/001/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.asahi-kasei.co.jp/fibers/en/products_bemberg.html",
+      "status": 200,
+      "final_url": "https://www.asahi-kasei.co.jp/fibers/en/products_bemberg.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.harristweed.org/our-role/",
+      "status": 200,
+      "final_url": "https://www.harristweed.org/our-role/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.jstage.jst.go.jp/article/fiber1944/50/10/50_10_P569/_article/-char/en",
+      "status": 200,
+      "final_url": "https://www.jstage.jst.go.jp/article/fiber1944/50/10/50_10_P569/_article/-char/en",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-jesenny-kabat-trenckot-a-lahky-vlneny-kabat-doma",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-jesenny-kabat-trenckot-a-lahky-vlneny-kabat-doma",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true,
+      "expected_status": 404
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/care/care-for-wool/",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/care/care-for-wool/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/globalassets/_06-new-woolmark/_industry/certification/licensee-portal/gd5407-wool-care-factsheet_pilling.pdf",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/globalassets/_06-new-woolmark/_industry/certification/licensee-portal/gd5407-wool-care-factsheet_pilling.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    }
+  ]
+}
