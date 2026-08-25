@@ -228,7 +228,7 @@ AA_COMPLETION_OBSERVATION_PATH = (
 )
 
 EXPECTED_AA_ACCEPTANCE = {
-    "schema_version": 1,
+    "schema_version": 2,
     "experiment_id": "vevo-sk-aa-001",
     "timezone": "Europe/Bratislava",
     "variations": ["control", "variant"],
@@ -240,7 +240,7 @@ EXPECTED_AA_ACCEPTANCE = {
     "minimum_exact_joined_transactions": 1,
     "minimum_meta_exposures": 1,
     "minimum_complete_stable_meta_dimension_exposures": 1,
-    "privacy_sample_max_rows": 100,
+    "privacy_full_window_required": True,
     "srm_p_value_min": 0.001,
     "split_percent_min": 48,
     "split_percent_max": 52,

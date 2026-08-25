@@ -36,7 +36,7 @@ EXPECTED_CONFIG_KEYS = {
     "minimum_exact_joined_transactions",
     "minimum_meta_exposures",
     "minimum_complete_stable_meta_dimension_exposures",
-    "privacy_sample_max_rows",
+    "privacy_full_window_required",
     "srm_p_value_min",
     "split_percent_min",
     "split_percent_max",
@@ -105,7 +105,7 @@ EXPECTED_META_KEYS = {
 }
 EXPECTED_PRIVACY_KEYS = {
     "total_stored_row_count",
-    "sampled_row_count",
+    "audited_row_count",
     "pii_finding_count",
     "forbidden_field_finding_count",
     "raw_ip_address_stored_count",
@@ -235,7 +235,7 @@ def _full_calendar_days(started: datetime, evaluated: datetime, zone: ZoneInfo) 
 
 def validate_config(config: Mapping[str, Any]) -> None:
     root = _require_exact_keys(config, EXPECTED_CONFIG_KEYS, "A/A acceptance config")
-    _require(root["schema_version"] == 1, "A/A acceptance config schema drift")
+    _require(root["schema_version"] == 2, "A/A acceptance config schema drift")
     _require(root["experiment_id"] == "vevo-sk-aa-001", "A/A experiment ID drift")
     _require(root["timezone"] == "Europe/Bratislava", "A/A timezone drift")
     _require(root["variations"] == ["control", "variant"], "A/A variation order drift")
@@ -251,7 +251,6 @@ def validate_config(config: Mapping[str, Any]) -> None:
         "minimum_exact_joined_transactions": (1, None),
         "minimum_meta_exposures": (1, None),
         "minimum_complete_stable_meta_dimension_exposures": (1, None),
-        "privacy_sample_max_rows": (1, None),
         "split_percent_min": (1, 99),
         "split_percent_max": (1, 99),
         "lcp_degradation_absolute_ms": (0, None),
@@ -261,6 +260,10 @@ def validate_config(config: Mapping[str, Any]) -> None:
     for field, (minimum, maximum) in integer_fields.items():
         value = _integer(root[field], field, maximum=maximum)
         _require(value >= minimum, f"{field} is below its allowed minimum")
+    _require(
+        root["privacy_full_window_required"] is True,
+        "A/A privacy audit must cover the full frozen window",
+    )
     _require(
         root["split_percent_min"] < root["split_percent_max"], "A/A split range drift"
     )
@@ -409,8 +412,8 @@ def _validate_snapshot(
     for field in EXPECTED_CONSENT_KEYS:
         _integer(consent[field], f"consent_audit.{field}")
     _require(
-        privacy["sampled_row_count"] <= privacy["total_stored_row_count"],
-        "privacy sample exceeds stored row population",
+        privacy["audited_row_count"] <= privacy["total_stored_row_count"],
+        "privacy audit exceeds stored row population",
     )
 
     commerce = _require_exact_keys(
@@ -690,30 +693,28 @@ def evaluate(snapshot: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str
         },
     )
 
-    required_privacy_sample = min(
-        privacy["total_stored_row_count"], config["privacy_sample_max_rows"]
-    )
     privacy_ready = (
-        required_privacy_sample > 0
-        and privacy["sampled_row_count"] >= required_privacy_sample
+        config["privacy_full_window_required"] is True
+        and privacy["total_stored_row_count"] > 0
+        and privacy["audited_row_count"] == privacy["total_stored_row_count"]
     )
     privacy_findings = sum(
         privacy[field]
         for field in EXPECTED_PRIVACY_KEYS
         if field.endswith("_count")
-        and field not in {"total_stored_row_count", "sampled_row_count"}
+        and field not in {"total_stored_row_count", "audited_row_count"}
     )
     add_gate(
-        "privacy_sample",
+        "privacy_full_window",
         "pass"
         if privacy_ready and privacy_findings == 0
         else ("fail" if privacy_findings else "not_ready"),
         {
-            "sampled_rows": privacy["sampled_row_count"],
+            "audited_rows": privacy["audited_row_count"],
             "total_rows": privacy["total_stored_row_count"],
             "finding_count": privacy_findings,
         },
-        {"minimum_sampled_rows": required_privacy_sample, "finding_count": 0},
+        {"all_stored_rows_audited": True, "finding_count": 0},
     )
     consent_violations = sum(consent.values())
     add_gate(

@@ -119,7 +119,7 @@ META_KEYS = {
 }
 PRIVACY_KEYS = {
     "total_stored_row_count",
-    "sampled_row_count",
+    "audited_row_count",
     "pii_finding_count",
     "forbidden_field_finding_count",
     "raw_ip_address_stored_count",

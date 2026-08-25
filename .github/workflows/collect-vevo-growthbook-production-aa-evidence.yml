@@ -435,9 +435,6 @@ jobs:
               AND from_iso8601_timestamp(received_at) >= from_iso8601_timestamp('{os.environ['AA_FROM_UTC']}')
               AND from_iso8601_timestamp(received_at) < from_iso8601_timestamp('{os.environ['AA_THROUGH_UTC']}')
           ),
-          privacy_sample AS (
-            SELECT * FROM raw_window ORDER BY received_at, event_id LIMIT 100
-          ),
           eligible_facts AS (
             SELECT *
             FROM experiment_device_facts
@@ -451,13 +448,13 @@ jobs:
           SELECT
             (SELECT COUNT(DISTINCT event_id) FROM raw_window) AS athena_unique_event_count,
             (SELECT COUNT(*) FROM raw_window) AS total_stored_row_count,
-            (SELECT COUNT(*) FROM privacy_sample) AS sampled_row_count,
+            (SELECT COUNT(*) FROM raw_window) AS audited_row_count,
             (SELECT COUNT_IF(
               regexp_like(lower(concat_ws('|', coalesce(page_path, ''), coalesce(utm_source, ''), coalesce(utm_medium, ''), coalesce(product_id, ''), coalesce(error_kind, ''))),
                 '[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{{2,}}|(?:[+]421|00421)[ 0-9-]{{8,16}}')
-            ) FROM privacy_sample) AS pii_finding_count,
-            (SELECT COUNT_IF(regexp_like(coalesce(page_path, ''), '(?i)^(?:https?://)|[?#]')) FROM privacy_sample) AS full_url_stored_count,
-            (SELECT COUNT_IF(regexp_like(lower(concat_ws('|', coalesce(page_path, ''), coalesce(utm_source, ''), coalesce(utm_medium, ''))), 'fbclid|_fbp|_fbc')) FROM privacy_sample) AS click_identifier_stored_count,
+            ) FROM raw_window) AS pii_finding_count,
+            (SELECT COUNT_IF(regexp_like(coalesce(page_path, ''), '(?i)^(?:https?://)|[?#]')) FROM raw_window) AS full_url_stored_count,
+            (SELECT COUNT_IF(regexp_like(lower(concat_ws('|', coalesce(page_path, ''), coalesce(utm_source, ''), coalesce(utm_medium, ''))), 'fbclid|_fbp|_fbc')) FROM raw_window) AS click_identifier_stored_count,
             (SELECT COUNT_IF(meta_campaign_id IS NOT NULL OR meta_adset_id IS NOT NULL OR meta_ad_id IS NOT NULL OR meta_placement IS NOT NULL) FROM eligible_facts) AS meta_exposure_count,
             (SELECT COUNT_IF(meta_campaign_id IS NOT NULL AND meta_adset_id IS NOT NULL AND meta_ad_id IS NOT NULL AND meta_placement IS NOT NULL) FROM eligible_facts) AS complete_stable_dimension_exposure_count,
             (SELECT COUNT_IF(
@@ -571,7 +568,7 @@ jobs:
           header = [cell.get('VarCharValue') for cell in rows[0].get('Data') or []]
           values = [cell.get('VarCharValue') for cell in rows[1].get('Data') or []]
           expected_columns = {
-              'athena_unique_event_count', 'total_stored_row_count', 'sampled_row_count',
+              'athena_unique_event_count', 'total_stored_row_count', 'audited_row_count',
               'pii_finding_count', 'full_url_stored_count', 'click_identifier_stored_count',
               'meta_exposure_count', 'complete_stable_dimension_exposure_count',
               'invalid_dimension_row_count', 'forbidden_click_identifier_count',
@@ -631,7 +628,7 @@ jobs:
               },
               'privacy_audit': {
                   'total_stored_row_count': aggregate['total_stored_row_count'],
-                  'sampled_row_count': aggregate['sampled_row_count'],
+                  'audited_row_count': aggregate['audited_row_count'],
                   'pii_finding_count': aggregate['pii_finding_count'],
                   'forbidden_field_finding_count': 0,
                   'raw_ip_address_stored_count': 0,
