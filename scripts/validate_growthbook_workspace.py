@@ -131,6 +131,17 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
     )
 
 try:
+    from validate_growthbook_meta_reporting_contract import (
+        MetaReportingContractError,
+        validate_contract as validate_meta_reporting_contract,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.validate_growthbook_meta_reporting_contract import (
+        MetaReportingContractError,
+        validate_contract as validate_meta_reporting_contract,
+    )
+
+try:
     from record_growthbook_cta_activation import (
         CtaActivationRecordingError,
         RUNNING as CTA_RUNNING_STATUS,
@@ -203,6 +214,9 @@ CTA_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.
 CTA_BASELINE_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_baseline.json"
 PRO_UPGRADE_PATH = ROOT / "projects" / "vevo" / "growthbook_pro_upgrade.json"
 CTA_ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_activation.json"
+META_REPORTING_CONTRACT_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_meta_reporting_contract.json"
+)
 CTA_MEASUREMENT_WINDOW_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_measurement_window.json"
 )
@@ -453,6 +467,9 @@ def validate() -> None:
     except ProUpgradeError as exc:
         raise AssertionError(f"GrowthBook Pro upgrade contract is invalid: {exc}") from exc
     cta_activation = json.loads(CTA_ACTIVATION_PATH.read_text(encoding="utf-8"))
+    meta_reporting_contract = json.loads(
+        META_REPORTING_CONTRACT_PATH.read_text(encoding="utf-8")
+    )
     cta_measurement_window = json.loads(
         CTA_MEASUREMENT_WINDOW_PATH.read_text(encoding="utf-8")
     )
@@ -511,10 +528,17 @@ def validate() -> None:
         validate_cta_activation_manifest(cta_activation)
     except CtaActivationRecordingError as exc:
         raise AssertionError(f"CTA activation contract is invalid: {exc}") from exc
+    try:
+        validate_meta_reporting_contract(meta_reporting_contract)
+    except MetaReportingContractError as exc:
+        raise AssertionError(
+            f"GrowthBook Meta reporting contract is invalid: {exc}"
+        ) from exc
     cta_bindings = cta_activation["source_bindings"]
     for binding_name, binding_path in (
         ("design_contract", CTA_DESIGN_PATH),
         ("decision_contract", CTA_DECISION_CONTRACT_PATH),
+        ("meta_reporting_contract", META_REPORTING_CONTRACT_PATH),
     ):
         if hashlib.sha256(binding_path.read_bytes()).hexdigest() != cta_bindings[
             binding_name

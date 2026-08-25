@@ -34,6 +34,9 @@ DEFAULT_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_p
 DEFAULT_LIFECYCLE_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_lifecycle_reconciliation.json"
 DEFAULT_DESIGN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_design.json"
 DEFAULT_DECISION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_decision_contract.json"
+DEFAULT_META_REPORTING_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_meta_reporting_contract.json"
+)
 DEFAULT_REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
 DEFAULT_WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
 
@@ -61,11 +64,13 @@ EXPECTED_PATHS = {
     "lifecycle_reconciliation": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
     "design_contract": "projects/vevo/growthbook_cta_design.json",
     "decision_contract": "projects/vevo/growthbook_cta_decision_contract.json",
+    "meta_reporting_contract": "projects/vevo/growthbook_meta_reporting_contract.json",
     "collector_registry": "growthbook_collector/experiments.json",
 }
 EXPECTED_STATIC_HASHES = {
     "design_contract": "fef74b323f154f9476db4fd00c171c297043b7662f39d871284d6c417d2ece6d",
     "decision_contract": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+    "meta_reporting_contract": "0578cf48c00485071cb535670e113ad9dcfaf5ac09b2fa4308ea5bd0b3c19bd3",
 }
 
 
@@ -144,7 +149,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         root["source_bindings"],
         {
             "aa_completion", "aa_snapshot", "sample_plan", "lifecycle_reconciliation",
-            "design_contract", "decision_contract", "collector_registry", "runtime_readiness",
+            "design_contract", "decision_contract", "meta_reporting_contract",
+            "collector_registry", "runtime_readiness",
         },
         "source_bindings",
     )
@@ -656,6 +662,9 @@ def _parser() -> argparse.ArgumentParser:
     open_parser.add_argument("--lifecycle", type=Path, default=DEFAULT_LIFECYCLE_PATH)
     open_parser.add_argument("--design", type=Path, default=DEFAULT_DESIGN_PATH)
     open_parser.add_argument("--decision", type=Path, default=DEFAULT_DECISION_PATH)
+    open_parser.add_argument(
+        "--meta-reporting", type=Path, default=DEFAULT_META_REPORTING_PATH
+    )
     open_parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY_PATH)
     open_parser.add_argument("--workspace", type=Path, default=DEFAULT_WORKSPACE_PATH)
     open_parser.add_argument("--runtime-observation", type=Path, required=True)
@@ -670,6 +679,9 @@ def _parser() -> argparse.ArgumentParser:
     start_parser.add_argument("--lifecycle", type=Path, default=DEFAULT_LIFECYCLE_PATH)
     start_parser.add_argument("--design", type=Path, default=DEFAULT_DESIGN_PATH)
     start_parser.add_argument("--decision", type=Path, default=DEFAULT_DECISION_PATH)
+    start_parser.add_argument(
+        "--meta-reporting", type=Path, default=DEFAULT_META_REPORTING_PATH
+    )
     start_parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY_PATH)
     start_parser.add_argument("--observation", type=Path, required=True)
     start_parser.add_argument("--observation-sha256", required=True)
@@ -688,6 +700,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "lifecycle_reconciliation": args.lifecycle,
                 "design_contract": args.design,
                 "decision_contract": args.decision,
+                "meta_reporting_contract": args.meta_reporting,
                 "collector_registry": args.registry,
             }
             runtime = _load_canonical(args.runtime_observation, args.runtime_observation_sha256, "CTA runtime observation")
@@ -722,6 +735,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "lifecycle_reconciliation": _file_sha256(args.lifecycle),
                 "design_contract": _file_sha256(args.design),
                 "decision_contract": _file_sha256(args.decision),
+                "meta_reporting_contract": _file_sha256(args.meta_reporting),
                 "collector_registry": _file_sha256(args.registry),
             },
         )

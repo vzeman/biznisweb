@@ -29,6 +29,12 @@ Do not start the CTA experiment when any one of these is true:
 - another Production experiment is active;
 - the current GrowthBook draft differs from the frozen experiment, feature,
   variations, `50/50` weights, metrics, data source, or first-`N` sample;
+- `growthbook_meta_reporting_contract.json` is missing, hash-mismatched, or no
+  longer proves the exact Meta URL-parameter → collector → Athena → GrowthBook/
+  reporting dimension chain;
+- Meta would select an experiment arm through a separate destination, query
+  parameter, or Meta A/B split instead of sending both arms to the same
+  canonical VEVO destination for on-site GrowthBook assignment;
 - any step would change Meta Ads, BiznisWeb, a price, product content, cart,
   checkout, payment, stock, or an order;
 - the runtime observation or activation readback contains credentials,
@@ -108,16 +114,20 @@ reformat or manually reconstruct it. On a new branch, run:
 
 ```text
 python scripts/record_growthbook_cta_activation.py --output projects/vevo/growthbook_cta_activation.json open-review --runtime-observation projects/vevo/growthbook_cta_runtime_readiness_observation.json --runtime-observation-sha256 <independent-sha256>
+python scripts/validate_growthbook_meta_reporting_contract.py
 python scripts/validate_growthbook_workspace.py
-python -m unittest tests.test_growthbook_cta_activation_recorder tests.test_growthbook_workspace
+python -m unittest tests.test_growthbook_meta_reporting_contract tests.test_growthbook_cta_activation_recorder tests.test_growthbook_workspace
 python scripts/security_ci.py
 git diff --check
 ```
 
 Review the diff and merge it through a PR. The recorder must bind the exact A/A
 completion, snapshot manifest, frozen sample, lifecycle reconciliation, design,
-decision contract, checked-in collector registry, runtime artifact, workflow
-run, and main commit. It may open only
+decision contract, immutable Meta/reporting contract, checked-in collector
+registry, runtime artifact, workflow run, and main commit. The Meta/reporting
+contract proves the stable campaign/ad-set/ad/placement mapping and preserves
+one canonical destination; those dimensions are diagnostic and cannot replace
+the primary all-traffic decision. The recorder may open only
 `manual_growthbook_start_allowed=true`. Every automatic mutation boundary,
 winner call, and commerce/Meta/BiznisWeb change remains false.
 
@@ -134,11 +144,13 @@ After the reviewed `manual_cta_start_review_allowed` state is on `main`:
    weights, assignment attribute `id`, the frozen first-`N` target, one goal,
    six secondary metrics, the client-error plus three verified Pro p75
    guardrails, Bayesian settings, and no activation metric.
-4. Start only `vevo-sk-product-cta-color-001` and publish only its Production
+4. Confirm Meta is not running a separate A/B split for this hypothesis and no
+   ad destination or URL parameter selects `control` or `brand_contrast`.
+5. Start only `vevo-sk-product-cta-color-001` and publish only its Production
    feature rule. Do not publish GTM, edit Meta Ads, or save BiznisWeb forms.
-5. Reload GrowthBook and read back that CTA is the only active Production
+6. Reload GrowthBook and read back that CTA is the only active Production
    experiment at `100%`/`50-50`, while A/A remains stopped at `0%`.
-6. With Tag Assistant, verify consent accept/reject/withdrawal, desktop and
+7. With Tag Assistant, verify consent accept/reject/withdrawal, desktop and
    mobile, both variations, exact approved CSS, unchanged text/dimensions/layout/
    placement/price, zero console errors, accepted collector delivery, and one
    sticky-consistent anonymous repeat. Do not add to cart or place an order for

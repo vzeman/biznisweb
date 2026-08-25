@@ -30,6 +30,10 @@
       "path": "projects/vevo/growthbook_cta_decision_contract.json",
       "sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183"
     },
+    "meta_reporting_contract": {
+      "path": "projects/vevo/growthbook_meta_reporting_contract.json",
+      "sha256": "0578cf48c00485071cb535670e113ad9dcfaf5ac09b2fa4308ea5bd0b3c19bd3"
+    },
     "collector_registry": {
       "path": "growthbook_collector/experiments.json",
       "sha256": null
