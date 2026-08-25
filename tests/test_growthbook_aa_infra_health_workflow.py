@@ -64,6 +64,8 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             "cron(45 3 * * ? *)",
             "Europe/Bratislava",
             "vevo-reporting-daily:33",
+            "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
+            "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
             'source "${TEMP_HEALTH_DIR}/selected-task.env"',
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
