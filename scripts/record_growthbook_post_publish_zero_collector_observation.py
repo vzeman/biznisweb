@@ -166,7 +166,7 @@ def _parse_utc(value: Any, field: str) -> datetime:
 def expected_pending_activation() -> dict[str, Any]:
     """Return the exact schema-8 post-publish collector-pending gate."""
 
-    pending = copy.deepcopy(activation_validator.EXPECTED_ACTIVATION)
+    pending = copy.deepcopy(activation_validator.EXPECTED_PRE_ACTIVATION)
     pending["schema_version"] = 8
     pending["status"] = "gtm_published_zero_allocation_verification_pending"
     preflight = pending["activation_preflight"]

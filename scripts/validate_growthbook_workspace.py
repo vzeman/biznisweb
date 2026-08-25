@@ -340,12 +340,16 @@ def validate() -> None:
     ):
         raise AssertionError("CTA decision and sample contracts differ")
 
-    if (
-        workspace.get("schema_version") != 1
-        or workspace.get("state")
-        != "preview_aa_runtime_and_reconciliation_verified_recurring_schedule_pending_pro_quantiles_blocked"
-    ):
-        raise AssertionError("GrowthBook workspace must remain a connected Preview-only v1 contract")
+    workspace_state = workspace.get("state")
+    production_aa_running = workspace_state == (
+        "production_aa_running_activation_verified_pro_quantiles_blocked"
+    )
+    if workspace.get("schema_version") != 1 or workspace_state not in {
+        "preview_aa_runtime_and_reconciliation_verified_"
+        "recurring_schedule_pending_pro_quantiles_blocked",
+        "production_aa_running_activation_verified_pro_quantiles_blocked",
+    }:
+        raise AssertionError("GrowthBook workspace lifecycle state drift")
     workspace_config = workspace.get("workspace", {})
     if workspace_config.get("organization_name") != "Vevo":
         raise AssertionError("GrowthBook organization read-back changed")
@@ -359,8 +363,12 @@ def validate() -> None:
         raise AssertionError("GrowthBook plan must match the authenticated workspace read-back")
     if workspace_config.get("subscription_or_trial_status") != "starter_active_no_paid_upgrade_accepted":
         raise AssertionError("GrowthBook paid-upgrade status is not safely recorded")
-    if workspace_config.get("production_allocation_percent") != 0:
-        raise AssertionError("GrowthBook Production allocation must remain 0%")
+    expected_workspace_allocation = 100 if production_aa_running else 0
+    if (
+        workspace_config.get("production_allocation_percent")
+        != expected_workspace_allocation
+    ):
+        raise AssertionError("GrowthBook Production A/A allocation state drift")
     if (
         workspace_config.get("actual_region") is not None
         or workspace_config.get("region_status") != "not_exposed_in_current_workspace_ui"
@@ -1461,11 +1469,19 @@ def validate() -> None:
         if (
             experiment.get("assignment_attribute") != "id"
             or experiment.get("traffic_percent") != 100
-            or experiment.get("feature_rule_environments") != ["staging"]
         ):
-            raise AssertionError(f"GrowthBook experiment must remain staging-only: {experiment_id}")
-        if experiment.get("production_allocation_percent") != 0:
-            raise AssertionError(f"GrowthBook Production allocation must remain zero: {experiment_id}")
+            raise AssertionError(f"GrowthBook experiment assignment drift: {experiment_id}")
+        aa_running = experiment_id == "vevo-sk-aa-001" and production_aa_running
+        expected_environment = ["production"] if aa_running else ["staging"]
+        expected_allocation = 100 if aa_running else 0
+        if experiment.get("feature_rule_environments") != expected_environment:
+            raise AssertionError(
+                f"GrowthBook experiment environment drift: {experiment_id}"
+            )
+        if experiment.get("production_allocation_percent") != expected_allocation:
+            raise AssertionError(
+                f"GrowthBook Production allocation drift: {experiment_id}"
+            )
         variations = experiment.get("variations", [])
         if variations != preview_registry.get(experiment_id, {}).get("variations"):
             raise AssertionError(f"GrowthBook/collector variation order differs for {experiment_id}")
@@ -1476,10 +1492,15 @@ def validate() -> None:
             raise AssertionError(f"GrowthBook/reporting weights differ for {experiment_id}")
     aa_experiment = experiment_map["vevo-sk-aa-001"]
     expected_aa_analysis = {
-        "verified_date": "2026-08-21",
-        "data_source_id": "ds_19g6mmt2c4dmn",
-        "data_source_name": "VEVO Preview Experiment Facts",
-        "assignment_query_id": "tbl_mt2c74ol",
+        "verified_date": "2026-08-25" if production_aa_running else "2026-08-21",
+        "data_source_id": (
+            "ds_19g6mmt5stlp6" if production_aa_running else "ds_19g6mmt2c4dmn"
+        ),
+        "data_source_name": (
+            "VEVO Production Experiment Facts"
+            if production_aa_running
+            else "VEVO Preview Experiment Facts"
+        ),
         "assignment_query_name": "VEVO consented devices",
         "statistics_engine": "bayesian_default",
         "cuped_enabled": False,
@@ -1496,18 +1517,59 @@ def validate() -> None:
         ],
         "guardrail_metrics": ["vevo_client_error_device_rate_24h"],
     }
+    if not production_aa_running:
+        expected_aa_analysis["assignment_query_id"] = "tbl_mt2c74ol"
     if (
-        aa_experiment.get("status") != "running_preview_staging_only"
-        or aa_experiment.get("started_date") != "2026-08-21"
+        aa_experiment.get("name")
+        != (
+            "VEVO SK Production A/A measurement validation"
+            if production_aa_running
+            else "VEVO SK A/A measurement validation"
+        )
+        or aa_experiment.get("growthbook_id")
+        != (
+            "exp_19g6mmt5wugpk"
+            if production_aa_running
+            else "exp_19g6mmt1qsqm9"
+        )
+        or aa_experiment.get("status")
+        != (
+            "running_production_aa_only"
+            if production_aa_running
+            else "running_preview_staging_only"
+        )
+        or aa_experiment.get("started_date")
+        != ("2026-08-25" if production_aa_running else "2026-08-21")
         or aa_experiment.get("feature_rule_status") != "live"
-        or aa_experiment.get("feature_rule_revision") != 2
+        or aa_experiment.get("feature_rule_revision")
+        != (3 if production_aa_running else 2)
         or aa_experiment.get("analysis_settings") != expected_aa_analysis
     ):
-        raise AssertionError("GrowthBook A/A Preview running state drift")
+        raise AssertionError("GrowthBook A/A lifecycle running state drift")
+    expected_activation_evidence = {
+        "browser_observation_sha256": (
+            "451e6489df351cc2318751a9d4bd727d107d8aaf9763e406c595fc5824ec8705"
+        ),
+        "smoke_evidence_sha256": (
+            "c21d7418656ad0841851a8afbc642a6ea39328e2151e6dc647ce8c59c06c1823"
+        ),
+        "workflow_run_id": "32815955896",
+        "main_commit": "1965091059e5a35518265aafd282db842f8ea5d3",
+        "accepted_collector_delivery_verified": True,
+        "sticky_assignment_verified": True,
+        "cta_experiment_started": False,
+    }
+    if production_aa_running:
+        if aa_experiment.get("activation_evidence") != expected_activation_evidence:
+            raise AssertionError("GrowthBook A/A activation evidence binding drift")
+    elif "activation_evidence" in aa_experiment:
+        raise AssertionError("Historical Preview state contains activation evidence")
     cta_experiment = experiment_map["vevo-sk-product-cta-color-001"]
     if (
-        cta_experiment.get("status") != "draft"
-        or cta_experiment.get("feature_rule_status") != "draft"
+        cta_experiment.get("status")
+        != ("unstarted_draft" if production_aa_running else "draft")
+        or cta_experiment.get("feature_rule_status")
+        != ("no_live_rules" if production_aa_running else "draft")
         or "analysis_settings" in cta_experiment
     ):
         raise AssertionError("GrowthBook CTA A/B must remain an unstarted draft")
@@ -1565,8 +1627,8 @@ def validate() -> None:
         raise AssertionError("GrowthBook/reporting maturity gates differ")
     if gates.get("price_tests_allowed") is not False:
         raise AssertionError("price testing must remain disabled")
-    if gates.get("production_activation_allowed") is not False:
-        raise AssertionError("Production activation must remain blocked")
+    if gates.get("production_activation_allowed") is not production_aa_running:
+        raise AssertionError("Production A/A activation gate state drift")
     if (
         aa_acceptance["growthbook_reporting_count_difference_max_percent"]
         != gates.get("growthbook_count_difference_max_percent")

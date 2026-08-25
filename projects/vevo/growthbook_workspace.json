@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "preview_aa_runtime_and_reconciliation_verified_recurring_schedule_pending_pro_quantiles_blocked",
+  "state": "production_aa_running_activation_verified_pro_quantiles_blocked",
   "workspace": {
     "organization_name": "Vevo",
     "organization_id": "org_19g6mmt1q79o1",
@@ -18,7 +18,7 @@
       "preview": "staging"
     },
     "plan_type": "starter",
-    "production_allocation_percent": 0,
+    "production_allocation_percent": 100,
     "subscription_or_trial_status": "starter_active_no_paid_upgrade_accepted"
   },
   "sdk_connection": {
@@ -1279,16 +1279,16 @@
     {
       "tracking_key": "vevo-sk-aa-001",
       "feature_key": "vevo-sk-aa-assignment",
-      "name": "VEVO SK A/A measurement validation",
-      "growthbook_id": "exp_19g6mmt1qsqm9",
-      "status": "running_preview_staging_only",
-      "started_date": "2026-08-21",
+      "name": "VEVO SK Production A/A measurement validation",
+      "growthbook_id": "exp_19g6mmt5wugpk",
+      "status": "running_production_aa_only",
+      "started_date": "2026-08-25",
       "assignment_attribute": "id",
       "traffic_percent": 100,
       "feature_rule_status": "live",
-      "feature_rule_revision": 2,
+      "feature_rule_revision": 3,
       "feature_rule_environments": [
-        "staging"
+        "production"
       ],
       "variations": [
         "control",
@@ -1298,14 +1298,13 @@
         0.5,
         0.5
       ],
-      "production_allocation_percent": 0,
+      "production_allocation_percent": 100,
       "planned_allocation_percent_after_gates": 100,
       "winner_calls_allowed": false,
       "analysis_settings": {
-        "verified_date": "2026-08-21",
-        "data_source_id": "ds_19g6mmt2c4dmn",
-        "data_source_name": "VEVO Preview Experiment Facts",
-        "assignment_query_id": "tbl_mt2c74ol",
+        "verified_date": "2026-08-25",
+        "data_source_id": "ds_19g6mmt5stlp6",
+        "data_source_name": "VEVO Production Experiment Facts",
         "assignment_query_name": "VEVO consented devices",
         "statistics_engine": "bayesian_default",
         "cuped_enabled": false,
@@ -1327,17 +1326,26 @@
         ]
       },
       "minimum_days": 7,
-      "minimum_eligible_devices": 1000
+      "minimum_eligible_devices": 1000,
+      "activation_evidence": {
+        "browser_observation_sha256": "451e6489df351cc2318751a9d4bd727d107d8aaf9763e406c595fc5824ec8705",
+        "smoke_evidence_sha256": "c21d7418656ad0841851a8afbc642a6ea39328e2151e6dc647ce8c59c06c1823",
+        "workflow_run_id": "32815955896",
+        "main_commit": "1965091059e5a35518265aafd282db842f8ea5d3",
+        "accepted_collector_delivery_verified": true,
+        "sticky_assignment_verified": true,
+        "cta_experiment_started": false
+      }
     },
     {
       "tracking_key": "vevo-sk-product-cta-color-001",
       "feature_key": "vevo-sk-product-cta-color",
       "name": "VEVO SK product CTA color",
       "growthbook_id": "exp_19g6mmt1qxzrp",
-      "status": "draft",
+      "status": "unstarted_draft",
       "assignment_attribute": "id",
       "traffic_percent": 100,
-      "feature_rule_status": "draft",
+      "feature_rule_status": "no_live_rules",
       "feature_rule_environments": [
         "staging"
       ],
@@ -1365,6 +1373,6 @@
     "exact_order_join_min_percent": 98,
     "maturity_checkpoint_days": 14,
     "price_tests_allowed": false,
-    "production_activation_allowed": false
+    "production_activation_allowed": true
   }
 }

@@ -32,24 +32,22 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
         self.assertNotIn("transaction_id", sql.lower())
         self.assertNotIn("order_num", sql.lower())
 
-    def test_validator_rejects_nonzero_production_allocation(self) -> None:
+    def test_validator_rejects_partial_production_aa_allocation(self) -> None:
         altered = copy.deepcopy(self.workspace)
-        altered["workspace"]["production_allocation_percent"] = 1
+        altered["workspace"]["production_allocation_percent"] = 99
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):
-            with self.assertRaisesRegex(AssertionError, "Production allocation"):
+            with self.assertRaisesRegex(AssertionError, "allocation state drift"):
                 validator.validate()
 
-    def test_validator_rejects_published_or_production_experiment_rule(self) -> None:
+    def test_validator_rejects_nonproduction_aa_rule(self) -> None:
         altered = copy.deepcopy(self.workspace)
-        altered["experiments"][0]["status"] = "running"
-        altered["experiments"][0]["feature_rule_status"] = "published"
-        altered["experiments"][0]["feature_rule_environments"] = ["staging", "production"]
+        altered["experiments"][0]["feature_rule_environments"] = ["staging"]
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):
-            with self.assertRaisesRegex(AssertionError, "staging-only"):
+            with self.assertRaisesRegex(AssertionError, "environment drift"):
                 validator.validate()
 
     def test_validator_rejects_aa_analysis_setting_drift(self) -> None:
@@ -60,7 +58,18 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
         with mock.patch.object(
             validator, "_load", side_effect=[altered, self.reporting, self.registry]
         ):
-            with self.assertRaisesRegex(AssertionError, "A/A Preview running state drift"):
+            with self.assertRaisesRegex(AssertionError, "A/A lifecycle running state drift"):
+                validator.validate()
+
+    def test_validator_rejects_activation_evidence_binding_drift(self) -> None:
+        altered = copy.deepcopy(self.workspace)
+        altered["experiments"][0]["activation_evidence"][
+            "sticky_assignment_verified"
+        ] = False
+        with mock.patch.object(
+            validator, "_load", side_effect=[altered, self.reporting, self.registry]
+        ):
+            with self.assertRaisesRegex(AssertionError, "activation evidence binding"):
                 validator.validate()
 
     def test_validator_rejects_started_cta_experiment(self) -> None:

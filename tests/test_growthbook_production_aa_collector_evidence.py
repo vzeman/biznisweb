@@ -21,6 +21,7 @@ from scripts.record_growthbook_production_aa_collector_evidence import (
 )
 from scripts import validate_growthbook_production_aa_activation as activation_validator
 from scripts import record_growthbook_production_aa_collector_evidence as recorder
+from tests.growthbook_test_state import pre_activation_workspace
 
 
 RUN_ID = "32499999999"
@@ -124,8 +125,10 @@ def ready_state() -> tuple[dict, dict, dict]:
     activation["growthbook"]["data_source_id"] = "ds_Production123"
     activation["next_gate"] = "dispatch_production_aa_collector_after_review"
 
-    workspace = json.loads(
-        activation_validator.WORKSPACE_PATH.read_text(encoding="utf-8")
+    workspace = pre_activation_workspace(
+        json.loads(
+            activation_validator.WORKSPACE_PATH.read_text(encoding="utf-8")
+        )
     )
     production = workspace["athena"]["production"]
     production["status"] = "route_disabled_foundation_deployed_verified"

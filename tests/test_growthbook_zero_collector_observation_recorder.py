@@ -126,7 +126,7 @@ class GrowthBookZeroCollectorObservationRecorderTests(unittest.TestCase):
         workspace = json.loads(validator.WORKSPACE_PATH.read_text(encoding="utf-8"))
         registry = json.loads(validator.REGISTRY_PATH.read_text(encoding="utf-8"))
         self.assertNotIn("activation_preflight", result)
-        with self.assertRaisesRegex(AssertionError, "reviewed zero-allocation UI gate"):
+        with self.assertRaisesRegex(AssertionError, "reviewed running evidence gate"):
             validator.validate_activation_handoff(result, workspace, registry)
 
     def test_rejects_any_nonzero_request_or_receipt_count(self) -> None:
