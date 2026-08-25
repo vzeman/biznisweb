@@ -165,6 +165,7 @@ jobs:
               raise SystemExit('Production GrowthBook stack state drift')
           collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
           reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}
+          reconciliation_parameters = {row['ParameterKey']: row['ParameterValue'] for row in reconciliation.get('Parameters') or []}
           if (
               collector_outputs.get('ExperimentDatabaseName') != os.environ['EXPECTED_DATABASE']
               or collector_outputs.get('ReportingWorkGroupName') != os.environ['EXPECTED_WORKGROUP']
@@ -178,7 +179,7 @@ jobs:
               or schedule.get('ScheduleExpression') != 'cron(45 3 * * ? *)'
               or schedule.get('ScheduleExpressionTimezone') != 'Europe/Bratislava'
               or schedule.get('FlexibleTimeWindow') != {'Mode': 'OFF'}
-              or schedule.get('Target', {}).get('Arn') != collector_outputs.get('CollectorClusterArn')
+              or schedule.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')
               or schedule.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') != reconciliation_outputs.get('TargetTaskDefinitionArn')
               or schedule.get('Target', {}).get('EcsParameters', {}).get('Group') != os.environ['EXPECTED_SERVICE']
               or schedule.get('Target', {}).get('EcsParameters', {}).get('TaskCount') != 1
@@ -209,10 +210,15 @@ jobs:
               or not override.get('name')
           ):
               raise SystemExit('Production reconciliation scheduled command drift')
-          if source.get('State') != 'ENABLED' or not str(source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') or '').endswith('vevo-reporting-daily:33'):
+          if (
+              source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
+              or source.get('State') != 'ENABLED'
+              or source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')
+              or not str(source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') or '').endswith('vevo-reporting-daily:33')
+          ):
               raise SystemExit('source reporting schedule drift')
           values = {
-              'PRODUCTION_CLUSTER_ARN': collector_outputs['CollectorClusterArn'],
+              'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn'],
               'PRODUCTION_DATABASE': collector_outputs['ExperimentDatabaseName'],
               'PRODUCTION_WORKGROUP': collector_outputs['ReportingWorkGroupName'],
               'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
@@ -227,7 +233,7 @@ jobs:
           set +a
 
           aws ecs describe-task-definition --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-definition.json"
-          aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-list.json"
+          aws ecs list-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-list.json"
           python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/task-arns.txt"
           import json
           import os
@@ -237,7 +243,7 @@ jobs:
           print(' '.join(tasks))
           PY
           read -r -a TASK_ARNS < "${TEMP_CHECKPOINT_DIR}/task-arns.txt"
-          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/tasks.json"
+          aws ecs describe-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/tasks.json"
           python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/selected-task.env"
           import ipaddress
           import json

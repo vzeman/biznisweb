@@ -63,6 +63,10 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             "vevo-reporting-daily:33",
             "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
             "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
+            "reconciliation_parameters.get('ClusterArn')",
+            "source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')",
+            "'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn']",
+            '--cluster "${RECONCILIATION_CLUSTER_ARN}"',
             "task.get('group') == os.environ['EXPECTED_SERVICE']",
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
@@ -73,6 +77,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             "PRODUCTION_CTA_WINDOW_CONTROL_GATE_OK:",
         ):
             self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
 
     def test_population_query_is_one_cta_count_without_arm_or_outcome(self) -> None:
         query_start = WORKFLOW.index(

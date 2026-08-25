@@ -186,6 +186,7 @@ jobs:
               raise SystemExit('Production GrowthBook stack state drift')
           collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
           reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}
+          reconciliation_parameters = {row['ParameterKey']: row['ParameterValue'] for row in reconciliation.get('Parameters') or []}
           if (
               collector_outputs.get('ExperimentDatabaseName') != os.environ['EXPECTED_DATABASE']
               or collector_outputs.get('ReportingWorkGroupName') != os.environ['EXPECTED_WORKGROUP']
@@ -201,7 +202,7 @@ jobs:
               'expression': schedule.get('ScheduleExpression') == 'cron(45 3 * * ? *)',
               'timezone': schedule.get('ScheduleExpressionTimezone') == 'Europe/Bratislava',
               'flexible_window': schedule.get('FlexibleTimeWindow') == {'Mode': 'OFF'},
-              'cluster': target.get('Arn') == collector_outputs.get('CollectorClusterArn'),
+              'cluster': target.get('Arn') == reconciliation_parameters.get('ClusterArn'),
               'task_definition': ecs.get('TaskDefinitionArn') == reconciliation_outputs.get('TargetTaskDefinitionArn'),
               'group': ecs.get('Group') == os.environ['EXPECTED_SERVICE'],
               'task_count': ecs.get('TaskCount') == 1,
@@ -237,11 +238,12 @@ jobs:
               expected_source.rsplit('/', 1)[-1] != os.environ['EXPECTED_SOURCE_TASK_DEFINITION']
               or source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
               or source.get('State') != 'ENABLED'
+              or source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')
               or source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') != expected_source
           ):
               raise SystemExit('source reporting schedule drift')
           values = {
-              'PRODUCTION_CLUSTER_ARN': collector_outputs['CollectorClusterArn'],
+              'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn'],
               'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
               'RECONCILIATION_CONTAINER_NAME': override['name'],
               'SOURCE_TASK_DEFINITION': expected_source.rsplit('/', 1)[-1],
@@ -319,7 +321,7 @@ jobs:
         if: ${{ env.RUN_INFRA_HEALTH == 'true' && env.HEALTH_PHASE == 'natural_reconciliation_verified' }}
         run: |
           set -euo pipefail
-          aws ecs list-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/task-list.json"
+          aws ecs list-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/task-list.json"
           python - <<'PY' > "${TEMP_HEALTH_DIR}/task-arns.txt"
           import json
           import os
@@ -329,7 +331,7 @@ jobs:
           print(' '.join(tasks))
           PY
           read -r -a TASK_ARNS < "${TEMP_HEALTH_DIR}/task-arns.txt"
-          aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/tasks.json"
+          aws ecs describe-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/tasks.json"
           python - <<'PY' > "${TEMP_HEALTH_DIR}/selected-task.env"
           import ipaddress
           import json
