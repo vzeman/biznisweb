@@ -122,6 +122,7 @@ FINAL_LOOK_KEYS = {
     "main_commit",
     "snapshot_sha256",
     "decision_sha256",
+    "hypothesis_registry_sha256",
     "verdict",
     "recommended_variation",
 }
@@ -556,6 +557,7 @@ def validate_manifest(
             "main_commit",
             "snapshot_sha256",
             "decision_sha256",
+            "hypothesis_registry_sha256",
             "verdict",
             "recommended_variation",
         ):
@@ -576,7 +578,7 @@ def validate_manifest(
     _require(final["protected_workflow_allowed"] is False, "CTA final workflow remains open")
     _require(RUN_ID_RE.fullmatch(str(final["successful_run_id"] or "")) is not None, "CTA final run ID is invalid")
     _require(COMMIT_RE.fullmatch(str(final["main_commit"] or "")) is not None, "CTA final main commit is invalid")
-    for field in ("snapshot_sha256", "decision_sha256"):
+    for field in ("snapshot_sha256", "decision_sha256", "hypothesis_registry_sha256"):
         _require(SHA256_RE.fullmatch(str(final[field] or "")) is not None, f"CTA final {field} is invalid")
     _require(final["verdict"] in {"WIN", "LOSE", "INCONCLUSIVE"}, "CTA final verdict drift")
     _require(final["recommended_variation"] in {"control", "brand_contrast"}, "CTA final recommendation drift")

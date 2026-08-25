@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "registry_type": "vevo_growthbook_experiment_hypothesis_registry",
+  "analytics_ui": "GrowthBook",
+  "audit_source_of_truth": "Git",
+  "privacy": {
+    "aggregate_evidence_only": true,
+    "pii_allowed": false,
+    "event_or_device_ids_allowed": false,
+    "customer_or_order_data_allowed": false
+  },
+  "experiments": [
+    {
+      "experiment_id": "vevo-sk-product-cta-color-001",
+      "growthbook_experiment_id": "exp_19g6mmt1qxzrp",
+      "feature_key": "vevo-sk-product-cta-color",
+      "name": "VEVO SK product CTA color",
+      "hypothesis_version": 1,
+      "hypothesis": "Changing only the product-detail add-to-cart CTA background from the current control color to one approved, accessible, high-contrast VEVO brand color will increase the share of exposed product viewers who add a product to cart because the primary action is easier to notice.",
+      "status": "preregistered_waiting_for_final_decision",
+      "population": "Eligible consented devices on Slovak product-detail pages where the add-to-cart CTA is actually rendered.",
+      "allowed_change": "Only the approved CTA background gradient and text color; label, dimensions, layout, placement, selectors, prices, cart, checkout, and every other element remain unchanged.",
+      "variations": [
+        "control",
+        "brand_contrast"
+      ],
+      "expected_variation_weights": {
+        "control": 0.5,
+        "brand_contrast": 0.5
+      },
+      "primary_metric": "add_to_cart_within_24h_per_first_rendered_cta_exposed_device",
+      "business_guardrail": "vevo_cm1_per_exposed_device_7d",
+      "diagnostic_dimensions_only": [
+        "meta_campaign_id",
+        "meta_adset_id",
+        "meta_ad_id",
+        "meta_placement",
+        "device_type",
+        "new_or_returning_device"
+      ],
+      "decision_contract": {
+        "path": "projects/vevo/growthbook_cta_decision_contract.json",
+        "sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183"
+      },
+      "final_decision": null
+    }
+  ]
+}

@@ -58,6 +58,9 @@ def main() -> int:
         from scripts.build_growthbook_cta_final_snapshot import (
             validate_manifest as validate_cta_final_snapshot_manifest,
         )
+        from scripts.validate_growthbook_hypothesis_registry import (
+            validate_registry as validate_hypothesis_registry,
+        )
 
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
@@ -268,6 +271,7 @@ def main() -> int:
         growthbook_cta_final_recorder = read(
             "scripts/record_growthbook_cta_final_snapshot.py"
         )
+        read("scripts/validate_growthbook_hypothesis_registry.py")
         growthbook_cta_final_workflow = read(
             ".github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml"
         )
@@ -283,6 +287,9 @@ def main() -> int:
         json.loads(read("projects/vevo/growthbook_cta_completion.json"))
         growthbook_cta_final_manifest = json.loads(
             read("projects/vevo/growthbook_cta_final_snapshot.json")
+        )
+        growthbook_hypothesis_registry = json.loads(
+            read("projects/vevo/growthbook_hypothesis_registry.json")
         )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
@@ -2127,6 +2134,10 @@ def main() -> int:
         if validate_cta_completion() != 0:
             raise AssertionError("GrowthBook CTA completion state is invalid.")
         validate_cta_final_snapshot_manifest(growthbook_cta_final_manifest)
+        validate_hypothesis_registry(
+            growthbook_hypothesis_registry,
+            growthbook_cta_final_manifest,
+        )
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
             "release_boundaries", {}
         )
@@ -3165,6 +3176,7 @@ def main() -> int:
             "scripts/build_growthbook_cta_final_snapshot.py",
             "scripts/validate_growthbook_cta_final_snapshot.py",
             "scripts/record_growthbook_cta_final_snapshot.py",
+            "scripts/validate_growthbook_hypothesis_registry.py",
             "growthbook_collector/runtime_marker.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",

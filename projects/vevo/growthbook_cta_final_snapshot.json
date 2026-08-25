@@ -35,6 +35,7 @@
     "main_commit": null,
     "snapshot_sha256": null,
     "decision_sha256": null,
+    "hypothesis_registry_sha256": null,
     "verdict": null,
     "recommended_variation": null
   },

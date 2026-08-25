@@ -309,7 +309,8 @@ commit, and both SHA-256 values, then record the result through a separate
 reviewed branch:
 
 ```text
-python scripts/record_growthbook_cta_final_snapshot.py --snapshot <downloaded-vevo-growthbook-cta-final-snapshot.json> --snapshot-sha256 <independent-snapshot-sha256> --decision <downloaded-vevo-growthbook-cta-final-decision.json> --decision-sha256 <independent-decision-sha256> --workflow-run-id <successful-run-id> --main-commit <exact-main-commit> --output projects/vevo/growthbook_cta_final_snapshot.json
+python scripts/record_growthbook_cta_final_snapshot.py --snapshot <downloaded-vevo-growthbook-cta-final-snapshot.json> --snapshot-sha256 <independent-snapshot-sha256> --decision <downloaded-vevo-growthbook-cta-final-decision.json> --decision-sha256 <independent-decision-sha256> --workflow-run-id <successful-run-id> --main-commit <exact-main-commit> --registry projects/vevo/growthbook_hypothesis_registry.json --registry-output projects/vevo/growthbook_hypothesis_registry.json --output projects/vevo/growthbook_cta_final_snapshot.json
+python scripts/validate_growthbook_hypothesis_registry.py
 python scripts/validate_growthbook_cta_final_snapshot.py
 python scripts/validate_growthbook_workspace.py
 python -m unittest tests.test_growthbook_cta_final_snapshot_builder tests.test_growthbook_cta_final_snapshot_recorder tests.test_growthbook_cta_final_snapshot_workflow tests.test_growthbook_workspace
@@ -318,11 +319,17 @@ git diff --check
 ```
 
 The offline recorder verifies canonical bytes, provenance, source hashes, and
-the lifecycle reconciliation, recomputes the decision byte-for-byte, records
-only `WIN`, `LOSE`, or `INCONCLUSIVE`, and immediately closes every final-look
-read gate. It never applies the recommendation. Any later GrowthBook, GTM, Meta
-Ads, BiznisWeb, collector/reporting, or commerce action requires a new explicit
-manual review and a separate versioned workflow.
+the lifecycle reconciliation, recomputes the decision byte-for-byte, and
+pre-validates both outputs before writing. It records only `WIN`, `LOSE`, or
+`INCONCLUSIVE`, stores the complete aggregate decision in the PII-free Git
+hypothesis registry, binds that registry's SHA-256 into the final-snapshot
+manifest, and immediately closes every final-look read gate. GrowthBook remains
+the analytical UI; the registry is the durable audit source of truth after the
+90-day workflow artifact expires. The same reviewed branch must summarize the
+decision and next action in `PROJECT_STATE.md`. The recorder never applies the
+recommendation. Any later GrowthBook, GTM, Meta Ads, BiznisWeb,
+collector/reporting, or commerce action requires a new explicit manual review
+and a separate versioned workflow.
 
 ## Rollback
 
