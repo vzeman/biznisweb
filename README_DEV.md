@@ -76,6 +76,43 @@ Use this before deploys when you want a fast view of:
 - latest `data_quality_*.json`
 - whether the newest run is partial and which source degraded
 
+## VEVO GrowthBook CLI control plane
+
+Chrome automation is not a Production control plane. The repository pins the official
+GrowthBook CLI under `tools/growthbook-cli` and exposes a fail-closed VEVO wrapper.
+The wrapper currently supports only authenticated read-only preflight and mutation
+dry-run; it cannot start or publish an experiment.
+
+Install the pinned CLI after bootstrap:
+
+```powershell
+npm ci --prefix tools/growthbook-cli
+```
+
+```bash
+npm ci --prefix tools/growthbook-cli
+```
+
+Configure a GrowthBook Personal Access Token or Secret Key in the OS keychain. Do not
+put it in Git, a committed config file, a command-line argument, or chat history:
+
+```powershell
+node tools/growthbook-cli/node_modules/growthbook/bin/growthbook.js auth login
+```
+
+Run the live read-only gate and the network-free mutation plan:
+
+```powershell
+python scripts/vevo_growthbook_cli.py preflight --pretty
+python scripts/vevo_growthbook_cli.py plan --pretty
+```
+
+The preflight is bound to the schema-9 activation manifest, experiment
+`exp_19g6mmt5wugpk`, feature `vevo-sk-aa-assignment`, live revision 2, draft revision
+3, Production disabled at read time, 100% experiment coverage, a 50/50 split, and no
+merge conflict. It stores only sanitized summaries and SHA-256 values. Mutation support
+must be introduced by a separate reviewed change after this authenticated gate passes.
+
 ## Client scaffolding template
 
 To scaffold a new reporting client from the internal template:
