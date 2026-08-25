@@ -23,6 +23,12 @@ ACTIVATION_SMOKE_PATH = (
 BROWSER_OBSERVATION_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_aa_activation_browser_observation.json"
 )
+PRODUCTION_RECONCILIATION_EVIDENCE_PATH = (
+    ROOT
+    / "projects"
+    / "vevo"
+    / "growthbook_production_reconciliation_deploy_evidence.json"
+)
 
 
 EXPECTED_PRE_ACTIVATION = {
@@ -436,9 +442,114 @@ FINAL_ACTIVATION_READBACK = {
 }
 
 
+PRODUCTION_RECONCILIATION_BINDING = {
+    "status": "deployed_one_shot_verified_schedule_enabled",
+    "evidence_path": (
+        "projects/vevo/growthbook_production_reconciliation_deploy_evidence.json"
+    ),
+    "evidence_sha256": (
+        "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb"
+    ),
+    "workflow_run_id": "32821210244",
+    "workflow_run_url": (
+        "https://github.com/vzeman/biznisweb/actions/runs/32821210244"
+    ),
+    "main_commit": "cf92eb0e007fb9a9163068a2735e5becc0327f03",
+    "first_scheduled_run_due_local": "2026-08-26T03:45:00+02:00",
+    "bootstrap_counts_are_not_population_acceptance": True,
+}
+
+
+EXPECTED_PRODUCTION_RECONCILIATION_EVIDENCE = {
+    "aws": {
+        "account_id": "919341186960",
+        "collector_stack": "vevo-growthbook-production",
+        "reconciliation_stack": "vevo-growthbook-reconciliation-production",
+        "region": "eu-central-1",
+    },
+    "boundaries": {
+        "biznisweb_mutated": False,
+        "collector_mutated": False,
+        "growthbook_experiment_mutated": False,
+        "gtm_mutated": False,
+        "meta_ads_mutated": False,
+        "price_product_cart_checkout_or_order_mutated": False,
+        "raw_event_delete_performed": False,
+    },
+    "contains_cloudwatch_messages": False,
+    "contains_credentials": False,
+    "contains_event_device_customer_or_order_ids": False,
+    "contains_raw_aws_payloads": False,
+    "environment": "production",
+    "evidence_type": "vevo_growthbook_reconciliation_deploy",
+    "host_gate": {
+        "instance_id": "N/A:Fargate",
+        "localhost_health_verified": True,
+        "localhost_marker_verified": True,
+        "private_ip": "172.31.39.76",
+        "runtime_path": "/app",
+        "service": "vevo-growthbook-reconcile-production",
+        "task_id": "17d2ea85e2304d2ca0f16ef3ad32913d",
+    },
+    "observed_at_utc": "2026-08-25T07:28:18Z",
+    "reconciliation": {
+        "curated_fact_publish_verified": True,
+        "device_facts": 0,
+        "image_digest": (
+            "sha256:51d70f4976083f86a0d7c5e542c21d93e5bbeff3d75d2af31f620b42df1a1b92"
+        ),
+        "one_shot_private_ip": "172.31.38.184",
+        "one_shot_task_id": "496df38886674a8885866016e82c5ae6",
+        "performance_facts": 0,
+        "quality_reports": 2,
+        "raw_events": 0,
+        "task_definition": (
+            "arn:aws:ecs:eu-central-1:919341186960:task-definition/"
+            "vevo-growthbook-reconcile-production:3"
+        ),
+    },
+    "reporting_policy": {
+        "arn": (
+            "arn:aws:iam::919341186960:policy/"
+            "vevo-growthbook-reporting-production"
+        ),
+        "attached_by_run": False,
+        "attachment_readback_verified": True,
+        "document_exactly_verified": True,
+        "task_role": (
+            "arn:aws:iam::919341186960:role/BiznisWebReportingTaskRole-vevo"
+        ),
+    },
+    "schedule": {
+        "dlq": "vevo-growthbook-reconcile-production-dlq",
+        "dlq_alarm": "vevo-growthbook-reconcile-production-dlq",
+        "enabled": True,
+        "expression": "cron(45 3 * * ? *)",
+        "failure_alarm": "vevo-growthbook-reconcile-production-failure",
+        "missing_success_alarm": (
+            "vevo-growthbook-reconcile-production-missing-success"
+        ),
+        "name": "vevo-growthbook-reconcile-production",
+        "timezone": "Europe/Bratislava",
+    },
+    "schema_version": 1,
+    "source_main_commit": "cf92eb0e007fb9a9163068a2735e5becc0327f03",
+    "source_run_id": "32821210244",
+    "source_runtime": {
+        "instance_id": "N/A:Fargate",
+        "service": "vevo-daily-report-email",
+        "source_schedule_unchanged": True,
+        "task_definition": (
+            "arn:aws:ecs:eu-central-1:919341186960:task-definition/"
+            "vevo-reporting-daily:33"
+        ),
+    },
+}
+
+
 def _running_activation() -> dict[str, Any]:
     activation = copy.deepcopy(EXPECTED_PRE_ACTIVATION)
-    activation["schema_version"] = 10
+    activation["schema_version"] = 11
     activation["status"] = "production_aa_running_activation_verified"
     activation["growthbook"].update(
         {
@@ -449,6 +560,9 @@ def _running_activation() -> dict[str, Any]:
     )
     activation["gtm"]["publish_status"] = "published_production_loader_active"
     activation["activation_readback"] = copy.deepcopy(FINAL_ACTIVATION_READBACK)
+    activation["production_reconciliation"] = copy.deepcopy(
+        PRODUCTION_RECONCILIATION_BINDING
+    )
     activation["traffic"].update(
         {
             "activation_allowed": True,
@@ -579,6 +693,23 @@ def _validate_activation_evidence(activation: Mapping[str, Any]) -> None:
         raise AssertionError("Production A/A browser readback drift")
 
 
+def _validate_production_reconciliation_evidence(
+    activation: Mapping[str, Any],
+) -> None:
+    binding = activation.get("production_reconciliation") or {}
+    raw = PRODUCTION_RECONCILIATION_EVIDENCE_PATH.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != binding.get("evidence_sha256"):
+        raise AssertionError("Production reconciliation evidence SHA-256 drift")
+    evidence = json.loads(raw)
+    if evidence != EXPECTED_PRODUCTION_RECONCILIATION_EVIDENCE:
+        raise AssertionError("Production reconciliation evidence content drift")
+    if (
+        evidence.get("source_run_id") != binding.get("workflow_run_id")
+        or evidence.get("source_main_commit") != binding.get("main_commit")
+    ):
+        raise AssertionError("Production reconciliation evidence provenance drift")
+
+
 def validate_activation_handoff(
     activation: Mapping[str, Any],
     workspace: Mapping[str, Any],
@@ -589,6 +720,7 @@ def validate_activation_handoff(
             "Production A/A activation must match the reviewed running evidence gate"
         )
     _validate_activation_evidence(activation)
+    _validate_production_reconciliation_evidence(activation)
 
     if workspace.get("workspace", {}).get("production_allocation_percent") != 100:
         raise AssertionError("Production A/A activation requires full workspace allocation")

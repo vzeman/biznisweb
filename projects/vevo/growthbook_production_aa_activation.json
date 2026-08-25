@@ -1,5 +1,5 @@
 {
-  "schema_version": 10,
+  "schema_version": 11,
   "activation_type": "vevo_growthbook_production_aa",
   "tracking_key": "vevo-sk-aa-001",
   "feature_key": "vevo-sk-aa-assignment",
@@ -378,6 +378,16 @@
       "preexisting_cart_item_count": 2,
       "cart_checkout_or_order_mutated": false
     }
+  },
+  "production_reconciliation": {
+    "status": "deployed_one_shot_verified_schedule_enabled",
+    "evidence_path": "projects/vevo/growthbook_production_reconciliation_deploy_evidence.json",
+    "evidence_sha256": "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb",
+    "workflow_run_id": "32821210244",
+    "workflow_run_url": "https://github.com/vzeman/biznisweb/actions/runs/32821210244",
+    "main_commit": "cf92eb0e007fb9a9163068a2735e5becc0327f03",
+    "first_scheduled_run_due_local": "2026-08-26T03:45:00+02:00",
+    "bootstrap_counts_are_not_population_acceptance": true
   },
   "traffic": {
     "activation_allowed": true,

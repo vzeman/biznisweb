@@ -68,6 +68,40 @@ class GrowthBookProductionAaActivationTests(unittest.TestCase):
         self.assertFalse(readback["commerce"]["cart_checkout_or_order_mutated"])
         self.assertFalse(self.activation["traffic"]["cta_experiment_started"])
 
+    def test_production_reconciliation_is_hash_bound_and_schedule_enabled(self) -> None:
+        binding = self.activation["production_reconciliation"]
+        self.assertEqual(11, self.activation["schema_version"])
+        self.assertEqual("32821210244", binding["workflow_run_id"])
+        self.assertEqual(
+            "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb",
+            binding["evidence_sha256"],
+        )
+        self.assertTrue(binding["bootstrap_counts_are_not_population_acceptance"])
+
+        evidence = json.loads(
+            validator.PRODUCTION_RECONCILIATION_EVIDENCE_PATH.read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(evidence["host_gate"]["localhost_health_verified"])
+        self.assertTrue(evidence["host_gate"]["localhost_marker_verified"])
+        self.assertTrue(evidence["reconciliation"]["curated_fact_publish_verified"])
+        self.assertEqual(0, evidence["reconciliation"]["raw_events"])
+        self.assertEqual(2, evidence["reconciliation"]["quality_reports"])
+        self.assertTrue(evidence["schedule"]["enabled"])
+        self.assertEqual("cron(45 3 * * ? *)", evidence["schedule"]["expression"])
+        self.assertEqual("Europe/Bratislava", evidence["schedule"]["timezone"])
+        self.assertTrue(evidence["source_runtime"]["source_schedule_unchanged"])
+        for boundary in evidence["boundaries"].values():
+            self.assertFalse(boundary)
+        for field in (
+            "contains_cloudwatch_messages",
+            "contains_credentials",
+            "contains_event_device_customer_or_order_ids",
+            "contains_raw_aws_payloads",
+        ):
+            self.assertFalse(evidence[field])
+
     def test_historical_zero_traffic_qa_is_retained_after_activation(self) -> None:
         qa = self.activation["tag_assistant_qa"]
         self.assertEqual("zero_traffic_qa_verified", qa["status"])
