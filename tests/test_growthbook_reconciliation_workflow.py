@@ -109,6 +109,7 @@ class GrowthBookReconciliationWorkflowTests(unittest.TestCase):
         for marker in (
             "vevo-growthbook-reconciliation-{0}",
             "vevo-growthbook-reconcile-{0}",
+            "GROWTHBOOK_ENVIRONMENT: ${{ inputs.environment }}",
             "growthbook_reconciliation_production",
             "cron(45 3 * * ? *)",
             "cron(30 3 * * ? *)",

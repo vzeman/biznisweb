@@ -41,6 +41,7 @@ jobs:
       EXPECTED_ACCOUNT_ID: '919341186960'
       AWS_REGION: eu-central-1
       RECONCILIATION_ENVIRONMENT: ${{ inputs.environment }}
+      GROWTHBOOK_ENVIRONMENT: ${{ inputs.environment }}
       COLLECTOR_STACK_NAME: ${{ inputs.environment == 'production' && 'vevo-growthbook-production' || 'vevo-growthbook-preview' }}
       STACK_NAME: ${{ format('vevo-growthbook-reconciliation-{0}', inputs.environment) }}
       SOURCE_SCHEDULE: vevo-daily-report-email

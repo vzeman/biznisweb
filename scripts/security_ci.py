@@ -653,6 +653,7 @@ def main() -> int:
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "growthbook_reconciliation_production",
+            "GROWTHBOOK_ENVIRONMENT: ${{ inputs.environment }}",
             "IMAGE_TAG: git-${{ github.sha }}",
             "REPORTING_POLICY_DOCUMENT_EXACT_OK",
             "aws iam attach-role-policy",
