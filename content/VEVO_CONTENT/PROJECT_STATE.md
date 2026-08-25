@@ -13,7 +13,7 @@ Branch: codex/vevo-content-batch-48
 - VEVO content work was previously stored at the repository root as `vevo-5000-content-plan.md` and `vevo_duplicate_guard.py`.
 - Those files now live under `content/VEVO_CONTENT/`.
 - Published VEVO batch history is still summarized in the root `PROJECT_STATE.md`; future VEVO-specific state belongs here.
-- Published VEVO history is recorded through batch 42; batch-specific IDs and public URLs are authoritative in the sections below and their verification exports.
+- Published VEVO history is recorded through batch 48; batch-specific IDs and public URLs are authoritative in the sections below and their verification exports.
 - Current batch workflow is established: merged live/local duplicate guard, link preflight, wording/depth/HTML guards, repo-local slug-safe MCP hidden-first publication, and independent final public verification.
 - BiznisWeb editor workflow guard from batch 29: after filling rich HTML through the editor's HTML/source mode, toggle back out of source mode before saving the post, then verify the public article body. Saving while the source view is still active can leave the public `long` body empty.
 - Duplicate guard now has canonical-intent blocking for laundry-symbol head terms (`symboly prania`, `pracie symboly`, `praci stitok`, `vysvetlivky na pranie`) after batch 25 exposed a title-similarity blind spot.
@@ -31,6 +31,7 @@ Branch: codex/vevo-content-batch-48
 - Batch 40 material decision guides are published as post IDs `2335-2338` through the repo-local hidden-first content MCP. All four clean URLs, long-form rich HTML bodies, links, product/category cards, and responsive article layout passed independent verification.
 - Batch 41 material blends and performance guides are published as post IDs `2340-2343` through the repo-local hidden-first content MCP. All four clean URLs, expert long-form bodies, links, cards, and responsive layout passed independent verification.
 - Batch 42 textile construction and durability guides are published as post IDs `2345-2348` through the repo-local hidden-first content MCP. All four clean URLs, rich HTML bodies, technical sources, internal links, product/category cards, and responsive article layout passed independent verification.
+- Batch 48 underused-material guides are published as post IDs `3191-3194` through the repo-local hidden-first content MCP. All four clean URLs, long-form rich HTML bodies, authoritative sources, internal links, product/category cards, and responsive mobile layout passed independent verification.
 - Cross-section duplicate audit and remediation on `2026-07-14` inspected all `829` admin records in glossary block `1905`, FAQ block `774`, and Blog block `765`. Exact public title/body duplicates were resolved and `23` semantic-overlap articles were expanded without changing their existing titles or slugs. The final audit has zero public exact-title and zero public exact-body groups.
 
 ## Verified
@@ -1965,9 +1966,9 @@ Branch: codex/vevo-content-batch-48
   - `imports/build_batch_47_distinct_materials.py`, `imports/batch-47-2026-08-24-articles.json`, and `imports/verify_batch_47_public.py`;
   - candidate-scan, duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, and independent public verification reports under `exports/`.
 
-## Batch 48 Underused Materials - Prepared 2026-08-25
+## Batch 48 Underused Materials - Published 2026-08-25
 
-- Status: prepared and not yet published. Four distinct material intents were selected after a twelve-topic exploration and an exact final duplicate guard against `843` merged Blog, FAQ, glossary, RSS and local records:
+- Status: complete. Four distinct material intents were selected after a twelve-topic exploration and an exact final duplicate guard against `843` merged Blog, FAQ, glossary, RSS and local records:
   - `Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie`;
   - `Čo je cupro: regenerované celulózové vlákno, splývavosť a starostlivosť`;
   - `Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie`;
@@ -1977,11 +1978,21 @@ Branch: codex/vevo-content-batch-48
 - Link preflight passed after rejecting one assumed but nonexistent generic-wool URL and replacing it with the verified VEVO wool-coat guide. All four exact future slugs return `404`; all current VEVO, product, category, EU, GINETEX, AATCC, ASTM, CottonWorks, Asahi Kasei, Woolmark, Harris Tweed Authority and J-STAGE destinations pass.
 - Public wording, depth and HTML safety guards pass with zero fixed prices, internal workflow wording, escaped HTML, malformed links or structural failures. The complete project check passed `38/38` tests with project audit `block_count=0`; the known stale global MCP registration remains safely bypassed by the explicit repo-local script.
 - A seven-word-shingle comparison measured pairwise overlap from `0.1161` to `0.1197`. Shared wording is confined to the common safety and layout framework; the fibre definitions, product boundaries, diagnostics, procedures, tables and expert sections are material-specific.
+- The read-only MCP preflight confirmed account `vevo.flox.sk`, public domain `www.vevo.sk`, Slovak language ID `1`, Blog page `309`, news block `765`, and zero exact title or slug matches in the `590`-record admin Blog catalog. Disposable hidden smoke post `3190` preserved its explicit slug and rich HTML, remained public `404`, and was deleted; the follow-up admin lookup found zero matches and its public URL remained `404`.
+- Live posts and canonical public URLs:
+  - post `3191`: `https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie`;
+  - post `3192`: `https://www.vevo.sk/n/co-je-cupro-regenerovane-celulozove-vlakno-splyvavost-a-starostlivost`;
+  - post `3193`: `https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie`;
+  - post `3194`: `https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie`.
+- Hidden-first publication preserved the exact titles, clean slugs, metadata and `31077-31598` characters of rich HTML. Every final record has active state `1`, retained the same slug and body, and returned public HTTP `200`; `exports/batch-48-2026-08-25-mcp-publication.json` reports `record_count=4`, `public_ok_count=4`, and `all_ok=true`.
+- Independent public verification measured `3341`, `3252`, `3245`, and `3267` visible words; every article has `30` H2 headings, two responsive tables, eleven styled blocks, two product/category action buttons, authoritative external sources, and zero short paragraphs. All `35` unique outgoing destinations passed.
+- Mobile QA at `390x844` confirmed a `351px` article column for every public URL, both `680px` tables safely contained by `overflow-x:auto` wrappers, both action buttons contained, zero one-character paragraphs, and no page-level horizontal overflow. Browser screenshot capture timed out twice, but the rendered DOM and computed layout checks completed successfully. The temporary viewport override was reset and both QA tabs were closed.
+- Final post-publication project check passed `38/38` tests with project audit `block_count=0`, live catalog `record_count=844`, zero duplicate-title groups, zero invalid slugs, and both publication reports green. The only remaining warning is the known stale global MCP registration; the verified repo-local explicit-script workflow remains authoritative.
 - Durable prepared artifacts:
   - `content-plan/batch-48-underused-materials-2026-08-25.md`;
   - `batches/batch-48-candidate-scan-2026-08-25.txt` and `batches/batch-48-candidates-2026-08-25.txt`;
   - `imports/build_batch_48_underused_materials.py`, `imports/batch-48-2026-08-25-articles.json`, and `imports/verify_batch_48_public.py`;
-  - duplicate, link-preflight, wording, depth and HTML reports under `exports/`.
+  - duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, independent public verification, and mobile QA reports under `exports/`.
 
 ## Known Issues
 
@@ -2000,6 +2011,7 @@ Branch: codex/vevo-content-batch-48
 - Batch 45 is complete; post IDs `3176-3179` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 45 title, intent, or slug.
 - Batch 46 is complete; post IDs `3181-3184` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 46 title, intent, or slug.
 - Batch 47 is complete; post IDs `3186-3189` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 47 title, intent, or slug.
+- Batch 48 is complete; post IDs `3191-3194` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 48 title, intent, or slug.
 - VEVO admin browser automation can be unstable on long loops. Use short stepwise source-mode saves, verify public URLs after each small block, and avoid relying on generic hidden-field selectors when old ExtJS form instances remain in the DOM.
 - The VEVO admin browser session was recovered on `2026-07-06` and used to finish batch 33 publication; no batch 33 publication blocker remains.
 - Batch 32 robot-vacuum batch is now published and verified; no batch 32 publication blocker remains.
@@ -2009,11 +2021,11 @@ Branch: codex/vevo-content-batch-48
 
 For the next VEVO work:
 
-1. Run the read-only repo-local MCP preflight for batch 48 against account `vevo.flox.sk`, language `SK`, Blog page `309`, news block `765`, then complete a disposable hidden smoke create/readback/public-404/delete cycle.
-2. If the smoke passes, publish the four batch 48 records hidden first with exact titles and slugs, read them back, explicitly activate them, and run the independent public and mobile verification.
-3. Keep `codex/vevo-content-batch-48` stacked on batch 47 until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
-4. Resolve the older batch 31 hidden posts `2278` and `2279` separately, preserving their prepared titles and slugs and checking first that no public/canonical replacement already exists.
-5. Never use legacy remote `biznisweb-add_news_post`/`biznisweb-update_news_post` as the final VEVO new-article path. The approved API path is repo-local `biznisweb-vevo-content` with hidden-first creation, explicit slug, readback, resumable report, and independent public verification.
+1. Start batch 49 on a new `codex/vevo-content-batch-49` branch stacked on batch 48 and inspect at least twelve candidate intents against the merged Blog, FAQ, glossary, RSS, admin and local catalog before selecting a small final set.
+2. Keep the next batch in the broader expert-material cluster only where it adds a distinct reader problem; continue excluding gabardine, taffeta, jacquard, lamé, brocade and sherpa until a manual intent review proves they do not duplicate existing construction or material coverage.
+3. Run duplicate, wording, link, depth and HTML guards before any mutation, then use the repo-local hidden-first MCP workflow with an explicit slug, readback, resumable publication report, independent public verification and mobile layout check.
+4. Keep `codex/vevo-content-batch-48` stacked on batch 47 until its pull request merges, push every durable checkpoint, and merge only through pull requests. Never return VEVO content work to the unrelated local-only `opan-claw` history.
+5. Resolve the older batch 31 hidden posts `2278` and `2279` separately, preserving their prepared titles and slugs and checking first that no public/canonical replacement already exists.
 
 ## Handoff Template
 
