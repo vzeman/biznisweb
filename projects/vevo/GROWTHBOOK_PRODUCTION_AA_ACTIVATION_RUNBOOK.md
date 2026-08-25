@@ -147,4 +147,34 @@ git diff --check
 
 Review and merge that manifest transition through PR. A checkpoint below `1,000` changes only the hash-bound history. The first qualifying checkpoint additionally resolves the exact through-boundary and copies it to both still-disabled component manifests; it does not open a producer or snapshot gate.
 
+## Phase 6 — PASS-bound A/A completion and CTA handoff
+
+Do not stop the Production A/A merely because the minimum date or sample was reached. First assemble the exact protected snapshot and require its independently recomputed decision to be `PASS`. Download the single `vevo-growthbook-aa-snapshot` artifact from its successful `main` workflow run, require exactly `vevo-growthbook-aa-snapshot.json` and `vevo-growthbook-aa-decision.json`, independently calculate both SHA-256 values, and run the offline transition on a new branch:
+
+```text
+python scripts/record_growthbook_aa_completion.py --output projects/vevo/growthbook_production_aa_completion.json record-pass --snapshot <downloaded-artifact>/vevo-growthbook-aa-snapshot.json --decision <downloaded-artifact>/vevo-growthbook-aa-decision.json --snapshot-sha256 <snapshot-sha256> --decision-sha256 <decision-sha256> --workflow-run-id <snapshot-run-id> --main-commit <snapshot-head-sha>
+python scripts/validate_growthbook_aa_completion.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_aa_completion_recorder tests.test_growthbook_workspace
+python scripts/security_ci.py
+git diff --check
+```
+
+The recorder accepts compact canonical artifacts only, independently runs the versioned A/A evaluator, requires byte-identical decision output, and rejects `FAIL`, `NOT_READY`, any winner call, a changed frozen window, or a closed snapshot gate. The reviewed PR may open only `manual_growthbook_stop_allowed`; automatic GrowthBook mutation, CTA activation, GTM, Meta Ads, BiznisWeb, collector/reporting, prices, cart, checkout, and orders remain closed.
+
+Only after that exact PASS-binding PR merges, use the authenticated GrowthBook UI and confirm project `prj_2CeEJc6J9FwQFix9UhsnKr`, Production experiment `exp_19g6mmt5wugpk`, linked feature revision `3`, traffic `100%`, and GTM live version `15`. Stop only that A/A experiment, remove only its Production live feature rule, and publish the resulting feature revision. Preserve the staging rule, CTA experiment `exp_19g6mmt1qxzrp` as an unstarted draft at `0%`, GTM version `15`, the collector, reporting schedules, Meta Ads, and BiznisWeb.
+
+Reload the UI and storefront, then create the exact canonical `projects/vevo/growthbook_aa_completion_observation.json` readback required by `record_growthbook_aa_completion.py`. It must prove A/A stopped, zero Production A/A/CTA live rules and allocation, the staging rule retained, CTA still draft, GTM version `15` unchanged with zero pending changes, no A/A assignment or CTA class on desktop/mobile, unchanged add-to-cart text, zero console errors, and no price/cart/checkout/order mutation. Record the post-stop transition on a separate branch:
+
+```text
+python scripts/record_growthbook_aa_completion.py --output projects/vevo/growthbook_production_aa_completion.json record-stop --observation projects/vevo/growthbook_aa_completion_observation.json --observation-sha256 <observation-sha256> --workspace projects/vevo/growthbook_workspace.json --workspace-output projects/vevo/growthbook_workspace.json
+python scripts/validate_growthbook_aa_completion.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_aa_completion_recorder tests.test_growthbook_workspace tests.test_growthbook_cta_sample_freeze
+python scripts/security_ci.py
+git diff --check
+```
+
+This second transition closes the manual stop gate and records the workspace at zero Production allocation. It prepares only the CTA draft/sample-freeze state; CTA activation remains false. Next, produce the identity-free product-page baseline bound to the same A/A snapshot, freeze the final CTA sample through `freeze_growthbook_cta_sample.py`, and independently finish the 14-day lifecycle reconciliation before any CTA launch review.
+
 An A/A pass never declares a winner. It only permits a separate reviewed preparation of the non-price CTA A/B. Prices remain out of scope.
