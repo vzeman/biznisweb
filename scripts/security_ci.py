@@ -34,6 +34,9 @@ def main() -> int:
             MeasurementWindowError,
             validate_measurement_window,
         )
+        from scripts.validate_growthbook_aa_completion import (
+            validate as validate_aa_completion,
+        )
 
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
@@ -192,6 +195,12 @@ def main() -> int:
         )
         growthbook_aa_evidence_gate_recorder = read(
             "scripts/record_growthbook_aa_evidence_gates.py"
+        )
+        growthbook_aa_completion_recorder = read(
+            "scripts/record_growthbook_aa_completion.py"
+        )
+        growthbook_aa_completion_validator = read(
+            "scripts/validate_growthbook_aa_completion.py"
         )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
@@ -1992,6 +2001,7 @@ def main() -> int:
             raise AssertionError(
                 f"GrowthBook A/A manifest lifecycle is invalid: {exc}"
             ) from exc
+        validate_aa_completion()
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
             "release_boundaries", {}
         )
@@ -2349,6 +2359,53 @@ def main() -> int:
                 "GrowthBook A/A evidence-gate recorder lost safety marker: "
                 f"{required_evidence_gate_marker}",
             )
+        for offline_completion_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_aa_completion_recorder.lower(),
+                offline_completion_marker.lower(),
+                "GrowthBook A/A completion recorder must remain offline: "
+                f"{offline_completion_marker}",
+            )
+        for required_completion_marker in (
+            "A/A decision differs from independent evaluation",
+            "A/A completion requires PASS",
+            "manual_growthbook_stop_allowed",
+            "automatic_growthbook_mutation_allowed",
+            "stop_exact_aa_experiment_and_remove_only_its_production_live_rule",
+            "aa_production_live_rule_count",
+            "cta_production_live_rule_count",
+            "price_cart_checkout_order_mutation_performed",
+            "VEVO_AA_PASS_RECORDED:",
+            "VEVO_AA_STOP_RECORDED:",
+        ):
+            require(
+                growthbook_aa_completion_recorder,
+                required_completion_marker,
+                "GrowthBook A/A completion recorder lost safety marker: "
+                f"{required_completion_marker}",
+            )
+        for required_completion_validator_marker in (
+            "A/A stop observation is not canonical JSON",
+            "A/A stop observation exists before completion",
+            "validate_manifest",
+        ):
+            require(
+                growthbook_aa_completion_validator,
+                required_completion_validator_marker,
+                "GrowthBook A/A completion validator lost safety marker: "
+                f"{required_completion_validator_marker}",
+            )
         for required_checkpoint_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "outcome-blind A/A checkpoint is outside its daily gate",
@@ -2489,6 +2546,8 @@ def main() -> int:
             "scripts/build_growthbook_aa_manual_qa_evidence.py",
             "scripts/build_growthbook_aa_automated_evidence.py",
             "scripts/record_growthbook_aa_evidence_gates.py",
+            "scripts/record_growthbook_aa_completion.py",
+            "scripts/validate_growthbook_aa_completion.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",
             "scripts/summarize_growthbook_foundation_bucket.py",
