@@ -174,6 +174,57 @@ Minimum assignment duration is 14 full local days. Safety guardrails may stop
 early, but a safety stop can never declare a winner. After assignment stops,
 wait the frozen 14-day lifecycle follow-up before the one final decision look.
 
+The executable source of truth for this rule is
+`projects/vevo/growthbook_cta_measurement_window.json`. It is deliberately
+`waiting_for_verified_cta_start` now. After Gate 4 is recorded on `main`, bind
+the canonical start readback and exact frozen sample in a separate reviewed PR:
+
+```text
+python scripts/record_growthbook_cta_window_checkpoint.py --output projects/vevo/growthbook_cta_measurement_window.json initialize
+python scripts/validate_growthbook_cta_measurement_window.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_cta_window_checkpoint tests.test_growthbook_cta_window_checkpoint_workflow tests.test_growthbook_workspace
+python scripts/security_ci.py
+git diff --check
+```
+
+Initialization computes the first complete local date, exact 14-day and 42-day
+boundaries, and the first eligible `03:45 Europe/Bratislava` checkpoint from the
+recorded assignment start. It binds the current activation, start observation,
+sample, decision contract, and localhost-gated reconciliation evidence by
+SHA-256. It does not query AWS or change traffic.
+
+At each due checkpoint, dispatch only
+`.github/workflows/check-vevo-growthbook-production-cta-window.yml` from the
+exact reviewed `main` commit with `confirm_checkpoint=true`. Before AWS
+credentials, it requires the A/A stopped, only CTA running at `100%`, the
+outcome/arm/winner gates closed, and the exact next whole-local-day boundary.
+It then verifies instance `N/A:Fargate`, the reconciliation task private IP,
+service `vevo-growthbook-reconcile-production`, path `/app`, task definition,
+immutable image, inherited localhost marker evidence, successful schedule
+marker, generated/published parity, three clear alarms, empty DLQ, and the
+unchanged source reporting schedule. Its only Athena result is one cumulative
+eligible-device count. It never groups by variation or reads conversion,
+revenue, CM1, performance, Meta dimensions, raw events, or identities.
+
+Independently download and hash the sole canonical artifact, then record it on
+a new branch:
+
+```text
+python scripts/record_growthbook_cta_window_checkpoint.py --output projects/vevo/growthbook_cta_measurement_window.json record-checkpoint --evidence <downloaded-vevo-growthbook-cta-window-checkpoint.json> --expected-evidence-sha256 <independent-sha256> --expected-workflow-run-id <successful-run-id> --expected-main-commit <exact-main-commit>
+python scripts/validate_growthbook_cta_measurement_window.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_cta_window_checkpoint tests.test_growthbook_cta_window_checkpoint_workflow tests.test_growthbook_workspace
+python scripts/security_ci.py
+git diff --check
+```
+
+Below the target and before day 42, the recorder can only extend one whole
+local day. At the target or day 42 it closes further checkpoints and opens only
+`manual_review_allowed=true` for stopping this CTA assignment. It cannot stop
+GrowthBook automatically, read an outcome, declare a winner, or mutate GTM,
+Meta Ads, BiznisWeb, collector/reporting, prices, cart, checkout, or orders.
+
 ## Rollback
 
 For activation or runtime failure, use this order:

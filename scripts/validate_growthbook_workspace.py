@@ -134,6 +134,17 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_manifest as validate_cta_activation_manifest,
     )
 
+try:
+    from validate_growthbook_cta_measurement_window import (
+        CtaMeasurementWindowError,
+        validate_manifest as validate_cta_measurement_manifest,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.validate_growthbook_cta_measurement_window import (
+        CtaMeasurementWindowError,
+        validate_manifest as validate_cta_measurement_manifest,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -142,6 +153,9 @@ AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json
 CTA_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
 CTA_BASELINE_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_baseline.json"
 CTA_ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_activation.json"
+CTA_MEASUREMENT_WINDOW_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_measurement_window.json"
+)
 CTA_ACTIVATION_OBSERVATION_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_activation_observation.json"
 )
@@ -377,6 +391,9 @@ def validate() -> None:
     cta_sample_plan = json.loads(CTA_SAMPLE_PLAN_PATH.read_text(encoding="utf-8"))
     cta_baseline = json.loads(CTA_BASELINE_PATH.read_text(encoding="utf-8"))
     cta_activation = json.loads(CTA_ACTIVATION_PATH.read_text(encoding="utf-8"))
+    cta_measurement_window = json.loads(
+        CTA_MEASUREMENT_WINDOW_PATH.read_text(encoding="utf-8")
+    )
     cta_activation_observation = None
     if cta_activation.get("status") == CTA_RUNNING_STATUS:
         observation_bytes = CTA_ACTIVATION_OBSERVATION_PATH.read_bytes()
@@ -475,6 +492,24 @@ def validate() -> None:
         )
     except CtaEvaluationError as exc:
         raise AssertionError(f"CTA decision contract is invalid: {exc}") from exc
+    try:
+        validate_cta_measurement_manifest(
+            cta_measurement_window,
+            cta_activation,
+            cta_sample_plan,
+            cta_decision_contract,
+            json.loads(
+                (
+                    ROOT
+                    / "projects"
+                    / "vevo"
+                    / "growthbook_production_reconciliation_deploy_evidence.json"
+                ).read_text(encoding="utf-8")
+            ),
+            cta_activation_observation,
+        )
+    except CtaMeasurementWindowError as exc:
+        raise AssertionError(f"CTA measurement window is invalid: {exc}") from exc
     if (
         cta_decision_contract["decision_timing"]["minimum_full_calendar_days"]
         != cta_sample_plan["minimum_full_calendar_days"]
