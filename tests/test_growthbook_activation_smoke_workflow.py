@@ -54,6 +54,15 @@ class GrowthBookActivationSmokeWorkflowTests(unittest.TestCase):
         self.assertLess(local_gate, credentials)
         self.assertLess(credentials, raw_read)
 
+    def test_runner_local_gate_has_no_optional_pyyaml_dependency(self) -> None:
+        gate = WORKFLOW.split(
+            "- name: Enforce frozen activation gate before AWS credentials", 1
+        )[1].split("- name: Configure AWS credentials", 1)[0]
+        self.assertIn("tests.test_growthbook_activation_smoke_reducer", gate)
+        self.assertNotIn("tests.test_growthbook_activation_smoke_workflow", gate)
+        self.assertNotIn("tests.test_growthbook_production_aa_activation", gate)
+        self.assertNotIn("pip install", gate)
+
     def test_workflow_has_no_external_mutation_path(self) -> None:
         for forbidden in (
             "aws s3api put-object",
