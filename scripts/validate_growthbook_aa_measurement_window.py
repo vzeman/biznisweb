@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import ipaddress
 import json
+import re
 import sys
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
@@ -27,6 +30,105 @@ class MeasurementWindowError(ValueError):
     """Raised when the pre-registered window or its provenance drifts."""
 
 
+CHECKPOINT_WORKFLOW = (
+    ".github/workflows/check-vevo-growthbook-production-aa-window.yml"
+)
+CHECKPOINT_ROOT_KEYS = {
+    "schema_version",
+    "evidence_type",
+    "status",
+    "experiment_id",
+    "repository",
+    "workflow",
+    "workflow_run_id",
+    "main_commit",
+    "observed_at_utc",
+    "window",
+    "runtime",
+    "control_plane",
+    "population",
+    "decision",
+    "safety",
+}
+CHECKPOINT_WINDOW_KEYS = {
+    "timezone",
+    "checkpoint_index",
+    "from_utc",
+    "candidate_through_utc",
+    "candidate_last_full_local_date",
+    "full_calendar_days",
+    "resolution_due_local",
+}
+CHECKPOINT_RUNTIME_KEYS = {
+    "instance_id",
+    "private_ip",
+    "service",
+    "runtime_path",
+    "task_id",
+    "task_definition",
+    "image_digest",
+    "host_gate_evidence_sha256",
+    "localhost_health_marker_inherited_from_deploy_evidence",
+    "localhost_runtime_marker_inherited_from_deploy_evidence",
+}
+CHECKPOINT_CONTROL_KEYS = {
+    "schedule_name",
+    "schedule_due_local",
+    "schedule_succeeded",
+    "success_marker_sha256",
+    "publish_summary_sha256",
+    "generated_published_counts_match",
+    "dlq_empty",
+    "alarms_clear",
+    "source_schedule_name",
+    "source_schedule_unchanged",
+}
+CHECKPOINT_POPULATION_KEYS = {
+    "metric",
+    "eligible_devices",
+    "database",
+    "workgroup",
+    "source_table",
+    "aggregate_query_sha256",
+    "aggregate_result_sha256",
+    "only_aggregate_count_retained",
+    "arm_counts_read",
+    "arm_outcomes_read",
+    "outcome_metrics_read",
+    "contains_event_or_device_ids",
+    "contains_customer_or_order_data",
+}
+CHECKPOINT_SAFETY = {
+    "contains_raw_aws_payloads": False,
+    "contains_cloudwatch_messages": False,
+    "contains_credentials": False,
+    "aws_mutations": False,
+    "growthbook_mutations": False,
+    "gtm_mutations": False,
+    "meta_ads_mutations": False,
+    "biznisweb_mutations": False,
+    "commerce_mutations": False,
+    "winner_calls": False,
+    "cta_activation": False,
+}
+RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+TASK_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+TASK_DEFINITION_RE = re.compile(r"^vevo-growthbook-reconcile-production:[1-9][0-9]*$")
+IMAGE_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+MUTABLE_WINDOW_KEYS = {
+    "status",
+    "resolution_status",
+    "resolved_last_full_local_date",
+    "resolved_through_utc",
+    "resolved_full_calendar_days",
+    "resolved_eligible_devices",
+    "resolved_at_utc",
+    "checkpoint_history",
+}
+
+
 def _load(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -48,6 +150,16 @@ def _parse_utc(value: object, field: str) -> datetime:
 
 def _utc_text(value: datetime) -> str:
     return value.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def canonical_evidence_bytes(evidence: Mapping[str, Any]) -> bytes:
+    return (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _exact_object(value: object, keys: set[str], field: str) -> Mapping[str, Any]:
+    if not isinstance(value, dict) or set(value) != keys:
+        raise MeasurementWindowError(f"{field} field set drift")
+    return value
 
 
 def expected_measurement_window(
@@ -127,6 +239,9 @@ def expected_measurement_window(
         "source_activation_main_commit": readback.get("main_commit"),
         "source_reconciliation_workflow_run_id": reconciliation.get("source_run_id"),
         "source_reconciliation_main_commit": reconciliation.get("source_main_commit"),
+        "checkpoint_workflow": CHECKPOINT_WORKFLOW,
+        "checkpoint_artifact_name": "vevo-growthbook-aa-window-checkpoint",
+        "checkpoint_file_name": "vevo-growthbook-aa-window-checkpoint.json",
         "first_full_local_date": first_full_local_date.isoformat(),
         "last_required_full_local_date": last_required_full_local_date.isoformat(),
         "minimum_full_calendar_days": minimum_days,
@@ -152,8 +267,173 @@ def expected_measurement_window(
         "resolved_full_calendar_days": None,
         "resolved_eligible_devices": None,
         "resolved_at_utc": None,
+        "checkpoint_history": [],
         "post_hoc_window_change_allowed": False,
     }
+
+
+def _checkpoint_boundaries(
+    expected: Mapping[str, Any], checkpoint_index: int
+) -> tuple[datetime, datetime, str, int]:
+    if type(checkpoint_index) is not int or checkpoint_index < 1:
+        raise MeasurementWindowError("checkpoint index is invalid")
+    local_timezone = ZoneInfo(str(expected["timezone"]))
+    minimum_through = _parse_utc(
+        expected["minimum_through_utc"], "minimum_through_utc"
+    ).astimezone(local_timezone)
+    candidate_date = minimum_through.date() + timedelta(days=checkpoint_index - 1)
+    candidate_through = datetime.combine(
+        candidate_date, time.min, tzinfo=local_timezone
+    )
+    due = datetime.combine(
+        candidate_date, time(hour=3, minute=45), tzinfo=local_timezone
+    )
+    last_full_date = candidate_date - timedelta(days=1)
+    full_days = int(expected["minimum_full_calendar_days"]) + checkpoint_index - 1
+    return candidate_through, due, last_full_date.isoformat(), full_days
+
+
+def validate_checkpoint_evidence(
+    evidence: Mapping[str, Any],
+    expected: Mapping[str, Any],
+    checkpoint_index: int,
+) -> None:
+    root = _exact_object(evidence, CHECKPOINT_ROOT_KEYS, "checkpoint evidence")
+    if (
+        root["schema_version"] != 1
+        or type(root["schema_version"]) is not int
+        or root["evidence_type"] != "vevo_growthbook_aa_window_checkpoint"
+        or root["status"] != "passed"
+        or root["experiment_id"] != "vevo-sk-aa-001"
+        or root["repository"] != "vzeman/biznisweb"
+        or root["workflow"] != CHECKPOINT_WORKFLOW
+        or RUN_ID_RE.fullmatch(str(root["workflow_run_id"])) is None
+        or COMMIT_RE.fullmatch(str(root["main_commit"])) is None
+    ):
+        raise MeasurementWindowError("checkpoint evidence identity drift")
+
+    observed_at = _parse_utc(root["observed_at_utc"], "checkpoint observed_at_utc")
+    candidate_through, due, last_full_date, full_days = _checkpoint_boundaries(
+        expected, checkpoint_index
+    )
+    if not due.astimezone(UTC) <= observed_at < (due + timedelta(days=1)).astimezone(
+        UTC
+    ):
+        raise MeasurementWindowError("checkpoint observation is outside its daily gate")
+
+    window = _exact_object(root["window"], CHECKPOINT_WINDOW_KEYS, "checkpoint window")
+    if window != {
+        "timezone": expected["timezone"],
+        "checkpoint_index": checkpoint_index,
+        "from_utc": expected["from_utc"],
+        "candidate_through_utc": _utc_text(candidate_through),
+        "candidate_last_full_local_date": last_full_date,
+        "full_calendar_days": full_days,
+        "resolution_due_local": due.isoformat(timespec="seconds"),
+    }:
+        raise MeasurementWindowError("checkpoint window drift")
+
+    runtime = _exact_object(root["runtime"], CHECKPOINT_RUNTIME_KEYS, "checkpoint runtime")
+    if (
+        runtime["instance_id"] != "N/A:Fargate"
+        or runtime["service"] != "vevo-growthbook-reconcile-production"
+        or runtime["runtime_path"] != "/app"
+        or TASK_ID_RE.fullmatch(str(runtime["task_id"])) is None
+        or TASK_DEFINITION_RE.fullmatch(str(runtime["task_definition"])) is None
+        or IMAGE_DIGEST_RE.fullmatch(str(runtime["image_digest"])) is None
+        or runtime["host_gate_evidence_sha256"]
+        != "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb"
+        or runtime["localhost_health_marker_inherited_from_deploy_evidence"] is not True
+        or runtime["localhost_runtime_marker_inherited_from_deploy_evidence"] is not True
+    ):
+        raise MeasurementWindowError("checkpoint runtime hard gate drift")
+    try:
+        private_ip = ipaddress.ip_address(str(runtime["private_ip"]))
+    except ValueError as exc:
+        raise MeasurementWindowError("checkpoint runtime private IP is invalid") from exc
+    if private_ip.version != 4 or private_ip not in ipaddress.ip_network("172.31.0.0/16"):
+        raise MeasurementWindowError("checkpoint runtime private IP boundary drift")
+
+    control = _exact_object(
+        root["control_plane"], CHECKPOINT_CONTROL_KEYS, "checkpoint control plane"
+    )
+    if control != {
+        "schedule_name": "vevo-growthbook-reconcile-production",
+        "schedule_due_local": due.isoformat(timespec="seconds"),
+        "schedule_succeeded": True,
+        "success_marker_sha256": control["success_marker_sha256"],
+        "publish_summary_sha256": control["publish_summary_sha256"],
+        "generated_published_counts_match": True,
+        "dlq_empty": True,
+        "alarms_clear": True,
+        "source_schedule_name": "vevo-daily-report-email",
+        "source_schedule_unchanged": True,
+    }:
+        raise MeasurementWindowError("checkpoint control-plane gate failed")
+    for field in ("success_marker_sha256", "publish_summary_sha256"):
+        if SHA256_RE.fullmatch(str(control[field])) is None:
+            raise MeasurementWindowError("checkpoint control-plane hash drift")
+
+    population = _exact_object(
+        root["population"], CHECKPOINT_POPULATION_KEYS, "checkpoint population"
+    )
+    eligible_devices = population["eligible_devices"]
+    if type(eligible_devices) is not int or eligible_devices < 0:
+        raise MeasurementWindowError("checkpoint eligible-device count is invalid")
+    if population != {
+        "metric": expected["stopping_rule_population_metric"],
+        "eligible_devices": eligible_devices,
+        "database": "vevo_growthbook_production",
+        "workgroup": "vevo-growthbook-reporting-production",
+        "source_table": "experiment_device_facts",
+        "aggregate_query_sha256": population["aggregate_query_sha256"],
+        "aggregate_result_sha256": population["aggregate_result_sha256"],
+        "only_aggregate_count_retained": True,
+        "arm_counts_read": False,
+        "arm_outcomes_read": False,
+        "outcome_metrics_read": False,
+        "contains_event_or_device_ids": False,
+        "contains_customer_or_order_data": False,
+    }:
+        raise MeasurementWindowError("checkpoint outcome-blind population boundary drift")
+    for field in ("aggregate_query_sha256", "aggregate_result_sha256"):
+        if SHA256_RE.fullmatch(str(population[field])) is None:
+            raise MeasurementWindowError("checkpoint aggregate hash drift")
+
+    expected_decision = (
+        "resolve"
+        if eligible_devices >= int(expected["minimum_eligible_devices"])
+        else "extend_one_full_local_day"
+    )
+    if root["decision"] != expected_decision:
+        raise MeasurementWindowError("checkpoint stopping-rule decision drift")
+    if root["safety"] != CHECKPOINT_SAFETY:
+        raise MeasurementWindowError("checkpoint safety boundary drift")
+
+
+def validate_checkpoint_history(
+    history: object, expected: Mapping[str, Any]
+) -> list[Mapping[str, Any]]:
+    if not isinstance(history, list):
+        raise MeasurementWindowError("checkpoint history must be an array")
+    validated: list[Mapping[str, Any]] = []
+    resolved = False
+    for index, item in enumerate(history, start=1):
+        record = _exact_object(
+            item, {"evidence_sha256", "evidence"}, f"checkpoint history item {index}"
+        )
+        evidence = record["evidence"]
+        if not isinstance(evidence, dict):
+            raise MeasurementWindowError("checkpoint history evidence must be an object")
+        digest = hashlib.sha256(canonical_evidence_bytes(evidence)).hexdigest()
+        if record["evidence_sha256"] != digest:
+            raise MeasurementWindowError("checkpoint evidence SHA-256 mismatch")
+        validate_checkpoint_evidence(evidence, expected, index)
+        if resolved:
+            raise MeasurementWindowError("checkpoint exists after window resolution")
+        resolved = evidence["decision"] == "resolve"
+        validated.append(record)
+    return validated
 
 
 def validate_measurement_window(
@@ -167,17 +447,49 @@ def validate_measurement_window(
     if manifest.get("experiment_id") != "vevo-sk-aa-001":
         raise MeasurementWindowError("A/A snapshot experiment drift")
     expected = expected_measurement_window(activation, acceptance, reconciliation)
-    if manifest.get("measurement_window") != expected:
+    actual = manifest.get("measurement_window")
+    if not isinstance(actual, dict) or set(actual) != set(expected):
         raise MeasurementWindowError("A/A pre-registered measurement window drift")
+    for key in set(expected) - MUTABLE_WINDOW_KEYS:
+        if actual[key] != expected[key]:
+            raise MeasurementWindowError("A/A pre-registered measurement window drift")
+
+    history = validate_checkpoint_history(actual["checkpoint_history"], expected)
+    resolution_evidence = history[-1]["evidence"] if history else None
+    is_resolved = bool(
+        resolution_evidence and resolution_evidence["decision"] == "resolve"
+    )
+    if is_resolved:
+        resolution_window = resolution_evidence["window"]
+        population = resolution_evidence["population"]
+        expected_lifecycle = {
+            "status": "resolved_by_preregistered_sample_stopping_rule",
+            "resolution_status": "resolved",
+            "resolved_last_full_local_date": resolution_window[
+                "candidate_last_full_local_date"
+            ],
+            "resolved_through_utc": resolution_window["candidate_through_utc"],
+            "resolved_full_calendar_days": resolution_window["full_calendar_days"],
+            "resolved_eligible_devices": population["eligible_devices"],
+            "resolved_at_utc": resolution_evidence["observed_at_utc"],
+        }
+    else:
+        expected_lifecycle = {
+            key: expected[key]
+            for key in MUTABLE_WINDOW_KEYS
+            if key != "checkpoint_history"
+        }
+    if any(actual[key] != value for key, value in expected_lifecycle.items()):
+        raise MeasurementWindowError("A/A measurement-window lifecycle drift")
 
     for component_name in ("automated_evidence", "manual_qa_evidence"):
         component = manifest.get(component_name) or {}
-        if (
-            component.get("from_utc") != expected["from_utc"]
-            or component.get("through_utc") is not None
-        ):
+        expected_through = actual["resolved_through_utc"] if is_resolved else None
+        if component.get("from_utc") != expected["from_utc"] or component.get(
+            "through_utc"
+        ) != expected_through:
             raise MeasurementWindowError(
-                f"{component_name} opened before deterministic window resolution"
+                f"{component_name} differs from deterministic window resolution"
             )
 
 

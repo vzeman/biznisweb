@@ -134,4 +134,17 @@ Then verify the collector service remains healthy and retained data remains inta
 
 The A/A must run for at least seven full Europe/Bratislava calendar days and at least `1,000` eligible devices. The pre-outcome schema-`2` manifest freezes start `2026-08-25T22:00:00Z`, minimum local dates `2026-08-26..2026-09-01`, and the first resolution checkpoint at `2026-09-02 03:45 Europe/Bratislava`. At that and every later successful daily reconciliation, inspect only the cumulative eligible-device count: resolve the through-boundary at the first checkpoint with at least `1,000`; otherwise extend by exactly one whole local day. Do not inspect arm outcomes, split, SRM, conversion, revenue, or performance while resolving the window. `scripts/validate_growthbook_aa_measurement_window.py` recomputes and enforces the frozen provenance, boundaries, and outcome-blind stopping rule. Only after deterministic resolution may the same resolved interval be bound to both sanitized evidence components and the protected aggregate snapshot. Require the offline evaluator result `PASS`, including SRM, split, duplicate, reconciliation, exact-order-join, Meta dimensions, privacy, consent, purchase duplication, desktop/mobile, rollback, and performance gates.
 
+Run `.github/workflows/check-vevo-growthbook-production-aa-window.yml` only at the due checkpoint with `confirm_checkpoint=true`. Independently read the successful run ID and exact main commit, download its single `vevo-growthbook-aa-window-checkpoint` artifact, verify that the ZIP contains only `vevo-growthbook-aa-window-checkpoint.json`, and record it offline on a new branch:
+
+```text
+python scripts/record_growthbook_aa_window_checkpoint.py --evidence <downloaded-artifact>/vevo-growthbook-aa-window-checkpoint.json --snapshot projects/vevo/growthbook_aa_snapshot.json --output projects/vevo/growthbook_aa_snapshot.json --expected-evidence-sha256 <sha256> --expected-workflow-run-id <run-id> --expected-main-commit <head-sha>
+python scripts/validate_growthbook_aa_measurement_window.py
+python scripts/validate_growthbook_workspace.py
+python -m unittest tests.test_growthbook_aa_measurement_window tests.test_growthbook_aa_window_checkpoint_recorder tests.test_growthbook_aa_window_checkpoint_workflow tests.test_growthbook_workspace
+python scripts/security_ci.py
+git diff --check
+```
+
+Review and merge that manifest transition through PR. A checkpoint below `1,000` changes only the hash-bound history. The first qualifying checkpoint additionally resolves the exact through-boundary and copies it to both still-disabled component manifests; it does not open a producer or snapshot gate.
+
 An A/A pass never declares a winner. It only permits a separate reviewed preparation of the non-price CTA A/B. Prices remain out of scope.

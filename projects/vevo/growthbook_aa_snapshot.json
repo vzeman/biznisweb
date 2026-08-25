@@ -11,6 +11,9 @@
     "source_activation_main_commit": "1965091059e5a35518265aafd282db842f8ea5d3",
     "source_reconciliation_workflow_run_id": "32821210244",
     "source_reconciliation_main_commit": "cf92eb0e007fb9a9163068a2735e5becc0327f03",
+    "checkpoint_workflow": ".github/workflows/check-vevo-growthbook-production-aa-window.yml",
+    "checkpoint_artifact_name": "vevo-growthbook-aa-window-checkpoint",
+    "checkpoint_file_name": "vevo-growthbook-aa-window-checkpoint.json",
     "first_full_local_date": "2026-08-26",
     "last_required_full_local_date": "2026-09-01",
     "minimum_full_calendar_days": 7,
@@ -29,6 +32,7 @@
     "resolved_full_calendar_days": null,
     "resolved_eligible_devices": null,
     "resolved_at_utc": null,
+    "checkpoint_history": [],
     "post_hoc_window_change_allowed": false
   },
   "automated_evidence": {
