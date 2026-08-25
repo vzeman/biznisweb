@@ -5455,6 +5455,8 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
 - Branch `codex/vevo-growthbook-cli-control-plane` pins the official GrowthBook CLI
   `2.2.0` in a dedicated package lock; npm package integrity is
   `sha512-mgABUq0Qejj7ZA0i6G3YmL7LhCxDQQhdL5KI8elGs1iqeoPoGiLQPR/dYVTtz4LH+nhpcmYpssUWjfhNHGcYEA==`.
+- Implementation commit `6893869a` is pushed and draft PR `#379` is open; it remains
+  draft until the authenticated read-only API preflight passes.
 - `scripts/vevo_growthbook_cli.py` is fail-closed and currently exposes only:
   - authenticated read-only API preflight for the exact schema-9 experiment, feature,
     live revision, draft revision, traffic split, environment scope, and merge status
