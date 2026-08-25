@@ -27,6 +27,14 @@ def forbid(text: str, needle: str, message: str) -> None:
 
 def main() -> int:
     try:
+        root_text = str(ROOT)
+        if root_text not in sys.path:
+            sys.path.insert(0, root_text)
+        from scripts.validate_growthbook_aa_measurement_window import (
+            MeasurementWindowError,
+            validate_measurement_window,
+        )
+
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
         daily_runner = read("daily_report_runner.py")
@@ -150,7 +158,9 @@ def main() -> int:
         growthbook_workspace_config = json.loads(
             read("projects/vevo/growthbook_workspace.json")
         )
-        growthbook_reporting_config = json.loads(read("projects/vevo/growthbook_reporting.json"))
+        growthbook_reporting_config = json.loads(
+            read("projects/vevo/growthbook_reporting.json")
+        )
         growthbook_aa_evaluator = read("scripts/evaluate_growthbook_aa.py")
         growthbook_receipt_summarizer = read("scripts/summarize_growthbook_receipts.py")
         growthbook_aa_snapshot_assembler = read(
@@ -180,8 +190,19 @@ def main() -> int:
         growthbook_aa_window_checkpoint_workflow = read(
             ".github/workflows/check-vevo-growthbook-production-aa-window.yml"
         )
+        growthbook_aa_evidence_gate_recorder = read(
+            "scripts/record_growthbook_aa_evidence_gates.py"
+        )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
+        )
+        growthbook_production_aa_activation = json.loads(
+            read("projects/vevo/growthbook_production_aa_activation.json")
+        )
+        growthbook_production_reconciliation_evidence = json.loads(
+            read(
+                "projects/vevo/growthbook_production_reconciliation_deploy_evidence.json"
+            )
         )
         growthbook_aa_acceptance = json.loads(
             read("projects/vevo/growthbook_aa_acceptance.json")
@@ -216,7 +237,7 @@ def main() -> int:
         )
         forbid(
             facebook_ads,
-            "params = {\"access_token\"",
+            'params = {"access_token"',
             "facebook_ads.py must not send Meta token via query string params.",
         )
         require(
@@ -266,17 +287,17 @@ def main() -> int:
         )
         require(
             export_orders,
-            "\"qa_failure_count\"",
+            '"qa_failure_count"',
             "export_orders.py must aggregate QA failure counts into source health metadata.",
         )
         require(
             export_orders,
-            "\"qa_warning_count\"",
+            '"qa_warning_count"',
             "export_orders.py must aggregate QA warning counts into source health metadata.",
         )
         require(
             export_orders,
-            "\"null_label_rate_pct\"",
+            '"null_label_rate_pct"',
             "export_orders.py must expose null label rate in data assertions QA.",
         )
         require(
@@ -291,7 +312,7 @@ def main() -> int:
         )
         require(
             export_orders,
-            "\"is_partial\"",
+            '"is_partial"',
             "export_orders.py must persist partial-data state in source health metadata.",
         )
         require(
@@ -411,7 +432,7 @@ def main() -> int:
         )
         forbid(
             growthbook_collector,
-            "Access-Control-Allow-Origin\": \"*",
+            'Access-Control-Allow-Origin": "*',
             "GrowthBook collector must never use wildcard CORS.",
         )
         for marker in (
@@ -439,9 +460,11 @@ def main() -> int:
             "curl -fsS http://127.0.0.1:8080/marker.json",
             "GrowthBook collector must prove its marker with curl on localhost.",
         )
-        preview_aa_registry = growthbook_registry_config.get("environments", {}).get(
-            "preview", {}
-        ).get("vevo-sk-aa-001")
+        preview_aa_registry = (
+            growthbook_registry_config.get("environments", {})
+            .get("preview", {})
+            .get("vevo-sk-aa-001")
+        )
         production_registry = growthbook_registry_config.get("environments", {}).get(
             "production"
         )
@@ -450,7 +473,9 @@ def main() -> int:
                 "GrowthBook Production registry must contain only the exact reviewed A/A contract."
             )
         if "vevo-sk-product-cta-color-001" in production_registry:
-            raise AssertionError("GrowthBook CTA registry entry is forbidden in Production.")
+            raise AssertionError(
+                "GrowthBook CTA registry entry is forbidden in Production."
+            )
         require(
             growthbook_storefront,
             "var PRODUCTION_ACTIVATION = false;",
@@ -495,8 +520,8 @@ def main() -> int:
             'typeof result.value === "string"',
             "library.setPolyfills",
             "options.consent & options.ANALYTIC",
-            '#product-detail .s1-detailCart .s1-submitCart',
-            'collector.port ||',
+            "#product-detail .s1-detailCart .s1-submitCart",
+            "collector.port ||",
         ]:
             require(
                 growthbook_storefront,
@@ -566,31 +591,31 @@ def main() -> int:
         )
         forbid(
             growthbook_event_io,
-            'Prefix=normalized_prefix',
+            "Prefix=normalized_prefix",
             "GrowthBook raw loader must never scan the broad raw prefix.",
         )
         require(
             growthbook_order_adapter,
-            'if set(fact) != ORDER_FIELDS',
+            "if set(fact) != ORDER_FIELDS",
             "GrowthBook order adapter must enforce the exact PII-free output schema.",
         )
         require(
             growthbook_reconciler,
-            'GROWTHBOOK_FACT_PUBLISH_ENABLED',
+            "GROWTHBOOK_FACT_PUBLISH_ENABLED",
             "GrowthBook fact publication must keep the environment write gate.",
         )
         require(
             growthbook_reconciler,
-            'if args.publish and not _enabled',
+            "if args.publish and not _enabled",
             "GrowthBook fact publication must require both explicit CLI and runtime gates.",
         )
         for marker in (
-            'scheduled reconciliation accepts no arguments',
-            'GROWTHBOOK_FACT_PUBLISH_ENABLED',
-            'rolling_partition_days',
-            'max_raw_events',
-            'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK',
-            'GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE',
+            "scheduled reconciliation accepts no arguments",
+            "GROWTHBOOK_FACT_PUBLISH_ENABLED",
+            "rolling_partition_days",
+            "max_raw_events",
+            "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK",
+            "GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE",
         ):
             require(
                 growthbook_scheduled_reconciler,
@@ -701,7 +726,7 @@ def main() -> int:
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "Require exact manual read-only confirmation",
-            "[[ \"${CONFIRM_VERIFICATION}\" == \"true\" ]]",
+            '[[ "${CONFIRM_VERIFICATION}" == "true" ]]',
             "VERIFY_NOT_BEFORE_UTC: '2026-08-23T01:40:00Z'",
             "EXPECTED_CLUSTER_ARN: arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster",
             "EXPECTED_CONTAINER_NAME: reporting",
@@ -717,9 +742,9 @@ def main() -> int:
             "cloudtrail lookup-events",
             "sqs get-queue-attributes",
             "scripts/verify_growthbook_natural_reconciliation.py",
-            "--evidence-output \"${EVIDENCE_FILE}\"",
-            "--workflow-run-id \"${GITHUB_RUN_ID}\"",
-            "--main-commit \"${GITHUB_SHA}\"",
+            '--evidence-output "${EVIDENCE_FILE}"',
+            '--workflow-run-id "${GITHUB_RUN_ID}"',
+            '--main-commit "${GITHUB_SHA}"',
             "Upload sanitized natural reconciliation evidence only",
             "uses: actions/upload-artifact@v4.6.2",
             "path: vevo-growthbook-natural-reconciliation-evidence.json",
@@ -781,9 +806,12 @@ def main() -> int:
                 "GrowthBook natural evidence must not upload raw AWS artifact: "
                 f"{forbidden_artifact_path}",
             )
-        if growthbook_natural_reconciliation_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
+        if (
+            growthbook_natural_reconciliation_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
             raise AssertionError(
                 "GrowthBook natural verifier must upload exactly one sanitized artifact."
             )
@@ -893,7 +921,13 @@ def main() -> int:
                 marker,
                 f"GrowthBook Meta audit lost safety marker: {marker}",
             )
-        for forbidden_call in ("._post_json(", ".post(", ".put(", ".patch(", ".delete("):
+        for forbidden_call in (
+            "._post_json(",
+            ".post(",
+            ".put(",
+            ".patch(",
+            ".delete(",
+        ):
             forbid(
                 growthbook_meta_audit,
                 forbidden_call,
@@ -977,8 +1011,8 @@ def main() -> int:
         for marker in (
             "optional_absent_taskdef_bound",
             "host-gate ECS log stream contradicts task definition",
-            "task.get(\"clusterArn\") == expected_cluster_arn",
-            "container.get(\"imageDigest\") == expected_image_digest",
+            'task.get("clusterArn") == expected_cluster_arn',
+            'container.get("imageDigest") == expected_image_digest',
             "private_ip in private_network",
             "raw=false",
         ):
@@ -1026,9 +1060,12 @@ def main() -> int:
                 "GrowthBook Production foundation evidence must not upload raw AWS data: "
                 f"{forbidden_artifact_path}",
             )
-        if growthbook_production_foundation_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
+        if (
+            growthbook_production_foundation_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
             raise AssertionError(
                 "GrowthBook Production foundation must upload exactly one sanitized artifact."
             )
@@ -1140,9 +1177,12 @@ def main() -> int:
                 forbidden_action,
                 f"GrowthBook zero-collector workflow must remain read-only: {forbidden_action}",
             )
-        if growthbook_zero_collector_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
+        if (
+            growthbook_zero_collector_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
             raise AssertionError(
                 "GrowthBook zero-collector workflow must upload one sanitized artifact."
             )
@@ -1250,7 +1290,10 @@ def main() -> int:
                 marker,
                 f"GrowthBook foundation recovery lost safety marker: {marker}",
             )
-        if growthbook_foundation_recovery_workflow.lower().count("aws ecs run-task") != 1:
+        if (
+            growthbook_foundation_recovery_workflow.lower().count("aws ecs run-task")
+            != 1
+        ):
             raise AssertionError(
                 "GrowthBook foundation recovery must run exactly one temporary ECS host gate."
             )
@@ -1295,9 +1338,12 @@ def main() -> int:
                 "GrowthBook foundation recovery must not upload raw state: "
                 f"{raw_artifact_path}",
             )
-        if growthbook_foundation_recovery_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
+        if (
+            growthbook_foundation_recovery_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
             raise AssertionError(
                 "GrowthBook foundation recovery must upload exactly one sanitized artifact."
             )
@@ -1402,8 +1448,8 @@ def main() -> int:
             'parameters.get("PublicRouteEnabled") != "true"',
             "aws ecs run-task",
             "identity-host-gate-task.json",
-            'COLLECTOR_LOCALHOST_HEALTH_OK:preview:${ACTIVE_VERSION}',
-            'COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:${ACTIVE_VERSION}',
+            "COLLECTOR_LOCALHOST_HEALTH_OK:preview:${ACTIVE_VERSION}",
+            "COLLECTOR_LOCALHOST_MARKER_OK:${RUNTIME_PATH}:${ACTIVE_VERSION}",
             "if not set(resources) <= allowed_resources:",
             "if observed_actions != allowed_actions:",
             "aws iam create-user",
@@ -1424,7 +1470,7 @@ def main() -> int:
             )
         for forbidden_reader_marker in (
             "cat ${CREDENTIAL_JSON}",
-            "cat \"${CREDENTIAL_JSON}\"",
+            'cat "${CREDENTIAL_JSON}"',
             "GITHUB_ENV} < ${CREDENTIAL_JSON}",
             "GITHUB_OUTPUT} < ${CREDENTIAL_JSON}",
             "s3:DeleteObject",
@@ -1492,9 +1538,12 @@ def main() -> int:
                 marker,
                 f"GrowthBook Production reader workflow lost safety marker: {marker}",
             )
-        if growthbook_production_reader_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 2:
+        if (
+            growthbook_production_reader_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 2
+        ):
             raise AssertionError(
                 "GrowthBook Production reader must upload separate credential and evidence artifacts."
             )
@@ -1511,14 +1560,22 @@ def main() -> int:
             raise AssertionError(
                 "Production reader success must follow both artifact uploads."
             )
-        if "vevo-growthbook-production-reader-evidence.json" in (
-            growthbook_production_reader_workflow[credential_upload:evidence_upload]
+        if (
+            "vevo-growthbook-production-reader-evidence.json"
+            in (
+                growthbook_production_reader_workflow[credential_upload:evidence_upload]
+            )
         ):
             raise AssertionError(
                 "Sanitized reader evidence must not share the credential artifact."
             )
-        if "vevo-growthbook-production-reader.cms" in (
-            growthbook_production_reader_workflow[evidence_upload:success_confirmation]
+        if (
+            "vevo-growthbook-production-reader.cms"
+            in (
+                growthbook_production_reader_workflow[
+                    evidence_upload:success_confirmation
+                ]
+            )
         ):
             raise AssertionError(
                 "Encrypted credentials must not share the reader evidence artifact."
@@ -1565,7 +1622,7 @@ def main() -> int:
             "vevo-growthbook-preview-reader",
             "/vevo/growthbook/preview/",
             "cat ${CREDENTIAL_JSON}",
-            "cat \"${CREDENTIAL_JSON}\"",
+            'cat "${CREDENTIAL_JSON}"',
             "GITHUB_ENV} < ${CREDENTIAL_JSON}",
             "GITHUB_OUTPUT} < ${CREDENTIAL_JSON}",
             "s3:DeleteObject",
@@ -1636,8 +1693,10 @@ def main() -> int:
             or production_reader_state.get("reader_provisioning_allowed") is not False
             or production_reader_state.get("reader_evidence_artifact_status")
             != "verified_downloaded_sha256_recorded"
-            or production_reader_state.get("reader_evidence_contains_credentials") is not False
-            or production_reader_state.get("reader_provisioning_run_id") != "32614706434"
+            or production_reader_state.get("reader_evidence_contains_credentials")
+            is not False
+            or production_reader_state.get("reader_provisioning_run_id")
+            != "32614706434"
             or production_reader_state.get("reader_provisioning_main_commit")
             != "79f1eb4b1b29bb65efbdbe310b0033e1a5a1f594"
             or production_reader_state.get("reader_evidence_artifact_sha256")
@@ -1648,8 +1707,10 @@ def main() -> int:
             != "79f1eb4b1b29bb65efbdbe310b0033e1a5a1f594"
             or recorded_reader.get("safety", {}).get("contains_plaintext_credentials")
             is not False
-            or recorded_reader.get("safety", {}).get("contains_access_key_id") is not False
-            or recorded_reader.get("safety", {}).get("contains_secret_access_key") is not False
+            or recorded_reader.get("safety", {}).get("contains_access_key_id")
+            is not False
+            or recorded_reader.get("safety", {}).get("contains_secret_access_key")
+            is not False
         ):
             raise AssertionError(
                 "GrowthBook Production reader evidence must remain exact and secret-free in source control."
@@ -1724,8 +1785,7 @@ def main() -> int:
                 )
         production_clone_state = production_reader_state.get("growthbook_clone", {})
         if (
-            production_clone_state.get("status")
-            != "verified_complete"
+            production_clone_state.get("status") != "verified_complete"
             or production_clone_state.get("clone_allowed") is not False
             or production_clone_state.get("mutation_status")
             != "created_and_query_verified"
@@ -1739,8 +1799,7 @@ def main() -> int:
             != production_clone_state.get("observation_sha256")
             or production_clone_state.get("successful_clone_verification")
             != growthbook_production_clone_observation
-            or production_clone_state.get("target_data_source_id")
-            != "ds_19g6mmt5stlp6"
+            or production_clone_state.get("target_data_source_id") != "ds_19g6mmt5stlp6"
             or production_clone_state.get("target_fact_table_ids")
             != {
                 "vevo_device_outcomes_v1": "ftb_19g6mmt5tg48t",
@@ -1766,9 +1825,9 @@ def main() -> int:
             "s3:DeleteObject",
             "GrowthBook runtime policies must not delete experiment objects.",
         )
-        growthbook_policy_section = growthbook_template.split("  GrowthBookReadOnlyPolicy:", 1)[1].split(
-            "  CollectorTarget5xxAlarm:", 1
-        )[0]
+        growthbook_policy_section = growthbook_template.split(
+            "  GrowthBookReadOnlyPolicy:", 1
+        )[1].split("  CollectorTarget5xxAlarm:", 1)[0]
         forbid(
             growthbook_policy_section,
             "experiment-events/raw",
@@ -1779,14 +1838,25 @@ def main() -> int:
             "Resource: '*'",
             "GrowthBook identity must not receive wildcard resources.",
         )
-        if growthbook_reporting_config.get("metric_contract_version") != "vevo_cm1_v1_2026-08-20":
-            raise AssertionError("VEVO GrowthBook reporting must keep the frozen CM1 metric contract.")
+        if (
+            growthbook_reporting_config.get("metric_contract_version")
+            != "vevo_cm1_v1_2026-08-20"
+        ):
+            raise AssertionError(
+                "VEVO GrowthBook reporting must keep the frozen CM1 metric contract."
+            )
         if growthbook_reporting_config.get("cart_window_hours") != 24:
-            raise AssertionError("VEVO GrowthBook primary cart window must remain 24 hours.")
+            raise AssertionError(
+                "VEVO GrowthBook primary cart window must remain 24 hours."
+            )
         if growthbook_reporting_config.get("order_window_days") != 7:
-            raise AssertionError("VEVO GrowthBook purchase attribution window must remain 7 days.")
+            raise AssertionError(
+                "VEVO GrowthBook purchase attribution window must remain 7 days."
+            )
         if growthbook_reporting_config.get("maturity_checkpoint_days") != 14:
-            raise AssertionError("VEVO GrowthBook maturity checkpoint must remain 14 days.")
+            raise AssertionError(
+                "VEVO GrowthBook maturity checkpoint must remain 14 days."
+            )
         expected_aa_acceptance = {
             "schema_version": 1,
             "experiment_id": "vevo-sk-aa-001",
@@ -1869,7 +1939,7 @@ def main() -> int:
             '"contains_raw_log_events": False',
             '"contains_event_or_device_ids": False',
             'not payload.get("nextToken")',
-            'set(receipt) == EXPECTED_RECEIPT_KEYS',
+            "set(receipt) == EXPECTED_RECEIPT_KEYS",
             'receipt["marker"] == RECEIPT_MARKER',
             'receipt["accepted"] is True',
             'type(receipt["duplicate"]) is bool',
@@ -1911,102 +1981,25 @@ def main() -> int:
                 "GrowthBook A/A snapshot assembler lost safety marker: "
                 f"{required_snapshot_assembler_marker}",
             )
-        if growthbook_aa_snapshot_manifest.get("snapshot_build_allowed") is not False:
-            raise AssertionError("GrowthBook A/A snapshot build must remain disabled before evidence.")
-        if growthbook_aa_snapshot_manifest.get("schema_version") != 2:
-            raise AssertionError("GrowthBook A/A snapshot manifest schema drift.")
-        expected_measurement_window = {
-            "status": "frozen_start_and_stopping_rule_before_outcome_readback",
-            "timezone": "Europe/Bratislava",
-            "activation_observed_at_utc": "2026-08-25T05:43:54Z",
-            "source_activation_workflow_run_id": "32815955896",
-            "source_activation_main_commit": (
-                "1965091059e5a35518265aafd282db842f8ea5d3"
-            ),
-            "source_reconciliation_workflow_run_id": "32821210244",
-            "source_reconciliation_main_commit": (
-                "cf92eb0e007fb9a9163068a2735e5becc0327f03"
-            ),
-            "checkpoint_workflow": (
-                ".github/workflows/check-vevo-growthbook-production-aa-window.yml"
-            ),
-            "checkpoint_artifact_name": "vevo-growthbook-aa-window-checkpoint",
-            "checkpoint_file_name": "vevo-growthbook-aa-window-checkpoint.json",
-            "first_full_local_date": "2026-08-26",
-            "last_required_full_local_date": "2026-09-01",
-            "minimum_full_calendar_days": 7,
-            "minimum_eligible_devices": 1000,
-            "from_utc": "2026-08-25T22:00:00Z",
-            "minimum_through_utc": "2026-09-01T22:00:00Z",
-            "earliest_resolution_check_due_local": (
-                "2026-09-02T03:45:00+02:00"
-            ),
-            "resolution_checkpoint_time_local": "03:45:00",
-            "stopping_rule": (
-                "after_minimum_days_resolve_at_first_successful_daily_"
-                "reconciliation_with_minimum_eligible_devices"
-            ),
-            "stopping_rule_population_metric": (
-                "cumulative_eligible_devices_without_arm_outcome_readback"
-            ),
-            "whole_local_day_extensions_only": True,
-            "outcome_blind_resolution_required": True,
-            "resolution_status": "pending_minimum_window_and_sample",
-            "resolved_last_full_local_date": None,
-            "resolved_through_utc": None,
-            "resolved_full_calendar_days": None,
-            "resolved_eligible_devices": None,
-            "resolved_at_utc": None,
-            "checkpoint_history": [],
-            "post_hoc_window_change_allowed": False,
-        }
-        if (
-            growthbook_aa_snapshot_manifest.get("measurement_window")
-            != expected_measurement_window
-        ):
-            raise AssertionError("GrowthBook A/A pre-registered window drift.")
-        for evidence_group in ("automated_evidence", "manual_qa_evidence"):
-            evidence = growthbook_aa_snapshot_manifest.get(evidence_group, {})
-            if evidence.get("status") != "not_recorded" or any(
-                evidence.get(field) is not None
-                for field in ("run_id", "main_commit", "sha256")
-            ):
-                raise AssertionError(
-                    f"GrowthBook A/A snapshot evidence opened early: {evidence_group}."
-                )
-        manual_qa_manifest = growthbook_aa_snapshot_manifest.get(
-            "manual_qa_evidence", {}
+        try:
+            validate_measurement_window(
+                growthbook_aa_snapshot_manifest,
+                growthbook_production_aa_activation,
+                growthbook_aa_acceptance,
+                growthbook_production_reconciliation_evidence,
+            )
+        except MeasurementWindowError as exc:
+            raise AssertionError(
+                f"GrowthBook A/A manifest lifecycle is invalid: {exc}"
+            ) from exc
+        snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
+            "release_boundaries", {}
         )
-        automated_manifest = growthbook_aa_snapshot_manifest.get(
-            "automated_evidence", {}
-        )
-        if (
-            automated_manifest.get("producer_allowed") is not False
-            or automated_manifest.get("window_status")
-            != "frozen_waiting_for_completion"
-            or automated_manifest.get("from_utc")
-            != expected_measurement_window["from_utc"]
-            or automated_manifest.get("through_utc") is not None
-            or automated_manifest.get("quality_report_status") != "not_recorded"
-            or automated_manifest.get("quality_report_key") is not None
-            or automated_manifest.get("quality_report_sha256") is not None
-        ):
-            raise AssertionError("GrowthBook A/A automated producer opened early.")
-        if (
-            manual_qa_manifest.get("producer_allowed") is not False
-            or manual_qa_manifest.get("window_status")
-            != "frozen_waiting_for_completion"
-            or manual_qa_manifest.get("from_utc")
-            != expected_measurement_window["from_utc"]
-            or manual_qa_manifest.get("through_utc") is not None
-            or manual_qa_manifest.get("observation_status") != "not_recorded"
-            or manual_qa_manifest.get("observation_sha256") is not None
-        ):
-            raise AssertionError("GrowthBook A/A manual QA producer opened early.")
-        snapshot_boundaries = growthbook_aa_snapshot_manifest.get("release_boundaries", {})
         for boundary in ("main_only", "github_artifact_reads_only"):
             if snapshot_boundaries.get(boundary) is not True:
-                raise AssertionError(f"GrowthBook A/A snapshot boundary drift: {boundary}.")
+                raise AssertionError(
+                    f"GrowthBook A/A snapshot boundary drift: {boundary}."
+                )
         for boundary in (
             "aws_credentials_allowed",
             "aws_api_calls_allowed",
@@ -2018,7 +2011,9 @@ def main() -> int:
             "cta_activation_allowed",
         ):
             if snapshot_boundaries.get(boundary) is not False:
-                raise AssertionError(f"GrowthBook A/A snapshot mutation gate opened: {boundary}.")
+                raise AssertionError(
+                    f"GrowthBook A/A snapshot mutation gate opened: {boundary}."
+                )
         snapshot_output = growthbook_aa_snapshot_manifest.get("output", {})
         if (
             snapshot_output.get("artifact_name") != "vevo-growthbook-aa-snapshot"
@@ -2043,9 +2038,9 @@ def main() -> int:
             "validate_growthbook_aa_measurement_window.py",
             "pre-registered A/A stopping rule is not resolved",
             "Production GrowthBook clone must be complete and re-closed",
-            "gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${AUTOMATED_RUN_ID}\"",
-            "gh run download \"${AUTOMATED_RUN_ID}\"",
-            "gh run download \"${MANUAL_QA_RUN_ID}\"",
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${AUTOMATED_RUN_ID}"',
+            'gh run download "${AUTOMATED_RUN_ID}"',
+            'gh run download "${MANUAL_QA_RUN_ID}"',
             "scripts/assemble_growthbook_aa_snapshot.py",
             "scripts/evaluate_growthbook_aa.py",
             "winner=false:cta=unchanged",
@@ -2057,10 +2052,15 @@ def main() -> int:
                 "GrowthBook A/A snapshot workflow lost safety marker: "
                 f"{required_snapshot_workflow_marker}",
             )
-        if growthbook_aa_snapshot_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
-            raise AssertionError("GrowthBook A/A snapshot must upload exactly one artifact.")
+        if (
+            growthbook_aa_snapshot_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook A/A snapshot must upload exactly one artifact."
+            )
         for forbidden_snapshot_workflow_marker in (
             "configure-aws-credentials",
             "aws ",
@@ -2142,10 +2142,15 @@ def main() -> int:
                 "GrowthBook A/A manual QA workflow lost safety marker: "
                 f"{required_manual_qa_workflow_marker}",
             )
-        if growthbook_aa_manual_qa_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
-            raise AssertionError("GrowthBook A/A manual QA must upload exactly one artifact.")
+        if (
+            growthbook_aa_manual_qa_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook A/A manual QA must upload exactly one artifact."
+            )
         for forbidden_manual_qa_workflow_marker in (
             "configure-aws-credentials",
             "aws ",
@@ -2308,6 +2313,42 @@ def main() -> int:
                 "GrowthBook A/A window checkpoint recorder lost safety marker: "
                 f"{required_checkpoint_marker}",
             )
+        for offline_evidence_gate_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_aa_evidence_gate_recorder.lower(),
+                offline_evidence_gate_marker.lower(),
+                "GrowthBook A/A evidence-gate recorder must remain offline: "
+                f"{offline_evidence_gate_marker}",
+            )
+        for required_evidence_gate_marker in (
+            "independently supplied {field} SHA-256 mismatch",
+            "quality report predates the resolved A/A window",
+            "quality report eligible devices differ from the stopping checkpoint",
+            "manual QA observation differs from the resolved A/A window",
+            "expected_workflow_run_id",
+            "expected_main_commit",
+            "expected evidence SHA-256 is invalid",
+            "snapshot_build_allowed",
+            "producer_allowed",
+            "aws=false:network=false:biznisweb=false:meta=false:commerce=false",
+        ):
+            require(
+                growthbook_aa_evidence_gate_recorder,
+                required_evidence_gate_marker,
+                "GrowthBook A/A evidence-gate recorder lost safety marker: "
+                f"{required_evidence_gate_marker}",
+            )
         for required_checkpoint_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "outcome-blind A/A checkpoint is outside its daily gate",
@@ -2332,9 +2373,12 @@ def main() -> int:
                 "GrowthBook A/A window checkpoint workflow lost safety marker: "
                 f"{required_checkpoint_workflow_marker}",
             )
-        if growthbook_aa_window_checkpoint_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
+        if (
+            growthbook_aa_window_checkpoint_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
             raise AssertionError(
                 "GrowthBook A/A window checkpoint must upload exactly one artifact."
             )
@@ -2362,10 +2406,15 @@ def main() -> int:
                 "GrowthBook A/A window checkpoint workflow mutation path detected: "
                 f"{forbidden_checkpoint_workflow_marker}",
             )
-        if growthbook_aa_automated_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
-            raise AssertionError("GrowthBook A/A automated evidence must upload exactly one artifact.")
+        if (
+            growthbook_aa_automated_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook A/A automated evidence must upload exactly one artifact."
+            )
         for forbidden_automated_workflow_marker in (
             "cloudformation create-",
             "cloudformation update-",
@@ -2394,9 +2443,15 @@ def main() -> int:
                 "GrowthBook A/A automated evidence workflow gained a mutation path: "
                 f"{forbidden_automated_workflow_marker}",
             )
-        preview_registry = growthbook_registry_config.get("environments", {}).get("preview", {})
-        for experiment_id, weights in growthbook_reporting_config.get("expected_variation_weights", {}).items():
-            registry_variations = preview_registry.get(experiment_id, {}).get("variations", [])
+        preview_registry = growthbook_registry_config.get("environments", {}).get(
+            "preview", {}
+        )
+        for experiment_id, weights in growthbook_reporting_config.get(
+            "expected_variation_weights", {}
+        ).items():
+            registry_variations = preview_registry.get(experiment_id, {}).get(
+                "variations", []
+            )
             if set(registry_variations) != set(weights):
                 raise AssertionError(
                     f"GrowthBook registry/reporting variation mismatch for {experiment_id}."
@@ -2433,6 +2488,7 @@ def main() -> int:
             "scripts/assemble_growthbook_aa_snapshot.py",
             "scripts/build_growthbook_aa_manual_qa_evidence.py",
             "scripts/build_growthbook_aa_automated_evidence.py",
+            "scripts/record_growthbook_aa_evidence_gates.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",
             "scripts/summarize_growthbook_foundation_bucket.py",
