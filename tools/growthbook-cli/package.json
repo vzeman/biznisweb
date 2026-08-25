@@ -1,0 +1,9 @@
+{
+  "name": "biznisweb-growthbook-cli-tooling",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned GrowthBook CLI used by repository-owned safety wrappers.",
+  "devDependencies": {
+    "growthbook": "2.2.0"
+  }
+}

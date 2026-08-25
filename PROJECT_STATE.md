@@ -5447,3 +5447,38 @@ eport_20260301-20260331__test2.html and decide whether the remaining legacy tabl
   - SDK key and collector URL remain task-scoped environment inputs and are never committed
 - Next exact step:
   - merge the reviewed Production builder, generate the exact temporary artifact from that `main` commit, create four new unpublished Production GTM tags in workspace `16`, read back their IDs, delete the artifact, and record only the tag IDs and SHA-256
+
+### 2026-08-25 (VEVO GrowthBook official CLI recovery path)
+
+- Browser automation was removed from the Production activation control path after
+  repeated Chrome-extension transport failures.
+- Branch `codex/vevo-growthbook-cli-control-plane` pins the official GrowthBook CLI
+  `2.2.0` in a dedicated package lock; npm package integrity is
+  `sha512-mgABUq0Qejj7ZA0i6G3YmL7LhCxDQQhdL5KI8elGs1iqeoPoGiLQPR/dYVTtz4LH+nhpcmYpssUWjfhNHGcYEA==`.
+- `scripts/vevo_growthbook_cli.py` is fail-closed and currently exposes only:
+  - authenticated read-only API preflight for the exact schema-9 experiment, feature,
+    live revision, draft revision, traffic split, environment scope, and merge status
+  - network-free dry-run planning for the exact experiment-start and feature-revision
+    publish requests
+- The wrapper has no mutation execution command and rejects skip-checklist,
+  ignore-warning, approval-bypass, hook-bypass, and schema-bypass paths.
+- Verified locally:
+  - official CLI reports version `2.2.0`; its installer verified the downloaded release
+    archive against the release SHA-256 file
+  - dry-run resolves only `POST /api/v1/experiments/exp_19g6mmt5wugpk/start` followed by
+    `POST /api/v2/features/vevo-sk-aa-assignment/revisions/3/publish`
+  - dry-run status is `mutation_dry_run_passed` with `mutation_executed=false`
+  - `24` focused CLI/schema-9 tests, Python compile, Ruff, the existing Production A/A
+    activation validator, and `git diff --check` pass
+  - full repository suite passes with `623` tests and `scripts/security_ci.py` passes
+- No GrowthBook, GTM, Meta Ads, BiznisWeb, price, product, cart, checkout, order,
+  collector, or traffic mutation occurred. No local server or persistent process was
+  started.
+- Current blocker:
+  - the web login is intentionally not reused as an API credential and the OS-keychain
+    GrowthBook CLI profile is unset; authenticated preflight therefore stops before the
+    first API read
+- Next exact step:
+  - create a task-scoped GrowthBook Personal Access Token or Secret Key in GrowthBook,
+    save it with `growthbook auth login` in the OS keychain without putting it in Git,
+    shell history, or chat, then run the authenticated read-only preflight
