@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "activation_type": "vevo_growthbook_product_cta",
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "feature_key": "vevo-sk-product-cta-color",
+  "runbook": "projects/vevo/GROWTHBOOK_CTA_ACTIVATION_RUNBOOK.md",
+  "status": "waiting_for_verified_aa_completion_sample_lifecycle_and_runtime",
+  "source_bindings": {
+    "aa_completion": {
+      "path": "projects/vevo/growthbook_production_aa_completion.json",
+      "sha256": null
+    },
+    "aa_snapshot": {
+      "path": "projects/vevo/growthbook_aa_snapshot.json",
+      "sha256": null
+    },
+    "sample_plan": {
+      "path": "projects/vevo/growthbook_cta_sample_plan.json",
+      "sha256": null
+    },
+    "lifecycle_reconciliation": {
+      "path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
+      "sha256": null
+    },
+    "design_contract": {
+      "path": "projects/vevo/growthbook_cta_design.json",
+      "sha256": "fef74b323f154f9476db4fd00c171c297043b7662f39d871284d6c417d2ece6d"
+    },
+    "decision_contract": {
+      "path": "projects/vevo/growthbook_cta_decision_contract.json",
+      "sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183"
+    },
+    "collector_registry": {
+      "path": "growthbook_collector/experiments.json",
+      "sha256": null
+    },
+    "runtime_readiness": {
+      "observation_path": "projects/vevo/growthbook_cta_runtime_readiness_observation.json",
+      "observation_sha256": null,
+      "workflow_run_id": null,
+      "main_commit": null
+    }
+  },
+  "launch_contract": {
+    "environment": "production",
+    "assignment_attribute": "id",
+    "traffic_percent": 100,
+    "variation_weights": {
+      "control": 0.5,
+      "brand_contrast": 0.5
+    },
+    "target_total_sample": null,
+    "minimum_full_calendar_days": 14,
+    "maximum_full_calendar_days": 42,
+    "assignment_stop_rule": "first_successful_post_reconciliation_checkpoint_with_target_first_n_or_42_full_calendar_days",
+    "checkpoint_policy": "outcome_blind_eligible_device_count_only",
+    "gtm_container_version_id": "15",
+    "growthbook_experiment_id": "exp_19g6mmt1qxzrp",
+    "data_source_id": "ds_19g6mmt5stlp6",
+    "production_registry_experiments": [
+      "vevo-sk-product-cta-color-001"
+    ]
+  },
+  "runtime_readiness_requirements": {
+    "instance_id": "N/A:Fargate",
+    "service": "vevo-growthbook-collector-production",
+    "runtime_path": "/app",
+    "localhost_marker_required": true,
+    "target_health": "healthy",
+    "cta_only_production_registry_required": true,
+    "zero_cta_events_before_start_required": true,
+    "gtm_unprocessed_changes_required": 0,
+    "aa_production_allocation_percent_required": 0,
+    "cta_production_allocation_percent_required": 0
+  },
+  "start_readback": {
+    "status": "not_recorded",
+    "observation_path": "projects/vevo/growthbook_cta_activation_observation.json",
+    "observation_sha256": null,
+    "observed_at_utc": null,
+    "assignment_started_at_utc": null,
+    "feature_revision": null
+  },
+  "release_boundaries": {
+    "manual_growthbook_start_allowed": false,
+    "automatic_growthbook_mutation_allowed": false,
+    "automatic_gtm_mutation_allowed": false,
+    "automatic_meta_ads_mutation_allowed": false,
+    "automatic_biznisweb_mutation_allowed": false,
+    "automatic_collector_or_reporting_mutation_allowed": false,
+    "price_product_cart_checkout_order_mutation_allowed": false,
+    "winner_calls_allowed": false
+  },
+  "next_gate": "after_aa_pass_stop_sample_freeze_lifecycle_and_cta_only_host_gate_open_manual_start_review"
+}

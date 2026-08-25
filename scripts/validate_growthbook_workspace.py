@@ -115,6 +115,25 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_manifest as validate_cta_baseline_manifest,
     )
 
+try:
+    from record_growthbook_cta_activation import (
+        CtaActivationRecordingError,
+        RUNNING as CTA_RUNNING_STATUS,
+        canonical_json_bytes as canonical_cta_activation_bytes,
+        validate_runtime_observation as validate_cta_runtime_observation,
+        validate_running_handoff as validate_cta_running_handoff,
+        validate_manifest as validate_cta_activation_manifest,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.record_growthbook_cta_activation import (
+        CtaActivationRecordingError,
+        RUNNING as CTA_RUNNING_STATUS,
+        canonical_json_bytes as canonical_cta_activation_bytes,
+        validate_runtime_observation as validate_cta_runtime_observation,
+        validate_running_handoff as validate_cta_running_handoff,
+        validate_manifest as validate_cta_activation_manifest,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -122,6 +141,16 @@ REPORTING_PATH = ROOT / "projects" / "vevo" / "growthbook_reporting.json"
 AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json"
 CTA_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
 CTA_BASELINE_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_baseline.json"
+CTA_ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_activation.json"
+CTA_ACTIVATION_OBSERVATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_activation_observation.json"
+)
+CTA_RUNTIME_READINESS_OBSERVATION_PATH = (
+    ROOT
+    / "projects"
+    / "vevo"
+    / "growthbook_cta_runtime_readiness_observation.json"
+)
 CTA_DESIGN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_design.json"
 CTA_STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 CTA_DECISION_CONTRACT_PATH = (
@@ -347,6 +376,17 @@ def validate() -> None:
     aa_acceptance = json.loads(AA_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
     cta_sample_plan = json.loads(CTA_SAMPLE_PLAN_PATH.read_text(encoding="utf-8"))
     cta_baseline = json.loads(CTA_BASELINE_PATH.read_text(encoding="utf-8"))
+    cta_activation = json.loads(CTA_ACTIVATION_PATH.read_text(encoding="utf-8"))
+    cta_activation_observation = None
+    if cta_activation.get("status") == CTA_RUNNING_STATUS:
+        observation_bytes = CTA_ACTIVATION_OBSERVATION_PATH.read_bytes()
+        cta_activation_observation = json.loads(observation_bytes.decode("utf-8"))
+        if observation_bytes != canonical_cta_activation_bytes(
+            cta_activation_observation
+        ):
+            raise AssertionError("CTA activation observation is not canonical JSON")
+    elif CTA_ACTIVATION_OBSERVATION_PATH.exists():
+        raise AssertionError("CTA activation observation exists before verified start")
     cta_design = json.loads(CTA_DESIGN_PATH.read_text(encoding="utf-8"))
     cta_decision_contract = json.loads(
         CTA_DECISION_CONTRACT_PATH.read_text(encoding="utf-8")
@@ -376,6 +416,50 @@ def validate() -> None:
         validate_cta_baseline_manifest(cta_baseline)
     except CtaBaselineError as exc:
         raise AssertionError(f"CTA baseline contract is invalid: {exc}") from exc
+    try:
+        validate_cta_activation_manifest(cta_activation)
+    except CtaActivationRecordingError as exc:
+        raise AssertionError(f"CTA activation contract is invalid: {exc}") from exc
+    cta_bindings = cta_activation["source_bindings"]
+    for binding_name, binding_path in (
+        ("design_contract", CTA_DESIGN_PATH),
+        ("decision_contract", CTA_DECISION_CONTRACT_PATH),
+    ):
+        if hashlib.sha256(binding_path.read_bytes()).hexdigest() != cta_bindings[
+            binding_name
+        ]["sha256"]:
+            raise AssertionError(f"CTA activation {binding_name} file hash drift")
+    if cta_activation["status"] != "waiting_for_verified_aa_completion_sample_lifecycle_and_runtime":
+        for binding_name, binding_path in (
+            ("aa_completion", AA_COMPLETION_PATH),
+            ("aa_snapshot", AA_SNAPSHOT_PATH),
+            ("sample_plan", CTA_SAMPLE_PLAN_PATH),
+            ("lifecycle_reconciliation", CTA_LIFECYCLE_RECONCILIATION_PATH),
+            ("collector_registry", REGISTRY_PATH),
+        ):
+            if hashlib.sha256(binding_path.read_bytes()).hexdigest() != cta_bindings[
+                binding_name
+            ]["sha256"]:
+                raise AssertionError(
+                    f"CTA activation bound source changed: {binding_name}"
+                )
+        runtime_bytes = CTA_RUNTIME_READINESS_OBSERVATION_PATH.read_bytes()
+        runtime_observation = json.loads(runtime_bytes.decode("utf-8"))
+        if runtime_bytes != canonical_cta_activation_bytes(runtime_observation):
+            raise AssertionError("CTA runtime readiness observation is not canonical JSON")
+        runtime_binding = cta_bindings["runtime_readiness"]
+        if hashlib.sha256(runtime_bytes).hexdigest() != runtime_binding[
+            "observation_sha256"
+        ]:
+            raise AssertionError("CTA runtime readiness observation SHA-256 drift")
+        try:
+            validate_cta_runtime_observation(runtime_observation, cta_activation)
+        except CtaActivationRecordingError as exc:
+            raise AssertionError(
+                f"CTA runtime readiness observation is invalid: {exc}"
+            ) from exc
+    elif CTA_RUNTIME_READINESS_OBSERVATION_PATH.exists():
+        raise AssertionError("CTA runtime readiness observation exists before review")
     try:
         validate_cta_design_contract(
             cta_design,
@@ -408,19 +492,24 @@ def validate() -> None:
     production_aa_completed = workspace_state == (
         "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked"
     )
-    production_aa_lifecycle = production_aa_running or production_aa_completed
+    production_cta_running = workspace_state == (
+        "production_cta_running_activation_verified_pro_quantiles_blocked"
+    )
+    production_post_aa = production_aa_completed or production_cta_running
+    production_aa_lifecycle = production_aa_running or production_post_aa
     if workspace.get("schema_version") != 1 or workspace_state not in {
         "preview_aa_runtime_and_reconciliation_verified_"
         "recurring_schedule_pending_pro_quantiles_blocked",
         "production_aa_running_activation_verified_pro_quantiles_blocked",
         "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked",
+        "production_cta_running_activation_verified_pro_quantiles_blocked",
     }:
         raise AssertionError("GrowthBook workspace lifecycle state drift")
     completion_finished = (
         aa_completion.get("status")
         == "production_aa_stopped_verified_cta_activation_blocked"
     )
-    if production_aa_completed is not completion_finished:
+    if production_post_aa is not completion_finished:
         raise AssertionError("GrowthBook workspace/A/A completion lifecycle drift")
     workspace_config = workspace.get("workspace", {})
     if workspace_config.get("organization_name") != "Vevo":
@@ -435,7 +524,9 @@ def validate() -> None:
         raise AssertionError("GrowthBook plan must match the authenticated workspace read-back")
     if workspace_config.get("subscription_or_trial_status") != "starter_active_no_paid_upgrade_accepted":
         raise AssertionError("GrowthBook paid-upgrade status is not safely recorded")
-    expected_workspace_allocation = 100 if production_aa_running else 0
+    expected_workspace_allocation = (
+        100 if production_aa_running or production_cta_running else 0
+    )
     if (
         workspace_config.get("production_allocation_percent")
         != expected_workspace_allocation
@@ -1543,9 +1634,14 @@ def validate() -> None:
             or experiment.get("traffic_percent") != 100
         ):
             raise AssertionError(f"GrowthBook experiment assignment drift: {experiment_id}")
-        aa_running = experiment_id == "vevo-sk-aa-001" and production_aa_running
-        expected_environment = ["production"] if aa_running else ["staging"]
-        expected_allocation = 100 if aa_running else 0
+        experiment_running = (
+            experiment_id == "vevo-sk-aa-001" and production_aa_running
+        ) or (
+            experiment_id == "vevo-sk-product-cta-color-001"
+            and production_cta_running
+        )
+        expected_environment = ["production"] if experiment_running else ["staging"]
+        expected_allocation = 100 if experiment_running else 0
         if experiment.get("feature_rule_environments") != expected_environment:
             raise AssertionError(
                 f"GrowthBook experiment environment drift: {experiment_id}"
@@ -1596,13 +1692,13 @@ def validate() -> None:
         if production_aa_running
         else (
             "stopped_production_aa_pass_verified"
-            if production_aa_completed
+            if production_post_aa
             else "running_preview_staging_only"
         )
     )
     expected_aa_feature_status = (
         "live"
-        if production_aa_running or not production_aa_completed
+        if production_aa_running or not production_post_aa
         else "staging_only"
     )
     expected_aa_revision = (
@@ -1610,7 +1706,7 @@ def validate() -> None:
         if production_aa_running
         else (
             aa_completion.get("stop_readback", {}).get("feature_revision")
-            if production_aa_completed
+            if production_post_aa
             else 2
         )
     )
@@ -1654,14 +1750,24 @@ def validate() -> None:
     elif "activation_evidence" in aa_experiment:
         raise AssertionError("Historical Preview state contains activation evidence")
     cta_experiment = experiment_map["vevo-sk-product-cta-color-001"]
-    expected_cta_status = "unstarted_draft" if production_aa_running else "draft"
-    expected_cta_rule_status = "no_live_rules" if production_aa_running else "draft"
+    expected_cta_status = (
+        "running_production_cta_only"
+        if production_cta_running
+        else ("unstarted_draft" if production_aa_running else "draft")
+    )
+    expected_cta_rule_status = (
+        "live"
+        if production_cta_running
+        else ("no_live_rules" if production_aa_running else "draft")
+    )
     if (
         cta_experiment.get("status") != expected_cta_status
         or cta_experiment.get("feature_rule_status") != expected_cta_rule_status
-        or "analysis_settings" in cta_experiment
+        or (("analysis_settings" in cta_experiment) is not production_cta_running)
     ):
-        raise AssertionError("GrowthBook CTA A/B must remain an unstarted draft")
+        raise AssertionError(
+            "GrowthBook CTA A/B must remain an unstarted draft or match the verified running handoff"
+        )
     if (
         cta_sample_plan["experiment_id"] != cta_experiment.get("tracking_key")
         or list(cta_sample_plan["expected_variation_weights"])
@@ -1690,7 +1796,11 @@ def validate() -> None:
     else:
         final = cta_sample_plan["final"]
         expected_final = {
-            "final_sample_status": "frozen_from_hash_bound_aa_activation_still_blocked",
+            "final_sample_status": (
+                "frozen_from_hash_bound_aa_running_exact_first_n"
+                if production_cta_running
+                else "frozen_from_hash_bound_aa_activation_still_blocked"
+            ),
             "final_sample_per_arm": final["sample_per_arm"],
             "final_total_sample": final["total_sample"],
             "sample_observation_sha256": final["observation_sha256"],
@@ -1716,8 +1826,10 @@ def validate() -> None:
         raise AssertionError("GrowthBook/reporting maturity gates differ")
     if gates.get("price_tests_allowed") is not False:
         raise AssertionError("price testing must remain disabled")
-    if gates.get("production_activation_allowed") is not production_aa_running:
-        raise AssertionError("Production A/A activation gate state drift")
+    if gates.get("production_activation_allowed") is not (
+        production_aa_running or production_cta_running
+    ):
+        raise AssertionError("Production experiment activation gate state drift")
     if (
         aa_acceptance["growthbook_reporting_count_difference_max_percent"]
         != gates.get("growthbook_count_difference_max_percent")
@@ -1741,6 +1853,15 @@ def validate() -> None:
     if workspace == checked_in_workspace and registry == checked_in_registry:
         if production_aa_running:
             validate_activation_handoff(activation, workspace, registry)
+        if production_cta_running:
+            if cta_activation_observation is None:
+                raise AssertionError("CTA running state has no activation observation")
+            validate_cta_running_handoff(
+                cta_activation,
+                workspace,
+                registry,
+                cta_activation_observation,
+            )
         try:
             from scripts.validate_growthbook_aa_measurement_window import (
                 validate as validate_aa_measurement_window,
