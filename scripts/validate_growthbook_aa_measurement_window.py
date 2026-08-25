@@ -15,7 +15,9 @@ from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_production_aa_activation.json"
+ACTIVATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_production_aa_activation.json"
+)
 ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json"
 SNAPSHOT_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_snapshot.json"
 RECONCILIATION_EVIDENCE_PATH = (
@@ -30,9 +32,7 @@ class MeasurementWindowError(ValueError):
     """Raised when the pre-registered window or its provenance drifts."""
 
 
-CHECKPOINT_WORKFLOW = (
-    ".github/workflows/check-vevo-growthbook-production-aa-window.yml"
-)
+CHECKPOINT_WORKFLOW = ".github/workflows/check-vevo-growthbook-production-aa-window.yml"
 CHECKPOINT_ROOT_KEYS = {
     "schema_version",
     "evidence_type",
@@ -111,7 +111,7 @@ CHECKPOINT_SAFETY = {
     "winner_calls": False,
     "cta_activation": False,
 }
-RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
+RUN_ID_RE = re.compile(r"^[1-9][0-9]{5,19}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 TASK_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 TASK_DEFINITION_RE = re.compile(r"^vevo-growthbook-reconcile-production:[1-9][0-9]*$")
@@ -127,6 +127,11 @@ MUTABLE_WINDOW_KEYS = {
     "resolved_at_utc",
     "checkpoint_history",
 }
+
+QUALITY_KEY_RE = re.compile(
+    r"^experiment-events/curated/quality/experiment_id=vevo-sk-aa-001/"
+    r"facts_generated_at=20[2-9][0-9]{5}T[0-9]{6}Z[.]json$"
+)
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -225,10 +230,9 @@ def expected_measurement_window(
     )
 
     binding = activation.get("production_reconciliation") or {}
-    if (
-        binding.get("workflow_run_id") != reconciliation.get("source_run_id")
-        or binding.get("main_commit") != reconciliation.get("source_main_commit")
-    ):
+    if binding.get("workflow_run_id") != reconciliation.get(
+        "source_run_id"
+    ) or binding.get("main_commit") != reconciliation.get("source_main_commit"):
         raise MeasurementWindowError("Production reconciliation provenance drift")
 
     return {
@@ -316,8 +320,10 @@ def validate_checkpoint_evidence(
     candidate_through, due, last_full_date, full_days = _checkpoint_boundaries(
         expected, checkpoint_index
     )
-    if not due.astimezone(UTC) <= observed_at < (due + timedelta(days=1)).astimezone(
-        UTC
+    if (
+        not due.astimezone(UTC)
+        <= observed_at
+        < (due + timedelta(days=1)).astimezone(UTC)
     ):
         raise MeasurementWindowError("checkpoint observation is outside its daily gate")
 
@@ -333,7 +339,9 @@ def validate_checkpoint_evidence(
     }:
         raise MeasurementWindowError("checkpoint window drift")
 
-    runtime = _exact_object(root["runtime"], CHECKPOINT_RUNTIME_KEYS, "checkpoint runtime")
+    runtime = _exact_object(
+        root["runtime"], CHECKPOINT_RUNTIME_KEYS, "checkpoint runtime"
+    )
     if (
         runtime["instance_id"] != "N/A:Fargate"
         or runtime["service"] != "vevo-growthbook-reconcile-production"
@@ -344,14 +352,19 @@ def validate_checkpoint_evidence(
         or runtime["host_gate_evidence_sha256"]
         != "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb"
         or runtime["localhost_health_marker_inherited_from_deploy_evidence"] is not True
-        or runtime["localhost_runtime_marker_inherited_from_deploy_evidence"] is not True
+        or runtime["localhost_runtime_marker_inherited_from_deploy_evidence"]
+        is not True
     ):
         raise MeasurementWindowError("checkpoint runtime hard gate drift")
     try:
         private_ip = ipaddress.ip_address(str(runtime["private_ip"]))
     except ValueError as exc:
-        raise MeasurementWindowError("checkpoint runtime private IP is invalid") from exc
-    if private_ip.version != 4 or private_ip not in ipaddress.ip_network("172.31.0.0/16"):
+        raise MeasurementWindowError(
+            "checkpoint runtime private IP is invalid"
+        ) from exc
+    if private_ip.version != 4 or private_ip not in ipaddress.ip_network(
+        "172.31.0.0/16"
+    ):
         raise MeasurementWindowError("checkpoint runtime private IP boundary drift")
 
     control = _exact_object(
@@ -395,7 +408,9 @@ def validate_checkpoint_evidence(
         "contains_event_or_device_ids": False,
         "contains_customer_or_order_data": False,
     }:
-        raise MeasurementWindowError("checkpoint outcome-blind population boundary drift")
+        raise MeasurementWindowError(
+            "checkpoint outcome-blind population boundary drift"
+        )
     for field in ("aggregate_query_sha256", "aggregate_result_sha256"):
         if SHA256_RE.fullmatch(str(population[field])) is None:
             raise MeasurementWindowError("checkpoint aggregate hash drift")
@@ -424,7 +439,9 @@ def validate_checkpoint_history(
         )
         evidence = record["evidence"]
         if not isinstance(evidence, dict):
-            raise MeasurementWindowError("checkpoint history evidence must be an object")
+            raise MeasurementWindowError(
+                "checkpoint history evidence must be an object"
+            )
         digest = hashlib.sha256(canonical_evidence_bytes(evidence)).hexdigest()
         if record["evidence_sha256"] != digest:
             raise MeasurementWindowError("checkpoint evidence SHA-256 mismatch")
@@ -485,12 +502,132 @@ def validate_measurement_window(
     for component_name in ("automated_evidence", "manual_qa_evidence"):
         component = manifest.get(component_name) or {}
         expected_through = actual["resolved_through_utc"] if is_resolved else None
-        if component.get("from_utc") != expected["from_utc"] or component.get(
-            "through_utc"
-        ) != expected_through:
+        if (
+            component.get("from_utc") != expected["from_utc"]
+            or component.get("through_utc") != expected_through
+        ):
             raise MeasurementWindowError(
                 f"{component_name} differs from deterministic window resolution"
             )
+
+    automated = manifest.get("automated_evidence") or {}
+    manual = manifest.get("manual_qa_evidence") or {}
+    components = (automated, manual)
+    for component_name, component in zip(
+        ("automated_evidence", "manual_qa_evidence"), components, strict=True
+    ):
+        status = component.get("status")
+        if status == "not_recorded":
+            if any(
+                component.get(field) is not None
+                for field in ("run_id", "main_commit", "sha256")
+            ):
+                raise MeasurementWindowError(
+                    f"{component_name} has provenance before artifact verification"
+                )
+        elif status == "verified":
+            if (
+                RUN_ID_RE.fullmatch(str(component.get("run_id") or "")) is None
+                or COMMIT_RE.fullmatch(str(component.get("main_commit") or "")) is None
+                or SHA256_RE.fullmatch(str(component.get("sha256") or "")) is None
+            ):
+                raise MeasurementWindowError(
+                    f"{component_name} verified artifact provenance is invalid"
+                )
+            if component.get("producer_allowed") is not False:
+                raise MeasurementWindowError(
+                    f"{component_name} producer remained open after artifact verification"
+                )
+        else:
+            raise MeasurementWindowError(f"{component_name} artifact status drift")
+
+    if not is_resolved:
+        if manifest.get("snapshot_build_allowed") is not False:
+            raise MeasurementWindowError(
+                "snapshot gate opened before window resolution"
+            )
+        expected_automated = {
+            "producer_allowed": False,
+            "window_status": "frozen_waiting_for_completion",
+            "quality_report_status": "not_recorded",
+            "quality_report_key": None,
+            "quality_report_sha256": None,
+            "status": "not_recorded",
+        }
+        expected_manual = {
+            "producer_allowed": False,
+            "window_status": "frozen_waiting_for_completion",
+            "observation_status": "not_recorded",
+            "observation_sha256": None,
+            "status": "not_recorded",
+        }
+        for component, expected_state, component_name in (
+            (automated, expected_automated, "automated_evidence"),
+            (manual, expected_manual, "manual_qa_evidence"),
+        ):
+            if any(
+                component.get(key) != value for key, value in expected_state.items()
+            ):
+                raise MeasurementWindowError(
+                    f"{component_name} opened before deterministic window resolution"
+                )
+        return
+
+    automated_opened = automated.get("quality_report_status") == (
+        "verified_canonical_reporting_quality"
+    )
+    if automated_opened:
+        if (
+            automated.get("window_status")
+            != "verified_complete_reconciled_production_aa"
+            or QUALITY_KEY_RE.fullmatch(str(automated.get("quality_report_key") or ""))
+            is None
+            or SHA256_RE.fullmatch(str(automated.get("quality_report_sha256") or ""))
+            is None
+        ):
+            raise MeasurementWindowError("automated evidence producer gate drift")
+    elif (
+        automated.get("quality_report_status") != "not_recorded"
+        or automated.get("quality_report_key") is not None
+        or automated.get("quality_report_sha256") is not None
+        or automated.get("window_status")
+        != "resolved_waiting_for_reviewed_producer_open"
+    ):
+        raise MeasurementWindowError("automated evidence producer gate drift")
+
+    manual_opened = manual.get("observation_status") == ("verified_reviewed_browser_qa")
+    if manual_opened:
+        if (
+            manual.get("window_status") != "verified_complete_reconciled_production_aa"
+            or SHA256_RE.fullmatch(str(manual.get("observation_sha256") or "")) is None
+        ):
+            raise MeasurementWindowError("manual QA evidence producer gate drift")
+    elif (
+        manual.get("observation_status") != "not_recorded"
+        or manual.get("observation_sha256") is not None
+        or manual.get("window_status") != "resolved_waiting_for_reviewed_producer_open"
+    ):
+        raise MeasurementWindowError("manual QA evidence producer gate drift")
+
+    for opened, component, component_name in (
+        (automated_opened, automated, "automated_evidence"),
+        (manual_opened, manual, "manual_qa_evidence"),
+    ):
+        if component.get("status") == "verified" and not opened:
+            raise MeasurementWindowError(
+                f"{component_name} artifact exists without a reviewed producer source"
+            )
+        expected_producer = opened and component.get("status") == "not_recorded"
+        if component.get("producer_allowed") is not expected_producer:
+            raise MeasurementWindowError(f"{component_name} producer lifecycle drift")
+
+    expected_snapshot_gate = all(
+        component.get("status") == "verified" for component in components
+    )
+    if manifest.get("snapshot_build_allowed") is not expected_snapshot_gate:
+        raise MeasurementWindowError(
+            "snapshot gate differs from component verification"
+        )
 
 
 def validate() -> None:
@@ -508,7 +645,10 @@ def main() -> int:
         print("validate_growthbook_aa_measurement_window.py: OK")
         return 0
     except Exception as exc:  # pragma: no cover - CLI failure path
-        print(f"validate_growthbook_aa_measurement_window.py: FAIL: {exc}", file=sys.stderr)
+        print(
+            f"validate_growthbook_aa_measurement_window.py: FAIL: {exc}",
+            file=sys.stderr,
+        )
         return 1
 
 
