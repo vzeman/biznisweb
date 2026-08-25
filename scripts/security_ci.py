@@ -46,6 +46,9 @@ def main() -> int:
         from scripts.validate_growthbook_cta_measurement_window import (
             validate_manifest as validate_cta_measurement_manifest,
         )
+        from scripts.validate_growthbook_cta_completion import (
+            main as validate_cta_completion,
+        )
 
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
@@ -241,12 +244,19 @@ def main() -> int:
         growthbook_cta_checkpoint_workflow = read(
             ".github/workflows/check-vevo-growthbook-production-cta-window.yml"
         )
+        growthbook_cta_completion_recorder = read(
+            "scripts/record_growthbook_cta_completion.py"
+        )
+        growthbook_cta_completion_validator = read(
+            "scripts/validate_growthbook_cta_completion.py"
+        )
         growthbook_cta_activation_manifest = json.loads(
             read("projects/vevo/growthbook_cta_activation.json")
         )
         growthbook_cta_measurement_manifest = json.loads(
             read("projects/vevo/growthbook_cta_measurement_window.json")
         )
+        json.loads(read("projects/vevo/growthbook_cta_completion.json"))
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
         )
@@ -2078,6 +2088,8 @@ def main() -> int:
             json.loads(read("projects/vevo/growthbook_cta_decision_contract.json")),
             growthbook_production_reconciliation_evidence,
         )
+        if validate_cta_completion() != 0:
+            raise AssertionError("GrowthBook CTA completion state is invalid.")
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
             "release_boundaries", {}
         )
@@ -2869,6 +2881,46 @@ def main() -> int:
                 "GrowthBook CTA window checkpoint workflow mutation path detected: "
                 f"{forbidden_cta_checkpoint_workflow_marker}",
             )
+        for offline_cta_completion_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            for source, label in (
+                (growthbook_cta_completion_recorder, "recorder"),
+                (growthbook_cta_completion_validator, "validator"),
+            ):
+                forbid(
+                    source.lower(),
+                    offline_cta_completion_marker.lower(),
+                    "GrowthBook CTA completion "
+                    f"{label} must remain offline: {offline_cta_completion_marker}",
+                )
+        for required_cta_completion_marker in (
+            "waiting_for_assignment_stop_review",
+            "cta_assignment_stopped_verified_followup_pending",
+            "stop_exact_cta_experiment_remove_only_production_rule_preserve_staging",
+            "post_stop_cta_exposure_count",
+            "final_snapshot_due_utc",
+            "required_days_after_assignment_stop",
+            "protected_final_snapshot_workflow_allowed",
+            "one_final_look_only",
+            "winner_calls_outside_offline_final_evaluator_allowed",
+            "All output documents are fully built and validated before any output is written",
+        ):
+            require(
+                growthbook_cta_completion_recorder,
+                required_cta_completion_marker,
+                "GrowthBook CTA completion lost safety marker: "
+                f"{required_cta_completion_marker}",
+            )
         if (
             growthbook_aa_automated_workflow.count(
                 "uses: actions/upload-artifact@v4.6.2"
@@ -2960,6 +3012,8 @@ def main() -> int:
             "scripts/build_growthbook_cta_runtime_readiness.py",
             "scripts/validate_growthbook_cta_measurement_window.py",
             "scripts/record_growthbook_cta_window_checkpoint.py",
+            "scripts/record_growthbook_cta_completion.py",
+            "scripts/validate_growthbook_cta_completion.py",
             "growthbook_collector/runtime_marker.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",

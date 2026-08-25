@@ -40,6 +40,7 @@ DEFAULT_WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json
 WAITING = "waiting_for_verified_aa_completion_sample_lifecycle_and_runtime"
 REVIEW_OPEN = "manual_cta_start_review_allowed"
 RUNNING = "production_cta_running_activation_verified"
+STOPPED = "production_cta_start_recorded_assignment_stopped_verified"
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_RE = re.compile(r"^[1-9][0-9]*$")
@@ -128,7 +129,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     _require(root["experiment_id"] == "vevo-sk-product-cta-color-001", "CTA experiment drift")
     _require(root["feature_key"] == "vevo-sk-product-cta-color", "CTA feature drift")
     _require(root["runbook"] == "projects/vevo/GROWTHBOOK_CTA_ACTIVATION_RUNBOOK.md", "CTA activation runbook drift")
-    _require(root["status"] in {WAITING, REVIEW_OPEN, RUNNING}, "CTA activation status drift")
+    _require(
+        root["status"] in {WAITING, REVIEW_OPEN, RUNNING, STOPPED},
+        "CTA activation status drift",
+    )
 
     bindings = _exact_object(
         root["source_bindings"],
@@ -271,7 +275,12 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     started = _parse_utc(readback["assignment_started_at_utc"], "start_readback.assignment_started_at_utc")
     _require(started <= observed, "CTA start readback predates assignment start")
     _positive_int(readback["feature_revision"], "start_readback.feature_revision")
-    _require(root["next_gate"] == "monitor_outcome_blind_first_n_and_safety_stop_conditions", "running CTA next gate drift")
+    expected_next_gate = (
+        "monitor_outcome_blind_first_n_and_safety_stop_conditions"
+        if root["status"] == RUNNING
+        else "use_growthbook_cta_completion_for_followup_and_one_final_look"
+    )
+    _require(root["next_gate"] == expected_next_gate, "CTA post-start next gate drift")
 
 
 def validate_runtime_observation(observation: Mapping[str, Any], manifest: Mapping[str, Any]) -> None:
