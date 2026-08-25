@@ -84,6 +84,10 @@ class GrowthBookActivationSmokeWorkflowTests(unittest.TestCase):
 
     def test_raw_identity_is_reduced_and_cleaned_before_upload(self) -> None:
         self.assertIn("scripts/summarize_growthbook_activation_smoke.py", WORKFLOW)
+        self.assertIn("--page-size 500", WORKFLOW)
+        self.assertIn("--query 'Contents[].{Key:Key,LastModified:LastModified}'", WORKFLOW)
+        self.assertIn("Production raw-object paginated listing is malformed", WORKFLOW)
+        self.assertNotIn("Production raw-object listing is truncated", WORKFLOW)
         self.assertIn("contains_event_or_device_ids': False", WORKFLOW)
         self.assertIn("contains_raw_aws_payloads': False", WORKFLOW)
         self.assertIn('trap cleanup EXIT', WORKFLOW)

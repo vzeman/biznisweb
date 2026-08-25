@@ -387,7 +387,10 @@ jobs:
           aws s3api list-objects-v2 \
             --bucket "${EVENT_BUCKET_NAME}" \
             --prefix 'experiment-events/raw/event_date=2026-08-25/' \
-            --region "${AWS_REGION}" > "${TEMP_DIR}/objects.json"
+            --region "${AWS_REGION}" \
+            --page-size 500 \
+            --query 'Contents[].{Key:Key,LastModified:LastModified}' \
+            --output json > "${TEMP_DIR}/objects.json"
           python - <<'PY' > "${TEMP_DIR}/selected-keys.txt"
           import json
           import os
@@ -396,13 +399,15 @@ jobs:
 
           root = f"{os.environ['RUNNER_TEMP']}/vevo-aa-activation-smoke-{os.environ['GITHUB_RUN_ID']}"
           listing = json.load(open(f'{root}/objects.json', encoding='utf-8'))
-          if listing.get('IsTruncated') is not False:
-              raise SystemExit('Production raw-object listing is truncated')
+          if not isinstance(listing, list):
+              raise SystemExit('Production raw-object paginated listing is malformed')
           start = datetime.fromisoformat(os.environ['OBSERVATION_FROM_UTC'].replace('Z', '+00:00')) - timedelta(minutes=1)
           through = datetime.fromisoformat(os.environ['OBSERVATION_THROUGH_UTC'].replace('Z', '+00:00')) + timedelta(minutes=2)
           key_re = re.compile(r'^experiment-events/raw/event_date=2026-08-25/[0-9a-f-]{36}[.]json$')
           selected = []
-          for row in listing.get('Contents') or []:
+          for row in listing:
+              if not isinstance(row, dict) or set(row) != {'Key', 'LastModified'}:
+                  raise SystemExit('Production raw-object paginated row is malformed')
               key = str(row.get('Key') or '')
               modified = datetime.fromisoformat(str(row.get('LastModified') or '').replace('Z', '+00:00'))
               if start <= modified < through:
