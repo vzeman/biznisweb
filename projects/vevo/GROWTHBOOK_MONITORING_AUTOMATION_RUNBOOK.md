@@ -74,6 +74,33 @@ any identity, marker, schedule, alarm, DLQ, or source-schedule invariant drifts,
 stop and report it. Do not deploy a fix, open a data query, or continue to a UI
 test from the monitoring run.
 
+### Credential-independent daily monitor
+
+The repository-owned AWS readback is
+`.github/workflows/monitor-vevo-growthbook-production-aa-infra.yml`. It is
+main-only and schedules both possible UTC equivalents of `04:15
+Europe/Bratislava`; a pre-credential timezone gate executes exactly the
+currently correct slot and skips the other across daylight-saving changes.
+The Codex heartbeat observes this workflow rather than requiring an AWS key on
+the local PC. It must not dispatch a duplicate while the scheduled run is
+queued or in progress.
+
+Before the first natural reconciliation is due, the workflow verifies only the
+stacks, schedule, task definition/image inherited from the hash-bound localhost
+gate, alarms, empty DLQ, and source schedule. After a natural run is due, it
+additionally binds the one exact successful Fargate task, current private IP,
+success-marker hash, and generated/published parity hash. It performs no
+Athena, S3 data, GrowthBook, Meta, GTM, or BiznisWeb request and emits no row
+count.
+
+Its only artifact is canonical
+`vevo-growthbook-production-aa-infra-health.json`, validated by
+`scripts/validate_growthbook_aa_infra_health_evidence.py`. Raw stack, ECS,
+CloudWatch, alarm, queue, and schedule responses are deleted before the
+identity-free artifact is uploaded. A missing or failed daily run is an
+infrastructure-monitoring blocker; it does not authorize the A/A checkpoint or
+any live mutation.
+
 ## Due A/A Checkpoint
 
 At the exact next due gate, and only then:
