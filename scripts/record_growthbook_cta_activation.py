@@ -47,6 +47,12 @@ RUN_RE = re.compile(r"^[1-9][0-9]*$")
 TASK_RE = re.compile(r"^vevo-growthbook-collector-production:[1-9][0-9]*$")
 TASK_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 IMAGE_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+CTA_GUARDRAILS = [
+    "vevo_client_error_device_rate_24h",
+    "vevo_lcp_p75_24h",
+    "vevo_inp_p75_24h",
+    "vevo_cls_p75_milli_24h",
+]
 
 EXPECTED_PATHS = {
     "aa_completion": "projects/vevo/growthbook_production_aa_completion.json",
@@ -353,7 +359,7 @@ def validate_start_observation(observation: Mapping[str, Any], manifest: Mapping
     _require(growthbook["data_source_id"] == "ds_19g6mmt5stlp6", "CTA data source drift")
     _require(growthbook["goal_metrics"] == ["vevo_add_to_cart_24h"], "CTA goal metric drift")
     _require(growthbook["secondary_metrics"] == ["vevo_average_order_value_7d", "vevo_cancelled_order_rate_14d", "vevo_cm1_per_exposed_device_7d", "vevo_revenue_per_exposed_device_7d", "vevo_purchase_conversion_7d", "vevo_refunded_order_rate_14d"], "CTA secondary metrics drift")
-    _require(growthbook["guardrail_metrics"] == ["vevo_client_error_device_rate_24h"], "CTA guardrail metrics drift")
+    _require(growthbook["guardrail_metrics"] == CTA_GUARDRAILS, "CTA Pro guardrail metrics drift")
     gtm = _exact_object(root["gtm"], {"container_id", "container_version_id", "unprocessed_changes"}, "gtm")
     _require(gtm == {"container_id": "GTM-5ZB5LFGB", "container_version_id": "15", "unprocessed_changes": 0}, "CTA GTM readback drift")
     qa = _exact_object(root["tag_assistant"], {"connected", "desktop_verified", "mobile_verified", "consent_accept_reject_withdrawal_verified", "control_observed", "brand_contrast_observed", "cta_css_matches_design_contract", "console_error_count"}, "tag_assistant")
@@ -388,8 +394,14 @@ def _validate_post_aa_sources(
     _require(sample.get("activation_allowed") is False, "CTA sample freeze may not activate CTA")
     _require(lifecycle.get("status") == "verified_production_14d_refund_creditnote_value_reconciliation", "CTA activation requires verified lifecycle reconciliation")
     _require(lifecycle.get("verified") is True and lifecycle.get("activation_allowed") is False, "CTA lifecycle gate is not safely verified")
-    _require(workspace.get("state") == "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked", "GrowthBook workspace is not post-A/A")
+    _require(workspace.get("state") == "production_aa_completed_cta_sample_freeze_pro_quantiles_verified", "GrowthBook workspace is not post-A/A with verified Pro quantiles")
     _require(workspace.get("workspace", {}).get("production_allocation_percent") == 0, "GrowthBook workspace allocation is nonzero")
+    _require(
+        workspace.get("workspace", {}).get("plan_type") == "pro"
+        and workspace.get("workspace", {}).get("subscription_or_trial_status")
+        == "pro_active_paid_monthly_one_seat",
+        "GrowthBook Pro subscription is not verified",
+    )
     _require(workspace.get("decision_gates", {}).get("production_activation_allowed") is False, "GrowthBook Production gate is already open")
     experiments = {row.get("tracking_key"): row for row in workspace.get("experiments", []) if isinstance(row, dict)}
     _require(set(experiments) == {"vevo-sk-aa-001", "vevo-sk-product-cta-color-001"}, "GrowthBook experiment set drift")
@@ -397,6 +409,27 @@ def _validate_post_aa_sources(
     cta = experiments["vevo-sk-product-cta-color-001"]
     _require(cta.get("status") == "draft" and cta.get("feature_rule_status") == "draft", "CTA is not a draft")
     _require(cta.get("production_allocation_percent") == 0, "CTA allocation is nonzero before start")
+    _require(
+        cta.get("pro_guardrail_metrics") == CTA_GUARDRAILS
+        and isinstance(cta.get("pro_quantile_metrics_verified_date"), str),
+        "CTA Pro p75 guardrails are not verified",
+    )
+    metrics = {
+        row.get("key"): row
+        for row in workspace.get("metrics", [])
+        if isinstance(row, dict)
+    }
+    for key in CTA_GUARDRAILS[1:]:
+        metric = metrics.get(key) or {}
+        _require(
+            metric.get("status")
+            == "growthbook_pro_preview_and_production_created_query_verified"
+            and isinstance(metric.get("growthbook_id"), str)
+            and isinstance(metric.get("production_growthbook_id"), str),
+            f"CTA Pro metric is not query-verified: {key}",
+        )
+    clone = workspace.get("athena", {}).get("production", {}).get("growthbook_clone", {})
+    _require(clone.get("paid_pro_upgrade_authorized") is True, "GrowthBook paid Pro upgrade is not recorded")
     production = registry.get("environments", {}).get("production", {})
     preview = registry.get("environments", {}).get("preview", {})
     _require(set(production) == {"vevo-sk-product-cta-color-001"}, "collector Production registry is not CTA-only")
@@ -456,14 +489,14 @@ def open_review(
 
 def _running_workspace(workspace: Mapping[str, Any], observation: Mapping[str, Any], manifest: Mapping[str, Any]) -> dict[str, Any]:
     updated = copy.deepcopy(workspace)
-    _require(updated.get("state") == "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked", "GrowthBook workspace is not ready for CTA start")
+    _require(updated.get("state") == "production_aa_completed_cta_sample_freeze_pro_quantiles_verified", "GrowthBook workspace is not ready for CTA start with verified Pro quantiles")
     experiments = {row.get("tracking_key"): row for row in updated.get("experiments", []) if isinstance(row, dict)}
     cta = experiments.get("vevo-sk-product-cta-color-001")
     _require(isinstance(cta, dict) and cta.get("status") == "draft", "GrowthBook CTA workspace draft drift")
     _require(cta.get("production_allocation_percent") == 0, "GrowthBook CTA workspace allocation is nonzero")
     started = _parse_utc(observation["assignment_started_at_utc"], "assignment_started_at_utc")
     growthbook = observation["growthbook"]
-    updated["state"] = "production_cta_running_activation_verified_pro_quantiles_blocked"
+    updated["state"] = "production_cta_running_activation_verified_pro_quantiles_verified"
     updated["workspace"]["production_allocation_percent"] = 100
     updated["decision_gates"]["production_activation_allowed"] = True
     cta.update({
@@ -549,7 +582,11 @@ def validate_running_handoff(
     validate_start_observation(observation, manifest)
     digest = hashlib.sha256(canonical_json_bytes(observation)).hexdigest()
     _require(digest == manifest["start_readback"]["observation_sha256"], "CTA start handoff observation SHA-256 drift")
-    _require(workspace.get("state") == "production_cta_running_activation_verified_pro_quantiles_blocked", "CTA running workspace state drift")
+    _require(
+        workspace.get("state")
+        == "production_cta_running_activation_verified_pro_quantiles_verified",
+        "CTA running workspace state drift",
+    )
     _require(workspace.get("workspace", {}).get("production_allocation_percent") == 100, "CTA running workspace allocation drift")
     _require(workspace.get("decision_gates", {}).get("production_activation_allowed") is True, "CTA running workspace gate is closed")
     experiments = {row.get("tracking_key"): row for row in workspace.get("experiments", []) if isinstance(row, dict)}

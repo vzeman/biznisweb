@@ -116,6 +116,21 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
     )
 
 try:
+    from record_growthbook_pro_upgrade import (
+        REVIEW_OPEN as PRO_REVIEW_OPEN_STATUS,
+        VERIFIED as PRO_VERIFIED_STATUS,
+        ProUpgradeError,
+        validate_manifest as validate_pro_upgrade_manifest,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.record_growthbook_pro_upgrade import (
+        REVIEW_OPEN as PRO_REVIEW_OPEN_STATUS,
+        VERIFIED as PRO_VERIFIED_STATUS,
+        ProUpgradeError,
+        validate_manifest as validate_pro_upgrade_manifest,
+    )
+
+try:
     from record_growthbook_cta_activation import (
         CtaActivationRecordingError,
         RUNNING as CTA_RUNNING_STATUS,
@@ -186,6 +201,7 @@ REPORTING_PATH = ROOT / "projects" / "vevo" / "growthbook_reporting.json"
 AA_ACCEPTANCE_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_acceptance.json"
 CTA_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
 CTA_BASELINE_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_baseline.json"
+PRO_UPGRADE_PATH = ROOT / "projects" / "vevo" / "growthbook_pro_upgrade.json"
 CTA_ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_activation.json"
 CTA_MEASUREMENT_WINDOW_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_measurement_window.json"
@@ -431,6 +447,11 @@ def validate() -> None:
     aa_acceptance = json.loads(AA_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
     cta_sample_plan = json.loads(CTA_SAMPLE_PLAN_PATH.read_text(encoding="utf-8"))
     cta_baseline = json.loads(CTA_BASELINE_PATH.read_text(encoding="utf-8"))
+    pro_upgrade = json.loads(PRO_UPGRADE_PATH.read_text(encoding="utf-8"))
+    try:
+        validate_pro_upgrade_manifest(pro_upgrade, workspace)
+    except ProUpgradeError as exc:
+        raise AssertionError(f"GrowthBook Pro upgrade contract is invalid: {exc}") from exc
     cta_activation = json.loads(CTA_ACTIVATION_PATH.read_text(encoding="utf-8"))
     cta_measurement_window = json.loads(
         CTA_MEASUREMENT_WINDOW_PATH.read_text(encoding="utf-8")
@@ -638,15 +659,27 @@ def validate() -> None:
     production_aa_running = workspace_state == (
         "production_aa_running_activation_verified_pro_quantiles_blocked"
     )
-    production_aa_completed = workspace_state == (
+    production_aa_completed_blocked = workspace_state == (
         "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked"
     )
+    production_aa_completed_pro = workspace_state == (
+        "production_aa_completed_cta_sample_freeze_pro_quantiles_verified"
+    )
+    production_aa_completed = production_aa_completed_blocked or production_aa_completed_pro
     production_cta_running = workspace_state == (
-        "production_cta_running_activation_verified_pro_quantiles_blocked"
+        "production_cta_running_activation_verified_pro_quantiles_verified"
     )
     production_cta_stopped = workspace_state == (
-        "production_cta_stopped_followup_pending_pro_quantiles_blocked"
+        "production_cta_stopped_followup_pro_quantiles_verified"
     )
+    pro_quantiles_verified = (
+        production_aa_completed_pro or production_cta_running or production_cta_stopped
+    )
+    pro_upgrade_status = pro_upgrade.get("status")
+    if pro_quantiles_verified is not (pro_upgrade_status == PRO_VERIFIED_STATUS):
+        raise AssertionError("GrowthBook workspace/Pro upgrade lifecycle drift")
+    if pro_upgrade_status == PRO_REVIEW_OPEN_STATUS and not production_aa_completed_blocked:
+        raise AssertionError("GrowthBook Pro review opened outside the stopped post-A/A gate")
     if production_cta_stopped is not completion_is_followup:
         raise AssertionError("GrowthBook workspace/CTA completion lifecycle drift")
     production_post_aa = (
@@ -658,8 +691,9 @@ def validate() -> None:
         "recurring_schedule_pending_pro_quantiles_blocked",
         "production_aa_running_activation_verified_pro_quantiles_blocked",
         "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked",
-        "production_cta_running_activation_verified_pro_quantiles_blocked",
-        "production_cta_stopped_followup_pending_pro_quantiles_blocked",
+        "production_aa_completed_cta_sample_freeze_pro_quantiles_verified",
+        "production_cta_running_activation_verified_pro_quantiles_verified",
+        "production_cta_stopped_followup_pro_quantiles_verified",
     }:
         raise AssertionError("GrowthBook workspace lifecycle state drift")
     completion_finished = (
@@ -677,9 +711,15 @@ def validate() -> None:
         raise AssertionError("GrowthBook environment read-back changed")
     if workspace_config.get("environment_aliases") != {"preview": "staging"}:
         raise AssertionError("GrowthBook Preview must remain mapped to the Starter staging environment")
-    if workspace_config.get("plan_type") != "starter":
+    expected_plan = "pro" if pro_quantiles_verified else "starter"
+    expected_subscription = (
+        "pro_active_paid_monthly_one_seat"
+        if pro_quantiles_verified
+        else "starter_active_no_paid_upgrade_accepted"
+    )
+    if workspace_config.get("plan_type") != expected_plan:
         raise AssertionError("GrowthBook plan must match the authenticated workspace read-back")
-    if workspace_config.get("subscription_or_trial_status") != "starter_active_no_paid_upgrade_accepted":
+    if workspace_config.get("subscription_or_trial_status") != expected_subscription:
         raise AssertionError("GrowthBook paid-upgrade status is not safely recorded")
     expected_workspace_allocation = (
         100 if production_aa_running or production_cta_running else 0
@@ -1607,6 +1647,35 @@ def validate() -> None:
             "target_fact_table_ids": target_fact_tables,
             "target_metric_ids": target_metrics,
         }
+        if pro_quantiles_verified:
+            pro_metrics = {
+                row.get("key"): row
+                for row in workspace.get("metrics", [])
+                if isinstance(row, dict)
+                and row.get("key") in EXPECTED_PRO_BLOCKED_METRICS
+            }
+            if set(pro_metrics) != EXPECTED_PRO_BLOCKED_METRICS:
+                raise AssertionError("GrowthBook verified Pro metric set drift")
+            preview_pro_ids = {
+                key: row.get("growthbook_id") for key, row in pro_metrics.items()
+            }
+            production_pro_ids = {
+                key: row.get("production_growthbook_id")
+                for key, row in pro_metrics.items()
+            }
+            all_pro_ids = [*preview_pro_ids.values(), *production_pro_ids.values()]
+            if (
+                any(
+                    not isinstance(value, str)
+                    or re.fullmatch(r"fact__[A-Za-z0-9]+", value) is None
+                    for value in all_pro_ids
+                )
+                or len(set(all_pro_ids)) != 6
+            ):
+                raise AssertionError("GrowthBook verified Pro metric ID drift")
+            expected_clone["source_metric_ids"].update(preview_pro_ids)
+            expected_clone["target_metric_ids"].update(production_pro_ids)
+            expected_clone["paid_pro_upgrade_authorized"] = True
         expected_production_connection.update(
             {
                 "growthbook_clone": expected_clone,
@@ -1726,11 +1795,35 @@ def validate() -> None:
             raise AssertionError(f"GrowthBook created metric state drift: {key}")
     for key in EXPECTED_PRO_BLOCKED_METRICS:
         metric = metric_map[key]
-        if (
+        if pro_quantiles_verified:
+            if (
+                re.fullmatch(r"fact__[A-Za-z0-9]+", str(metric.get("growthbook_id") or ""))
+                is None
+                or re.fullmatch(
+                    r"fact__[A-Za-z0-9]+",
+                    str(metric.get("production_growthbook_id") or ""),
+                )
+                is None
+                or metric.get("status")
+                != "growthbook_pro_preview_and_production_created_query_verified"
+                or metric.get("blocker") is not None
+                or metric.get("blocker_observed_date") != "2026-08-21"
+                or not isinstance(metric.get("blocker_resolved_date"), str)
+                or metric.get("created_verified_date")
+                != metric.get("blocker_resolved_date")
+                or metric.get("analysis_query_verified_date")
+                != metric.get("blocker_resolved_date")
+            ):
+                raise AssertionError(
+                    f"GrowthBook verified Pro metric state drift: {key}"
+                )
+        elif (
             metric.get("growthbook_id") is not None
             or metric.get("status") != "blocked_pending_paid_pro_upgrade"
             or metric.get("blocker") != "quantile_metric_requires_paid_pro"
             or metric.get("blocker_observed_date") != "2026-08-21"
+            or "production_growthbook_id" in metric
+            or "blocker_resolved_date" in metric
         ):
             raise AssertionError(f"GrowthBook Pro metric blocker state drift: {key}")
     if metric_map["vevo_add_to_cart_24h"]["roles"]["vevo-sk-product-cta-color-001"] != "primary":
@@ -1933,6 +2026,30 @@ def validate() -> None:
         raise AssertionError(
             "GrowthBook CTA A/B must remain an unstarted draft or match the verified running handoff"
         )
+    expected_pro_guardrails = [
+        "vevo_client_error_device_rate_24h",
+        "vevo_lcp_p75_24h",
+        "vevo_inp_p75_24h",
+        "vevo_cls_p75_milli_24h",
+    ]
+    if pro_quantiles_verified:
+        if (
+            cta_experiment.get("pro_guardrail_metrics") != expected_pro_guardrails
+            or not isinstance(
+                cta_experiment.get("pro_quantile_metrics_verified_date"), str
+            )
+        ):
+            raise AssertionError("GrowthBook CTA Pro guardrail read-back drift")
+        if (production_cta_running or production_cta_stopped) and (
+            cta_experiment.get("analysis_settings", {}).get("guardrail_metrics")
+            != expected_pro_guardrails
+        ):
+            raise AssertionError("Running CTA lost verified Pro p75 guardrails")
+    elif (
+        "pro_guardrail_metrics" in cta_experiment
+        or "pro_quantile_metrics_verified_date" in cta_experiment
+    ):
+        raise AssertionError("GrowthBook CTA contains Pro metrics before upgrade")
     if (
         cta_sample_plan["experiment_id"] != cta_experiment.get("tracking_key")
         or list(cta_sample_plan["expected_variation_weights"])

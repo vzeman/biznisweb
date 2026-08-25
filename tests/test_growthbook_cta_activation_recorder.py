@@ -73,10 +73,40 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             }
         )
         self.workspace["state"] = (
-            "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked"
+            "production_aa_completed_cta_sample_freeze_pro_quantiles_verified"
+        )
+        self.workspace["workspace"]["plan_type"] = "pro"
+        self.workspace["workspace"]["subscription_or_trial_status"] = (
+            "pro_active_paid_monthly_one_seat"
         )
         self.workspace["workspace"]["production_allocation_percent"] = 0
         self.workspace["decision_gates"]["production_activation_allowed"] = False
+        clone = self.workspace["athena"]["production"]["growthbook_clone"]
+        clone["paid_pro_upgrade_authorized"] = True
+        metric_map = {row["key"]: row for row in self.workspace["metrics"]}
+        for index, key in enumerate(
+            [
+                "vevo_cls_p75_milli_24h",
+                "vevo_inp_p75_24h",
+                "vevo_lcp_p75_24h",
+            ],
+            start=1,
+        ):
+            preview_id = f"fact__ProPreview{index}"
+            production_id = f"fact__ProProduction{index}"
+            metric_map[key].update(
+                {
+                    "growthbook_id": preview_id,
+                    "production_growthbook_id": production_id,
+                    "status": "growthbook_pro_preview_and_production_created_query_verified",
+                    "blocker": None,
+                    "blocker_resolved_date": "2026-09-03",
+                    "created_verified_date": "2026-09-03",
+                    "analysis_query_verified_date": "2026-09-03",
+                }
+            )
+            clone["source_metric_ids"][key] = preview_id
+            clone["target_metric_ids"][key] = production_id
         experiments = {
             row["tracking_key"]: row for row in self.workspace["experiments"]
         }
@@ -94,6 +124,8 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 "feature_rule_status": "draft",
                 "feature_rule_environments": ["staging"],
                 "production_allocation_percent": 0,
+                "pro_guardrail_metrics": recorder.CTA_GUARDRAILS,
+                "pro_quantile_metrics_verified_date": "2026-09-03",
             }
         )
         cta = copy.deepcopy(
@@ -198,7 +230,12 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                     "vevo_purchase_conversion_7d",
                     "vevo_refunded_order_rate_14d",
                 ],
-                "guardrail_metrics": ["vevo_client_error_device_rate_24h"],
+                "guardrail_metrics": [
+                    "vevo_client_error_device_rate_24h",
+                    "vevo_lcp_p75_24h",
+                    "vevo_inp_p75_24h",
+                    "vevo_cls_p75_milli_24h",
+                ],
             },
             "gtm": {
                 "container_id": "GTM-5ZB5LFGB",
@@ -431,7 +468,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             recorded["release_boundaries"]["manual_growthbook_start_allowed"]
         )
         self.assertEqual(
-            "production_cta_running_activation_verified_pro_quantiles_blocked",
+            "production_cta_running_activation_verified_pro_quantiles_verified",
             workspace["state"],
         )
         self.assertEqual(100, workspace["workspace"]["production_allocation_percent"])

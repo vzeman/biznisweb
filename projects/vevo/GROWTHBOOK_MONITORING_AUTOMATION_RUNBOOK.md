@@ -145,13 +145,17 @@ this order:
    `PASS`.
 4. Record the PASS-bound completion, then perform and record the reviewed
    manual A/A stop/readback.
-5. Wait until the exact A/A end plus 24 hours, collect one protected product
+5. Reconfirm the exact one-seat `$40/month` recurring offer at action time,
+   perform the manually authorized GrowthBook Pro upgrade, create and
+   query-test all six Preview/Production p75 metrics, and record the canonical
+   sanitized readback while CTA remains draft at `0%`.
+6. Wait until the exact A/A end plus 24 hours, collect one protected product
    CTA baseline artifact, and freeze the CTA sample offline.
-6. Complete the versioned CTA runtime and activation readbacks before any CTA
+7. Complete the versioned CTA runtime and activation readbacks before any CTA
    start.
-7. During CTA collection, use only the separate outcome-blind CTA checkpoint
+8. During CTA collection, use only the separate outcome-blind CTA checkpoint
    path. Stop assignment only at its pre-registered sample/day-42 boundary.
-8. Wait through the exact stop plus 14-day follow-up and execute exactly one
+9. Wait through the exact stop plus 14-day follow-up and execute exactly one
    protected final snapshot. Record the offline decision without applying it.
 
 The full operational detail remains in

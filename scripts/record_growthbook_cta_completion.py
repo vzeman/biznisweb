@@ -413,7 +413,7 @@ def _validate_stopped_workspace(
 ) -> None:
     _require(
         workspace.get("state")
-        == "production_cta_stopped_followup_pending_pro_quantiles_blocked",
+        == "production_cta_stopped_followup_pro_quantiles_verified",
         "CTA stopped workspace state drift",
     )
     _require(workspace.get("workspace", {}).get("production_allocation_percent") == 0, "CTA stopped workspace allocation drift")
@@ -627,7 +627,7 @@ def _stopped_workspace(
     updated = copy.deepcopy(workspace)
     _require(
         updated.get("state")
-        == "production_cta_running_activation_verified_pro_quantiles_blocked",
+        == "production_cta_running_activation_verified_pro_quantiles_verified",
         "GrowthBook workspace is not in the running CTA state",
     )
     experiments = {
@@ -638,7 +638,7 @@ def _stopped_workspace(
     cta = experiments.get(EXPERIMENT_ID)
     _require(isinstance(cta, dict) and cta.get("status") == "running_production_cta_only", "CTA workspace is not running")
     _require(cta.get("feature_rule_revision") == activation["start_readback"]["feature_revision"], "CTA running revision drift")
-    updated["state"] = "production_cta_stopped_followup_pending_pro_quantiles_blocked"
+    updated["state"] = "production_cta_stopped_followup_pro_quantiles_verified"
     updated["workspace"]["production_allocation_percent"] = 0
     updated["decision_gates"]["production_activation_allowed"] = False
     ended = _parse_utc(observation["assignment_ended_at_utc"], "assignment_ended_at_utc")
