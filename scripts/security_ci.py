@@ -40,6 +40,9 @@ def main() -> int:
         from scripts.build_growthbook_cta_baseline_observation import (
             validate_manifest as validate_cta_baseline_manifest,
         )
+        from scripts.record_growthbook_cta_activation import (
+            validate_manifest as validate_cta_activation_manifest,
+        )
 
         facebook_ads = read("facebook_ads.py")
         export_orders = read("export_orders.py")
@@ -213,6 +216,12 @@ def main() -> int:
         )
         growthbook_cta_baseline_manifest = json.loads(
             read("projects/vevo/growthbook_cta_baseline.json")
+        )
+        growthbook_cta_activation_recorder = read(
+            "scripts/record_growthbook_cta_activation.py"
+        )
+        growthbook_cta_activation_manifest = json.loads(
+            read("projects/vevo/growthbook_cta_activation.json")
         )
         growthbook_aa_snapshot_manifest = json.loads(
             read("projects/vevo/growthbook_aa_snapshot.json")
@@ -486,17 +495,39 @@ def main() -> int:
             .get("preview", {})
             .get("vevo-sk-aa-001")
         )
+        preview_cta_registry = (
+            growthbook_registry_config.get("environments", {})
+            .get("preview", {})
+            .get("vevo-sk-product-cta-color-001")
+        )
         production_registry = growthbook_registry_config.get("environments", {}).get(
             "production"
         )
-        if production_registry != {"vevo-sk-aa-001": preview_aa_registry}:
-            raise AssertionError(
-                "GrowthBook Production registry must contain only the exact reviewed A/A contract."
-            )
-        if "vevo-sk-product-cta-color-001" in production_registry:
-            raise AssertionError(
-                "GrowthBook CTA registry entry is forbidden in Production."
-            )
+        workspace_state = growthbook_workspace_config.get("state")
+        aa_only_registry = {"vevo-sk-aa-001": preview_aa_registry}
+        cta_only_registry = {
+            "vevo-sk-product-cta-color-001": preview_cta_registry
+        }
+        if workspace_state == "production_aa_running_activation_verified_pro_quantiles_blocked":
+            if production_registry != aa_only_registry:
+                raise AssertionError(
+                    "GrowthBook Production registry must contain only the exact reviewed A/A contract while A/A is running."
+                )
+        elif workspace_state == "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked":
+            if production_registry not in (aa_only_registry, cta_only_registry):
+                raise AssertionError(
+                    "Post-A/A Production registry must contain exactly one reviewed A/A or CTA contract."
+                )
+        elif workspace_state == "production_cta_running_activation_verified_pro_quantiles_blocked":
+            if production_registry != cta_only_registry:
+                raise AssertionError(
+                    "GrowthBook Production registry must contain only the exact reviewed CTA contract while CTA is running."
+                )
+        else:
+            if production_registry != aa_only_registry:
+                raise AssertionError(
+                    "GrowthBook Production registry differs from the reviewed pre-CTA contract."
+                )
         require(
             growthbook_storefront,
             "var PRODUCTION_ACTIVATION = false;",
@@ -2015,6 +2046,7 @@ def main() -> int:
             ) from exc
         validate_aa_completion()
         validate_cta_baseline_manifest(growthbook_cta_baseline_manifest)
+        validate_cta_activation_manifest(growthbook_cta_activation_manifest)
         snapshot_boundaries = growthbook_aa_snapshot_manifest.get(
             "release_boundaries", {}
         )
@@ -2510,6 +2542,43 @@ def main() -> int:
                 "GrowthBook CTA baseline workflow mutation path detected: "
                 f"{forbidden_cta_baseline_workflow_marker}",
             )
+        for offline_cta_activation_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            forbid(
+                growthbook_cta_activation_recorder.lower(),
+                offline_cta_activation_marker.lower(),
+                "GrowthBook CTA activation recorder must remain offline: "
+                f"{offline_cta_activation_marker}",
+            )
+        for required_cta_activation_marker in (
+            "CTA activation requires verified A/A PASS and stop readback",
+            "collector Production registry is not CTA-only",
+            "CTA localhost marker is not verified",
+            "CTA events exist before activation",
+            "A/A Production allocation is nonzero",
+            "GTM has unprocessed changes",
+            "CTA is not the only active Production experiment",
+            "automatic_growthbook_mutation_allowed",
+            "price_product_cart_checkout_order_mutation_allowed",
+            "VEVO_CTA_START_REVIEW_OPENED:",
+            "VEVO_CTA_START_RECORDED:",
+        ):
+            require(
+                growthbook_cta_activation_recorder,
+                required_cta_activation_marker,
+                "GrowthBook CTA activation recorder lost safety marker: "
+                f"{required_cta_activation_marker}",
+            )
         for required_checkpoint_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "outcome-blind A/A checkpoint is outside its daily gate",
@@ -2653,6 +2722,7 @@ def main() -> int:
             "scripts/record_growthbook_aa_completion.py",
             "scripts/validate_growthbook_aa_completion.py",
             "scripts/build_growthbook_cta_baseline_observation.py",
+            "scripts/record_growthbook_cta_activation.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",
             "scripts/summarize_growthbook_foundation_bucket.py",
