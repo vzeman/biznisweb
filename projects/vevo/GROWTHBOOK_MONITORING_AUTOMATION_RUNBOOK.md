@@ -13,8 +13,12 @@ preceding checked-in gate is satisfied through a reviewed pull request.
 
 ## Schedule And Repository Boundary
 
-- Run daily at `04:15 Europe/Bratislava`, after the expected `03:45`
-  reconciliation.
+- The repository-owned GitHub monitor runs daily at `04:15
+  Europe/Bratislava`, after the expected `03:45` reconciliation, and does not
+  depend on the local PC.
+- The Codex heartbeat runs daily at `09:00 Europe/Bratislava` to inspect and
+  report the GitHub result when the local PC and desktop app are available. It
+  is not the execution dependency for the overnight infrastructure check.
 - Work only from the repository containing this file and synchronize exact
   `main` before reading a gate or dispatching a workflow.
 - If the worktree is dirty, the branch is unexpected, or `main` differs from
@@ -81,9 +85,12 @@ The repository-owned AWS readback is
 main-only and schedules both possible UTC equivalents of `04:15
 Europe/Bratislava`; a pre-credential timezone gate executes exactly the
 currently correct slot and skips the other across daylight-saving changes.
-The Codex heartbeat observes this workflow rather than requiring an AWS key on
-the local PC. It must not dispatch a duplicate while the scheduled run is
-queued or in progress.
+The Codex heartbeat observes this workflow at its later `09:00` readback slot
+rather than requiring an AWS key on the local PC. It must not dispatch a
+duplicate while the scheduled run is queued or in progress. This separation is
+intentional because local scheduled tasks require the computer to be powered on
+and the desktop app running, as documented in
+[OpenAI Scheduled tasks](https://learn.chatgpt.com/docs/automations).
 
 Before the first natural reconciliation is due, the workflow verifies only the
 stacks, schedule, task definition/image inherited from the hash-bound localhost
