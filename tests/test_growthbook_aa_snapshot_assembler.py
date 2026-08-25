@@ -92,7 +92,7 @@ def automated_evidence() -> dict[str, object]:
         },
         "privacy_audit": {
             "total_stored_row_count": 5990,
-            "sampled_row_count": 100,
+            "audited_row_count": 5990,
             "pii_finding_count": 0,
             "forbidden_field_finding_count": 0,
             "raw_ip_address_stored_count": 0,

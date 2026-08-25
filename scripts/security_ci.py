@@ -1962,7 +1962,7 @@ def main() -> int:
                 "VEVO GrowthBook maturity checkpoint must remain 14 days."
             )
         expected_aa_acceptance = {
-            "schema_version": 1,
+            "schema_version": 2,
             "experiment_id": "vevo-sk-aa-001",
             "timezone": "Europe/Bratislava",
             "variations": ["control", "variant"],
@@ -1974,7 +1974,7 @@ def main() -> int:
             "minimum_exact_joined_transactions": 1,
             "minimum_meta_exposures": 1,
             "minimum_complete_stable_meta_dimension_exposures": 1,
-            "privacy_sample_max_rows": 100,
+            "privacy_full_window_required": True,
             "srm_p_value_min": 0.001,
             "split_percent_min": 48,
             "split_percent_max": 52,

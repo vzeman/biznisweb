@@ -93,11 +93,14 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
             "aws athena start-query-execution",
             "aws athena get-query-results",
             "COUNT(DISTINCT event_id)",
-            "LIMIT 100",
+            "(SELECT COUNT(*) FROM raw_window) AS audited_row_count",
             "Remove all temporary AWS responses and aggregate query files",
             'rm -rf -- "${TARGET}"',
         ):
             self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("privacy_sample AS", WORKFLOW)
+        self.assertNotIn("LIMIT 100", WORKFLOW)
+        self.assertEqual(8, WORKFLOW.count("FROM raw_window"))
         self.assertLess(
             WORKFLOW.index("scripts/summarize_growthbook_receipts.py"),
             WORKFLOW.index("scripts/build_growthbook_aa_automated_evidence.py"),

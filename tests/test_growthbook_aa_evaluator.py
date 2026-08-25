@@ -77,7 +77,7 @@ def snapshot() -> dict[str, object]:
         },
         "privacy_audit": {
             "total_stored_row_count": 5990,
-            "sampled_row_count": 100,
+            "audited_row_count": 5990,
             "pii_finding_count": 0,
             "forbidden_field_finding_count": 0,
             "raw_ip_address_stored_count": 0,
@@ -167,7 +167,7 @@ class GrowthBookAaEvaluatorTests(unittest.TestCase):
             "variation_contamination": lambda value: value[
                 "reporting_quality"
             ].__setitem__("contaminated_device_count", 1),
-            "privacy_sample": lambda value: value["privacy_audit"].__setitem__(
+            "privacy_full_window": lambda value: value["privacy_audit"].__setitem__(
                 "pii_finding_count", 1
             ),
             "consent_boundary": lambda value: value["consent_audit"].__setitem__(
@@ -205,6 +205,19 @@ class GrowthBookAaEvaluatorTests(unittest.TestCase):
             1,
             meta_gate["requirement"]["minimum_complete_stable_dimension_exposures"],
         )
+
+    def test_privacy_gate_requires_every_stored_row_to_be_audited(self) -> None:
+        evidence = snapshot()
+        evidence["privacy_audit"]["audited_row_count"] = 100
+
+        result = evaluate(evidence, self.config)
+
+        self.assertEqual("NOT_READY", result["verdict"])
+        privacy_gate = gate(result, "privacy_full_window")
+        self.assertEqual("not_ready", privacy_gate["status"])
+        self.assertEqual(100, privacy_gate["observed"]["audited_rows"])
+        self.assertEqual(5990, privacy_gate["observed"]["total_rows"])
+        self.assertTrue(privacy_gate["requirement"]["all_stored_rows_audited"])
 
     def test_fails_srm_split_pipeline_duplicate_join_population_and_performance_gates(
         self,
