@@ -66,6 +66,8 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             "vevo-reporting-daily:33",
             "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
             "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
+            "schedule_drift = sorted(key for key, passed in schedule_checks.items() if not passed)",
+            "Production reconciliation schedule drift:' + ','.join(schedule_drift)",
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
             'source "${TEMP_HEALTH_DIR}/selected-task.env"',
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",

@@ -194,22 +194,27 @@ jobs:
           ):
               raise SystemExit('Production infrastructure stack output drift')
           target = schedule.get('Target') or {}
-          if (
-              schedule.get('Name') != os.environ['EXPECTED_SERVICE']
-              or schedule.get('State') != 'ENABLED'
-              or schedule.get('ScheduleExpression') != 'cron(45 3 * * ? *)'
-              or schedule.get('ScheduleExpressionTimezone') != 'Europe/Bratislava'
-              or schedule.get('FlexibleTimeWindow') != {'Mode': 'OFF'}
-              or target.get('Arn') != collector_outputs.get('CollectorClusterArn')
-              or target.get('EcsParameters', {}).get('TaskDefinitionArn') != reconciliation_outputs.get('TargetTaskDefinitionArn')
-              or target.get('EcsParameters', {}).get('Group') != os.environ['EXPECTED_SERVICE']
-              or target.get('EcsParameters', {}).get('TaskCount') != 1
-              or target.get('EcsParameters', {}).get('EnableExecuteCommand') is not False
-              or target.get('RoleArn') != reconciliation_outputs.get('SchedulerRoleArn')
-              or target.get('DeadLetterConfig') != {'Arn': reconciliation_outputs.get('DeadLetterQueueArn')}
-              or target.get('RetryPolicy') != {'MaximumEventAgeInSeconds': 3600, 'MaximumRetryAttempts': 2}
-          ):
-              raise SystemExit('Production reconciliation schedule drift')
+          ecs = target.get('EcsParameters') or {}
+          schedule_checks = {
+              'name': schedule.get('Name') == os.environ['EXPECTED_SERVICE'],
+              'state': schedule.get('State') == 'ENABLED',
+              'expression': schedule.get('ScheduleExpression') == 'cron(45 3 * * ? *)',
+              'timezone': schedule.get('ScheduleExpressionTimezone') == 'Europe/Bratislava',
+              'flexible_window': schedule.get('FlexibleTimeWindow') == {'Mode': 'OFF'},
+              'cluster': target.get('Arn') == collector_outputs.get('CollectorClusterArn'),
+              'task_definition': ecs.get('TaskDefinitionArn') == reconciliation_outputs.get('TargetTaskDefinitionArn'),
+              'group': ecs.get('Group') == os.environ['EXPECTED_SERVICE'],
+              'task_count': ecs.get('TaskCount') == 1,
+              'execute_command': ecs.get('EnableExecuteCommand') is False,
+              'role': target.get('RoleArn') == reconciliation_outputs.get('SchedulerRoleArn'),
+              'dlq': target.get('DeadLetterConfig') == {'Arn': reconciliation_outputs.get('DeadLetterQueueArn')},
+              'retry': target.get('RetryPolicy') == {'MaximumEventAgeInSeconds': 3600, 'MaximumRetryAttempts': 2},
+          }
+          schedule_drift = sorted(key for key, passed in schedule_checks.items() if not passed)
+          if schedule_drift:
+              raise SystemExit(
+                  'Production reconciliation schedule drift:' + ','.join(schedule_drift)
+              )
           schedule_input = json.loads(target.get('Input') or '{}')
           overrides = schedule_input.get('containerOverrides') or []
           if len(overrides) != 1:
