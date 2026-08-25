@@ -43,6 +43,13 @@ try:
         evaluate,
         validate_lifecycle_manifest,
     )
+    from validate_growthbook_hypothesis_registry import (
+        DEFAULT_REGISTRY_PATH,
+        HypothesisRegistryError,
+        pretty_json_bytes as registry_json_bytes,
+        record_final_decision,
+        validate_registry,
+    )
 except ModuleNotFoundError:  # Imported as scripts.record_growthbook_cta_final_snapshot.
     from scripts.build_growthbook_cta_final_snapshot import (
         COMMIT_RE,
@@ -67,6 +74,13 @@ except ModuleNotFoundError:  # Imported as scripts.record_growthbook_cta_final_s
         canonical_json_bytes,
         evaluate,
         validate_lifecycle_manifest,
+    )
+    from scripts.validate_growthbook_hypothesis_registry import (
+        DEFAULT_REGISTRY_PATH,
+        HypothesisRegistryError,
+        pretty_json_bytes as registry_json_bytes,
+        record_final_decision,
+        validate_registry,
     )
 
 
@@ -113,6 +127,7 @@ def _load_lifecycle_observation(
 
 def record_final_snapshot(
     manifest: Mapping[str, Any],
+    registry: Mapping[str, Any],
     snapshot: Mapping[str, Any],
     decision: Mapping[str, Any],
     contract: Mapping[str, Any],
@@ -132,7 +147,7 @@ def record_final_snapshot(
     lifecycle_path: Path = DEFAULT_LIFECYCLE_PATH,
     stop_observation_path: Path = DEFAULT_STOP_OBSERVATION_PATH,
     source_bytes: Mapping[str, bytes] | None = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
         validate_manifest(
             manifest,
@@ -198,6 +213,22 @@ def record_final_snapshot(
         "CTA final snapshot predates its due time",
     )
 
+    try:
+        updated_registry = record_final_decision(
+            registry,
+            snapshot,
+            decision,
+            snapshot_sha256=snapshot_sha256,
+            decision_sha256=decision_sha256,
+            workflow_run_id=workflow_run_id,
+            main_commit=main_commit,
+        )
+    except HypothesisRegistryError as exc:
+        raise CtaFinalSnapshotRecordingError(
+            f"CTA hypothesis registry is invalid: {exc}"
+        ) from exc
+    registry_sha256 = hashlib.sha256(registry_json_bytes(updated_registry)).hexdigest()
+
     updated = copy.deepcopy(dict(manifest))
     updated["status"] = RECORDED
     updated["final_look"].update(
@@ -207,6 +238,7 @@ def record_final_snapshot(
             "main_commit": main_commit,
             "snapshot_sha256": snapshot_sha256,
             "decision_sha256": decision_sha256,
+            "hypothesis_registry_sha256": registry_sha256,
             "verdict": decision["verdict"],
             "recommended_variation": decision["recommended_variation"],
         }
@@ -229,7 +261,13 @@ def record_final_snapshot(
         )
     except CtaFinalSnapshotError as exc:
         raise CtaFinalSnapshotRecordingError(str(exc)) from exc
-    return updated
+    try:
+        validate_registry(updated_registry, updated)
+    except HypothesisRegistryError as exc:
+        raise CtaFinalSnapshotRecordingError(
+            f"CTA hypothesis registry/final snapshot binding is invalid: {exc}"
+        ) from exc
+    return updated, updated_registry
 
 
 def _write_atomic(path: Path, value: Mapping[str, Any]) -> None:
@@ -263,6 +301,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--sample-plan", type=Path, default=DEFAULT_SAMPLE_PLAN_PATH)
     parser.add_argument("--lifecycle", type=Path, default=DEFAULT_LIFECYCLE_PATH)
     parser.add_argument("--lifecycle-observation", type=Path)
+    parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY_PATH)
+    parser.add_argument("--registry-output", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -270,11 +310,16 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        _require(
+            args.output.resolve() != args.registry_output.resolve(),
+            "CTA final manifest and hypothesis registry outputs must differ",
+        )
         snapshot = _load_canonical(args.snapshot, args.snapshot_sha256, "CTA final snapshot")
         decision = _load_canonical(args.decision, args.decision_sha256, "CTA final decision")
         lifecycle = _load(args.lifecycle, "CTA lifecycle reconciliation")
-        recorded = record_final_snapshot(
+        recorded, recorded_registry = record_final_snapshot(
             _load(args.manifest, "CTA final snapshot manifest"),
+            _load(args.registry, "CTA hypothesis registry"),
             snapshot,
             decision,
             _load(args.contract, "CTA decision contract"),
@@ -286,6 +331,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             workflow_run_id=args.workflow_run_id,
             main_commit=args.main_commit,
         )
+        _write_atomic(args.registry_output, recorded_registry)
         _write_atomic(args.output, recorded)
     except (
         OSError,
@@ -293,6 +339,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         json.JSONDecodeError,
         CtaFinalSnapshotError,
         CtaFinalSnapshotRecordingError,
+        HypothesisRegistryError,
     ) as exc:
         print(f"VEVO_CTA_FINAL_RECORD_INVALID:{exc}")
         return 2

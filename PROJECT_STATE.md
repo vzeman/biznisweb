@@ -5619,3 +5619,31 @@ Known issues:
 Next exact step:
 
 - Verify the first natural Production reconciliation result-blind after `2026-08-26 03:45 Europe/Bratislava`; before `2026-09-02 03:45`, continue to avoid population, arm, outcome, Meta dimension, conversion, revenue, CM1, and performance reads.
+
+## 2026-08-25 — VEVO durable GrowthBook hypothesis/decision registry
+
+Date: 2026-08-25
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-growthbook-hypothesis-registry`
+
+What changed:
+
+- Added the PII-free `growthbook_hypothesis_registry.json` as the durable Git audit source of truth for the exact first CTA hypothesis, GrowthBook experiment/feature IDs, allowed change, population, `50/50` variations, primary metric, CM1 guardrail, and diagnostic-only Meta dimensions; GrowthBook remains the analytical UI.
+- The final CTA recorder now pre-validates and writes both the closed final-snapshot manifest and the registry decision. It retains the complete aggregate decision, exact sample/effect/interval/guardrail evidence and provenance, verifies the decision artifact hash, and SHA-binds the canonical registry into the final snapshot.
+- Workspace validation, the standalone final-snapshot validator, security CI, plan, Pro workspace contract, activation runbook, and recorder tests now fail closed on a missing, premature, identity-bearing, automatically mutating, tampered, or hash-mismatched registry decision.
+
+What is verified:
+
+- Full Python suite: `760` tests passed.
+- GrowthBook storefront JavaScript suite: `9` tests passed.
+- Dedicated hypothesis/final-snapshot tests, standalone hypothesis/final-snapshot/workspace validators, security CI, focused Ruff, Python compilation, JSON parsing, and `git diff --check` passed.
+- No A/A population, arm, outcome, Meta dimension, conversion, revenue, CM1, performance, or experiment result was read. No GrowthBook, GTM, Meta Ads, BiznisWeb, AWS, traffic, price, product, stock, cart, checkout, payment, or order mutation occurred.
+- No local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Known issues:
+
+- The registry is intentionally preregistered with `final_decision=null`; the Production A/A remains inside its result-blind pre-registered window and the CTA experiment remains unstarted.
+
+Next exact step:
+
+- Verify the first natural Production reconciliation result-blind after `2026-08-26 03:45 Europe/Bratislava`; before `2026-09-02 03:45`, do not inspect population, arms, outcomes, Meta dimensions, conversions, revenue, CM1, performance, or any result.

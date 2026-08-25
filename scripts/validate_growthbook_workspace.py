@@ -205,6 +205,17 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
         validate_manifest as validate_cta_final_snapshot_manifest,
     )
 
+try:
+    from validate_growthbook_hypothesis_registry import (
+        HypothesisRegistryError,
+        validate_registry as validate_hypothesis_registry,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.validate_growthbook_hypothesis_registry import (
+        HypothesisRegistryError,
+        validate_registry as validate_hypothesis_registry,
+    )
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
@@ -223,6 +234,9 @@ CTA_MEASUREMENT_WINDOW_PATH = (
 CTA_COMPLETION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_completion.json"
 CTA_FINAL_SNAPSHOT_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_final_snapshot.json"
+)
+HYPOTHESIS_REGISTRY_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_hypothesis_registry.json"
 )
 CTA_STOP_OBSERVATION_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_assignment_stop_observation.json"
@@ -477,6 +491,9 @@ def validate() -> None:
     cta_final_snapshot = json.loads(
         CTA_FINAL_SNAPSHOT_PATH.read_text(encoding="utf-8")
     )
+    hypothesis_registry = json.loads(
+        HYPOTHESIS_REGISTRY_PATH.read_text(encoding="utf-8")
+    )
     cta_activation_observation = None
     if cta_activation.get("status") in {CTA_RUNNING_STATUS, CTA_STOPPED_STATUS}:
         observation_bytes = CTA_ACTIVATION_OBSERVATION_PATH.read_bytes()
@@ -657,6 +674,10 @@ def validate() -> None:
         validate_cta_final_snapshot_manifest(cta_final_snapshot)
     except CtaFinalSnapshotError as exc:
         raise AssertionError(f"CTA final snapshot contract is invalid: {exc}") from exc
+    try:
+        validate_hypothesis_registry(hypothesis_registry, cta_final_snapshot)
+    except HypothesisRegistryError as exc:
+        raise AssertionError(f"GrowthBook hypothesis registry is invalid: {exc}") from exc
     final_snapshot_status = cta_final_snapshot.get("status")
     completion_is_followup = cta_completion.get("status") == CTA_FOLLOWUP_STATUS
     if completion_is_followup:

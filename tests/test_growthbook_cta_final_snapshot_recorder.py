@@ -9,6 +9,7 @@ from pathlib import Path
 from scripts import build_growthbook_cta_final_snapshot as builder
 from scripts import evaluate_growthbook_cta as evaluator
 from scripts import record_growthbook_cta_final_snapshot as recorder
+from scripts import validate_growthbook_hypothesis_registry as registry_validator
 from tests import test_growthbook_cta_final_snapshot_builder as builder_fixtures
 
 
@@ -19,6 +20,9 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
         )
         fixture.setUp()
         self.fixture = fixture
+        self.registry = builder_fixtures.load(
+            "projects/vevo/growthbook_hypothesis_registry.json"
+        )
 
     def _artifacts(self, paths: dict[str, Path]) -> tuple[dict, dict]:
         snapshot = builder.build_snapshot(
@@ -44,8 +48,9 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             paths = self.fixture._write_sources(Path(temporary))
             snapshot, decision = self._artifacts(paths)
-            recorded = recorder.record_final_snapshot(
+            recorded, recorded_registry = recorder.record_final_snapshot(
                 self.fixture.opened,
+                self.registry,
                 snapshot,
                 decision,
                 self.fixture.contract,
@@ -71,13 +76,41 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
         self.assertFalse(
             recorded["release_boundaries"]["automatic_winner_application_allowed"]
         )
+        self.assertEqual(
+            registry_validator.RECORDED,
+            recorded_registry["experiments"][0]["status"],
+        )
+        final_decision = recorded_registry["experiments"][0]["final_decision"]
+        self.assertEqual(decision, final_decision["aggregate_evidence"])
+        self.assertEqual(
+            1084,
+            final_decision["aggregate_evidence"]["summary"]["included_devices"],
+        )
+        self.assertEqual(
+            hashlib.sha256(
+                registry_validator.pretty_json_bytes(recorded_registry)
+            ).hexdigest(),
+            recorded["final_look"]["hypothesis_registry_sha256"],
+        )
+        registry_validator.validate_registry(recorded_registry, recorded)
+
+        tampered = copy.deepcopy(recorded_registry)
+        tampered["experiments"][0]["final_decision"]["aggregate_evidence"][
+            "verdict"
+        ] = "LOSE"
+        with self.assertRaisesRegex(
+            registry_validator.HypothesisRegistryError,
+            "aggregate evidence hash drift",
+        ):
+            registry_validator.validate_registry(tampered)
 
     def test_rejects_repeat_recording_or_decision_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             paths = self.fixture._write_sources(Path(temporary))
             snapshot, decision = self._artifacts(paths)
-            recorded = recorder.record_final_snapshot(
+            recorded, _recorded_registry = recorder.record_final_snapshot(
                 self.fixture.opened,
+                self.registry,
                 snapshot,
                 decision,
                 self.fixture.contract,
@@ -96,6 +129,7 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
             ):
                 recorder.record_final_snapshot(
                     recorded,
+                    self.registry,
                     snapshot,
                     decision,
                     self.fixture.contract,
@@ -117,6 +151,7 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
             ):
                 recorder.record_final_snapshot(
                     self.fixture.opened,
+                    self.registry,
                     snapshot,
                     altered,
                     self.fixture.contract,
