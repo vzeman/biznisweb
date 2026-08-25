@@ -220,6 +220,15 @@ def main() -> int:
         growthbook_cta_activation_recorder = read(
             "scripts/record_growthbook_cta_activation.py"
         )
+        growthbook_cta_runtime_release_validator = read(
+            "scripts/validate_growthbook_cta_runtime_release.py"
+        )
+        growthbook_cta_runtime_builder = read(
+            "scripts/build_growthbook_cta_runtime_readiness.py"
+        )
+        growthbook_cta_runtime_workflow = read(
+            ".github/workflows/deploy-vevo-growthbook-production-cta-runtime.yml"
+        )
         growthbook_cta_activation_manifest = json.loads(
             read("projects/vevo/growthbook_cta_activation.json")
         )
@@ -2579,6 +2588,115 @@ def main() -> int:
                 "GrowthBook CTA activation recorder lost safety marker: "
                 f"{required_cta_activation_marker}",
             )
+        for offline_cta_runtime_source_name, offline_cta_runtime_source in (
+            (
+                "release validator",
+                growthbook_cta_runtime_release_validator,
+            ),
+            (
+                "canonical builder",
+                growthbook_cta_runtime_builder,
+            ),
+        ):
+            for forbidden_cta_runtime_source_marker in (
+                "import boto3",
+                "import requests",
+                "import httpx",
+                "import socket",
+                "import subprocess",
+                "urllib",
+                "facebook_ads",
+                "tagmanager",
+                "playwright",
+                "selenium",
+            ):
+                forbid(
+                    offline_cta_runtime_source.lower(),
+                    forbidden_cta_runtime_source_marker.lower(),
+                    f"GrowthBook CTA runtime {offline_cta_runtime_source_name} must remain offline: "
+                    f"{forbidden_cta_runtime_source_marker}",
+                )
+        for required_cta_runtime_release_marker in (
+            "CTA activation manifest is not waiting",
+            "A/A stop observation file/hash binding drift",
+            "A/A stop observation is not canonical JSON",
+            "CTA design contract SHA-256 drift",
+            "CTA decision contract SHA-256 drift",
+            "checked-in storefront must remain compile-time Production-disabled",
+            "VEVO_CTA_RUNTIME_RELEASE_GATE_OK:",
+        ):
+            require(
+                growthbook_cta_runtime_release_validator,
+                required_cta_runtime_release_marker,
+                "GrowthBook CTA runtime release validator lost safety marker: "
+                f"{required_cta_runtime_release_marker}",
+            )
+        for required_cta_runtime_builder_marker in (
+            "Production registry is not CTA-only",
+            "Production CTA contract differs from Preview",
+            "CTA events exist before start",
+            '"host_gate_task_id": host_gate_task_id',
+            '"host_gate_private_ip": host_gate_private_ip',
+            '"contains_event_or_device_ids": False',
+            '"price_product_cart_checkout_order_mutated": False',
+            "VEVO_CTA_RUNTIME_OBSERVATION_OK:",
+        ):
+            require(
+                growthbook_cta_runtime_builder,
+                required_cta_runtime_builder_marker,
+                "GrowthBook CTA runtime canonical builder lost safety marker: "
+                f"{required_cta_runtime_builder_marker}",
+            )
+        for required_cta_runtime_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "validate_growthbook_cta_runtime_release.py",
+            "Confirm exact current Fargate instance IP service and path before code deploy",
+            "VEVO_CTA_PREDEPLOY_HARD_GATE_OK:",
+            "candidate['PublicRouteEnabled'] = 'true'",
+            "--phase candidate",
+            "COLLECTOR_LOCALHOST_HEALTH_OK:production:git-${GITHUB_SHA}",
+            "COLLECTOR_LOCALHOST_MARKER_OK:/app:git-${GITHUB_SHA}",
+            "COLLECTOR_REGISTRY_OK:production:${REGISTRY_SHA256}:vevo-sk-product-cta-color-001",
+            "VEVO_CTA_SERVICE_RUNTIME_OK:",
+            "SELECT COUNT(*) AS cta_events_before_start",
+            "VEVO_CTA_ZERO_EVENTS_OK:",
+            "build_growthbook_cta_runtime_readiness.py",
+            "Remove all temporary AWS responses queries and logs",
+            "uses: actions/upload-artifact@v4.6.2",
+            "Restore the exact preceding collector runtime after a failed candidate gate",
+            "PREVIOUS_IMAGE_IDENTIFIER",
+            "VEVO_CTA_RUNTIME_ROLLBACK_OK:",
+            "GTM/Meta Ads/BiznisWeb/commerce mutations: \\`none\\`",
+        ):
+            require(
+                growthbook_cta_runtime_workflow,
+                required_cta_runtime_workflow_marker,
+                "GrowthBook CTA runtime workflow lost safety marker: "
+                f"{required_cta_runtime_workflow_marker}",
+            )
+        for forbidden_cta_runtime_workflow_marker in (
+            "--phase activate",
+            "--phase deactivate",
+            "apigatewayv2 create-route",
+            "apigatewayv2 delete-route",
+            "cloudformation delete-stack",
+            "ecs update-service",
+            "register-task-definition",
+            "api.growthbook.io",
+            "graph.facebook.com",
+            "biznisweb_api_token",
+        ):
+            forbid(
+                growthbook_cta_runtime_workflow.lower(),
+                forbidden_cta_runtime_workflow_marker.lower(),
+                "GrowthBook CTA runtime workflow contains unsafe mutation path: "
+                f"{forbidden_cta_runtime_workflow_marker}",
+            )
+        require(
+            growthbook_collector_host_gate,
+            "python -m growthbook_collector.runtime_marker",
+            "GrowthBook collector host gate lost packaged registry marker",
+        )
         for required_checkpoint_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "outcome-blind A/A checkpoint is outside its daily gate",
@@ -2723,6 +2841,9 @@ def main() -> int:
             "scripts/validate_growthbook_aa_completion.py",
             "scripts/build_growthbook_cta_baseline_observation.py",
             "scripts/record_growthbook_cta_activation.py",
+            "scripts/validate_growthbook_cta_runtime_release.py",
+            "scripts/build_growthbook_cta_runtime_readiness.py",
+            "growthbook_collector/runtime_marker.py",
             "scripts/record_growthbook_production_reader_evidence.py",
             "scripts/record_growthbook_foundation_evidence.py",
             "scripts/summarize_growthbook_foundation_bucket.py",

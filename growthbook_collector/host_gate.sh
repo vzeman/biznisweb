@@ -57,3 +57,5 @@ assert marker == {
 print(f"COLLECTOR_LOCALHOST_HEALTH_OK:{expected_environment}:{expected_version}")
 print(f"COLLECTOR_LOCALHOST_MARKER_OK:/app:{expected_version}")
 PY
+
+python -m growthbook_collector.runtime_marker
