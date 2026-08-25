@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "completion_type": "vevo_growthbook_production_aa_completion",
+  "experiment_id": "vevo-sk-aa-001",
+  "source_activation_manifest": "projects/vevo/growthbook_production_aa_activation.json",
+  "source_activation_sha256": "94a7d7cfdd96febf0c6b34ddd233c777120e15b9d5e68a29518a611cf21046a7",
+  "source_snapshot_manifest": "projects/vevo/growthbook_aa_snapshot.json",
+  "status": "waiting_for_verified_aa_pass",
+  "aa_pass": {
+    "status": "not_recorded",
+    "snapshot_workflow": ".github/workflows/build-vevo-growthbook-production-aa-snapshot.yml",
+    "artifact_name": "vevo-growthbook-aa-snapshot",
+    "snapshot_file": "vevo-growthbook-aa-snapshot.json",
+    "decision_file": "vevo-growthbook-aa-decision.json",
+    "workflow_run_id": null,
+    "main_commit": null,
+    "snapshot_sha256": null,
+    "decision_sha256": null,
+    "evaluated_at_utc": null,
+    "verdict": null,
+    "winner_calls_allowed": false
+  },
+  "stop_readback": {
+    "status": "not_recorded",
+    "observation_file": "projects/vevo/growthbook_aa_completion_observation.json",
+    "observation_sha256": null,
+    "observed_at_utc": null,
+    "growthbook_build": null,
+    "feature_revision": null,
+    "gtm_container_version_id": null
+  },
+  "next_state": {
+    "workspace_state": "production_aa_completed_cta_sample_freeze_pending_pro_quantiles_blocked",
+    "production_allocation_percent": 0,
+    "cta_status": "draft",
+    "cta_feature_rule_status": "draft",
+    "cta_production_allocation_percent": 0,
+    "cta_activation_allowed": false
+  },
+  "release_boundaries": {
+    "manual_growthbook_stop_allowed": false,
+    "automatic_growthbook_mutation_allowed": false,
+    "gtm_mutation_allowed": false,
+    "meta_ads_mutation_allowed": false,
+    "biznisweb_mutation_allowed": false,
+    "collector_or_reporting_mutation_allowed": false,
+    "price_cart_checkout_order_mutation_allowed": false,
+    "cta_activation_allowed": false
+  },
+  "next_gate": "record_exact_aa_pass_before_reviewed_manual_growthbook_stop"
+}
