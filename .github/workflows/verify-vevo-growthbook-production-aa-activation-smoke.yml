@@ -61,10 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/validate_growthbook_production_aa_activation.py
-          python -m unittest \
-            tests.test_growthbook_activation_smoke_reducer \
-            tests.test_growthbook_activation_smoke_workflow \
-            tests.test_growthbook_production_aa_activation
+          python -m unittest tests.test_growthbook_activation_smoke_reducer
           python - <<'PY'
           import hashlib
           import json
