@@ -5647,3 +5647,21 @@ Known issues:
 Next exact step:
 
 - Verify the first natural Production reconciliation result-blind after `2026-08-26 03:45 Europe/Bratislava`; before `2026-09-02 03:45`, do not inspect population, arms, outcomes, Meta dimensions, conversions, revenue, CM1, performance, or any result.
+
+## 2026-08-25 — VEVO exact-main result-blind infrastructure preflight
+
+Date: 2026-08-25
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-infra-preflight-c989`
+
+What is verified:
+
+- Read-only workflow run `32864004703` succeeded on exact merged `main` commit `c989488f579999aff5442e35e23994eb8c6e74ec` before the first natural reconciliation was due.
+- Its one canonical sanitized JSON has SHA-256 `c8d05bdc39412abfacc010654bef1b4a225f3bb0bb2d23cd2ae7248f53d0bb3` and independently passes `validate_growthbook_aa_infra_health_evidence.py` against the checked-in Production reconciliation deploy evidence.
+- The recorded phase is exactly `waiting_for_first_natural_run`: reconciliation schedule `ENABLED`, all three alarms clear, DLQ empty, and no natural task/marker claim made before the due boundary.
+- Population, arm, outcome, Meta-dimension, and performance reads are all `false`; AWS resource mutation and every GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, and commerce mutation boundary remain `false`.
+- The downloaded local verification copy and its exact temporary directory were removed after validation. No local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Next exact step:
+
+- Let the PC-independent GitHub monitor run at `2026-08-26 04:15 Europe/Bratislava`, after the first natural `03:45` reconciliation, and validate only its exact-main canonical result-blind artifact; do not read any experimental population or result before `2026-09-02 03:45`.
