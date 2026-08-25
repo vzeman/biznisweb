@@ -12,6 +12,15 @@ utm_source=meta&utm_medium=paid_social&utm_id={{campaign.id}}&utm_campaign={{cam
 
 The six analyzed dimensions are `utm_source`, `utm_medium`, `utm_id`, `utm_content`, `meta_adset_id`, and `meta_placement`. `utm_campaign={{campaign.name}}` is a human-readable diagnostic label only; mutable names never replace the stable IDs.
 
+The machine-readable end-to-end release gate is
+`growthbook_meta_reporting_contract.json`, validated offline by
+`scripts/validate_growthbook_meta_reporting_contract.py`. It binds the stable
+campaign/ad-set/ad/placement fields from the URL parameters through the
+allowlisted collector, anonymous reporting facts, the query-tested Production
+GrowthBook assignment SQL, and the CTA activation manifest. A dimension result
+is diagnostic only: it cannot declare a winner or replace the pre-registered
+all-eligible-traffic decision.
+
 Never add email, phone, name, address, customer/account ID, `fbclid`, `_fbp`, or `_fbc` to this field. Meta may append its own click identifier in transit, but the VEVO experiment collector does not persist it, a full URL, a query string, raw IP, or raw user agent.
 
 ## Rollout boundary
@@ -21,6 +30,7 @@ Never add email, phone, name, address, customer/account ID, `fbclid`, `_fbp`, or
 - If an ad already has a legitimate planned edit, add the canonical value within that same reviewed change. Never create an extra edit solely for tracking.
 - Do not bulk-edit active ads, change campaign/ad-set budget, targeting, bid strategy, optimization, creative, destination, schedule, or status as part of this runbook.
 - Do not enable Meta's A/B-test split for the same hypothesis. GrowthBook remains the sole 50/50 assignment system.
+- Do not use separate arm-specific destinations or add an arm/variation selector to URL parameters. The first CTA test uses one canonical VEVO destination and GrowthBook assigns the arm on site.
 
 ## Pre-publish checklist
 

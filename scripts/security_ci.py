@@ -46,6 +46,9 @@ def main() -> int:
         from scripts.record_growthbook_cta_activation import (
             validate_manifest as validate_cta_activation_manifest,
         )
+        from scripts.validate_growthbook_meta_reporting_contract import (
+            validate_contract as validate_meta_reporting_contract,
+        )
         from scripts.validate_growthbook_cta_measurement_window import (
             validate_manifest as validate_cta_measurement_manifest,
         )
@@ -270,6 +273,9 @@ def main() -> int:
         )
         growthbook_cta_activation_manifest = json.loads(
             read("projects/vevo/growthbook_cta_activation.json")
+        )
+        growthbook_meta_reporting_contract = json.loads(
+            read("projects/vevo/growthbook_meta_reporting_contract.json")
         )
         growthbook_cta_measurement_manifest = json.loads(
             read("projects/vevo/growthbook_cta_measurement_window.json")
@@ -2109,6 +2115,7 @@ def main() -> int:
         if validate_pro_upgrade() != 0:
             raise AssertionError("GrowthBook Pro upgrade state is invalid.")
         validate_cta_baseline_manifest(growthbook_cta_baseline_manifest)
+        validate_meta_reporting_contract(growthbook_meta_reporting_contract)
         validate_cta_activation_manifest(growthbook_cta_activation_manifest)
         validate_cta_measurement_manifest(
             growthbook_cta_measurement_manifest,
@@ -3148,6 +3155,7 @@ def main() -> int:
             "scripts/validate_growthbook_pro_upgrade.py",
             "scripts/build_growthbook_cta_baseline_observation.py",
             "scripts/record_growthbook_cta_activation.py",
+            "scripts/validate_growthbook_meta_reporting_contract.py",
             "scripts/validate_growthbook_cta_runtime_release.py",
             "scripts/build_growthbook_cta_runtime_readiness.py",
             "scripts/validate_growthbook_cta_measurement_window.py",

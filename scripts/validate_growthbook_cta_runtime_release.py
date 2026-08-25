@@ -16,9 +16,17 @@ from typing import Any, Mapping
 try:
     from scripts import record_growthbook_aa_completion as aa_completion
     from scripts import record_growthbook_cta_activation as cta_activation
+    from scripts.validate_growthbook_meta_reporting_contract import (
+        MetaReportingContractError,
+        validate_contract as validate_meta_reporting_contract,
+    )
 except ModuleNotFoundError:  # Direct execution from scripts/.
     import record_growthbook_aa_completion as aa_completion  # type: ignore
     import record_growthbook_cta_activation as cta_activation  # type: ignore
+    from validate_growthbook_meta_reporting_contract import (  # type: ignore
+        MetaReportingContractError,
+        validate_contract as validate_meta_reporting_contract,
+    )
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +40,7 @@ PATHS = {
     "lifecycle": VEVO / "growthbook_cta_lifecycle_reconciliation.json",
     "design": VEVO / "growthbook_cta_design.json",
     "decision": VEVO / "growthbook_cta_decision_contract.json",
+    "meta_reporting": VEVO / "growthbook_meta_reporting_contract.json",
     "workspace": VEVO / "growthbook_workspace.json",
     "registry": ROOT / "growthbook_collector" / "experiments.json",
     "storefront": ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js",
@@ -73,6 +82,8 @@ def validate_release_state(
     stop_observation_raw: bytes,
     design_sha256: str,
     decision_sha256: str,
+    meta_reporting: Mapping[str, Any],
+    meta_reporting_sha256: str,
     registry_sha256: str,
     storefront_source: str,
 ) -> None:
@@ -103,6 +114,13 @@ def validate_release_state(
     _require(
         decision_sha256 == cta_activation.EXPECTED_STATIC_HASHES["decision_contract"],
         "CTA decision contract SHA-256 drift",
+    )
+    validate_meta_reporting_contract(meta_reporting)
+    _require(
+        meta_reporting_sha256
+        == cta_activation.EXPECTED_STATIC_HASHES["meta_reporting_contract"]
+        == manifest["source_bindings"]["meta_reporting_contract"]["sha256"],
+        "CTA Meta reporting contract SHA-256 drift",
     )
     _require(
         len(registry_sha256) == 64
@@ -144,6 +162,8 @@ def validate_checked_in_release() -> str:
         stop_observation_raw=stop_raw,
         design_sha256=_sha256(PATHS["design"]),
         decision_sha256=_sha256(PATHS["decision"]),
+        meta_reporting=_load(PATHS["meta_reporting"], "Meta reporting contract"),
+        meta_reporting_sha256=_sha256(PATHS["meta_reporting"]),
         registry_sha256=registry_hash,
         storefront_source=PATHS["storefront"].read_text(encoding="utf-8"),
     )
@@ -157,6 +177,7 @@ def main() -> int:
         CtaRuntimeReleaseError,
         aa_completion.AaCompletionRecordingError,
         cta_activation.CtaActivationRecordingError,
+        MetaReportingContractError,
         OSError,
         KeyError,
     ) as exc:

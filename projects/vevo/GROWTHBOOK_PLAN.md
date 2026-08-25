@@ -92,6 +92,14 @@ The exact macro syntax must be verified in Meta Ads Manager preview before publi
 
 The repeatable operator procedure, no-bulk-edit boundary, post-publish aggregate gate, and rollback are frozen in [`META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md`](META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md).
 
+The executable release contract is
+[`growthbook_meta_reporting_contract.json`](growthbook_meta_reporting_contract.json).
+Its offline validator proves the four stable Meta ID/placement mappings through
+the collector, anonymous facts, Production GrowthBook assignment SQL, and CTA
+activation gate. It also fails closed if Meta owns the split, an ad URL selects
+an arm, diagnostic slices can replace the all-traffic decision, or any automatic
+Meta/GrowthBook/GTM/BiznisWeb/commerce mutation boundary opens.
+
 Future landing-page tests may use GrowthBook URL redirects or separate BiznisWeb pages, but only after the non-redirect A/A and first DOM test pass. Meta must never run its own A/B traffic split at the same time as GrowthBook for the same hypothesis.
 
 ## Consent decision
@@ -247,6 +255,7 @@ Hypothesis: changing only the product-detail add-to-cart CTA background from the
 - Primary business guardrail: authoritative CM1 contribution per eligible exposed device under `vevo_cm1_v1_2026-08-20`.
 - Other guardrails: purchase conversion, AOV, cancellation/refund rate, p75 LCP, JavaScript errors, and checkout health.
 - Dimensions for diagnosis only: Meta campaign ID, ad-set ID, ad ID, placement, device type, and new/returning device. Dimension findings do not replace the primary all-traffic decision.
+- Meta/reporting release gate: `growthbook_meta_reporting_contract.json` is hash-bound by `growthbook_cta_activation.json`. `validate_growthbook_meta_reporting_contract.py` verifies the canonical parameter contract, exact stable-ID mapping in the collector and reporting facts, the query-tested Production assignment SQL/readback, GrowthBook-owned randomization, one canonical destination, and zero automatic external mutation. The first CTA test cannot open manual start review if this chain drifts.
 - Minimum run: 14 full days and two complete weekday cycles.
 - Maximum planned run: 42 days.
 - Provisional planning target: `1,084` total exposed devices (`542`/arm), calculated from the diagnostic seven-day GA4 ratio `148 add_to_cart users / 451 view_item users`, a `25%` relative MDE, `80%` power, and two-sided `5%` alpha. Because the GA4 ratio is not an exposure-linked cohort, recompute once from A/A event data, freeze the final target before launch, and never change it after observing A/B results.

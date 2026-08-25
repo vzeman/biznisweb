@@ -27,6 +27,9 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         self.snapshot = load("projects/vevo/growthbook_aa_snapshot.json")
         self.sample = load("projects/vevo/growthbook_cta_sample_plan.json")
         self.lifecycle = load("projects/vevo/growthbook_cta_lifecycle_reconciliation.json")
+        self.meta_reporting = load(
+            "projects/vevo/growthbook_meta_reporting_contract.json"
+        )
         self.workspace = load("projects/vevo/growthbook_workspace.json")
         self.registry = load("growthbook_collector/experiments.json")
         self.snapshot_artifact_hash = "a" * 64
@@ -38,6 +41,9 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             "lifecycle_reconciliation": "4" * 64,
             "design_contract": recorder.EXPECTED_STATIC_HASHES["design_contract"],
             "decision_contract": recorder.EXPECTED_STATIC_HASHES["decision_contract"],
+            "meta_reporting_contract": recorder.EXPECTED_STATIC_HASHES[
+                "meta_reporting_contract"
+            ],
             "collector_registry": self.registry_hash,
         }
         self._make_post_aa_state()
@@ -320,6 +326,10 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             stop_observation_raw=raw,
             design_sha256=recorder.EXPECTED_STATIC_HASHES["design_contract"],
             decision_sha256=recorder.EXPECTED_STATIC_HASHES["decision_contract"],
+            meta_reporting=self.meta_reporting,
+            meta_reporting_sha256=recorder.EXPECTED_STATIC_HASHES[
+                "meta_reporting_contract"
+            ],
             registry_sha256=self.registry_hash,
             storefront_source="var PRODUCTION_ACTIVATION = false;\n",
         )
@@ -339,6 +349,10 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 stop_observation_raw=aa_canonical_json_bytes(unsafe),
                 design_sha256=recorder.EXPECTED_STATIC_HASHES["design_contract"],
                 decision_sha256=recorder.EXPECTED_STATIC_HASHES["decision_contract"],
+                meta_reporting=self.meta_reporting,
+                meta_reporting_sha256=recorder.EXPECTED_STATIC_HASHES[
+                    "meta_reporting_contract"
+                ],
                 registry_sha256=self.registry_hash,
                 storefront_source="var PRODUCTION_ACTIVATION = false;\n",
             )

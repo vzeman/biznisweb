@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "contract_type": "vevo_growthbook_meta_reporting",
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "status": "verified_offline_activation_gate",
+  "runbook": "projects/vevo/META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md",
+  "traffic_assignment": {
+    "owner": "growthbook",
+    "meta_ab_split_for_same_hypothesis_allowed": false,
+    "first_cta_routing_mode": "single_canonical_destination_with_on_site_growthbook_assignment",
+    "canonical_destination_origin": "https://www.vevo.sk",
+    "arm_specific_destination_or_query_parameter_allowed": false,
+    "future_landing_page_redirect_requires_separate_review": true
+  },
+  "meta_url_parameter_contract": {
+    "canonical_value": "utm_source=meta&utm_medium=paid_social&utm_id={{campaign.id}}&utm_campaign={{campaign.name}}&utm_content={{ad.id}}&meta_adset_id={{adset.id}}&meta_placement={{placement}}",
+    "diagnostic_label": {
+      "utm_campaign": "{{campaign.name}}"
+    },
+    "required_source_medium": {
+      "utm_source": "meta",
+      "utm_medium": "paid_social"
+    },
+    "stable_dimension_mappings": [
+      {
+        "url_parameter": "utm_id",
+        "meta_macro": "{{campaign.id}}",
+        "collector_field": "meta_campaign_id",
+        "growthbook_assignment_column": "meta_campaign_id",
+        "reporting_fact_column": "meta_campaign_id"
+      },
+      {
+        "url_parameter": "meta_adset_id",
+        "meta_macro": "{{adset.id}}",
+        "collector_field": "meta_adset_id",
+        "growthbook_assignment_column": "meta_adset_id",
+        "reporting_fact_column": "meta_adset_id"
+      },
+      {
+        "url_parameter": "utm_content",
+        "meta_macro": "{{ad.id}}",
+        "collector_field": "meta_ad_id",
+        "growthbook_assignment_column": "meta_ad_id",
+        "reporting_fact_column": "meta_ad_id"
+      },
+      {
+        "url_parameter": "meta_placement",
+        "meta_macro": "{{placement}}",
+        "collector_field": "meta_placement",
+        "growthbook_assignment_column": "meta_placement",
+        "reporting_fact_column": "meta_placement"
+      }
+    ],
+    "forbidden_persisted_identifiers": [
+      "fbclid",
+      "_fbp",
+      "_fbc",
+      "email",
+      "phone",
+      "name",
+      "address",
+      "customer_id",
+      "account_id",
+      "ip_address"
+    ],
+    "forbidden_configured_click_identifiers": [
+      "fbclid",
+      "_fbp",
+      "_fbc"
+    ],
+    "existing_live_ads_policy": "do_not_edit_only_for_tracking",
+    "new_or_otherwise_edited_ads_policy": "apply_canonical_value_before_publish"
+  },
+  "verified_data_chain": {
+    "storefront_source": "storefront/vevo-growthbook/vevo-growthbook.js",
+    "collector_source": "growthbook_collector/handler.py",
+    "reporting_builder": "reporting_core/experiments.py",
+    "growthbook_assignment_query": "projects/vevo/growthbook_sql/assignment.sql",
+    "growthbook_outcome_query": "projects/vevo/growthbook_sql/device_outcomes_production.sql",
+    "cta_final_snapshot_query": "projects/vevo/growthbook_sql/cta_final_snapshot_production.sql",
+    "meta_audit_script": "scripts/audit_vevo_meta_dimensions.py",
+    "production_clone_observation": {
+      "path": "projects/vevo/vevo-growthbook-production-clone-observation.json",
+      "sha256": "b2f96b7047321f11da4f00c7886c4b9422d7759428534f8fd5534ee1299f2030",
+      "data_source_id": "ds_19g6mmt5stlp6",
+      "assignment_query_sha256": "3774afcd5e940ca626dc99d66322475a8f32189c0cc1a02e0f35fd9072e1811f",
+      "assignment_query_test_passed": true,
+      "configuration_readback_match": true
+    }
+  },
+  "analysis_policy": {
+    "primary_decision_population": "all_eligible_traffic",
+    "meta_dimensions_role": "diagnostic_only",
+    "dimension_result_may_declare_winner": false,
+    "dimension_result_may_replace_primary_decision": false,
+    "minimum_complete_stable_meta_dimension_exposures_in_aa": 1,
+    "cta_final_decision_remains_unsegmented": true
+  },
+  "release_boundaries": {
+    "automatic_meta_ads_mutation_allowed": false,
+    "automatic_growthbook_mutation_allowed": false,
+    "automatic_gtm_mutation_allowed": false,
+    "automatic_biznisweb_mutation_allowed": false,
+    "automatic_traffic_routing_mutation_allowed": false,
+    "price_product_cart_checkout_order_mutation_allowed": false
+  }
+}

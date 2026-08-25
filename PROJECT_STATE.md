@@ -5591,3 +5591,31 @@ What is verified:
 Next exact step:
 
 - Let the GitHub monitor execute after the first natural `2026-08-26 03:45 Europe/Bratislava` reconciliation, then use the `09:00` heartbeat only to verify the successful exact-main run and its single canonical result-blind artifact.
+
+## 2026-08-25 — VEVO Meta Ads → GrowthBook/reporting CTA release gate
+
+Date: 2026-08-25
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-growthbook-meta-reporting-gate`
+
+What changed:
+
+- Added `growthbook_meta_reporting_contract.json` and an offline validator that bind the canonical Meta URL parameters to the exact stable campaign/ad-set/ad/placement fields in the allowlisted collector, anonymous reporting facts, query-tested Production GrowthBook assignment SQL, and CTA activation gate.
+- The contract preserves a single canonical `https://www.vevo.sk` destination for the first CTA test. GrowthBook owns the on-site `50/50` split; Meta A/B split, arm-specific destinations, and arm/variation URL parameters are fail-closed.
+- Meta dimension slices are explicitly diagnostic only. They cannot declare a winner or replace the pre-registered all-eligible-traffic decision.
+- `growthbook_cta_activation.json`, its recorder, runtime release validator, workspace validator, and security CI now hash-bind and verify the Meta/reporting contract before manual CTA start review can open.
+
+What is verified:
+
+- The existing Production clone observation is SHA-bound and proves data source `ds_19g6mmt5stlp6` used the exact query-tested assignment SQL hash that exposes all four stable Meta dimensions.
+- Full Python suite: `757` tests passed. GrowthBook storefront JavaScript suite: `9` tests passed. Focused Ruff, Python compilation, JSON parsing, workspace/security validation, and `git diff --check` passed; the dedicated validator reports the complete offline chain valid.
+- No A/A population, arm, outcome, Meta dimension, conversion, revenue, CM1, or performance result was read. No Meta Ads, GrowthBook, GTM, BiznisWeb, AWS, traffic, price, product, stock, cart, checkout, payment, or order mutation occurred.
+- No local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Known issues:
+
+- The Production A/A remains inside its pre-registered blind window. This release gate prepares the later CTA handoff but does not authorize a live ad edit, traffic reroute, CTA start, or result read.
+
+Next exact step:
+
+- Verify the first natural Production reconciliation result-blind after `2026-08-26 03:45 Europe/Bratislava`; before `2026-09-02 03:45`, continue to avoid population, arm, outcome, Meta dimension, conversion, revenue, CM1, and performance reads.
