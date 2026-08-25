@@ -68,6 +68,10 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
             "schedule_drift = sorted(key for key, passed in schedule_checks.items() if not passed)",
             "Production reconciliation schedule drift:' + ','.join(schedule_drift)",
+            "reconciliation_parameters.get('ClusterArn')",
+            "source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')",
+            "'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn']",
+            '--cluster "${RECONCILIATION_CLUSTER_ARN}"',
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
             'source "${TEMP_HEALTH_DIR}/selected-task.env"',
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
@@ -77,6 +81,7 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             "PRODUCTION_AA_INFRA_RUNTIME_OK:instance-id=N/A:Fargate",
         ):
             self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
 
     def test_contains_no_population_outcome_or_data_query(self) -> None:
         lowered = WORKFLOW.lower()

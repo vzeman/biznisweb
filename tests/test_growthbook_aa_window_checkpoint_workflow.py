@@ -62,6 +62,10 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "vevo-reporting-daily:33",
             "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
             "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
+            "reconciliation_parameters.get('ClusterArn')",
+            "source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')",
+            "'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn']",
+            '--cluster "${RECONCILIATION_CLUSTER_ARN}"',
             "task.get('group') == os.environ['EXPECTED_SERVICE']",
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
@@ -72,6 +76,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "PRODUCTION_AA_WINDOW_CONTROL_GATE_OK:",
         ):
             self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
 
     def test_population_query_returns_only_one_outcome_blind_aggregate(self) -> None:
         query_start = WORKFLOW.index("SELECT COUNT(DISTINCT device_id) AS eligible_devices")

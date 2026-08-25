@@ -74,6 +74,10 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
             "source reporting schedule drift",
             "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
             "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
+            "reconciliation_parameters.get('ClusterArn')",
+            "source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')",
+            "'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn']",
+            '--cluster "${RECONCILIATION_CLUSTER_ARN}"',
             "not str(task.get('startedBy') or '').startswith('cta-final-')",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
             "CTA_FINAL_RECONCILIATION_GATE_OK:marker=true:parity=true:alarms=clear:dlq=empty",
@@ -86,6 +90,7 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
             "CTA_FINAL_GLUE_SCHEMA_OK:pii-fields=absent:customer-fields=absent:ip-fields=absent",
         ):
             self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
         host_gate = WORKFLOW.index("CTA_FINAL_HOST_GATE_OK:")
         schema_gate = WORKFLOW.index("CTA_FINAL_GLUE_SCHEMA_OK:")
         query = WORKFLOW.index("aws athena start-query-execution")

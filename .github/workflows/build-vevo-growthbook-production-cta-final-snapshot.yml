@@ -179,6 +179,7 @@ jobs:
               raise SystemExit('Production GrowthBook stack state drift')
           collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
           reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}
+          reconciliation_parameters = {row['ParameterKey']: row['ParameterValue'] for row in reconciliation.get('Parameters') or []}
           target = schedule.get('Target') or {}
           ecs = target.get('EcsParameters') or {}
           network = (ecs.get('NetworkConfiguration') or {}).get('awsvpcConfiguration') or {}
@@ -196,7 +197,7 @@ jobs:
               or ecs.get('Group') != os.environ['EXPECTED_SERVICE']
               or ecs.get('TaskCount') != 1
               or ecs.get('EnableExecuteCommand') is not False
-              or target.get('Arn') != collector_outputs.get('CollectorClusterArn')
+              or target.get('Arn') != reconciliation_parameters.get('ClusterArn')
               or target.get('RoleArn') != reconciliation_outputs.get('SchedulerRoleArn')
               or target.get('DeadLetterConfig') != {'Arn': reconciliation_outputs.get('DeadLetterQueueArn')}
               or target.get('RetryPolicy') != {'MaximumEventAgeInSeconds': 3600, 'MaximumRetryAttempts': 2}
@@ -225,11 +226,12 @@ jobs:
           if (
               source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
               or source.get('State') != 'ENABLED'
+              or source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')
               or not source_task.endswith('vevo-reporting-daily:33')
           ):
               raise SystemExit('source reporting schedule drift')
           values = {
-              'PRODUCTION_CLUSTER_ARN': collector_outputs['CollectorClusterArn'],
+              'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn'],
               'PRODUCTION_DATABASE': collector_outputs['ExperimentDatabaseName'],
               'PRODUCTION_WORKGROUP': collector_outputs['ReportingWorkGroupName'],
               'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
@@ -257,7 +259,7 @@ jobs:
             --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" \
             --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/task-definition.json"
           aws ecs list-tasks \
-            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
             --family "${EXPECTED_SERVICE}" \
             --desired-status STOPPED \
             --max-results 100 \
@@ -272,7 +274,7 @@ jobs:
           PY
           read -r -a TASK_ARNS < "${TEMP_FINAL_DIR}/task-arns.txt"
           aws ecs describe-tasks \
-            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
             --tasks "${TASK_ARNS[@]}" \
             --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/tasks.json"
           python - <<'PY' > "${TEMP_FINAL_DIR}/selected-task.env"
@@ -413,7 +415,7 @@ jobs:
           }]}))
           PY
           aws ecs run-task \
-            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
             --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" \
             --launch-type FARGATE \
             --platform-version "${PLATFORM_VERSION}" \
@@ -432,11 +434,11 @@ jobs:
           PY
           )"
           aws ecs wait tasks-stopped \
-            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
             --tasks "${HOST_TASK_ARN}" \
             --region "${AWS_REGION}"
           aws ecs describe-tasks \
-            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
             --tasks "${HOST_TASK_ARN}" \
             --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/host-gate-state.json"
           python - <<'PY' > "${TEMP_FINAL_DIR}/host-gate.env"
