@@ -1651,6 +1651,15 @@ def validate() -> None:
     checked_in_registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     if workspace == checked_in_workspace and registry == checked_in_registry:
         validate_activation_handoff(activation, workspace, registry)
+        try:
+            from scripts.validate_growthbook_aa_measurement_window import (
+                validate as validate_aa_measurement_window,
+            )
+        except ModuleNotFoundError:
+            from validate_growthbook_aa_measurement_window import (
+                validate as validate_aa_measurement_window,
+            )
+        validate_aa_measurement_window()
 
 
 def main() -> int:

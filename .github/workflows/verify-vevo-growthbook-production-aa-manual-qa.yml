@@ -57,11 +57,13 @@ jobs:
             tests.test_growthbook_workspace
           python scripts/security_ci.py
           python scripts/validate_growthbook_workspace.py
+          python scripts/validate_growthbook_aa_measurement_window.py
           python - <<'PY'
           import json
           import os
           import pathlib
           import re
+          from datetime import datetime, timezone
 
           manifest = json.load(open(os.environ['SNAPSHOT_MANIFEST'], encoding='utf-8'))
           workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
@@ -85,6 +87,22 @@ jobs:
               raise SystemExit('manual QA observation SHA-256 is missing')
           if not pathlib.Path(os.environ['OBSERVATION_FILE']).is_file():
               raise SystemExit('manual QA observation file is missing')
+          observation = json.load(open(os.environ['OBSERVATION_FILE'], encoding='utf-8'))
+          window = manifest.get('measurement_window') or {}
+          if (
+              window.get('resolution_status') != 'resolved'
+              or manual.get('from_utc') != window.get('from_utc')
+              or manual.get('through_utc') != window.get('resolved_through_utc')
+          ):
+              raise SystemExit('pre-registered A/A stopping rule is not resolved')
+          if (
+              observation.get('from_utc') != window.get('from_utc')
+              or observation.get('through_utc') != window.get('resolved_through_utc')
+          ):
+              raise SystemExit('manual QA observation differs from the pre-registered window')
+          through = datetime.fromisoformat(str(window.get('resolved_through_utc') or '').replace('Z', '+00:00'))
+          if through > datetime.now(timezone.utc):
+              raise SystemExit('manual QA evidence window is not complete')
           if manual.get('status') != 'not_recorded' or any(
               manual.get(field) is not None for field in ('run_id', 'main_commit', 'sha256')
           ):
