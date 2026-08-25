@@ -39,11 +39,15 @@ class GrowthBookActivationSmokeWorkflowTests(unittest.TestCase):
             "EXPECTED_ACCOUNT_ID: '919341186960'",
             "EXPECTED_SERVICE: vevo-growthbook-collector-production",
             "EXPECTED_TASK_DEFINITION: vevo-growthbook-collector-production:2",
+            "EXPECTED_COLLECTOR_VERSION: git-57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2",
             "EXPECTED_RUNTIME_PATH: /app",
             "instance_id': 'N/A:Fargate'",
             "immutable_image_prior_localhost_marker",
             "target_health': 'healthy'",
             "POST /v1/events",
+            "Production collector version parameter drift",
+            "Production task-definition collector version drift",
+            '--expected-collector-version "${EXPECTED_COLLECTOR_VERSION}"',
         ):
             self.assertIn(marker, WORKFLOW)
 
