@@ -26,6 +26,7 @@ env:
   EXPECTED_SERVICE: vevo-growthbook-collector-production
   EXPECTED_TASK_DEFINITION: vevo-growthbook-collector-production:2
   EXPECTED_IMAGE_DIGEST: sha256:e9aeee45f457dca5e7cb8f6a80f37763de0bb7f61c96f614d79e222fe4707058
+  EXPECTED_COLLECTOR_VERSION: git-57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2
   EXPECTED_RUNTIME_PATH: /app
   EXPECTED_API_LOG_GROUP: /aws/apigateway/vevo-growthbook-collector-production
   EXPECTED_CONTAINER_LOG_GROUP: /ecs/vevo-growthbook-collector-production
@@ -222,6 +223,12 @@ jobs:
               raise SystemExit('Production task definition output drift')
           if outputs['CollectorContainerLogGroup'] != os.environ['EXPECTED_CONTAINER_LOG_GROUP']:
               raise SystemExit('Production collector log group drift')
+          parameters = {
+              row['ParameterKey']: row['ParameterValue']
+              for row in stack.get('Parameters') or []
+          }
+          if parameters.get('CollectorVersion') != os.environ['EXPECTED_COLLECTOR_VERSION']:
+              raise SystemExit('Production collector version parameter drift')
           values = {
               'COLLECTOR_API_BASE_URL': outputs['CollectorApiBaseUrl'],
               'COLLECTOR_CLUSTER_ARN': outputs['CollectorClusterArn'],
@@ -318,6 +325,12 @@ jobs:
           definitions = definition.get('containerDefinitions') or []
           if len(definitions) != 1 or definitions[0].get('name') != 'collector':
               raise SystemExit('Production task-definition container drift')
+          environment = {
+              row['name']: row['value']
+              for row in definitions[0].get('environment') or []
+          }
+          if environment.get('GROWTHBOOK_COLLECTOR_VERSION') != os.environ['EXPECTED_COLLECTOR_VERSION']:
+              raise SystemExit('Production task-definition collector version drift')
           if definitions[0].get('workingDirectory') not in {None, os.environ['EXPECTED_RUNTIME_PATH']}:
               raise SystemExit('Production runtime path drift')
           details = [
@@ -346,6 +359,7 @@ jobs:
               'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
               'runtime_path_verification': 'immutable_image_prior_localhost_marker',
               'image_digest': os.environ['EXPECTED_IMAGE_DIGEST'],
+              'collector_version': os.environ['EXPECTED_COLLECTOR_VERSION'],
               'target_health': 'healthy',
               'route_key': 'POST /v1/events',
           }
@@ -433,6 +447,7 @@ jobs:
             --raw-directory "${RAW_DIR}" \
             --from-utc "${OBSERVATION_FROM_UTC}" \
             --through-utc "${OBSERVATION_THROUGH_UTC}" \
+            --expected-collector-version "${EXPECTED_COLLECTOR_VERSION}" \
             --output "${TEMP_DIR}/reduction.json"
 
           python - <<'PY'

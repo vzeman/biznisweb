@@ -11,6 +11,7 @@ from scripts.summarize_growthbook_activation_smoke import summarize
 
 FROM = "2026-08-25T05:34:30Z"
 THROUGH = "2026-08-25T05:44:30Z"
+COLLECTOR_VERSION = "git-57b29c3b166eabbbabee4d3b8e69d1b56e2ae8e2"
 
 
 def event(*, event_id: str, device_id: str, variation: str, received_at: str) -> dict:
@@ -33,7 +34,7 @@ def event(*, event_id: str, device_id: str, variation: str, received_at: str) ->
         "meta_placement": None,
         "received_at": received_at,
         "event_date": "2026-08-25",
-        "collector_version": "vevo-growthbook-collector-v1",
+        "collector_version": COLLECTOR_VERSION,
         "risk_result": "accepted",
     }
 
@@ -65,7 +66,7 @@ class GrowthBookActivationSmokeReducerTests(unittest.TestCase):
                 ),
             ]
         )
-        result = summarize(root, FROM, THROUGH)
+        result = summarize(root, FROM, THROUGH, COLLECTOR_VERSION)
         self.assertEqual(2, result["target_exposure_count"])
         self.assertEqual(1, result["unique_exposed_device_count"])
         self.assertEqual(1, result["repeat_exposed_device_count"])
@@ -93,7 +94,7 @@ class GrowthBookActivationSmokeReducerTests(unittest.TestCase):
                 ),
             ]
         )
-        result = summarize(root, FROM, THROUGH)
+        result = summarize(root, FROM, THROUGH, COLLECTOR_VERSION)
         self.assertEqual(1, result["repeat_exposed_device_count"])
         self.assertEqual(1, result["sticky_inconsistent_device_count"])
 
@@ -107,7 +108,21 @@ class GrowthBookActivationSmokeReducerTests(unittest.TestCase):
         row["email"] = "forbidden@example.com"
         root = self.write_events([row])
         with self.assertRaisesRegex(ValueError, "field set drift"):
-            summarize(root, FROM, THROUGH)
+            summarize(root, FROM, THROUGH, COLLECTOR_VERSION)
+
+    def test_rejects_collector_version_not_bound_to_runtime(self) -> None:
+        root = self.write_events(
+            [
+                event(
+                    event_id=str(uuid.uuid4()),
+                    device_id=str(uuid.uuid4()),
+                    variation="control",
+                    received_at="2026-08-25T05:40:00Z",
+                )
+            ]
+        )
+        with self.assertRaisesRegex(ValueError, "collector version drift"):
+            summarize(root, FROM, THROUGH, "git-" + "0" * 40)
 
     def test_ignores_valid_records_outside_frozen_window(self) -> None:
         root = self.write_events(
@@ -120,7 +135,7 @@ class GrowthBookActivationSmokeReducerTests(unittest.TestCase):
                 )
             ]
         )
-        result = summarize(root, FROM, THROUGH)
+        result = summarize(root, FROM, THROUGH, COLLECTOR_VERSION)
         self.assertEqual(0, result["raw_event_count"])
         self.assertEqual(0, result["target_exposure_count"])
 

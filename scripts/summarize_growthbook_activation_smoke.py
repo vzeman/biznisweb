@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -14,7 +15,6 @@ from typing import Any
 
 EXPERIMENT_ID = "vevo-sk-aa-001"
 VARIATIONS = ("control", "variant")
-COLLECTOR_VERSION = "vevo-growthbook-collector-v1"
 COMMON_FIELDS = {
     "schema_version",
     "event_id",
@@ -75,11 +75,20 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
-def summarize(directory: Path, from_utc: str, through_utc: str) -> dict[str, Any]:
+def summarize(
+    directory: Path,
+    from_utc: str,
+    through_utc: str,
+    expected_collector_version: str,
+) -> dict[str, Any]:
     start = _parse_utc(from_utc, "from_utc")
     through = _parse_utc(through_utc, "through_utc")
     _require(through > start, "smoke window must be positive")
     _require(directory.is_dir(), "raw object directory is missing")
+    _require(
+        re.fullmatch(r"git-[0-9a-f]{40}", expected_collector_version) is not None,
+        "expected collector version is invalid",
+    )
 
     event_ids: set[str] = set()
     exposure_counts_by_device: Counter[str] = Counter()
@@ -109,7 +118,10 @@ def summarize(directory: Path, from_utc: str, through_utc: str) -> dict[str, Any
         received = _parse_utc(record.get("received_at"), "received_at")
         _parse_utc(record.get("occurred_at"), "occurred_at")
         _require(record.get("event_date") == received.date().isoformat(), "event date drift")
-        _require(record.get("collector_version") == COLLECTOR_VERSION, "collector version drift")
+        _require(
+            record.get("collector_version") == expected_collector_version,
+            "collector version drift",
+        )
         _require(record.get("risk_result") == "accepted", "collector risk result drift")
         _require(record.get("consent_state") == "analytics_granted", "collector consent drift")
         _require(record.get("experiment_id") == EXPERIMENT_ID, "collector experiment drift")
@@ -166,9 +178,15 @@ def main() -> int:
     parser.add_argument("--raw-directory", required=True, type=Path)
     parser.add_argument("--from-utc", required=True)
     parser.add_argument("--through-utc", required=True)
+    parser.add_argument("--expected-collector-version", required=True)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    result = summarize(args.raw_directory, args.from_utc, args.through_utc)
+    result = summarize(
+        args.raw_directory,
+        args.from_utc,
+        args.through_utc,
+        args.expected_collector_version,
+    )
     args.output.write_bytes(_canonical_bytes(result))
     print(
         "PRODUCTION_AA_SMOKE_REDUCTION_OK:"
