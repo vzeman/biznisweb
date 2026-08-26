@@ -42,6 +42,7 @@ PATHS = {
     "pro_observation": VEVO / "growthbook_pro_upgrade_observation.json",
     "sample_plan": VEVO / "growthbook_cta_sample_plan.json",
     "lifecycle": VEVO / "growthbook_cta_lifecycle_reconciliation.json",
+    "lifecycle_observation": VEVO / "growthbook_cta_lifecycle_observation.json",
     "design": VEVO / "growthbook_cta_design.json",
     "decision": VEVO / "growthbook_cta_decision_contract.json",
     "meta_reporting": VEVO / "growthbook_meta_reporting_contract.json",
@@ -84,6 +85,8 @@ def validate_release_state(
     pro_observation_raw: bytes,
     sample: Mapping[str, Any],
     lifecycle: Mapping[str, Any],
+    lifecycle_observation: Mapping[str, Any],
+    lifecycle_observation_raw: bytes,
     workspace: Mapping[str, Any],
     registry: Mapping[str, Any],
     stop_observation: Mapping[str, Any],
@@ -96,7 +99,10 @@ def validate_release_state(
     storefront_source: str,
 ) -> None:
     cta_activation.validate_manifest(manifest)
-    _require(manifest["status"] == cta_activation.WAITING, "CTA activation manifest is not waiting")
+    _require(
+        manifest["status"] == cta_activation.WAITING,
+        "CTA activation manifest is not waiting",
+    )
     cta_activation._validate_post_aa_sources(  # noqa: SLF001 - shared release contract
         completion,
         snapshot,
@@ -104,8 +110,16 @@ def validate_release_state(
         pro_observation,
         sample,
         lifecycle,
+        lifecycle_observation,
         workspace,
         registry,
+    )
+    _require(
+        lifecycle_observation_raw
+        == cta_activation.canonical_json_bytes(lifecycle_observation)
+        and hashlib.sha256(lifecycle_observation_raw).hexdigest()
+        == lifecycle["observation_sha256"],
+        "CTA lifecycle observation file/hash binding drift",
     )
     pro_bindings = manifest["source_bindings"]
     _require(
@@ -169,9 +183,9 @@ def validate_release_state(
 
 def validate_checked_in_release() -> str:
     completion = _load(PATHS["aa_completion"], "A/A completion")
-    stop_path = VEVO / str(completion.get("stop_readback", {}).get("observation_file") or "").removeprefix(
-        "projects/vevo/"
-    )
+    stop_path = VEVO / str(
+        completion.get("stop_readback", {}).get("observation_file") or ""
+    ).removeprefix("projects/vevo/")
     _require(stop_path.parent == VEVO, "A/A stop observation path drift")
     stop_raw = stop_path.read_bytes()
     stop_observation = _load(stop_path, "A/A stop observation")
@@ -187,6 +201,7 @@ def validate_checked_in_release() -> str:
         observation=stop_observation,
     )
     registry_hash = _sha256(PATHS["registry"])
+    lifecycle_observation_raw = PATHS["lifecycle_observation"].read_bytes()
     validate_release_state(
         manifest=_load(PATHS["cta_activation"], "CTA activation"),
         completion=completion,
@@ -197,6 +212,10 @@ def validate_checked_in_release() -> str:
         pro_observation_raw=pro_observation_raw,
         sample=_load(PATHS["sample_plan"], "CTA sample plan"),
         lifecycle=_load(PATHS["lifecycle"], "CTA lifecycle reconciliation"),
+        lifecycle_observation=_load(
+            PATHS["lifecycle_observation"], "CTA lifecycle observation"
+        ),
+        lifecycle_observation_raw=lifecycle_observation_raw,
         workspace=_load(PATHS["workspace"], "GrowthBook workspace"),
         registry=_load(PATHS["registry"], "collector registry"),
         stop_observation=stop_observation,

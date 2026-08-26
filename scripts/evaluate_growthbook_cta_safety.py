@@ -196,7 +196,7 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         if name == "decision_contract":
             _require(
                 binding["sha256"]
-                == "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+                == "62d9eb905a05b6273a7395905bc73f815e130155af1a32d896195facd442a07a",
                 "CTA safety decision contract hash drift",
             )
         elif name == "safety_query":
@@ -551,7 +551,7 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
             and handoff["stop_reasons"] == [],
             "CTA non-safety stop gained a safety trigger",
         )
-    _require(root["next_gate"] == "wait_exact_14_day_followup_then_one_protected_final_look", "CTA safety stopped next gate drift")
+    _require(root["next_gate"] == "wait_exact_21_day_followup_then_one_protected_final_look", "CTA safety stopped next gate drift")
 
 
 def validate_snapshot(snapshot: Mapping[str, Any]) -> None:

@@ -1,0 +1,438 @@
+name: Collect VEVO GrowthBook CTA Lifecycle Preflight
+
+on:
+  schedule:
+    - cron: '20 5 * * *'
+  workflow_dispatch:
+    inputs:
+      confirm_collection:
+        description: Type true to collect the completed-A/A lifecycle preflight without CTA outcome access
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-cta-lifecycle-preflight
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  STACK_NAME: vevo-growthbook-production
+  EXPECTED_SERVICE: vevo-growthbook-collector-production
+  EXPECTED_DATABASE: vevo_growthbook_production
+  EXPECTED_WORKGROUP: vevo-growthbook-reporting-production
+  EXPECTED_RUNTIME_PATH: /app
+  SOURCE_EXPERIMENT_ID: vevo-sk-aa-001
+  LIFECYCLE_FILE: vevo-growthbook-cta-lifecycle-preflight.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  collect-lifecycle-preflight:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Admit only a confirmed manual run or the first due scheduled window
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CONFIRM_COLLECTION: ${{ inputs.confirm_collection }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          event = os.environ['EVENT_NAME']
+          if event == 'workflow_dispatch':
+              if os.environ.get('CONFIRM_COLLECTION') != 'true':
+                  raise SystemExit('exact lifecycle preflight confirmation is required')
+              run_collection = True
+              reason = 'confirmed-manual'
+          elif event == 'schedule':
+              manifest = json.loads(Path('projects/vevo/growthbook_cta_lifecycle_reconciliation.json').read_text(encoding='utf-8'))
+              completion = json.loads(Path('projects/vevo/growthbook_production_aa_completion.json').read_text(encoding='utf-8'))
+              snapshot = json.loads(Path('projects/vevo/growthbook_aa_snapshot.json').read_text(encoding='utf-8'))
+              pass_ready = (
+                  completion.get('status') == 'production_aa_stopped_verified_cta_activation_blocked'
+                  and (completion.get('aa_pass') or {}).get('status') == 'verified_pass'
+                  and (completion.get('aa_pass') or {}).get('verdict') == 'PASS'
+                  and (completion.get('stop_readback') or {}).get('status') == 'verified_zero_allocation'
+              )
+              window = snapshot.get('measurement_window') or {}
+              through_text = str(window.get('resolved_through_utc') or '')
+              if manifest.get('verified') is True:
+                  run_collection = False
+                  reason = 'already-recorded'
+              elif not pass_ready or window.get('resolution_status') != 'resolved':
+                  run_collection = False
+                  reason = 'aa-pass-stop-window-not-ready'
+              else:
+                  try:
+                      through = datetime.fromisoformat(through_text.removesuffix('Z') + '+00:00')
+                  except ValueError as exc:
+                      raise SystemExit('resolved A/A through time is invalid') from exc
+                  due = through.astimezone(timezone.utc) + timedelta(days=21)
+                  current = datetime.now(timezone.utc)
+                  run_collection = due <= current < due + timedelta(days=1)
+                  if run_collection:
+                      reason = 'due-scheduled'
+                  elif current < due:
+                      reason = 'followup-not-due'
+                  else:
+                      reason = 'scheduled-window-missed-manual-confirmation-required'
+          else:
+              raise SystemExit('unsupported lifecycle preflight trigger')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f"RUN_COLLECTION={'true' if run_collection else 'false'}\n")
+          print(
+              'VEVO_CTA_LIFECYCLE_SCHEDULE_GATE:'
+              f"run={'true' if run_collection else 'false'}:reason={reason}:aws=false"
+          )
+          PY
+
+      - name: Require completed A/A and full order plus lifecycle maturity before AWS
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_lifecycle_preflight.py validate-contract
+          python scripts/validate_growthbook_aa_completion.py
+          python scripts/validate_growthbook_workspace.py
+          python scripts/security_ci.py
+          TEMPORARY="${RUNNER_TEMP}/vevo-cta-lifecycle-${GITHUB_RUN_ID}"
+          mkdir -m 700 -- "${TEMPORARY}"
+          mkdir -m 700 -- "${TEMPORARY}/direct-device-facts"
+          python scripts/build_growthbook_cta_lifecycle_preflight.py prepare \
+            --context-output "${TEMPORARY}/context.json" \
+            --query-output "${TEMPORARY}/lifecycle.sql"
+          {
+            echo "TEMP_LIFECYCLE_DIR=${TEMPORARY}"
+          } >> "${GITHUB_ENV}"
+          echo 'VEVO_CTA_LIFECYCLE_LOCAL_GATE_OK:source=completed-aa:followup=21d:cta-outcomes=false:mutation=false'
+
+      - name: Configure AWS credentials for bounded read-only evidence
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm exact Production host identity before data reads
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_LIFECYCLE_DIR}/stack.json"
+          python - <<'PY' > "${TEMP_LIFECYCLE_DIR}/runtime.env"
+          import json
+          import os
+          from pathlib import Path
+
+          stack = json.loads((Path(os.environ['TEMP_LIFECYCLE_DIR']) / 'stack.json').read_text(encoding='utf-8'))['Stacks'][0]
+          if stack.get('StackStatus') != 'CREATE_COMPLETE':
+              raise SystemExit('Production stack is not CREATE_COMPLETE')
+          outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
+          required = {
+              'CollectorClusterArn', 'CollectorServiceName', 'CollectorTaskDefinitionArn',
+              'EventBucketName', 'ExperimentDatabaseName', 'ReportingWorkGroupName',
+          }
+          if not required.issubset(outputs):
+              raise SystemExit('Production stack output set drift')
+          if outputs['CollectorServiceName'] != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('Production service output drift')
+          if outputs['ExperimentDatabaseName'] != os.environ['EXPECTED_DATABASE']:
+              raise SystemExit('Production database output drift')
+          if outputs['ReportingWorkGroupName'] != os.environ['EXPECTED_WORKGROUP']:
+              raise SystemExit('Production workgroup output drift')
+          for key, value in (
+              ('PRODUCTION_CLUSTER_ARN', outputs['CollectorClusterArn']),
+              ('PRODUCTION_SERVICE_NAME', outputs['CollectorServiceName']),
+              ('PRODUCTION_TASK_DEFINITION_ARN', outputs['CollectorTaskDefinitionArn']),
+              ('PRODUCTION_EVENT_BUCKET', outputs['EventBucketName']),
+              ('PRODUCTION_DATABASE', outputs['ExperimentDatabaseName']),
+              ('PRODUCTION_WORKGROUP', outputs['ReportingWorkGroupName']),
+          ):
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_LIFECYCLE_DIR}/runtime.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_LIFECYCLE_DIR}/runtime.env"
+          set +a
+          aws ecs describe-services \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --services "${PRODUCTION_SERVICE_NAME}" \
+            --region "${AWS_REGION}" > "${TEMP_LIFECYCLE_DIR}/service.json"
+          aws ecs list-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --service-name "${PRODUCTION_SERVICE_NAME}" \
+            --desired-status RUNNING \
+            --region "${AWS_REGION}" > "${TEMP_LIFECYCLE_DIR}/task-list.json"
+          TASK_ARN="$(python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          tasks = json.loads((Path(os.environ['TEMP_LIFECYCLE_DIR']) / 'task-list.json').read_text(encoding='utf-8')).get('taskArns') or []
+          if len(tasks) != 1:
+              raise SystemExit('Production must have exactly one collector task')
+          print(tasks[0])
+          PY
+          )"
+          aws ecs describe-tasks \
+            --cluster "${PRODUCTION_CLUSTER_ARN}" \
+            --tasks "${TASK_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_LIFECYCLE_DIR}/task.json"
+          aws ecs describe-task-definition \
+            --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
+            --region "${AWS_REGION}" > "${TEMP_LIFECYCLE_DIR}/task-definition.json"
+          python - <<'PY'
+          import ipaddress
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_LIFECYCLE_DIR'])
+          workspace = json.loads(Path('projects/vevo/growthbook_workspace.json').read_text(encoding='utf-8'))
+          foundation = workspace['athena']['production']['successful_foundation_deployment']
+          service = json.loads((root / 'service.json').read_text(encoding='utf-8'))['services'][0]
+          task = json.loads((root / 'task.json').read_text(encoding='utf-8'))['tasks'][0]
+          definition = json.loads((root / 'task-definition.json').read_text(encoding='utf-8'))['taskDefinition']
+          if service.get('status') != 'ACTIVE' or service.get('desiredCount') != 1 or service.get('runningCount') != 1:
+              raise SystemExit('Production collector service is not healthy 1/1')
+          if service.get('taskDefinition') != os.environ['PRODUCTION_TASK_DEFINITION_ARN']:
+              raise SystemExit('Production task definition drift')
+          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN']:
+              raise SystemExit('Production task identity drift')
+          containers = task.get('containers') or []
+          definitions = definition.get('containerDefinitions') or []
+          if len(containers) != 1 or len(definitions) != 1 or definitions[0].get('name') != 'collector':
+              raise SystemExit('Production container identity drift')
+          recorded = foundation['service_runtime']
+          image_digest = str(containers[0].get('imageDigest') or '')
+          task_definition = str(definition.get('taskDefinitionArn') or '').rsplit('/', 1)[-1]
+          if image_digest != recorded.get('image_digest') or task_definition != recorded.get('task_definition'):
+              raise SystemExit('Production runtime differs from localhost-gated foundation')
+          if foundation['host_gate'].get('instance_id') != 'N/A:Fargate':
+              raise SystemExit('Production instance identity drift')
+          if foundation['host_gate'].get('service') != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('Production service identity drift')
+          if foundation['host_gate'].get('runtime_path') != os.environ['EXPECTED_RUNTIME_PATH']:
+              raise SystemExit('Production runtime path drift')
+          if foundation['host_gate'].get('localhost_health_marker_verified') is not True:
+              raise SystemExit('Production localhost health marker is missing')
+          if foundation['host_gate'].get('localhost_runtime_marker_verified') is not True:
+              raise SystemExit('Production localhost runtime marker is missing')
+          details = [
+              row for attachment in task.get('attachments') or []
+              for row in attachment.get('details') or []
+          ]
+          private_ip = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+          parsed_ip = ipaddress.ip_address(private_ip)
+          if parsed_ip.version != 4 or not parsed_ip.is_private or not private_ip.startswith('172.31.'):
+              raise SystemExit('Production private IP is outside the VEVO VPC')
+          print(
+              'VEVO_CTA_LIFECYCLE_HOST_GATE_OK:'
+              f'instance-id=N/A:Fargate:private-ip={private_ip}:'
+              f"service={os.environ['EXPECTED_SERVICE']}:path={os.environ['EXPECTED_RUNTIME_PATH']}:"
+              f'image={image_digest}:localhost-marker=inherited-verified'
+          )
+          PY
+
+      - name: Verify the exact curated device-fact schema
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          aws glue get-table \
+            --database-name "${PRODUCTION_DATABASE}" \
+            --name experiment_device_facts \
+            --region "${AWS_REGION}" > "${TEMP_LIFECYCLE_DIR}/device-schema.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          table = json.loads((Path(os.environ['TEMP_LIFECYCLE_DIR']) / 'device-schema.json').read_text(encoding='utf-8'))['Table']
+          expected = [
+              'metric_contract_version', 'device_id', 'first_exposure_at', 'variation_id',
+              'meta_campaign_id', 'meta_adset_id', 'meta_ad_id', 'meta_placement',
+              'add_to_cart_24h', 'purchase_converted', 'joined_order_count',
+              'net_revenue_eur', 'cm1_eur', 'cancelled_order_count',
+              'refunded_order_count', 'immature_order_count', 'client_error_observed',
+              'contaminated', 'eligible', 'order_attribution_eligible',
+              'order_attribution_issue', 'unmatched_transaction_count',
+              'ambiguous_transaction_count', 'exclusion_reason', 'facts_generated_at',
+          ]
+          actual = [row['Name'] for row in table['StorageDescriptor']['Columns']]
+          partitions = [row['Name'] for row in table.get('PartitionKeys') or []]
+          if actual != expected or partitions != ['experiment_id']:
+              raise SystemExit('Production device-fact schema drift')
+          print('VEVO_CTA_LIFECYCLE_SCHEMA_OK:identity=temporary-only:customer-fields=absent')
+          PY
+
+      - name: Download the direct curated A/A facts into the isolated runner directory
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          aws s3 sync \
+            "s3://${PRODUCTION_EVENT_BUCKET}/experiment-events/curated/device_facts/experiment_id=${SOURCE_EXPERIMENT_ID}/" \
+            "${TEMP_LIFECYCLE_DIR}/direct-device-facts/" \
+            --exclude '*' \
+            --include '*.json' \
+            --only-show-errors \
+            --region "${AWS_REGION}"
+          [[ "$(find "${TEMP_LIFECYCLE_DIR}/direct-device-facts" -type f -name '*.json' | wc -l)" -gt 0 ]]
+
+      - name: Bind the exact retained quality object to the direct cohort generation
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_lifecycle_preflight.py select-quality-context \
+            --context "${TEMP_LIFECYCLE_DIR}/context.json" \
+            --direct-facts "${TEMP_LIFECYCLE_DIR}/direct-device-facts" \
+            --output "${TEMP_LIFECYCLE_DIR}/quality-context.json"
+          QUALITY_KEY="$(python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value = json.loads((Path(os.environ['TEMP_LIFECYCLE_DIR']) / 'quality-context.json').read_text(encoding='utf-8'))
+          print(value['quality_key'])
+          PY
+          )"
+          aws s3api get-object \
+            --bucket "${PRODUCTION_EVENT_BUCKET}" \
+            --key "${QUALITY_KEY}" \
+            --region "${AWS_REGION}" \
+            "${TEMP_LIFECYCLE_DIR}/reporting-quality.json" > "${TEMP_LIFECYCLE_DIR}/quality-metadata.json"
+          {
+            echo "QUALITY_KEY=${QUALITY_KEY}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Run one aggregate-only Athena lifecycle parity query
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          QUERY_ID="$(aws athena start-query-execution \
+            --query-string "file://${TEMP_LIFECYCLE_DIR}/lifecycle.sql" \
+            --query-execution-context "Database=${PRODUCTION_DATABASE}" \
+            --work-group "${PRODUCTION_WORKGROUP}" \
+            --region "${AWS_REGION}" \
+            --query QueryExecutionId \
+            --output text)"
+          [[ -n "${QUERY_ID}" && "${QUERY_ID}" != 'None' ]]
+          STATE='QUEUED'
+          for attempt in $(seq 1 30); do
+            STATE="$(aws athena get-query-execution \
+              --query-execution-id "${QUERY_ID}" \
+              --region "${AWS_REGION}" \
+              --query 'QueryExecution.Status.State' \
+              --output text)"
+            if [[ "${STATE}" == 'SUCCEEDED' ]]; then
+              break
+            fi
+            if [[ "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then
+              echo "Lifecycle parity query failed safely: ${STATE}" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          [[ "${STATE}" == 'SUCCEEDED' ]]
+          aws athena get-query-results \
+            --query-execution-id "${QUERY_ID}" \
+            --max-results 2 \
+            --region "${AWS_REGION}" > "${TEMP_LIFECYCLE_DIR}/athena-results.json"
+
+      - name: Build one canonical source-explicit identity-free observation
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_lifecycle_preflight.py build-observation \
+            --context "${TEMP_LIFECYCLE_DIR}/context.json" \
+            --quality "${TEMP_LIFECYCLE_DIR}/reporting-quality.json" \
+            --quality-key "${QUALITY_KEY}" \
+            --direct-facts "${TEMP_LIFECYCLE_DIR}/direct-device-facts" \
+            --athena-results "${TEMP_LIFECYCLE_DIR}/athena-results.json" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --main-commit "${GITHUB_SHA}" \
+            --output "${LIFECYCLE_FILE}"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          raw = Path(os.environ['LIFECYCLE_FILE']).read_bytes()
+          value = json.loads(raw)
+          canonical = (json.dumps(value, ensure_ascii=False, separators=(',', ':'), sort_keys=True) + '\n').encode('utf-8')
+          if raw != canonical:
+              raise SystemExit('Lifecycle preflight artifact is not canonical JSON')
+          if value.get('cta_outcome_data_read') is not False:
+              raise SystemExit('Lifecycle preflight read CTA outcomes')
+          if value.get('contains_event_or_device_identity') is not False:
+              raise SystemExit('Lifecycle preflight artifact contains identity')
+          if value.get('customer_or_order_identity_in_evidence') is not False:
+              raise SystemExit('Lifecycle preflight artifact contains commerce identity')
+          print(
+              'VEVO_CTA_LIFECYCLE_ARTIFACT_OK:'
+              f"sha256={hashlib.sha256(raw).hexdigest()}:source=completed-aa:"
+              'cta-outcomes=false:identity=false:mutation=false'
+          )
+          PY
+
+      - name: Remove every raw AWS response, identity-bearing fact and query file
+        if: ${{ always() && env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          TARGET="${RUNNER_TEMP}/vevo-cta-lifecycle-${GITHUB_RUN_ID}"
+          [[ "${TARGET}" == "${RUNNER_TEMP}/vevo-cta-lifecycle-${GITHUB_RUN_ID}" ]]
+          if [[ -d "${TARGET}" ]]; then
+            find "${TARGET}" -type f -exec shred -f -u -- {} + 2>/dev/null || find "${TARGET}" -type f -delete
+            rmdir "${TARGET}/direct-device-facts" 2>/dev/null || true
+            rmdir "${TARGET}" 2>/dev/null || true
+          fi
+          [[ ! -e "${TARGET}" ]]
+
+      - name: Upload only the canonical lifecycle preflight
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-cta-lifecycle-preflight
+          path: vevo-growthbook-cta-lifecycle-preflight.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Write read-only preflight summary
+        if: ${{ env.RUN_COLLECTION == 'true' }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## VEVO CTA lifecycle preflight'
+            echo '- Source cohort: `completed and stopped Production A/A`'
+            echo '- Order attribution plus lifecycle maturity: `7 + 14 = 21 days`'
+            echo '- Direct curated S3 vs Athena CM1/lifecycle parity: `required`'
+            echo '- CTA outcome data: `not read`'
+            echo '- Event/device/customer/order identities in artifact: `excluded`'
+            echo '- GrowthBook, GTM, Meta Ads, BiznisWeb, reporting and commerce mutation: `none`'
+            echo '- CTA activation: `still blocked pending offline hash/run/commit recording`'
+            echo '- UI test: `not applicable; the workflow makes no UI change`'
+          } >> "${GITHUB_STEP_SUMMARY}"

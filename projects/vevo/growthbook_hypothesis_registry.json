@@ -40,7 +40,7 @@
       ],
       "decision_contract": {
         "path": "projects/vevo/growthbook_cta_decision_contract.json",
-        "sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183"
+        "sha256": "62d9eb905a05b6273a7395905bc73f815e130155af1a32d896195facd442a07a"
       },
       "final_decision": null
     }

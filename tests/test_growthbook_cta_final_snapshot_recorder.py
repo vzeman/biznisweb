@@ -31,7 +31,7 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
         snapshot = builder.build_snapshot(
             self.fixture.opened,
             self.fixture._athena_results(),
-            evaluated_at_utc="2026-10-03T02:00:00Z",
+            evaluated_at_utc="2026-10-10T02:00:00Z",
             **paths,
         )
         decision = evaluator.evaluate(
@@ -116,9 +116,7 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
         self.assertEqual(
             self._sha(provenance), recorded["final_look"]["provenance_sha256"]
         )
-        self.assertFalse(
-            recorded["release_boundaries"]["outcome_metrics_read_allowed"]
-        )
+        self.assertFalse(recorded["release_boundaries"]["outcome_metrics_read_allowed"])
         self.assertFalse(
             recorded["release_boundaries"]["automatic_winner_application_allowed"]
         )

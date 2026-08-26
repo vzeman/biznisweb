@@ -85,7 +85,7 @@ jobs:
               raise SystemExit('CTA one-look gate is closed')
           due = datetime.fromisoformat(str(final.get('snapshot_due_utc') or '').replace('Z', '+00:00'))
           if datetime.now(UTC) < due:
-              raise SystemExit('CTA 14-day outcome maturity is not complete')
+              raise SystemExit('CTA 21-day outcome maturity is not complete')
           required_true = {
               'main_only',
               'diagnostic_host_gate_task_allowed',

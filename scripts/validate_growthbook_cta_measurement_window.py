@@ -305,7 +305,7 @@ def expected_measurement_window(
         == {
             "minimum_full_calendar_days": 14,
             "maximum_full_calendar_days": 42,
-            "required_followup_days_after_assignment_stop": 14,
+            "required_followup_days_after_assignment_stop": 21,
             "assignment_must_be_stopped": True,
             "one_final_look_only": True,
             "safety_guardrails_may_stop_early": True,
@@ -1126,7 +1126,7 @@ def validate_manifest(
     )
     _require(
         root["next_gate"]
-        == "wait_exact_14_day_followup_then_run_one_protected_final_snapshot",
+        == "wait_exact_21_day_followup_then_run_one_protected_final_snapshot",
         "stopped CTA next gate drift",
     )
 

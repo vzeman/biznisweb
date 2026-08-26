@@ -87,7 +87,7 @@ EVIDENCE_FILE = "vevo-growthbook-cta-safety-evidence.json"
 DECISION_FILE = "vevo-growthbook-cta-safety-decision.json"
 PROVENANCE_FILE = "vevo-growthbook-cta-safety-provenance.json"
 EXPECTED_DECISION_SHA256 = (
-    "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183"
+    "62d9eb905a05b6273a7395905bc73f815e130155af1a32d896195facd442a07a"
 )
 
 PROVENANCE_KEYS = {
@@ -213,7 +213,9 @@ def validate_provenance(
         },
         "CTA safety provenance file binding drift",
     )
-    safety = _exact(root["safety"], PROVENANCE_SAFETY_KEYS, "CTA safety provenance boundary")
+    safety = _exact(
+        root["safety"], PROVENANCE_SAFETY_KEYS, "CTA safety provenance boundary"
+    )
     _require(not any(safety.values()), "CTA safety provenance exceeded its boundary")
 
 
@@ -231,8 +233,13 @@ def initialize_monitoring(
         validate_activation_manifest(activation)
         validate_start_observation(start_observation, activation)
     except (CtaSafetyEvaluationError, ValueError) as exc:
-        raise CtaSafetyRecordingError(f"CTA safety initialization source invalid: {exc}") from exc
-    _require(manifest.get("status") == WAITING, "CTA safety monitoring is already initialized")
+        raise CtaSafetyRecordingError(
+            f"CTA safety initialization source invalid: {exc}"
+        ) from exc
+    _require(
+        manifest.get("status") == WAITING,
+        "CTA safety monitoring is already initialized",
+    )
     _require(activation.get("status") == CTA_RUNNING, "CTA activation is not running")
     _require(
         set(source_hashes) == {"activation", "start_observation", "decision_contract"},
@@ -337,7 +344,9 @@ def _open_measurement_safety_stop(
         }
     )
     updated["release_boundaries"]["read_only_checkpoint_allowed"] = False
-    updated["next_gate"] = "manually_stop_only_cta_assignment_then_record_canonical_readback"
+    updated["next_gate"] = (
+        "manually_stop_only_cta_assignment_then_record_canonical_readback"
+    )
     try:
         validate_measurement_manifest(
             updated,
@@ -376,9 +385,7 @@ def _validate_running_measurement_source(
             source_hashes=measurement_source_hashes,
         )
     except CtaMeasurementWindowError as exc:
-        raise CtaSafetyRecordingError(
-            f"CTA measurement source invalid: {exc}"
-        ) from exc
+        raise CtaSafetyRecordingError(f"CTA measurement source invalid: {exc}") from exc
     _require(
         measurement.get("status") == WINDOW_RUNNING,
         "CTA assignment window is not running",
@@ -422,7 +429,10 @@ def record_checkpoint(
         "safety_checkpoint_recording_allowed",
         "protected_safety_collection_workflow_allowed",
     ):
-        _require(manifest["release_boundaries"][field] is True, f"CTA safety gate closed: {field}")
+        _require(
+            manifest["release_boundaries"][field] is True,
+            f"CTA safety gate closed: {field}",
+        )
     expected_run_id = str(expected_workflow_run_id or "").strip()
     expected_commit = str(expected_main_commit or "").strip()
     _require(
@@ -439,11 +449,23 @@ def record_checkpoint(
         "provenance": str(provenance_sha256 or "").strip(),
     }
     for name, digest in hashes.items():
-        _require(SHA256_RE.fullmatch(digest) is not None, f"CTA safety {name} SHA-256 invalid")
-    _require(_sha256_bytes(canonical_json_bytes(evidence)) == hashes["evidence"], "CTA safety evidence SHA-256 mismatch")
+        _require(
+            SHA256_RE.fullmatch(digest) is not None,
+            f"CTA safety {name} SHA-256 invalid",
+        )
+    _require(
+        _sha256_bytes(canonical_json_bytes(evidence)) == hashes["evidence"],
+        "CTA safety evidence SHA-256 mismatch",
+    )
     recomputed = evaluate(evidence, manifest)
-    _require(decision == recomputed, "CTA safety decision differs from independent evaluation")
-    _require(_sha256_bytes(canonical_json_bytes(decision)) == hashes["decision"], "CTA safety decision SHA-256 mismatch")
+    _require(
+        decision == recomputed,
+        "CTA safety decision differs from independent evaluation",
+    )
+    _require(
+        _sha256_bytes(canonical_json_bytes(decision)) == hashes["decision"],
+        "CTA safety decision SHA-256 mismatch",
+    )
     validate_provenance(
         provenance,
         evidence_sha256=hashes["evidence"],
@@ -457,7 +479,10 @@ def record_checkpoint(
         provenance["main_commit"] == expected_commit,
         "CTA safety provenance main commit mismatch",
     )
-    _require(_sha256_bytes(canonical_json_bytes(provenance)) == hashes["provenance"], "CTA safety provenance SHA-256 mismatch")
+    _require(
+        _sha256_bytes(canonical_json_bytes(provenance)) == hashes["provenance"],
+        "CTA safety provenance SHA-256 mismatch",
+    )
     previous_index = (
         0
         if manifest["latest_checkpoint"]["status"] == "not_recorded"
@@ -502,8 +527,7 @@ def record_checkpoint(
         "checkpoint_index": evidence["checkpoint_index"],
         "observed_at_utc": evidence["observed_at_utc"],
         "eligible_devices_seen": sum(
-            row["eligible_devices"]
-            for row in evidence["variation_health"].values()
+            row["eligible_devices"] for row in evidence["variation_health"].values()
         ),
         "evidence_sha256": hashes["evidence"],
         "decision_sha256": hashes["decision"],
@@ -533,7 +557,9 @@ def record_checkpoint(
         ):
             recorded["release_boundaries"][field] = False
         recorded["release_boundaries"]["manual_growthbook_stop_allowed"] = True
-        recorded["next_gate"] = "manually_stop_only_exact_cta_then_record_canonical_readback"
+        recorded["next_gate"] = (
+            "manually_stop_only_exact_cta_then_record_canonical_readback"
+        )
         validate_contract(recorded)
         updated_measurement = _open_measurement_safety_stop(
             measurement,
@@ -609,15 +635,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             sample = _load(SAMPLE_PLAN_PATH, "CTA sample plan")
             decision_contract = json.loads(decision_contract_bytes.decode("utf-8"))
             reconciliation = _load(RECONCILIATION_PATH, "CTA reconciliation")
-            evidence = _load_canonical(args.evidence, args.evidence_sha256, "CTA safety evidence")
-            decision = _load_canonical(args.decision, args.decision_sha256, "CTA safety decision")
-            provenance = _load_canonical(args.provenance, args.provenance_sha256, "CTA safety provenance")
+            evidence = _load_canonical(
+                args.evidence, args.evidence_sha256, "CTA safety evidence"
+            )
+            decision = _load_canonical(
+                args.decision, args.decision_sha256, "CTA safety decision"
+            )
+            provenance = _load_canonical(
+                args.provenance, args.provenance_sha256, "CTA safety provenance"
+            )
             measurement_hashes = {
                 "activation": _sha256_bytes(pretty_json_bytes(activation)),
                 "start_observation": _sha256_bytes(canonical_activation_bytes(start)),
                 "sample_plan": _sha256_bytes(SAMPLE_PLAN_PATH.read_bytes()),
                 "decision_contract": _sha256_bytes(decision_contract_bytes),
-                "reconciliation_evidence": _sha256_bytes(RECONCILIATION_PATH.read_bytes()),
+                "reconciliation_evidence": _sha256_bytes(
+                    RECONCILIATION_PATH.read_bytes()
+                ),
             }
             recorded, updated_measurement = record_checkpoint(
                 manifest,
@@ -637,7 +671,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 reconciliation=reconciliation,
                 measurement_source_hashes=measurement_hashes,
             )
-            _require(args.output.resolve() != args.measurement_output.resolve(), "CTA safety outputs must be distinct")
+            _require(
+                args.output.resolve() != args.measurement_output.resolve(),
+                "CTA safety outputs must be distinct",
+            )
             _write_atomic(args.output, recorded)
             _write_atomic(args.measurement_output, updated_measurement)
         print("VEVO_CTA_SAFETY_RECORDED:automatic=false:winner=false:outcomes=false")

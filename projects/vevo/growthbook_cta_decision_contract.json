@@ -22,7 +22,7 @@
   "decision_timing": {
     "minimum_full_calendar_days": 14,
     "maximum_full_calendar_days": 42,
-    "required_followup_days_after_assignment_stop": 14,
+    "required_followup_days_after_assignment_stop": 21,
     "assignment_must_be_stopped": true,
     "one_final_look_only": true,
     "safety_guardrails_may_stop_early": true

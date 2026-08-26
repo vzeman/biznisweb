@@ -127,12 +127,12 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
         builder.validate_manifest(self.waiting)
         self.assertEqual(builder.WAITING, self.waiting["status"])
         self.assertFalse(self.waiting["final_look"]["protected_workflow_allowed"])
-        self.assertFalse(self.waiting["release_boundaries"]["outcome_metrics_read_allowed"])
+        self.assertFalse(
+            self.waiting["release_boundaries"]["outcome_metrics_read_allowed"]
+        )
         self.assertEqual(
             self.waiting["query_contract"]["template_sha256"],
-            builder._hash_path(
-                ROOT / self.waiting["query_contract"]["template_path"]
-            ),
+            builder._hash_path(ROOT / self.waiting["query_contract"]["template_path"]),
         )
 
     def test_stop_opens_only_the_hash_bound_future_final_look(self) -> None:
@@ -142,7 +142,7 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
 
         final = self.opened["final_look"]
         self.assertEqual(builder.FOLLOWUP, self.opened["status"])
-        self.assertEqual("2026-10-03T02:00:00Z", final["snapshot_due_utc"])
+        self.assertEqual("2026-10-10T02:00:00Z", final["snapshot_due_utc"])
         self.assertTrue(final["protected_workflow_allowed"])
         self.assertTrue(
             self.opened["release_boundaries"]["outcome_metrics_read_allowed"]
@@ -154,7 +154,9 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
             "outcome_metrics_read_allowed",
         }
         self.assertTrue(
-            all(self.opened["release_boundaries"][field] is False for field in forbidden)
+            all(
+                self.opened["release_boundaries"][field] is False for field in forbidden
+            )
         )
 
     def test_rendered_query_is_exact_first_n_and_has_no_placeholders(self) -> None:
@@ -164,7 +166,7 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
 
         self.assertIn("sample_ordinal <= 1084", query)
         self.assertIn("2026-09-19T02:00:00Z", query)
-        self.assertIn("2026-10-03T02:00:00Z", query)
+        self.assertIn("2026-10-10T02:00:00Z", query)
         self.assertNotIn("__CTA_", query)
         self.assertNotIn("__FOLLOWUP_", query)
         self.assertNotIn("__TARGET_", query)
@@ -172,13 +174,15 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
         self.assertNotIn("LIMIT 100", query)
         self.assertEqual(6, query.count("FROM raw_window"))
 
-    def test_builds_one_canonical_identity_free_snapshot_and_final_decision(self) -> None:
+    def test_builds_one_canonical_identity_free_snapshot_and_final_decision(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             paths = self._write_sources(Path(temporary))
             snapshot = builder.build_snapshot(
                 self.opened,
                 self._athena_results(),
-                evaluated_at_utc="2026-10-03T02:00:00Z",
+                evaluated_at_utc="2026-10-10T02:00:00Z",
                 **paths,
             )
 
@@ -205,9 +209,7 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
 
     def test_rejects_result_schema_drift_or_identity_column(self) -> None:
         altered = self._athena_results()
-        altered["ResultSet"]["Rows"][0]["Data"].append(
-            {"VarCharValue": "device_id"}
-        )
+        altered["ResultSet"]["Rows"][0]["Data"].append({"VarCharValue": "device_id"})
         for row in altered["ResultSet"]["Rows"][1:]:
             row["Data"].append({"VarCharValue": "forbidden"})
 
@@ -223,7 +225,7 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
                 builder.build_snapshot(
                     self.opened,
                     self._athena_results(),
-                    evaluated_at_utc="2026-10-03T01:59:59Z",
+                    evaluated_at_utc="2026-10-10T01:59:59Z",
                     **paths,
                 )
             recorded = copy.deepcopy(self.opened)
@@ -244,13 +246,17 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
             recorded["release_boundaries"]["aws_aggregate_reads_allowed"] = False
             recorded["release_boundaries"]["diagnostic_host_gate_task_allowed"] = False
             recorded["release_boundaries"]["outcome_metrics_read_allowed"] = False
-            recorded["next_gate"] = "manual_review_decision_before_any_external_mutation"
+            recorded["next_gate"] = (
+                "manual_review_decision_before_any_external_mutation"
+            )
             builder.validate_manifest(recorded, **paths)
-            with self.assertRaisesRegex(builder.CtaFinalSnapshotError, "gate is not open"):
+            with self.assertRaisesRegex(
+                builder.CtaFinalSnapshotError, "gate is not open"
+            ):
                 builder.build_snapshot(
                     recorded,
                     self._athena_results(),
-                    evaluated_at_utc="2026-10-03T02:00:00Z",
+                    evaluated_at_utc="2026-10-10T02:00:00Z",
                     **paths,
                 )
 

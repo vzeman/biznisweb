@@ -10,8 +10,13 @@ from scripts import record_growthbook_cta_activation as recorder
 from scripts import record_growthbook_pro_upgrade as pro_upgrade_recorder
 from scripts import build_growthbook_cta_runtime_readiness as runtime_builder
 from scripts import validate_growthbook_cta_runtime_release as release_validator
-from scripts.record_growthbook_aa_completion import canonical_json_bytes as aa_canonical_json_bytes
+from scripts.record_growthbook_aa_completion import (
+    canonical_json_bytes as aa_canonical_json_bytes,
+)
 from tests.test_growthbook_aa_completion_recorder import stop_observation
+from tests.test_growthbook_cta_lifecycle_recorder import (
+    _observation as lifecycle_observation,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +33,9 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         self.snapshot = load("projects/vevo/growthbook_aa_snapshot.json")
         self.pro_upgrade = load("projects/vevo/growthbook_pro_upgrade.json")
         self.sample = load("projects/vevo/growthbook_cta_sample_plan.json")
-        self.lifecycle = load("projects/vevo/growthbook_cta_lifecycle_reconciliation.json")
+        self.lifecycle = load(
+            "projects/vevo/growthbook_cta_lifecycle_reconciliation.json"
+        )
         self.meta_reporting = load(
             "projects/vevo/growthbook_meta_reporting_contract.json"
         )
@@ -68,9 +75,9 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             rows[key] = {
                 "preview_metric_id": preview_id,
                 "production_metric_id": production_id,
-                "contract_sha256": self.pro_upgrade["target"][
-                    "metric_contract_sha256"
-                ][key],
+                "contract_sha256": self.pro_upgrade["target"]["metric_contract_sha256"][
+                    key
+                ],
                 "preview_configuration_readback_match": True,
                 "production_configuration_readback_match": True,
                 "preview_query_test_passed": True,
@@ -128,9 +135,9 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         ).hexdigest()
         self.pro_upgrade["status"] = pro_upgrade_recorder.VERIFIED
         self.pro_upgrade["source_bindings"]["aa_completion"]["sha256"] = "3" * 64
-        self.pro_upgrade["source_bindings"]["workspace_before_upgrade"][
-            "sha256"
-        ] = "4" * 64
+        self.pro_upgrade["source_bindings"]["workspace_before_upgrade"]["sha256"] = (
+            "4" * 64
+        )
         self.pro_upgrade["authorization"].update(
             {
                 "status": "consumed_by_verified_upgrade",
@@ -168,9 +175,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             "production_aa_stopped_verified_cta_activation_blocked"
         )
         self.completion["aa_pass"]["verdict"] = "PASS"
-        self.completion["aa_pass"]["snapshot_sha256"] = (
-            self.snapshot_artifact_hash
-        )
+        self.completion["aa_pass"]["snapshot_sha256"] = self.snapshot_artifact_hash
         self.completion["aa_pass"]["provenance_sha256"] = "e" * 64
         self.completion["stop_readback"]["status"] = "verified_zero_allocation"
         self.snapshot["snapshot_build_allowed"] = True
@@ -181,11 +186,39 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 "total_sample": 1084,
             }
         )
+        self.lifecycle_observation = lifecycle_observation()
+        self.lifecycle_observation["source_completion_sha256"] = self.source_hashes[
+            "aa_completion"
+        ]
+        self.lifecycle_observation["source_aa_snapshot_sha256"] = self.source_hashes[
+            "aa_snapshot"
+        ]
+        lifecycle_observation_sha256 = hashlib.sha256(
+            recorder.canonical_json_bytes(self.lifecycle_observation)
+        ).hexdigest()
         self.lifecycle.update(
             {
-                "status": "verified_production_14d_refund_creditnote_value_reconciliation",
+                "status": "verified_completed_aa_21d_lifecycle_preflight",
                 "verified": True,
-                "observation_sha256": "c" * 64,
+                "observation_path": (
+                    "projects/vevo/growthbook_cta_lifecycle_observation.json"
+                ),
+                "observation_sha256": lifecycle_observation_sha256,
+                "workflow_run_id": self.lifecycle_observation["workflow_run_id"],
+                "main_commit": self.lifecycle_observation["main_commit"],
+                "source_completion_sha256": self.lifecycle_observation[
+                    "source_completion_sha256"
+                ],
+                "source_aa_snapshot_sha256": self.lifecycle_observation[
+                    "source_aa_snapshot_sha256"
+                ],
+                "reporting_quality_object_key": self.lifecycle_observation[
+                    "reporting_quality_object_key"
+                ],
+                "reporting_quality_object_sha256": self.lifecycle_observation[
+                    "reporting_quality_object_sha256"
+                ],
+                "verified_at_utc": "2026-09-24T04:00:00Z",
                 "refund_creditnote_value_parity_verified": True,
                 "non_realized_value_policy_verified": True,
             }
@@ -247,9 +280,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             }
         )
         cta = copy.deepcopy(
-            self.registry["environments"]["preview"][
-                "vevo-sk-product-cta-color-001"
-            ]
+            self.registry["environments"]["preview"]["vevo-sk-product-cta-color-001"]
         )
         self.registry["environments"]["production"] = {
             "vevo-sk-product-cta-color-001": cta
@@ -280,9 +311,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             },
             "control_plane": {
                 "registry_sha256": self.registry_hash,
-                "production_registry_experiments": [
-                    "vevo-sk-product-cta-color-001"
-                ],
+                "production_registry_experiments": ["vevo-sk-product-cta-color-001"],
                 "cta_events_before_start": 0,
                 "aa_production_allocation_percent": 0,
                 "cta_production_allocation_percent": 0,
@@ -335,9 +364,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 "variation_weights": {"control": 0.5, "brand_contrast": 0.5},
                 "feature_revision": 4,
                 "feature_revision_status": "live",
-                "active_production_experiments": [
-                    "vevo-sk-product-cta-color-001"
-                ],
+                "active_production_experiments": ["vevo-sk-product-cta-color-001"],
                 "aa_status": "stopped_zero_allocation",
                 "data_source_id": "ds_19g6mmt5stlp6",
                 "goal_metrics": ["vevo_add_to_cart_24h"],
@@ -411,6 +438,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             pro_observation=self.pro_observation,
             sample=self.sample,
             lifecycle=self.lifecycle,
+            lifecycle_observation=self.lifecycle_observation,
             workspace=self.workspace,
             registry=self.registry,
             runtime_observation=self.runtime,
@@ -433,9 +461,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             },
         )
         self.assertFalse(
-            self.activation["release_boundaries"][
-                "manual_growthbook_start_allowed"
-            ]
+            self.activation["release_boundaries"]["manual_growthbook_start_allowed"]
         )
         self.assertTrue(
             all(
@@ -452,15 +478,17 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             completion=self.completion,
             snapshot=self.snapshot,
             pro_upgrade=self.pro_upgrade,
-            pro_upgrade_raw=pro_upgrade_recorder.canonical_json_bytes(
-                self.pro_upgrade
-            ),
+            pro_upgrade_raw=pro_upgrade_recorder.canonical_json_bytes(self.pro_upgrade),
             pro_observation=self.pro_observation,
             pro_observation_raw=pro_upgrade_recorder.canonical_json_bytes(
                 self.pro_observation
             ),
             sample=self.sample,
             lifecycle=self.lifecycle,
+            lifecycle_observation=self.lifecycle_observation,
+            lifecycle_observation_raw=recorder.canonical_json_bytes(
+                self.lifecycle_observation
+            ),
             workspace=self.workspace,
             registry=self.registry,
             stop_observation=observation,
@@ -492,6 +520,10 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 ),
                 sample=self.sample,
                 lifecycle=self.lifecycle,
+                lifecycle_observation=self.lifecycle_observation,
+                lifecycle_observation_raw=recorder.canonical_json_bytes(
+                    self.lifecycle_observation
+                ),
                 workspace=self.workspace,
                 registry=self.registry,
                 stop_observation=unsafe,
@@ -523,14 +555,16 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 ),
                 sample=self.sample,
                 lifecycle=self.lifecycle,
+                lifecycle_observation=self.lifecycle_observation,
+                lifecycle_observation_raw=recorder.canonical_json_bytes(
+                    self.lifecycle_observation
+                ),
                 workspace=self.workspace,
                 registry=self.registry,
                 stop_observation=observation,
                 stop_observation_raw=raw,
                 design_sha256=recorder.EXPECTED_STATIC_HASHES["design_contract"],
-                decision_sha256=recorder.EXPECTED_STATIC_HASHES[
-                    "decision_contract"
-                ],
+                decision_sha256=recorder.EXPECTED_STATIC_HASHES["decision_contract"],
                 meta_reporting=self.meta_reporting,
                 meta_reporting_sha256=recorder.EXPECTED_STATIC_HASHES[
                     "meta_reporting_contract"
@@ -585,13 +619,9 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         self.assertEqual(1084, opened["launch_contract"]["target_total_sample"])
         self.assertEqual(
             self.runtime_hash,
-            opened["source_bindings"]["runtime_readiness"][
-                "observation_sha256"
-            ],
+            opened["source_bindings"]["runtime_readiness"]["observation_sha256"],
         )
-        self.assertTrue(
-            opened["release_boundaries"]["manual_growthbook_start_allowed"]
-        )
+        self.assertTrue(opened["release_boundaries"]["manual_growthbook_start_allowed"])
         self.assertFalse(
             opened["release_boundaries"]["automatic_growthbook_mutation_allowed"]
         )
@@ -629,11 +659,27 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         ):
             self._open()
 
+    def test_open_review_rejects_lifecycle_source_rebinding(self) -> None:
+        self.source_hashes["aa_completion"] = "9" * 64
+
+        with self.assertRaisesRegex(
+            recorder.CtaActivationRecordingError,
+            "lifecycle source completion changed",
+        ):
+            self._open()
+
+    def test_open_review_rejects_lifecycle_observation_tampering(self) -> None:
+        self.lifecycle_observation["cta_outcome_data_read"] = True
+
+        with self.assertRaisesRegex(
+            recorder.CtaActivationRecordingError,
+            "lifecycle evidence is invalid",
+        ):
+            self._open()
+
     def test_open_review_rejects_non_cta_or_mismatched_registry(self) -> None:
         self.registry["environments"]["production"] = copy.deepcopy(
-            load("growthbook_collector/experiments.json")["environments"][
-                "production"
-            ]
+            load("growthbook_collector/experiments.json")["environments"]["production"]
         )
         with self.assertRaisesRegex(
             recorder.CtaActivationRecordingError, "not CTA-only"
@@ -672,9 +718,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
     def test_record_start_binds_readback_and_running_workspace(self) -> None:
         opened = self._open()
         observation = self._start_observation()
-        digest = hashlib.sha256(
-            recorder.canonical_json_bytes(observation)
-        ).hexdigest()
+        digest = hashlib.sha256(recorder.canonical_json_bytes(observation)).hexdigest()
         recorded, workspace = recorder.record_start(
             opened,
             self.workspace,
@@ -692,9 +736,9 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             workspace["state"],
         )
         self.assertEqual(100, workspace["workspace"]["production_allocation_percent"])
-        cta = {
-            row["tracking_key"]: row for row in workspace["experiments"]
-        }["vevo-sk-product-cta-color-001"]
+        cta = {row["tracking_key"]: row for row in workspace["experiments"]}[
+            "vevo-sk-product-cta-color-001"
+        ]
         self.assertEqual("running_production_cta_only", cta["status"])
         self.assertEqual(1084, cta["activation_evidence"]["target_total_sample"])
         recorder.validate_manifest(recorded)
@@ -709,9 +753,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             "vevo-sk-aa-001",
             "vevo-sk-product-cta-color-001",
         ]
-        digest = hashlib.sha256(
-            recorder.canonical_json_bytes(observation)
-        ).hexdigest()
+        digest = hashlib.sha256(recorder.canonical_json_bytes(observation)).hexdigest()
         with self.assertRaisesRegex(
             recorder.CtaActivationRecordingError,
             "only active Production experiment",
@@ -726,9 +768,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             )
         observation = self._start_observation()
         observation["commerce"]["price_unchanged"] = False
-        digest = hashlib.sha256(
-            recorder.canonical_json_bytes(observation)
-        ).hexdigest()
+        digest = hashlib.sha256(recorder.canonical_json_bytes(observation)).hexdigest()
         with self.assertRaisesRegex(
             recorder.CtaActivationRecordingError, "commerce readback"
         ):
@@ -744,9 +784,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
     def test_record_start_rejects_source_drift_after_review(self) -> None:
         opened = self._open()
         observation = self._start_observation()
-        digest = hashlib.sha256(
-            recorder.canonical_json_bytes(observation)
-        ).hexdigest()
+        digest = hashlib.sha256(recorder.canonical_json_bytes(observation)).hexdigest()
         changed = dict(self.source_hashes)
         changed["sample_plan"] = "f" * 64
         with self.assertRaisesRegex(

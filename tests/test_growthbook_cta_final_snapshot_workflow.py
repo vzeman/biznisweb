@@ -70,7 +70,7 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
             "confirm_final_snapshot:",
             "[[ \"${GITHUB_RUN_ATTEMPT}\" == '1' ]]",
             "followup_pending_final_look_locked_until_due",
-            "CTA 14-day outcome maturity is not complete",
+            "CTA 21-day outcome maturity is not complete",
             "diagnostic_host_gate_task_allowed",
             "outcome_metrics_read_allowed",
             "PRODUCTION_CTA_FINAL_LOCAL_GATE_OK:due=true:one-look=true:mutation=none",
@@ -86,7 +86,9 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
         self.assertLess(local_gate, prior_run_gate)
         self.assertLess(prior_run_gate, credentials)
 
-    def test_host_identity_localhost_markers_and_reconciliation_precede_query(self) -> None:
+    def test_host_identity_localhost_markers_and_reconciliation_precede_query(
+        self,
+    ) -> None:
         for marker in (
             "CTA_FINAL_PREQUERY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=",
             "service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}",
@@ -156,9 +158,7 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
             "arn:aws:ecs:eu-central-1:919341186960:task-definition/"
             "vevo-growthbook-reconcile-production:3"
         )
-        task_arn = (
-            "arn:aws:ecs:eu-central-1:919341186960:task/cluster/" + task_id
-        )
+        task_arn = "arn:aws:ecs:eu-central-1:919341186960:task/cluster/" + task_id
         digest = "sha256:" + "e" * 64
         log_stream = f"service/container/{task_id}"
         cloudtrail = {
@@ -332,7 +332,9 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
             output.getvalue(),
         )
 
-    def test_uploads_only_three_canonical_identity_free_files_after_cleanup(self) -> None:
+    def test_uploads_only_three_canonical_identity_free_files_after_cleanup(
+        self,
+    ) -> None:
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))
         cleanup = WORKFLOW.index(
             "Remove every temporary AWS response query and host-gate file"
