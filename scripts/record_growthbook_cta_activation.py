@@ -25,11 +25,20 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
+try:
+    from scripts import record_growthbook_pro_upgrade as pro_upgrade_recorder
+except ModuleNotFoundError:  # Direct execution from scripts/.
+    import record_growthbook_pro_upgrade as pro_upgrade_recorder  # type: ignore
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ACTIVATION_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_activation.json"
 DEFAULT_COMPLETION_PATH = ROOT / "projects" / "vevo" / "growthbook_production_aa_completion.json"
 DEFAULT_AA_SNAPSHOT_PATH = ROOT / "projects" / "vevo" / "growthbook_aa_snapshot.json"
+DEFAULT_PRO_UPGRADE_PATH = ROOT / "projects" / "vevo" / "growthbook_pro_upgrade.json"
+DEFAULT_PRO_OBSERVATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_pro_upgrade_observation.json"
+)
 DEFAULT_SAMPLE_PLAN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_sample_plan.json"
 DEFAULT_LIFECYCLE_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_lifecycle_reconciliation.json"
 DEFAULT_DESIGN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_design.json"
@@ -60,6 +69,8 @@ CTA_GUARDRAILS = [
 EXPECTED_PATHS = {
     "aa_completion": "projects/vevo/growthbook_production_aa_completion.json",
     "aa_snapshot": "projects/vevo/growthbook_aa_snapshot.json",
+    "pro_upgrade": "projects/vevo/growthbook_pro_upgrade.json",
+    "pro_upgrade_observation": "projects/vevo/growthbook_pro_upgrade_observation.json",
     "sample_plan": "projects/vevo/growthbook_cta_sample_plan.json",
     "lifecycle_reconciliation": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
     "design_contract": "projects/vevo/growthbook_cta_design.json",
@@ -148,7 +159,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     bindings = _exact_object(
         root["source_bindings"],
         {
-            "aa_completion", "aa_snapshot", "sample_plan", "lifecycle_reconciliation",
+            "aa_completion", "aa_snapshot", "pro_upgrade",
+            "pro_upgrade_observation", "sample_plan", "lifecycle_reconciliation",
             "design_contract", "decision_contract", "meta_reporting_contract",
             "collector_registry", "runtime_readiness",
         },
@@ -246,7 +258,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         _require(boundaries[field] is False, f"CTA forbidden boundary opened: {field}")
 
     dynamic_hashes = (
-        "aa_completion", "aa_snapshot", "sample_plan", "lifecycle_reconciliation", "collector_registry"
+        "aa_completion", "aa_snapshot", "pro_upgrade", "pro_upgrade_observation",
+        "sample_plan", "lifecycle_reconciliation", "collector_registry",
     )
     if root["status"] == WAITING:
         for name in dynamic_hashes:
@@ -387,6 +400,8 @@ def validate_start_observation(observation: Mapping[str, Any], manifest: Mapping
 def _validate_post_aa_sources(
     completion: Mapping[str, Any],
     snapshot: Mapping[str, Any],
+    pro_upgrade: Mapping[str, Any],
+    pro_observation: Mapping[str, Any],
     sample: Mapping[str, Any],
     lifecycle: Mapping[str, Any],
     workspace: Mapping[str, Any],
@@ -396,6 +411,28 @@ def _validate_post_aa_sources(
     _require(completion.get("aa_pass", {}).get("verdict") == "PASS", "CTA activation requires A/A PASS")
     _require(completion.get("stop_readback", {}).get("status") == "verified_zero_allocation", "CTA activation requires verified zero-allocation A/A stop")
     _require(snapshot.get("snapshot_build_allowed") is True, "A/A protected snapshot gate was not opened")
+    try:
+        pro_upgrade_recorder.validate_manifest(pro_upgrade, workspace)
+        pro_upgrade_recorder.validate_observation(
+            pro_observation,
+            pro_upgrade,
+            workspace,
+        )
+    except pro_upgrade_recorder.ProUpgradeError as exc:
+        raise CtaActivationRecordingError(
+            f"GrowthBook Pro source is invalid: {exc}"
+        ) from exc
+    _require(
+        pro_upgrade.get("status") == pro_upgrade_recorder.VERIFIED,
+        "CTA activation requires verified GrowthBook Pro metrics",
+    )
+    _require(
+        hashlib.sha256(
+            pro_upgrade_recorder.canonical_json_bytes(pro_observation)
+        ).hexdigest()
+        == pro_upgrade.get("verification", {}).get("observation_sha256"),
+        "GrowthBook Pro observation binding drift",
+    )
     _require(sample.get("status") == "sample_frozen_activation_still_blocked", "CTA activation requires a frozen sample")
     _require(sample.get("activation_allowed") is False, "CTA sample freeze may not activate CTA")
     _require(lifecycle.get("status") == "verified_production_14d_refund_creditnote_value_reconciliation", "CTA activation requires verified lifecycle reconciliation")
@@ -447,6 +484,8 @@ def open_review(
     *,
     completion: Mapping[str, Any],
     snapshot: Mapping[str, Any],
+    pro_upgrade: Mapping[str, Any],
+    pro_observation: Mapping[str, Any],
     sample: Mapping[str, Any],
     lifecycle: Mapping[str, Any],
     workspace: Mapping[str, Any],
@@ -462,7 +501,31 @@ def open_review(
         expected_static = EXPECTED_STATIC_HASHES.get(name)
         if expected_static is not None:
             _require(source_hashes[name] == expected_static, f"{name} checked-in SHA-256 drift")
-    _validate_post_aa_sources(completion, snapshot, sample, lifecycle, workspace, registry)
+    _require(
+        source_hashes["pro_upgrade"]
+        == hashlib.sha256(
+            pro_upgrade_recorder.canonical_json_bytes(pro_upgrade)
+        ).hexdigest(),
+        "GrowthBook Pro manifest is not canonical or hash-bound",
+    )
+    _require(
+        source_hashes["pro_upgrade_observation"]
+        == hashlib.sha256(
+            pro_upgrade_recorder.canonical_json_bytes(pro_observation)
+        ).hexdigest()
+        == pro_upgrade.get("verification", {}).get("observation_sha256"),
+        "GrowthBook Pro observation is not canonical or hash-bound",
+    )
+    _validate_post_aa_sources(
+        completion,
+        snapshot,
+        pro_upgrade,
+        pro_observation,
+        sample,
+        lifecycle,
+        workspace,
+        registry,
+    )
     validate_runtime_observation(runtime_observation, manifest)
     _require(hashlib.sha256(canonical_json_bytes(runtime_observation)).hexdigest() == runtime_observation_sha256, "CTA runtime observation SHA-256 mismatch")
     runtime_workflow = runtime_observation["workflow"]
@@ -477,7 +540,15 @@ def open_review(
     _require(target % 2 == 0, "CTA frozen sample does not preserve equal allocation")
 
     updated = copy.deepcopy(manifest)
-    for name in ("aa_completion", "aa_snapshot", "sample_plan", "lifecycle_reconciliation", "collector_registry"):
+    for name in (
+        "aa_completion",
+        "aa_snapshot",
+        "pro_upgrade",
+        "pro_upgrade_observation",
+        "sample_plan",
+        "lifecycle_reconciliation",
+        "collector_registry",
+    ):
         updated["source_bindings"][name]["sha256"] = source_hashes[name]
     runtime = updated["source_bindings"]["runtime_readiness"]
     runtime.update({
@@ -658,6 +729,10 @@ def _parser() -> argparse.ArgumentParser:
     open_parser = commands.add_parser("open-review")
     open_parser.add_argument("--completion", type=Path, default=DEFAULT_COMPLETION_PATH)
     open_parser.add_argument("--aa-snapshot", type=Path, default=DEFAULT_AA_SNAPSHOT_PATH)
+    open_parser.add_argument("--pro-upgrade", type=Path, default=DEFAULT_PRO_UPGRADE_PATH)
+    open_parser.add_argument(
+        "--pro-observation", type=Path, default=DEFAULT_PRO_OBSERVATION_PATH
+    )
     open_parser.add_argument("--sample-plan", type=Path, default=DEFAULT_SAMPLE_PLAN_PATH)
     open_parser.add_argument("--lifecycle", type=Path, default=DEFAULT_LIFECYCLE_PATH)
     open_parser.add_argument("--design", type=Path, default=DEFAULT_DESIGN_PATH)
@@ -675,6 +750,10 @@ def _parser() -> argparse.ArgumentParser:
     start_parser.add_argument("--workspace-output", type=Path, required=True)
     start_parser.add_argument("--completion", type=Path, default=DEFAULT_COMPLETION_PATH)
     start_parser.add_argument("--aa-snapshot", type=Path, default=DEFAULT_AA_SNAPSHOT_PATH)
+    start_parser.add_argument("--pro-upgrade", type=Path, default=DEFAULT_PRO_UPGRADE_PATH)
+    start_parser.add_argument(
+        "--pro-observation", type=Path, default=DEFAULT_PRO_OBSERVATION_PATH
+    )
     start_parser.add_argument("--sample-plan", type=Path, default=DEFAULT_SAMPLE_PLAN_PATH)
     start_parser.add_argument("--lifecycle", type=Path, default=DEFAULT_LIFECYCLE_PATH)
     start_parser.add_argument("--design", type=Path, default=DEFAULT_DESIGN_PATH)
@@ -696,6 +775,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             paths = {
                 "aa_completion": args.completion,
                 "aa_snapshot": args.aa_snapshot,
+                "pro_upgrade": args.pro_upgrade,
+                "pro_upgrade_observation": args.pro_observation,
                 "sample_plan": args.sample_plan,
                 "lifecycle_reconciliation": args.lifecycle,
                 "design_contract": args.design,
@@ -708,6 +789,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 manifest,
                 completion=_load(args.completion, "A/A completion"),
                 snapshot=_load(args.aa_snapshot, "A/A snapshot manifest"),
+                pro_upgrade=_load(args.pro_upgrade, "GrowthBook Pro manifest"),
+                pro_observation=_load(
+                    args.pro_observation, "GrowthBook Pro observation"
+                ),
                 sample=_load(args.sample_plan, "CTA sample plan"),
                 lifecycle=_load(args.lifecycle, "CTA lifecycle manifest"),
                 workspace=_load(args.workspace, "GrowthBook workspace"),
@@ -731,6 +816,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_hashes={
                 "aa_completion": _file_sha256(args.completion),
                 "aa_snapshot": _file_sha256(args.aa_snapshot),
+                "pro_upgrade": _file_sha256(args.pro_upgrade),
+                "pro_upgrade_observation": _file_sha256(args.pro_observation),
                 "sample_plan": _file_sha256(args.sample_plan),
                 "lifecycle_reconciliation": _file_sha256(args.lifecycle),
                 "design_contract": _file_sha256(args.design),
@@ -743,7 +830,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_json(args.workspace_output, workspace)
         print("VEVO_CTA_START_RECORDED:production_allocation=100:first_n_frozen=true:automatic_mutation=false")
         return 0
-    except (CtaActivationRecordingError, OSError, KeyError) as exc:
+    except (
+        CtaActivationRecordingError,
+        pro_upgrade_recorder.ProUpgradeError,
+        OSError,
+        KeyError,
+    ) as exc:
         print(f"record_growthbook_cta_activation.py: FAIL: {exc}")
         return 2
 

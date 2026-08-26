@@ -14,6 +14,14 @@
       "path": "projects/vevo/growthbook_aa_snapshot.json",
       "sha256": null
     },
+    "pro_upgrade": {
+      "path": "projects/vevo/growthbook_pro_upgrade.json",
+      "sha256": null
+    },
+    "pro_upgrade_observation": {
+      "path": "projects/vevo/growthbook_pro_upgrade_observation.json",
+      "sha256": null
+    },
     "sample_plan": {
       "path": "projects/vevo/growthbook_cta_sample_plan.json",
       "sha256": null

@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from scripts import record_growthbook_cta_activation as recorder
+from scripts import record_growthbook_pro_upgrade as pro_upgrade_recorder
 from scripts import build_growthbook_cta_runtime_readiness as runtime_builder
 from scripts import validate_growthbook_cta_runtime_release as release_validator
 from scripts.record_growthbook_aa_completion import canonical_json_bytes as aa_canonical_json_bytes
@@ -25,6 +26,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         self.activation = load("projects/vevo/growthbook_cta_activation.json")
         self.completion = load("projects/vevo/growthbook_production_aa_completion.json")
         self.snapshot = load("projects/vevo/growthbook_aa_snapshot.json")
+        self.pro_upgrade = load("projects/vevo/growthbook_pro_upgrade.json")
         self.sample = load("projects/vevo/growthbook_cta_sample_plan.json")
         self.lifecycle = load("projects/vevo/growthbook_cta_lifecycle_reconciliation.json")
         self.meta_reporting = load(
@@ -37,8 +39,8 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         self.source_hashes = {
             "aa_completion": "1" * 64,
             "aa_snapshot": "2" * 64,
-            "sample_plan": "3" * 64,
-            "lifecycle_reconciliation": "4" * 64,
+            "sample_plan": "5" * 64,
+            "lifecycle_reconciliation": "6" * 64,
             "design_contract": recorder.EXPECTED_STATIC_HASHES["design_contract"],
             "decision_contract": recorder.EXPECTED_STATIC_HASHES["decision_contract"],
             "meta_reporting_contract": recorder.EXPECTED_STATIC_HASHES[
@@ -47,10 +49,119 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             "collector_registry": self.registry_hash,
         }
         self._make_post_aa_state()
+        self._make_verified_pro_evidence()
         self.runtime = self._runtime_observation()
         self.runtime_hash = hashlib.sha256(
             recorder.canonical_json_bytes(self.runtime)
         ).hexdigest()
+
+    def _make_verified_pro_evidence(self) -> None:
+        metric_map = {row["key"]: row for row in self.workspace["metrics"]}
+        rows = {}
+        preview_ids = {}
+        production_ids = {}
+        for key in sorted(pro_upgrade_recorder.METRIC_KEYS):
+            preview_id = metric_map[key]["growthbook_id"]
+            production_id = metric_map[key]["production_growthbook_id"]
+            preview_ids[key] = preview_id
+            production_ids[key] = production_id
+            rows[key] = {
+                "preview_metric_id": preview_id,
+                "production_metric_id": production_id,
+                "contract_sha256": self.pro_upgrade["target"][
+                    "metric_contract_sha256"
+                ][key],
+                "preview_configuration_readback_match": True,
+                "production_configuration_readback_match": True,
+                "preview_query_test_passed": True,
+                "production_query_test_passed": True,
+            }
+        self.pro_observation = {
+            "schema_version": 1,
+            "observation_type": "vevo_growthbook_pro_upgrade_observation",
+            "observed_at_utc": "2026-09-03T10:05:00Z",
+            "organization": {
+                "name": "Vevo",
+                "id": "org_19g6mmt1q79o1",
+                "project_name": "VEVO SK Web",
+                "project_id": "prj_2CeEJc6J9FwQFix9UhsnKr",
+            },
+            "billing": {
+                "plan": "pro",
+                "status": "pro_active_paid_monthly_one_seat",
+                "seat_count": 1,
+                "currency": "USD",
+                "base_monthly_price": 40,
+                "billing_period": "monthly",
+                "recurring_subscription": True,
+            },
+            "quantile_metrics": rows,
+            "cta_draft": {
+                "experiment_id": "exp_19g6mmt1qxzrp",
+                "status": "draft",
+                "production_allocation_percent": 0,
+                "guardrail_metrics": pro_upgrade_recorder.CTA_GUARDRAILS,
+            },
+            "control": {
+                "aa_status": "stopped",
+                "aa_production_allocation_percent": 0,
+                "active_production_experiments": [],
+                "gtm_container_version_id": "15",
+                "gtm_unprocessed_changes": 0,
+            },
+            "safety": {
+                "contains_credentials": False,
+                "contains_payment_method_or_card_data": False,
+                "contains_invoice_address_or_tax_id": False,
+                "contains_user_email": False,
+                "contains_event_or_device_ids": False,
+                "contains_customer_or_order_data": False,
+                "gtm_mutated": False,
+                "meta_ads_mutated": False,
+                "biznisweb_mutated": False,
+                "collector_or_reporting_mutated": False,
+                "price_product_stock_cart_checkout_payment_or_order_mutated": False,
+            },
+        }
+        observation_hash = hashlib.sha256(
+            pro_upgrade_recorder.canonical_json_bytes(self.pro_observation)
+        ).hexdigest()
+        self.pro_upgrade["status"] = pro_upgrade_recorder.VERIFIED
+        self.pro_upgrade["source_bindings"]["aa_completion"]["sha256"] = "3" * 64
+        self.pro_upgrade["source_bindings"]["workspace_before_upgrade"][
+            "sha256"
+        ] = "4" * 64
+        self.pro_upgrade["authorization"].update(
+            {
+                "status": "consumed_by_verified_upgrade",
+                "authorized_at_utc": "2026-09-03T10:00:00Z",
+                "confirmed_seat_count": 1,
+                "confirmed_base_monthly_price": 40,
+                "confirmed_recurring_subscription": True,
+            }
+        )
+        self.pro_upgrade["verification"].update(
+            {
+                "status": "verified_pro_active_quantile_metrics",
+                "observation_sha256": observation_hash,
+                "observed_at_utc": self.pro_observation["observed_at_utc"],
+                "preview_metric_ids": preview_ids,
+                "production_metric_ids": production_ids,
+            }
+        )
+        self.pro_upgrade["next_gate"] = (
+            "collect_24h_cta_baseline_then_freeze_sample_with_cta_still_blocked"
+        )
+        self.source_hashes["pro_upgrade"] = hashlib.sha256(
+            pro_upgrade_recorder.canonical_json_bytes(self.pro_upgrade)
+        ).hexdigest()
+        self.source_hashes["pro_upgrade_observation"] = observation_hash
+        pro_upgrade_recorder.validate_manifest(self.pro_upgrade, self.workspace)
+        pro_upgrade_recorder.validate_observation(
+            self.pro_observation,
+            self.pro_upgrade,
+            self.workspace,
+        )
 
     def _make_post_aa_state(self) -> None:
         self.completion["status"] = (
@@ -289,6 +400,8 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             self.activation,
             completion=self.completion,
             snapshot=self.snapshot,
+            pro_upgrade=self.pro_upgrade,
+            pro_observation=self.pro_observation,
             sample=self.sample,
             lifecycle=self.lifecycle,
             workspace=self.workspace,
@@ -301,6 +414,17 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
     def test_checked_in_manifest_is_fail_closed(self) -> None:
         recorder.validate_manifest(self.activation)
         self.assertEqual(recorder.WAITING, self.activation["status"])
+        self.assertEqual(
+            {
+                "pro_upgrade",
+                "pro_upgrade_observation",
+            },
+            {
+                name
+                for name in self.activation["source_bindings"]
+                if name.startswith("pro_upgrade")
+            },
+        )
         self.assertFalse(
             self.activation["release_boundaries"][
                 "manual_growthbook_start_allowed"
@@ -320,6 +444,14 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             manifest=self.activation,
             completion=self.completion,
             snapshot=self.snapshot,
+            pro_upgrade=self.pro_upgrade,
+            pro_upgrade_raw=pro_upgrade_recorder.canonical_json_bytes(
+                self.pro_upgrade
+            ),
+            pro_observation=self.pro_observation,
+            pro_observation_raw=pro_upgrade_recorder.canonical_json_bytes(
+                self.pro_observation
+            ),
             sample=self.sample,
             lifecycle=self.lifecycle,
             workspace=self.workspace,
@@ -343,6 +475,14 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 manifest=self.activation,
                 completion=self.completion,
                 snapshot=self.snapshot,
+                pro_upgrade=self.pro_upgrade,
+                pro_upgrade_raw=pro_upgrade_recorder.canonical_json_bytes(
+                    self.pro_upgrade
+                ),
+                pro_observation=self.pro_observation,
+                pro_observation_raw=pro_upgrade_recorder.canonical_json_bytes(
+                    self.pro_observation
+                ),
                 sample=self.sample,
                 lifecycle=self.lifecycle,
                 workspace=self.workspace,
@@ -351,6 +491,39 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 stop_observation_raw=aa_canonical_json_bytes(unsafe),
                 design_sha256=recorder.EXPECTED_STATIC_HASHES["design_contract"],
                 decision_sha256=recorder.EXPECTED_STATIC_HASHES["decision_contract"],
+                meta_reporting=self.meta_reporting,
+                meta_reporting_sha256=recorder.EXPECTED_STATIC_HASHES[
+                    "meta_reporting_contract"
+                ],
+                registry_sha256=self.registry_hash,
+                storefront_source="var PRODUCTION_ACTIVATION = false;\n",
+            )
+
+        unsafe_pro_observation = copy.deepcopy(self.pro_observation)
+        unsafe_pro_observation["billing"]["seat_count"] = 2
+        with self.assertRaisesRegex(Exception, "GrowthBook Pro source is invalid"):
+            release_validator.validate_release_state(
+                manifest=self.activation,
+                completion=self.completion,
+                snapshot=self.snapshot,
+                pro_upgrade=self.pro_upgrade,
+                pro_upgrade_raw=pro_upgrade_recorder.canonical_json_bytes(
+                    self.pro_upgrade
+                ),
+                pro_observation=unsafe_pro_observation,
+                pro_observation_raw=pro_upgrade_recorder.canonical_json_bytes(
+                    unsafe_pro_observation
+                ),
+                sample=self.sample,
+                lifecycle=self.lifecycle,
+                workspace=self.workspace,
+                registry=self.registry,
+                stop_observation=observation,
+                stop_observation_raw=raw,
+                design_sha256=recorder.EXPECTED_STATIC_HASHES["design_contract"],
+                decision_sha256=recorder.EXPECTED_STATIC_HASHES[
+                    "decision_contract"
+                ],
                 meta_reporting=self.meta_reporting,
                 meta_reporting_sha256=recorder.EXPECTED_STATIC_HASHES[
                     "meta_reporting_contract"
@@ -415,7 +588,31 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         self.assertFalse(
             opened["release_boundaries"]["automatic_growthbook_mutation_allowed"]
         )
+        self.assertEqual(
+            self.source_hashes["pro_upgrade"],
+            opened["source_bindings"]["pro_upgrade"]["sha256"],
+        )
+        self.assertEqual(
+            self.source_hashes["pro_upgrade_observation"],
+            opened["source_bindings"]["pro_upgrade_observation"]["sha256"],
+        )
         recorder.validate_manifest(opened)
+
+    def test_open_review_rejects_rehashed_pro_observation_contract_drift(self) -> None:
+        self.pro_observation["billing"]["seat_count"] = 2
+        observation_hash = hashlib.sha256(
+            pro_upgrade_recorder.canonical_json_bytes(self.pro_observation)
+        ).hexdigest()
+        self.pro_upgrade["verification"]["observation_sha256"] = observation_hash
+        self.source_hashes["pro_upgrade_observation"] = observation_hash
+        self.source_hashes["pro_upgrade"] = hashlib.sha256(
+            pro_upgrade_recorder.canonical_json_bytes(self.pro_upgrade)
+        ).hexdigest()
+        with self.assertRaisesRegex(
+            recorder.CtaActivationRecordingError,
+            "billing readback drift",
+        ):
+            self._open()
 
     def test_open_review_rejects_aa_that_is_not_stopped(self) -> None:
         self.completion["status"] = "aa_pass_recorded_manual_stop_review_allowed"
@@ -548,6 +745,20 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         with self.assertRaisesRegex(
             recorder.CtaActivationRecordingError,
             "sample_plan changed after CTA start review",
+        ):
+            recorder.record_start(
+                opened,
+                self.workspace,
+                self.registry,
+                observation,
+                observation_sha256=digest,
+                source_hashes=changed,
+            )
+        changed = dict(self.source_hashes)
+        changed["pro_upgrade"] = "e" * 64
+        with self.assertRaisesRegex(
+            recorder.CtaActivationRecordingError,
+            "pro_upgrade changed after CTA start review",
         ):
             recorder.record_start(
                 opened,

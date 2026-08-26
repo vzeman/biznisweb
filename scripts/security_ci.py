@@ -2668,6 +2668,9 @@ def main() -> int:
             )
         for required_cta_activation_marker in (
             "CTA activation requires verified A/A PASS and stop readback",
+            "CTA activation requires verified GrowthBook Pro metrics",
+            "GrowthBook Pro observation is not canonical or hash-bound",
+            '"pro_upgrade_observation"',
             "collector Production registry is not CTA-only",
             "CTA localhost marker is not verified",
             "CTA events exist before activation",
@@ -2715,6 +2718,8 @@ def main() -> int:
                 )
         for required_cta_runtime_release_marker in (
             "CTA activation manifest is not waiting",
+            "GrowthBook Pro manifest file/hash binding drift",
+            "GrowthBook Pro observation file/hash binding drift",
             "A/A stop observation file/hash binding drift",
             "A/A stop observation is not canonical JSON",
             "CTA design contract SHA-256 drift",

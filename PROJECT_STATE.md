@@ -6160,3 +6160,32 @@ Known issues:
 Next exact step:
 
 - Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate its snapshot, decision, provenance, and source bindings, record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
+
+## 2026-08-26 — VEVO CTA start directly bound to verified Pro evidence
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-pro-provenance`
+
+What changed:
+
+- Added the exact GrowthBook Pro transition manifest and its canonical six-metric observation as first-class dynamic source bindings in `growthbook_cta_activation.json`.
+- The offline CTA review recorder now validates the verified Pro plan/metric contract against the current workspace, requires canonical file hashes, persists both hashes, and rejects either file changing before the recorded CTA start.
+- The CTA runtime release validator now independently validates the canonical Pro manifest/readback before AWS credentials; the workspace validator also requires the exact observation and hash in every verified-Pro state.
+- Updated the CTA activation runbook, rollout plan, workspace handoff, central security CI, and regression tests. Workspace flags alone can no longer impersonate the paid Pro/quantile-metric gate.
+
+What is verified:
+
+- `796` Python tests and all `9` storefront JavaScript tests passed. Focused Pro/CTA/workspace tests passed `46` cases, including rehashed billing-contract drift, swapped Pro source hashes, non-canonical evidence, and runtime-release rejection.
+- GrowthBook workspace, Pro-upgrade, CTA completion, and central security validators passed; scoped Ruff, Python compilation, JSON parsing, and `git diff --check` passed.
+- The official GrowthBook pricing page read on `2026-08-26` still lists Cloud Pro at `$40` per seat per month; no checkout, subscription, trial, payment method, or account state was opened or changed.
+- The versioned Production host boundary remains instance `N/A:Fargate`, recorded deployment private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, and runtime path `/app`. This repository-only change performs no deploy or infrastructure mutation and therefore does not claim a new live-host readback.
+- No A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read. No workflow was dispatched and no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, cart, checkout, payment, stock, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- None introduced. The new bindings remain null and fail-closed until the future A/A PASS/stop and explicitly authorized Pro transition genuinely create the canonical files.
+
+Next exact step:
+
+- Merge this direct Pro-to-CTA provenance hardening after CI. Continue result-blind monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results; at the first due boundary process the earliest successful exact-main A/A checkpoint through the protected offline chain.

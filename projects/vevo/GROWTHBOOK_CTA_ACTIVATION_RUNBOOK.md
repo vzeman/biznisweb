@@ -21,6 +21,9 @@ Do not start the CTA experiment when any one of these is true:
 - Production A/A or CTA allocation is not exactly `0%` before the start;
 - the A/A stop/readback, frozen CTA sample, or 14-day lifecycle value
   reconciliation is missing or hash-mismatched;
+- the verified GrowthBook Pro transition manifest or its canonical billing/
+  six-metric observation is missing, non-canonical, hash-mismatched, or no
+  longer validates against the current workspace;
 - the checked-in and deployed Production collector registry is not CTA-only;
 - the exact Production collector instance ID, private IP, service, runtime path,
   task definition, image digest, localhost marker, or target health is unknown;
@@ -52,9 +55,12 @@ state must prove all of the following before CTA runtime preparation:
 4. Only the exact A/A was manually stopped and its Production live rule removed.
 5. Reload/readback proved zero Production allocation, CTA still draft, staging
    preserved, GTM version `15` unchanged, and commerce unchanged.
-6. The A/A product-page baseline completed its 24-hour follow-up and the final
+6. The separately authorized GrowthBook Pro transition and its canonical
+   readback prove the exact active one-seat monthly plan plus all six unique,
+   query-tested Preview/Production p75 metric IDs while CTA remains at `0%`.
+7. The A/A product-page baseline completed its 24-hour follow-up and the final
    CTA sample was frozen offline.
-7. The 14-day refund/credit-note lifecycle reconciliation passed exact value
+8. The 14-day refund/credit-note lifecycle reconciliation passed exact value
    parity and was recorded without identities.
 
 An A/A `PASS` is not a CTA winner and does not start the CTA automatically.
@@ -115,7 +121,7 @@ file at its versioned path
 reformat or manually reconstruct it. On a new branch, run:
 
 ```text
-python scripts/record_growthbook_cta_activation.py --output projects/vevo/growthbook_cta_activation.json open-review --runtime-observation projects/vevo/growthbook_cta_runtime_readiness_observation.json --runtime-observation-sha256 <independent-sha256>
+python scripts/record_growthbook_cta_activation.py --output projects/vevo/growthbook_cta_activation.json open-review --pro-upgrade projects/vevo/growthbook_pro_upgrade.json --pro-observation projects/vevo/growthbook_pro_upgrade_observation.json --runtime-observation projects/vevo/growthbook_cta_runtime_readiness_observation.json --runtime-observation-sha256 <independent-sha256>
 python scripts/validate_growthbook_meta_reporting_contract.py
 python scripts/validate_growthbook_workspace.py
 python -m unittest tests.test_growthbook_meta_reporting_contract tests.test_growthbook_cta_activation_recorder tests.test_growthbook_workspace
@@ -124,9 +130,12 @@ git diff --check
 ```
 
 Review the diff and merge it through a PR. The recorder must bind the exact A/A
-completion, snapshot manifest, frozen sample, lifecycle reconciliation, design,
-decision contract, immutable Meta/reporting contract, checked-in collector
-registry, runtime artifact, workflow run, and main commit. The Meta/reporting
+completion, snapshot manifest, verified Pro transition manifest and canonical
+Pro observation, frozen sample, lifecycle reconciliation, design, decision
+contract, immutable Meta/reporting contract, checked-in collector registry,
+runtime artifact, workflow run, and main commit. The Pro files are validated
+again against the current workspace and both hashes must remain unchanged
+between review and the recorded CTA start. The Meta/reporting
 contract proves the stable campaign/ad-set/ad/placement mapping and preserves
 one canonical destination; those dimensions are diagnostic and cannot replace
 the primary all-traffic decision. The recorder may open only
@@ -163,7 +172,7 @@ Create canonical compact JSON
 SHA-256 independently, and record the start on a new branch:
 
 ```text
-python scripts/record_growthbook_cta_activation.py --output projects/vevo/growthbook_cta_activation.json record-start --workspace projects/vevo/growthbook_workspace.json --workspace-output projects/vevo/growthbook_workspace.json --registry growthbook_collector/experiments.json --observation projects/vevo/growthbook_cta_activation_observation.json --observation-sha256 <independent-sha256>
+python scripts/record_growthbook_cta_activation.py --output projects/vevo/growthbook_cta_activation.json record-start --workspace projects/vevo/growthbook_workspace.json --workspace-output projects/vevo/growthbook_workspace.json --pro-upgrade projects/vevo/growthbook_pro_upgrade.json --pro-observation projects/vevo/growthbook_pro_upgrade_observation.json --registry growthbook_collector/experiments.json --observation projects/vevo/growthbook_cta_activation_observation.json --observation-sha256 <independent-sha256>
 python scripts/validate_growthbook_workspace.py
 python -m unittest tests.test_growthbook_cta_activation_recorder tests.test_growthbook_workspace tests.test_growthbook_cta_evaluator
 python scripts/security_ci.py
