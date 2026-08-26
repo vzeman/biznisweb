@@ -6519,3 +6519,30 @@ Known issues:
 Next exact step:
 
 - Commit and push this handoff, open the repair PR and merge only after all required CI checks pass. Keep the A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava`; at or after that time process only the protected A/A evidence chain. Continue toward GrowthBook Pro and the first non-price CTA A/B test only after an independently verified `PASS`, reviewed zero-allocation stop and fresh purchase confirmation.
+
+## 2026-08-26 — VEVO CTA lifecycle launch-gate repair merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-lifecycle-gate-state`
+
+What changed:
+
+- PR `#458` merged the source-explicit CTA lifecycle preflight, exact evidence/source-hash activation binding and 21-day final-maturity correction into `main` as `d0a0a4c1e40c9e5d02cc95c9741322799a34dc99`.
+- This handoff records the completed merge and replaces the obsolete launch-gate repair instruction with the exact time-gated A/A continuation. It introduces no experiment, reporting, advertising, storefront, commerce or infrastructure mutation.
+
+What is verified:
+
+- PR `#458` passed `env-check`, `secret-scan`, `observability-baseline` and `security-baseline` before merge and was `CLEAN`/`MERGEABLE` on exact head `2f41206b3de32963a74e4da31e5cf80bee0abc02`.
+- `origin/main` and this state branch both read back exact merge commit `d0a0a4c1e40c9e5d02cc95c9741322799a34dc99` before this handoff edit.
+- The circular lifecycle dependency is removed, final CTA maturity is correctly stop plus 21 days, and all CTA activation/runtime gates remain closed until their exact protected evidence exists.
+- No A/A population or result was inspected, no workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`. GrowthBook Pro remains unpurchased and requires independently reproduced A/A `PASS`, reviewed zero Production allocation and fresh action-time confirmation.
+- The lifecycle preflight remains intentionally pending until the resolved A/A source window later reaches its full 21-day order/lifecycle maturity.
+
+Next exact step:
+
+- Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful outcome-blind checkpoint artifact in index order, resolve the window without arm/outcome peeking, and process only the protected A/A evidence path. Continue only on an independently reproduced `PASS`; after the reviewed zero-allocation stop, request fresh confirmation immediately before purchasing GrowthBook Pro.
