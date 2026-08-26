@@ -6352,3 +6352,29 @@ Known issues:
 Next exact step:
 
 - Merge this protected collection change after CI. Keep the frozen A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava`; only then process the protected A/A evidence, and require the verified A/A PASS plus reviewed zero-allocation stop before requesting fresh confirmation for the paid GrowthBook Pro action.
+
+## 2026-08-26 — VEVO CTA protected safety checkpoint collection merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-safety-collection-state`
+
+What changed:
+
+- PR `#452` merged the protected PC-independent CTA safety checkpoint collection path into `main` as `0ae0cbefea16b497d24cec17c1f2a715189a3127`.
+- This handoff records the completed merge and replaces the obsolete merge instruction with the next time-gated A/A step. It introduces no runtime, experiment, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#452` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- `origin/main` and this state branch read back exact merge commit `0ae0cbefea16b497d24cec17c1f2a715189a3127` before this handoff edit.
+- The merged safety workflow remains fail-closed in the checked-in `waiting_for_verified_cta_start` state. All collection/recording/manual-stop, primary/business-outcome, Meta-dimension, winner, and automatic external-mutation gates remain false, so scheduled runs skip before AWS until a future verified CTA start is initialized.
+- No A/A population or result was read, no result or safety workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The A/A result boundary remains time-locked. GrowthBook Pro has not been purchased, and its paid action still requires verified A/A `PASS`, the reviewed zero-allocation stop, and fresh action-time confirmation.
+
+Next exact step:
+
+- Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, process the already protected A/A evidence path exactly once without browser-result peeking; if and only if it independently reproduces `PASS`, complete the reviewed A/A zero-allocation stop, then request fresh confirmation before the paid GrowthBook Pro action.
