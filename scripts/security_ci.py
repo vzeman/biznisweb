@@ -2893,6 +2893,17 @@ def main() -> int:
             )
         for required_cta_checkpoint_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
+            "- cron: '30 2 * * *'",
+            "- cron: '30 3 * * *'",
+            "EVENT_SCHEDULE: ${{ github.event.schedule }}",
+            "PRODUCTION_CTA_WINDOW_SCHEDULE_SKIP:reason=window-not-open:aws=false",
+            "PRODUCTION_CTA_WINDOW_SCHEDULE_SKIP:reason=wrong-dst-slot:aws=false",
+            "PRODUCTION_CTA_WINDOW_SCHEDULE_SKIP:reason=before-first-due:aws=false",
+            "PRODUCTION_CTA_WINDOW_SCHEDULE_SKIP:reason=after-maximum-due:aws=false",
+            "PRODUCTION_CTA_WINDOW_SCHEDULE_SKIP:reason=already-recorded:aws=false",
+            "checkpoint_index = (now_local.date() - first_due.date()).days + 1",
+            "if: ${{ env.RUN_CHECKPOINT == 'true' }}",
+            "if: ${{ always() && env.RUN_CHECKPOINT == 'true' }}",
             "PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:",
             "PRODUCTION_CTA_WINDOW_RUNTIME_GATE_OK:",
             "PRODUCTION_CTA_WINDOW_CONTROL_GATE_OK:",
@@ -2910,6 +2921,7 @@ def main() -> int:
             "assignment_stopped': False",
             "validate_checkpoint_evidence(evidence, expected, index)",
             "Remove every temporary AWS response and query file",
+            "retention-days: 90",
             "Assignment stop/winner/external mutation gates changed: `none`",
         ):
             require(

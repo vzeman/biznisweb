@@ -206,11 +206,19 @@ recorded assignment start. It binds the current activation, start observation,
 sample, decision contract, and localhost-gated reconciliation evidence by
 SHA-256. It does not query AWS or change traffic.
 
-At each due checkpoint, dispatch only
+At each due checkpoint, use only
 `.github/workflows/check-vevo-growthbook-production-cta-window.yml` from the
-exact reviewed `main` commit with `confirm_checkpoint=true`. Before AWS
-credentials, it requires the A/A stopped, only CTA running at `100%`, the
-outcome/arm/winner gates closed, and the exact next whole-local-day boundary.
+exact reviewed `main` commit. It schedules both UTC equivalents of `04:30
+Europe/Bratislava` and admits only the correct DST slot after the frozen
+`03:45` reconciliation. Before a verified CTA start, before the first due date,
+on the wrong DST slot, after the 42-day maximum, after resolution, or for an
+already committed index, it skips before AWS credentials and the population
+query. An admitted scheduled run derives its checkpoint index from the frozen
+local date rather than current Git history, so the canonical artifact is
+captured even while the local PC is off. Manual `confirm_checkpoint=true`
+remains an exact-daily-gate fallback. Before AWS credentials, every admitted
+run requires the A/A stopped, only CTA running at `100%`, the
+outcome/arm/winner gates closed, and the exact whole-local-day boundary.
 It then binds instance `N/A:Fargate` and the exact reconciliation through the
 bounded success marker plus Scheduler-authenticated CloudTrail `RunTask` event,
 service `vevo-growthbook-reconcile-production`, path `/app`, task definition,
@@ -235,6 +243,12 @@ python -m unittest tests.test_growthbook_cta_window_checkpoint tests.test_growth
 python scripts/security_ci.py
 git diff --check
 ```
+
+Artifacts are retained for 90 days. If the PC was offline across several due
+checkpoints, record them in ascending checkpoint-index order. Stop at the
+earliest artifact that reaches the frozen first-`N` target or the day-42
+boundary; ignore every later capture after that resolution boundary. The
+workflow never stops assignment automatically.
 
 Below the target and before day 42, the recorder can only extend one whole
 local day. At the target or day 42 it closes further checkpoints and opens only
