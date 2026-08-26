@@ -6742,3 +6742,29 @@ Known issues:
 Next exact step:
 
 - Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then return to metadata-only monitoring while the A/A boundary remains closed. At or after `2026-09-02 03:45 Europe/Bratislava`, continue only through the versioned outcome-blind A/A checkpoint/PASS/stop/Pro/lifecycle/runtime/CTA chain; immediately before a future CTA stop, require clean exact `main` and a fresh successful `VEVO_CTA_STOP_READY` assertion.
+
+## 2026-08-26 — VEVO manual CTA stop-readiness merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-stop-readiness-state`
+
+What changed:
+
+- PR `#466` merged the fail-closed manual CTA stop-readiness assertion into `main` as `665985a28743d9c294f290d153999ccc662339b8`.
+- This handoff records the verified merge and supersedes the preceding pre-merge instruction. It introduces no experiment, billing, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#466` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` on exact head `07650c0b426147003514f5b1f3e2b5069c0bb64e` before merge. GitHub readback identifies base `b20a521c95cab064b29e278496de69a733b4f96e` and exact merge `665985a28743d9c294f290d153999ccc662339b8`.
+- Post-merge Env Check run `32981150703`, Observability Baseline run `32981150712`, and Build and Push ECR run `32981150767` all passed on that exact merge commit. The commit tag and `latest` are byte-identical at `sha256:d2a42e511fa385345615449c4c17ca0b96628d2ec298233f98af6df37ac4d787`; the image was built only and was not deployed.
+- The future manual CTA stop now requires clean synchronized exact `main`, a reviewed outcome-blind or safety stop trigger, the canonical running CTA-only handoff, one-seat Pro workspace, A/A at zero Production allocation, unchanged registry/GTM state, and a closed final-look gate. The same validation runs again before the offline recorder can construct stopped outputs.
+- The present waiting state remains fail-closed. No A/A or CTA population/result was inspected, no result workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`. GrowthBook Pro remains unpurchased and the CTA experiment remains draft at zero allocation.
+
+Next exact step:
+
+- Keep the frozen A/A boundary closed. Monitor only repository-owned infra-health and exact checkpoint workflow run metadata; do not dispatch the result workflow or open an artifact before the due boundary. At or after `2026-09-02 03:45 Europe/Bratislava`, use the earliest successful outcome-blind checkpoint in index order and continue only through the versioned PASS, A/A stop, fresh Pro action-time confirmation, lifecycle, runtime, CTA start, CTA stop, follow-up, and one final-look gates.
