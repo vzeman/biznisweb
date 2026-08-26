@@ -157,7 +157,9 @@ class GrowthBookAaWindowCheckpointRecorderTests(unittest.TestCase):
     def test_below_threshold_appends_only_outcome_blind_checkpoint(self) -> None:
         recorded = self.record(checkpoint_evidence())
         window = recorded["measurement_window"]
-        self.assertEqual("pending_minimum_window_and_sample", window["resolution_status"])
+        self.assertEqual(
+            "pending_minimum_window_and_sample", window["resolution_status"]
+        )
         self.assertEqual(1, len(window["checkpoint_history"]))
         self.assertIsNone(window["resolved_through_utc"])
         self.assertIsNone(recorded["automated_evidence"]["through_utc"])
@@ -181,9 +183,7 @@ class GrowthBookAaWindowCheckpointRecorderTests(unittest.TestCase):
         self.assertEqual(1005, window["resolved_eligible_devices"])
         self.assertEqual(2, len(window["checkpoint_history"]))
         for component in ("automated_evidence", "manual_qa_evidence"):
-            self.assertEqual(
-                "2026-09-02T22:00:00Z", second[component]["through_utc"]
-            )
+            self.assertEqual("2026-09-02T22:00:00Z", second[component]["through_utc"])
             self.assertFalse(second[component]["producer_allowed"])
         self.assertFalse(second["snapshot_build_allowed"])
 
@@ -214,6 +214,42 @@ class GrowthBookAaWindowCheckpointRecorderTests(unittest.TestCase):
         saved = recorded["measurement_window"]["checkpoint_history"][0]["evidence"]
         self.assertIsNone(saved["runtime"]["private_ip"])
         self.assertFalse(saved["control_plane"]["runtime_state_retained"])
+
+    def test_accepts_explicit_schema_v3_historical_backfill_for_next_missing_index(
+        self,
+    ) -> None:
+        evidence = checkpoint_evidence()
+        evidence["schema_version"] = 3
+        evidence["collection_mode"] = "manual_historical_backfill"
+        evidence["observed_at_utc"] = "2026-09-04T02:30:00Z"
+        recorded = self.record(evidence)
+        saved = recorded["measurement_window"]["checkpoint_history"][0]["evidence"]
+        self.assertEqual("manual_historical_backfill", saved["collection_mode"])
+        self.assertEqual(
+            "2026-09-01T22:00:00Z", saved["window"]["candidate_through_utc"]
+        )
+
+    def test_rejects_schema_v3_backfill_timing_and_mode_contradictions(self) -> None:
+        early_backfill = checkpoint_evidence()
+        early_backfill["schema_version"] = 3
+        early_backfill["collection_mode"] = "manual_historical_backfill"
+        with self.assertRaisesRegex(
+            CheckpointRecordingError, "before its daily gate closed"
+        ):
+            self.record(early_backfill)
+
+        late_same_window = checkpoint_evidence()
+        late_same_window["schema_version"] = 3
+        late_same_window["collection_mode"] = "manual_same_window"
+        late_same_window["observed_at_utc"] = "2026-09-04T02:30:00Z"
+        with self.assertRaisesRegex(CheckpointRecordingError, "outside its daily gate"):
+            self.record(late_same_window)
+
+        unknown_mode = checkpoint_evidence()
+        unknown_mode["schema_version"] = 3
+        unknown_mode["collection_mode"] = "operator_selected"
+        with self.assertRaisesRegex(CheckpointRecordingError, "collection mode drift"):
+            self.record(unknown_mode)
 
     def test_rejects_retention_source_and_private_ip_contradictions(self) -> None:
         missing_retained_ip = checkpoint_evidence()
