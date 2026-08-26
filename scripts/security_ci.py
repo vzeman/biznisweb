@@ -3027,7 +3027,14 @@ def main() -> int:
             "a prior CTA final outcome-query attempt already exists",
             "CTA_FINAL_PREQUERY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=",
             "source reporting schedule drift",
-            "not str(task.get('startedBy') or '').startswith('cta-final-')",
+            "aws logs filter-log-events",
+            "aws cloudtrail lookup-events",
+            "expected one exact Scheduler CloudTrail RunTask event",
+            "cloudtrail_run_task_retention_recovery",
+            "RECONCILIATION_RUNTIME_IDENTITY_SOURCE",
+            "RECONCILIATION_RUNTIME_STATE_RETAINED",
+            "str(exact_task.get('startedBy') or '').startswith('cta-final-')",
+            "scheduler-run-task=true",
             "CTA_FINAL_RECONCILIATION_GATE_OK:",
             "/app/scripts/growthbook_reconcile_host_gate.sh",
             "GROWTHBOOK_RECONCILE_LOCALHOST_HEALTH_OK:production:",
@@ -3048,6 +3055,10 @@ def main() -> int:
         if growthbook_cta_final_workflow.count("aws ecs run-task") != 1:
             raise AssertionError(
                 "GrowthBook CTA final workflow must run exactly one localhost host-gate task."
+            )
+        if "aws ecs list-tasks" in growthbook_cta_final_workflow:
+            raise AssertionError(
+                "GrowthBook CTA final workflow must not depend on retained stopped-task listings."
             )
         if growthbook_cta_final_workflow.count("aws athena start-query-execution") != 1:
             raise AssertionError(
