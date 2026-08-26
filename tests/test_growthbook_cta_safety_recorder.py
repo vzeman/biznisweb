@@ -54,13 +54,6 @@ class GrowthBookCtaSafetyRecorderTests(unittest.TestCase):
             source_hashes=self.safety_source_hashes,
         )
         self.enabled = copy.deepcopy(self.prepared)
-        for field in (
-            "safety_checkpoint_collection_allowed",
-            "safety_checkpoint_recording_allowed",
-            "protected_safety_collection_workflow_allowed",
-        ):
-            self.enabled["release_boundaries"][field] = True
-        self.enabled["next_gate"] = "record_next_hash_bound_safety_checkpoint"
         validate_contract(self.enabled)
 
     def evidence(self, *, stop: str | None = None) -> dict:
@@ -179,38 +172,38 @@ class GrowthBookCtaSafetyRecorderTests(unittest.TestCase):
             measurement_source_hashes=self.measurement_source_hashes,
         )
 
-    def test_initialize_binds_start_but_cannot_record_before_protected_path(self) -> None:
+    def test_initialize_binds_start_and_opens_only_protected_path(self) -> None:
         self.assertEqual(MONITORING, self.prepared["status"])
         self.assertEqual(
             self.start_observation["assignment_started_at_utc"],
             self.prepared["assignment_started_at_utc"],
         )
-        self.assertFalse(
+        self.assertTrue(
             self.prepared["release_boundaries"][
                 "protected_safety_collection_workflow_allowed"
             ]
         )
+        self.assertEqual("25,90 €", self.prepared["commerce_probe"]["price_text"])
+        self.assertFalse(self.prepared["release_boundaries"]["manual_growthbook_stop_allowed"])
+
+    def test_rejects_checkpoint_outside_exact_timing_gate(self) -> None:
+        for observed_at in ("2026-09-05T06:59:59Z", "2026-09-05T08:00:01Z"):
+            evidence = self.evidence()
+            evidence["observed_at_utc"] = observed_at
+            with self.subTest(observed_at=observed_at):
+                with self.assertRaisesRegex(
+                    recorder.CtaSafetyRecordingError,
+                    "outside exact timing gate",
+                ):
+                    self.record(evidence)
+
+    def test_accepts_current_due_index_after_an_unrecorded_prior_day(self) -> None:
         evidence = self.evidence()
-        decision, provenance, hashes = self.artifact(evidence)
-        with self.assertRaisesRegex(recorder.CtaSafetyRecordingError, "gate closed"):
-            recorder.record_checkpoint(
-                self.prepared,
-                self.measurement,
-                evidence,
-                decision,
-                provenance,
-                evidence_sha256=hashes["evidence"],
-                decision_sha256=hashes["decision"],
-                provenance_sha256=hashes["provenance"],
-                expected_workflow_run_id=provenance["workflow_run_id"],
-                expected_main_commit=provenance["main_commit"],
-                activation=self.activation,
-                start_observation=self.start_observation,
-                sample_plan=self.sample,
-                decision_contract=self.decision_contract,
-                reconciliation=self.reconciliation,
-                measurement_source_hashes=self.measurement_source_hashes,
-            )
+        evidence["checkpoint_index"] = 3
+        evidence["observed_at_utc"] = "2026-09-07T07:05:00Z"
+        safety, measurement = self.record(evidence)
+        self.assertEqual(3, safety["latest_checkpoint"]["checkpoint_index"])
+        self.assertEqual(self.measurement, measurement)
 
     def test_continue_records_provenance_without_changing_stop_lifecycle(self) -> None:
         safety, measurement = self.record(self.evidence())

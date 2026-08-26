@@ -233,9 +233,9 @@ class GrowthBookCtaSafetyEvaluatorTests(unittest.TestCase):
         too_many_errors = snapshot()
         too_many_errors["variation_health"]["control"]["client_error_devices"] = 401
         cases.append(too_many_errors)
-        bad_quality = snapshot()
-        bad_quality["data_quality"]["query_complete"] = False
-        cases.append(bad_quality)
+        bad_quality_type = snapshot()
+        bad_quality_type["data_quality"]["query_complete"] = 0
+        cases.append(bad_quality_type)
         measured_without_devices = snapshot()
         measured_without_devices["variation_health"]["control"].update(
             {"eligible_devices": 0, "client_error_devices": 0}
@@ -256,6 +256,33 @@ class GrowthBookCtaSafetyEvaluatorTests(unittest.TestCase):
             "mature performance evidence is incomplete",
         ):
             evaluate(mature_missing_metric, self.contract)
+
+    def test_each_data_quality_breach_requires_immediate_manual_stop(self) -> None:
+        cases = {
+            "query_incomplete": ("query_complete", False),
+            "variation_set_invalid": ("exact_two_variations", False),
+            "assignment_source_mismatch": ("assignment_source_match", False),
+            "duplicate_or_conflicting_assignment": (
+                "duplicate_or_conflicting_assignment_detected",
+                True,
+            ),
+        }
+        for expected_reason, (field, value) in cases.items():
+            with self.subTest(expected_reason=expected_reason):
+                evidence = snapshot()
+                for row in evidence["variation_health"].values():
+                    row.update(
+                        {
+                            "measured_page_loads": 0,
+                            "lcp_p75_ms": None,
+                            "inp_p75_ms": None,
+                            "cls_p75_milli": None,
+                        }
+                    )
+                evidence["data_quality"][field] = value
+                decision = evaluate(evidence, self.contract)
+                self.assertEqual("STOP_REQUIRED", decision["verdict"])
+                self.assertEqual([expected_reason], decision["stop_reasons"])
 
     def test_cli_writes_only_canonical_safety_decision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -1,0 +1,411 @@
+name: Check VEVO GrowthBook Production CTA Safety
+
+on:
+  schedule:
+    # Runs hourly; the local pre-AWS gate admits only the exact 60-minute
+    # checkpoint window derived from the verified CTA assignment start.
+    - cron: '5 * * * *'
+  workflow_dispatch:
+    inputs:
+      confirm_checkpoint:
+        description: Type true to run one read-only CTA safety checkpoint
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vevo-growthbook-production-cta-safety-checkpoint
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  EXPECTED_ACCOUNT_ID: '919341186960'
+  COLLECTOR_STACK: vevo-growthbook-production
+  RECONCILIATION_STACK: vevo-growthbook-reconciliation-production
+  EXPECTED_SERVICE: vevo-growthbook-reconcile-production
+  EXPECTED_SOURCE_SCHEDULE: vevo-daily-report-email
+  EXPECTED_DATABASE: vevo_growthbook_production
+  EXPECTED_WORKGROUP: vevo-growthbook-reporting-production
+  EXPECTED_RUNTIME_PATH: /app
+  CTA_SAFETY_MANIFEST: projects/vevo/growthbook_cta_safety_monitoring.json
+  DEPLOY_EVIDENCE: projects/vevo/growthbook_production_reconciliation_deploy_evidence.json
+  EVIDENCE_FILE: vevo-growthbook-cta-safety-evidence.json
+  DECISION_FILE: vevo-growthbook-cta-safety-decision.json
+  PROVENANCE_FILE: vevo-growthbook-cta-safety-provenance.json
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  collect-safety-only-checkpoint:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Require exact read-only checkpoint confirmation
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CONFIRM_CHECKPOINT: ${{ inputs.confirm_checkpoint }}
+        run: |
+          set -euo pipefail
+          case "${EVENT_NAME}" in
+            workflow_dispatch)
+              [[ "${CONFIRM_CHECKPOINT}" == 'true' ]]
+              ;;
+            schedule)
+              ;;
+            *)
+              echo "unsupported CTA safety checkpoint event: ${EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate safety gate before AWS credentials
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            tests.test_growthbook_cta_safety_checkpoint_builder \
+            tests.test_growthbook_cta_safety_evaluator
+          python scripts/validate_growthbook_workspace.py
+          python scripts/validate_growthbook_cta_safety_monitoring.py
+          python scripts/build_growthbook_cta_safety_checkpoint.py prepare \
+            --manifest "${CTA_SAFETY_MANIFEST}" \
+            --event-name "${EVENT_NAME}" \
+            --github-env "${GITHUB_ENV}" \
+            --runner-temp "${RUNNER_TEMP}" \
+            --run-id "${GITHUB_RUN_ID}"
+
+      - name: Configure AWS credentials for bounded read-only checkpoint
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify exact Fargate host gate and current control plane
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
+          ACTUAL_DEPLOY_SHA="$(sha256sum "${DEPLOY_EVIDENCE}" | cut -d' ' -f1)"
+          [[ "${ACTUAL_DEPLOY_SHA}" == '21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb' ]]
+          aws cloudformation describe-stacks --stack-name "${COLLECTOR_STACK}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/collector-stack.json"
+          aws cloudformation describe-stacks --stack-name "${RECONCILIATION_STACK}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/reconciliation-stack.json"
+          aws scheduler get-schedule --name "${EXPECTED_SERVICE}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/schedule.json"
+          aws scheduler get-schedule --name "${EXPECTED_SOURCE_SCHEDULE}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/source-schedule.json"
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/runtime.env"
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          deploy = json.load(open(os.environ['DEPLOY_EVIDENCE'], encoding='utf-8'))
+          host = deploy.get('host_gate') or {}
+          if host != {
+              'instance_id': 'N/A:Fargate',
+              'localhost_health_verified': True,
+              'localhost_marker_verified': True,
+              'private_ip': '172.31.39.76',
+              'runtime_path': '/app',
+              'service': 'vevo-growthbook-reconcile-production',
+              'task_id': '17d2ea85e2304d2ca0f16ef3ad32913d',
+          }:
+              raise SystemExit('checked-in Fargate localhost host-gate evidence drift')
+          collector = json.load(open(root / 'collector-stack.json', encoding='utf-8'))['Stacks'][0]
+          reconciliation = json.load(open(root / 'reconciliation-stack.json', encoding='utf-8'))['Stacks'][0]
+          schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
+          source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          if collector.get('StackStatus') != 'UPDATE_COMPLETE' or reconciliation.get('StackStatus') != 'UPDATE_COMPLETE':
+              raise SystemExit('Production GrowthBook stack state drift')
+          collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
+          reconciliation_outputs = {row['OutputKey']: row['OutputValue'] for row in reconciliation.get('Outputs') or []}
+          reconciliation_parameters = {row['ParameterKey']: row['ParameterValue'] for row in reconciliation.get('Parameters') or []}
+          target = schedule.get('Target') or {}
+          if (
+              collector_outputs.get('ExperimentDatabaseName') != os.environ['EXPECTED_DATABASE']
+              or collector_outputs.get('ReportingWorkGroupName') != os.environ['EXPECTED_WORKGROUP']
+              or reconciliation_outputs.get('ScheduleName') != os.environ['EXPECTED_SERVICE']
+              or reconciliation_outputs.get('ScheduleState') != 'ENABLED'
+              or schedule.get('Name') != os.environ['EXPECTED_SERVICE']
+              or schedule.get('State') != 'ENABLED'
+              or schedule.get('ScheduleExpression') != 'cron(45 3 * * ? *)'
+              or schedule.get('ScheduleExpressionTimezone') != 'Europe/Bratislava'
+              or schedule.get('FlexibleTimeWindow') != {'Mode': 'OFF'}
+              or target.get('Arn') != reconciliation_parameters.get('ClusterArn')
+              or target.get('EcsParameters', {}).get('TaskDefinitionArn') != reconciliation_outputs.get('TargetTaskDefinitionArn')
+              or target.get('EcsParameters', {}).get('Group') != os.environ['EXPECTED_SERVICE']
+              or target.get('EcsParameters', {}).get('TaskCount') != 1
+              or target.get('EcsParameters', {}).get('EnableExecuteCommand') is not False
+              or target.get('RoleArn') != reconciliation_outputs.get('SchedulerRoleArn')
+              or target.get('DeadLetterConfig') != {'Arn': reconciliation_outputs.get('DeadLetterQueueArn')}
+              or target.get('RetryPolicy') != {'MaximumEventAgeInSeconds': 3600, 'MaximumRetryAttempts': 2}
+          ):
+              raise SystemExit('Production reconciliation schedule drift')
+          schedule_input = json.loads(target.get('Input') or '{}')
+          overrides = schedule_input.get('containerOverrides') or []
+          if len(overrides) != 1:
+              raise SystemExit('Production reconciliation schedule input drift')
+          override = overrides[0]
+          if (
+              override.get('command') != ['/bin/bash', '-lc', 'cd /app && python scripts/run_scheduled_growthbook_reconciliation.py']
+              or not override.get('name')
+              or source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
+              or source.get('State') != 'ENABLED'
+              or source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')
+              or not str(source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') or '').endswith('vevo-reporting-daily:33')
+          ):
+              raise SystemExit('scheduled runtime/source identity drift')
+          values = {
+              'PRODUCTION_DATABASE': collector_outputs['ExperimentDatabaseName'],
+              'PRODUCTION_WORKGROUP': collector_outputs['ReportingWorkGroupName'],
+              'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
+              'RECONCILIATION_CONTAINER_NAME': override['name'],
+              'HOST_GATE_PRIVATE_IP': host['private_ip'],
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          cat "${TEMP_CHECKPOINT_DIR}/runtime.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_CHECKPOINT_DIR}/runtime.env"
+          set +a
+          aws ecs describe-task-definition --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-definition.json"
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/task-definition.env"
+          import json
+          import os
+          from pathlib import Path
+
+          definition = json.load(open(Path(os.environ['TEMP_CHECKPOINT_DIR']) / 'task-definition.json', encoding='utf-8'))['taskDefinition']
+          containers = definition.get('containerDefinitions') or []
+          expected_image = json.load(open(os.environ['DEPLOY_EVIDENCE'], encoding='utf-8'))['reconciliation']['image_digest']
+          if (
+              definition.get('taskDefinitionArn') != os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+              or len(containers) != 1
+              or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']
+              or not str(containers[0].get('image') or '').endswith('@' + expected_image)
+              or containers[0].get('workingDirectory') not in (None, os.environ['EXPECTED_RUNTIME_PATH'])
+          ):
+              raise SystemExit('reconciliation task-definition identity drift')
+          log_options = (containers[0].get('logConfiguration') or {}).get('options') or {}
+          if not log_options.get('awslogs-group'):
+              raise SystemExit('reconciliation log group missing')
+          print(f"RECONCILIATION_LOG_GROUP={log_options['awslogs-group']}")
+          PY
+          cat "${TEMP_CHECKPOINT_DIR}/task-definition.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_CHECKPOINT_DIR}/task-definition.env"
+          set +a
+          echo "PRODUCTION_CTA_SAFETY_HOST_GATE_OK:instance-id=N/A:Fargate:private-ip=${HOST_GATE_PRIVATE_IP}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:localhost-health=inherited-verified:marker=inherited-verified"
+
+      - name: Verify latest scheduled marker alarms and DLQ
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          START_MS="$(python - <<'PY'
+          from datetime import UTC, datetime, timedelta
+          print(int((datetime.now(UTC) - timedelta(hours=27)).timestamp() * 1000))
+          PY
+          )"
+          aws logs filter-log-events --log-group-name "${RECONCILIATION_LOG_GROUP}" --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:"' --start-time "${START_MS}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/success-events.json"
+          aws logs filter-log-events --log-group-name "${RECONCILIATION_LOG_GROUP}" --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:"' --start-time "${START_MS}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/failure-events.json"
+          aws cloudwatch describe-alarms --alarm-names \
+            vevo-growthbook-reconcile-production-failure \
+            vevo-growthbook-reconcile-production-missing-success \
+            vevo-growthbook-reconcile-production-dlq \
+            --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/alarms.json"
+          aws sqs get-queue-url --queue-name vevo-growthbook-reconcile-production-dlq --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/queue-url.json"
+          QUEUE_URL="$(python - <<'PY'
+          import json
+          import os
+          print(json.load(open(f"{os.environ['TEMP_CHECKPOINT_DIR']}/queue-url.json", encoding='utf-8'))['QueueUrl'])
+          PY
+          )"
+          aws sqs get-queue-attributes --queue-url "${QUEUE_URL}" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesDelayed ApproximateNumberOfMessagesNotVisible --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/queue.json"
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          successes = json.load(open(root / 'success-events.json', encoding='utf-8')).get('events') or []
+          failures = json.load(open(root / 'failure-events.json', encoding='utf-8')).get('events') or []
+          if not successes:
+              raise SystemExit('recent scheduled reconciliation success marker missing')
+          latest = max(successes, key=lambda row: int(row.get('timestamp') or 0))
+          latest_at = datetime.fromtimestamp(int(latest['timestamp']) / 1000, tz=UTC)
+          if datetime.now(UTC) - latest_at > timedelta(hours=27):
+              raise SystemExit('scheduled reconciliation success marker is stale')
+          if any(int(row.get('timestamp') or 0) >= int(latest['timestamp']) for row in failures):
+              raise SystemExit('scheduled reconciliation failure followed latest success boundary')
+          alarms = json.load(open(root / 'alarms.json', encoding='utf-8')).get('MetricAlarms') or []
+          expected = {
+              'vevo-growthbook-reconcile-production-failure',
+              'vevo-growthbook-reconcile-production-missing-success',
+              'vevo-growthbook-reconcile-production-dlq',
+          }
+          if {row.get('AlarmName') for row in alarms} != expected or any(row.get('StateValue') != 'OK' for row in alarms):
+              raise SystemExit('Production reconciliation alarm gate failed')
+          queue = json.load(open(root / 'queue.json', encoding='utf-8')).get('Attributes') or {}
+          keys = ('ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesDelayed', 'ApproximateNumberOfMessagesNotVisible')
+          if any(int(queue.get(key, '-1')) != 0 for key in keys):
+              raise SystemExit('Production reconciliation DLQ is not empty')
+          print('PRODUCTION_CTA_SAFETY_CONTROL_GATE_OK:marker=true:alarms=clear:dlq=empty')
+          PY
+
+      - name: Query only aggregate CTA safety fields
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          python scripts/build_growthbook_cta_safety_checkpoint.py render-query \
+            --manifest "${CTA_SAFETY_MANIFEST}" \
+            --started-at-utc "${CTA_STARTED_AT_UTC}" \
+            --through-utc "${CHECKPOINT_THROUGH_UTC}" \
+            --output "${TEMP_CHECKPOINT_DIR}/cta-safety.sql"
+          QUERY_ID="$(aws athena start-query-execution \
+            --query-string "file://${TEMP_CHECKPOINT_DIR}/cta-safety.sql" \
+            --query-execution-context "Database=${PRODUCTION_DATABASE}" \
+            --work-group "${PRODUCTION_WORKGROUP}" \
+            --region "${AWS_REGION}" \
+            --query QueryExecutionId \
+            --output text)"
+          [[ -n "${QUERY_ID}" && "${QUERY_ID}" != 'None' ]]
+          STATE='QUEUED'
+          for _ in $(seq 1 30); do
+            STATE="$(aws athena get-query-execution --query-execution-id "${QUERY_ID}" --region "${AWS_REGION}" --query 'QueryExecution.Status.State' --output text)"
+            if [[ "${STATE}" == 'SUCCEEDED' || "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then
+              break
+            fi
+            sleep 5
+          done
+          if [[ "${STATE}" == 'SUCCEEDED' ]]; then
+            aws athena get-query-results --query-execution-id "${QUERY_ID}" --max-results 3 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/athena-result.json"
+          else
+            printf '%s\n' '{"query_failed":true}' > "${TEMP_CHECKPOINT_DIR}/athena-result.json"
+          fi
+          echo "PRODUCTION_CTA_SAFETY_ATHENA_READ_OK:state=${STATE}:raw-retained=false:outcomes=false"
+
+      - name: Probe storefront with GET only and build canonical bundle
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          PRODUCT_URL="$(python - <<'PY'
+          import json
+          import os
+          print(json.load(open(os.environ['CTA_SAFETY_MANIFEST'], encoding='utf-8'))['commerce_probe']['product_url'])
+          PY
+          )"
+          CART_URL="$(python - <<'PY'
+          import json
+          import os
+          print(json.load(open(os.environ['CTA_SAFETY_MANIFEST'], encoding='utf-8'))['commerce_probe']['cart_url'])
+          PY
+          )"
+          PRODUCT_FETCH_SUCCEEDED=false
+          CART_FETCH_SUCCEEDED=false
+          : > "${TEMP_CHECKPOINT_DIR}/product.html"
+          : > "${TEMP_CHECKPOINT_DIR}/cart.html"
+          for _ in 1 2; do
+            if curl --request GET --location --fail --silent --show-error --max-time 20 --user-agent 'VEVO-CTA-Safety-ReadOnly/1.0' --output "${TEMP_CHECKPOINT_DIR}/product.html" "${PRODUCT_URL}"; then
+              PRODUCT_FETCH_SUCCEEDED=true
+              break
+            fi
+          done
+          for _ in 1 2; do
+            if curl --request GET --location --fail --silent --show-error --max-time 20 --user-agent 'VEVO-CTA-Safety-ReadOnly/1.0' --output "${TEMP_CHECKPOINT_DIR}/cart.html" "${CART_URL}"; then
+              CART_FETCH_SUCCEEDED=true
+              break
+            fi
+          done
+          OBSERVED_AT_UTC="$(python - <<'PY'
+          import os
+          from datetime import UTC, datetime, timedelta
+          due = datetime.fromisoformat(os.environ['CHECKPOINT_DUE_UTC'].replace('Z', '+00:00'))
+          now = datetime.now(UTC)
+          if not due <= now <= due + timedelta(minutes=60):
+              raise SystemExit('CTA safety bundle is outside exact checkpoint timing gate')
+          print(now.isoformat(timespec='seconds').replace('+00:00', 'Z'))
+          PY
+          )"
+          ARTIFACT_DIR="${RUNNER_TEMP}/vevo-cta-safety-artifact-${GITHUB_RUN_ID}"
+          mkdir -m 700 "${ARTIFACT_DIR}"
+          python scripts/build_growthbook_cta_safety_checkpoint.py assemble \
+            --manifest "${CTA_SAFETY_MANIFEST}" \
+            --athena-result "${TEMP_CHECKPOINT_DIR}/athena-result.json" \
+            --product-html "${TEMP_CHECKPOINT_DIR}/product.html" \
+            --cart-html "${TEMP_CHECKPOINT_DIR}/cart.html" \
+            --product-fetch-succeeded "${PRODUCT_FETCH_SUCCEEDED}" \
+            --cart-fetch-succeeded "${CART_FETCH_SUCCEEDED}" \
+            --checkpoint-index "${CHECKPOINT_INDEX}" \
+            --assignment-started-at-utc "${CTA_STARTED_AT_UTC}" \
+            --observed-at-utc "${OBSERVED_AT_UTC}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --main-commit "${GITHUB_SHA}" \
+            --output-directory "${ARTIFACT_DIR}"
+          [[ "$(find "${ARTIFACT_DIR}" -maxdepth 1 -type f | wc -l)" -eq 3 ]]
+          for file in "${EVIDENCE_FILE}" "${DECISION_FILE}" "${PROVENANCE_FILE}"; do
+            [[ -f "${ARTIFACT_DIR}/${file}" ]]
+          done
+          echo "ARTIFACT_DIR=${ARTIFACT_DIR}" >> "${GITHUB_ENV}"
+
+      - name: Remove every temporary AWS query and storefront response
+        if: ${{ always() && env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          TARGET="${TEMP_CHECKPOINT_DIR:-}"
+          [[ -n "${TARGET}" && "${TARGET}" == "${RUNNER_TEMP}"/vevo-cta-safety-* ]]
+          if [[ -d "${TARGET}" ]]; then
+            find "${TARGET}" -type f -delete
+            rmdir "${TARGET}"
+          fi
+
+      - name: Upload only the canonical three-file safety bundle
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-cta-safety-checkpoint
+          path: |
+            ${{ env.ARTIFACT_DIR }}/vevo-growthbook-cta-safety-evidence.json
+            ${{ env.ARTIFACT_DIR }}/vevo-growthbook-cta-safety-decision.json
+            ${{ env.ARTIFACT_DIR }}/vevo-growthbook-cta-safety-provenance.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish safety-only checkpoint summary
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['ARTIFACT_DIR'])
+          evidence = json.load(open(root / os.environ['EVIDENCE_FILE'], encoding='utf-8'))
+          decision = json.load(open(root / os.environ['DECISION_FILE'], encoding='utf-8'))
+          print('## VEVO Production CTA safety-only checkpoint')
+          print(f"- Checkpoint: `{evidence['checkpoint_index']}`")
+          print(f"- Observed: `{evidence['observed_at_utc']}`")
+          print(f"- Verdict: `{decision['verdict']}`")
+          print(f"- Manual stop required: `{str(decision['manual_stop_required']).lower()}`")
+          print('- Primary/business outcomes, Meta dimensions and winner read: `false`')
+          print('- GrowthBook, GTM, Meta Ads, BiznisWeb and commerce mutation: `none`')
+          PY
