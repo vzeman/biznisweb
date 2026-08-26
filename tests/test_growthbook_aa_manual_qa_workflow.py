@@ -78,7 +78,7 @@ class GrowthBookAaManualQaWorkflowTests(unittest.TestCase):
         for marker in (
             "name: vevo-growthbook-aa-manual-qa-evidence",
             "path: vevo-growthbook-aa-manual-qa-evidence.json",
-            "retention-days: 14",
+            "retention-days: 90",
         ):
             self.assertIn(marker, WORKFLOW[upload:])
         self.assertNotIn("path: projects/vevo/growthbook_aa_manual_qa_observation.json", WORKFLOW)

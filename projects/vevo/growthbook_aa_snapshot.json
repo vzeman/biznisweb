@@ -73,7 +73,7 @@
     "artifact_name": "vevo-growthbook-aa-snapshot",
     "snapshot_file": "vevo-growthbook-aa-snapshot.json",
     "decision_file": "vevo-growthbook-aa-decision.json",
-    "retention_days": 14,
+    "retention_days": 90,
     "contains_component_artifacts": false,
     "contains_raw_aws_payloads": false,
     "contains_cloudwatch_messages": false,

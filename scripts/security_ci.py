@@ -2163,7 +2163,7 @@ def main() -> int:
         snapshot_output = growthbook_aa_snapshot_manifest.get("output", {})
         if (
             snapshot_output.get("artifact_name") != "vevo-growthbook-aa-snapshot"
-            or snapshot_output.get("retention_days") != 14
+            or snapshot_output.get("retention_days") != 90
         ):
             raise AssertionError("GrowthBook A/A snapshot output identity drift.")
         for output_boundary in (
@@ -2191,6 +2191,7 @@ def main() -> int:
             "scripts/evaluate_growthbook_aa.py",
             "winner=false:cta=unchanged",
             "uses: actions/upload-artifact@v4.6.2",
+            "retention-days: 90",
         ):
             require(
                 growthbook_aa_snapshot_workflow,
@@ -2281,6 +2282,7 @@ def main() -> int:
             '--main-commit "${GITHUB_SHA}"',
             "uses: actions/upload-artifact@v4.6.2",
             "winner=false:cta=unchanged",
+            "retention-days: 90",
         ):
             require(
                 growthbook_aa_manual_qa_workflow,
@@ -2379,6 +2381,7 @@ def main() -> int:
             "Remove all temporary AWS responses and aggregate query files",
             "uses: actions/upload-artifact@v4.6.2",
             "winner=false:cta=unchanged",
+            "retention-days: 90",
         ):
             require(
                 growthbook_aa_automated_workflow,
@@ -2589,6 +2592,7 @@ def main() -> int:
             "variation-breakdown=false:activation=false",
             "Remove all temporary AWS responses and aggregate query files",
             "UI test: `not applicable; read-only aggregate workflow makes no UI change`",
+            "retention-days: 90",
         ):
             require(
                 growthbook_cta_baseline_workflow,
@@ -2745,6 +2749,7 @@ def main() -> int:
             "build_growthbook_cta_runtime_readiness.py",
             "Remove all temporary AWS responses queries and logs",
             "uses: actions/upload-artifact@v4.6.2",
+            "retention-days: 90",
             "Restore the exact preceding collector runtime after a failed candidate gate",
             "PREVIOUS_IMAGE_IDENTIFIER",
             "VEVO_CTA_RUNTIME_ROLLBACK_OK:",

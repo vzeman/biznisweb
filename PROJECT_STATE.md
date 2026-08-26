@@ -5942,3 +5942,32 @@ Known issues:
 Next exact step:
 
 - Continue daily result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, prefer the earliest successful exact-main `04:30 Europe/Bratislava` scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
+
+## 2026-08-26 — VEVO gate-critical handoff artifacts made 90-day retention-safe
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-gate-artifact-retention`
+
+What changed:
+
+- Extended only five one-time, hash-bound inter-gate artifacts from 14 to 90 days: automated A/A evidence, reviewed manual A/A QA evidence, assembled A/A snapshot/decision, aggregate CTA planning baseline, and CTA-only runtime-readiness evidence.
+- Updated the machine-readable A/A snapshot and CTA baseline contracts, the offline baseline validator, workflow/security tests, central security CI, and the A/A/CTA runbooks to enforce the same 90-day contract.
+- Repeated daily infrastructure-health evidence remains 14 days, existing recorded deployment evidence remains in Git, and one-time encrypted credentials remain one day; no unnecessary sensitive or routine artifact retention was expanded.
+
+What is verified:
+
+- GitHub artifact metadata in this repository proves the effective repository policy supports 90 days: artifact `9596061718` was created at `2026-08-26T06:47:09Z` and expires at `2026-11-24T06:46:37Z`; multiple other current artifacts have the same effective duration. The direct settings endpoint returned `403` for the current token, so no unsupported settings-level claim is made.
+- `788` Python tests and all `9` storefront JavaScript tests passed. The focused retention/lifecycle suite passed `55` tests.
+- A/A measurement-window, CTA baseline, workspace, Pro, completion, and central security validators passed; Ruff, Python compilation, five-workflow YAML parsing, and `git diff --check` passed.
+- Every affected workflow remains main-only and preserves its existing pre-credential lifecycle gates, identity-free canonical output, raw-response cleanup, no-winner boundary, and external/commerce mutation exclusions.
+- The versioned Production host boundary remains instance `N/A:Fargate`, private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, runtime path `/app`; this repository-only retention change does not deploy or mutate that service and therefore does not claim a new live-host hard gate.
+- No GitHub workflow was dispatched for this change, no A/A or CTA population, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read, and no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, cart, checkout, payment, stock, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- None introduced. Actual future artifact creation remains subject to GitHub Actions availability, but the reviewed inputs and effective 90-day repository retention prevent normal extended PC downtime from losing these handoffs.
+
+Next exact step:
+
+- Merge this retention hardening after CI. Continue result-blind A/A infrastructure monitoring without duplicate manual runs; before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.

@@ -91,7 +91,9 @@ Only after those checks may a protected main-branch workflow emit the canonical,
 identity-free file
 `vevo-growthbook-cta-runtime-readiness.json` as its only uploaded artifact. Raw AWS,
 CloudWatch, ECS, and query responses must remain temporary and must not be
-committed or uploaded with the canonical artifact. Independently download that
+committed or uploaded with the canonical artifact. The canonical artifact is
+retained for 90 days so extended local-PC downtime cannot lose this one-time
+deployment-to-activation handoff. Independently download that
 artifact, verify the successful workflow run/main commit and SHA-256, then place
 the byte-identical file at
 `projects/vevo/growthbook_cta_runtime_readiness_observation.json` through a

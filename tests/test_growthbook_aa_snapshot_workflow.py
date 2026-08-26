@@ -46,7 +46,7 @@ class GrowthBookAaSnapshotWorkflowTests(unittest.TestCase):
             self.assertFalse(boundaries[field])
         output = self.manifest["output"]
         self.assertEqual("vevo-growthbook-aa-snapshot", output["artifact_name"])
-        self.assertEqual(14, output["retention_days"])
+        self.assertEqual(90, output["retention_days"])
         for field in (
             "contains_component_artifacts",
             "contains_raw_aws_payloads",
@@ -102,7 +102,7 @@ class GrowthBookAaSnapshotWorkflowTests(unittest.TestCase):
             "name: vevo-growthbook-aa-snapshot",
             "vevo-growthbook-aa-snapshot.json",
             "vevo-growthbook-aa-decision.json",
-            "retention-days: 14",
+            "retention-days: 90",
         ):
             self.assertIn(marker, self.workflow[upload:])
         for forbidden in (
