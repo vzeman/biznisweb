@@ -195,6 +195,20 @@ winner call, and commerce/Meta/BiznisWeb change remains false.
 
 After the reviewed `manual_cta_start_review_allowed` state is on `main`:
 
+```text
+python scripts/record_growthbook_cta_activation.py assert-start-ready
+python scripts/validate_growthbook_workspace.py
+python scripts/validate_growthbook_meta_reporting_contract.py
+```
+
+All three read-only commands must pass on the exact synchronized `main` commit
+immediately before opening the GrowthBook start control. The first command
+re-reads the canonical A/A stop, Pro, completed-A/A lifecycle, CTA-only runtime,
+sample, registry, Meta/reporting, design, and decision evidence. It rejects a
+missing, non-canonical, hash-drifted, provenance-drifted, or no-longer-reviewed
+source. Re-run the gate after any source change or UI drift; never continue from
+an earlier successful assertion.
+
 1. Reload GrowthBook and confirm project `VEVO SK Web`, Production data source
    `ds_19g6mmt5stlp6`, experiment `exp_19g6mmt1qxzrp`, and feature
    `vevo-sk-product-cta-color`.

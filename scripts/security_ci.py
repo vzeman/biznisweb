@@ -3049,6 +3049,13 @@ def main() -> int:
             "CTA activation requires verified GrowthBook Pro metrics",
             "GrowthBook Pro observation is not canonical or hash-bound",
             '"pro_upgrade_observation"',
+            'commands.add_parser("assert-start-ready")',
+            "def validate_start_readiness(",
+            "CTA manual start review is not open",
+            "A/A stop observation file/hash binding drift",
+            "CTA lifecycle observation file/hash binding drift",
+            "CTA runtime readiness observation file/hash binding drift",
+            "CTA runtime readiness workflow provenance drift",
             "CTA lifecycle evidence is invalid",
             "CTA lifecycle source completion changed after preflight",
             "CTA lifecycle source A/A snapshot changed after preflight",
@@ -3061,6 +3068,7 @@ def main() -> int:
             "automatic_growthbook_mutation_allowed",
             "price_product_cart_checkout_order_mutation_allowed",
             "VEVO_CTA_START_REVIEW_OPENED:",
+            "VEVO_CTA_START_READY:",
             "VEVO_CTA_START_RECORDED:",
         ):
             require(

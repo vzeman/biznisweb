@@ -6602,3 +6602,32 @@ Known issues:
 Next exact step:
 
 - Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful outcome-blind checkpoint artifact in index order, resolve the window without arm/outcome peeking, and process only the protected A/A evidence path. Continue only on an independently reproduced `PASS`; after the reviewed zero-allocation stop, request a new confirmation immediately before the exact one-seat `$40 USD` monthly GrowthBook Pro action and require `assert-action-time` to pass on exact `main`.
+
+## 2026-08-26 — VEVO CTA start handoff made source-complete
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-post-aa-operator-readiness`
+
+What changed:
+
+- Audited the static post-boundary operator sequence from A/A resolution through GrowthBook Pro, the completed-A/A 21-day lifecycle preflight, CTA-only runtime, manual CTA start, outcome-blind checkpoints, stop, final 21-day follow-up, and durable reporting/hypothesis decision. No protected A/A result was opened.
+- Closed a start-handoff gap: the CTA review bound the canonical lifecycle and runtime artifacts, but `record-start` did not previously re-read those ephemeral evidence files. A reviewed manifest could therefore outlive a deleted or drifted runtime/lifecycle file even though the later workspace validator would eventually reject the recorded state.
+- Added the read-only `assert-start-ready` hard gate. On exact synchronized `main` it revalidates the reviewed gate, every versioned source SHA-256, the canonical A/A stop observation, verified Pro manifest/observation, frozen sample, completed-A/A lifecycle manifest/observation and source hashes, CTA-only registry/runtime artifact and workflow provenance, workspace, design, decision, and immutable Meta/reporting contract.
+- Made `record-start` call the same complete readiness validator before it can construct either the running activation or workspace state. A missing, non-canonical, rehashed, provenance-drifted, unsafe, or no-longer-reviewed source now fails before any output file is written.
+- Updated the CTA runbook to require the assertion plus workspace and Meta/reporting validators immediately before the manual GrowthBook start. Corrected the monitoring sequence so the completed-A/A 21-day lifecycle preflight explicitly precedes the CTA-only runtime and start gates.
+
+What is verified:
+
+- The full repository suite passes `861` Python tests and all `9` storefront JavaScript tests. The focused activation/window/workspace group passes `69` tests.
+- GrowthBook Pro, Meta/reporting, workspace, CTA completion/safety, and central security validators pass. Scoped Ruff lint, Python compilation, JavaScript syntax, and `git diff --check` pass.
+- The checked-in waiting state executes `assert-start-ready` fail-closed with `CTA manual start review is not open` before attempting to read future evidence. No output or source file changes.
+- No A/A eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was inspected. No workflow was dispatched and no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, product, price, stock, cart, checkout, payment, or order state changed. No browser or local runtime process was started.
+
+Known issues:
+
+- This source-complete CTA start gate is not yet merged. The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`.
+
+Next exact step:
+
+- Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then preserve the frozen A/A boundary until `2026-09-02 03:45 Europe/Bratislava`; at or after that time process only the protected outcome-blind A/A chain and continue through the already versioned gates without skipping the completed-A/A 21-day lifecycle or exact-main CTA start-readiness assertion.

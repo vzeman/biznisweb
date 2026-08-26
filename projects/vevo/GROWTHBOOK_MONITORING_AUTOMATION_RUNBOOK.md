@@ -203,11 +203,13 @@ this order:
    sanitized readback while CTA remains draft at `0%`.
 6. Wait until the exact A/A end plus 24 hours, collect one protected product
    CTA baseline artifact, and freeze the CTA sample offline.
-7. Complete the versioned CTA runtime and activation readbacks before any CTA
-   start.
-8. During CTA collection, use only the separate outcome-blind CTA checkpoint
+7. Wait through and record the completed-A/A source cohort's exact 21-day
+   prelaunch lifecycle preflight, then complete the CTA-only runtime handoff.
+8. On exact synchronized `main`, require the read-only CTA start-readiness gate
+   to pass before the reviewed manual CTA start and activation readback.
+9. During CTA collection, use only the separate outcome-blind CTA checkpoint
    path. Stop assignment only at its pre-registered sample/day-42 boundary.
-9. Wait through the exact stop plus 21-day follow-up (7-day attribution plus
+10. Wait through the exact stop plus 21-day follow-up (7-day attribution plus
    14-day per-order lifecycle maturity) and execute exactly one
    protected final snapshot. Record the offline decision without applying it.
 

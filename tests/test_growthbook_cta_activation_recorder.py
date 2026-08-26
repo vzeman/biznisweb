@@ -446,6 +446,20 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             runtime_observation_sha256=self.runtime_hash,
         )
 
+    def _start_readiness_kwargs(self) -> dict:
+        stop_readback, _ = self._release_stop_observation()
+        return {
+            "completion": self.completion,
+            "snapshot": self.snapshot,
+            "pro_upgrade": self.pro_upgrade,
+            "pro_observation": self.pro_observation,
+            "sample": self.sample,
+            "lifecycle": self.lifecycle,
+            "lifecycle_observation": self.lifecycle_observation,
+            "runtime_observation": self.runtime,
+            "stop_observation": stop_readback,
+        }
+
     def test_checked_in_manifest_is_fail_closed(self) -> None:
         recorder.validate_manifest(self.activation)
         self.assertEqual(recorder.WAITING, self.activation["status"])
@@ -724,6 +738,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             self.workspace,
             self.registry,
             observation,
+            **self._start_readiness_kwargs(),
             observation_sha256=digest,
             source_hashes=self.source_hashes,
         )
@@ -746,6 +761,64 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
             recorded, workspace, self.registry, observation
         )
 
+    def test_start_readiness_rechecks_all_ephemeral_evidence(self) -> None:
+        opened = self._open()
+        readiness = self._start_readiness_kwargs()
+        recorder.validate_start_readiness(
+            opened,
+            workspace=self.workspace,
+            registry=self.registry,
+            source_hashes=self.source_hashes,
+            **readiness,
+        )
+
+        tampered_runtime = copy.deepcopy(self.runtime)
+        tampered_runtime["runtime"]["target_health"] = "unhealthy"
+        with self.assertRaisesRegex(
+            recorder.CtaActivationRecordingError,
+            "target is not healthy",
+        ):
+            recorder.validate_start_readiness(
+                opened,
+                workspace=self.workspace,
+                registry=self.registry,
+                source_hashes=self.source_hashes,
+                **{**readiness, "runtime_observation": tampered_runtime},
+            )
+
+        tampered_lifecycle = copy.deepcopy(self.lifecycle_observation)
+        tampered_lifecycle["cta_outcome_data_read"] = True
+        with self.assertRaisesRegex(
+            recorder.CtaActivationRecordingError,
+            "lifecycle evidence is invalid",
+        ):
+            recorder.validate_start_readiness(
+                opened,
+                workspace=self.workspace,
+                registry=self.registry,
+                source_hashes=self.source_hashes,
+                **{**readiness, "lifecycle_observation": tampered_lifecycle},
+            )
+
+        tampered_stop = copy.deepcopy(readiness["stop_observation"])
+        tampered_stop["gtm"]["unprocessed_changes"]["added"] = 1
+        with self.assertRaisesRegex(
+            recorder.CtaActivationRecordingError,
+            "A/A stop observation is invalid",
+        ):
+            recorder.validate_start_readiness(
+                opened,
+                workspace=self.workspace,
+                registry=self.registry,
+                source_hashes=self.source_hashes,
+                **{**readiness, "stop_observation": tampered_stop},
+            )
+
+    def test_assert_start_ready_cli_needs_no_output_path(self) -> None:
+        args = recorder._parser().parse_args(["assert-start-ready"])
+        self.assertEqual("assert-start-ready", args.command)
+        self.assertIsNone(args.output)
+
     def test_record_start_rejects_simultaneous_aa_or_commerce_drift(self) -> None:
         opened = self._open()
         observation = self._start_observation()
@@ -763,6 +836,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 self.workspace,
                 self.registry,
                 observation,
+                **self._start_readiness_kwargs(),
                 observation_sha256=digest,
                 source_hashes=self.source_hashes,
             )
@@ -777,6 +851,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 self.workspace,
                 self.registry,
                 observation,
+                **self._start_readiness_kwargs(),
                 observation_sha256=digest,
                 source_hashes=self.source_hashes,
             )
@@ -796,6 +871,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 self.workspace,
                 self.registry,
                 observation,
+                **self._start_readiness_kwargs(),
                 observation_sha256=digest,
                 source_hashes=changed,
             )
@@ -810,6 +886,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 self.workspace,
                 self.registry,
                 observation,
+                **self._start_readiness_kwargs(),
                 observation_sha256=digest,
                 source_hashes=changed,
             )

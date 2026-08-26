@@ -42,6 +42,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
             source.workspace,
             source.registry,
             self.start_observation,
+            **source._start_readiness_kwargs(),
             observation_sha256=start_hash,
             source_hashes=source.source_hashes,
         )
