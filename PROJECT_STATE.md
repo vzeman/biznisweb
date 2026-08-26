@@ -6433,3 +6433,32 @@ Known issues:
 Next exact step:
 
 - Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful checkpoint artifact in index order; use schema-`3` historical backfill only if the exact next artifact was never created. Resolve the window without arm/outcome peeking, then process the protected A/A evidence path and continue only on an independently reproduced `PASS`.
+
+## 2026-08-26 — VEVO CTA missing-checkpoint recovery hardened
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-checkpoint-backfill-safety`
+
+What changed:
+
+- Closed the equivalent future CTA assignment-window liveness gap without opening the currently time-locked A/A result boundary. A missed scheduled and same-window CTA artifact can no longer make the strict sequential recorder permanently impossible to advance.
+- Added explicit schema-`3` CTA checkpoint collection modes. Scheduled and manual same-window runs retain the original exact daily gate. A late run requires both manual confirmations, is marked `manual_historical_backfill`, and can reconstruct only the exact next missing index at its original preregistered cutoff.
+- Preserved schema-`1`/`2` compatibility and the schema-`2` runtime provenance fields. The validator rejects premature backfill, late same-window evidence, unknown or contradictory modes, index gaps, evidence after resolution, outcomes, winner fields, and external mutations.
+- Updated the activation runbook and central security markers. Historical backfill is forbidden when a successful artifact for that exact checkpoint already exists.
+
+What is verified:
+
+- Core commit `ec73e406` is pushed to `origin/codex/vevo-cta-checkpoint-backfill-safety`.
+- The full repository suite passes `838` Python tests and all `9` storefront JavaScript tests. The broader focused CTA lifecycle suite passes `157` tests.
+- CTA measurement-window, final-snapshot, workspace, and central security validators pass. Scoped Ruff on changed Python files, Python compilation, workflow YAML parsing, and `git diff --check` pass.
+- No A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was inspected. No workflow was dispatched; no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, product, price, cart, checkout, payment, stock, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- This recovery hardening is pushed but not yet merged.
+- Static CTA lifecycle audit found a separate circular launch gate: the current activation contract requires verified Production CTA lifecycle evidence before CTA can start, while the required CTA data cannot exist before that start. The recorder is safe but has no protected reproducible producer. This must be corrected on a separate clean branch before CTA launch readiness is claimed.
+
+Next exact step:
+
+- Merge the CTA checkpoint recovery after CI. Then, on a clean branch from updated `main`, replace the circular pre-start lifecycle dependency with a source-explicit, protected reconciliation path and verify the complete activation-to-final-snapshot chain. Keep the A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava` and do not dispatch result workflows before then.
