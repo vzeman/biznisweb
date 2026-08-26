@@ -97,6 +97,10 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             "privateIPv4Address",
             "privateIpv4Address",
             "networkInterfaces",
+            "'schema_version': 2",
+            "'identity_source': (",
+            "'scheduler_run_task_verified': post_run",
+            "'runtime_state_retained': (",
         ):
             self.assertIn(marker, WORKFLOW)
         self.assertNotIn("aws ecs list-tasks", WORKFLOW)

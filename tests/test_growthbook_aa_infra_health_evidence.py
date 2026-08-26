@@ -29,7 +29,7 @@ def health_evidence(*, post_run: bool) -> dict:
     task_definition = DEPLOY["reconciliation"]["task_definition"].rsplit("/", 1)[-1]
     source_task_definition = DEPLOY["source_runtime"]["task_definition"].rsplit("/", 1)[-1]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "evidence_type": "vevo_growthbook_production_aa_infra_health",
         "environment": "production",
         "observed_at_utc": "2026-08-26T02:15:00Z",
@@ -58,6 +58,7 @@ def health_evidence(*, post_run: bool) -> dict:
             "task_definition": task_definition,
             "image_digest": DEPLOY["reconciliation"]["image_digest"],
             "localhost_marker_source": "hash_bound_deploy_evidence_host_gate",
+            "identity_source": "ecs_stopped_task" if post_run else None,
         },
         "control": {
             "schedule_name": "vevo-growthbook-reconcile-production",
@@ -79,6 +80,8 @@ def health_evidence(*, post_run: bool) -> dict:
             "source_schedule_state": "ENABLED",
             "source_task_definition": source_task_definition,
             "source_schedule_unchanged": True,
+            "scheduler_run_task_verified": post_run,
+            "runtime_state_retained": True if post_run else None,
         },
         "privacy": {
             "experimental_population_read": False,
@@ -129,6 +132,27 @@ class GrowthBookAaInfraHealthEvidenceTests(unittest.TestCase):
             '"quality_reports"',
         ):
             self.assertNotIn(forbidden, serialized)
+
+    def test_accepts_cloudtrail_retention_recovery_without_inventing_private_ip(self) -> None:
+        value = health_evidence(post_run=True)
+        value["runtime"]["private_ip"] = None
+        value["runtime"]["identity_source"] = "cloudtrail_run_task_retention_recovery"
+        value["control"]["runtime_state_retained"] = False
+        validate_health_evidence(value, DEPLOY, deploy_evidence_bytes=DEPLOY_BYTES)
+
+    def test_rejects_missing_private_ip_without_exact_retention_source(self) -> None:
+        value = health_evidence(post_run=True)
+        value["runtime"]["private_ip"] = None
+        with self.assertRaisesRegex(InfraHealthEvidenceError, "retained runtime IP missing"):
+            validate_health_evidence(value, DEPLOY, deploy_evidence_bytes=DEPLOY_BYTES)
+
+    def test_accepts_legacy_schema_one_evidence(self) -> None:
+        value = health_evidence(post_run=True)
+        value["schema_version"] = 1
+        value["runtime"].pop("identity_source")
+        value["control"].pop("scheduler_run_task_verified")
+        value["control"].pop("runtime_state_retained")
+        validate_health_evidence(value, DEPLOY, deploy_evidence_bytes=DEPLOY_BYTES)
 
     def test_rejects_result_or_identity_field_injection(self) -> None:
         value = health_evidence(post_run=True)

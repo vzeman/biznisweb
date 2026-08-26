@@ -103,6 +103,12 @@ success marker and Scheduler-authenticated CloudTrail `RunTask` event first.
 It prefers retained ECS state and may recover the original private IP from the
 same exact CloudTrail response only when the task ID, task definition, group,
 Scheduler role, time window, marker, and VPC range all match. It performs no
+guessing when neither retained source contains the IP: schema v2 records a
+`null` private IP together with the exact
+`cloudtrail_run_task_retention_recovery` source and a false retained-runtime
+flag. That result-blind proof is sufficient only for reconciliation monitoring;
+it never satisfies the separate live IP plus localhost-marker hard gate needed
+before an infrastructure mutation. The workflow performs no
 Athena, S3 data, GrowthBook, Meta, GTM, or BiznisWeb request and emits no row
 count.
 
