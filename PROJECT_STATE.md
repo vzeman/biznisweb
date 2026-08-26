@@ -5812,6 +5812,8 @@ What changed:
 
 What is verified:
 
+- PR `#432` merged as `4abda7d4fc593bb4134c07552449283ceb740acc`; `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` all passed.
+- GitHub API readback reports workflow ID `341899955`, path `.github/workflows/check-vevo-growthbook-production-aa-window.yml`, and state `active` on exact synchronized `main`.
 - The versioned host boundary remains instance `N/A:Fargate`, private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, runtime path `/app`; this change does not deploy or mutate that service.
 - `782` Python tests and all `9` storefront JavaScript tests passed, including pre-due, wrong-DST, already-recorded, resolved-window, summer-slot, winter-slot, multi-day calendar-index, manual-gate, and post-gate step-condition behavior.
 - GrowthBook workspace and A/A measurement-window validators, central security CI, focused Ruff, Python compilation, YAML parsing, and `git diff --check` passed.
@@ -5824,4 +5826,4 @@ Known issues:
 
 Next exact step:
 
-- Merge the cloud-checkpoint workflow after reviewed CI. Before `2026-09-02 03:45 Europe/Bratislava`, continue only result-blind infrastructure monitoring. Let the first admitted scheduled checkpoint capture at `2026-09-02 04:30 Europe/Bratislava`, then independently download/hash its one canonical artifact and record it through a separate reviewed PR; do not read arms, outcomes, Meta dimensions, conversion, revenue, CM1, or performance before the window resolves.
+- Before `2026-09-02 03:45 Europe/Bratislava`, continue only result-blind infrastructure monitoring. Let the first admitted scheduled checkpoint capture at `2026-09-02 04:30 Europe/Bratislava`, then independently download/hash its one canonical artifact and record it through a separate reviewed PR; do not read arms, outcomes, Meta dimensions, conversion, revenue, CM1, or performance before the window resolves.
