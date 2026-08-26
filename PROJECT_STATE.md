@@ -6378,3 +6378,32 @@ Known issues:
 Next exact step:
 
 - Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, process the already protected A/A evidence path exactly once without browser-result peeking; if and only if it independently reproduces `PASS`, complete the reviewed A/A zero-allocation stop, then request fresh confirmation before the paid GrowthBook Pro action.
+
+## 2026-08-26 — VEVO A/A missing-checkpoint recovery hardened
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-backfill-safety`
+
+What changed:
+
+- Static outcome-blind review of the post-boundary A/A snapshot, PASS, reviewed zero-allocation stop, and GrowthBook Pro handoff confirmed that those transitions remain hash/run/commit-bound and fail closed. No A/A population or result was opened.
+- Closed a checkpoint-liveness gap: one failed scheduled and same-window run could previously leave the required next checkpoint artifact permanently unavailable because the offline recorder rejects index gaps while the manual workflow also rejected all historical reconstruction.
+- Added an explicit schema-`3` checkpoint collection mode. Normal scheduled and manual same-window runs retain the original 24-hour gate. A late run is admitted only by a manual dispatch with both exact confirmations, is marked `manual_historical_backfill`, and reconstructs only `len(checkpoint_history) + 1` at its original preregistered cutoff.
+- The offline validator accepts late evidence only when that schema/mode/timing combination is exact; it still rejects gaps, premature backfill, late same-window evidence, unknown modes, unsafe fields, outcome reads, and mutations. Legacy schema `1`/`2` evidence remains valid only inside its original daily gate.
+- Updated the runbook and central security assertions. The runbook explicitly forbids creating a backfill when a successful artifact for that index already exists.
+
+What is verified:
+
+- Commit `ad16de14` is pushed to `origin/codex/vevo-aa-checkpoint-backfill-safety`.
+- The full repository Python suite passes `835` tests. The focused A/A window/evidence/snapshot/completion/Pro chain passes `81` tests, and all `9` storefront JavaScript tests pass.
+- Workspace validation, central security validation, workflow YAML parsing, scoped Ruff lint/format, Python compilation, and `git diff --check` pass.
+- No A/A eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was inspected. No workflow was dispatched; no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, product, price, cart, checkout, payment, stock, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- This recovery hardening is pushed but not yet merged. The A/A result boundary remains time-locked, and GrowthBook Pro still requires verified A/A `PASS`, reviewed zero Production allocation, and fresh action-time confirmation.
+
+Next exact step:
+
+- Open and merge the recovery PR after CI. Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`; at or after that time, use the earliest successful checkpoint artifact in index order, and use the explicit historical backfill only if that exact next artifact was never created.
