@@ -236,6 +236,7 @@ jobs:
               'PRODUCTION_WORKGROUP': collector_outputs['ReportingWorkGroupName'],
               'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
               'RECONCILIATION_CONTAINER_NAME': override['name'],
+              'RECONCILIATION_SCHEDULER_ROLE_ARN': reconciliation_outputs['SchedulerRoleArn'],
               'PLATFORM_VERSION': ecs.get('PlatformVersion') or 'LATEST',
           }
           network_payload = {
@@ -258,24 +259,153 @@ jobs:
           aws ecs describe-task-definition \
             --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" \
             --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/task-definition.json"
-          aws ecs list-tasks \
-            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
-            --family "${EXPECTED_SERVICE}" \
-            --desired-status STOPPED \
-            --max-results 100 \
-            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/task-list.json"
-          python - <<'PY' > "${TEMP_FINAL_DIR}/task-arns.txt"
+          python - <<'PY' > "${TEMP_FINAL_DIR}/task-definition.env"
           import json
           import os
-          tasks = json.load(open(f"{os.environ['TEMP_FINAL_DIR']}/task-list.json", encoding='utf-8')).get('taskArns') or []
-          if not tasks:
-              raise SystemExit('scheduled reconciliation task list is empty')
-          print(' '.join(tasks))
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_FINAL_DIR'])
+          definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
+          containers = definition.get('containerDefinitions') or []
+          if (
+              definition.get('taskDefinitionArn') != os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+              or len(containers) != 1
+              or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']
+          ):
+              raise SystemExit('reconciliation task-definition identity drift')
+          image = str(containers[0].get('image') or '')
+          if '@sha256:' not in image:
+              raise SystemExit('reconciliation task definition is not digest pinned')
+          image_digest = 'sha256:' + image.rsplit('@sha256:', 1)[1]
+          log_group = ((containers[0].get('logConfiguration') or {}).get('options') or {}).get('awslogs-group')
+          if not log_group:
+              raise SystemExit('reconciliation log group missing')
+          values = {
+              'RECONCILIATION_IMAGE_DIGEST': image_digest,
+              'RECONCILIATION_LOG_GROUP': log_group,
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
           PY
-          read -r -a TASK_ARNS < "${TEMP_FINAL_DIR}/task-arns.txt"
+          cat "${TEMP_FINAL_DIR}/task-definition.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_FINAL_DIR}/task-definition.env"
+          set +a
+
+          python - <<'PY' > "${TEMP_FINAL_DIR}/final-reconciliation-window.env"
+          import os
+          from datetime import UTC, datetime, timedelta
+
+          due = datetime.fromisoformat(os.environ['FINAL_DUE_UTC'].replace('Z', '+00:00'))
+          now = datetime.now(UTC)
+          lower = max(due, now - timedelta(hours=26))
+          if now <= lower:
+              raise SystemExit('no post-due Production reconciliation window is available')
+          values = {
+              'FINAL_RECONCILIATION_START_UTC': lower.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'FINAL_RECONCILIATION_END_UTC': now.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'FINAL_RECONCILIATION_START_MS': str(int(lower.timestamp() * 1000)),
+              'FINAL_RECONCILIATION_END_MS': str(int(now.timestamp() * 1000)),
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          set -a
+          source "${TEMP_FINAL_DIR}/final-reconciliation-window.env"
+          set +a
+          aws logs filter-log-events \
+            --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:"' \
+            --start-time "${FINAL_RECONCILIATION_START_MS}" \
+            --end-time "${FINAL_RECONCILIATION_END_MS}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/success-events.json"
+          aws logs filter-log-events \
+            --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:"' \
+            --start-time "${FINAL_RECONCILIATION_START_MS}" \
+            --end-time "${FINAL_RECONCILIATION_END_MS}" \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/failure-events.json"
+          aws cloudtrail lookup-events \
+            --lookup-attributes AttributeKey=EventName,AttributeValue=RunTask \
+            --start-time "${FINAL_RECONCILIATION_START_UTC}" \
+            --end-time "${FINAL_RECONCILIATION_END_UTC}" \
+            --max-items 500 \
+            --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/cloudtrail.json"
+          python - <<'PY' > "${TEMP_FINAL_DIR}/selected-marker.env"
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_FINAL_DIR'])
+          successes = json.loads((root / 'success-events.json').read_text(encoding='utf-8')).get('events') or []
+          failures = json.loads((root / 'failure-events.json').read_text(encoding='utf-8')).get('events') or []
+          if not successes:
+              raise SystemExit('no successful post-due Production reconciliation marker exists')
+          latest_timestamp = max(int(row.get('timestamp') or -1) for row in successes)
+          latest = [row for row in successes if int(row.get('timestamp') or -1) == latest_timestamp]
+          if len(latest) != 1:
+              raise SystemExit('latest post-due Production reconciliation marker is ambiguous')
+          if any(int(row.get('timestamp') or -1) >= latest_timestamp for row in failures):
+              raise SystemExit('a reconciliation failure marker exists at or after the latest success')
+          stream = str(latest[0].get('logStreamName') or '')
+          task_id = stream.rsplit('/', 1)[-1]
+          if re.fullmatch(r'[0-9a-f]{32}', task_id) is None:
+              raise SystemExit('CTA final success-marker task ID is invalid')
+
+          cloudtrail_payload = json.loads((root / 'cloudtrail.json').read_text(encoding='utf-8'))
+          if cloudtrail_payload.get('NextToken'):
+              raise SystemExit('bounded CloudTrail RunTask lookup was truncated')
+          matching = []
+          for row in cloudtrail_payload.get('Events') or []:
+              raw = row.get('CloudTrailEvent')
+              if not isinstance(raw, str):
+                  continue
+              try:
+                  detail = json.loads(raw)
+              except json.JSONDecodeError:
+                  continue
+              identity = detail.get('userIdentity') or {}
+              issuer = ((identity.get('sessionContext') or {}).get('sessionIssuer') or {})
+              request = detail.get('requestParameters') or {}
+              requested_definition = str(request.get('taskDefinition') or '')
+              requested_cluster = str(request.get('cluster') or '')
+              serialized = json.dumps(detail, sort_keys=True, separators=(',', ':'))
+              if (
+                  detail.get('eventSource') == 'ecs.amazonaws.com'
+                  and detail.get('eventName') == 'RunTask'
+                  and request.get('group') == os.environ['EXPECTED_SERVICE']
+                  and requested_definition in {
+                      os.environ['RECONCILIATION_TASK_DEFINITION_ARN'],
+                      os.environ['RECONCILIATION_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1],
+                  }
+                  and requested_cluster in {
+                      os.environ['RECONCILIATION_CLUSTER_ARN'],
+                      os.environ['RECONCILIATION_CLUSTER_ARN'].rsplit('/', 1)[-1],
+                  }
+                  and (
+                      identity.get('invokedBy') == 'scheduler.amazonaws.com'
+                      or issuer.get('arn') == os.environ['RECONCILIATION_SCHEDULER_ROLE_ARN']
+                  )
+                  and task_id in serialized
+              ):
+                  matching.append(detail)
+          if len(matching) != 1:
+              raise SystemExit(f'expected one exact Scheduler CloudTrail RunTask event, found {len(matching)}')
+          (root / 'selected-cloudtrail-event.json').write_text(
+              json.dumps(matching[0], sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          print(f'RECONCILIATION_TASK_ID={task_id}')
+          print(f'RECONCILIATION_LOG_STREAM={stream}')
+          PY
+          cat "${TEMP_FINAL_DIR}/selected-marker.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_FINAL_DIR}/selected-marker.env"
+          set +a
           aws ecs describe-tasks \
             --cluster "${RECONCILIATION_CLUSTER_ARN}" \
-            --tasks "${TASK_ARNS[@]}" \
+            --tasks "${RECONCILIATION_TASK_ID}" \
             --region "${AWS_REGION}" > "${TEMP_FINAL_DIR}/tasks.json"
           python - <<'PY' > "${TEMP_FINAL_DIR}/selected-task.env"
           import ipaddress
@@ -285,53 +415,102 @@ jobs:
           from pathlib import Path
 
           root = Path(os.environ['TEMP_FINAL_DIR'])
-          due = datetime.fromisoformat(os.environ['FINAL_DUE_UTC'].replace('Z', '+00:00'))
-          definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
-          containers = definition.get('containerDefinitions') or []
-          if len(containers) != 1 or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']:
-              raise SystemExit('reconciliation task-definition container drift')
-          image = str(containers[0].get('image') or '')
-          if '@sha256:' not in image:
-              raise SystemExit('reconciliation task definition is not digest pinned')
-          image_digest = 'sha256:' + image.rsplit('@sha256:', 1)[1]
-          log_group = ((containers[0].get('logConfiguration') or {}).get('options') or {}).get('awslogs-group')
-          candidates = []
-          for task in json.load(open(root / 'tasks.json', encoding='utf-8')).get('tasks') or []:
+          lower = datetime.fromisoformat(os.environ['FINAL_RECONCILIATION_START_UTC'].replace('Z', '+00:00')).timestamp()
+          upper = datetime.fromisoformat(os.environ['FINAL_RECONCILIATION_END_UTC'].replace('Z', '+00:00')).timestamp()
+          exact_task = None
+          for task in json.loads((root / 'tasks.json').read_text(encoding='utf-8')).get('tasks') or []:
               started_at = task.get('startedAt')
-              stopped_at = task.get('stoppedAt')
-              started = datetime.fromisoformat(started_at.replace('Z', '+00:00')) if started_at else None
-              stopped = datetime.fromisoformat(stopped_at.replace('Z', '+00:00')) if stopped_at else None
-              task_containers = task.get('containers') or []
+              started_epoch = datetime.fromisoformat(started_at.replace('Z', '+00:00')).timestamp() if started_at else -1
               if (
-                  task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+                  task.get('taskArn', '').rsplit('/', 1)[-1] == os.environ['RECONCILIATION_TASK_ID']
+                  and task.get('clusterArn') == os.environ['RECONCILIATION_CLUSTER_ARN']
+                  and task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
                   and task.get('group') == os.environ['EXPECTED_SERVICE']
-                  and task.get('launchType') == 'FARGATE'
-                  and not str(task.get('startedBy') or '').startswith('cta-final-')
-                  and started is not None and started >= due
-                  and stopped is not None and stopped >= started
-                  and len(task_containers) == 1
-                  and task_containers[0].get('exitCode') == 0
-                  and task_containers[0].get('imageDigest') == image_digest
+                  and lower <= started_epoch < upper
               ):
-                  candidates.append((started, task))
-          if not candidates:
-              raise SystemExit('no successful post-due Production reconciliation task exists')
-          task = max(candidates, key=lambda row: row[0])[1]
-          container = task['containers'][0]
-          details = [row for attachment in task.get('attachments') or [] for row in attachment.get('details') or []]
-          private_ip_text = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
-          private_ip = ipaddress.ip_address(private_ip_text)
-          if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
-              raise SystemExit('scheduled reconciliation task private IP drift')
+                  if exact_task is not None:
+                      raise SystemExit('retained scheduled reconciliation task identity is ambiguous')
+                  exact_task = task
+
+          cloudtrail = json.loads((root / 'selected-cloudtrail-event.json').read_text(encoding='utf-8'))
+          response_tasks = (cloudtrail.get('responseElements') or {}).get('tasks') or []
+          cloudtrail_task = next(
+              (
+                  task for task in response_tasks
+                  if str(task.get('taskArn') or '').rsplit('/', 1)[-1]
+                  == os.environ['RECONCILIATION_TASK_ID']
+              ),
+              None,
+          )
+          if cloudtrail_task is None:
+              raise SystemExit('exact CloudTrail scheduled reconciliation task is missing')
+          cloudtrail_definition = str(cloudtrail_task.get('taskDefinitionArn') or '')
+          if cloudtrail_definition and cloudtrail_definition != os.environ['RECONCILIATION_TASK_DEFINITION_ARN']:
+              raise SystemExit('CloudTrail scheduled reconciliation task-definition drift')
+          cloudtrail_group = str(cloudtrail_task.get('group') or '')
+          if cloudtrail_group and cloudtrail_group != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('CloudTrail scheduled reconciliation group drift')
+          cloudtrail_cluster = str(cloudtrail_task.get('clusterArn') or '')
+          if cloudtrail_cluster and cloudtrail_cluster != os.environ['RECONCILIATION_CLUSTER_ARN']:
+              raise SystemExit('CloudTrail scheduled reconciliation cluster drift')
+
+          private_ip_text = ''
+          runtime_source = 'cloudtrail_run_task_retention_recovery'
+          runtime_retained = False
+          if exact_task is not None:
+              containers = exact_task.get('containers') or []
+              started_at = exact_task.get('startedAt')
+              stopped_at = exact_task.get('stoppedAt')
+              started_epoch = datetime.fromisoformat(started_at.replace('Z', '+00:00')).timestamp() if started_at else -1
+              stopped_epoch = datetime.fromisoformat(stopped_at.replace('Z', '+00:00')).timestamp() if stopped_at else -1
+              if (
+                  exact_task.get('launchType') != 'FARGATE'
+                  or str(exact_task.get('startedBy') or '').startswith('cta-final-')
+                  or stopped_epoch < started_epoch
+                  or len(containers) != 1
+                  or containers[0].get('exitCode') != 0
+                  or containers[0].get('logStreamName') != os.environ['RECONCILIATION_LOG_STREAM']
+              ):
+                  raise SystemExit('retained scheduled reconciliation task did not stop successfully')
+              if containers[0].get('imageDigest') != os.environ['RECONCILIATION_IMAGE_DIGEST']:
+                  raise SystemExit('scheduled reconciliation image differs from the immutable task definition')
+              details = [
+                  row
+                  for attachment in exact_task.get('attachments') or []
+                  for row in attachment.get('details') or []
+              ]
+              private_ip_text = str(next(
+                  (
+                      row.get('value') for row in details
+                      if str(row.get('name') or '').lower() == 'privateipv4address'
+                  ),
+                  '',
+              ))
+              if not private_ip_text:
+                  private_ip_text = str(next(
+                      (
+                          interface.get('privateIpv4Address')
+                          or interface.get('privateIPv4Address')
+                          for container in containers
+                          for interface in container.get('networkInterfaces') or []
+                          if interface.get('privateIpv4Address')
+                          or interface.get('privateIPv4Address')
+                      ),
+                      '',
+                  ))
+              if not private_ip_text:
+                  raise SystemExit('retained scheduled reconciliation task private IP missing')
+              private_ip = ipaddress.ip_address(private_ip_text)
+              if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
+                  raise SystemExit('scheduled reconciliation task private IP drift')
+              runtime_source = 'ecs_stopped_task'
+              runtime_retained = True
+
           values = {
-              'RECONCILIATION_TASK_ID': task['taskArn'].rsplit('/', 1)[-1],
               'RECONCILIATION_PRIVATE_IP': private_ip_text,
-              'RECONCILIATION_IMAGE_DIGEST': image_digest,
-              'RECONCILIATION_LOG_GROUP': log_group,
-              'RECONCILIATION_LOG_STREAM': container.get('logStreamName') or '',
+              'RECONCILIATION_RUNTIME_IDENTITY_SOURCE': runtime_source,
+              'RECONCILIATION_RUNTIME_STATE_RETAINED': str(runtime_retained).lower(),
           }
-          if not values['RECONCILIATION_LOG_GROUP'] or not values['RECONCILIATION_LOG_STREAM']:
-              raise SystemExit('scheduled reconciliation log identity missing')
           for key, value in values.items():
               print(f'{key}={value}')
           PY
@@ -339,7 +518,7 @@ jobs:
           set -a
           source "${TEMP_FINAL_DIR}/selected-task.env"
           set +a
-          echo "CTA_FINAL_PREQUERY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:task=${RECONCILIATION_TASK_ID}:image=${RECONCILIATION_IMAGE_DIGEST}"
+          echo "CTA_FINAL_PREQUERY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP:-expired}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:task=${RECONCILIATION_TASK_ID}:image=${RECONCILIATION_IMAGE_DIGEST}:source=${RECONCILIATION_RUNTIME_IDENTITY_SOURCE}:runtime-retained=${RECONCILIATION_RUNTIME_STATE_RETAINED}:scheduler-run-task=true"
 
       - name: Verify scheduled marker parity alarms and DLQ before outcomes
         run: |

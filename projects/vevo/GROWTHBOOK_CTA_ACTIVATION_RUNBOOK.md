@@ -292,11 +292,15 @@ hard gate in this order:
    `vevo-growthbook-reconcile-production`, runtime `/app`, schedule, task
    definition, immutable image, reporting database/workgroup, and source-table
    schemas;
-2. require a successful scheduled reconciliation after the due time, exact
-   generated/published marker parity, three clear alarms, and an empty DLQ;
-3. start one diagnostic task from that exact task definition and record its
-   private IP, then verify direct localhost `/health` and `/marker.json` with
-   the service and `/app` markers;
+2. bind the latest successful scheduled reconciliation after the due time
+   through a bounded CloudWatch marker and Scheduler-authenticated CloudTrail
+   `RunTask`, then require exact generated/published marker parity, three clear
+   alarms, and an empty DLQ. Prefer retained ECS task/IP state; after ECS
+   retention expiry record the explicit historical source and expired IP, which
+   never satisfies the live infrastructure hard gate;
+3. start one new diagnostic task from that exact task definition, require and
+   record its live private IP, then verify direct localhost `/health` and
+   `/marker.json` with the service and `/app` markers;
 4. only then run one Athena query that internally selects the frozen first-`N`
    devices but returns exactly two aggregate variation rows.
 
@@ -305,9 +309,10 @@ The workflow reads outcomes once and uploads only canonical
 `vevo-growthbook-cta-final-decision.json`. It deletes temporary AWS, log, and
 query payloads and cannot deploy, edit GrowthBook/GTM/Meta Ads/BiznisWeb,
 change reporting/collector infrastructure, alter commerce, or apply a winner.
-The host gate is the runtime verification for this read-only operation; no UI
-test is applicable because the workflow makes no storefront or control-plane
-change.
+Only the new diagnostic task's private IP and localhost markers satisfy the
+runtime hard gate for this read-only operation. Historical CloudTrail recovery
+only proves scheduled-task provenance. No UI test is applicable because the
+workflow makes no storefront or control-plane change.
 
 Independently download the sole artifact, verify the successful run, exact main
 commit, and both SHA-256 values, then record the result through a separate
