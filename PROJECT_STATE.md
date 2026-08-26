@@ -5769,3 +5769,28 @@ What is verified:
 Next exact step:
 
 - Continue cloud-based daily result-blind infrastructure monitoring. Do not inspect population, arms, outcomes, Meta dimensions, conversions, revenue, CM1, performance, or any experiment result before the pre-registered first A/A checkpoint at `2026-09-02 03:45 Europe/Bratislava`; dispatch the protected outcome-blind checkpoint only at or after that gate from exact `main` with `confirm_checkpoint=true`.
+
+## 2026-08-26 — VEVO current-main Production A/A infrastructure reverified result-blind
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-exact-main-health`
+
+What changed:
+
+- No production configuration changed. After the retention-safe checkpoint and final-look PRs landed, one new manual result-blind infrastructure monitor was dispatched from their exact current `main` solely to close the commit-provenance gap.
+- The repository-owned GitHub schedule remains the PC-independent daily monitor, while the existing Codex heartbeat `vevo-production-a-a-monitoring` was read back as `ACTIVE`, attached to this thread, and scheduled daily at `09:00 Europe/Bratislava` as coordinator/readback only.
+
+What is verified:
+
+- Workflow run `32935473209` succeeded on exact main commit `83eef030bb5db080fe41f01b3806ae7714020708` and produced exactly one artifact named `vevo-growthbook-production-aa-infra-health`.
+- The GitHub artifact ZIP SHA-256 is `5ed000ea47ac238c100b24614e2dd4e84fa6c746d1927d6543bb7e6dbea9fa03`; it contains only `vevo-growthbook-production-aa-infra-health.json`, whose SHA-256 is `d85e71f351ee4e442e68d2f8369b966a916d6db200cde12eebb1589a5c2db27d`.
+- Independent validation with `validate_growthbook_aa_infra_health_evidence.py` passed against the checked-in Production reconciliation deploy evidence.
+- Canonical schema `2` records `natural_reconciliation_verified` for `2026-08-26T03:45:00+02:00`: schedule `ENABLED`, Scheduler `RunTask` verified, exact task definition and immutable image, generated/published parity verified without row counts, all three alarms `OK`, DLQ empty, and source schedule unchanged.
+- ECS stopped-task state had expired, so the artifact correctly records `identity_source=cloudtrail_run_task_retention_recovery`, `runtime_state_retained=false`, and `private_ip=null`; it makes no live-IP hard-gate claim.
+- Experimental population, arm assignment, outcomes, Meta dimensions, performance values, reporting row counts, raw AWS payloads, CloudWatch messages, credentials, and event/device/customer/order identities are all absent or explicitly `false`. Every AWS-resource, GrowthBook, GTM, Meta Ads, BiznisWeb, collector/reporting, commerce, and workflow/experiment-gate mutation flag is `false`.
+- The artifact download directory was independently path-checked and deleted after validation. No local AWS credentials, local server, worker, watcher, tunnel, Docker stack, or persistent runtime was used.
+
+Next exact step:
+
+- Let the cloud monitor continue daily. Before `2026-09-02 03:45 Europe/Bratislava`, inspect only exact-main result-blind infrastructure evidence. At or after that frozen gate, dispatch the protected outcome-blind checkpoint once for its exact due boundary with `confirm_checkpoint=true`; use only its cumulative eligible-device count, never arms or outcomes, and record the canonical artifact through the offline recorder and reviewed PR.
