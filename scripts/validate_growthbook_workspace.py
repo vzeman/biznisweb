@@ -92,6 +92,17 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
     )
 
 try:
+    from evaluate_growthbook_cta_safety import (
+        CtaSafetyEvaluationError,
+        validate_contract as validate_cta_safety_contract,
+    )
+except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
+    from scripts.evaluate_growthbook_cta_safety import (
+        CtaSafetyEvaluationError,
+        validate_contract as validate_cta_safety_contract,
+    )
+
+try:
     from record_growthbook_aa_completion import (
         AaCompletionRecordingError,
         canonical_json_bytes as canonical_aa_completion_bytes,
@@ -260,6 +271,9 @@ CTA_DESIGN_PATH = ROOT / "projects" / "vevo" / "growthbook_cta_design.json"
 CTA_STOREFRONT_PATH = ROOT / "storefront" / "vevo-growthbook" / "vevo-growthbook.js"
 CTA_DECISION_CONTRACT_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_decision_contract.json"
+)
+CTA_SAFETY_MONITORING_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_safety_monitoring.json"
 )
 CTA_LIFECYCLE_RECONCILIATION_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_lifecycle_reconciliation.json"
@@ -546,6 +560,9 @@ def validate() -> None:
     cta_decision_contract = json.loads(
         CTA_DECISION_CONTRACT_PATH.read_text(encoding="utf-8")
     )
+    cta_safety_monitoring = json.loads(
+        CTA_SAFETY_MONITORING_PATH.read_text(encoding="utf-8")
+    )
     cta_lifecycle_reconciliation = json.loads(
         CTA_LIFECYCLE_RECONCILIATION_PATH.read_text(encoding="utf-8")
     )
@@ -639,6 +656,15 @@ def validate() -> None:
         )
     except CtaEvaluationError as exc:
         raise AssertionError(f"CTA decision contract is invalid: {exc}") from exc
+    try:
+        validate_cta_safety_contract(cta_safety_monitoring)
+    except CtaSafetyEvaluationError as exc:
+        raise AssertionError(f"CTA safety monitoring contract is invalid: {exc}") from exc
+    if (
+        hashlib.sha256(CTA_DECISION_CONTRACT_PATH.read_bytes()).hexdigest()
+        != cta_safety_monitoring["source_bindings"]["decision_contract"]["sha256"]
+    ):
+        raise AssertionError("CTA safety decision contract SHA-256 drift")
     cta_reconciliation_evidence_path = (
         ROOT
         / "projects"

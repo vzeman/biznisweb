@@ -55,6 +55,12 @@ def main() -> int:
         from scripts.validate_growthbook_cta_completion import (
             main as validate_cta_completion,
         )
+        from scripts.evaluate_growthbook_cta_safety import (
+            validate_contract as validate_cta_safety_contract,
+        )
+        from scripts.validate_growthbook_cta_safety_monitoring import (
+            main as validate_cta_safety_monitoring,
+        )
         from scripts.build_growthbook_cta_final_snapshot import (
             validate_manifest as validate_cta_final_snapshot_manifest,
         )
@@ -262,6 +268,12 @@ def main() -> int:
         growthbook_cta_completion_validator = read(
             "scripts/validate_growthbook_cta_completion.py"
         )
+        growthbook_cta_safety_evaluator = read(
+            "scripts/evaluate_growthbook_cta_safety.py"
+        )
+        growthbook_cta_safety_validator = read(
+            "scripts/validate_growthbook_cta_safety_monitoring.py"
+        )
         growthbook_cta_final_builder = read(
             "scripts/build_growthbook_cta_final_snapshot.py"
         )
@@ -285,6 +297,9 @@ def main() -> int:
             read("projects/vevo/growthbook_cta_measurement_window.json")
         )
         json.loads(read("projects/vevo/growthbook_cta_completion.json"))
+        growthbook_cta_safety_manifest = json.loads(
+            read("projects/vevo/growthbook_cta_safety_monitoring.json")
+        )
         growthbook_cta_final_manifest = json.loads(
             read("projects/vevo/growthbook_cta_final_snapshot.json")
         )
@@ -2133,6 +2148,27 @@ def main() -> int:
         )
         if validate_cta_completion() != 0:
             raise AssertionError("GrowthBook CTA completion state is invalid.")
+        validate_cta_safety_contract(growthbook_cta_safety_manifest)
+        if validate_cta_safety_monitoring() != 0:
+            raise AssertionError("GrowthBook CTA safety monitoring state is invalid.")
+        for safety_source, safety_name in (
+            (growthbook_cta_safety_evaluator, "CTA safety evaluator"),
+            (growthbook_cta_safety_validator, "CTA safety validator"),
+        ):
+            for forbidden_safety_marker in (
+                "import boto3",
+                "import requests",
+                "import httpx",
+                "facebook_ads",
+                "tagmanager",
+                "subprocess",
+            ):
+                forbid(
+                    safety_source.lower(),
+                    forbidden_safety_marker.lower(),
+                    f"{safety_name} gained an external or mutation client: "
+                    f"{forbidden_safety_marker}",
+                )
         validate_cta_final_snapshot_manifest(growthbook_cta_final_manifest)
         validate_hypothesis_registry(
             growthbook_hypothesis_registry,
@@ -3244,6 +3280,8 @@ def main() -> int:
             "scripts/record_growthbook_cta_window_checkpoint.py",
             "scripts/record_growthbook_cta_completion.py",
             "scripts/validate_growthbook_cta_completion.py",
+            "scripts/evaluate_growthbook_cta_safety.py",
+            "scripts/validate_growthbook_cta_safety_monitoring.py",
             "scripts/build_growthbook_cta_final_snapshot.py",
             "scripts/validate_growthbook_cta_final_snapshot.py",
             "scripts/record_growthbook_cta_final_snapshot.py",
