@@ -16,6 +16,7 @@ from typing import Any, Mapping
 try:
     from scripts import record_growthbook_aa_completion as aa_completion
     from scripts import record_growthbook_cta_activation as cta_activation
+    from scripts import record_growthbook_pro_upgrade as pro_upgrade_recorder
     from scripts.validate_growthbook_meta_reporting_contract import (
         MetaReportingContractError,
         validate_contract as validate_meta_reporting_contract,
@@ -23,6 +24,7 @@ try:
 except ModuleNotFoundError:  # Direct execution from scripts/.
     import record_growthbook_aa_completion as aa_completion  # type: ignore
     import record_growthbook_cta_activation as cta_activation  # type: ignore
+    import record_growthbook_pro_upgrade as pro_upgrade_recorder  # type: ignore
     from validate_growthbook_meta_reporting_contract import (  # type: ignore
         MetaReportingContractError,
         validate_contract as validate_meta_reporting_contract,
@@ -36,6 +38,8 @@ PATHS = {
     "aa_activation": VEVO / "growthbook_production_aa_activation.json",
     "aa_completion": VEVO / "growthbook_production_aa_completion.json",
     "aa_snapshot": VEVO / "growthbook_aa_snapshot.json",
+    "pro_upgrade": VEVO / "growthbook_pro_upgrade.json",
+    "pro_observation": VEVO / "growthbook_pro_upgrade_observation.json",
     "sample_plan": VEVO / "growthbook_cta_sample_plan.json",
     "lifecycle": VEVO / "growthbook_cta_lifecycle_reconciliation.json",
     "design": VEVO / "growthbook_cta_design.json",
@@ -74,6 +78,10 @@ def validate_release_state(
     manifest: Mapping[str, Any],
     completion: Mapping[str, Any],
     snapshot: Mapping[str, Any],
+    pro_upgrade: Mapping[str, Any],
+    pro_upgrade_raw: bytes,
+    pro_observation: Mapping[str, Any],
+    pro_observation_raw: bytes,
     sample: Mapping[str, Any],
     lifecycle: Mapping[str, Any],
     workspace: Mapping[str, Any],
@@ -92,11 +100,36 @@ def validate_release_state(
     cta_activation._validate_post_aa_sources(  # noqa: SLF001 - shared release contract
         completion,
         snapshot,
+        pro_upgrade,
+        pro_observation,
         sample,
         lifecycle,
         workspace,
         registry,
     )
+    pro_bindings = manifest["source_bindings"]
+    _require(
+        pro_upgrade_raw == pro_upgrade_recorder.canonical_json_bytes(pro_upgrade)
+        and (
+            manifest["status"] == cta_activation.WAITING
+            or hashlib.sha256(pro_upgrade_raw).hexdigest()
+            == pro_bindings["pro_upgrade"]["sha256"]
+        ),
+        "GrowthBook Pro manifest file/hash binding drift",
+    )
+    _require(
+        pro_observation_raw
+        == pro_upgrade_recorder.canonical_json_bytes(pro_observation)
+        and hashlib.sha256(pro_observation_raw).hexdigest()
+        == pro_upgrade["verification"]["observation_sha256"],
+        "GrowthBook Pro observation file/hash binding drift",
+    )
+    if manifest["status"] != cta_activation.WAITING:
+        _require(
+            hashlib.sha256(pro_observation_raw).hexdigest()
+            == pro_bindings["pro_upgrade_observation"]["sha256"],
+            "GrowthBook Pro observation CTA binding drift",
+        )
     aa_completion.validate_observation(stop_observation, completion)
     expected_stop_hash = completion["stop_readback"]["observation_sha256"]
     _require(
@@ -143,6 +176,10 @@ def validate_checked_in_release() -> str:
     stop_raw = stop_path.read_bytes()
     stop_observation = _load(stop_path, "A/A stop observation")
     snapshot = _load(PATHS["aa_snapshot"], "A/A snapshot manifest")
+    pro_upgrade_raw = PATHS["pro_upgrade"].read_bytes()
+    pro_upgrade = _load(PATHS["pro_upgrade"], "GrowthBook Pro manifest")
+    pro_observation_raw = PATHS["pro_observation"].read_bytes()
+    pro_observation = _load(PATHS["pro_observation"], "GrowthBook Pro observation")
     aa_completion.validate_manifest(
         completion,
         _load(PATHS["aa_activation"], "A/A activation"),
@@ -154,6 +191,10 @@ def validate_checked_in_release() -> str:
         manifest=_load(PATHS["cta_activation"], "CTA activation"),
         completion=completion,
         snapshot=snapshot,
+        pro_upgrade=pro_upgrade,
+        pro_upgrade_raw=pro_upgrade_raw,
+        pro_observation=pro_observation,
+        pro_observation_raw=pro_observation_raw,
         sample=_load(PATHS["sample_plan"], "CTA sample plan"),
         lifecycle=_load(PATHS["lifecycle"], "CTA lifecycle reconciliation"),
         workspace=_load(PATHS["workspace"], "GrowthBook workspace"),
@@ -177,6 +218,7 @@ def main() -> int:
         CtaRuntimeReleaseError,
         aa_completion.AaCompletionRecordingError,
         cta_activation.CtaActivationRecordingError,
+        pro_upgrade_recorder.ProUpgradeError,
         MetaReportingContractError,
         OSError,
         KeyError,

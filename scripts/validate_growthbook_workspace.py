@@ -117,17 +117,23 @@ except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace
 
 try:
     from record_growthbook_pro_upgrade import (
+        OBSERVATION_PATH as PRO_UPGRADE_OBSERVATION_PATH,
         REVIEW_OPEN as PRO_REVIEW_OPEN_STATUS,
         VERIFIED as PRO_VERIFIED_STATUS,
         ProUpgradeError,
+        canonical_json_bytes as canonical_pro_upgrade_bytes,
         validate_manifest as validate_pro_upgrade_manifest,
+        validate_observation as validate_pro_upgrade_observation,
     )
 except ModuleNotFoundError:  # Imported as scripts.validate_growthbook_workspace.
     from scripts.record_growthbook_pro_upgrade import (
+        OBSERVATION_PATH as PRO_UPGRADE_OBSERVATION_PATH,
         REVIEW_OPEN as PRO_REVIEW_OPEN_STATUS,
         VERIFIED as PRO_VERIFIED_STATUS,
         ProUpgradeError,
+        canonical_json_bytes as canonical_pro_upgrade_bytes,
         validate_manifest as validate_pro_upgrade_manifest,
+        validate_observation as validate_pro_upgrade_observation,
     )
 
 try:
@@ -480,6 +486,30 @@ def validate() -> None:
         validate_pro_upgrade_manifest(pro_upgrade, workspace)
     except ProUpgradeError as exc:
         raise AssertionError(f"GrowthBook Pro upgrade contract is invalid: {exc}") from exc
+    if pro_upgrade.get("status") == PRO_VERIFIED_STATUS:
+        try:
+            pro_observation_bytes = PRO_UPGRADE_OBSERVATION_PATH.read_bytes()
+            pro_observation = json.loads(pro_observation_bytes.decode("utf-8"))
+            if pro_observation_bytes != canonical_pro_upgrade_bytes(pro_observation):
+                raise AssertionError("GrowthBook Pro observation is not canonical JSON")
+            if (
+                hashlib.sha256(pro_observation_bytes).hexdigest()
+                != pro_upgrade["verification"]["observation_sha256"]
+            ):
+                raise AssertionError("GrowthBook Pro observation SHA-256 drift")
+            validate_pro_upgrade_observation(
+                pro_observation,
+                pro_upgrade,
+                workspace,
+            )
+        except ProUpgradeError as exc:
+            raise AssertionError(
+                f"GrowthBook Pro observation is invalid: {exc}"
+            ) from exc
+    elif PRO_UPGRADE_OBSERVATION_PATH.exists():
+        raise AssertionError(
+            "GrowthBook Pro observation exists before verified upgrade"
+        )
     cta_activation = json.loads(CTA_ACTIVATION_PATH.read_text(encoding="utf-8"))
     meta_reporting_contract = json.loads(
         META_REPORTING_CONTRACT_PATH.read_text(encoding="utf-8")
@@ -565,6 +595,8 @@ def validate() -> None:
         for binding_name, binding_path in (
             ("aa_completion", AA_COMPLETION_PATH),
             ("aa_snapshot", AA_SNAPSHOT_PATH),
+            ("pro_upgrade", PRO_UPGRADE_PATH),
+            ("pro_upgrade_observation", PRO_UPGRADE_OBSERVATION_PATH),
             ("sample_plan", CTA_SAMPLE_PLAN_PATH),
             ("lifecycle_reconciliation", CTA_LIFECYCLE_RECONCILIATION_PATH),
             ("collector_registry", REGISTRY_PATH),
