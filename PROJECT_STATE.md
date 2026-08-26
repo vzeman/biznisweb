@@ -6462,3 +6462,29 @@ Known issues:
 Next exact step:
 
 - Merge the CTA checkpoint recovery after CI. Then, on a clean branch from updated `main`, replace the circular pre-start lifecycle dependency with a source-explicit, protected reconciliation path and verify the complete activation-to-final-snapshot chain. Keep the A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava` and do not dispatch result workflows before then.
+
+## 2026-08-26 — VEVO CTA missing-checkpoint recovery merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-checkpoint-backfill-state`
+
+What changed:
+
+- PR `#456` merged the fail-closed future CTA missing-checkpoint recovery into `main` as `b5313349256866da2bfa7e76e1ad92180f34c49d`.
+- This handoff records the completed merge and advances the source of truth to the independently discovered CTA lifecycle launch-gate repair. It introduces no experiment, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#456` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- `origin/main` and this state branch both read back exact merge commit `b5313349256866da2bfa7e76e1ad92180f34c49d` before this handoff edit.
+- Scheduled, same-window, and explicit next-missing historical CTA checkpoint paths are deterministic, sequential, aggregate-only, outcome-blind, identity-free, winner-free, and externally read-only.
+- No A/A population or result was inspected, no workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- CTA launch readiness remains blocked by a circular lifecycle contract: verified Production CTA lifecycle evidence is required before CTA start even though the required CTA data cannot exist until after start. The current offline recorder is fail-closed, but there is no protected producer that can satisfy this gate reproducibly.
+
+Next exact step:
+
+- On a clean branch from this merge, replace the circular pre-start lifecycle dependency with a source-explicit protected reconciliation path, then verify the complete activation-to-final-snapshot chain. Keep the A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava` and do not dispatch result workflows before then.
