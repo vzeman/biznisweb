@@ -6189,3 +6189,29 @@ Known issues:
 Next exact step:
 
 - Merge this direct Pro-to-CTA provenance hardening after CI. Continue result-blind monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results; at the first due boundary process the earliest successful exact-main A/A checkpoint through the protected offline chain.
+
+## 2026-08-26 — VEVO direct Pro-to-CTA provenance merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-pro-provenance-state`
+
+What changed:
+
+- PR `#446` merged the direct GrowthBook Pro manifest/readback bindings for the future CTA activation into `main` as `7ce987afb85643c3babc8a7d62044c5fbb55149d`.
+- This handoff replaces the completed merge instruction with the frozen A/A checkpoint boundary and introduces no runtime, experiment, billing, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#446` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- `origin/main` and this state branch both read back exact merge commit `7ce987afb85643c3babc8a7d62044c5fbb55149d`.
+- The merged waiting CTA manifest contains the null, fail-closed `pro_upgrade` and `pro_upgrade_observation` bindings. The future release/start recorders require both canonical files, validate them against the current workspace, and reject either hash changing after review.
+- No result workflow was dispatched, no A/A population or result was read, no paid GrowthBook action occurred, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- None introduced. The Pro evidence files do not yet exist because the paid transition remains correctly gated behind verified A/A PASS, zero-allocation stop, and fresh user confirmation.
+
+Next exact step:
+
+- Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the earliest artifact that satisfies the frozen eligible-device threshold.
