@@ -1,6 +1,11 @@
 name: Check VEVO GrowthBook Production A/A Window
 
 on:
+  schedule:
+    # GitHub Actions cron is UTC. The pre-AWS gate admits only the slot that is
+    # 04:30 Europe/Bratislava for the current checkpoint date.
+    - cron: '30 2 * * *'
+    - cron: '30 3 * * *'
   workflow_dispatch:
     inputs:
       confirm_checkpoint:
@@ -43,10 +48,21 @@ jobs:
     steps:
       - name: Require exact read-only checkpoint confirmation
         env:
+          EVENT_NAME: ${{ github.event_name }}
           CONFIRM_CHECKPOINT: ${{ inputs.confirm_checkpoint }}
         run: |
           set -euo pipefail
-          [[ "${CONFIRM_CHECKPOINT}" == 'true' ]]
+          case "${EVENT_NAME}" in
+            workflow_dispatch)
+              [[ "${CONFIRM_CHECKPOINT}" == 'true' ]]
+              ;;
+            schedule)
+              ;;
+            *)
+              echo "unsupported checkpoint event: ${EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Checkout exact main commit
         uses: actions/checkout@v6.0.2
@@ -57,6 +73,9 @@ jobs:
           python-version: '3.12'
 
       - name: Validate outcome-blind checkpoint gate before AWS credentials
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
           python -m unittest \
@@ -67,8 +86,9 @@ jobs:
           python - <<'PY'
           import json
           import os
-          from datetime import UTC, datetime, timedelta
+          from datetime import UTC, datetime, time, timedelta
           from pathlib import Path
+          from zoneinfo import ZoneInfo
 
           from scripts.validate_growthbook_aa_measurement_window import (
               _checkpoint_boundaries,
@@ -82,7 +102,13 @@ jobs:
           reconciliation = json.loads(Path(os.environ['DEPLOY_EVIDENCE']).read_text(encoding='utf-8'))
           workspace = json.loads((root / 'projects/vevo/growthbook_workspace.json').read_text(encoding='utf-8'))
           window = manifest['measurement_window']
+          event_name = os.environ['EVENT_NAME']
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write('RUN_CHECKPOINT=false\n')
           if window['resolution_status'] == 'resolved':
+              if event_name == 'schedule':
+                  print('PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=window-resolved:aws=false')
+                  raise SystemExit(0)
               raise SystemExit('A/A window is already resolved')
           if manifest.get('snapshot_build_allowed') is not False:
               raise SystemExit('snapshot build opened before A/A window resolution')
@@ -103,14 +129,48 @@ jobs:
               raise SystemExit('CTA must remain unstarted during A/A checkpointing')
 
           expected = expected_measurement_window(activation, acceptance, reconciliation)
-          checkpoint_index = len(window['checkpoint_history']) + 1
-          candidate_through, due, _, _ = _checkpoint_boundaries(expected, checkpoint_index)
           now = datetime.now(UTC)
+          checkpoint_history = window['checkpoint_history']
+
+          if event_name == 'workflow_dispatch':
+              checkpoint_index = len(checkpoint_history) + 1
+          elif event_name == 'schedule':
+              local_timezone = ZoneInfo(expected['timezone'])
+              now_local = now.astimezone(local_timezone)
+              scheduled_local = datetime.combine(
+                  now_local.date(), time(hour=4, minute=30), tzinfo=local_timezone
+              )
+              scheduled_utc = scheduled_local.astimezone(UTC)
+              expected_schedule = (
+                  f'{scheduled_utc.minute} {scheduled_utc.hour} * * *'
+              )
+              if os.environ['EVENT_SCHEDULE'] != expected_schedule:
+                  print('PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=wrong-dst-slot:aws=false')
+                  raise SystemExit(0)
+              first_due = datetime.fromisoformat(
+                  expected['earliest_resolution_check_due_local']
+              )
+              checkpoint_index = (now_local.date() - first_due.date()).days + 1
+              if checkpoint_index < 1:
+                  print('PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=before-first-due:aws=false')
+                  raise SystemExit(0)
+              recorded_indexes = {
+                  row['evidence']['window']['checkpoint_index']
+                  for row in checkpoint_history
+              }
+              if checkpoint_index in recorded_indexes:
+                  print('PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=already-recorded:aws=false')
+                  raise SystemExit(0)
+          else:
+              raise SystemExit(f'unsupported checkpoint event: {event_name}')
+
+          candidate_through, due, _, _ = _checkpoint_boundaries(expected, checkpoint_index)
           if not due.astimezone(UTC) <= now < (due + timedelta(days=1)).astimezone(UTC):
               raise SystemExit('outcome-blind A/A checkpoint is outside its daily gate')
           temporary = Path(os.environ['RUNNER_TEMP']) / f"vevo-aa-window-{os.environ['GITHUB_RUN_ID']}"
           temporary.mkdir(mode=0o700)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write('RUN_CHECKPOINT=true\n')
               handle.write(f'CHECKPOINT_INDEX={checkpoint_index}\n')
               handle.write(f'AA_FROM_UTC={expected["from_utc"]}\n')
               handle.write(f'CANDIDATE_THROUGH_UTC={candidate_through.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")}\n')
@@ -120,6 +180,7 @@ jobs:
           PY
 
       - name: Configure AWS credentials for bounded read-only checkpoint
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6.1.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -127,6 +188,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Read exact stack schedule and reconciliation task identity
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
         run: |
           set -euo pipefail
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
@@ -451,6 +513,7 @@ jobs:
           echo "PRODUCTION_AA_WINDOW_RUNTIME_GATE_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP:-expired}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:source=${RECONCILIATION_RUNTIME_IDENTITY_SOURCE}:runtime-retained=${RECONCILIATION_RUNTIME_STATE_RETAINED}"
 
       - name: Verify exact scheduled success marker alarms and DLQ
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
         run: |
           set -euo pipefail
           aws logs get-log-events --log-group-name "${RECONCILIATION_LOG_GROUP}" --log-stream-name "${RECONCILIATION_LOG_STREAM}" --start-from-head --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-logs.json"
@@ -514,6 +577,7 @@ jobs:
           PY
 
       - name: Query only the cumulative eligible-device count
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -583,6 +647,7 @@ jobs:
           PY
 
       - name: Build and independently validate sanitized checkpoint evidence
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -661,7 +726,7 @@ jobs:
           PY
 
       - name: Remove every temporary AWS response and query file
-        if: ${{ always() }}
+        if: ${{ always() && env.RUN_CHECKPOINT == 'true' }}
         run: |
           set -euo pipefail
           TARGET="${TEMP_CHECKPOINT_DIR:-}"
@@ -672,14 +737,16 @@ jobs:
           fi
 
       - name: Upload only sanitized outcome-blind checkpoint evidence
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: vevo-growthbook-aa-window-checkpoint
           path: vevo-growthbook-aa-window-checkpoint.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
 
       - name: Publish checkpoint summary
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
         run: |
           set -euo pipefail
           python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
