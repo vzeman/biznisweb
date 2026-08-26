@@ -116,7 +116,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
         )
         observed = due.astimezone(UTC).replace(minute=50)
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "evidence_type": "vevo_growthbook_cta_window_checkpoint",
             "status": "passed",
             "experiment_id": "vevo-sk-product-cta-color-001",
@@ -148,6 +148,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
                 "task_id": "a" * 32,
                 "task_definition": "vevo-growthbook-reconcile-production:2",
                 "image_digest": "sha256:" + "b" * 64,
+                "identity_source": "ecs_stopped_task",
                 "host_gate_evidence_sha256": validator.EXPECTED_RECONCILIATION_SHA256,
                 "localhost_health_marker_inherited_from_deploy_evidence": True,
                 "localhost_runtime_marker_inherited_from_deploy_evidence": True,
@@ -163,6 +164,8 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
                 "alarms_clear": True,
                 "source_schedule_name": "vevo-daily-report-email",
                 "source_schedule_unchanged": True,
+                "scheduler_run_task_verified": True,
+                "runtime_state_retained": True,
             },
             "population": {
                 "metric": self.expected["population_metric"],
@@ -323,6 +326,57 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
             recorder.CtaCheckpointRecordingError, "decision drift"
         ):
             self.record(self.running, wrong)
+
+    def test_accepts_retention_recovery_without_inventing_private_ip(self) -> None:
+        evidence = self.evidence(1, 1000, "extend_one_full_local_day")
+        evidence["runtime"]["private_ip"] = None
+        evidence["runtime"]["identity_source"] = (
+            "cloudtrail_run_task_retention_recovery"
+        )
+        evidence["control_plane"]["runtime_state_retained"] = False
+        recorded = self.record(self.running, evidence)
+        saved = recorded["measurement_window"]["checkpoint_history"][0]["evidence"]
+        self.assertIsNone(saved["runtime"]["private_ip"])
+        self.assertFalse(saved["control_plane"]["runtime_state_retained"])
+
+    def test_rejects_retention_source_and_private_ip_contradictions(self) -> None:
+        missing_retained_ip = self.evidence(1, 1000, "extend_one_full_local_day")
+        missing_retained_ip["runtime"]["private_ip"] = None
+        with self.assertRaisesRegex(
+            recorder.CtaCheckpointRecordingError, "IP invalid"
+        ):
+            self.record(self.running, missing_retained_ip)
+
+        invented_expired_ip = self.evidence(1, 1000, "extend_one_full_local_day")
+        invented_expired_ip["runtime"]["identity_source"] = (
+            "cloudtrail_run_task_retention_recovery"
+        )
+        invented_expired_ip["control_plane"]["runtime_state_retained"] = False
+        with self.assertRaisesRegex(
+            recorder.CtaCheckpointRecordingError, "must be null"
+        ):
+            self.record(self.running, invented_expired_ip)
+
+        unverified_scheduler = self.evidence(1, 1000, "extend_one_full_local_day")
+        unverified_scheduler["control_plane"]["scheduler_run_task_verified"] = False
+        with self.assertRaisesRegex(
+            recorder.CtaCheckpointRecordingError, "RunTask"
+        ):
+            self.record(self.running, unverified_scheduler)
+
+    def test_accepts_legacy_schema_v1_checkpoint(self) -> None:
+        evidence = self.evidence(1, 1000, "extend_one_full_local_day")
+        evidence["schema_version"] = 1
+        evidence["runtime"].pop("identity_source")
+        evidence["control_plane"].pop("scheduler_run_task_verified")
+        evidence["control_plane"].pop("runtime_state_retained")
+        recorded = self.record(self.running, evidence)
+        self.assertEqual(
+            1,
+            recorded["measurement_window"]["checkpoint_history"][0]["evidence"][
+                "schema_version"
+            ],
+        )
 
     def test_rejects_noncanonical_or_wrong_provenance_hash(self) -> None:
         evidence = self.evidence(1, 1000, "extend_one_full_local_day")

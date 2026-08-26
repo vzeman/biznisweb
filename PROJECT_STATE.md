@@ -5718,3 +5718,28 @@ What is verified:
 Next exact step:
 
 - Merge the retention-safe checkpoint workflow after CI, continue daily result-blind monitoring, and dispatch the outcome-blind checkpoint only at or after `2026-09-02 03:45 Europe/Bratislava` from exact `main` with `confirm_checkpoint=true`.
+
+## 2026-08-26 — VEVO CTA outcome-blind checkpoint made ECS-retention-safe
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-checkpoint-retention`
+
+What changed:
+
+- Pre-launch review found the future CTA assignment checkpoint had the same short-lived ECS `STOPPED` task dependency as the earlier A/A checkpoint and could fail hours after its `03:45` reconciliation.
+- `check-vevo-growthbook-production-cta-window.yml` now binds the exact reconciliation through a bounded CloudWatch success marker plus Scheduler-authenticated CloudTrail `RunTask`, validates the immutable task definition/image, and prefers retained ECS state when it exists.
+- CTA checkpoint evidence schema `2` records `identity_source`, `scheduler_run_task_verified`, and `runtime_state_retained`. Expired ECS state produces the explicit identity-free combination `cloudtrail_run_task_retention_recovery`, `runtime_state_retained=false`, and `private_ip=null`.
+- The historical null-IP fallback remains valid only for the read-only outcome-blind CTA checkpoint and never satisfies the live-IP plus localhost-marker gate required before infrastructure mutation.
+- The offline validator and recorder remain compatible with legacy schema `1` while enforcing exact v2 source/IP/retention relationships and the `172.31.0.0/16` boundary for retained private IPs.
+
+What is verified:
+
+- `774` Python tests passed, including CTA behavior tests for both retained and expired ECS task state; `9` storefront JavaScript tests passed.
+- Focused Ruff checks, Python compilation, YAML parsing, CTA/workspace/security validators, and `git diff --check` passed.
+- The CTA workflow remains main-only, explicit-confirmation-only, and fail-closed before AWS until a verified CTA start. It still permits only one cumulative eligible-device aggregate, never reads arms/outcomes, never stops assignment automatically, and uploads one sanitized artifact after raw-file cleanup.
+- No workflow was dispatched, no A/A or CTA population/result was read, and no AWS resource, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, product, stock, cart, checkout, payment, or order mutation occurred. No local runtime process was started.
+
+Next exact step:
+
+- Merge the CTA retention-safe preparation after CI; keep the CTA lifecycle closed, continue daily result-blind A/A monitoring, and do not dispatch the A/A checkpoint before `2026-09-02 03:45 Europe/Bratislava`.
