@@ -6134,3 +6134,29 @@ Known issues:
 Next exact step:
 
 - Merge this A/A provenance hardening after CI. Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results; at the first due boundary use the earliest successful exact-main scheduled A/A checkpoint artifact and record it through the offline hash-bound workflow.
+
+## 2026-08-26 — VEVO A/A snapshot provenance merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-snapshot-provenance-state`
+
+What changed:
+
+- PR `#444` merged the protected A/A snapshot provenance contract into `main` as `33e4895395cdf08c922e782c09d5b57f0127f584`.
+- This handoff replaces the completed merge instruction with the frozen checkpoint boundary and introduces no runtime, experiment, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#444` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- `origin/main` and this state branch both read back exact merge commit `33e4895395cdf08c922e782c09d5b57f0127f584`.
+- The merged A/A artifact bundle contains only the canonical aggregate snapshot, offline decision, and PII-free provenance; the offline recorder requires and cross-binds all three hashes with the exact first assembly run, main commit, and both source artifacts.
+- The protected A/A snapshot workflow was not dispatched. No A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- None introduced. The A/A result gate remains closed until the scheduled checkpoint boundary.
+
+Next exact step:
+
+- Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate its snapshot, decision, provenance, and source bindings, record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
