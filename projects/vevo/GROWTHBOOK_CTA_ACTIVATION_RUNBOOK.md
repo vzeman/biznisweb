@@ -321,21 +321,25 @@ hard gate in this order:
    devices but returns exactly two aggregate variation rows.
 
 The workflow reads outcomes once and uploads only canonical
-`vevo-growthbook-cta-final-snapshot.json` and
-`vevo-growthbook-cta-final-decision.json`. It deletes temporary AWS, log, and
-query payloads and cannot deploy, edit GrowthBook/GTM/Meta Ads/BiznisWeb,
+`vevo-growthbook-cta-final-snapshot.json`,
+`vevo-growthbook-cta-final-decision.json`, and the PII-free
+`vevo-growthbook-cta-final-provenance.json`. The provenance binds the exact
+repository, workflow, first run attempt, main commit, artifact name, and both
+file hashes. The workflow deletes temporary AWS, log, and query payloads and
+cannot deploy, edit GrowthBook/GTM/Meta Ads/BiznisWeb,
 change reporting/collector infrastructure, alter commerce, or apply a winner.
 Only the new diagnostic task's private IP and localhost markers satisfy the
 runtime hard gate for this read-only operation. Historical CloudTrail recovery
 only proves scheduled-task provenance. No UI test is applicable because the
 workflow makes no storefront or control-plane change.
 
-Independently download the sole artifact, verify the successful run, exact main
-commit, and both SHA-256 values, then record the result through a separate
-reviewed branch:
+Independently download the sole artifact bundle, verify the successful run,
+exact main commit, and all three SHA-256 values, then record the result through
+a separate reviewed branch. The recorder rejects a provenance file whose run,
+commit, file set, or file hashes differ from the supplied canonical files:
 
 ```text
-python scripts/record_growthbook_cta_final_snapshot.py --snapshot <downloaded-vevo-growthbook-cta-final-snapshot.json> --snapshot-sha256 <independent-snapshot-sha256> --decision <downloaded-vevo-growthbook-cta-final-decision.json> --decision-sha256 <independent-decision-sha256> --workflow-run-id <successful-run-id> --main-commit <exact-main-commit> --registry projects/vevo/growthbook_hypothesis_registry.json --registry-output projects/vevo/growthbook_hypothesis_registry.json --output projects/vevo/growthbook_cta_final_snapshot.json
+python scripts/record_growthbook_cta_final_snapshot.py --snapshot <downloaded-vevo-growthbook-cta-final-snapshot.json> --snapshot-sha256 <independent-snapshot-sha256> --decision <downloaded-vevo-growthbook-cta-final-decision.json> --decision-sha256 <independent-decision-sha256> --provenance <downloaded-vevo-growthbook-cta-final-provenance.json> --provenance-sha256 <independent-provenance-sha256> --workflow-run-id <successful-run-id> --main-commit <exact-main-commit> --registry projects/vevo/growthbook_hypothesis_registry.json --registry-output projects/vevo/growthbook_hypothesis_registry.json --output projects/vevo/growthbook_cta_final_snapshot.json
 python scripts/validate_growthbook_hypothesis_registry.py
 python scripts/validate_growthbook_cta_final_snapshot.py
 python scripts/validate_growthbook_workspace.py

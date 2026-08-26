@@ -33,6 +33,7 @@ env:
   FINAL_MANIFEST: projects/vevo/growthbook_cta_final_snapshot.json
   SNAPSHOT_FILE: vevo-growthbook-cta-final-snapshot.json
   DECISION_FILE: vevo-growthbook-cta-final-decision.json
+  PROVENANCE_FILE: vevo-growthbook-cta-final-provenance.json
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -764,6 +765,64 @@ jobs:
             --output "${DECISION_FILE}" \
             --require-final
 
+      - name: Bind exact workflow provenance to both final files
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          if os.environ.get('GITHUB_REPOSITORY') != 'vzeman/biznisweb':
+              raise SystemExit('CTA final provenance repository drift')
+          if os.environ.get('GITHUB_REF') != 'refs/heads/main':
+              raise SystemExit('CTA final provenance is not from main')
+          if os.environ.get('GITHUB_RUN_ATTEMPT') != '1':
+              raise SystemExit('CTA final provenance is not the first run attempt')
+          run_id = os.environ.get('GITHUB_RUN_ID', '')
+          main_commit = os.environ.get('GITHUB_SHA', '')
+          if (
+              re.fullmatch(r'[1-9][0-9]{5,19}', run_id) is None
+              or re.fullmatch(r'[0-9a-f]{40}', main_commit) is None
+          ):
+              raise SystemExit('CTA final provenance identity is invalid')
+
+          files = {}
+          for name in (os.environ['SNAPSHOT_FILE'], os.environ['DECISION_FILE']):
+              digest = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+              files[name] = {'sha256': digest}
+          provenance = {
+              'schema_version': 1,
+              'evidence_type': 'vevo_growthbook_cta_final_provenance',
+              'repository': 'vzeman/biznisweb',
+              'workflow': '.github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml',
+              'workflow_run_id': run_id,
+              'workflow_run_attempt': 1,
+              'main_commit': main_commit,
+              'artifact_name': 'vevo-growthbook-cta-final-snapshot',
+              'files': files,
+              'safety': {
+                  'contains_raw_aws_payloads': False,
+                  'contains_credentials': False,
+                  'contains_event_or_device_ids': False,
+                  'contains_customer_or_order_data': False,
+                  'external_or_automatic_mutation': False,
+              },
+          }
+          canonical = (
+              json.dumps(
+                  provenance,
+                  ensure_ascii=False,
+                  separators=(',', ':'),
+                  sort_keys=True,
+              ) + '\n'
+          ).encode('utf-8')
+          Path(os.environ['PROVENANCE_FILE']).write_bytes(canonical)
+          print('CTA_FINAL_PROVENANCE_BOUND:run=true:commit=true:file-hashes=true')
+          PY
+
       - name: Validate only canonical identity-free final artifacts
         run: |
           set -euo pipefail
@@ -786,7 +845,11 @@ jobs:
                   for nested in value:
                       walk(nested)
 
-          for path in (os.environ['SNAPSHOT_FILE'], os.environ['DECISION_FILE']):
+          for path in (
+              os.environ['SNAPSHOT_FILE'],
+              os.environ['DECISION_FILE'],
+              os.environ['PROVENANCE_FILE'],
+          ):
               raw = open(path, 'rb').read()
               payload = json.loads(raw.decode('utf-8'))
               canonical = (json.dumps(payload, ensure_ascii=False, separators=(',', ':'), sort_keys=True) + '\n').encode('utf-8')
@@ -801,6 +864,23 @@ jobs:
               raise SystemExit('CTA final verdict drift')
           if decision.get('automatic_mutation_allowed') is not False:
               raise SystemExit('CTA final decision opened automatic mutation')
+          provenance = json.load(open(os.environ['PROVENANCE_FILE'], encoding='utf-8'))
+          if (
+              provenance.get('workflow_run_id') != os.environ.get('GITHUB_RUN_ID')
+              or provenance.get('workflow_run_attempt') != 1
+              or provenance.get('main_commit') != os.environ.get('GITHUB_SHA')
+          ):
+              raise SystemExit('CTA final provenance identity drift')
+          expected_files = {
+              os.environ['SNAPSHOT_FILE'],
+              os.environ['DECISION_FILE'],
+          }
+          if set(provenance.get('files') or {}) != expected_files:
+              raise SystemExit('CTA final provenance file set drift')
+          for path in expected_files:
+              digest = hashlib.sha256(open(path, 'rb').read()).hexdigest()
+              if provenance['files'][path] != {'sha256': digest}:
+                  raise SystemExit('CTA final provenance file hash drift')
           print(f"CTA_FINAL_DECISION_OK:verdict={decision['verdict']}:automatic-mutation=false")
           PY
 
@@ -815,13 +895,14 @@ jobs:
             rmdir "${TARGET}"
           fi
 
-      - name: Upload only the aggregate snapshot and offline decision
+      - name: Upload only the aggregate snapshot decision and provenance
         uses: actions/upload-artifact@v4.6.2
         with:
           name: vevo-growthbook-cta-final-snapshot
           path: |
             vevo-growthbook-cta-final-snapshot.json
             vevo-growthbook-cta-final-decision.json
+            vevo-growthbook-cta-final-provenance.json
           if-no-files-found: error
           retention-days: 90
 
@@ -834,11 +915,13 @@ jobs:
           import os
           snapshot_raw = open(os.environ['SNAPSHOT_FILE'], 'rb').read()
           decision_raw = open(os.environ['DECISION_FILE'], 'rb').read()
+          provenance_raw = open(os.environ['PROVENANCE_FILE'], 'rb').read()
           decision = json.loads(decision_raw)
           print('## VEVO Production CTA protected final look')
           print(f"- Verdict: `{decision['verdict']}`")
           print(f"- Snapshot SHA-256: `{hashlib.sha256(snapshot_raw).hexdigest()}`")
           print(f"- Decision SHA-256: `{hashlib.sha256(decision_raw).hexdigest()}`")
+          print(f"- Provenance SHA-256: `{hashlib.sha256(provenance_raw).hexdigest()}`")
           print('- Result rows: `two aggregate variation rows only`')
           print('- Event/device/customer/order identities: `excluded`')
           print('- GrowthBook, GTM, Meta Ads, BiznisWeb and commerce mutation: `none`')

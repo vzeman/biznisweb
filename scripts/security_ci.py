@@ -3041,6 +3041,7 @@ def main() -> int:
             "diagnostic_host_gate_task_allowed",
             "outcome_metrics_read_allowed",
             "automatic_winner_application_allowed",
+            "provenance_sha256",
             "manual_review_decision_before_any_external_mutation",
         ):
             require(
@@ -3071,6 +3072,9 @@ def main() -> int:
             "build_growthbook_cta_final_snapshot.py render-query",
             "evaluate_growthbook_cta.py",
             "--require-final",
+            "vevo-growthbook-cta-final-provenance.json",
+            "CTA_FINAL_PROVENANCE_BOUND:run=true:commit=true:file-hashes=true",
+            "workflow_run_attempt",
             "Remove every temporary AWS response query and host-gate file",
             "Automatic winner application: `false`",
         ):

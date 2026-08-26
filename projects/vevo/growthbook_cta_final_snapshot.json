@@ -35,6 +35,7 @@
     "main_commit": null,
     "snapshot_sha256": null,
     "decision_sha256": null,
+    "provenance_sha256": null,
     "hypothesis_registry_sha256": null,
     "verdict": null,
     "recommended_variation": null
@@ -73,6 +74,7 @@
     "artifact_name": "vevo-growthbook-cta-final-snapshot",
     "snapshot_file_name": "vevo-growthbook-cta-final-snapshot.json",
     "decision_file_name": "vevo-growthbook-cta-final-decision.json",
+    "provenance_file_name": "vevo-growthbook-cta-final-provenance.json",
     "retention_days": 90,
     "canonical_json_required": true,
     "contains_raw_aws_payloads": false,
