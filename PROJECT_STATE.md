@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
@@ -5997,3 +5997,29 @@ Known issues:
 Next exact step:
 
 - Continue result-blind A/A infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
+
+## 2026-08-26 — VEVO Meta handoff aligned with the running A/A lifecycle
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-meta-aa-lifecycle-handoff`
+
+What changed:
+
+- Replaced the stale pre-publication Meta/population next gates in `growthbook_workspace.json` with the current frozen-window A/A evidence boundary.
+- The workspace now says explicitly that a complete stable campaign/ad-set/ad/placement exposure must be present in the final frozen A/A evidence or the decision remains `NOT_READY`.
+- Added a regression test that binds the checked-in running-A/A state to this gate while preserving the historical zero-coverage baseline, the no-bulk-live-edit rule, and the no-observed-Meta-mutation flag.
+
+What is verified:
+
+- PR `#440` contains only the workspace contract, its offline validator, and the regression test; no runtime or external configuration file changed.
+- `789` Python tests and all `9` storefront JavaScript tests passed. GrowthBook workspace, Meta/reporting, A/A measurement-window, Pro, CTA measurement-window/completion, and central security validators passed; Ruff, Python compilation, and `git diff --check` passed.
+- No A/A population, arm, outcome, Meta dimension, conversion, revenue, CM1, performance, or result was read. No AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, product, stock, cart, checkout, payment, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- The historical Meta delivery audit remains intentionally recorded as zero complete-contract ads. Only the frozen final A/A evidence may prove whether at least one dimension-complete exposure occurred; the repository change makes no such result claim.
+
+Next exact step:
+
+- Merge PR `#440` after CI. Continue result-blind monitoring until `2026-09-02 03:45 Europe/Bratislava`; then consume the earliest successful exact-main A/A checkpoint artifact, record it through the offline hash-bound recorder, and keep A/A `NOT_READY` unless every frozen acceptance gate—including the complete stable Meta exposure—is proven.
