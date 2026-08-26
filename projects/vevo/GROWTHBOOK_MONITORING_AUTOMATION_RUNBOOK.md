@@ -129,9 +129,14 @@ At the exact next due gate, and only then:
 2. Dispatch only
    `.github/workflows/check-vevo-growthbook-production-aa-window.yml` from
    `main` with `confirm_checkpoint=true`.
-3. Let the protected workflow perform the AWS/Fargate hard gate before its one
-   permitted aggregate Athena query. The query may return only cumulative
-   eligible-device count and may not select an arm or outcome.
+3. Let the protected workflow bind the exact reconciliation through the bounded
+   success marker and Scheduler-authenticated CloudTrail `RunTask` event before
+   its one permitted aggregate Athena query. It prefers retained ECS state; if
+   that short-lived state has expired, schema `2` records a null private IP,
+   `cloudtrail_run_task_retention_recovery`, and `runtime_state_retained=false`.
+   This historical read-only proof never satisfies the live-IP plus localhost
+   marker hard gate for an infrastructure mutation. The query may return only
+   cumulative eligible-device count and may not select an arm or outcome.
 4. Require a successful run, record its exact run ID and head commit, and
    download only artifact `vevo-growthbook-aa-window-checkpoint`.
 5. Require the ZIP to contain only

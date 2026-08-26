@@ -209,6 +209,7 @@ jobs:
               'PRODUCTION_WORKGROUP': collector_outputs['ReportingWorkGroupName'],
               'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
               'RECONCILIATION_CONTAINER_NAME': override['name'],
+              'RECONCILIATION_SCHEDULER_ROLE_ARN': reconciliation_outputs['SchedulerRoleArn'],
           }
           for key, value in values.items():
               print(f'{key}={value}')
@@ -219,77 +220,235 @@ jobs:
           set +a
 
           aws ecs describe-task-definition --task-definition "${RECONCILIATION_TASK_DEFINITION_ARN}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-definition.json"
-          aws ecs list-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/task-list.json"
-          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/task-arns.txt"
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/task-definition.env"
           import json
           import os
-          tasks = json.load(open(f"{os.environ['TEMP_CHECKPOINT_DIR']}/task-list.json", encoding='utf-8')).get('taskArns') or []
-          if not tasks:
-              raise SystemExit('scheduled reconciliation task list is empty')
-          print(' '.join(tasks))
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          definition = json.loads((root / 'task-definition.json').read_text(encoding='utf-8'))['taskDefinition']
+          containers = definition.get('containerDefinitions') or []
+          if (
+              definition.get('taskDefinitionArn') != os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+              or len(containers) != 1
+              or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']
+          ):
+              raise SystemExit('reconciliation task-definition identity drift')
+          container = containers[0]
+          expected_image = json.loads(Path(os.environ['DEPLOY_EVIDENCE']).read_text(encoding='utf-8'))['reconciliation']['image_digest']
+          if not str(container.get('image') or '').endswith('@' + expected_image):
+              raise SystemExit('reconciliation task-definition image drift')
+          if container.get('workingDirectory') not in (None, os.environ['EXPECTED_RUNTIME_PATH']):
+              raise SystemExit('reconciliation runtime path drift')
+          log_options = (container.get('logConfiguration') or {}).get('options') or {}
+          log_group = log_options.get('awslogs-group')
+          if not log_group:
+              raise SystemExit('reconciliation log group missing')
+          print(f'RECONCILIATION_TASK_DEFINITION={os.environ["RECONCILIATION_TASK_DEFINITION_ARN"].rsplit("/", 1)[-1]}')
+          print(f'RECONCILIATION_IMAGE_DIGEST={expected_image}')
+          print(f'RECONCILIATION_LOG_GROUP={log_group}')
           PY
-          read -r -a TASK_ARNS < "${TEMP_CHECKPOINT_DIR}/task-arns.txt"
-          aws ecs describe-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/tasks.json"
+          cat "${TEMP_CHECKPOINT_DIR}/task-definition.env" >> "${GITHUB_ENV}"
+          set -a
+          source "${TEMP_CHECKPOINT_DIR}/task-definition.env"
+          set +a
+
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/checkpoint-window.env"
+          import os
+          from datetime import datetime, timedelta, timezone
+
+          lower = datetime.fromisoformat(os.environ['CHECKPOINT_DUE_LOCAL']).astimezone(timezone.utc)
+          upper = lower + timedelta(hours=2)
+          values = {
+              'CHECKPOINT_START_UTC': lower.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'CHECKPOINT_END_UTC': upper.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'CHECKPOINT_START_MS': str(int(lower.timestamp() * 1000)),
+              'CHECKPOINT_END_MS': str(int(upper.timestamp() * 1000)),
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          set -a
+          source "${TEMP_CHECKPOINT_DIR}/checkpoint-window.env"
+          set +a
+          aws logs filter-log-events \
+            --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:"' \
+            --start-time "${CHECKPOINT_START_MS}" \
+            --end-time "${CHECKPOINT_END_MS}" \
+            --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/success-events.json"
+          aws logs filter-log-events \
+            --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:"' \
+            --start-time "${CHECKPOINT_START_MS}" \
+            --end-time "${CHECKPOINT_END_MS}" \
+            --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/failure-events.json"
+          aws cloudtrail lookup-events \
+            --lookup-attributes AttributeKey=EventName,AttributeValue=RunTask \
+            --start-time "${CHECKPOINT_START_UTC}" \
+            --end-time "${CHECKPOINT_END_UTC}" \
+            --max-items 500 \
+            --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/cloudtrail.json"
+          python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/selected-marker.env"
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
+          successes = json.loads((root / 'success-events.json').read_text(encoding='utf-8')).get('events') or []
+          failures = json.loads((root / 'failure-events.json').read_text(encoding='utf-8')).get('events') or []
+          if failures or len(successes) != 1:
+              raise SystemExit(
+                  f'expected one checkpoint success marker and zero failure markers, found {len(successes)}/{len(failures)}'
+              )
+          stream = str(successes[0].get('logStreamName') or '')
+          task_id = stream.rsplit('/', 1)[-1]
+          if re.fullmatch(r'[0-9a-f]{32}', task_id) is None:
+              raise SystemExit('checkpoint success-marker task ID is invalid')
+
+          matching = []
+          for row in json.loads((root / 'cloudtrail.json').read_text(encoding='utf-8')).get('Events') or []:
+              raw = row.get('CloudTrailEvent')
+              if not isinstance(raw, str):
+                  continue
+              try:
+                  detail = json.loads(raw)
+              except json.JSONDecodeError:
+                  continue
+              identity = detail.get('userIdentity') or {}
+              issuer = ((identity.get('sessionContext') or {}).get('sessionIssuer') or {})
+              request = detail.get('requestParameters') or {}
+              requested_definition = str(request.get('taskDefinition') or '')
+              serialized = json.dumps(detail, sort_keys=True, separators=(',', ':'))
+              if (
+                  detail.get('eventSource') == 'ecs.amazonaws.com'
+                  and detail.get('eventName') == 'RunTask'
+                  and request.get('group') == os.environ['EXPECTED_SERVICE']
+                  and requested_definition in {
+                      os.environ['RECONCILIATION_TASK_DEFINITION_ARN'],
+                      os.environ['RECONCILIATION_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1],
+                  }
+                  and (
+                      identity.get('invokedBy') == 'scheduler.amazonaws.com'
+                      or issuer.get('arn') == os.environ['RECONCILIATION_SCHEDULER_ROLE_ARN']
+                  )
+                  and task_id in serialized
+              ):
+                  matching.append(detail)
+          if len(matching) != 1:
+              raise SystemExit(f'expected one exact Scheduler CloudTrail RunTask event, found {len(matching)}')
+          (root / 'selected-cloudtrail-event.json').write_text(
+              json.dumps(matching[0], sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          print(f'RECONCILIATION_TASK_ID={task_id}')
+          print(f'RECONCILIATION_LOG_STREAM={stream}')
+          PY
+          set -a
+          source "${TEMP_CHECKPOINT_DIR}/selected-marker.env"
+          set +a
+          aws ecs describe-tasks \
+            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
+            --tasks "${RECONCILIATION_TASK_ID}" \
+            --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/tasks.json"
           python - <<'PY' > "${TEMP_CHECKPOINT_DIR}/selected-task.env"
           import ipaddress
           import json
           import os
-          from datetime import datetime, timedelta
+          from datetime import datetime
           from pathlib import Path
 
           root = Path(os.environ['TEMP_CHECKPOINT_DIR'])
-          # Compare normalized epoch seconds so the runner's local timezone cannot affect selection.
-          lower = datetime.fromisoformat(os.environ['CHECKPOINT_DUE_LOCAL']).timestamp()
-          upper = lower + timedelta(hours=2).total_seconds()
-          definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
-          containers = definition.get('containerDefinitions') or []
-          if len(containers) != 1 or containers[0].get('name') != os.environ['RECONCILIATION_CONTAINER_NAME']:
-              raise SystemExit('reconciliation task-definition container drift')
-          log_options = (containers[0].get('logConfiguration') or {}).get('options') or {}
-          log_group = log_options.get('awslogs-group')
-          if not log_group:
-              raise SystemExit('reconciliation log group missing')
-          candidates = []
-          for task in json.load(open(root / 'tasks.json', encoding='utf-8')).get('tasks') or []:
+          lower = datetime.fromisoformat(os.environ['CHECKPOINT_START_UTC'].replace('Z', '+00:00')).timestamp()
+          upper = datetime.fromisoformat(os.environ['CHECKPOINT_END_UTC'].replace('Z', '+00:00')).timestamp()
+          exact_task = None
+          for task in json.loads((root / 'tasks.json').read_text(encoding='utf-8')).get('tasks') or []:
               started_at = task.get('startedAt')
               started_epoch = datetime.fromisoformat(started_at.replace('Z', '+00:00')).timestamp() if started_at else -1
-              task_containers = task.get('containers') or []
               if (
-                  task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+                  task.get('taskArn', '').rsplit('/', 1)[-1] == os.environ['RECONCILIATION_TASK_ID']
+                  and task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
                   and task.get('group') == os.environ['EXPECTED_SERVICE']
                   and lower <= started_epoch < upper
-                  and len(task_containers) == 1
-                  and task_containers[0].get('exitCode') == 0
               ):
-                  candidates.append(task)
-          if len(candidates) != 1:
-              raise SystemExit(f'expected one successful scheduled reconciliation task, found {len(candidates)}')
-          task = candidates[0]
-          container = task['containers'][0]
-          details = [row for attachment in task.get('attachments') or [] for row in attachment.get('details') or []]
-          private_ip_text = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
-          private_ip = ipaddress.ip_address(private_ip_text)
-          if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
-              raise SystemExit('scheduled reconciliation task private IP drift')
-          expected_image = json.load(open(os.environ['DEPLOY_EVIDENCE'], encoding='utf-8'))['reconciliation']['image_digest']
-          if container.get('imageDigest') != expected_image:
-              raise SystemExit('scheduled reconciliation image differs from localhost-gated deploy evidence')
-          task_definition = os.environ['RECONCILIATION_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1]
+                  exact_task = task
+
+          cloudtrail = json.loads((root / 'selected-cloudtrail-event.json').read_text(encoding='utf-8'))
+          response_tasks = (cloudtrail.get('responseElements') or {}).get('tasks') or []
+          cloudtrail_task = next(
+              (
+                  task for task in response_tasks
+                  if str(task.get('taskArn') or '').rsplit('/', 1)[-1]
+                  == os.environ['RECONCILIATION_TASK_ID']
+              ),
+              None,
+          )
+          if cloudtrail_task is None:
+              raise SystemExit('exact CloudTrail scheduled reconciliation task is missing')
+          cloudtrail_definition = str(cloudtrail_task.get('taskDefinitionArn') or '')
+          if cloudtrail_definition and cloudtrail_definition != os.environ['RECONCILIATION_TASK_DEFINITION_ARN']:
+              raise SystemExit('CloudTrail scheduled reconciliation task-definition drift')
+          cloudtrail_group = str(cloudtrail_task.get('group') or '')
+          if cloudtrail_group and cloudtrail_group != os.environ['EXPECTED_SERVICE']:
+              raise SystemExit('CloudTrail scheduled reconciliation group drift')
+
+          private_ip_text = ''
+          runtime_source = 'cloudtrail_run_task_retention_recovery'
+          runtime_retained = False
+          if exact_task is not None:
+              containers = exact_task.get('containers') or []
+              if len(containers) != 1 or containers[0].get('exitCode') != 0:
+                  raise SystemExit('retained scheduled reconciliation task did not stop successfully')
+              if containers[0].get('imageDigest') != os.environ['RECONCILIATION_IMAGE_DIGEST']:
+                  raise SystemExit('scheduled reconciliation image differs from localhost-gated deploy evidence')
+              details = [
+                  row
+                  for attachment in exact_task.get('attachments') or []
+                  for row in attachment.get('details') or []
+              ]
+              private_ip_text = str(next(
+                  (
+                      row.get('value') for row in details
+                      if str(row.get('name') or '').lower() == 'privateipv4address'
+                  ),
+                  '',
+              ))
+              if not private_ip_text:
+                  private_ip_text = str(next(
+                      (
+                          interface.get('privateIpv4Address')
+                          or interface.get('privateIPv4Address')
+                          for container in containers
+                          for interface in container.get('networkInterfaces') or []
+                          if interface.get('privateIpv4Address')
+                          or interface.get('privateIPv4Address')
+                      ),
+                      '',
+                  ))
+              if not private_ip_text:
+                  raise SystemExit('retained scheduled reconciliation task private IP missing')
+              private_ip = ipaddress.ip_address(private_ip_text)
+              if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
+                  raise SystemExit('scheduled reconciliation task private IP drift')
+              runtime_source = 'ecs_stopped_task'
+              runtime_retained = True
+
           values = {
-              'RECONCILIATION_TASK_ID': task['taskArn'].rsplit('/', 1)[-1],
+              'RECONCILIATION_TASK_ID': os.environ['RECONCILIATION_TASK_ID'],
               'RECONCILIATION_PRIVATE_IP': private_ip_text,
-              'RECONCILIATION_TASK_DEFINITION': task_definition,
-              'RECONCILIATION_IMAGE_DIGEST': expected_image,
-              'RECONCILIATION_LOG_GROUP': log_group,
-              'RECONCILIATION_LOG_STREAM': container.get('logStreamName') or '',
+              'RECONCILIATION_LOG_STREAM': os.environ['RECONCILIATION_LOG_STREAM'],
+              'RECONCILIATION_RUNTIME_IDENTITY_SOURCE': runtime_source,
+              'RECONCILIATION_RUNTIME_STATE_RETAINED': str(runtime_retained).lower(),
           }
-          if not values['RECONCILIATION_LOG_STREAM']:
-              raise SystemExit('scheduled reconciliation log stream missing')
           for key, value in values.items():
               print(f'{key}={value}')
           PY
           cat "${TEMP_CHECKPOINT_DIR}/selected-task.env" >> "${GITHUB_ENV}"
-          echo "PRODUCTION_AA_WINDOW_RUNTIME_GATE_OK:instance-id=N/A:Fargate:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}"
+          set -a
+          source "${TEMP_CHECKPOINT_DIR}/selected-task.env"
+          set +a
+          echo "PRODUCTION_AA_WINDOW_RUNTIME_GATE_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP:-expired}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:source=${RECONCILIATION_RUNTIME_IDENTITY_SOURCE}:runtime-retained=${RECONCILIATION_RUNTIME_STATE_RETAINED}"
 
       - name: Verify exact scheduled success marker alarms and DLQ
         run: |
@@ -347,6 +506,8 @@ jobs:
               'alarms_clear': True,
               'source_schedule_name': os.environ['EXPECTED_SOURCE_SCHEDULE'],
               'source_schedule_unchanged': True,
+              'scheduler_run_task_verified': True,
+              'runtime_state_retained': os.environ['RECONCILIATION_RUNTIME_STATE_RETAINED'] == 'true',
           }
           (root / 'control.json').write_text(json.dumps(control, sort_keys=True, separators=(',', ':')) + '\n', encoding='utf-8')
           print('PRODUCTION_AA_WINDOW_CONTROL_GATE_OK:marker=true:parity=true:alarms=clear:dlq=empty')
@@ -446,7 +607,7 @@ jobs:
           candidate_through = datetime.fromisoformat(os.environ['CANDIDATE_THROUGH_UTC'].replace('Z', '+00:00'))
           due = datetime.fromisoformat(os.environ['CHECKPOINT_DUE_LOCAL'])
           evidence = {
-              'schema_version': 1,
+              'schema_version': 2,
               'evidence_type': 'vevo_growthbook_aa_window_checkpoint',
               'status': 'passed',
               'experiment_id': 'vevo-sk-aa-001',
@@ -466,12 +627,13 @@ jobs:
               },
               'runtime': {
                   'instance_id': 'N/A:Fargate',
-                  'private_ip': os.environ['RECONCILIATION_PRIVATE_IP'],
+                  'private_ip': os.environ['RECONCILIATION_PRIVATE_IP'] or None,
                   'service': os.environ['EXPECTED_SERVICE'],
                   'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
                   'task_id': os.environ['RECONCILIATION_TASK_ID'],
                   'task_definition': os.environ['RECONCILIATION_TASK_DEFINITION'],
                   'image_digest': os.environ['RECONCILIATION_IMAGE_DIGEST'],
+                  'identity_source': os.environ['RECONCILIATION_RUNTIME_IDENTITY_SOURCE'],
                   'host_gate_evidence_sha256': '21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb',
                   'localhost_health_marker_inherited_from_deploy_evidence': True,
                   'localhost_runtime_marker_inherited_from_deploy_evidence': True,
