@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Record one successful protected VEVO CTA final snapshot offline.
 
-The recorder accepts only canonical, independently hashed snapshot and decision
-artifacts. It recomputes the decision, closes the final-look read gate, and
-records provenance without calling any external service or applying a winner.
+The recorder accepts only canonical, independently hashed snapshot, decision,
+and workflow-provenance artifacts. It recomputes the decision, closes the
+final-look read gate, and records provenance without calling any external
+service or applying a winner.
 """
 
 from __future__ import annotations
@@ -86,6 +87,32 @@ except ModuleNotFoundError:  # Imported as scripts.record_growthbook_cta_final_s
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+PROVENANCE_TYPE = "vevo_growthbook_cta_final_provenance"
+PROVENANCE_WORKFLOW = (
+    ".github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml"
+)
+PROVENANCE_ARTIFACT = "vevo-growthbook-cta-final-snapshot"
+SNAPSHOT_FILE_NAME = "vevo-growthbook-cta-final-snapshot.json"
+DECISION_FILE_NAME = "vevo-growthbook-cta-final-decision.json"
+PROVENANCE_KEYS = {
+    "schema_version",
+    "evidence_type",
+    "repository",
+    "workflow",
+    "workflow_run_id",
+    "workflow_run_attempt",
+    "main_commit",
+    "artifact_name",
+    "files",
+    "safety",
+}
+PROVENANCE_SAFETY = {
+    "contains_raw_aws_payloads": False,
+    "contains_credentials": False,
+    "contains_event_or_device_ids": False,
+    "contains_customer_or_order_data": False,
+    "external_or_automatic_mutation": False,
+}
 
 
 class CtaFinalSnapshotRecordingError(ValueError):
@@ -95,6 +122,83 @@ class CtaFinalSnapshotRecordingError(ValueError):
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise CtaFinalSnapshotRecordingError(message)
+
+
+def _exact(value: Any, keys: set[str], field: str) -> Mapping[str, Any]:
+    _require(isinstance(value, Mapping), f"{field} must be an object")
+    _require(set(value) == keys, f"{field} keys drift")
+    return value
+
+
+def validate_provenance(
+    provenance: Mapping[str, Any],
+    *,
+    provenance_sha256: str,
+    snapshot_sha256: str,
+    decision_sha256: str,
+    workflow_run_id: str,
+    main_commit: str,
+) -> None:
+    root = _exact(provenance, PROVENANCE_KEYS, "CTA final provenance")
+    _require(
+        root["schema_version"] == 1
+        and root["evidence_type"] == PROVENANCE_TYPE,
+        "CTA final provenance identity drift",
+    )
+    _require(
+        root["repository"] == "vzeman/biznisweb"
+        and root["workflow"] == PROVENANCE_WORKFLOW,
+        "CTA final provenance source drift",
+    )
+    _require(
+        root["workflow_run_id"] == workflow_run_id
+        and RUN_ID_RE.fullmatch(workflow_run_id) is not None,
+        "CTA final provenance workflow run mismatch",
+    )
+    _require(
+        root["workflow_run_attempt"] == 1,
+        "CTA final provenance must come from the first workflow attempt",
+    )
+    _require(
+        root["main_commit"] == main_commit
+        and COMMIT_RE.fullmatch(main_commit) is not None,
+        "CTA final provenance main commit mismatch",
+    )
+    _require(
+        root["artifact_name"] == PROVENANCE_ARTIFACT,
+        "CTA final provenance artifact drift",
+    )
+    files = _exact(
+        root["files"],
+        {SNAPSHOT_FILE_NAME, DECISION_FILE_NAME},
+        "CTA final provenance files",
+    )
+    expected_hashes = {
+        SNAPSHOT_FILE_NAME: snapshot_sha256,
+        DECISION_FILE_NAME: decision_sha256,
+    }
+    for file_name, expected_sha256 in expected_hashes.items():
+        row = _exact(
+            files[file_name], {"sha256"}, f"CTA final provenance {file_name}"
+        )
+        _require(
+            row["sha256"] == expected_sha256
+            and SHA256_RE.fullmatch(str(row["sha256"] or "")) is not None,
+            f"CTA final provenance hash mismatch: {file_name}",
+        )
+    _require(
+        _exact(
+            root["safety"], set(PROVENANCE_SAFETY), "CTA final provenance safety"
+        )
+        == PROVENANCE_SAFETY,
+        "CTA final provenance safety drift",
+    )
+    _require(
+        SHA256_RE.fullmatch(provenance_sha256) is not None
+        and hashlib.sha256(canonical_json_bytes(provenance)).hexdigest()
+        == provenance_sha256,
+        "CTA final provenance SHA-256 mismatch",
+    )
 
 
 def _load_canonical(path: Path, expected_sha256: str, field: str) -> dict[str, Any]:
@@ -130,6 +234,7 @@ def record_final_snapshot(
     registry: Mapping[str, Any],
     snapshot: Mapping[str, Any],
     decision: Mapping[str, Any],
+    provenance: Mapping[str, Any],
     contract: Mapping[str, Any],
     sample: Mapping[str, Any],
     lifecycle: Mapping[str, Any],
@@ -137,6 +242,7 @@ def record_final_snapshot(
     *,
     snapshot_sha256: str,
     decision_sha256: str,
+    provenance_sha256: str,
     workflow_run_id: str,
     main_commit: str,
     completion_path: Path = DEFAULT_COMPLETION_PATH,
@@ -167,6 +273,7 @@ def record_final_snapshot(
     _require(COMMIT_RE.fullmatch(main_commit) is not None, "CTA final main commit is invalid")
     _require(SHA256_RE.fullmatch(snapshot_sha256) is not None, "CTA final snapshot SHA-256 is invalid")
     _require(SHA256_RE.fullmatch(decision_sha256) is not None, "CTA final decision SHA-256 is invalid")
+    _require(SHA256_RE.fullmatch(provenance_sha256) is not None, "CTA final provenance SHA-256 is invalid")
     _require(
         hashlib.sha256(canonical_json_bytes(snapshot)).hexdigest() == snapshot_sha256,
         "CTA final snapshot SHA-256 mismatch",
@@ -174,6 +281,14 @@ def record_final_snapshot(
     _require(
         hashlib.sha256(canonical_json_bytes(decision)).hexdigest() == decision_sha256,
         "CTA final decision SHA-256 mismatch",
+    )
+    validate_provenance(
+        provenance,
+        provenance_sha256=provenance_sha256,
+        snapshot_sha256=snapshot_sha256,
+        decision_sha256=decision_sha256,
+        workflow_run_id=workflow_run_id,
+        main_commit=main_commit,
     )
     try:
         validate_lifecycle_manifest(lifecycle, lifecycle_observation)
@@ -220,6 +335,7 @@ def record_final_snapshot(
             decision,
             snapshot_sha256=snapshot_sha256,
             decision_sha256=decision_sha256,
+            provenance_sha256=provenance_sha256,
             workflow_run_id=workflow_run_id,
             main_commit=main_commit,
         )
@@ -238,6 +354,7 @@ def record_final_snapshot(
             "main_commit": main_commit,
             "snapshot_sha256": snapshot_sha256,
             "decision_sha256": decision_sha256,
+            "provenance_sha256": provenance_sha256,
             "hypothesis_registry_sha256": registry_sha256,
             "verdict": decision["verdict"],
             "recommended_variation": decision["recommended_variation"],
@@ -295,6 +412,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot-sha256", required=True)
     parser.add_argument("--decision", type=Path, required=True)
     parser.add_argument("--decision-sha256", required=True)
+    parser.add_argument("--provenance", type=Path, required=True)
+    parser.add_argument("--provenance-sha256", required=True)
     parser.add_argument("--workflow-run-id", required=True)
     parser.add_argument("--main-commit", required=True)
     parser.add_argument("--contract", type=Path, default=DEFAULT_DECISION_CONTRACT_PATH)
@@ -316,18 +435,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         snapshot = _load_canonical(args.snapshot, args.snapshot_sha256, "CTA final snapshot")
         decision = _load_canonical(args.decision, args.decision_sha256, "CTA final decision")
+        provenance = _load_canonical(
+            args.provenance, args.provenance_sha256, "CTA final provenance"
+        )
         lifecycle = _load(args.lifecycle, "CTA lifecycle reconciliation")
         recorded, recorded_registry = record_final_snapshot(
             _load(args.manifest, "CTA final snapshot manifest"),
             _load(args.registry, "CTA hypothesis registry"),
             snapshot,
             decision,
+            provenance,
             _load(args.contract, "CTA decision contract"),
             _load(args.sample_plan, "CTA sample plan"),
             lifecycle,
             _load_lifecycle_observation(lifecycle, args.lifecycle_observation),
             snapshot_sha256=args.snapshot_sha256,
             decision_sha256=args.decision_sha256,
+            provenance_sha256=args.provenance_sha256,
             workflow_run_id=args.workflow_run_id,
             main_commit=args.main_commit,
         )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -277,21 +278,80 @@ class GrowthBookCtaFinalSnapshotWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, WORKFLOW)
 
-    def test_uploads_only_two_canonical_identity_free_artifacts_after_cleanup(self) -> None:
+    def test_provenance_block_binds_exact_run_commit_and_file_hashes(self) -> None:
+        source = inline_python_block_containing("CTA_FINAL_PROVENANCE_BOUND")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            snapshot = b'{"snapshot":true}\n'
+            decision = b'{"decision":true}\n'
+            (root / "vevo-growthbook-cta-final-snapshot.json").write_bytes(snapshot)
+            (root / "vevo-growthbook-cta-final-decision.json").write_bytes(decision)
+            env = {
+                "GITHUB_REPOSITORY": "vzeman/biznisweb",
+                "GITHUB_REF": "refs/heads/main",
+                "GITHUB_RUN_ATTEMPT": "1",
+                "GITHUB_RUN_ID": "32843957284",
+                "GITHUB_SHA": "a" * 40,
+                "SNAPSHOT_FILE": "vevo-growthbook-cta-final-snapshot.json",
+                "DECISION_FILE": "vevo-growthbook-cta-final-decision.json",
+                "PROVENANCE_FILE": "vevo-growthbook-cta-final-provenance.json",
+            }
+            output = io.StringIO()
+            with contextlib.chdir(root), mock.patch.dict(os.environ, env, clear=False):
+                with contextlib.redirect_stdout(output):
+                    exec(compile(source, "cta-final-provenance.py", "exec"))
+            provenance_path = root / "vevo-growthbook-cta-final-provenance.json"
+            raw = provenance_path.read_bytes()
+            provenance = json.loads(raw)
+
+        self.assertEqual(
+            raw,
+            (
+                json.dumps(
+                    provenance,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode("utf-8"),
+        )
+        self.assertEqual("32843957284", provenance["workflow_run_id"])
+        self.assertEqual(1, provenance["workflow_run_attempt"])
+        self.assertEqual("a" * 40, provenance["main_commit"])
+        self.assertEqual(
+            {"sha256": hashlib.sha256(snapshot).hexdigest()},
+            provenance["files"]["vevo-growthbook-cta-final-snapshot.json"],
+        )
+        self.assertEqual(
+            {"sha256": hashlib.sha256(decision).hexdigest()},
+            provenance["files"]["vevo-growthbook-cta-final-decision.json"],
+        )
+        self.assertIn(
+            "CTA_FINAL_PROVENANCE_BOUND:run=true:commit=true:file-hashes=true",
+            output.getvalue(),
+        )
+
+    def test_uploads_only_three_canonical_identity_free_files_after_cleanup(self) -> None:
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))
         cleanup = WORKFLOW.index(
             "Remove every temporary AWS response query and host-gate file"
         )
         upload = WORKFLOW.index(
-            "Upload only the aggregate snapshot and offline decision"
+            "Upload only the aggregate snapshot decision and provenance"
         )
         self.assertLess(cleanup, upload)
         for marker in (
             "name: vevo-growthbook-cta-final-snapshot",
             "vevo-growthbook-cta-final-snapshot.json",
             "vevo-growthbook-cta-final-decision.json",
+            "vevo-growthbook-cta-final-provenance.json",
             "retention-days: 90",
             "CTA final artifact contains an identity field",
+            "CTA_FINAL_PROVENANCE_BOUND:run=true:commit=true:file-hashes=true",
+            "workflow_run_attempt",
+            "GITHUB_RUN_ID",
+            "GITHUB_SHA",
         ):
             self.assertIn(marker, WORKFLOW)
         for forbidden in (

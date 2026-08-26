@@ -14,6 +14,9 @@ from tests import test_growthbook_cta_final_snapshot_builder as builder_fixtures
 
 
 class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
+    workflow_run_id = "32843957284"
+    main_commit = "a" * 40
+
     def setUp(self) -> None:
         fixture = builder_fixtures.GrowthBookCtaFinalSnapshotBuilderTests(
             methodName="runTest"
@@ -44,23 +47,63 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
     def _sha(value: dict) -> str:
         return hashlib.sha256(evaluator.canonical_json_bytes(value)).hexdigest()
 
+    def _provenance(
+        self,
+        snapshot: dict,
+        decision: dict,
+        *,
+        workflow_run_id: str | None = None,
+        main_commit: str | None = None,
+    ) -> dict:
+        return {
+            "artifact_name": "vevo-growthbook-cta-final-snapshot",
+            "evidence_type": "vevo_growthbook_cta_final_provenance",
+            "files": {
+                "vevo-growthbook-cta-final-decision.json": {
+                    "sha256": self._sha(decision)
+                },
+                "vevo-growthbook-cta-final-snapshot.json": {
+                    "sha256": self._sha(snapshot)
+                },
+            },
+            "main_commit": main_commit or self.main_commit,
+            "repository": "vzeman/biznisweb",
+            "safety": {
+                "contains_credentials": False,
+                "contains_customer_or_order_data": False,
+                "contains_event_or_device_ids": False,
+                "contains_raw_aws_payloads": False,
+                "external_or_automatic_mutation": False,
+            },
+            "schema_version": 1,
+            "workflow": (
+                ".github/workflows/"
+                "build-vevo-growthbook-production-cta-final-snapshot.yml"
+            ),
+            "workflow_run_attempt": 1,
+            "workflow_run_id": workflow_run_id or self.workflow_run_id,
+        }
+
     def test_records_exact_recomputed_final_decision_and_closes_reads(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             paths = self.fixture._write_sources(Path(temporary))
             snapshot, decision = self._artifacts(paths)
+            provenance = self._provenance(snapshot, decision)
             recorded, recorded_registry = recorder.record_final_snapshot(
                 self.fixture.opened,
                 self.registry,
                 snapshot,
                 decision,
+                provenance,
                 self.fixture.contract,
                 self.fixture.sample,
                 self.fixture.lifecycle,
                 self.fixture.lifecycle_observation,
                 snapshot_sha256=self._sha(snapshot),
                 decision_sha256=self._sha(decision),
-                workflow_run_id="32843957284",
-                main_commit="a" * 40,
+                provenance_sha256=self._sha(provenance),
+                workflow_run_id=self.workflow_run_id,
+                main_commit=self.main_commit,
                 **paths,
             )
 
@@ -70,6 +113,9 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
             "brand_contrast", recorded["final_look"]["recommended_variation"]
         )
         self.assertFalse(recorded["final_look"]["protected_workflow_allowed"])
+        self.assertEqual(
+            self._sha(provenance), recorded["final_look"]["provenance_sha256"]
+        )
         self.assertFalse(
             recorded["release_boundaries"]["outcome_metrics_read_allowed"]
         )
@@ -82,6 +128,7 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
         )
         final_decision = recorded_registry["experiments"][0]["final_decision"]
         self.assertEqual(decision, final_decision["aggregate_evidence"])
+        self.assertEqual(self._sha(provenance), final_decision["provenance_sha256"])
         self.assertEqual(
             1084,
             final_decision["aggregate_evidence"]["summary"]["included_devices"],
@@ -108,36 +155,47 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             paths = self.fixture._write_sources(Path(temporary))
             snapshot, decision = self._artifacts(paths)
+            provenance = self._provenance(snapshot, decision)
             recorded, _recorded_registry = recorder.record_final_snapshot(
                 self.fixture.opened,
                 self.registry,
                 snapshot,
                 decision,
+                provenance,
                 self.fixture.contract,
                 self.fixture.sample,
                 self.fixture.lifecycle,
                 self.fixture.lifecycle_observation,
                 snapshot_sha256=self._sha(snapshot),
                 decision_sha256=self._sha(decision),
-                workflow_run_id="32843957284",
-                main_commit="a" * 40,
+                provenance_sha256=self._sha(provenance),
+                workflow_run_id=self.workflow_run_id,
+                main_commit=self.main_commit,
                 **paths,
             )
             with self.assertRaisesRegex(
                 recorder.CtaFinalSnapshotRecordingError,
                 "already recorded or not open",
             ):
+                repeat_provenance = self._provenance(
+                    snapshot,
+                    decision,
+                    workflow_run_id="32843957285",
+                    main_commit="b" * 40,
+                )
                 recorder.record_final_snapshot(
                     recorded,
                     self.registry,
                     snapshot,
                     decision,
+                    repeat_provenance,
                     self.fixture.contract,
                     self.fixture.sample,
                     self.fixture.lifecycle,
                     self.fixture.lifecycle_observation,
                     snapshot_sha256=self._sha(snapshot),
                     decision_sha256=self._sha(decision),
+                    provenance_sha256=self._sha(repeat_provenance),
                     workflow_run_id="32843957285",
                     main_commit="b" * 40,
                     **paths,
@@ -145,6 +203,7 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
 
             altered = copy.deepcopy(decision)
             altered["verdict"] = "LOSE"
+            altered_provenance = self._provenance(snapshot, altered)
             with self.assertRaisesRegex(
                 recorder.CtaFinalSnapshotRecordingError,
                 "differs from offline recomputation",
@@ -154,16 +213,63 @@ class GrowthBookCtaFinalSnapshotRecorderTests(unittest.TestCase):
                     self.registry,
                     snapshot,
                     altered,
+                    altered_provenance,
                     self.fixture.contract,
                     self.fixture.sample,
                     self.fixture.lifecycle,
                     self.fixture.lifecycle_observation,
                     snapshot_sha256=self._sha(snapshot),
                     decision_sha256=self._sha(altered),
-                    workflow_run_id="32843957284",
-                    main_commit="a" * 40,
+                    provenance_sha256=self._sha(altered_provenance),
+                    workflow_run_id=self.workflow_run_id,
+                    main_commit=self.main_commit,
                     **paths,
                 )
+
+    def test_rejects_swapped_provenance_run_commit_or_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = self.fixture._write_sources(Path(temporary))
+            snapshot, decision = self._artifacts(paths)
+            cases = (
+                (
+                    "workflow run mismatch",
+                    lambda value: value.update({"workflow_run_id": "32843957285"}),
+                ),
+                (
+                    "main commit mismatch",
+                    lambda value: value.update({"main_commit": "b" * 40}),
+                ),
+                (
+                    "hash mismatch: vevo-growthbook-cta-final-decision.json",
+                    lambda value: value["files"][
+                        "vevo-growthbook-cta-final-decision.json"
+                    ].update({"sha256": "f" * 64}),
+                ),
+            )
+            for expected, mutate in cases:
+                with self.subTest(expected=expected):
+                    provenance = self._provenance(snapshot, decision)
+                    mutate(provenance)
+                    with self.assertRaisesRegex(
+                        recorder.CtaFinalSnapshotRecordingError, expected
+                    ):
+                        recorder.record_final_snapshot(
+                            self.fixture.opened,
+                            self.registry,
+                            snapshot,
+                            decision,
+                            provenance,
+                            self.fixture.contract,
+                            self.fixture.sample,
+                            self.fixture.lifecycle,
+                            self.fixture.lifecycle_observation,
+                            snapshot_sha256=self._sha(snapshot),
+                            decision_sha256=self._sha(decision),
+                            provenance_sha256=self._sha(provenance),
+                            workflow_run_id=self.workflow_run_id,
+                            main_commit=self.main_commit,
+                            **paths,
+                        )
 
 
 if __name__ == "__main__":

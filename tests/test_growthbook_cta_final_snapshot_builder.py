@@ -234,7 +234,8 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
                     "main_commit": "a" * 40,
                     "snapshot_sha256": "b" * 64,
                     "decision_sha256": "c" * 64,
-                    "hypothesis_registry_sha256": "d" * 64,
+                    "provenance_sha256": "d" * 64,
+                    "hypothesis_registry_sha256": "e" * 64,
                     "verdict": "WIN",
                     "recommended_variation": "brand_contrast",
                 }

@@ -6049,3 +6049,33 @@ Known issues:
 Next exact step:
 
 - Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results. At the first due boundary, use the earliest successful exact-main scheduled checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
+
+## 2026-08-26 — VEVO CTA final artifact provenance hardened
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-final-provenance`
+
+What changed:
+
+- Added a third canonical, PII-free final-look file, `vevo-growthbook-cta-final-provenance.json`, to the protected future CTA workflow artifact bundle.
+- The workflow-generated file binds the exact repository, workflow path, first run attempt, main commit, artifact name, and SHA-256 of the aggregate snapshot and offline decision.
+- The offline recorder now requires an independently hashed canonical provenance file and rejects a swapped run ID, main commit, file set, or snapshot/decision hash before it can close the final-look gate.
+- The provenance SHA-256 is stored in both the final-snapshot manifest and durable hypothesis registry and is cross-validated with their existing snapshot, decision, run, commit, verdict, recommendation, and registry-hash bindings.
+- Updated the machine-readable output contract, runbook, plan, security CI, workflow tests, builder tests, recorder tests, and registry schema. No result workflow was dispatched.
+
+What is verified:
+
+- `791` Python tests and all `9` storefront JavaScript tests passed. The focused final builder/recorder/workflow/registry suite passed `21` tests, including execution of the exact inline provenance producer and negative cases for a swapped run, commit, and file hash.
+- CTA final-snapshot, hypothesis-registry, workspace, CTA completion, CTA measurement-window, A/A measurement-window, Pro-upgrade, and central security validators passed.
+- Scoped Ruff, Python compilation, JSON/YAML and inline-Python parsing, canonical-byte checks, and `git diff --check` passed.
+- The versioned Production host boundary remains instance `N/A:Fargate`, recorded deployment private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, and runtime path `/app`. This repository-only change performs no deploy or infrastructure mutation and therefore does not claim a new live-host readback.
+- No A/A population, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read. No AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, cart, checkout, payment, stock, or order state changed. No local server, worker, watcher, tunnel, Docker stack, or persistent process was started.
+
+Known issues:
+
+- None introduced. The provenance applies to the future CTA final-look bundle; it does not open any current A/A or CTA result gate.
+
+Next exact step:
+
+- Merge this provenance hardening after CI. Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results; at the first due boundary use the earliest successful exact-main scheduled A/A checkpoint artifact and record it through the offline hash-bound workflow.

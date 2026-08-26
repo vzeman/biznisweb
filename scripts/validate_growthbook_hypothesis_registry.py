@@ -69,6 +69,7 @@ FINAL_KEYS = {
     "assignment_ended_at_utc",
     "snapshot_sha256",
     "decision_sha256",
+    "provenance_sha256",
     "verdict",
     "recommended_variation",
     "automatic_mutation_allowed",
@@ -326,7 +327,7 @@ def validate_registry(
             COMMIT_RE.fullmatch(str(record["main_commit"] or "")) is not None,
             "hypothesis main commit is invalid",
         )
-        for field in ("snapshot_sha256", "decision_sha256"):
+        for field in ("snapshot_sha256", "decision_sha256", "provenance_sha256"):
             _require(
                 SHA256_RE.fullmatch(str(record[field] or "")) is not None,
                 f"hypothesis {field} is invalid",
@@ -379,6 +380,7 @@ def validate_registry(
             ("main_commit", "main_commit"),
             ("snapshot_sha256", "snapshot_sha256"),
             ("decision_sha256", "decision_sha256"),
+            ("provenance_sha256", "provenance_sha256"),
             ("verdict", "verdict"),
             ("recommended_variation", "recommended_variation"),
             ("assignment_started_at_utc", "assignment_started_at_utc"),
@@ -411,6 +413,7 @@ def record_final_decision(
     *,
     snapshot_sha256: str,
     decision_sha256: str,
+    provenance_sha256: str,
     workflow_run_id: str,
     main_commit: str,
 ) -> dict[str, Any]:
@@ -433,6 +436,10 @@ def record_final_decision(
         "hypothesis snapshot SHA-256 is invalid",
     )
     _require(
+        SHA256_RE.fullmatch(provenance_sha256) is not None,
+        "hypothesis provenance SHA-256 is invalid",
+    )
+    _require(
         RUN_ID_RE.fullmatch(workflow_run_id) is not None,
         "hypothesis workflow run ID is invalid",
     )
@@ -451,6 +458,7 @@ def record_final_decision(
         "assignment_ended_at_utc": snapshot.get("assignment_ended_at_utc"),
         "snapshot_sha256": snapshot_sha256,
         "decision_sha256": decision_sha256,
+        "provenance_sha256": provenance_sha256,
         "verdict": decision["verdict"],
         "recommended_variation": decision["recommended_variation"],
         "automatic_mutation_allowed": False,
