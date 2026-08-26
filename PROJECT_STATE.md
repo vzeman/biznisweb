@@ -5886,3 +5886,30 @@ Known issues:
 Next exact step:
 
 - Merge this future CTA cloud-capture preparation after CI, while keeping the CTA lifecycle closed. Before `2026-09-02 03:45 Europe/Bratislava`, continue only result-blind A/A infrastructure monitoring; at the first A/A due boundary, consume the earliest successful exact-main scheduled artifact without dispatching a duplicate and record it through the offline recorder and reviewed PR.
+
+## 2026-08-26 — VEVO CTA cloud checkpoint merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-cloud-checkpoints-state`
+
+What changed:
+
+- PR `#435` merged the PC-independent future CTA checkpoint preparation into `main` as `7e6828a641251e8cf091087d0138a2f834ad4b90`.
+- This handoff replaces the completed merge instruction with the next operational A/A gate; it introduces no workflow, runtime, experiment, reporting, advertising, or commerce change.
+
+What is verified:
+
+- PR `#435` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- Local `main` and `origin/main` both read back the exact merge commit `7e6828a641251e8cf091087d0138a2f834ad4b90`.
+- GitHub API reports workflow ID `342017535`, path `.github/workflows/check-vevo-growthbook-production-cta-window.yml`, and state `active` on synchronized `main`.
+- The checked-in CTA manifest remains `waiting_for_verified_cta_start`, with `release_boundaries.read_only_checkpoint_allowed=false`; the cloud schedule therefore exits before AWS and before any population query until a separately verified CTA start.
+- No workflow was dispatched, no A/A or CTA population/result was read, and no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, pricing, cart, checkout, payment, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- None introduced. CTA cloud capture is installed but intentionally dormant until all preceding Pro, baseline, sample-freeze, activation, and start-observation gates pass.
+
+Next exact step:
+
+- Continue daily result-blind A/A infrastructure monitoring. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact without dispatching a duplicate, independently verify and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
