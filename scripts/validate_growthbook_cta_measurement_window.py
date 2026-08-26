@@ -11,6 +11,7 @@ GrowthBook automatically, call a winner, or mutate another external system.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 from datetime import UTC, datetime, time, timedelta
@@ -68,11 +69,6 @@ UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-IP_RE = re.compile(
-    r"^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}"
-    r"(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$"
-)
-
 ROOT_KEYS = {
     "schema_version",
     "experiment_id",
@@ -387,7 +383,11 @@ def validate_checkpoint_evidence(
     evidence: Mapping[str, Any], expected: Mapping[str, Any], checkpoint_index: int
 ) -> None:
     root = _exact_object(evidence, CHECKPOINT_ROOT_KEYS, "CTA checkpoint evidence")
-    _require(root["schema_version"] == 1, "CTA checkpoint schema drift")
+    schema_version = root["schema_version"]
+    _require(
+        type(schema_version) is int and schema_version in {1, 2},
+        "CTA checkpoint schema drift",
+    )
     _require(root["evidence_type"] == "vevo_growthbook_cta_window_checkpoint", "CTA checkpoint type drift")
     _require(root["status"] == "passed", "CTA checkpoint did not pass")
     _require(root["experiment_id"] == EXPERIMENT_ID, "CTA checkpoint experiment drift")
@@ -416,9 +416,11 @@ def validate_checkpoint_evidence(
         "CTA checkpoint observed outside daily gate",
     )
 
-    runtime = _exact_object(root["runtime"], RUNTIME_KEYS, "CTA checkpoint runtime")
+    runtime_keys = set(RUNTIME_KEYS)
+    if schema_version == 2:
+        runtime_keys.add("identity_source")
+    runtime = _exact_object(root["runtime"], runtime_keys, "CTA checkpoint runtime")
     _require(runtime["instance_id"] == "N/A:Fargate", "CTA checkpoint instance drift")
-    _require(IP_RE.fullmatch(str(runtime["private_ip"])) is not None, "CTA checkpoint IP invalid")
     _require(runtime["service"] == "vevo-growthbook-reconcile-production", "CTA checkpoint service drift")
     _require(runtime["runtime_path"] == "/app", "CTA checkpoint path drift")
     _require(re.fullmatch(r"[0-9a-f]{32}", str(runtime["task_id"])) is not None, "CTA checkpoint task invalid")
@@ -428,7 +430,10 @@ def validate_checkpoint_evidence(
     _require(runtime["localhost_health_marker_inherited_from_deploy_evidence"] is True, "CTA checkpoint localhost health missing")
     _require(runtime["localhost_runtime_marker_inherited_from_deploy_evidence"] is True, "CTA checkpoint runtime marker missing")
 
-    control = _exact_object(root["control_plane"], CONTROL_KEYS, "CTA checkpoint control plane")
+    control_keys = set(CONTROL_KEYS)
+    if schema_version == 2:
+        control_keys.update({"runtime_state_retained", "scheduler_run_task_verified"})
+    control = _exact_object(root["control_plane"], control_keys, "CTA checkpoint control plane")
     _require(control["schedule_name"] == "vevo-growthbook-reconcile-production", "CTA checkpoint schedule drift")
     _require(control["schedule_due_local"] == due.isoformat(timespec="seconds"), "CTA checkpoint due drift")
     _require(control["source_schedule_name"] == "vevo-daily-report-email", "CTA source schedule drift")
@@ -436,6 +441,46 @@ def validate_checkpoint_evidence(
         _require(control[field] is True, f"CTA checkpoint control gate failed: {field}")
     for field in ("success_marker_sha256", "publish_summary_sha256"):
         _require(SHA256_RE.fullmatch(str(control[field])) is not None, f"CTA checkpoint {field} invalid")
+
+    def validate_private_ip() -> None:
+        try:
+            private_ip = ipaddress.ip_address(str(runtime["private_ip"]))
+        except ValueError as exc:
+            raise CtaMeasurementWindowError("CTA checkpoint IP invalid") from exc
+        _require(
+            private_ip.version == 4
+            and private_ip in ipaddress.ip_network("172.31.0.0/16"),
+            "CTA checkpoint IP boundary drift",
+        )
+
+    if schema_version == 1:
+        validate_private_ip()
+    else:
+        identity_source = runtime["identity_source"]
+        _require(
+            identity_source
+            in {"ecs_stopped_task", "cloudtrail_run_task_retention_recovery"},
+            "CTA checkpoint runtime identity source drift",
+        )
+        _require(
+            control["scheduler_run_task_verified"] is True,
+            "CTA checkpoint Scheduler RunTask verification drift",
+        )
+        if identity_source == "ecs_stopped_task":
+            validate_private_ip()
+            _require(
+                control["runtime_state_retained"] is True,
+                "CTA checkpoint runtime retention drift",
+            )
+        else:
+            _require(
+                runtime["private_ip"] is None,
+                "CTA checkpoint expired runtime private IP must be null",
+            )
+            _require(
+                control["runtime_state_retained"] is False,
+                "CTA checkpoint runtime retention drift",
+            )
 
     population = _exact_object(root["population"], POPULATION_KEYS, "CTA checkpoint population")
     _require(population["metric"] == expected["population_metric"], "CTA checkpoint population metric drift")
