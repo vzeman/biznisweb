@@ -162,6 +162,21 @@ git diff --check
 
 The recorder accepts compact canonical artifacts only, independently runs the versioned A/A evaluator, requires byte-identical decision output, and rejects `FAIL`, `NOT_READY`, any winner call, a changed frozen window, or a closed snapshot gate. The reviewed PR may open only `manual_growthbook_stop_allowed`; automatic GrowthBook mutation, CTA activation, GTM, Meta Ads, BiznisWeb, collector/reporting, prices, cart, checkout, and orders remain closed.
 
+Immediately before the manual GrowthBook stop, synchronize the exact checked-out `main`, require an empty worktree, and require `HEAD` to equal `origin/main`. Then run the read-only stop-readiness assertion and both versioned validators:
+
+```text
+git fetch origin --prune
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git rev-parse origin/main
+python scripts/record_growthbook_aa_completion.py assert-stop-ready
+python scripts/validate_growthbook_aa_completion.py
+python scripts/validate_growthbook_workspace.py
+```
+
+Continue only when the branch is exactly `main`, the status output is empty, both commit values are identical, the validators pass, and the assertion prints `VEVO_AA_STOP_READY`. The assertion re-reads the exact PASS-bound completion, activation, resolved snapshot manifest, and workspace; it requires the reviewed manual-stop gate, only the A/A experiment live at revision `3` and `100%` with `50/50` weights, and the CTA experiment still an unstarted staging-only draft at `0%`. Any failure or later source/UI drift closes the action: do not stop or edit an experiment until the exact-main assertion is repeated successfully.
+
 Only after that exact PASS-binding PR merges, use the authenticated GrowthBook UI and confirm project `prj_2CeEJc6J9FwQFix9UhsnKr`, Production experiment `exp_19g6mmt5wugpk`, linked feature revision `3`, traffic `100%`, and GTM live version `15`. Stop only that A/A experiment, remove only its Production live feature rule, and publish the resulting feature revision. Preserve the staging rule, CTA experiment `exp_19g6mmt1qxzrp` as an unstarted draft at `0%`, GTM version `15`, the collector, reporting schedules, Meta Ads, and BiznisWeb.
 
 Reload the UI and storefront, then create the exact canonical `projects/vevo/growthbook_aa_completion_observation.json` readback required by `record_growthbook_aa_completion.py`. It must bind the recorded snapshot, decision, and provenance hashes and prove A/A stopped, zero Production A/A/CTA live rules and allocation, the staging rule retained, CTA still draft, GTM version `15` unchanged with zero pending changes, no A/A assignment or CTA class on desktop/mobile, unchanged add-to-cart text, zero console errors, and no price/cart/checkout/order mutation. Record the post-stop transition on a separate branch:

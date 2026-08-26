@@ -11,12 +11,14 @@ from unittest import mock
 from scripts.evaluate_growthbook_aa import evaluate, load_config
 from scripts import validate_growthbook_workspace as workspace_validator
 from scripts.record_growthbook_aa_completion import (
+    _parser,
     AaCompletionRecordingError,
     canonical_json_bytes,
     load_canonical,
     record_pass,
     record_stop,
     validate_manifest,
+    validate_stop_readiness,
 )
 from scripts.record_growthbook_aa_evidence_gates import (
     open_automated_producer,
@@ -408,6 +410,65 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
                     canonical_json_bytes(observed)
                 ).hexdigest(),
             )
+
+    def test_manual_stop_readiness_requires_pass_and_exact_running_workspace(
+        self,
+    ) -> None:
+        passed = self.record_pass()
+        workspace = load("growthbook_workspace.json")
+        validate_stop_readiness(
+            passed,
+            self.activation,
+            self.snapshot_manifest,
+            workspace,
+        )
+
+        with self.assertRaisesRegex(
+            AaCompletionRecordingError, "manual A/A stop review is not open"
+        ):
+            validate_stop_readiness(
+                self.completion,
+                self.activation,
+                self.pending_snapshot_manifest,
+                workspace,
+            )
+
+        cases = (
+            (
+                "workspace identity or allocation drift",
+                lambda value: value["workspace"].update(
+                    {"production_allocation_percent": 0}
+                ),
+            ),
+            (
+                "Production A/A live state drift",
+                lambda value: value["experiments"][0].update(
+                    {"feature_rule_revision": 4}
+                ),
+            ),
+            (
+                "CTA draft changed before the reviewed A/A stop",
+                lambda value: value["experiments"][1].update(
+                    {"status": "running"}
+                ),
+            ),
+        )
+        for expected, mutate in cases:
+            with self.subTest(expected=expected):
+                changed = copy.deepcopy(workspace)
+                mutate(changed)
+                with self.assertRaisesRegex(AaCompletionRecordingError, expected):
+                    validate_stop_readiness(
+                        passed,
+                        self.activation,
+                        self.snapshot_manifest,
+                        changed,
+                    )
+
+    def test_assert_stop_ready_parser_does_not_require_output(self) -> None:
+        args = _parser().parse_args(["assert-stop-ready"])
+        self.assertEqual("assert-stop-ready", args.command)
+        self.assertIsNone(args.output)
 
     def test_records_safe_stop_and_only_prepares_cta_draft(self) -> None:
         passed = self.record_pass()

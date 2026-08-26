@@ -232,6 +232,9 @@ def main() -> int:
         growthbook_aa_completion_recorder = read(
             "scripts/record_growthbook_aa_completion.py"
         )
+        growthbook_aa_activation_runbook = read(
+            "projects/vevo/GROWTHBOOK_PRODUCTION_AA_ACTIVATION_RUNBOOK.md"
+        )
         growthbook_aa_completion_validator = read(
             "scripts/validate_growthbook_aa_completion.py"
         )
@@ -2733,6 +2736,10 @@ def main() -> int:
             "A/A snapshot provenance main commit mismatch",
             "A/A snapshot provenance source mismatch",
             "A/A PASS is already bound to a different artifact",
+            "assert-stop-ready",
+            "manual A/A stop review is not open",
+            "GrowthBook Production A/A live state drift",
+            "GrowthBook CTA draft changed before the reviewed A/A stop",
             "aa_pass_provenance_sha256",
             "manual_growthbook_stop_allowed",
             "automatic_growthbook_mutation_allowed",
@@ -2741,6 +2748,7 @@ def main() -> int:
             "cta_production_live_rule_count",
             "price_cart_checkout_order_mutation_performed",
             "VEVO_AA_PASS_RECORDED:",
+            "VEVO_AA_STOP_READY:",
             "VEVO_AA_STOP_RECORDED:",
         ):
             require(
@@ -2748,6 +2756,18 @@ def main() -> int:
                 required_completion_marker,
                 "GrowthBook A/A completion recorder lost safety marker: "
                 f"{required_completion_marker}",
+            )
+        for required_stop_runbook_marker in (
+            "git rev-parse origin/main",
+            "record_growthbook_aa_completion.py assert-stop-ready",
+            "VEVO_AA_STOP_READY",
+            "the CTA experiment still an unstarted staging-only draft at `0%`",
+        ):
+            require(
+                growthbook_aa_activation_runbook,
+                required_stop_runbook_marker,
+                "GrowthBook A/A stop runbook lost exact-main readiness marker: "
+                f"{required_stop_runbook_marker}",
             )
         for required_completion_validator_marker in (
             "A/A stop observation is not canonical JSON",

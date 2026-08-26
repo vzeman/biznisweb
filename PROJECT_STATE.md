@@ -6657,3 +6657,32 @@ Known issues:
 Next exact step:
 
 - Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful outcome-blind checkpoint artifact in index order, resolve the window without arm/outcome peeking, and process only the protected A/A evidence path. Continue only on an independently reproduced `PASS`; after the reviewed zero-allocation stop, request a fresh action-time confirmation immediately before the exact one-seat `$40 USD` monthly GrowthBook Pro action, then execute the completed-A/A 21-day lifecycle preflight, CTA-only runtime, and exact-main `assert-start-ready` gate before any manual CTA allocation.
+
+## 2026-08-26 — VEVO manual A/A stop handoff made fail-closed
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-resolution-readiness`
+
+What changed:
+
+- Audited the static transition from the future independently reproduced A/A `PASS` to the one reviewed manual GrowthBook stop without opening any protected population or result.
+- Added read-only `record_growthbook_aa_completion.py assert-stop-ready`. It revalidates the exact PASS-bound completion, activation and resolved snapshot manifests, requires the manual stop review to remain open, and requires the exact VEVO Production workspace/project to remain on Starter with only A/A live at revision `3`, `100%` traffic, `50/50`, while CTA remains an unstarted staging-only draft at `0%`.
+- Strengthened the post-stop recorder to reuse the same exact running-workspace validator before it can construct the zero-allocation state. Updated the activation runbook, long-form plan, tests, and central security contract with the exact synchronized-`main` pre-action sequence and fail-closed marker.
+
+What is verified:
+
+- The full repository suite passes `863` Python tests and all `9` storefront JavaScript tests. The focused completion/workspace group passes `32` tests.
+- Completion/workspace validators, central security validation, scoped Ruff lint, Python compilation, and `git diff --check` pass.
+- The current waiting state runs the new assertion read-only and fails closed with `manual A/A stop review is not open` and exit code `2`. No file or external state is changed.
+- GitHub reports workflow ID `341899955` (`Check VEVO GrowthBook Production A/A Window`) as active on the default `main` branch. As of this audit it has no workflow-run record yet; no workflow was dispatched to manufacture one before the protected boundary. The versioned same-window and exact historical-backfill paths remain available independently of the local PC.
+- No A/A eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was inspected. No result workflow was dispatched and no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, product, price, stock, cart, checkout, payment, or order state changed. No browser or local runtime process remains; one unintended duplicate local unit-test process was identified by exact PID/parent/executable/command, stopped in isolation, and independently verified absent.
+
+Known issues:
+
+- This fail-closed manual-stop gate is not yet merged. The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`.
+- The exact A/A window workflow is active but its scheduled-event delivery has not yet been observed. This is not a data-loss boundary because artifacts are retained for 90 days and the recorder supports only the next missing preregistered historical cutoff after its original daily gate closes; nevertheless, do not claim the scheduled path verified until a real metadata-only run record exists.
+
+Next exact step:
+
+- Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then keep the A/A result boundary closed; inspect only the exact checkpoint workflow's run metadata before the first due boundary, without downloading artifacts or reading results. At or after `2026-09-02 03:45 Europe/Bratislava`, use the earliest successful outcome-blind checkpoint in index order and continue only through the already versioned PASS/stop/Pro/lifecycle/CTA gates.

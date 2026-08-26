@@ -6,6 +6,10 @@ decision, and workflow provenance from the protected snapshot workflow. It
 independently recomputes the decision and opens only the reviewed manual A/A
 stop gate.
 
+``assert-stop-ready`` revalidates that exact PASS-bound gate together with the
+still-running, A/A-only Production workspace immediately before the manual UI
+stop. It is read-only and fails closed on any source or workspace drift.
+
 ``record-stop`` accepts only a canonical reviewed post-stop readback. It closes
 the stop gate and updates a supplied workspace copy to the post-A/A, zero-
 allocation CTA-draft state. The tool has no browser, network, AWS, GrowthBook,
@@ -749,6 +753,76 @@ def record_pass(
     return recorded
 
 
+def _validate_running_aa_workspace(workspace: Mapping[str, Any]) -> None:
+    _require(
+        workspace.get("state")
+        == "production_aa_running_activation_verified_pro_quantiles_blocked",
+        "GrowthBook workspace is not in the running Production A/A state",
+    )
+    workspace_details = workspace.get("workspace") or {}
+    _require(
+        workspace_details.get("project_id") == "prj_2CeEJc6J9FwQFix9UhsnKr"
+        and workspace_details.get("plan_type") == "starter"
+        and workspace_details.get("subscription_or_trial_status")
+        == "starter_active_no_paid_upgrade_accepted"
+        and workspace_details.get("production_allocation_percent") == 100,
+        "GrowthBook running A/A workspace identity or allocation drift",
+    )
+    _require(
+        workspace.get("decision_gates", {}).get("production_activation_allowed")
+        is True,
+        "GrowthBook workspace A/A gate is closed unexpectedly",
+    )
+    experiments = {
+        row.get("tracking_key"): row
+        for row in workspace.get("experiments", [])
+        if isinstance(row, dict)
+    }
+    _require(
+        set(experiments) == {"vevo-sk-aa-001", "vevo-sk-product-cta-color-001"},
+        "GrowthBook workspace experiment set drift",
+    )
+    aa = experiments["vevo-sk-aa-001"]
+    _require(
+        aa.get("growthbook_id") == "exp_19g6mmt5wugpk"
+        and aa.get("status") == "running_production_aa_only"
+        and aa.get("feature_rule_status") == "live"
+        and aa.get("feature_rule_revision") == 3
+        and aa.get("feature_rule_environments") == ["production"]
+        and aa.get("production_allocation_percent") == 100
+        and aa.get("traffic_percent") == 100
+        and aa.get("variation_weights") == [0.5, 0.5],
+        "GrowthBook Production A/A live state drift",
+    )
+    cta = experiments["vevo-sk-product-cta-color-001"]
+    _require(
+        cta.get("growthbook_id") == "exp_19g6mmt1qxzrp"
+        and cta.get("status") == "unstarted_draft"
+        and cta.get("feature_rule_status") == "no_live_rules"
+        and cta.get("feature_rule_environments") == ["staging"]
+        and cta.get("production_allocation_percent") == 0,
+        "GrowthBook CTA draft changed before the reviewed A/A stop",
+    )
+
+
+def validate_stop_readiness(
+    completion: Mapping[str, Any],
+    activation: Mapping[str, Any],
+    snapshot_manifest: Mapping[str, Any],
+    workspace: Mapping[str, Any],
+) -> None:
+    validate_manifest(completion, activation, snapshot_manifest)
+    _require(
+        completion.get("status") == "aa_pass_recorded_manual_stop_review_allowed"
+        and completion.get("release_boundaries", {}).get(
+            "manual_growthbook_stop_allowed"
+        )
+        is True,
+        "manual A/A stop review is not open",
+    )
+    _validate_running_aa_workspace(workspace)
+
+
 def _post_aa_workspace(
     workspace: Mapping[str, Any], *, feature_revision: int
 ) -> dict[str, Any]:
@@ -756,26 +830,14 @@ def _post_aa_workspace(
     post_state = NEXT_STATE["workspace_state"]
     if updated.get("state") == post_state:
         return updated
-    _require(
-        updated.get("state")
-        == "production_aa_running_activation_verified_pro_quantiles_blocked",
-        "GrowthBook workspace is not in the running Production A/A state",
-    )
-    _require(updated.get("workspace", {}).get("production_allocation_percent") == 100, "workspace A/A allocation drift")
-    _require(updated.get("decision_gates", {}).get("production_activation_allowed") is True, "workspace A/A gate is closed unexpectedly")
+    _validate_running_aa_workspace(updated)
     experiments = {
         row.get("tracking_key"): row
         for row in updated.get("experiments", [])
         if isinstance(row, dict)
     }
-    _require(set(experiments) == {"vevo-sk-aa-001", "vevo-sk-product-cta-color-001"}, "workspace experiment set drift")
     aa = experiments["vevo-sk-aa-001"]
     cta = experiments["vevo-sk-product-cta-color-001"]
-    _require(aa.get("status") == "running_production_aa_only", "workspace A/A is not running")
-    _require(aa.get("feature_rule_revision") == 3, "workspace A/A feature revision drift")
-    _require(aa.get("production_allocation_percent") == 100, "workspace A/A allocation is not 100")
-    _require(cta.get("status") == "unstarted_draft", "workspace CTA state drift")
-    _require(cta.get("production_allocation_percent") == 0, "workspace CTA allocation is nonzero")
 
     updated["state"] = post_state
     updated["workspace"]["production_allocation_percent"] = 0
@@ -875,7 +937,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--completion", type=Path, default=DEFAULT_COMPLETION_PATH)
     parser.add_argument("--activation", type=Path, default=ACTIVATION_PATH)
     parser.add_argument("--snapshot-manifest", type=Path, default=SNAPSHOT_PATH)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     pass_parser = subparsers.add_parser("record-pass")
@@ -887,6 +949,8 @@ def _parser() -> argparse.ArgumentParser:
     pass_parser.add_argument("--provenance-sha256", required=True)
     pass_parser.add_argument("--workflow-run-id", required=True)
     pass_parser.add_argument("--main-commit", required=True)
+
+    subparsers.add_parser("assert-stop-ready")
 
     stop_parser = subparsers.add_parser("record-stop")
     stop_parser.add_argument("--workspace", type=Path, default=DEFAULT_WORKSPACE_PATH)
@@ -902,7 +966,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         completion = _load(args.completion, "A/A completion manifest")
         activation = _load(args.activation, "A/A activation manifest")
         snapshot_manifest = _load(args.snapshot_manifest, "A/A snapshot manifest")
+        if args.command == "assert-stop-ready":
+            workspace = _load(DEFAULT_WORKSPACE_PATH, "GrowthBook workspace")
+            validate_stop_readiness(
+                completion,
+                activation,
+                snapshot_manifest,
+                workspace,
+            )
+            print(
+                "VEVO_AA_STOP_READY:manual_growthbook_stop=true:"
+                "aa_only=true:automatic_mutation=false"
+            )
+            return 0
+
         if args.command == "record-pass":
+            _require(args.output is not None, "--output is required for record-pass")
             snapshot = load_canonical(args.snapshot, args.snapshot_sha256, "A/A snapshot")
             decision = load_canonical(args.decision, args.decision_sha256, "A/A decision")
             provenance = load_canonical(
@@ -925,6 +1004,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("VEVO_AA_PASS_RECORDED:manual_stop_review_allowed=true:automatic_mutation=false:cta=false")
             return 0
 
+        _require(args.output is not None, "--output is required for record-stop")
         observation = load_canonical(
             args.observation, args.observation_sha256, "A/A stop observation"
         )
