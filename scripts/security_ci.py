@@ -235,6 +235,12 @@ def main() -> int:
         growthbook_aa_completion_validator = read(
             "scripts/validate_growthbook_aa_completion.py"
         )
+        growthbook_pro_upgrade_recorder = read(
+            "scripts/record_growthbook_pro_upgrade.py"
+        )
+        growthbook_pro_upgrade_runbook = read(
+            "projects/vevo/GROWTHBOOK_PRO_UPGRADE_RUNBOOK.md"
+        )
         growthbook_cta_baseline_builder = read(
             "scripts/build_growthbook_cta_baseline_observation.py"
         )
@@ -2166,6 +2172,44 @@ def main() -> int:
                 f"GrowthBook A/A manifest lifecycle is invalid: {exc}"
             ) from exc
         validate_aa_completion()
+        for marker in (
+            "ACTION_TIME_FRESHNESS = timedelta(minutes=15)",
+            "MAX_VERIFIED_UPGRADE_DELAY = timedelta(hours=4)",
+            'sub.add_parser("assert-action-time")',
+            "GrowthBook Pro action-time confirmation is stale",
+            "GrowthBook Pro authorization predates the verified A/A stop",
+            "A/A completion changed before GrowthBook Pro authorization refresh",
+            "GrowthBook workspace changed before GrowthBook Pro authorization refresh",
+            "GrowthBook Pro observation is outside the authorized upgrade window",
+        ):
+            require(
+                growthbook_pro_upgrade_recorder,
+                marker,
+                f"GrowthBook Pro paid action-time gate lost marker: {marker}",
+            )
+        for marker in (
+            "current within 15 minutes",
+            "assert-action-time",
+            "no more than four hours later",
+            "never backdate or rewrite evidence",
+        ):
+            require(
+                growthbook_pro_upgrade_runbook,
+                marker,
+                f"GrowthBook Pro runbook lost action-time boundary: {marker}",
+            )
+        for forbidden_client in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import selenium",
+            "from playwright",
+        ):
+            forbid(
+                growthbook_pro_upgrade_recorder.lower(),
+                forbidden_client,
+                f"GrowthBook Pro recorder must remain offline: {forbidden_client}",
+            )
         if validate_pro_upgrade() != 0:
             raise AssertionError("GrowthBook Pro upgrade state is invalid.")
         validate_cta_baseline_manifest(growthbook_cta_baseline_manifest)

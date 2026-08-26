@@ -6546,3 +6546,33 @@ Known issues:
 Next exact step:
 
 - Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful outcome-blind checkpoint artifact in index order, resolve the window without arm/outcome peeking, and process only the protected A/A evidence path. Continue only on an independently reproduced `PASS`; after the reviewed zero-allocation stop, request fresh confirmation immediately before purchasing GrowthBook Pro.
+
+## 2026-08-26 — VEVO GrowthBook Pro paid action-time gate hardened
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pre-aa-readiness-audit`
+
+What changed:
+
+- Audited the static post-A/A chain without opening any protected A/A population or result. GrowthBook remains the onsite randomizer; canonical Meta campaign/ad-set/ad/placement URL IDs remain diagnostic reporting dimensions only, and the existing reporting core plus anonymous curated facts remain the hypothesis-verification path.
+- Closed a paid-action authorization gap in the offline GrowthBook Pro transition. The recorder now accepts only a canonical whole-second UTC `Z` confirmation that is no more than 15 minutes old, no more than 60 seconds ahead of the executing clock, and at or after the verified A/A zero-allocation stop.
+- An already-open review can now refresh its action-time timestamp only while the exact bound A/A completion and pre-upgrade workspace SHA-256 values remain unchanged. A new read-only `assert-action-time` command rechecks those hashes and freshness immediately before the reviewed paid click.
+- Bound the canonical Pro/quantile-metric observation to the refreshed authorization chronology: it must be recorded at or after authorization and no more than four hours later. Added fail-closed tests for stale/future/non-canonical/pre-stop timestamps, source drift, refresh, assertion expiry, and early/late observations.
+- Updated the Pro runbook and central security checks. The runbook requires a fresh reviewed confirmation, exact-main assertion, one seat at the official `$40 USD` monthly base price, and stop/escalation instead of backdating when the evidence window expires. GrowthBook Pro remains unpurchased and CTA remains draft at zero allocation.
+
+What is verified:
+
+- The full repository suite passes `859` Python tests and all `9` storefront JavaScript tests. The focused Pro/CTA/workspace suite passes `45` tests.
+- GrowthBook Pro/workspace validators, central security validation, scoped Ruff lint, Python compilation, JavaScript syntax, and `git diff --check` pass.
+- The official GrowthBook pricing page and metric documentation were rechecked on 2026-08-26: Pro is listed at `$40` per seat per month and Quantile Metrics are a Pro capability matching the preregistered p75 contract.
+- No A/A eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was inspected. No workflow was dispatched and no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, product, price, stock, cart, checkout, payment, or order state changed. No browser or local runtime process was started.
+
+Known issues:
+
+- This hardening is not yet merged. The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`.
+- A current user acknowledgement is not the future paid action-time confirmation. Purchase remains impossible until an independently reproduced A/A `PASS`, reviewed zero Production allocation, and a new confirmation immediately before the exact `$40 USD` monthly Pro action.
+
+Next exact step:
+
+- Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then keep the A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`; at or after that time process only the protected outcome-blind A/A chain. Continue to the reviewed GrowthBook Pro purchase only after verified `PASS`, zero-allocation stop, and a fresh action-time confirmation that passes `assert-action-time` on exact `main`.
