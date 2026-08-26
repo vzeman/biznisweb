@@ -167,7 +167,7 @@ jobs:
           name: vevo-growthbook-aa-manual-qa-evidence
           path: vevo-growthbook-aa-manual-qa-evidence.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
 
       - name: Write sanitized manual QA summary
         run: |

@@ -109,6 +109,7 @@ class GrowthBookCtaRuntimeWorkflowTests(unittest.TestCase):
     def test_uploads_only_one_canonical_identity_free_artifact(self) -> None:
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))
         self.assertIn("path: ${{ env.EVIDENCE_FILE }}", WORKFLOW)
+        self.assertIn("retention-days: 90", WORKFLOW)
         self.assertNotIn("path: ${{ env.TEMP_DIR }}", WORKFLOW)
         for forbidden in (
             "path: host-gate.log",

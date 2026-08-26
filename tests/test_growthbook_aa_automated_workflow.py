@@ -116,7 +116,7 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
         for marker in (
             "name: vevo-growthbook-aa-automated-evidence",
             "path: vevo-growthbook-aa-automated-evidence.json",
-            "retention-days: 14",
+            "retention-days: 90",
         ):
             self.assertIn(marker, WORKFLOW[upload:])
         for forbidden in (

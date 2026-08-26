@@ -331,7 +331,7 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         == {
             "artifact_name": "vevo-growthbook-cta-baseline",
             "file_name": "vevo-growthbook-cta-baseline.json",
-            "retention_days": 14,
+            "retention_days": 90,
             "canonical_json_required": True,
             "contains_raw_aws_payloads": False,
             "contains_event_or_device_ids": False,

@@ -331,7 +331,7 @@ jobs:
           name: vevo-growthbook-cta-baseline
           path: vevo-growthbook-cta-baseline.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
 
       - name: Write aggregate-only collection summary
         run: |

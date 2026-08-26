@@ -62,6 +62,7 @@ class GrowthBookCtaBaselineWorkflowTests(unittest.TestCase):
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))
         self.assertIn("name: vevo-growthbook-cta-baseline", WORKFLOW)
         self.assertIn("path: vevo-growthbook-cta-baseline.json", WORKFLOW)
+        self.assertIn("retention-days: 90", WORKFLOW)
         self.assertNotIn("path: ${TEMP_BASELINE_DIR}", WORKFLOW)
 
     def test_has_no_external_mutation_path(self) -> None:

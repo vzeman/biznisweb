@@ -260,7 +260,7 @@ jobs:
             vevo-growthbook-aa-snapshot.json
             vevo-growthbook-aa-decision.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
 
       - name: Write sanitized decision summary
         run: |

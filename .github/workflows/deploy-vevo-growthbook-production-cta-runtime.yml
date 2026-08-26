@@ -620,7 +620,7 @@ jobs:
           name: vevo-growthbook-cta-runtime-readiness-${{ github.run_id }}
           path: ${{ env.EVIDENCE_FILE }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
 
       - name: Restore the exact preceding collector runtime after a failed candidate gate
         if: ${{ failure() && env.RUNTIME_UPDATED == 'true' }}
