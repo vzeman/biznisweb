@@ -303,9 +303,10 @@ def validate_checkpoint_evidence(
     checkpoint_index: int,
 ) -> None:
     root = _exact_object(evidence, CHECKPOINT_ROOT_KEYS, "checkpoint evidence")
+    schema_version = root["schema_version"]
     if (
-        root["schema_version"] != 1
-        or type(root["schema_version"]) is not int
+        type(schema_version) is not int
+        or schema_version not in {1, 2}
         or root["evidence_type"] != "vevo_growthbook_aa_window_checkpoint"
         or root["status"] != "passed"
         or root["experiment_id"] != "vevo-sk-aa-001"
@@ -339,9 +340,10 @@ def validate_checkpoint_evidence(
     }:
         raise MeasurementWindowError("checkpoint window drift")
 
-    runtime = _exact_object(
-        root["runtime"], CHECKPOINT_RUNTIME_KEYS, "checkpoint runtime"
-    )
+    runtime_keys = set(CHECKPOINT_RUNTIME_KEYS)
+    if schema_version == 2:
+        runtime_keys.add("identity_source")
+    runtime = _exact_object(root["runtime"], runtime_keys, "checkpoint runtime")
     if (
         runtime["instance_id"] != "N/A:Fargate"
         or runtime["service"] != "vevo-growthbook-reconcile-production"
@@ -356,21 +358,12 @@ def validate_checkpoint_evidence(
         is not True
     ):
         raise MeasurementWindowError("checkpoint runtime hard gate drift")
-    try:
-        private_ip = ipaddress.ip_address(str(runtime["private_ip"]))
-    except ValueError as exc:
-        raise MeasurementWindowError(
-            "checkpoint runtime private IP is invalid"
-        ) from exc
-    if private_ip.version != 4 or private_ip not in ipaddress.ip_network(
-        "172.31.0.0/16"
-    ):
-        raise MeasurementWindowError("checkpoint runtime private IP boundary drift")
 
-    control = _exact_object(
-        root["control_plane"], CHECKPOINT_CONTROL_KEYS, "checkpoint control plane"
-    )
-    if control != {
+    control_keys = set(CHECKPOINT_CONTROL_KEYS)
+    if schema_version == 2:
+        control_keys.update({"runtime_state_retained", "scheduler_run_task_verified"})
+    control = _exact_object(root["control_plane"], control_keys, "checkpoint control plane")
+    expected_control = {
         "schedule_name": "vevo-growthbook-reconcile-production",
         "schedule_due_local": due.isoformat(timespec="seconds"),
         "schedule_succeeded": True,
@@ -381,11 +374,56 @@ def validate_checkpoint_evidence(
         "alarms_clear": True,
         "source_schedule_name": "vevo-daily-report-email",
         "source_schedule_unchanged": True,
-    }:
+    }
+    if schema_version == 2:
+        expected_control.update(
+            {
+                "scheduler_run_task_verified": control[
+                    "scheduler_run_task_verified"
+                ],
+                "runtime_state_retained": control["runtime_state_retained"],
+            }
+        )
+    if control != expected_control:
         raise MeasurementWindowError("checkpoint control-plane gate failed")
     for field in ("success_marker_sha256", "publish_summary_sha256"):
         if SHA256_RE.fullmatch(str(control[field])) is None:
             raise MeasurementWindowError("checkpoint control-plane hash drift")
+
+    def validate_private_ip() -> None:
+        try:
+            private_ip = ipaddress.ip_address(str(runtime["private_ip"]))
+        except ValueError as exc:
+            raise MeasurementWindowError(
+                "checkpoint runtime private IP is invalid"
+            ) from exc
+        if private_ip.version != 4 or private_ip not in ipaddress.ip_network(
+            "172.31.0.0/16"
+        ):
+            raise MeasurementWindowError("checkpoint runtime private IP boundary drift")
+
+    if schema_version == 1:
+        validate_private_ip()
+    else:
+        identity_source = runtime["identity_source"]
+        if identity_source not in {
+            "ecs_stopped_task",
+            "cloudtrail_run_task_retention_recovery",
+        }:
+            raise MeasurementWindowError("checkpoint runtime identity source drift")
+        if control["scheduler_run_task_verified"] is not True:
+            raise MeasurementWindowError("checkpoint Scheduler RunTask verification drift")
+        if identity_source == "ecs_stopped_task":
+            validate_private_ip()
+            if control["runtime_state_retained"] is not True:
+                raise MeasurementWindowError("checkpoint runtime retention drift")
+        else:
+            if runtime["private_ip"] is not None:
+                raise MeasurementWindowError(
+                    "checkpoint expired runtime private IP must be null"
+                )
+            if control["runtime_state_retained"] is not False:
+                raise MeasurementWindowError("checkpoint runtime retention drift")
 
     population = _exact_object(
         root["population"], CHECKPOINT_POPULATION_KEYS, "checkpoint population"

@@ -49,7 +49,7 @@ def checkpoint_evidence(
     }
     through, last_date, due, observed, full_days = candidate_dates[index]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "evidence_type": "vevo_growthbook_aa_window_checkpoint",
         "status": "passed",
         "experiment_id": "vevo-sk-aa-001",
@@ -75,6 +75,7 @@ def checkpoint_evidence(
             "task_id": "b" * 32,
             "task_definition": "vevo-growthbook-reconcile-production:3",
             "image_digest": "sha256:" + "c" * 64,
+            "identity_source": "ecs_stopped_task",
             "host_gate_evidence_sha256": "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb",
             "localhost_health_marker_inherited_from_deploy_evidence": True,
             "localhost_runtime_marker_inherited_from_deploy_evidence": True,
@@ -90,6 +91,8 @@ def checkpoint_evidence(
             "alarms_clear": True,
             "source_schedule_name": "vevo-daily-report-email",
             "source_schedule_unchanged": True,
+            "scheduler_run_task_verified": True,
+            "runtime_state_retained": True,
         },
         "population": {
             "metric": "cumulative_eligible_devices_without_arm_outcome_readback",
@@ -199,6 +202,51 @@ class GrowthBookAaWindowCheckpointRecorderTests(unittest.TestCase):
         identity["population"]["device_id"] = "forbidden"
         with self.assertRaisesRegex(CheckpointRecordingError, "field set drift"):
             self.record(identity)
+
+    def test_accepts_retention_recovery_without_inventing_private_ip(self) -> None:
+        evidence = checkpoint_evidence()
+        evidence["runtime"]["private_ip"] = None
+        evidence["runtime"]["identity_source"] = (
+            "cloudtrail_run_task_retention_recovery"
+        )
+        evidence["control_plane"]["runtime_state_retained"] = False
+        recorded = self.record(evidence)
+        saved = recorded["measurement_window"]["checkpoint_history"][0]["evidence"]
+        self.assertIsNone(saved["runtime"]["private_ip"])
+        self.assertFalse(saved["control_plane"]["runtime_state_retained"])
+
+    def test_rejects_retention_source_and_private_ip_contradictions(self) -> None:
+        missing_retained_ip = checkpoint_evidence()
+        missing_retained_ip["runtime"]["private_ip"] = None
+        with self.assertRaisesRegex(CheckpointRecordingError, "private IP"):
+            self.record(missing_retained_ip)
+
+        invented_expired_ip = checkpoint_evidence()
+        invented_expired_ip["runtime"]["identity_source"] = (
+            "cloudtrail_run_task_retention_recovery"
+        )
+        invented_expired_ip["control_plane"]["runtime_state_retained"] = False
+        with self.assertRaisesRegex(CheckpointRecordingError, "must be null"):
+            self.record(invented_expired_ip)
+
+        unverified_scheduler = checkpoint_evidence()
+        unverified_scheduler["control_plane"]["scheduler_run_task_verified"] = False
+        with self.assertRaisesRegex(CheckpointRecordingError, "RunTask"):
+            self.record(unverified_scheduler)
+
+    def test_accepts_legacy_schema_v1_evidence(self) -> None:
+        evidence = checkpoint_evidence()
+        evidence["schema_version"] = 1
+        evidence["runtime"].pop("identity_source")
+        evidence["control_plane"].pop("scheduler_run_task_verified")
+        evidence["control_plane"].pop("runtime_state_retained")
+        recorded = self.record(evidence)
+        self.assertEqual(
+            1,
+            recorded["measurement_window"]["checkpoint_history"][0]["evidence"][
+                "schema_version"
+            ],
+        )
 
     def test_rejects_tampered_history_and_non_independent_identity(self) -> None:
         recorded = self.record(checkpoint_evidence())

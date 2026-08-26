@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
+import os
 import pathlib
+import tempfile
 import textwrap
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -14,23 +20,36 @@ WORKFLOW = (
 ).read_text(encoding="utf-8")
 
 
+def inline_python_blocks() -> list[str]:
+    lines = WORKFLOW.splitlines()
+    blocks: list[str] = []
+    index = 0
+    while index < len(lines):
+        if "python - <<'PY'" not in lines[index]:
+            index += 1
+            continue
+        index += 1
+        body: list[str] = []
+        while index < len(lines) and lines[index].strip() != "PY":
+            body.append(lines[index])
+            index += 1
+        if index >= len(lines):
+            raise AssertionError("unterminated inline Python block")
+        blocks.append(textwrap.dedent("\n".join(body)))
+        index += 1
+    return blocks
+
+
+def inline_python_block_containing(marker: str) -> str:
+    matches = [source for source in inline_python_blocks() if marker in source]
+    if len(matches) != 1:
+        raise AssertionError(f"expected one inline Python block containing {marker!r}")
+    return matches[0]
+
+
 class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
     def test_every_inline_python_block_compiles(self) -> None:
-        lines = WORKFLOW.splitlines()
-        blocks: list[str] = []
-        index = 0
-        while index < len(lines):
-            if "python - <<'PY'" not in lines[index]:
-                index += 1
-                continue
-            index += 1
-            body: list[str] = []
-            while index < len(lines) and lines[index].strip() != "PY":
-                body.append(lines[index])
-                index += 1
-            self.assertLess(index, len(lines), "unterminated inline Python block")
-            blocks.append(textwrap.dedent("\n".join(body)))
-            index += 1
+        blocks = inline_python_blocks()
         self.assertGreaterEqual(len(blocks), 8)
         for block_index, source in enumerate(blocks):
             compile(source, f"checkpoint-workflow-inline-{block_index}.py", "exec")
@@ -68,6 +87,14 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             '--cluster "${RECONCILIATION_CLUSTER_ARN}"',
             "task.get('group') == os.environ['EXPECTED_SERVICE']",
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
+            "aws logs filter-log-events",
+            "aws cloudtrail lookup-events",
+            "expected one exact Scheduler CloudTrail RunTask event",
+            "cloudtrail_run_task_retention_recovery",
+            "RECONCILIATION_RUNTIME_IDENTITY_SOURCE",
+            "RECONCILIATION_RUNTIME_STATE_RETAINED",
+            "'scheduler_run_task_verified': True",
+            "'runtime_state_retained':",
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
             "scheduled reconciliation generated/published parity drift",
             "Production reconciliation alarm gate failed",
@@ -77,6 +104,116 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, WORKFLOW)
         self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
+        self.assertNotIn("aws ecs list-tasks", WORKFLOW)
+
+    def test_expired_runtime_state_is_not_misrepresented_as_a_live_ip_gate(self) -> None:
+        for marker in (
+            "'schema_version': 2",
+            "'private_ip': os.environ['RECONCILIATION_PRIVATE_IP'] or None",
+            "'identity_source': os.environ['RECONCILIATION_RUNTIME_IDENTITY_SOURCE']",
+            "runtime_source = 'cloudtrail_run_task_retention_recovery'",
+            "runtime_retained = False",
+            "runtime_source = 'ecs_stopped_task'",
+            "runtime_retained = True",
+        ):
+            self.assertIn(marker, WORKFLOW)
+        self.assertNotIn(
+            "detail_value(cloudtrail_task, 'privateIPv4Address')", WORKFLOW
+        )
+
+    def test_runtime_selection_handles_retained_and_expired_ecs_state(self) -> None:
+        source = inline_python_block_containing(
+            "runtime_source = 'cloudtrail_run_task_retention_recovery'"
+        )
+        task_id = "b" * 32
+        task_definition_arn = (
+            "arn:aws:ecs:eu-central-1:919341186960:task-definition/"
+            "vevo-growthbook-reconcile-production:3"
+        )
+        task_arn = (
+            "arn:aws:ecs:eu-central-1:919341186960:task/cluster/" + task_id
+        )
+        digest = "sha256:" + "c" * 64
+        cloudtrail = {
+            "responseElements": {
+                "tasks": [
+                    {
+                        "taskArn": task_arn,
+                        "taskDefinitionArn": task_definition_arn,
+                        "group": "vevo-growthbook-reconcile-production",
+                    }
+                ]
+            }
+        }
+        base_env = {
+            "CHECKPOINT_START_UTC": "2026-09-02T01:45:00Z",
+            "CHECKPOINT_END_UTC": "2026-09-02T03:45:00Z",
+            "RECONCILIATION_TASK_ID": task_id,
+            "RECONCILIATION_TASK_DEFINITION_ARN": task_definition_arn,
+            "EXPECTED_SERVICE": "vevo-growthbook-reconcile-production",
+            "RECONCILIATION_IMAGE_DIGEST": digest,
+            "RECONCILIATION_LOG_STREAM": f"service/container/{task_id}",
+        }
+
+        fixtures = (
+            (
+                {"tasks": []},
+                (
+                    "RECONCILIATION_PRIVATE_IP=",
+                    "RECONCILIATION_RUNTIME_IDENTITY_SOURCE="
+                    "cloudtrail_run_task_retention_recovery",
+                    "RECONCILIATION_RUNTIME_STATE_RETAINED=false",
+                ),
+            ),
+            (
+                {
+                    "tasks": [
+                        {
+                            "taskArn": task_arn,
+                            "taskDefinitionArn": task_definition_arn,
+                            "group": "vevo-growthbook-reconcile-production",
+                            "startedAt": "2026-09-02T01:45:02Z",
+                            "attachments": [
+                                {
+                                    "details": [
+                                        {
+                                            "name": "privateIPv4Address",
+                                            "value": "172.31.10.20",
+                                        }
+                                    ]
+                                }
+                            ],
+                            "containers": [
+                                {"exitCode": 0, "imageDigest": digest}
+                            ],
+                        }
+                    ]
+                },
+                (
+                    "RECONCILIATION_PRIVATE_IP=172.31.10.20",
+                    "RECONCILIATION_RUNTIME_IDENTITY_SOURCE=ecs_stopped_task",
+                    "RECONCILIATION_RUNTIME_STATE_RETAINED=true",
+                ),
+            ),
+        )
+        for tasks, expected_lines in fixtures:
+            with self.subTest(runtime_retained=bool(tasks["tasks"])):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    root = pathlib.Path(temporary_directory)
+                    (root / "tasks.json").write_text(
+                        json.dumps(tasks), encoding="utf-8"
+                    )
+                    (root / "selected-cloudtrail-event.json").write_text(
+                        json.dumps(cloudtrail), encoding="utf-8"
+                    )
+                    output = io.StringIO()
+                    env = {**base_env, "TEMP_CHECKPOINT_DIR": temporary_directory}
+                    with mock.patch.dict(os.environ, env, clear=False):
+                        with contextlib.redirect_stdout(output):
+                            exec(compile(source, "checkpoint-runtime-selection.py", "exec"))
+                    actual_lines = output.getvalue().splitlines()
+                    for expected_line in expected_lines:
+                        self.assertIn(expected_line, actual_lines)
 
     def test_population_query_returns_only_one_outcome_blind_aggregate(self) -> None:
         query_start = WORKFLOW.index("SELECT COUNT(DISTINCT device_id) AS eligible_devices")

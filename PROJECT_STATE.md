@@ -5692,3 +5692,29 @@ What is verified:
 Next exact step:
 
 - Continue daily result-blind infrastructure monitoring, but do not inspect population, arms, outcomes, Meta dimensions, conversions, revenue, CM1, performance, or any experiment result before the pre-registered first checkpoint at `2026-09-02 03:45 Europe/Bratislava`.
+
+## 2026-08-26 — VEVO outcome-blind checkpoint made ECS-retention-safe
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-retention`
+
+What changed:
+
+- Pre-checkpoint review found that `check-vevo-growthbook-production-aa-window.yml` still depended on the short-lived ECS `STOPPED` task listing and would likely fail when the 09:00 coordinator ran after the 03:45 reconciliation.
+- The read-only checkpoint now selects the exact reconciliation through a bounded CloudWatch success marker plus the Scheduler-authenticated CloudTrail `RunTask` event, then prefers retained ECS state when available.
+- Canonical checkpoint evidence schema `2` records `identity_source`, `scheduler_run_task_verified`, and `runtime_state_retained`. If ECS state has expired, the artifact records `cloudtrail_run_task_retention_recovery`, `runtime_state_retained=false`, and `private_ip=null` instead of inventing or treating a historical IP as live.
+- The null-IP retention fallback is valid only for this read-only outcome-blind checkpoint. It never satisfies the live private-IP plus localhost-marker hard gate required before infrastructure mutation.
+- The offline validator and recorder retain legacy schema-`1` compatibility while enforcing the exact schema-`2` source/IP/retention relationships.
+
+What is verified:
+
+- `769` Python tests passed, including behavior tests for both retained and expired ECS task state; `9` storefront JavaScript tests passed.
+- Focused Ruff checks, Python compilation, YAML parsing, workspace/measurement-window/security validators, and `git diff --check` passed.
+- The workflow still permits only one cumulative eligible-device aggregate query, never reads arms or outcomes, uploads one canonical sanitized artifact, and deletes raw AWS/log/query files before upload.
+- No checkpoint workflow was dispatched early. No population, eligible count, arm, split, SRM, conversion, revenue, CM1, Meta dimension, performance, or other experiment result was read.
+- No AWS resource, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, product, stock, cart, checkout, payment, or order mutation occurred. No local runtime process was started.
+
+Next exact step:
+
+- Merge the retention-safe checkpoint workflow after CI, continue daily result-blind monitoring, and dispatch the outcome-blind checkpoint only at or after `2026-09-02 03:45 Europe/Bratislava` from exact `main` with `confirm_checkpoint=true`.
