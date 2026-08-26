@@ -5855,3 +5855,34 @@ Known issues:
 Next exact step:
 
 - Continue daily result-blind infrastructure monitoring. Before `2026-09-02 03:45 Europe/Bratislava`, accept only infrastructure-health evidence and scheduled checkpoint skip behavior. At the first due boundary, consume the earliest successful exact-main scheduled checkpoint artifact without dispatching a duplicate, then record it through the offline recorder and reviewed PR.
+
+## 2026-08-26 — VEVO future CTA checkpoint capture made PC-independent
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-cloud-checkpoints`
+
+What changed:
+
+- The future protected CTA assignment checkpoint workflow now schedules both UTC alternatives of `04:30 Europe/Bratislava`, after the frozen daily `03:45` reconciliation boundary.
+- Its pre-AWS gate admits only the correct DST slot and skips before credentials when the CTA window is closed, before the first due date, on the wrong DST slot, after the day-42 maximum, or for an index already recorded on `main`.
+- Scheduled checkpoint identity is derived from the frozen local calendar date instead of Git history, preserving exact daily artifacts while the desktop PC is off or earlier artifacts still await offline recording.
+- Manual `confirm_checkpoint=true` remains an in-window fallback for the next missing index. Every credential, AWS, aggregate-query, evidence, cleanup, upload, and summary step is conditioned on `RUN_CHECKPOINT=true`.
+- The single canonical identity-free checkpoint artifact is retained for 90 days. CTA activation, assignment stop, winner evaluation, GrowthBook Pro purchase, Meta Ads changes, and all external or commerce mutations remain separate reviewed gates.
+- The activation runbook, GrowthBook plan/workspace documentation, central security markers, and behavior tests now describe and enforce the same cloud-capture contract.
+
+What is verified:
+
+- The checked-in CTA window remains `waiting_for_verified_cta_start` with `read_only_checkpoint_allowed=false`; scheduled runs therefore stop before AWS and cannot query population now.
+- The versioned host boundary remains instance `N/A:Fargate`, private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, runtime path `/app`; this repository-only change does not deploy or mutate that service.
+- `788` Python tests and all `9` storefront JavaScript tests passed. Focused CTA checkpoint tests cover closed, pre-due, wrong-DST, resolved, already-recorded, calendar-derived catch-up, winter-slot, post-day-42, manual-index, daily-gate, and post-gate step conditions.
+- CTA measurement-window/workspace/Pro/completion validators, central security CI, focused Ruff, Python compilation, YAML parsing, and `git diff --check` passed.
+- No workflow was dispatched, no AWS query or deploy ran, no A/A or CTA population, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read. No browser/UI action or local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Known issues:
+
+- None introduced. GitHub scheduled execution remains subject to GitHub availability; the explicit same-window manual fallback remains available after a verified CTA start.
+
+Next exact step:
+
+- Merge this future CTA cloud-capture preparation after CI, while keeping the CTA lifecycle closed. Before `2026-09-02 03:45 Europe/Bratislava`, continue only result-blind A/A infrastructure monitoring; at the first A/A due boundary, consume the earliest successful exact-main scheduled artifact without dispatching a duplicate and record it through the offline recorder and reviewed PR.
