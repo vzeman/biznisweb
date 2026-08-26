@@ -34,6 +34,15 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         self.contract = window.contract
         self.reconciliation = window.reconciliation
         self.workspace = window.running_workspace
+        self.registry = load("growthbook_collector/experiments.json")
+        self.registry["environments"]["production"] = {
+            recorder.EXPERIMENT_ID: copy.deepcopy(
+                self.registry["environments"]["preview"][recorder.EXPERIMENT_ID]
+            )
+        }
+        self.registry_hash = self.activation["source_bindings"][
+            "collector_registry"
+        ]["sha256"]
         self.measurement = window.record(
             window.running,
             window.evidence(
@@ -194,10 +203,38 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             self.lifecycle_observation,
             self.reconciliation,
             self.workspace,
+            self.registry,
             self.final_snapshot,
             self.start_observation,
             selected,
             stop_observation_sha256=digest,
+            registry_sha256=self.registry_hash,
+            source_hashes=self.source_hashes,
+        )
+
+    def _assert_ready(
+        self,
+        *,
+        workspace: dict | None = None,
+        registry: dict | None = None,
+        registry_sha256: str | None = None,
+        final_snapshot: dict | None = None,
+    ) -> None:
+        recorder.validate_stop_readiness(
+            self.completion,
+            self.activation,
+            self.measurement,
+            self.safety,
+            self.sample,
+            self.contract,
+            self.lifecycle,
+            self.lifecycle_observation,
+            self.reconciliation,
+            workspace or self.workspace,
+            final_snapshot or self.final_snapshot,
+            self.start_observation,
+            registry or self.registry,
+            registry_sha256=registry_sha256 or self.registry_hash,
             source_hashes=self.source_hashes,
         )
 
@@ -213,6 +250,37 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         )
         self.assertEqual(recorder.WAITING, self.completion["status"])
         self.assertFalse(any(self.completion["release_boundaries"].values()))
+
+    def test_stop_readiness_revalidates_exact_running_handoff(self) -> None:
+        self._assert_ready()
+        drifted = copy.deepcopy(self.workspace)
+        experiments = {row["tracking_key"]: row for row in drifted["experiments"]}
+        experiments["vevo-sk-aa-001"]["production_allocation_percent"] = 100
+        with self.assertRaisesRegex(
+            recorder.CtaCompletionRecordingError,
+            "A/A allocation is nonzero in CTA handoff",
+        ):
+            self._assert_ready(workspace=drifted)
+
+    def test_stop_readiness_rejects_registry_or_final_look_drift(self) -> None:
+        with self.assertRaisesRegex(
+            recorder.CtaCompletionRecordingError,
+            "collector registry changed after start",
+        ):
+            self._assert_ready(registry_sha256="0" * 64)
+        opened = copy.deepcopy(self.final_snapshot)
+        opened["status"] = "followup_pending_final_look_locked_until_due"
+        with self.assertRaisesRegex(
+            recorder.CtaCompletionRecordingError,
+            "CTA final-look gate is invalid",
+        ):
+            self._assert_ready(final_snapshot=opened)
+
+    def test_assert_stop_ready_cli_needs_no_outputs_or_stop_observation(self) -> None:
+        args = recorder._parser().parse_args(["assert-stop-ready"])
+        self.assertEqual("assert-stop-ready", args.command)
+        self.assertIsNone(args.stop_observation_sha256)
+        self.assertIsNone(args.completion_output)
 
     def test_stop_records_zero_allocation_and_exact_followup(self) -> None:
         (
@@ -321,10 +389,12 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             self.lifecycle_observation,
             safety_case.reconciliation,
             self.workspace,
+            self.registry,
             self.final_snapshot,
             safety_case.start_observation,
             stop_observation,
             stop_observation_sha256=digest,
+            registry_sha256=self.registry_hash,
             source_hashes=source_hashes,
         )
         self.assertEqual(SAFETY_STOPPED, stopped_safety["status"])
@@ -367,10 +437,12 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
                 self.lifecycle_observation,
                 self.reconciliation,
                 self.workspace,
+                self.registry,
                 self.final_snapshot,
                 self.start_observation,
                 self.stop_observation,
                 stop_observation_sha256=self.stop_hash,
+                registry_sha256=self.registry_hash,
                 source_hashes=self.source_hashes,
             )
 

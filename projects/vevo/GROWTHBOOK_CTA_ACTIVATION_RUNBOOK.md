@@ -416,11 +416,42 @@ SHA-256, prove zero Production allocation/rules, an advanced feature revision,
 no active Production experiment, unchanged desktop/mobile commerce behavior,
 and at least 300 seconds with zero new CTA assignment or exposure.
 
+Immediately before that manual GrowthBook action, synchronize the exact
+checked-out `main`, require an empty worktree, and run the read-only pre-action
+assertion. It revalidates the resolved outcome-blind or safety stop gate, the
+hash-bound running activation and start observation, the CTA-only collector
+registry, the exact Pro workspace, A/A stopped at `0%`, CTA as the only active
+Production experiment at `100%`, and the still-closed one-look outcome gate:
+
+```text
+git fetch --all --prune
+git checkout main
+git pull --rebase
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git rev-parse origin/main
+python scripts/validate_growthbook_cta_completion.py
+python scripts/validate_growthbook_cta_measurement_window.py
+python scripts/validate_growthbook_cta_safety_monitoring.py
+python scripts/validate_growthbook_workspace.py
+python scripts/validate_growthbook_cta_final_snapshot.py
+python scripts/record_growthbook_cta_completion.py assert-stop-ready
+```
+
+Continue only when the branch is exactly `main`, status output is empty, both
+commit values are identical, every validator passes, and the assertion prints
+`VEVO_CTA_STOP_READY`. Any missing source, unrelated active experiment,
+nonzero A/A allocation, registry/GTM/workspace drift, closed review, automatic
+mutation boundary, or prematurely opened final look fails closed. Repeat this
+exact-main assertion after any later source or UI change; never use a prior
+successful output as authorization.
+
 Independently hash that canonical readback, then record all versioned stopped
 states in one reviewed branch:
 
 ```text
-python scripts/record_growthbook_cta_completion.py --stop-observation projects/vevo/growthbook_cta_assignment_stop_observation.json --stop-observation-sha256 <independent-sha256> --completion-output projects/vevo/growthbook_cta_completion.json --activation-output projects/vevo/growthbook_cta_activation.json --measurement-output projects/vevo/growthbook_cta_measurement_window.json --safety-output projects/vevo/growthbook_cta_safety_monitoring.json --workspace-output projects/vevo/growthbook_workspace.json --final-snapshot-output projects/vevo/growthbook_cta_final_snapshot.json
+python scripts/record_growthbook_cta_completion.py record-stop --stop-observation projects/vevo/growthbook_cta_assignment_stop_observation.json --stop-observation-sha256 <independent-sha256> --completion-output projects/vevo/growthbook_cta_completion.json --activation-output projects/vevo/growthbook_cta_activation.json --measurement-output projects/vevo/growthbook_cta_measurement_window.json --safety-output projects/vevo/growthbook_cta_safety_monitoring.json --workspace-output projects/vevo/growthbook_workspace.json --final-snapshot-output projects/vevo/growthbook_cta_final_snapshot.json
 python scripts/validate_growthbook_cta_completion.py
 python scripts/validate_growthbook_cta_final_snapshot.py
 python scripts/validate_growthbook_cta_measurement_window.py
