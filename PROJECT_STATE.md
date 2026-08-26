@@ -6298,3 +6298,29 @@ Known issues:
 Next exact step:
 
 - Merge this lifecycle change after CI, then implement the protected main-only safety collection workflow with the exact Production Fargate identity/localhost hard gate, aggregate identity-free safety evidence, independent decision/provenance hashes, and no primary/business/Meta/winner or mutation access. Before `2026-09-02 03:45 Europe/Bratislava`, continue to avoid A/A population/results and do not dispatch result workflows.
+
+## 2026-08-26 — VEVO CTA safety stop lifecycle merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-safety-stop-lifecycle-state`
+
+What changed:
+
+- PR `#450` merged the hash/run/commit-bound CTA safety recorder and reviewed manual-stop/follow-up integration into `main` as `f9159bee557b4041703cbc25b06868c89b87e6fa`.
+- This handoff records the completed merge and advances the next exact step to the separate protected collection workflow. It introduces no runtime, experiment, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#450` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- `origin/main` and this state branch both read back exact merge commit `f9159bee557b4041703cbc25b06868c89b87e6fa` before this handoff edit.
+- The merged checked-in manifests remain fail-closed before CTA start. A future verified `STOP_REQUIRED` can open only the same reviewed manual CTA stop and 14-day follow-up as the outcome-blind window; it cannot stop assignment automatically or call a winner.
+- No A/A population or result was read, no result or safety workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The protected PC-independent safety checkpoint collection workflow is still missing. All three collection/recording gates remain false, so operational early-safety monitoring is not launch-ready.
+
+Next exact step:
+
+- Implement the protected main-only safety collection workflow with the exact Production Fargate identity/localhost hard gate, aggregate identity-free performance/client-error and commerce evidence, independently hash-bound decision/provenance, and no primary/business/Meta/winner or mutation access. Keep the A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava`.
