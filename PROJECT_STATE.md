@@ -5743,3 +5743,29 @@ What is verified:
 Next exact step:
 
 - Merge the CTA retention-safe preparation after CI; keep the CTA lifecycle closed, continue daily result-blind A/A monitoring, and do not dispatch the A/A checkpoint before `2026-09-02 03:45 Europe/Bratislava`.
+
+## 2026-08-26 — VEVO protected CTA final look made ECS-retention-safe
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-final-retention`
+
+What changed:
+
+- The future one-look CTA final-snapshot workflow no longer enumerates short-lived ECS `STOPPED` history to find its latest post-due Production reconciliation.
+- It now selects the latest exact success from a bounded CloudWatch window, binds the task ID to one Scheduler-authenticated CloudTrail `RunTask`, verifies the exact cluster/group/task definition and immutable image, and rejects any failure marker at or after the selected success.
+- Retained ECS state still supplies and validates the historical task IP when available. After expiry the pre-query context records `cloudtrail_run_task_retention_recovery`, `runtime-retained=false`, and `private-ip=expired` without claiming a live hard gate.
+- The separate newly launched diagnostic Fargate task remains mandatory: only its exact `172.31.0.0/16` private IP plus direct localhost health and `/app` runtime markers can open the single aggregate Athena outcome query.
+- Security CI, behavioral tests, the activation runbook, the GrowthBook plan, and the workspace handoff now enforce and document this separation.
+
+What is verified:
+
+- PR `#429` merged as `796e2c1897bf9c071f527a8b4e5e874f33c6a388`; `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` all passed.
+- `776` Python tests passed, including retained and expired ECS-state execution of the exact inline runtime-selection block; `9` storefront JavaScript tests passed.
+- Focused CTA final builder/recorder/workflow tests, GrowthBook completion/measurement/final/workspace validators, security CI, Ruff, Python compilation, YAML parsing, and `git diff --check` passed.
+- The workflow still has exactly one diagnostic `aws ecs run-task`, exactly one aggregate Athena start, and one artifact bundle containing only the canonical identity-free snapshot and offline decision. It has no stopped-task listing, deploy path, automatic winner application, or GrowthBook/GTM/Meta Ads/BiznisWeb/commerce mutation path.
+- No workflow was dispatched, no AWS task or query ran, and no A/A/CTA population, arm, SRM, conversion, revenue, CM1, Meta-dimension, performance, or result was read. No production state changed and no local runtime process was started.
+
+Next exact step:
+
+- Continue cloud-based daily result-blind infrastructure monitoring. Do not inspect population, arms, outcomes, Meta dimensions, conversions, revenue, CM1, performance, or any experiment result before the pre-registered first A/A checkpoint at `2026-09-02 03:45 Europe/Bratislava`; dispatch the protected outcome-blind checkpoint only at or after that gate from exact `main` with `confirm_checkpoint=true`.
