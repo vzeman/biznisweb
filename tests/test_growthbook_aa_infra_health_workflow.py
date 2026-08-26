@@ -83,6 +83,26 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             self.assertIn(marker, WORKFLOW)
         self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
 
+    def test_recovers_exact_runtime_identity_after_stopped_task_retention_expires(self) -> None:
+        for marker in (
+            "aws logs filter-log-events",
+            "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
+            "GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:",
+            "aws cloudtrail lookup-events",
+            "AttributeKey=EventName,AttributeValue=RunTask",
+            "identity.get('invokedBy') == 'scheduler.amazonaws.com'",
+            "RECONCILIATION_SCHEDULER_ROLE_ARN",
+            "selected-cloudtrail-event.json",
+            "cloudtrail_run_task_retention_recovery",
+            "privateIPv4Address",
+        ):
+            self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("aws ecs list-tasks", WORKFLOW)
+        self.assertLess(
+            WORKFLOW.index("aws logs filter-log-events"),
+            WORKFLOW.index("aws ecs describe-tasks"),
+        )
+
     def test_contains_no_population_outcome_or_data_query(self) -> None:
         lowered = WORKFLOW.lower()
         for forbidden in (

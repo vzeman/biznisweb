@@ -96,7 +96,13 @@ Before the first natural reconciliation is due, the workflow verifies only the
 stacks, schedule, task definition/image inherited from the hash-bound localhost
 gate, alarms, empty DLQ, and source schedule. After a natural run is due, it
 additionally binds the one exact successful Fargate task, current private IP,
-success-marker hash, and generated/published parity hash. It performs no
+success-marker hash, and generated/published parity hash. Because GitHub
+scheduled workflows can start after ECS has expired a short-lived stopped-task
+record, the monitor discovers the exact task from the bounded CloudWatch
+success marker and Scheduler-authenticated CloudTrail `RunTask` event first.
+It prefers retained ECS state and may recover the original private IP from the
+same exact CloudTrail response only when the task ID, task definition, group,
+Scheduler role, time window, marker, and VPC range all match. It performs no
 Athena, S3 data, GrowthBook, Meta, GTM, or BiznisWeb request and emits no row
 count.
 

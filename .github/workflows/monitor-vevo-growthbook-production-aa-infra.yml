@@ -246,6 +246,7 @@ jobs:
               'RECONCILIATION_CLUSTER_ARN': reconciliation_parameters['ClusterArn'],
               'RECONCILIATION_TASK_DEFINITION_ARN': reconciliation_outputs['TargetTaskDefinitionArn'],
               'RECONCILIATION_CONTAINER_NAME': override['name'],
+              'RECONCILIATION_SCHEDULER_ROLE_ARN': target['RoleArn'],
               'SOURCE_TASK_DEFINITION': expected_source.rsplit('/', 1)[-1],
           }
           for key, value in values.items():
@@ -321,58 +322,184 @@ jobs:
         if: ${{ env.RUN_INFRA_HEALTH == 'true' && env.HEALTH_PHASE == 'natural_reconciliation_verified' }}
         run: |
           set -euo pipefail
-          aws ecs list-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --family "${EXPECTED_SERVICE}" --desired-status STOPPED --max-results 100 --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/task-list.json"
-          python - <<'PY' > "${TEMP_HEALTH_DIR}/task-arns.txt"
+          python - <<'PY' > "${TEMP_HEALTH_DIR}/natural-window.env"
+          import os
+          from datetime import datetime, timedelta, timezone
+
+          lower = datetime.fromisoformat(os.environ['CHECKED_DUE_LOCAL']).astimezone(timezone.utc)
+          upper = lower + timedelta(hours=2)
+          values = {
+              'NATURAL_START_UTC': lower.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'NATURAL_END_UTC': upper.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'NATURAL_START_MS': str(int(lower.timestamp() * 1000)),
+              'NATURAL_END_MS': str(int(upper.timestamp() * 1000)),
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          set -a
+          source "${TEMP_HEALTH_DIR}/natural-window.env"
+          set +a
+          aws logs filter-log-events \
+            --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:"' \
+            --start-time "${NATURAL_START_MS}" \
+            --end-time "${NATURAL_END_MS}" \
+            --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/success-events.json"
+          aws logs filter-log-events \
+            --log-group-name "${RECONCILIATION_LOG_GROUP}" \
+            --filter-pattern '"GROWTHBOOK_SCHEDULED_RECONCILIATION_FAILURE:"' \
+            --start-time "${NATURAL_START_MS}" \
+            --end-time "${NATURAL_END_MS}" \
+            --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/failure-events.json"
+          aws cloudtrail lookup-events \
+            --lookup-attributes AttributeKey=EventName,AttributeValue=RunTask \
+            --start-time "${NATURAL_START_UTC}" \
+            --end-time "${NATURAL_END_UTC}" \
+            --max-items 500 \
+            --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/cloudtrail.json"
+          python - <<'PY' > "${TEMP_HEALTH_DIR}/selected-marker.env"
           import json
           import os
-          tasks = json.load(open(f"{os.environ['TEMP_HEALTH_DIR']}/task-list.json", encoding='utf-8')).get('taskArns') or []
-          if not tasks:
-              raise SystemExit('scheduled reconciliation task list is empty')
-          print(' '.join(tasks))
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ['TEMP_HEALTH_DIR'])
+          successes = json.load(open(root / 'success-events.json', encoding='utf-8')).get('events') or []
+          failures = json.load(open(root / 'failure-events.json', encoding='utf-8')).get('events') or []
+          if failures or len(successes) != 1:
+              raise SystemExit(
+                  f'expected one natural success marker and zero failure markers, found {len(successes)}/{len(failures)}'
+              )
+          stream = str(successes[0].get('logStreamName') or '')
+          task_id = stream.rsplit('/', 1)[-1]
+          if re.fullmatch(r'[0-9a-f]{32}', task_id) is None:
+              raise SystemExit('natural success-marker task ID is invalid')
+
+          matching = []
+          for row in json.load(open(root / 'cloudtrail.json', encoding='utf-8')).get('Events') or []:
+              raw = row.get('CloudTrailEvent')
+              if not isinstance(raw, str):
+                  continue
+              try:
+                  detail = json.loads(raw)
+              except json.JSONDecodeError:
+                  continue
+              identity = detail.get('userIdentity') or {}
+              issuer = ((identity.get('sessionContext') or {}).get('sessionIssuer') or {})
+              request = detail.get('requestParameters') or {}
+              requested_definition = str(request.get('taskDefinition') or '')
+              serialized = json.dumps(detail, sort_keys=True, separators=(',', ':'))
+              if (
+                  detail.get('eventSource') == 'ecs.amazonaws.com'
+                  and detail.get('eventName') == 'RunTask'
+                  and request.get('group') == os.environ['EXPECTED_SERVICE']
+                  and requested_definition in {
+                      os.environ['RECONCILIATION_TASK_DEFINITION_ARN'],
+                      os.environ['RECONCILIATION_TASK_DEFINITION_ARN'].rsplit('/', 1)[-1],
+                  }
+                  and (
+                      identity.get('invokedBy') == 'scheduler.amazonaws.com'
+                      or issuer.get('arn') == os.environ['RECONCILIATION_SCHEDULER_ROLE_ARN']
+                  )
+                  and task_id in serialized
+              ):
+                  matching.append(detail)
+          if len(matching) != 1:
+              raise SystemExit(f'expected one exact Scheduler CloudTrail RunTask event, found {len(matching)}')
+          (root / 'selected-cloudtrail-event.json').write_text(
+              json.dumps(matching[0], sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          print(f'RECONCILIATION_TASK_ID={task_id}')
+          print(f'RECONCILIATION_LOG_STREAM={stream}')
           PY
-          read -r -a TASK_ARNS < "${TEMP_HEALTH_DIR}/task-arns.txt"
-          aws ecs describe-tasks --cluster "${RECONCILIATION_CLUSTER_ARN}" --tasks "${TASK_ARNS[@]}" --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/tasks.json"
+          set -a
+          source "${TEMP_HEALTH_DIR}/selected-marker.env"
+          set +a
+          aws ecs describe-tasks \
+            --cluster "${RECONCILIATION_CLUSTER_ARN}" \
+            --tasks "${RECONCILIATION_TASK_ID}" \
+            --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/tasks.json"
           python - <<'PY' > "${TEMP_HEALTH_DIR}/selected-task.env"
           import ipaddress
           import json
           import os
-          from datetime import datetime, timedelta
+          from datetime import datetime
           from pathlib import Path
 
           root = Path(os.environ['TEMP_HEALTH_DIR'])
           lower = datetime.fromisoformat(os.environ['CHECKED_DUE_LOCAL']).timestamp()
-          upper = lower + timedelta(hours=2).total_seconds()
-          candidates = []
+          upper = datetime.fromisoformat(os.environ['NATURAL_END_UTC'].replace('Z', '+00:00')).timestamp()
+          exact_task = None
           for task in json.load(open(root / 'tasks.json', encoding='utf-8')).get('tasks') or []:
               started_at = task.get('startedAt')
               started_epoch = datetime.fromisoformat(started_at.replace('Z', '+00:00')).timestamp() if started_at else -1
-              containers = task.get('containers') or []
               if (
-                  task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
+                  task.get('taskArn', '').rsplit('/', 1)[-1] == os.environ['RECONCILIATION_TASK_ID']
+                  and task.get('taskDefinitionArn') == os.environ['RECONCILIATION_TASK_DEFINITION_ARN']
                   and task.get('group') == os.environ['EXPECTED_SERVICE']
                   and lower <= started_epoch < upper
-                  and len(containers) == 1
-                  and containers[0].get('exitCode') == 0
               ):
-                  candidates.append(task)
-          if len(candidates) != 1:
-              raise SystemExit(f'expected one successful scheduled reconciliation task, found {len(candidates)}')
-          task = candidates[0]
-          container = task['containers'][0]
-          details = [row for attachment in task.get('attachments') or [] for row in attachment.get('details') or []]
-          private_ip_text = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
+                  exact_task = task
+
+          cloudtrail = json.load(open(root / 'selected-cloudtrail-event.json', encoding='utf-8'))
+          response_tasks = (cloudtrail.get('responseElements') or {}).get('tasks') or []
+          cloudtrail_task = next(
+              (
+                  task for task in response_tasks
+                  if str(task.get('taskArn') or '').rsplit('/', 1)[-1]
+                  == os.environ['RECONCILIATION_TASK_ID']
+              ),
+              None,
+          )
+
+          def detail_value(task, expected_name):
+              if not isinstance(task, dict):
+                  return ''
+              details = [
+                  row
+                  for attachment in task.get('attachments') or []
+                  for row in attachment.get('details') or []
+              ]
+              return str(next(
+                  (
+                      row.get('value') for row in details
+                      if str(row.get('name') or '').lower() == expected_name.lower()
+                  ),
+                  '',
+              ))
+
+          private_ip_text = detail_value(exact_task, 'privateIPv4Address')
+          runtime_source = 'ecs_stopped_task'
+          if not private_ip_text:
+              private_ip_text = detail_value(cloudtrail_task, 'privateIPv4Address')
+              runtime_source = 'cloudtrail_run_task_retention_recovery'
           private_ip = ipaddress.ip_address(private_ip_text)
           if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
               raise SystemExit('scheduled reconciliation task private IP drift')
-          if container.get('imageDigest') != os.environ['RECONCILIATION_IMAGE_DIGEST']:
-              raise SystemExit('scheduled reconciliation image differs from localhost-gated deploy evidence')
+
+          if exact_task is not None:
+              containers = exact_task.get('containers') or []
+              if len(containers) != 1 or containers[0].get('exitCode') != 0:
+                  raise SystemExit('retained scheduled reconciliation task did not stop successfully')
+              if containers[0].get('imageDigest') != os.environ['RECONCILIATION_IMAGE_DIGEST']:
+                  raise SystemExit('scheduled reconciliation image differs from localhost-gated deploy evidence')
+
+          if cloudtrail_task is not None:
+              cloudtrail_definition = str(cloudtrail_task.get('taskDefinitionArn') or '')
+              if cloudtrail_definition and cloudtrail_definition != os.environ['RECONCILIATION_TASK_DEFINITION_ARN']:
+                  raise SystemExit('CloudTrail scheduled reconciliation task-definition drift')
+              cloudtrail_group = str(cloudtrail_task.get('group') or '')
+              if cloudtrail_group and cloudtrail_group != os.environ['EXPECTED_SERVICE']:
+                  raise SystemExit('CloudTrail scheduled reconciliation group drift')
+
           values = {
-              'RECONCILIATION_TASK_ID': task['taskArn'].rsplit('/', 1)[-1],
+              'RECONCILIATION_TASK_ID': os.environ['RECONCILIATION_TASK_ID'],
               'RECONCILIATION_PRIVATE_IP': private_ip_text,
-              'RECONCILIATION_LOG_STREAM': container.get('logStreamName') or '',
+              'RECONCILIATION_LOG_STREAM': os.environ['RECONCILIATION_LOG_STREAM'],
+              'RECONCILIATION_RUNTIME_IDENTITY_SOURCE': runtime_source,
           }
-          if not values['RECONCILIATION_LOG_STREAM']:
-              raise SystemExit('scheduled reconciliation log stream missing')
           for key, value in values.items():
               print(f'{key}={value}')
           PY
@@ -380,7 +507,7 @@ jobs:
           set -a
           source "${TEMP_HEALTH_DIR}/selected-task.env"
           set +a
-          echo "PRODUCTION_AA_INFRA_RUNTIME_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}"
+          echo "PRODUCTION_AA_INFRA_RUNTIME_OK:instance-id=N/A:Fargate:private-ip=${RECONCILIATION_PRIVATE_IP}:service=${EXPECTED_SERVICE}:path=${EXPECTED_RUNTIME_PATH}:source=${RECONCILIATION_RUNTIME_IDENTITY_SOURCE}"
 
       - name: Verify natural success marker and generated published parity without emitting counts
         if: ${{ env.RUN_INFRA_HEALTH == 'true' && env.HEALTH_PHASE == 'natural_reconciliation_verified' }}
