@@ -16,6 +16,14 @@ on:
         options:
           - 'false'
           - 'true'
+      confirm_historical_backfill:
+        description: Type true only to reconstruct the exact next missing CTA checkpoint after its original daily gate closed
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: read
@@ -50,11 +58,13 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           CONFIRM_CHECKPOINT: ${{ inputs.confirm_checkpoint }}
+          CONFIRM_HISTORICAL_BACKFILL: ${{ inputs.confirm_historical_backfill }}
         run: |
           set -euo pipefail
           case "${EVENT_NAME}" in
             workflow_dispatch)
               [[ "${CONFIRM_CHECKPOINT}" == 'true' ]]
+              [[ "${CONFIRM_HISTORICAL_BACKFILL}" == 'false' || "${CONFIRM_HISTORICAL_BACKFILL}" == 'true' ]]
               ;;
             schedule)
               ;;
@@ -76,6 +86,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
+          CONFIRM_HISTORICAL_BACKFILL: ${{ inputs.confirm_historical_backfill }}
         run: |
           set -euo pipefail
           python -m unittest \
@@ -94,6 +105,9 @@ jobs:
           root = Path('.')
           manifest = json.loads(Path(os.environ['CTA_WINDOW_MANIFEST']).read_text(encoding='utf-8'))
           event_name = os.environ['EVENT_NAME']
+          historical_backfill_confirmed = (
+              os.environ.get('CONFIRM_HISTORICAL_BACKFILL') == 'true'
+          )
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
               handle.write('RUN_CHECKPOINT=false\n')
           if manifest.get('status') != 'cta_running_outcome_blind_checkpoint_pending':
@@ -189,8 +203,23 @@ jobs:
               raise SystemExit(f'unsupported CTA checkpoint event: {event_name}')
 
           candidate_through, due, _, _ = checkpoint_boundaries(expected, checkpoint_index)
-          if not due.astimezone(UTC) <= now < (due + timedelta(days=1)).astimezone(UTC):
-              raise SystemExit('outcome-blind CTA checkpoint is outside its daily gate')
+          due_utc = due.astimezone(UTC)
+          daily_gate_end_utc = (due + timedelta(days=1)).astimezone(UTC)
+          in_daily_gate = due_utc <= now < daily_gate_end_utc
+          if event_name == 'schedule':
+              if not in_daily_gate:
+                  raise SystemExit('scheduled outcome-blind CTA checkpoint is outside its daily gate')
+              collection_mode = 'scheduled_daily'
+          elif in_daily_gate:
+              if historical_backfill_confirmed:
+                  raise SystemExit('CTA historical backfill confirmation is invalid inside the original daily gate')
+              collection_mode = 'manual_same_window'
+          else:
+              if now < daily_gate_end_utc:
+                  raise SystemExit('manual outcome-blind CTA checkpoint is not due')
+              if not historical_backfill_confirmed:
+                  raise SystemExit('exact CTA historical backfill confirmation is required after the daily gate')
+              collection_mode = 'manual_historical_backfill'
           temporary = Path(os.environ['RUNNER_TEMP']) / f"vevo-cta-window-{os.environ['GITHUB_RUN_ID']}"
           temporary.mkdir(mode=0o700)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
@@ -200,8 +229,13 @@ jobs:
               handle.write(f'CANDIDATE_THROUGH_UTC={candidate_through.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")}\n')
               handle.write(f'CHECKPOINT_DUE_LOCAL={due.isoformat(timespec="seconds")}\n')
               handle.write(f'TARGET_TOTAL_SAMPLE={expected["target_total_sample"]}\n')
+              handle.write(f'CHECKPOINT_COLLECTION_MODE={collection_mode}\n')
               handle.write(f'TEMP_CHECKPOINT_DIR={temporary}\n')
-          print('PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:assignment=running:arm-read=false:outcome-read=false:mutation=none')
+          print(
+              'PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:'
+              f'collection={collection_mode}:assignment=running:'
+              'arm-read=false:outcome-read=false:mutation=none'
+          )
           PY
 
       - name: Configure AWS credentials for bounded read-only checkpoint
@@ -698,7 +732,7 @@ jobs:
           candidate_through = datetime.fromisoformat(os.environ['CANDIDATE_THROUGH_UTC'].replace('Z', '+00:00'))
           due = datetime.fromisoformat(os.environ['CHECKPOINT_DUE_LOCAL'])
           evidence = {
-              'schema_version': 2,
+              'schema_version': 3,
               'evidence_type': 'vevo_growthbook_cta_window_checkpoint',
               'status': 'passed',
               'experiment_id': 'vevo-sk-product-cta-color-001',
@@ -707,6 +741,7 @@ jobs:
               'workflow_run_id': os.environ['GITHUB_RUN_ID'],
               'main_commit': os.environ['GITHUB_SHA'],
               'observed_at_utc': datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'collection_mode': os.environ['CHECKPOINT_COLLECTION_MODE'],
               'window': {
                   'timezone': 'Europe/Bratislava',
                   'checkpoint_index': index,

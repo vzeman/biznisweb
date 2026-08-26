@@ -84,7 +84,9 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
             "start_observation": start_hash,
             "sample_plan": pretty_hash(self.sample),
             "decision_contract": hashlib.sha256(
-                (ROOT / "projects/vevo/growthbook_cta_decision_contract.json").read_bytes()
+                (
+                    ROOT / "projects/vevo/growthbook_cta_decision_contract.json"
+                ).read_bytes()
             ).hexdigest(),
             "reconciliation_evidence": hashlib.sha256(
                 (
@@ -130,9 +132,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
             "window": {
                 "timezone": "Europe/Bratislava",
                 "checkpoint_index": index,
-                "assignment_started_at_utc": self.expected[
-                    "assignment_started_at_utc"
-                ],
+                "assignment_started_at_utc": self.expected["assignment_started_at_utc"],
                 "candidate_through_utc": candidate.astimezone(UTC)
                 .isoformat(timespec="seconds")
                 .replace("+00:00", "Z"),
@@ -282,9 +282,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
         self.assertEqual(validator.RESOLVED, second["status"])
         self.assertTrue(second["assignment_stop"]["manual_review_allowed"])
         self.assertFalse(second["assignment_stop"]["automatic_stop_allowed"])
-        self.assertFalse(
-            second["release_boundaries"]["read_only_checkpoint_allowed"]
-        )
+        self.assertFalse(second["release_boundaries"]["read_only_checkpoint_allowed"])
         self.assertFalse(second["release_boundaries"]["outcome_metrics_read_allowed"])
         self.assertEqual(
             "target_total_sample_reached",
@@ -299,9 +297,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
             )
         state = self.record(
             state,
-            self.evidence(
-                29, 500, "open_manual_stop_review_maximum_duration_reached"
-            ),
+            self.evidence(29, 500, "open_manual_stop_review_maximum_duration_reached"),
         )
         self.assertEqual(validator.RESOLVED, state["status"])
         self.assertEqual(
@@ -319,9 +315,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
                     recorder.CtaCheckpointRecordingError, "forbidden population read"
                 ):
                     self.record(self.running, altered)
-        wrong = self.evidence(
-            1, 1000, "open_manual_stop_review_target_reached"
-        )
+        wrong = self.evidence(1, 1000, "open_manual_stop_review_target_reached")
         with self.assertRaisesRegex(
             recorder.CtaCheckpointRecordingError, "decision drift"
         ):
@@ -339,12 +333,50 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
         self.assertIsNone(saved["runtime"]["private_ip"])
         self.assertFalse(saved["control_plane"]["runtime_state_retained"])
 
+    def test_accepts_explicit_schema_v3_historical_backfill_for_next_missing_index(
+        self,
+    ) -> None:
+        evidence = self.evidence(1, 1000, "extend_one_full_local_day")
+        evidence["schema_version"] = 3
+        evidence["collection_mode"] = "manual_historical_backfill"
+        evidence["observed_at_utc"] = "2026-09-21T02:30:00Z"
+        recorded = self.record(self.running, evidence)
+        saved = recorded["measurement_window"]["checkpoint_history"][0]["evidence"]
+        self.assertEqual("manual_historical_backfill", saved["collection_mode"])
+        self.assertEqual(
+            "2026-09-18T22:00:00Z", saved["window"]["candidate_through_utc"]
+        )
+
+    def test_rejects_schema_v3_backfill_timing_and_mode_contradictions(self) -> None:
+        early_backfill = self.evidence(1, 1000, "extend_one_full_local_day")
+        early_backfill["schema_version"] = 3
+        early_backfill["collection_mode"] = "manual_historical_backfill"
+        with self.assertRaisesRegex(
+            recorder.CtaCheckpointRecordingError, "before its daily gate closed"
+        ):
+            self.record(self.running, early_backfill)
+
+        late_same_window = self.evidence(1, 1000, "extend_one_full_local_day")
+        late_same_window["schema_version"] = 3
+        late_same_window["collection_mode"] = "manual_same_window"
+        late_same_window["observed_at_utc"] = "2026-09-21T02:30:00Z"
+        with self.assertRaisesRegex(
+            recorder.CtaCheckpointRecordingError, "outside daily gate"
+        ):
+            self.record(self.running, late_same_window)
+
+        unknown_mode = self.evidence(1, 1000, "extend_one_full_local_day")
+        unknown_mode["schema_version"] = 3
+        unknown_mode["collection_mode"] = "operator_selected"
+        with self.assertRaisesRegex(
+            recorder.CtaCheckpointRecordingError, "collection mode drift"
+        ):
+            self.record(self.running, unknown_mode)
+
     def test_rejects_retention_source_and_private_ip_contradictions(self) -> None:
         missing_retained_ip = self.evidence(1, 1000, "extend_one_full_local_day")
         missing_retained_ip["runtime"]["private_ip"] = None
-        with self.assertRaisesRegex(
-            recorder.CtaCheckpointRecordingError, "IP invalid"
-        ):
+        with self.assertRaisesRegex(recorder.CtaCheckpointRecordingError, "IP invalid"):
             self.record(self.running, missing_retained_ip)
 
         invented_expired_ip = self.evidence(1, 1000, "extend_one_full_local_day")
@@ -359,9 +391,7 @@ class GrowthBookCtaWindowCheckpointTests(unittest.TestCase):
 
         unverified_scheduler = self.evidence(1, 1000, "extend_one_full_local_day")
         unverified_scheduler["control_plane"]["scheduler_run_task_verified"] = False
-        with self.assertRaisesRegex(
-            recorder.CtaCheckpointRecordingError, "RunTask"
-        ):
+        with self.assertRaisesRegex(recorder.CtaCheckpointRecordingError, "RunTask"):
             self.record(self.running, unverified_scheduler)
 
     def test_accepts_legacy_schema_v1_checkpoint(self) -> None:

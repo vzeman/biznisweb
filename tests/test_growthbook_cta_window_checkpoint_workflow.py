@@ -13,10 +13,7 @@ from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
-    ROOT
-    / ".github"
-    / "workflows"
-    / "check-vevo-growthbook-production-cta-window.yml"
+    ROOT / ".github" / "workflows" / "check-vevo-growthbook-production-cta-window.yml"
 ).read_text(encoding="utf-8")
 
 
@@ -57,6 +54,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
         running_window: bool = False,
         manifest_status: str | None = None,
         checkpoint_history: list[dict[str, object]] | None = None,
+        historical_backfill: str = "false",
     ) -> tuple[int | None, str, str]:
         source = inline_python_block_containing("expected_schedule =")
         source = source.replace(
@@ -86,8 +84,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             else:
                 manifest = json.loads(
                     (
-                        ROOT
-                        / "projects/vevo/growthbook_cta_measurement_window.json"
+                        ROOT / "projects/vevo/growthbook_cta_measurement_window.json"
                     ).read_text(encoding="utf-8")
                 )
                 files = {
@@ -101,7 +98,9 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             if manifest_status is not None:
                 manifest["status"] = manifest_status
             if checkpoint_history is not None:
-                manifest["measurement_window"]["checkpoint_history"] = checkpoint_history
+                manifest["measurement_window"]["checkpoint_history"] = (
+                    checkpoint_history
+                )
             for name, value in files.items():
                 (vevo / name).write_text(json.dumps(value), encoding="utf-8")
             manifest_path = vevo / "growthbook_cta_measurement_window.json"
@@ -111,11 +110,11 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             env = {
                 "CTA_WINDOW_MANIFEST": str(manifest_path),
                 "DEPLOY_EVIDENCE": str(
-                    vevo
-                    / "growthbook_production_reconciliation_deploy_evidence.json"
+                    vevo / "growthbook_production_reconciliation_deploy_evidence.json"
                 ),
                 "EVENT_NAME": event_name,
                 "EVENT_SCHEDULE": event_schedule,
+                "CONFIRM_HISTORICAL_BACKFILL": historical_backfill,
                 "TEST_NOW_UTC": now_utc,
                 "RUNNER_TEMP": str(temporary),
                 "GITHUB_RUN_ID": "52345678901",
@@ -146,6 +145,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_checkpoint:",
+            "confirm_historical_backfill:",
             "- cron: '30 2 * * *'",
             "- cron: '30 3 * * *'",
             "EVENT_NAME: ${{ github.event_name }}",
@@ -160,8 +160,9 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             "CTA assignment stop boundary opened before stopping rule",
             "A/A must remain stopped during CTA checkpointing",
             "CTA running Production allocation drift",
-            "outcome-blind CTA checkpoint is outside its daily gate",
-            "PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:assignment=running:arm-read=false:outcome-read=false:mutation=none",
+            "exact CTA historical backfill confirmation is required after the daily gate",
+            "PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:",
+            "collection={collection_mode}:assignment=running:",
             "uses: aws-actions/configure-aws-credentials@v6.1.0",
         ):
             self.assertIn(marker, WORKFLOW)
@@ -225,7 +226,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
         )
         self.assertIsNone(exit_code)
         self.assertIn(
-            "PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:assignment=running:arm-read=false:outcome-read=false:mutation=none",
+            "PRODUCTION_CTA_WINDOW_LOCAL_GATE_OK:collection=scheduled_daily:assignment=running:arm-read=false:outcome-read=false:mutation=none",
             output,
         )
         self.assertIn("RUN_CHECKPOINT=false\n", github_env)
@@ -240,9 +241,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             now_utc="2026-09-19T02:30:00Z",
             event_schedule="30 2 * * *",
             running_window=True,
-            checkpoint_history=[
-                {"evidence": {"window": {"checkpoint_index": 1}}}
-            ],
+            checkpoint_history=[{"evidence": {"window": {"checkpoint_index": 1}}}],
         )
         self.assertEqual(0, exit_code)
         self.assertIn("reason=already-recorded:aws=false", output)
@@ -258,7 +257,9 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
         self.assertIn("reason=after-maximum-due:aws=false", output)
         self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
 
-    def test_manual_gate_remains_next_history_index_and_exact_daily_window(self) -> None:
+    def test_manual_gate_remains_next_history_index_and_requires_explicit_late_backfill(
+        self,
+    ) -> None:
         exit_code, _, github_env = self.run_local_gate(
             event_name="workflow_dispatch",
             now_utc="2026-09-19T02:30:00Z",
@@ -266,10 +267,37 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
         )
         self.assertIsNone(exit_code)
         self.assertIn("CHECKPOINT_INDEX=1\n", github_env)
+        self.assertIn("CHECKPOINT_COLLECTION_MODE=manual_same_window\n", github_env)
         exit_code, _, github_env = self.run_local_gate(
             event_name="workflow_dispatch",
             now_utc="2026-09-21T02:30:00Z",
             running_window=True,
+        )
+        self.assertNotEqual(0, exit_code)
+        self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
+
+        exit_code, output, github_env = self.run_local_gate(
+            event_name="workflow_dispatch",
+            now_utc="2026-09-21T02:30:00Z",
+            running_window=True,
+            historical_backfill="true",
+        )
+        self.assertIsNone(exit_code)
+        self.assertIn("collection=manual_historical_backfill", output)
+        self.assertIn("CHECKPOINT_INDEX=1\n", github_env)
+        self.assertIn("CANDIDATE_THROUGH_UTC=2026-09-18T22:00:00Z\n", github_env)
+        self.assertIn(
+            "CHECKPOINT_COLLECTION_MODE=manual_historical_backfill\n", github_env
+        )
+
+    def test_manual_gate_rejects_backfill_confirmation_inside_original_window(
+        self,
+    ) -> None:
+        exit_code, _, github_env = self.run_local_gate(
+            event_name="workflow_dispatch",
+            now_utc="2026-09-19T02:30:00Z",
+            running_window=True,
+            historical_backfill="true",
         )
         self.assertNotEqual(0, exit_code)
         self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
@@ -335,7 +363,8 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
         self,
     ) -> None:
         for marker in (
-            "'schema_version': 2",
+            "'schema_version': 3",
+            "'collection_mode': os.environ['CHECKPOINT_COLLECTION_MODE']",
             "'private_ip': os.environ['RECONCILIATION_PRIVATE_IP'] or None",
             "'identity_source': os.environ['RECONCILIATION_RUNTIME_IDENTITY_SOURCE']",
             "runtime_source = 'cloudtrail_run_task_retention_recovery'",
@@ -354,9 +383,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
             "arn:aws:ecs:eu-central-1:919341186960:task-definition/"
             "vevo-growthbook-reconcile-production:3"
         )
-        task_arn = (
-            "arn:aws:ecs:eu-central-1:919341186960:task/cluster/" + task_id
-        )
+        task_arn = "arn:aws:ecs:eu-central-1:919341186960:task/cluster/" + task_id
         digest = "sha256:" + "c" * 64
         cloudtrail = {
             "responseElements": {
@@ -406,9 +433,7 @@ class GrowthBookCtaWindowCheckpointWorkflowTests(unittest.TestCase):
                                     ]
                                 }
                             ],
-                            "containers": [
-                                {"exitCode": 0, "imageDigest": digest}
-                            ],
+                            "containers": [{"exitCode": 0, "imageDigest": digest}],
                         }
                     ]
                 },

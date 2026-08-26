@@ -69,7 +69,9 @@ STOPPED = "cta_assignment_stopped_verified_followup_pending"
 EXPERIMENT_ID = "vevo-sk-product-cta-color-001"
 TIMEZONE = "Europe/Bratislava"
 CHECKPOINT_TIME = time(hour=3, minute=45)
-CHECKPOINT_WORKFLOW = ".github/workflows/check-vevo-growthbook-production-cta-window.yml"
+CHECKPOINT_WORKFLOW = (
+    ".github/workflows/check-vevo-growthbook-production-cta-window.yml"
+)
 CHECKPOINT_ARTIFACT = "vevo-growthbook-cta-window-checkpoint"
 CHECKPOINT_FILE = "vevo-growthbook-cta-window-checkpoint.json"
 EXPECTED_RECONCILIATION_SHA256 = (
@@ -323,11 +325,19 @@ def expected_measurement_window(
     )
     local_timezone = ZoneInfo(TIMEZONE)
     local_started = started.astimezone(local_timezone)
-    local_midnight = datetime.combine(local_started.date(), time.min, tzinfo=local_timezone)
-    first_full = local_midnight if local_started == local_midnight else local_midnight + timedelta(days=1)
+    local_midnight = datetime.combine(
+        local_started.date(), time.min, tzinfo=local_timezone
+    )
+    first_full = (
+        local_midnight
+        if local_started == local_midnight
+        else local_midnight + timedelta(days=1)
+    )
     minimum_through = first_full + timedelta(days=14)
     maximum_through = first_full + timedelta(days=42)
-    due = datetime.combine(minimum_through.date(), CHECKPOINT_TIME, tzinfo=local_timezone)
+    due = datetime.combine(
+        minimum_through.date(), CHECKPOINT_TIME, tzinfo=local_timezone
+    )
 
     schedule = reconciliation.get("schedule") or {}
     _require(
@@ -348,8 +358,12 @@ def expected_measurement_window(
         "timezone": TIMEZONE,
         "assignment_started_at_utc": _utc_text(started),
         "first_full_local_date": first_full.date().isoformat(),
-        "minimum_last_full_local_date": (minimum_through.date() - timedelta(days=1)).isoformat(),
-        "maximum_last_full_local_date": (maximum_through.date() - timedelta(days=1)).isoformat(),
+        "minimum_last_full_local_date": (
+            minimum_through.date() - timedelta(days=1)
+        ).isoformat(),
+        "maximum_last_full_local_date": (
+            maximum_through.date() - timedelta(days=1)
+        ).isoformat(),
         "minimum_full_calendar_days": 14,
         "maximum_full_calendar_days": 42,
         "target_total_sample": target,
@@ -380,14 +394,20 @@ def expected_measurement_window(
 def checkpoint_boundaries(
     expected: Mapping[str, Any], checkpoint_index: int
 ) -> tuple[datetime, datetime, str, int]:
-    _require(type(checkpoint_index) is int and checkpoint_index >= 1, "checkpoint index invalid")
+    _require(
+        type(checkpoint_index) is int and checkpoint_index >= 1,
+        "checkpoint index invalid",
+    )
     local_timezone = ZoneInfo(str(expected["timezone"]))
     minimum_through = _parse_utc(
         expected["minimum_through_utc"], "minimum_through_utc"
     ).astimezone(local_timezone)
     candidate_date = minimum_through.date() + timedelta(days=checkpoint_index - 1)
     _require(
-        candidate_date <= _parse_utc(expected["maximum_through_utc"], "maximum_through_utc").astimezone(local_timezone).date(),
+        candidate_date
+        <= _parse_utc(expected["maximum_through_utc"], "maximum_through_utc")
+        .astimezone(local_timezone)
+        .date(),
         "checkpoint exceeds 42 full local days",
     )
     candidate = datetime.combine(candidate_date, time.min, tzinfo=local_timezone)
@@ -399,22 +419,42 @@ def checkpoint_boundaries(
 def validate_checkpoint_evidence(
     evidence: Mapping[str, Any], expected: Mapping[str, Any], checkpoint_index: int
 ) -> None:
-    root = _exact_object(evidence, CHECKPOINT_ROOT_KEYS, "CTA checkpoint evidence")
-    schema_version = root["schema_version"]
+    schema_version = (
+        evidence.get("schema_version") if isinstance(evidence, dict) else None
+    )
+    root_keys = set(CHECKPOINT_ROOT_KEYS)
+    if schema_version == 3:
+        root_keys.add("collection_mode")
+    root = _exact_object(evidence, root_keys, "CTA checkpoint evidence")
     _require(
-        type(schema_version) is int and schema_version in {1, 2},
+        type(schema_version) is int and schema_version in {1, 2, 3},
         "CTA checkpoint schema drift",
     )
-    _require(root["evidence_type"] == "vevo_growthbook_cta_window_checkpoint", "CTA checkpoint type drift")
+    _require(
+        root["evidence_type"] == "vevo_growthbook_cta_window_checkpoint",
+        "CTA checkpoint type drift",
+    )
     _require(root["status"] == "passed", "CTA checkpoint did not pass")
     _require(root["experiment_id"] == EXPERIMENT_ID, "CTA checkpoint experiment drift")
-    _require(root["repository"] == "vzeman/biznisweb", "CTA checkpoint repository drift")
+    _require(
+        root["repository"] == "vzeman/biznisweb", "CTA checkpoint repository drift"
+    )
     _require(root["workflow"] == CHECKPOINT_WORKFLOW, "CTA checkpoint workflow drift")
-    _require(RUN_ID_RE.fullmatch(str(root["workflow_run_id"])) is not None, "CTA checkpoint run ID invalid")
-    _require(COMMIT_RE.fullmatch(str(root["main_commit"])) is not None, "CTA checkpoint commit invalid")
+    _require(
+        RUN_ID_RE.fullmatch(str(root["workflow_run_id"])) is not None,
+        "CTA checkpoint run ID invalid",
+    )
+    _require(
+        COMMIT_RE.fullmatch(str(root["main_commit"])) is not None,
+        "CTA checkpoint commit invalid",
+    )
     observed = _parse_utc(root["observed_at_utc"], "observed_at_utc")
-    window = _exact_object(root["window"], CHECKPOINT_WINDOW_KEYS, "CTA checkpoint window")
-    candidate, due, last_date, full_days = checkpoint_boundaries(expected, checkpoint_index)
+    window = _exact_object(
+        root["window"], CHECKPOINT_WINDOW_KEYS, "CTA checkpoint window"
+    )
+    candidate, due, last_date, full_days = checkpoint_boundaries(
+        expected, checkpoint_index
+    )
     _require(
         window
         == {
@@ -428,36 +468,96 @@ def validate_checkpoint_evidence(
         },
         "CTA checkpoint window drift",
     )
-    _require(
-        due.astimezone(UTC) <= observed < (due + timedelta(days=1)).astimezone(UTC),
-        "CTA checkpoint observed outside daily gate",
-    )
+    due_utc = due.astimezone(UTC)
+    daily_gate_end_utc = (due + timedelta(days=1)).astimezone(UTC)
+    if schema_version in {1, 2}:
+        _require(
+            due_utc <= observed < daily_gate_end_utc,
+            "CTA checkpoint observed outside daily gate",
+        )
+    else:
+        collection_mode = root["collection_mode"]
+        if collection_mode in {"scheduled_daily", "manual_same_window"}:
+            _require(
+                due_utc <= observed < daily_gate_end_utc,
+                "CTA same-window checkpoint observed outside daily gate",
+            )
+        elif collection_mode == "manual_historical_backfill":
+            _require(
+                observed >= daily_gate_end_utc,
+                "CTA historical backfill recorded before its daily gate closed",
+            )
+        else:
+            raise CtaMeasurementWindowError("CTA checkpoint collection mode drift")
 
     runtime_keys = set(RUNTIME_KEYS)
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         runtime_keys.add("identity_source")
     runtime = _exact_object(root["runtime"], runtime_keys, "CTA checkpoint runtime")
     _require(runtime["instance_id"] == "N/A:Fargate", "CTA checkpoint instance drift")
-    _require(runtime["service"] == "vevo-growthbook-reconcile-production", "CTA checkpoint service drift")
+    _require(
+        runtime["service"] == "vevo-growthbook-reconcile-production",
+        "CTA checkpoint service drift",
+    )
     _require(runtime["runtime_path"] == "/app", "CTA checkpoint path drift")
-    _require(re.fullmatch(r"[0-9a-f]{32}", str(runtime["task_id"])) is not None, "CTA checkpoint task invalid")
-    _require(str(runtime["task_definition"]).startswith("vevo-growthbook-reconcile-production:"), "CTA checkpoint task definition drift")
-    _require(re.fullmatch(r"sha256:[0-9a-f]{64}", str(runtime["image_digest"])) is not None, "CTA checkpoint image invalid")
-    _require(runtime["host_gate_evidence_sha256"] == EXPECTED_RECONCILIATION_SHA256, "CTA checkpoint host-gate evidence drift")
-    _require(runtime["localhost_health_marker_inherited_from_deploy_evidence"] is True, "CTA checkpoint localhost health missing")
-    _require(runtime["localhost_runtime_marker_inherited_from_deploy_evidence"] is True, "CTA checkpoint runtime marker missing")
+    _require(
+        re.fullmatch(r"[0-9a-f]{32}", str(runtime["task_id"])) is not None,
+        "CTA checkpoint task invalid",
+    )
+    _require(
+        str(runtime["task_definition"]).startswith(
+            "vevo-growthbook-reconcile-production:"
+        ),
+        "CTA checkpoint task definition drift",
+    )
+    _require(
+        re.fullmatch(r"sha256:[0-9a-f]{64}", str(runtime["image_digest"])) is not None,
+        "CTA checkpoint image invalid",
+    )
+    _require(
+        runtime["host_gate_evidence_sha256"] == EXPECTED_RECONCILIATION_SHA256,
+        "CTA checkpoint host-gate evidence drift",
+    )
+    _require(
+        runtime["localhost_health_marker_inherited_from_deploy_evidence"] is True,
+        "CTA checkpoint localhost health missing",
+    )
+    _require(
+        runtime["localhost_runtime_marker_inherited_from_deploy_evidence"] is True,
+        "CTA checkpoint runtime marker missing",
+    )
 
     control_keys = set(CONTROL_KEYS)
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         control_keys.update({"runtime_state_retained", "scheduler_run_task_verified"})
-    control = _exact_object(root["control_plane"], control_keys, "CTA checkpoint control plane")
-    _require(control["schedule_name"] == "vevo-growthbook-reconcile-production", "CTA checkpoint schedule drift")
-    _require(control["schedule_due_local"] == due.isoformat(timespec="seconds"), "CTA checkpoint due drift")
-    _require(control["source_schedule_name"] == "vevo-daily-report-email", "CTA source schedule drift")
-    for field in ("schedule_succeeded", "generated_published_counts_match", "dlq_empty", "alarms_clear", "source_schedule_unchanged"):
+    control = _exact_object(
+        root["control_plane"], control_keys, "CTA checkpoint control plane"
+    )
+    _require(
+        control["schedule_name"] == "vevo-growthbook-reconcile-production",
+        "CTA checkpoint schedule drift",
+    )
+    _require(
+        control["schedule_due_local"] == due.isoformat(timespec="seconds"),
+        "CTA checkpoint due drift",
+    )
+    _require(
+        control["source_schedule_name"] == "vevo-daily-report-email",
+        "CTA source schedule drift",
+    )
+    for field in (
+        "schedule_succeeded",
+        "generated_published_counts_match",
+        "dlq_empty",
+        "alarms_clear",
+        "source_schedule_unchanged",
+    ):
         _require(control[field] is True, f"CTA checkpoint control gate failed: {field}")
     for field in ("success_marker_sha256", "publish_summary_sha256"):
-        _require(SHA256_RE.fullmatch(str(control[field])) is not None, f"CTA checkpoint {field} invalid")
+        _require(
+            SHA256_RE.fullmatch(str(control[field])) is not None,
+            f"CTA checkpoint {field} invalid",
+        )
 
     def validate_private_ip() -> None:
         try:
@@ -499,19 +599,53 @@ def validate_checkpoint_evidence(
                 "CTA checkpoint runtime retention drift",
             )
 
-    population = _exact_object(root["population"], POPULATION_KEYS, "CTA checkpoint population")
-    _require(population["metric"] == expected["population_metric"], "CTA checkpoint population metric drift")
+    population = _exact_object(
+        root["population"], POPULATION_KEYS, "CTA checkpoint population"
+    )
+    _require(
+        population["metric"] == expected["population_metric"],
+        "CTA checkpoint population metric drift",
+    )
     eligible = population["eligible_devices"]
-    _require(type(eligible) is int and eligible >= 0, "CTA checkpoint eligible count invalid")
-    _require(population["target_total_sample"] == expected["target_total_sample"], "CTA checkpoint target drift")
-    _require(population["database"] == "vevo_growthbook_production", "CTA checkpoint database drift")
-    _require(population["workgroup"] == "vevo-growthbook-reporting-production", "CTA checkpoint workgroup drift")
-    _require(population["source_table"] == "experiment_device_facts", "CTA checkpoint table drift")
+    _require(
+        type(eligible) is int and eligible >= 0, "CTA checkpoint eligible count invalid"
+    )
+    _require(
+        population["target_total_sample"] == expected["target_total_sample"],
+        "CTA checkpoint target drift",
+    )
+    _require(
+        population["database"] == "vevo_growthbook_production",
+        "CTA checkpoint database drift",
+    )
+    _require(
+        population["workgroup"] == "vevo-growthbook-reporting-production",
+        "CTA checkpoint workgroup drift",
+    )
+    _require(
+        population["source_table"] == "experiment_device_facts",
+        "CTA checkpoint table drift",
+    )
     for field in ("aggregate_query_sha256", "aggregate_result_sha256"):
-        _require(SHA256_RE.fullmatch(str(population[field])) is not None, f"CTA checkpoint {field} invalid")
-    _require(population["only_aggregate_count_retained"] is True, "CTA checkpoint retained non-aggregate data")
-    for field in ("arm_counts_read", "arm_outcomes_read", "outcome_metrics_read", "contains_event_or_device_ids", "contains_customer_or_order_data"):
-        _require(population[field] is False, f"CTA checkpoint forbidden population read: {field}")
+        _require(
+            SHA256_RE.fullmatch(str(population[field])) is not None,
+            f"CTA checkpoint {field} invalid",
+        )
+    _require(
+        population["only_aggregate_count_retained"] is True,
+        "CTA checkpoint retained non-aggregate data",
+    )
+    for field in (
+        "arm_counts_read",
+        "arm_outcomes_read",
+        "outcome_metrics_read",
+        "contains_event_or_device_ids",
+        "contains_customer_or_order_data",
+    ):
+        _require(
+            population[field] is False,
+            f"CTA checkpoint forbidden population read: {field}",
+        )
 
     if full_days >= expected["maximum_full_calendar_days"]:
         decision = "open_manual_stop_review_maximum_duration_reached"
@@ -547,7 +681,9 @@ def validate_manifest(
         root["status"] in {WAITING, RUNNING, RESOLVED, STOPPED},
         "CTA measurement status drift",
     )
-    bindings = _exact_object(root["source_bindings"], BINDING_KEYS, "CTA source bindings")
+    bindings = _exact_object(
+        root["source_bindings"], BINDING_KEYS, "CTA source bindings"
+    )
     expected_paths = {
         "activation_path": "projects/vevo/growthbook_cta_activation.json",
         "start_observation_path": "projects/vevo/growthbook_cta_activation_observation.json",
@@ -570,36 +706,99 @@ def validate_manifest(
             "decision_contract": _sha256(DECISION_CONTRACT_PATH),
             "reconciliation_evidence": _sha256(RECONCILIATION_EVIDENCE_PATH),
         }
-    _require(set(actual_hashes) == {"activation", "start_observation", "sample_plan", "decision_contract", "reconciliation_evidence"}, "CTA source hash set drift")
-    _require(bindings["decision_contract_sha256"] == actual_hashes["decision_contract"], "CTA decision hash drift")
-    _require(bindings["reconciliation_evidence_sha256"] == actual_hashes["reconciliation_evidence"], "CTA reconciliation hash drift")
-    _require(bindings["reconciliation_evidence_sha256"] == EXPECTED_RECONCILIATION_SHA256, "CTA reconciliation evidence boundary drift")
-    window = _exact_object(root["measurement_window"], WINDOW_KEYS, "CTA measurement window")
+    _require(
+        set(actual_hashes)
+        == {
+            "activation",
+            "start_observation",
+            "sample_plan",
+            "decision_contract",
+            "reconciliation_evidence",
+        },
+        "CTA source hash set drift",
+    )
+    _require(
+        bindings["decision_contract_sha256"] == actual_hashes["decision_contract"],
+        "CTA decision hash drift",
+    )
+    _require(
+        bindings["reconciliation_evidence_sha256"]
+        == actual_hashes["reconciliation_evidence"],
+        "CTA reconciliation hash drift",
+    )
+    _require(
+        bindings["reconciliation_evidence_sha256"] == EXPECTED_RECONCILIATION_SHA256,
+        "CTA reconciliation evidence boundary drift",
+    )
+    window = _exact_object(
+        root["measurement_window"], WINDOW_KEYS, "CTA measurement window"
+    )
     stop = _exact_object(root["assignment_stop"], STOP_KEYS, "CTA assignment stop")
-    boundaries = _exact_object(root["release_boundaries"], BOUNDARY_KEYS, "CTA release boundaries")
+    boundaries = _exact_object(
+        root["release_boundaries"], BOUNDARY_KEYS, "CTA release boundaries"
+    )
     _require(boundaries["main_only"] is True, "CTA checkpoint is not main-only")
     for field in BOUNDARY_KEYS - {"main_only", "read_only_checkpoint_allowed"}:
-        _require(boundaries[field] is False, f"CTA forbidden release boundary opened: {field}")
+        _require(
+            boundaries[field] is False,
+            f"CTA forbidden release boundary opened: {field}",
+        )
     _require(stop["automatic_stop_allowed"] is False, "CTA automatic stop gate opened")
-    _require(stop["observation_path"] == "projects/vevo/growthbook_cta_assignment_stop_observation.json", "CTA stop observation path drift")
+    _require(
+        stop["observation_path"]
+        == "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+        "CTA stop observation path drift",
+    )
 
     if root["status"] == WAITING:
-        for field in ("activation_sha256", "start_observation_sha256", "sample_plan_sha256"):
-            _require(bindings[field] is None, f"waiting CTA source binding populated: {field}")
+        for field in (
+            "activation_sha256",
+            "start_observation_sha256",
+            "sample_plan_sha256",
+        ):
+            _require(
+                bindings[field] is None,
+                f"waiting CTA source binding populated: {field}",
+            )
         nullable = WINDOW_KEYS - {
-            "timezone", "minimum_full_calendar_days", "maximum_full_calendar_days",
-            "checkpoint_time_local", "checkpoint_workflow", "checkpoint_artifact_name",
-            "checkpoint_file_name", "stopping_rule", "population_metric", "outcome_blind",
-            "whole_local_day_extensions_only", "resolution_status", "checkpoint_history",
+            "timezone",
+            "minimum_full_calendar_days",
+            "maximum_full_calendar_days",
+            "checkpoint_time_local",
+            "checkpoint_workflow",
+            "checkpoint_artifact_name",
+            "checkpoint_file_name",
+            "stopping_rule",
+            "population_metric",
+            "outcome_blind",
+            "whole_local_day_extensions_only",
+            "resolution_status",
+            "checkpoint_history",
             "post_hoc_window_change_allowed",
         }
         for field in nullable:
-            _require(window[field] is None, f"waiting CTA window field populated: {field}")
+            _require(
+                window[field] is None, f"waiting CTA window field populated: {field}"
+            )
         _require(window["timezone"] == TIMEZONE, "waiting CTA timezone drift")
-        _require(window["minimum_full_calendar_days"] == 14 and window["maximum_full_calendar_days"] == 42, "waiting CTA duration drift")
-        _require(window["checkpoint_time_local"] == "03:45:00", "waiting CTA checkpoint time drift")
-        _require(window["checkpoint_workflow"] == CHECKPOINT_WORKFLOW, "waiting CTA workflow drift")
-        _require(window["checkpoint_artifact_name"] == CHECKPOINT_ARTIFACT and window["checkpoint_file_name"] == CHECKPOINT_FILE, "waiting CTA artifact drift")
+        _require(
+            window["minimum_full_calendar_days"] == 14
+            and window["maximum_full_calendar_days"] == 42,
+            "waiting CTA duration drift",
+        )
+        _require(
+            window["checkpoint_time_local"] == "03:45:00",
+            "waiting CTA checkpoint time drift",
+        )
+        _require(
+            window["checkpoint_workflow"] == CHECKPOINT_WORKFLOW,
+            "waiting CTA workflow drift",
+        )
+        _require(
+            window["checkpoint_artifact_name"] == CHECKPOINT_ARTIFACT
+            and window["checkpoint_file_name"] == CHECKPOINT_FILE,
+            "waiting CTA artifact drift",
+        )
         _require(
             window["stopping_rule"]
             == "after_14_full_local_days_open_manual_stop_at_first_post_reconciliation_checkpoint_with_target_first_n_or_at_42_full_local_days",
@@ -610,14 +809,21 @@ def validate_manifest(
             == "cumulative_eligible_first_exposed_devices_without_arm_or_outcome_readback",
             "waiting CTA population metric drift",
         )
-        _require(window["outcome_blind"] is True and window["whole_local_day_extensions_only"] is True, "waiting CTA outcome-blind rule drift")
+        _require(
+            window["outcome_blind"] is True
+            and window["whole_local_day_extensions_only"] is True,
+            "waiting CTA outcome-blind rule drift",
+        )
         _require(
             window["resolution_status"] == WAITING
             and window["resolution_trigger"] is None
             and window["checkpoint_history"] == [],
             "waiting CTA resolution drift",
         )
-        _require(window["post_hoc_window_change_allowed"] is False, "waiting CTA post-hoc change opened")
+        _require(
+            window["post_hoc_window_change_allowed"] is False,
+            "waiting CTA post-hoc change opened",
+        )
         _require(
             stop
             == {
@@ -635,8 +841,15 @@ def validate_manifest(
             },
             "waiting CTA stop state drift",
         )
-        _require(boundaries["read_only_checkpoint_allowed"] is False, "waiting CTA checkpoint gate opened")
-        _require(root["next_gate"] == "after_verified_cta_start_initialize_frozen_outcome_blind_window", "waiting CTA next gate drift")
+        _require(
+            boundaries["read_only_checkpoint_allowed"] is False,
+            "waiting CTA checkpoint gate opened",
+        )
+        _require(
+            root["next_gate"]
+            == "after_verified_cta_start_initialize_frozen_outcome_blind_window",
+            "waiting CTA next gate drift",
+        )
         return
 
     _require(start_observation is not None, "running CTA start observation missing")
@@ -650,8 +863,14 @@ def validate_manifest(
         activation.get("status") == expected_activation_status,
         "CTA activation/measurement lifecycle drift",
     )
-    _require(bindings["activation_sha256"] == actual_hashes["activation"], "CTA activation hash drift")
-    _require(bindings["sample_plan_sha256"] == actual_hashes["sample_plan"], "CTA sample hash drift")
+    _require(
+        bindings["activation_sha256"] == actual_hashes["activation"],
+        "CTA activation hash drift",
+    )
+    _require(
+        bindings["sample_plan_sha256"] == actual_hashes["sample_plan"],
+        "CTA sample hash drift",
+    )
     _require(
         activation["source_bindings"]["sample_plan"]["sha256"]
         == actual_hashes["sample_plan"],
@@ -663,16 +882,33 @@ def validate_manifest(
         "CTA activation/sample target drift",
     )
     observation_bytes = canonical_activation_bytes(start_observation)
-    _require(bindings["start_observation_sha256"] == actual_hashes["start_observation"], "CTA start observation source hash drift")
-    _require(bindings["start_observation_sha256"] == hashlib.sha256(observation_bytes).hexdigest(), "CTA start observation canonical hash drift")
+    _require(
+        bindings["start_observation_sha256"] == actual_hashes["start_observation"],
+        "CTA start observation source hash drift",
+    )
+    _require(
+        bindings["start_observation_sha256"]
+        == hashlib.sha256(observation_bytes).hexdigest(),
+        "CTA start observation canonical hash drift",
+    )
     history = window["checkpoint_history"]
     _require(isinstance(history, list), "CTA checkpoint history must be a list")
     expected_static = dict(expected)
     expected_static["checkpoint_history"] = history
     for index, row in enumerate(history, start=1):
-        _require(isinstance(row, Mapping) and set(row) == {"evidence_sha256", "evidence"}, "CTA checkpoint history row drift")
-        _require(SHA256_RE.fullmatch(str(row["evidence_sha256"])) is not None, "CTA checkpoint history hash invalid")
-        _require(hashlib.sha256(canonical_evidence_bytes(row["evidence"])).hexdigest() == row["evidence_sha256"], "CTA checkpoint history hash mismatch")
+        _require(
+            isinstance(row, Mapping) and set(row) == {"evidence_sha256", "evidence"},
+            "CTA checkpoint history row drift",
+        )
+        _require(
+            SHA256_RE.fullmatch(str(row["evidence_sha256"])) is not None,
+            "CTA checkpoint history hash invalid",
+        )
+        _require(
+            hashlib.sha256(canonical_evidence_bytes(row["evidence"])).hexdigest()
+            == row["evidence_sha256"],
+            "CTA checkpoint history hash mismatch",
+        )
         validate_checkpoint_evidence(row["evidence"], expected, index)
     eligible_history = [
         row["evidence"]["population"]["eligible_devices"] for row in history
@@ -708,8 +944,15 @@ def validate_manifest(
             },
             "running CTA stop state drift",
         )
-        _require(boundaries["read_only_checkpoint_allowed"] is True, "running CTA checkpoint gate closed")
-        _require(root["next_gate"] == "run_first_due_outcome_blind_checkpoint_without_arm_or_outcome_readback", "running CTA next gate drift")
+        _require(
+            boundaries["read_only_checkpoint_allowed"] is True,
+            "running CTA checkpoint gate closed",
+        )
+        _require(
+            root["next_gate"]
+            == "run_first_due_outcome_blind_checkpoint_without_arm_or_outcome_readback",
+            "running CTA next gate drift",
+        )
         return
 
     trigger_type = stop["review_trigger_type"]
@@ -780,9 +1023,9 @@ def validate_manifest(
         )
         if safety_monitoring_sha256 is not None:
             actual_safety_hash = hashlib.sha256(
-                (json.dumps(safety_monitoring, ensure_ascii=False, indent=2) + "\n").encode(
-                    "utf-8"
-                )
+                (
+                    json.dumps(safety_monitoring, ensure_ascii=False, indent=2) + "\n"
+                ).encode("utf-8")
             ).hexdigest()
             _require(
                 safety_monitoring_sha256 == actual_safety_hash,
@@ -794,8 +1037,7 @@ def validate_manifest(
             latest["verdict"] == "STOP_REQUIRED"
             and handoff["trigger_evidence_sha256"] == latest["evidence_sha256"]
             and handoff["trigger_decision_sha256"] == latest["decision_sha256"]
-            and handoff["trigger_provenance_sha256"]
-            == latest["provenance_sha256"],
+            and handoff["trigger_provenance_sha256"] == latest["provenance_sha256"],
             "CTA safety stop trigger drift",
         )
         expected_resolved = dict(expected_static)
@@ -835,8 +1077,15 @@ def validate_manifest(
             },
             "resolved CTA stop review drift",
         )
-        _require(boundaries["read_only_checkpoint_allowed"] is False, "resolved CTA checkpoint gate remains open")
-        _require(root["next_gate"] == "manually_stop_only_cta_assignment_then_record_canonical_readback", "resolved CTA next gate drift")
+        _require(
+            boundaries["read_only_checkpoint_allowed"] is False,
+            "resolved CTA checkpoint gate remains open",
+        )
+        _require(
+            root["next_gate"]
+            == "manually_stop_only_cta_assignment_then_record_canonical_readback",
+            "resolved CTA next gate drift",
+        )
         return
 
     _require(stop_observation is not None, "stopped CTA observation missing")
@@ -848,7 +1097,9 @@ def validate_manifest(
         stop_observation.get("assignment_ended_at_utc"),
         "assignment_ended_at_utc",
     )
-    observed = _parse_utc(stop_observation.get("observed_at_utc"), "stop observed_at_utc")
+    observed = _parse_utc(
+        stop_observation.get("observed_at_utc"), "stop observed_at_utc"
+    )
     _require(
         _parse_utc(window["resolved_at_utc"], "resolved_at_utc") <= ended <= observed,
         "CTA stop timestamps are outside the resolved window",
@@ -893,10 +1144,15 @@ def main() -> int:
         if manifest.get("status") != WAITING:
             raw = START_OBSERVATION_PATH.read_bytes()
             start_observation = json.loads(raw.decode("utf-8"))
-            _require(raw == canonical_activation_bytes(start_observation), "CTA start observation is not canonical JSON")
+            _require(
+                raw == canonical_activation_bytes(start_observation),
+                "CTA start observation is not canonical JSON",
+            )
         stop_observation = None
         if manifest.get("status") == STOPPED:
-            raw_stop = (VEVO / "growthbook_cta_assignment_stop_observation.json").read_bytes()
+            raw_stop = (
+                VEVO / "growthbook_cta_assignment_stop_observation.json"
+            ).read_bytes()
             stop_observation = json.loads(raw_stop.decode("utf-8"))
             _require(
                 raw_stop == canonical_evidence_bytes(stop_observation),

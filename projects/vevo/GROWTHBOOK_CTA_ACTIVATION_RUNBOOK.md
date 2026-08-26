@@ -291,7 +291,14 @@ already committed index, it skips before AWS credentials and the population
 query. An admitted scheduled run derives its checkpoint index from the frozen
 local date rather than current Git history, so the canonical artifact is
 captured even while the local PC is off. Manual `confirm_checkpoint=true`
-remains an exact-daily-gate fallback. Before AWS credentials, every admitted
+remains an exact-daily-gate fallback. If the exact next artifact was never
+created because both its scheduled and same-window runs failed, dispatch the
+same workflow after that gate closes with both `confirm_checkpoint=true` and
+`confirm_historical_backfill=true`. Schema `3` binds the run as
+`manual_historical_backfill` and reconstructs only
+`len(checkpoint_history) + 1` at its original preregistered cutoff. Never use
+backfill if a successful artifact for that index already exists. Before AWS
+credentials, every admitted
 run requires the A/A stopped, only CTA running at `100%`, the
 outcome/arm/winner gates closed, and the exact whole-local-day boundary.
 It then binds instance `N/A:Fargate` and the exact reconciliation through the
@@ -300,7 +307,8 @@ service `vevo-growthbook-reconcile-production`, path `/app`, task definition,
 immutable image, inherited localhost marker evidence, generated/published
 parity, three clear alarms, empty DLQ, and the unchanged source reporting
 schedule. Retained ECS state and its private IP are preferred. If that state has
-expired, schema `2` records `cloudtrail_run_task_retention_recovery`,
+expired, the retained schema `2` compatibility path and schema `3` record
+`cloudtrail_run_task_retention_recovery`,
 `runtime_state_retained=false`, and `private_ip=null`; this read-only historical
 proof never satisfies the live-IP plus localhost-marker hard gate for an
 infrastructure mutation. Its only Athena result is one cumulative eligible-device
