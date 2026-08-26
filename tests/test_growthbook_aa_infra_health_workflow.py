@@ -95,6 +95,8 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             "selected-cloudtrail-event.json",
             "cloudtrail_run_task_retention_recovery",
             "privateIPv4Address",
+            "privateIpv4Address",
+            "networkInterfaces",
         ):
             self.assertIn(marker, WORKFLOW)
         self.assertNotIn("aws ecs list-tasks", WORKFLOW)
