@@ -2163,6 +2163,8 @@ def main() -> int:
         snapshot_output = growthbook_aa_snapshot_manifest.get("output", {})
         if (
             snapshot_output.get("artifact_name") != "vevo-growthbook-aa-snapshot"
+            or snapshot_output.get("provenance_file")
+            != "vevo-growthbook-aa-provenance.json"
             or snapshot_output.get("retention_days") != 90
         ):
             raise AssertionError("GrowthBook A/A snapshot output identity drift.")
@@ -2189,6 +2191,10 @@ def main() -> int:
             'gh run download "${MANUAL_QA_RUN_ID}"',
             "scripts/assemble_growthbook_aa_snapshot.py",
             "scripts/evaluate_growthbook_aa.py",
+            "[[ \"${GITHUB_RUN_ATTEMPT}\" == '1' ]]",
+            "vevo-growthbook-aa-provenance.json",
+            "PRODUCTION_AA_SNAPSHOT_PROVENANCE_BOUND:run=true:commit=true:components=true:file-hashes=true",
+            "PRODUCTION_AA_SNAPSHOT_ARTIFACTS_OK:canonical=true:identities=false:provenance=true",
             "winner=false:cta=unchanged",
             "uses: actions/upload-artifact@v4.6.2",
             "retention-days: 90",
@@ -2519,6 +2525,11 @@ def main() -> int:
         for required_completion_marker in (
             "A/A decision differs from independent evaluation",
             "A/A completion requires PASS",
+            "A/A snapshot provenance workflow run mismatch",
+            "A/A snapshot provenance main commit mismatch",
+            "A/A snapshot provenance source mismatch",
+            "A/A PASS is already bound to a different artifact",
+            "aa_pass_provenance_sha256",
             "manual_growthbook_stop_allowed",
             "automatic_growthbook_mutation_allowed",
             "stop_exact_aa_experiment_and_remove_only_its_production_live_rule",

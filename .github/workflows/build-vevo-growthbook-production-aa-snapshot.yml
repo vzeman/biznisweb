@@ -42,6 +42,7 @@ env:
   MANUAL_QA_EVIDENCE_FILE: vevo-growthbook-aa-manual-qa-evidence.json
   SNAPSHOT_FILE: vevo-growthbook-aa-snapshot.json
   DECISION_FILE: vevo-growthbook-aa-decision.json
+  PROVENANCE_FILE: vevo-growthbook-aa-provenance.json
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -60,6 +61,7 @@ jobs:
           MANUAL_QA_SHA256: ${{ inputs.manual_qa_sha256 }}
         run: |
           set -euo pipefail
+          [[ "${GITHUB_RUN_ATTEMPT}" == '1' ]]
           [[ "${CONFIRM_SNAPSHOT}" == 'true' ]]
           [[ "${AUTOMATED_RUN_ID}" =~ ^[1-9][0-9]{5,19}$ ]]
           [[ "${MANUAL_QA_RUN_ID}" =~ ^[1-9][0-9]{5,19}$ ]]
@@ -250,15 +252,192 @@ jobs:
               f"verdict={decision['verdict']}:winner=false:cta=unchanged"
           )
           PY
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          if os.environ.get('GITHUB_REPOSITORY') != 'vzeman/biznisweb':
+              raise SystemExit('A/A snapshot provenance repository drift')
+          if os.environ.get('GITHUB_REF') != 'refs/heads/main':
+              raise SystemExit('A/A snapshot provenance is not from main')
+          if os.environ.get('GITHUB_RUN_ATTEMPT') != '1':
+              raise SystemExit('A/A snapshot provenance is not the first run attempt')
+          run_id = os.environ.get('GITHUB_RUN_ID', '')
+          main_commit = os.environ.get('GITHUB_SHA', '')
+          if (
+              re.fullmatch(r'[1-9][0-9]{5,19}', run_id) is None
+              or re.fullmatch(r'[0-9a-f]{40}', main_commit) is None
+          ):
+              raise SystemExit('A/A snapshot provenance identity is invalid')
+
+          files = {}
+          for name in (os.environ['SNAPSHOT_FILE'], os.environ['DECISION_FILE']):
+              digest = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+              files[name] = {'sha256': digest}
+          manifest = json.loads(
+              Path(os.environ['SNAPSHOT_MANIFEST']).read_text(encoding='utf-8')
+          )
+          source_components = {}
+          for component_name in ('automated_evidence', 'manual_qa_evidence'):
+              component = manifest[component_name]
+              source_components[component_name] = {
+                  'workflow': component['workflow'],
+                  'workflow_run_id': str(component['run_id']),
+                  'main_commit': component['main_commit'],
+                  'artifact_name': component['artifact_name'],
+                  'artifact_sha256': component['sha256'],
+              }
+          provenance = {
+              'schema_version': 1,
+              'evidence_type': 'vevo_growthbook_aa_snapshot_provenance',
+              'repository': 'vzeman/biznisweb',
+              'workflow': '.github/workflows/build-vevo-growthbook-production-aa-snapshot.yml',
+              'workflow_run_id': run_id,
+              'workflow_run_attempt': 1,
+              'main_commit': main_commit,
+              'artifact_name': 'vevo-growthbook-aa-snapshot',
+              'files': files,
+              'source_components': source_components,
+              'safety': {
+                  'contains_component_artifacts': False,
+                  'contains_raw_aws_payloads': False,
+                  'contains_event_or_device_ids': False,
+                  'contains_customer_or_order_data': False,
+                  'external_or_automatic_mutation': False,
+                  'winner_calls_allowed': False,
+              },
+          }
+          canonical = (
+              json.dumps(
+                  provenance,
+                  ensure_ascii=False,
+                  separators=(',', ':'),
+                  sort_keys=True,
+              ) + '\n'
+          ).encode('utf-8')
+          Path(os.environ['PROVENANCE_FILE']).write_bytes(canonical)
+          print('PRODUCTION_AA_SNAPSHOT_PROVENANCE_BOUND:run=true:commit=true:components=true:file-hashes=true')
+          PY
           rm -rf automated-component manual-component automated-run.json manual-run.json
 
-      - name: Upload only sanitized snapshot and decision
+      - name: Validate only canonical identity-free snapshot artifacts
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          forbidden_keys = {
+              'device_id', 'event_id', 'transaction_id', 'customer_id',
+              'customer_email', 'email', 'phone', 'address', 'ip_address',
+              'raw_url', 'query_string',
+          }
+          def walk(value):
+              if isinstance(value, dict):
+                  if forbidden_keys.intersection(value):
+                      raise SystemExit('A/A snapshot artifact contains an identity field')
+                  for nested in value.values():
+                      walk(nested)
+              elif isinstance(value, list):
+                  for nested in value:
+                      walk(nested)
+
+          for path in (
+              os.environ['SNAPSHOT_FILE'],
+              os.environ['DECISION_FILE'],
+              os.environ['PROVENANCE_FILE'],
+          ):
+              raw = Path(path).read_bytes()
+              payload = json.loads(raw.decode('utf-8'))
+              canonical = (
+                  json.dumps(
+                      payload,
+                      ensure_ascii=False,
+                      separators=(',', ':'),
+                      sort_keys=True,
+                  ) + '\n'
+              ).encode('utf-8')
+              if raw != canonical:
+                  raise SystemExit('A/A snapshot artifact is not canonical JSON')
+              walk(payload)
+
+          provenance = json.loads(
+              Path(os.environ['PROVENANCE_FILE']).read_text(encoding='utf-8')
+          )
+          expected_root_keys = {
+              'schema_version', 'evidence_type', 'repository', 'workflow',
+              'workflow_run_id', 'workflow_run_attempt', 'main_commit',
+              'artifact_name', 'files', 'source_components', 'safety',
+          }
+          if set(provenance) != expected_root_keys:
+              raise SystemExit('A/A snapshot provenance root schema drift')
+          if (
+              provenance.get('schema_version') != 1
+              or provenance.get('evidence_type')
+              != 'vevo_growthbook_aa_snapshot_provenance'
+              or provenance.get('repository') != 'vzeman/biznisweb'
+              or provenance.get('workflow')
+              != '.github/workflows/build-vevo-growthbook-production-aa-snapshot.yml'
+              or provenance.get('artifact_name') != 'vevo-growthbook-aa-snapshot'
+          ):
+              raise SystemExit('A/A snapshot provenance source drift')
+          if (
+              provenance.get('workflow_run_id') != os.environ.get('GITHUB_RUN_ID')
+              or provenance.get('workflow_run_attempt') != 1
+              or provenance.get('main_commit') != os.environ.get('GITHUB_SHA')
+          ):
+              raise SystemExit('A/A snapshot provenance identity drift')
+          expected_files = {
+              os.environ['SNAPSHOT_FILE'],
+              os.environ['DECISION_FILE'],
+          }
+          if set(provenance.get('files') or {}) != expected_files:
+              raise SystemExit('A/A snapshot provenance file set drift')
+          for path in expected_files:
+              digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+              if provenance['files'][path] != {'sha256': digest}:
+                  raise SystemExit('A/A snapshot provenance file hash drift')
+          manifest = json.loads(
+              Path(os.environ['SNAPSHOT_MANIFEST']).read_text(encoding='utf-8')
+          )
+          expected_sources = {}
+          for component_name in ('automated_evidence', 'manual_qa_evidence'):
+              component = manifest[component_name]
+              expected_sources[component_name] = {
+                  'workflow': component['workflow'],
+                  'workflow_run_id': str(component['run_id']),
+                  'main_commit': component['main_commit'],
+                  'artifact_name': component['artifact_name'],
+                  'artifact_sha256': component['sha256'],
+              }
+          if provenance.get('source_components') != expected_sources:
+              raise SystemExit('A/A snapshot provenance source component drift')
+          expected_safety = {
+              'contains_component_artifacts': False,
+              'contains_raw_aws_payloads': False,
+              'contains_event_or_device_ids': False,
+              'contains_customer_or_order_data': False,
+              'external_or_automatic_mutation': False,
+              'winner_calls_allowed': False,
+          }
+          if provenance.get('safety') != expected_safety:
+              raise SystemExit('A/A snapshot provenance safety drift')
+          print('PRODUCTION_AA_SNAPSHOT_ARTIFACTS_OK:canonical=true:identities=false:provenance=true')
+          PY
+
+      - name: Upload only sanitized snapshot decision and provenance
         uses: actions/upload-artifact@v4.6.2
         with:
           name: vevo-growthbook-aa-snapshot
           path: |
             vevo-growthbook-aa-snapshot.json
             vevo-growthbook-aa-decision.json
+            vevo-growthbook-aa-provenance.json
           if-no-files-found: error
           retention-days: 90
 
@@ -268,13 +447,21 @@ jobs:
           python - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
           import json
           import os
-          decision = json.load(open(os.environ['DECISION_FILE'], encoding='utf-8'))
+          import hashlib
+          from pathlib import Path
+          decision = json.loads(
+              Path(os.environ['DECISION_FILE']).read_text(encoding='utf-8')
+          )
+          provenance_sha256 = hashlib.sha256(
+              Path(os.environ['PROVENANCE_FILE']).read_bytes()
+          ).hexdigest()
           summary = decision['summary']
           print('## VEVO Production A/A snapshot')
           print(f"- Verdict: `{decision['verdict']}`")
           print('- Winner calls allowed: `false`')
           print(f"- Full local calendar days: `{summary['full_calendar_days']}`")
           print(f"- Eligible devices: `{summary['eligible_devices']}`")
+          print(f"- Provenance SHA-256: `{provenance_sha256}`")
           print('- GrowthBook, GTM, Meta Ads, BiznisWeb and Production traffic: `unchanged`')
           print('- Raw AWS/log/component artifacts uploaded: `no`')
           PY

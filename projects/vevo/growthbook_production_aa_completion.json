@@ -12,10 +12,12 @@
     "artifact_name": "vevo-growthbook-aa-snapshot",
     "snapshot_file": "vevo-growthbook-aa-snapshot.json",
     "decision_file": "vevo-growthbook-aa-decision.json",
+    "provenance_file": "vevo-growthbook-aa-provenance.json",
     "workflow_run_id": null,
     "main_commit": null,
     "snapshot_sha256": null,
     "decision_sha256": null,
+    "provenance_sha256": null,
     "evaluated_at_utc": null,
     "verdict": null,
     "winner_calls_allowed": false

@@ -19,6 +19,7 @@ from tests.test_growthbook_aa_completion_recorder import (
     SNAPSHOT_RUN_ID,
     aa_snapshot,
     build_snapshot_manifest,
+    snapshot_provenance,
     stop_observation,
 )
 
@@ -58,20 +59,29 @@ class GrowthBookCtaBaselineTests(unittest.TestCase):
         )
         snapshot_sha = hashlib.sha256(canonical_json_bytes(snapshot)).hexdigest()
         decision_sha = hashlib.sha256(canonical_json_bytes(decision)).hexdigest()
+        provenance = snapshot_provenance(
+            self.snapshot_manifest,
+            snapshot_sha256=snapshot_sha,
+            decision_sha256=decision_sha,
+        )
+        provenance_sha = hashlib.sha256(canonical_json_bytes(provenance)).hexdigest()
         passed = record_pass(
             self.pending_completion,
             self.activation,
             self.snapshot_manifest,
             snapshot,
             decision,
+            provenance,
             workflow_run_id=SNAPSHOT_RUN_ID,
             main_commit=SNAPSHOT_COMMIT,
             snapshot_sha256=snapshot_sha,
             decision_sha256=decision_sha,
+            provenance_sha256=provenance_sha,
         )
         self.stop_observation = stop_observation(
             snapshot_sha256=snapshot_sha,
             decision_sha256=decision_sha,
+            provenance_sha256=provenance_sha,
         )
         self.completion, self.workspace = record_stop(
             passed,

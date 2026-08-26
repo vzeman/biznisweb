@@ -6105,3 +6105,32 @@ Known issues:
 Next exact step:
 
 - Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
+
+## 2026-08-26 — VEVO A/A snapshot provenance hardened
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-snapshot-provenance`
+
+What changed:
+
+- Added a third canonical, PII-free A/A assembly file, `vevo-growthbook-aa-provenance.json`, to the future protected snapshot artifact bundle.
+- The assembly workflow now admits only the first workflow attempt and binds the exact repository, workflow path, run ID, main commit, artifact name, snapshot hash, decision hash, and both reviewed source-component workflow/run/commit/artifact hashes.
+- The offline A/A completion recorder now independently validates the canonical provenance, requires its SHA-256 in the completion manifest and zero-allocation stop readback, and rejects any attempt to rebind an already recorded PASS to another assembly artifact.
+- Updated the machine-readable snapshot and completion contracts, A/A runbook, GrowthBook plan/workspace, central security CI, and regression fixtures. No result workflow was dispatched.
+
+What is verified:
+
+- `795` Python tests and all `9` storefront JavaScript tests passed, including execution of the exact inline provenance producer/validator and negative cases for changed file hashes, swapped runs, commits, source-component hashes, stop-readback hashes, and recorded-PASS rebinding.
+- A/A measurement-window, A/A completion, Pro-upgrade, workspace, CTA completion, and central security validators passed; scoped Ruff, Python compilation, JSON/YAML parsing, and `git diff --check` passed.
+- The protected A/A assembly workflow is active and has no run yet, which is expected because its first admitted scheduled checkpoint is still in the future. Existing manual infrastructure-monitor runs were not duplicated.
+- The versioned Production host boundary remains instance `N/A:Fargate`, recorded deployment private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, and runtime path `/app`. This repository-only change performs no deploy or infrastructure mutation and therefore does not claim a new live-host readback.
+- No A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read. No AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, cart, checkout, payment, stock, or order state changed. No local server, worker, watcher, tunnel, Docker stack, or persistent process was started.
+
+Known issues:
+
+- None introduced. The provenance contract applies only to the future A/A snapshot bundle and does not open the currently frozen result gate.
+
+Next exact step:
+
+- Merge this A/A provenance hardening after CI. Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results; at the first due boundary use the earliest successful exact-main scheduled A/A checkpoint artifact and record it through the offline hash-bound workflow.
