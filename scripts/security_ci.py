@@ -296,6 +296,9 @@ def main() -> int:
         growthbook_cta_completion_validator = read(
             "scripts/validate_growthbook_cta_completion.py"
         )
+        growthbook_cta_activation_runbook = read(
+            "projects/vevo/GROWTHBOOK_CTA_ACTIVATION_RUNBOOK.md"
+        )
         growthbook_cta_safety_evaluator = read(
             "scripts/evaluate_growthbook_cta_safety.py"
         )
@@ -3427,6 +3430,12 @@ def main() -> int:
         for required_cta_completion_marker in (
             "waiting_for_assignment_stop_review",
             "cta_assignment_stopped_verified_followup_pending",
+            "assert-stop-ready",
+            "CTA manual stop review is not open",
+            "CTA collector registry changed after start",
+            "GrowthBook CTA running workspace Pro identity drift",
+            "CTA final-look gate is invalid",
+            "VEVO_CTA_STOP_READY:",
             "stop_exact_cta_experiment_remove_only_production_rule_preserve_staging",
             "post_stop_cta_exposure_count",
             "final_snapshot_due_utc",
@@ -3441,6 +3450,19 @@ def main() -> int:
                 required_cta_completion_marker,
                 "GrowthBook CTA completion lost safety marker: "
                 f"{required_cta_completion_marker}",
+            )
+        for required_cta_stop_runbook_marker in (
+            "git rev-parse origin/main",
+            "record_growthbook_cta_completion.py assert-stop-ready",
+            "VEVO_CTA_STOP_READY",
+            "CTA as the only active",
+            "A/A allocation",
+        ):
+            require(
+                growthbook_cta_activation_runbook,
+                required_cta_stop_runbook_marker,
+                "GrowthBook CTA stop runbook lost exact-main readiness marker: "
+                f"{required_cta_stop_runbook_marker}",
             )
         for offline_cta_final_marker in (
             "import boto3",

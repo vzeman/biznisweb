@@ -6714,3 +6714,31 @@ Known issues:
 Next exact step:
 
 - Keep the frozen A/A boundary closed. Monitor only repository-owned infra-health and exact checkpoint workflow run metadata; do not dispatch the result workflow or open an artifact before the due boundary. At or after `2026-09-02 03:45 Europe/Bratislava`, use the earliest successful outcome-blind checkpoint in index order and continue only through the versioned PASS, exact-main `assert-stop-ready`, verified zero-allocation stop, fresh Pro action-time confirmation, lifecycle, runtime, and CTA gates.
+
+## 2026-08-26 — VEVO manual CTA stop handoff made fail-closed
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-stop-readiness`
+
+What changed:
+
+- Audited the future CTA assignment-stop transition without reading any A/A or CTA population, arm, performance, business outcome, or result.
+- Added read-only `record_growthbook_cta_completion.py assert-stop-ready`. It accepts no output or stop-observation argument and revalidates the reviewed outcome-blind or safety stop trigger, hash-bound running activation and canonical start observation, CTA-only collector registry, exact one-seat Pro workspace, stopped A/A at `0%`, CTA as the only active Production experiment at `100%`, and the still-closed one-look final-snapshot gate.
+- Made `record-stop` reuse the same full readiness validator before it can accept the independently hashed post-stop readback or construct any stopped-state output. The legacy no-subcommand recorder invocation remains mapped to `record-stop` for compatibility.
+- Updated the CTA activation runbook, long-form plan, Pro workspace, tests, and central security contract with the exact clean-`main` pre-action sequence and `VEVO_CTA_STOP_READY` marker.
+
+What is verified:
+
+- The full repository suite passes `866` Python tests and all `9` storefront JavaScript tests. The focused activation/completion/window/final-snapshot/workspace group passes `69` tests, including both outcome-blind and safety-triggered stop paths plus registry, A/A allocation, and final-look drift rejection.
+- CTA completion, measurement, safety, final-snapshot, workspace, Pro, and central security validators pass. Scoped Ruff, Python compilation, and `git diff --check` pass.
+- The current checked-in waiting state executes `assert-stop-ready` read-only and fails closed with `CTA manual stop review is not open` and exit code `2`, before attempting to read the future start/stop evidence. No output file is written.
+- No A/A eligible count, arm, split, SRM, conversion, revenue, CM1, Meta dimension, performance, CTA outcome, or result was inspected. No workflow was dispatched; no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, product, price, stock, cart, checkout, payment, or order state changed. No browser or local runtime process was started.
+
+Known issues:
+
+- This CTA stop-readiness hardening is not yet merged. The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`.
+
+Next exact step:
+
+- Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then return to metadata-only monitoring while the A/A boundary remains closed. At or after `2026-09-02 03:45 Europe/Bratislava`, continue only through the versioned outcome-blind A/A checkpoint/PASS/stop/Pro/lifecycle/runtime/CTA chain; immediately before a future CTA stop, require clean exact `main` and a fresh successful `VEVO_CTA_STOP_READY` assertion.
