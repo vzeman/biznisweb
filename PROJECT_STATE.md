@@ -6686,3 +6686,31 @@ Known issues:
 Next exact step:
 
 - Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then keep the A/A result boundary closed; inspect only the exact checkpoint workflow's run metadata before the first due boundary, without downloading artifacts or reading results. At or after `2026-09-02 03:45 Europe/Bratislava`, use the earliest successful outcome-blind checkpoint in index order and continue only through the already versioned PASS/stop/Pro/lifecycle/CTA gates.
+
+## 2026-08-26 — VEVO manual A/A stop-readiness merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-stop-readiness-state`
+
+What changed:
+
+- PR `#464` merged the fail-closed manual A/A stop-readiness assertion into `main` as `613ab546cf32cbcc31dbeeb937d22c7c2c34131c`.
+- This handoff records the verified merge and supersedes the preceding pre-merge instruction. It introduces no experiment, billing, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#464` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` on exact head `ddcc2e3923177b966d8f930ee8a078efcadd6169` before merge.
+- The pull request was mergeable and clean against base `60a16da45b6379435bbc6af741cf0bf634192905`; `origin/main` and this state branch read back exact merge commit `613ab546cf32cbcc31dbeeb937d22c7c2c34131c` with that base and head as its parents.
+- The future manual A/A stop now requires exact synchronized `main`, an open PASS-bound stop review, the exact VEVO Production A/A still live at revision `3`, `100%`, `50/50`, and CTA still an unstarted staging-only draft at `0%`. The checked-in waiting state remains fail-closed.
+- Existing result-blind manual infra-health run `32939220338` completed successfully on exact workflow `.github/workflows/monitor-vevo-growthbook-production-aa-infra.yml`, attempt `1`, head `dc4d02d3387528cb74c3b2a804fbb60806eb70df`, which is an ancestor of current `main`. Its only artifact `vevo-growthbook-production-aa-infra-health` had GitHub ZIP SHA-256 `b5500f43a230c3c42544d0dfbd71c06bc2aa1df254febfa023e9fb048d8c4167`, contained only the canonical JSON, produced evidence SHA-256 `773b9a7da51e1ff07b52f56a68713aaff046a9d5414738daacfbf0453486336b`, retained exact run/head provenance, and passed `validate_growthbook_aa_infra_health_evidence.py`. The temporary ZIP/extraction directory was deleted and independently confirmed absent. No duplicate monitor was dispatched.
+- No A/A population or result was inspected, no result workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`. GrowthBook Pro remains unpurchased and the CTA experiment remains draft at zero allocation.
+- The exact A/A window workflow remains active but its first scheduled-event run has not yet been observed; keep this as metadata-only monitoring before the frozen due boundary.
+
+Next exact step:
+
+- Keep the frozen A/A boundary closed. Monitor only repository-owned infra-health and exact checkpoint workflow run metadata; do not dispatch the result workflow or open an artifact before the due boundary. At or after `2026-09-02 03:45 Europe/Bratislava`, use the earliest successful outcome-blind checkpoint in index order and continue only through the versioned PASS, exact-main `assert-stop-ready`, verified zero-allocation stop, fresh Pro action-time confirmation, lifecycle, runtime, and CTA gates.
