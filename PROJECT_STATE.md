@@ -5913,3 +5913,32 @@ Known issues:
 Next exact step:
 
 - Continue daily result-blind A/A infrastructure monitoring. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact without dispatching a duplicate, independently verify and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
+
+## 2026-08-26 — VEVO current-main A/A infrastructure readback remains healthy
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-infra-current-main-20260826`
+
+What changed:
+
+- Dispatched one explicit result-blind read-only infrastructure monitor from exact synchronized `main` commit `dc4d02d3387528cb74c3b2a804fbb60806eb70df` after the A/A and future CTA cloud-checkpoint merges.
+- GitHub run `32939220338` produced the sole canonical artifact `vevo-growthbook-production-aa-infra-health` (artifact ID `9595930112`), retained until `2026-09-09T06:41:42Z`.
+- This entry records external readback only; no code, workflow, runtime, experiment, reporting, advertising, or commerce configuration changed.
+
+What is verified:
+
+- The workflow completed successfully and bound run `32939220338` to exact `main` commit `dc4d02d3387528cb74c3b2a804fbb60806eb70df`.
+- The independently downloaded canonical artifact passed `validate_growthbook_aa_infra_health_evidence.py` and has SHA-256 `773b9a7da51e1ff07b52f56a68713aaff046a9d5414738daacfbf0453486336b`.
+- AWS account `919341186960`, region `eu-central-1`, collector/reconciliation stacks, enabled `03:45 Europe/Bratislava` schedule, Scheduler-authenticated `RunTask`, immutable task definition `vevo-growthbook-reconcile-production:3`, image digest, service `vevo-growthbook-reconcile-production`, and runtime path `/app` all match the protected evidence.
+- All three reconciliation alarms are `OK`, the DLQ is empty, the natural `2026-08-26 03:45 Europe/Bratislava` success marker is verified, generated/published parity is verified, and source schedule `vevo-daily-report-email` remains enabled on `vevo-reporting-daily:33`.
+- The artifact explicitly proves no experimental population, arm assignment, outcomes, Meta dimensions, performance values, reporting row counts, identifiers, credentials, raw AWS payloads, or CloudWatch messages were read or retained, and every mutation boundary is `false`.
+- The downloaded sanitised file and its dedicated temporary directory were removed after validation. No local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Known issues:
+
+- ECS stopped-task state had expired before this later readback, so schema `2` correctly records `cloudtrail_run_task_retention_recovery`, `runtime_state_retained=false`, and `private_ip=null`. This is valid only for result-blind historical monitoring; any infrastructure mutation still requires a fresh live private IP plus direct localhost marker hard gate.
+
+Next exact step:
+
+- Continue daily result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, prefer the earliest successful exact-main `04:30 Europe/Bratislava` scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
