@@ -18,6 +18,7 @@ try:
         MEASUREMENT_PATH,
         RECONCILIATION_PATH,
         SAMPLE_PLAN_PATH,
+        SAFETY_MONITORING_PATH,
         START_OBSERVATION_PATH,
         STOP_OBSERVATION_PATH,
         WORKSPACE_PATH,
@@ -34,6 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
         MEASUREMENT_PATH,
         RECONCILIATION_PATH,
         SAMPLE_PLAN_PATH,
+        SAFETY_MONITORING_PATH,
         START_OBSERVATION_PATH,
         STOP_OBSERVATION_PATH,
         WORKSPACE_PATH,
@@ -65,11 +67,13 @@ def main() -> int:
         contract = _load(DECISION_CONTRACT_PATH)
         lifecycle = _load(LIFECYCLE_PATH)
         reconciliation = _load(RECONCILIATION_PATH)
+        safety_monitoring = _load(SAFETY_MONITORING_PATH)
         source_hashes = {
             "activation": _sha256(ACTIVATION_PATH),
             "measurement_window": _sha256(MEASUREMENT_PATH),
             "sample_plan": _sha256(SAMPLE_PLAN_PATH),
             "decision_contract": _sha256(DECISION_CONTRACT_PATH),
+            "safety_monitoring": _sha256(SAFETY_MONITORING_PATH),
             "lifecycle_reconciliation": _sha256(LIFECYCLE_PATH),
             "start_observation": "",
             "reconciliation_evidence": _sha256(RECONCILIATION_PATH),
@@ -104,6 +108,7 @@ def main() -> int:
             lifecycle,
             reconciliation,
             lifecycle_observation=lifecycle_observation,
+            safety_monitoring=safety_monitoring,
             start_observation=start_observation,
             stop_observation=stop_observation,
             workspace=workspace,

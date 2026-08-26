@@ -7,8 +7,11 @@ import unittest
 from pathlib import Path
 
 from scripts import record_growthbook_cta_completion as recorder
+from scripts import record_growthbook_cta_safety_checkpoint as safety_recorder
 from scripts import validate_growthbook_cta_measurement_window as window_validator
+from scripts.evaluate_growthbook_cta_safety import STOPPED as SAFETY_STOPPED
 from tests import test_growthbook_cta_evaluator as evaluator_fixtures
+from tests import test_growthbook_cta_safety_recorder as safety_fixtures
 from tests import test_growthbook_cta_window_checkpoint as window_fixtures
 
 
@@ -39,6 +42,19 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
                 "open_manual_stop_review_target_reached",
             ),
         )
+        self.safety = safety_recorder.initialize_monitoring(
+            load("projects/vevo/growthbook_cta_safety_monitoring.json"),
+            self.activation,
+            self.start_observation,
+            source_hashes=safety_recorder.source_hashes(
+                self.activation,
+                self.start_observation,
+                (
+                    ROOT
+                    / "projects/vevo/growthbook_cta_decision_contract.json"
+                ).read_bytes(),
+            ),
+        )
         evaluator = evaluator_fixtures.GrowthBookCtaEvaluatorTests(
             methodName="runTest"
         )
@@ -66,6 +82,9 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             "decision_contract": hashlib.sha256(
                 (ROOT / "projects/vevo/growthbook_cta_decision_contract.json").read_bytes()
             ).hexdigest(),
+            "safety_monitoring": hashlib.sha256(
+                recorder.pretty_json_bytes(self.safety)
+            ).hexdigest(),
             "lifecycle_reconciliation": hashlib.sha256(
                 recorder.pretty_json_bytes(self.lifecycle)
             ).hexdigest(),
@@ -81,9 +100,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         }
 
     def _stop_observation(self) -> dict:
-        final_checkpoint = self.measurement["measurement_window"][
-            "checkpoint_history"
-        ][-1]
+        assignment_stop = self.measurement["assignment_stop"]
         return {
             "schema_version": 1,
             "evidence_type": "vevo_growthbook_cta_assignment_stop_readback",
@@ -91,9 +108,21 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             "feature_key": "vevo-sk-product-cta-color",
             "observed_at_utc": "2026-09-19T02:10:00Z",
             "assignment_ended_at_utc": "2026-09-19T02:00:00Z",
-            "window_checkpoint_evidence_sha256": final_checkpoint[
-                "evidence_sha256"
-            ],
+            "stop_trigger": {
+                "type": assignment_stop["review_trigger_type"],
+                "evidence_sha256": assignment_stop[
+                    "review_trigger_evidence_sha256"
+                ],
+                "decision_sha256": assignment_stop[
+                    "review_trigger_decision_sha256"
+                ],
+                "provenance_sha256": assignment_stop[
+                    "review_trigger_provenance_sha256"
+                ],
+                "observed_at_utc": assignment_stop[
+                    "review_trigger_observed_at_utc"
+                ],
+            },
             "activation_start_observation_sha256": self.activation[
                 "start_readback"
             ]["observation_sha256"],
@@ -167,6 +196,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             self.completion,
             self.activation,
             self.measurement,
+            self.safety,
             self.sample,
             self.contract,
             self.lifecycle,
@@ -194,10 +224,18 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         self.assertFalse(any(self.completion["release_boundaries"].values()))
 
     def test_stop_records_zero_allocation_and_exact_followup(self) -> None:
-        completion, activation, measurement, workspace, final_snapshot = self._record()
+        (
+            completion,
+            activation,
+            measurement,
+            safety,
+            workspace,
+            final_snapshot,
+        ) = self._record()
         self.assertEqual(recorder.FOLLOWUP, completion["status"])
         self.assertEqual(recorder.CTA_STOPPED, activation["status"])
         self.assertEqual(window_validator.STOPPED, measurement["status"])
+        self.assertEqual(SAFETY_STOPPED, safety["status"])
         self.assertEqual(
             "2026-10-03T02:00:00Z",
             completion["followup"]["final_snapshot_due_utc"],
@@ -229,7 +267,14 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         )
 
     def test_updated_measurement_binds_stopped_activation_hash(self) -> None:
-        completion, activation, measurement, _workspace, _final_snapshot = self._record()
+        (
+            completion,
+            activation,
+            measurement,
+            _safety,
+            _workspace,
+            _final_snapshot,
+        ) = self._record()
         activation_hash = hashlib.sha256(
             recorder.pretty_json_bytes(activation)
         ).hexdigest()
@@ -245,25 +290,94 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             completion["source_bindings"]["measurement_window_sha256"],
         )
 
-    def test_rejects_stop_before_outcome_blind_resolution(self) -> None:
+    def test_verified_safety_breach_uses_same_manual_stop_followup(self) -> None:
+        safety_case = safety_fixtures.GrowthBookCtaSafetyRecorderTests(
+            methodName="runTest"
+        )
+        safety_case.setUp()
+        safety, measurement = safety_case.record(
+            safety_case.evidence(stop="commerce")
+        )
+        self.assertEqual(self.activation, safety_case.activation)
+        stop_observation = copy.deepcopy(self.stop_observation)
+        trigger = measurement["assignment_stop"]
+        stop_observation["stop_trigger"] = {
+            "type": trigger["review_trigger_type"],
+            "evidence_sha256": trigger["review_trigger_evidence_sha256"],
+            "decision_sha256": trigger["review_trigger_decision_sha256"],
+            "provenance_sha256": trigger["review_trigger_provenance_sha256"],
+            "observed_at_utc": trigger["review_trigger_observed_at_utc"],
+        }
+        source_hashes = dict(self.source_hashes)
+        source_hashes["measurement_window"] = hashlib.sha256(
+            recorder.pretty_json_bytes(measurement)
+        ).hexdigest()
+        source_hashes["safety_monitoring"] = hashlib.sha256(
+            recorder.pretty_json_bytes(safety)
+        ).hexdigest()
+        digest = hashlib.sha256(
+            recorder.canonical_json_bytes(stop_observation)
+        ).hexdigest()
+        (
+            completion,
+            _activation,
+            stopped_measurement,
+            stopped_safety,
+            _workspace,
+            final_snapshot,
+        ) = recorder.record_stop(
+            self.completion,
+            safety_case.activation,
+            measurement,
+            safety,
+            safety_case.sample,
+            safety_case.decision_contract,
+            self.lifecycle,
+            self.lifecycle_observation,
+            safety_case.reconciliation,
+            self.workspace,
+            self.final_snapshot,
+            safety_case.start_observation,
+            stop_observation,
+            stop_observation_sha256=digest,
+            source_hashes=source_hashes,
+        )
+        self.assertEqual(SAFETY_STOPPED, stopped_safety["status"])
+        self.assertEqual(window_validator.STOPPED, stopped_measurement["status"])
+        self.assertEqual(
+            "safety_guardrail",
+            stopped_measurement["assignment_stop"]["review_trigger_type"],
+        )
+        self.assertEqual(recorder.FOLLOWUP, completion["status"])
+        self.assertTrue(
+            final_snapshot["final_look"]["protected_workflow_allowed"]
+        )
+
+    def test_rejects_stop_before_reviewed_resolution(self) -> None:
         unresolved = copy.deepcopy(self.measurement)
         unresolved["status"] = window_validator.RUNNING
         unresolved["assignment_stop"] = {
             "status": "not_open",
             "manual_review_allowed": False,
             "automatic_stop_allowed": False,
+            "review_trigger_type": None,
+            "review_trigger_evidence_sha256": None,
+            "review_trigger_decision_sha256": None,
+            "review_trigger_provenance_sha256": None,
+            "review_trigger_observed_at_utc": None,
             "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
             "observation_sha256": None,
             "assignment_ended_at_utc": None,
         }
         with self.assertRaisesRegex(
             recorder.CtaCompletionRecordingError,
-            "outcome-blind stop rule is unresolved",
+            "reviewed stop rule is unresolved",
         ):
             recorder.record_stop(
                 self.completion,
                 self.activation,
                 unresolved,
+                self.safety,
                 self.sample,
                 self.contract,
                 self.lifecycle,
@@ -294,7 +408,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         early["assignment_ended_at_utc"] = "2026-09-19T01:00:00Z"
         with self.assertRaisesRegex(
             recorder.CtaCompletionRecordingError,
-            "before the outcome-blind stopping rule resolved",
+            "before the reviewed stopping rule resolved",
         ):
             self._record(early)
         stale = copy.deepcopy(self.stop_observation)

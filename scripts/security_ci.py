@@ -271,6 +271,9 @@ def main() -> int:
         growthbook_cta_safety_evaluator = read(
             "scripts/evaluate_growthbook_cta_safety.py"
         )
+        growthbook_cta_safety_recorder = read(
+            "scripts/record_growthbook_cta_safety_checkpoint.py"
+        )
         growthbook_cta_safety_validator = read(
             "scripts/validate_growthbook_cta_safety_monitoring.py"
         )
@@ -2153,6 +2156,7 @@ def main() -> int:
             raise AssertionError("GrowthBook CTA safety monitoring state is invalid.")
         for safety_source, safety_name in (
             (growthbook_cta_safety_evaluator, "CTA safety evaluator"),
+            (growthbook_cta_safety_recorder, "CTA safety recorder"),
             (growthbook_cta_safety_validator, "CTA safety validator"),
         ):
             for forbidden_safety_marker in (
@@ -3281,6 +3285,7 @@ def main() -> int:
             "scripts/record_growthbook_cta_completion.py",
             "scripts/validate_growthbook_cta_completion.py",
             "scripts/evaluate_growthbook_cta_safety.py",
+            "scripts/record_growthbook_cta_safety_checkpoint.py",
             "scripts/validate_growthbook_cta_safety_monitoring.py",
             "scripts/build_growthbook_cta_final_snapshot.py",
             "scripts/validate_growthbook_cta_final_snapshot.py",

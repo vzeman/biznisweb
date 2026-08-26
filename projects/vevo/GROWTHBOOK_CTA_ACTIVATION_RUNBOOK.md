@@ -220,13 +220,24 @@ winner, or mutate any external service.
 This checked-in contract is deliberately
 `waiting_for_verified_cta_start`: collection and recording are disabled, both
 start-source hashes are null, and `manual_growthbook_stop_allowed=false`.
-Operational checkpoint collection plus the reviewed manual-stop handoff must
-be implemented and merged separately before Gate 4 can be considered ready.
-Validate only the closed contract now:
+The offline `record_growthbook_cta_safety_checkpoint.py` lifecycle recorder is
+prepared. After a future verified CTA start it can bind the exact activation,
+canonical start observation, and frozen decision contract while still leaving
+collection disabled. It independently re-evaluates a canonical checkpoint and
+requires separately supplied evidence, decision, and provenance hashes plus
+the exact successful workflow run and main commit. `CONTINUE` leaves the stop
+lifecycle unchanged. `STOP_REQUIRED` can only close further checkpoints and
+open the same reviewed manual CTA stop and 14-day follow-up path used by the
+outcome-blind first-`N`/day-42 rule; it never performs the stop itself.
+
+The protected PC-independent collection workflow does not exist yet, and all
+three collection/recording gates remain false. It must be implemented and
+merged separately before Gate 4 can be considered launch-ready. Validate the
+closed contract and lifecycle now:
 
 ```text
 python scripts/validate_growthbook_cta_safety_monitoring.py
-python -m unittest tests.test_growthbook_cta_safety_evaluator
+python -m unittest tests.test_growthbook_cta_safety_evaluator tests.test_growthbook_cta_safety_recorder
 ```
 
 The executable source of truth for this rule is
@@ -299,13 +310,15 @@ local day. At the target or day 42 it closes further checkpoints and opens only
 GrowthBook automatically, read an outcome, declare a winner, or mutate GTM,
 Meta Ads, BiznisWeb, collector/reporting, prices, cart, checkout, or orders.
 
-After the reviewed checkpoint opens the manual stop gate, stop only GrowthBook
+After either a reviewed outcome-blind checkpoint or a verified hash-bound
+`STOP_REQUIRED` safety checkpoint opens the manual stop gate, stop only GrowthBook
 experiment `exp_19g6mmt1qxzrp`, remove only its Production live rule, preserve
 the staging rule, and leave GTM version `15`, Meta Ads, BiznisWeb, collector,
 reporting, prices, cart, checkout, payments, stock, and orders unchanged. Do not
 open any arm or outcome result during this operation. The canonical readback at
 `projects/vevo/growthbook_cta_assignment_stop_observation.json` must bind the
-last outcome-blind checkpoint SHA-256 and original CTA start-observation
+exact reviewed stop trigger (one outcome-blind evidence hash or all three
+safety evidence/decision/provenance hashes) and original CTA start-observation
 SHA-256, prove zero Production allocation/rules, an advanced feature revision,
 no active Production experiment, unchanged desktop/mobile commerce behavior,
 and at least 300 seconds with zero new CTA assignment or exposure.
@@ -314,7 +327,7 @@ Independently hash that canonical readback, then record all versioned stopped
 states in one reviewed branch:
 
 ```text
-python scripts/record_growthbook_cta_completion.py --stop-observation projects/vevo/growthbook_cta_assignment_stop_observation.json --stop-observation-sha256 <independent-sha256> --completion-output projects/vevo/growthbook_cta_completion.json --activation-output projects/vevo/growthbook_cta_activation.json --measurement-output projects/vevo/growthbook_cta_measurement_window.json --workspace-output projects/vevo/growthbook_workspace.json --final-snapshot-output projects/vevo/growthbook_cta_final_snapshot.json
+python scripts/record_growthbook_cta_completion.py --stop-observation projects/vevo/growthbook_cta_assignment_stop_observation.json --stop-observation-sha256 <independent-sha256> --completion-output projects/vevo/growthbook_cta_completion.json --activation-output projects/vevo/growthbook_cta_activation.json --measurement-output projects/vevo/growthbook_cta_measurement_window.json --safety-output projects/vevo/growthbook_cta_safety_monitoring.json --workspace-output projects/vevo/growthbook_workspace.json --final-snapshot-output projects/vevo/growthbook_cta_final_snapshot.json
 python scripts/validate_growthbook_cta_completion.py
 python scripts/validate_growthbook_cta_final_snapshot.py
 python scripts/validate_growthbook_cta_measurement_window.py
@@ -325,8 +338,8 @@ git diff --check
 ```
 
 The offline recorder first builds and validates the completion, historical
-activation, measurement-window, workspace, and final-snapshot outputs before it
-writes any of them. It then records zero Production allocation, freezes
+activation, measurement-window, safety-monitoring, workspace, and
+final-snapshot outputs before it writes any of them. It then records zero Production allocation, freezes
 `final_snapshot_due_utc` at exactly 14 days after `assignment_ended_at_utc`, and
 opens only the hash-bound protected final-snapshot workflow. The current
 completion and final-snapshot manifests are deliberately waiting; therefore no

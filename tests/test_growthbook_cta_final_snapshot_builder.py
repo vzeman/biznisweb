@@ -30,6 +30,7 @@ class GrowthBookCtaFinalSnapshotBuilderTests(unittest.TestCase):
             self.completion,
             self.activation,
             self.measurement,
+            _safety,
             _workspace,
             recorded_final_snapshot,
         ) = completion._record()

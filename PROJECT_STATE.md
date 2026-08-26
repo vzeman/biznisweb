@@ -6269,3 +6269,32 @@ Known issues:
 Next exact step:
 
 - Implement the hash-bound safety stop lifecycle integration first, then the protected PC-independent checkpoint collection path. Continue the frozen A/A boundary: before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results or dispatch result workflows.
+
+## 2026-08-26 — VEVO CTA safety stop lifecycle prepared
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-safety-stop-lifecycle`
+
+What changed:
+
+- Added the offline `record_growthbook_cta_safety_checkpoint.py` lifecycle recorder. It can bind a future verified CTA start while leaving collection disabled, and later accepts only canonical evidence/decision/provenance artifacts whose independent SHA-256 values, successful workflow run, and exact main commit all match. It re-runs the frozen safety evaluator itself.
+- A `CONTINUE` or `CONTINUE_NOT_MATURE` checkpoint leaves assignment and the reviewed stop lifecycle unchanged. A verified `STOP_REQUIRED` closes safety collection, records the exact trigger, and opens only the existing manual CTA stop review; it performs no external mutation and cannot call a winner.
+- Extended `growthbook_cta_measurement_window.json` with an explicit reviewed stop-trigger contract. The normal first-`N`/day-42 path remains outcome-blind, while a safety stop must preserve all three safety artifact hashes and its observed time.
+- Extended `record_growthbook_cta_completion.py` so either reviewed trigger reaches the same exact manual GrowthBook-only stop readback, stopped safety state, zero Production allocation, and frozen 14-day follow-up. Completion now hash-binds the safety manifest and validates all six resulting manifests before writing.
+- Updated the existing outcome-blind checkpoint workflow fixture for the expanded closed stop schema, strengthened central security/workspace validation, and documented that protected safety collection remains a separate disabled step.
+
+What is verified:
+
+- The full official Python suite passes `814` tests and the storefront JavaScript suite passes all `9` tests. The focused safety/window/completion/final-snapshot suite passes `38` cases, including forged decisions, altered measurement state, swapped workflow run/main commit, both commerce and performance stops, the unchanged outcome-blind path, and the shared 14-day follow-up.
+- CTA safety, measurement-window, completion, workspace, and central security validators pass. Scoped Ruff, Python compilation, VEVO JSON parsing, workflow YAML parsing, and `git diff --check` pass.
+- The checked-in manifests remain fail-closed at the pre-CTA waiting state. All safety collection/recording/manual-stop, primary/business-outcome, winner, and automatic external-mutation gates remain false.
+- No A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read. No result or safety workflow was dispatched; no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, product, cart, checkout, payment, stock, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- The reviewed safety STOP lifecycle is now executable offline, but the protected PC-independent safety checkpoint collection workflow is not implemented. Recording remains deliberately impossible from the checked-in state because all three collection/recording gates are false.
+
+Next exact step:
+
+- Merge this lifecycle change after CI, then implement the protected main-only safety collection workflow with the exact Production Fargate identity/localhost hard gate, aggregate identity-free safety evidence, independent decision/provenance hashes, and no primary/business/Meta/winner or mutation access. Before `2026-09-02 03:45 Europe/Bratislava`, continue to avoid A/A population/results and do not dispatch result workflows.
