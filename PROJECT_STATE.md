@@ -6243,3 +6243,29 @@ Known issues:
 Next exact step:
 
 - Merge this safety-contract change after CI, then implement the hash/run/commit-bound safety checkpoint collection/recording path and connect a verified `STOP_REQUIRED` decision to the existing reviewed manual CTA stop/completion lifecycle. Continue the result-blind A/A boundary: before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results or dispatch result workflows.
+
+## 2026-08-26 — VEVO CTA safety-only contract merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-safety-contract-state`
+
+What changed:
+
+- PR `#448` merged the fail-closed CTA safety-only contract and offline evaluator into `main` as `a4e87378275da9e64382fee45ddc93d0e5b1c310`.
+- This handoff replaces the completed merge instruction with the next executable safety-lifecycle step and introduces no runtime, experiment, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#448` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- `origin/main` and this state branch both read back exact merge commit `a4e87378275da9e64382fee45ddc93d0e5b1c310` before this handoff edit.
+- The merged safety manifest remains closed with null CTA start-source hashes and all collection, stop, outcome, winner, and automatic-mutation boundaries false. The offline evaluator accepts only aggregate safety fields and has no external client.
+- No result workflow was dispatched, no A/A population or result was read, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The operational safety checkpoint collector/recorder and verified `STOP_REQUIRED` to reviewed manual CTA stop/completion handoff are still pending. Gate 4 remains not launch-ready until both are implemented and verified.
+
+Next exact step:
+
+- Implement the hash-bound safety stop lifecycle integration first, then the protected PC-independent checkpoint collection path. Continue the frozen A/A boundary: before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results or dispatch result workflows.
