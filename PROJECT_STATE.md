@@ -5827,3 +5827,31 @@ Known issues:
 Next exact step:
 
 - Before `2026-09-02 03:45 Europe/Bratislava`, continue only result-blind infrastructure monitoring. Let the first admitted scheduled checkpoint capture at `2026-09-02 04:30 Europe/Bratislava`, then independently download/hash its one canonical artifact and record it through a separate reviewed PR; do not read arms, outcomes, Meta dimensions, conversion, revenue, CM1, or performance before the window resolves.
+
+## 2026-08-26 — VEVO Codex heartbeat aligned with cloud checkpoint capture
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-heartbeat-cloud-handoff`
+
+What changed:
+
+- Existing heartbeat automation `vevo-production-a-a-monitoring` was updated in place; no duplicate automation was created.
+- Its result-blind pre-checkpoint boundary now permits the repository-owned scheduled workflow to execute only its pre-AWS skip gate before `2026-09-02 03:45 Europe/Bratislava`, while continuing to forbid a manual checkpoint dispatch and every population/result read.
+- At a due checkpoint the heartbeat must first inspect and wait for the correct `04:30 Europe/Bratislava` GitHub scheduled run and may not dispatch a duplicate. Manual `confirm_checkpoint=true` is only a fallback when no relevant scheduled artifact exists and the original 24-hour daily gate is still open.
+- If the local PC was offline across several checkpoints, the heartbeat must process retained artifacts in ascending checkpoint-index order, resolve at the earliest artifact with at least `1,000` eligible devices, and ignore all later captures after that boundary.
+
+What is verified:
+
+- Automation readback reports ID `vevo-production-a-a-monitoring`, kind `heartbeat`, status `ACTIVE`, the unchanged daily `09:00` schedule, and this goal thread as its target.
+- The saved prompt contains the exact no-duplicate scheduled-artifact preference, pre-AWS skip boundary, manual same-window fallback, 90-day sequential catch-up, first-qualifying-checkpoint rule, and all existing GrowthBook Pro/CTA/external-mutation hard gates.
+- Official OpenAI Scheduled tasks documentation confirms that local-project scheduled tasks require the computer and app to remain running; the GitHub schedule is therefore the durable checkpoint producer and the Codex heartbeat is only its later coordinator/readback.
+- No GitHub workflow, AWS query/deploy, browser/UI action, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, commerce, or experiment gate was mutated. No population, arm, outcome, Meta-dimension, conversion, revenue, CM1, performance, or result was read.
+
+Known issues:
+
+- The local Codex heartbeat cannot run while the PC/app is unavailable; this no longer risks losing the checkpoint because GitHub captures and retains the canonical artifact independently for 90 days.
+
+Next exact step:
+
+- Continue daily result-blind infrastructure monitoring. Before `2026-09-02 03:45 Europe/Bratislava`, accept only infrastructure-health evidence and scheduled checkpoint skip behavior. At the first due boundary, consume the earliest successful exact-main scheduled checkpoint artifact without dispatching a duplicate, then record it through the offline recorder and reviewed PR.
