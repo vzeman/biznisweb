@@ -5971,3 +5971,29 @@ Known issues:
 Next exact step:
 
 - Merge this retention hardening after CI. Continue result-blind A/A infrastructure monitoring without duplicate manual runs; before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
+
+## 2026-08-26 — VEVO 90-day gate-artifact retention merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-gate-artifact-retention-state`
+
+What changed:
+
+- PR `#438` merged the 90-day one-time gate-artifact retention contract into `main` as `9c43cb655d7b5f819ce51bd13e45e2f44b8587d0`.
+- This handoff replaces the completed merge instruction with the next time-gated A/A operation; it changes no workflow behavior beyond the already merged artifact retention values.
+
+What is verified:
+
+- PR `#438` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- Local `main` and `origin/main` both read back exact merge commit `9c43cb655d7b5f819ce51bd13e45e2f44b8587d0`.
+- The five gate-critical workflow uploads and both machine-readable output contracts read back `90`; daily health evidence remains `14` and encrypted credentials remain `1`.
+- No result workflow was dispatched, no population or experiment result was read, no production/external state changed, and no local runtime process was started.
+
+Known issues:
+
+- None introduced. The effective repository artifact policy is proven by current 90-day `created_at`/`expires_at` metadata even though the current CLI token cannot read the separate Actions-policy settings endpoint.
+
+Next exact step:
+
+- Continue result-blind A/A infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect population, arms, outcomes, Meta dimensions, conversion, revenue, CM1, performance, or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the first artifact with at least `1,000` eligible devices.
