@@ -470,10 +470,35 @@ jobs:
                   '',
               ))
 
-          private_ip_text = detail_value(exact_task, 'privateIPv4Address')
+          def network_interface_value(task):
+              if not isinstance(task, dict):
+                  return ''
+              interfaces = [
+                  interface
+                  for container in task.get('containers') or []
+                  for interface in container.get('networkInterfaces') or []
+              ]
+              return str(next(
+                  (
+                      interface.get('privateIpv4Address')
+                      or interface.get('privateIPv4Address')
+                      for interface in interfaces
+                      if interface.get('privateIpv4Address')
+                      or interface.get('privateIPv4Address')
+                  ),
+                  '',
+              ))
+
+          private_ip_text = (
+              detail_value(exact_task, 'privateIPv4Address')
+              or network_interface_value(exact_task)
+          )
           runtime_source = 'ecs_stopped_task'
           if not private_ip_text:
-              private_ip_text = detail_value(cloudtrail_task, 'privateIPv4Address')
+              private_ip_text = (
+                  detail_value(cloudtrail_task, 'privateIPv4Address')
+                  or network_interface_value(cloudtrail_task)
+              )
               runtime_source = 'cloudtrail_run_task_retention_recovery'
           private_ip = ipaddress.ip_address(private_ip_text)
           if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
