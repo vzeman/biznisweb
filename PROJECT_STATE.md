@@ -6631,3 +6631,29 @@ Known issues:
 Next exact step:
 
 - Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then preserve the frozen A/A boundary until `2026-09-02 03:45 Europe/Bratislava`; at or after that time process only the protected outcome-blind A/A chain and continue through the already versioned gates without skipping the completed-A/A 21-day lifecycle or exact-main CTA start-readiness assertion.
+
+## 2026-08-26 — VEVO CTA start-readiness merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-start-readiness-state`
+
+What changed:
+
+- PR `#462` merged the source-complete CTA start-readiness gate into `main` as `21998faccc266b529bc47737bb11293155e721a9`.
+- This handoff records the verified merge and supersedes the preceding pre-merge instruction. It introduces no experiment, billing, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#462` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` on exact head `ccf644bad76d01c9e94c0d8a6d748ff6025e3908` before merge.
+- The pull request was mergeable and clean against base `a69db11d343b33e3fc682bf9df4e6555fc778a32`; `origin/main` and this state branch read back exact merge commit `21998faccc266b529bc47737bb11293155e721a9` with that base and head as its parents.
+- The future CTA start now requires the completed-A/A lifecycle, CTA-only runtime, A/A stop, Pro, workspace, registry, Meta/reporting, and versioned source evidence to remain canonical and unchanged immediately before start. The checked-in waiting state remains fail-closed.
+- No A/A population or result was inspected, no workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`. GrowthBook Pro remains unpurchased and the CTA experiment remains draft at zero allocation.
+
+Next exact step:
+
+- Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful outcome-blind checkpoint artifact in index order, resolve the window without arm/outcome peeking, and process only the protected A/A evidence path. Continue only on an independently reproduced `PASS`; after the reviewed zero-allocation stop, request a fresh action-time confirmation immediately before the exact one-seat `$40 USD` monthly GrowthBook Pro action, then execute the completed-A/A 21-day lifecycle preflight, CTA-only runtime, and exact-main `assert-start-ready` gate before any manual CTA allocation.
