@@ -5665,3 +5665,30 @@ What is verified:
 Next exact step:
 
 - Let the PC-independent GitHub monitor run at `2026-08-26 04:15 Europe/Bratislava`, after the first natural `03:45` reconciliation, and validate only its exact-main canonical result-blind artifact; do not read any experimental population or result before `2026-09-02 03:45`.
+
+## 2026-08-26 — VEVO first natural Production reconciliation verified result-blind
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-first-natural-evidence`
+
+What changed:
+
+- The first scheduled monitor reached the post-due gate after GitHub delay, but the short-lived ECS stopped-task listing had already expired. PRs `#423`, `#424`, and `#425` made the monitor retention-safe without weakening the no-result boundary.
+- The monitor now discovers the exact task from the bounded CloudWatch success marker plus the Scheduler-authenticated CloudTrail `RunTask` event, prefers retained ECS state, and records an explicit schema-v2 retention source instead of inventing a private IP.
+- A `null` private IP under `cloudtrail_run_task_retention_recovery` is valid only for read-only reconciliation monitoring. It does not satisfy the separate live IP plus localhost-marker hard gate required before any infrastructure mutation.
+
+What is verified:
+
+- PR `#423` merged as `5bf0549a7412685dcf06bf89ac8ca30bff162fa1`, PR `#424` as `514cbcb5742b8a5ca8c3aa076f6ced80cf12dda8`, and PR `#425` as `3876798c1c581ea0dab8f2dde14c92baab2540f7`; every required PR check passed.
+- Exact-main read-only workflow run `32932181925` succeeded on `3876798c1c581ea0dab8f2dde14c92baab2540f7` and produced exactly one canonical sanitized artifact.
+- The artifact SHA-256 is `d1166ce95dd6369b882d0d63eedf4b85ad9503de6513665dd222a13ac5be4104`; independent local validation with `validate_growthbook_aa_infra_health_evidence.py` passed, and the temporary download was deleted.
+- Its phase is `natural_reconciliation_verified` for `2026-08-26T03:45:00+02:00`: schedule `ENABLED`, Scheduler `RunTask` verified, success marker and generated/published parity verified, all three alarms clear, and retained DLQ empty.
+- ECS stopped-task state had expired, so `runtime_state_retained=false`, `identity_source=cloudtrail_run_task_retention_recovery`, and `private_ip=null` are recorded explicitly. No live-IP hard-gate claim is made.
+- The retention changes passed `764` Python tests, `9` storefront JavaScript tests, security CI, Ruff, Python compilation, YAML parsing, and `git diff --check`.
+- Population, arm, outcome, Meta-dimension, conversion, revenue, CM1, performance, and reporting row-count reads are all `false`; no AWS resource, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, product, stock, cart, checkout, payment, or order mutation occurred.
+- No local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Next exact step:
+
+- Continue daily result-blind infrastructure monitoring, but do not inspect population, arms, outcomes, Meta dimensions, conversions, revenue, CM1, performance, or any experiment result before the pre-registered first checkpoint at `2026-09-02 03:45 Europe/Bratislava`.
