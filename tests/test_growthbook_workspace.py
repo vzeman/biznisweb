@@ -143,6 +143,30 @@ class GrowthBookWorkspaceContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Meta parameter rollout"):
                 validator.validate()
 
+    def test_checked_in_meta_handoff_matches_running_aa_gate(self) -> None:
+        self.assertEqual(
+            "production_aa_running_activation_verified_pro_quantiles_blocked",
+            self.workspace["state"],
+        )
+        self.assertEqual(
+            "freeze_exact_aa_window_then_require_complete_stable_meta_"
+            "dimension_exposure_in_final_evidence",
+            self.workspace["population_audit"]["next_gate"],
+        )
+        rollout = self.workspace["meta_parameter_rollout"]
+        self.assertEqual(
+            "aa_running_contract_enforced_existing_live_ads_unchanged",
+            rollout["status"],
+        )
+        self.assertEqual(
+            "require_complete_stable_meta_dimension_exposure_in_frozen_aa_"
+            "evidence_or_keep_not_ready",
+            rollout["next_gate"],
+        )
+        self.assertEqual(0, rollout["baseline_complete_contract_ads"])
+        self.assertFalse(rollout["bulk_live_edit_allowed"])
+        self.assertFalse(rollout["current_meta_mutation_observed"])
+
     def test_validator_rejects_production_foundation_activation_drift(self) -> None:
         altered = copy.deepcopy(self.workspace)
         current = altered["athena"]["production"]["deployment_allowed"]

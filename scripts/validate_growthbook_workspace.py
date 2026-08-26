@@ -1190,13 +1190,16 @@ def validate() -> None:
             },
             "external_mutation_observed": False,
         },
-        "next_gate": "verify_first_natural_reconciliation_before_measured_aa_publish",
+        "next_gate": (
+            "freeze_exact_aa_window_then_require_complete_stable_meta_"
+            "dimension_exposure_in_final_evidence"
+        ),
     }
     if workspace.get("population_audit") != expected_population_audit:
         raise AssertionError("GrowthBook Meta/population audit state drift")
 
     expected_meta_parameter_rollout = {
-        "status": "runbook_verified_existing_live_ads_unchanged",
+        "status": "aa_running_contract_enforced_existing_live_ads_unchanged",
         "runbook": "projects/vevo/META_ADS_GROWTHBOOK_PARAMETER_RUNBOOK.md",
         "owner_of_randomization": "growthbook",
         "meta_split_for_same_hypothesis_allowed": False,
@@ -1221,7 +1224,10 @@ def validate() -> None:
         "baseline_audit_run_id": "32464046045",
         "baseline_complete_contract_ads": 0,
         "current_meta_mutation_observed": False,
-        "next_gate": "verify_first_natural_reconciliation_before_measured_aa_publish",
+        "next_gate": (
+            "require_complete_stable_meta_dimension_exposure_in_frozen_aa_"
+            "evidence_or_keep_not_ready"
+        ),
     }
     if workspace.get("meta_parameter_rollout") != expected_meta_parameter_rollout:
         raise AssertionError("GrowthBook Meta parameter rollout state drift")
