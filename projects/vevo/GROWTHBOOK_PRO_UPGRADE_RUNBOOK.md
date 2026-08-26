@@ -20,6 +20,9 @@ Do not continue when any of the following is true:
   introduces an unreviewed tax, discount, trial, annual commitment, seat, or
   usage commitment;
 - action-time user confirmation of the recurring paid subscription is absent;
+- the recorded action-time confirmation is more than 15 minutes old, is more
+  than 60 seconds in the future, predates the verified A/A stop, or is not a
+  canonical whole-second UTC `Z` timestamp;
 - a page requests payment-method, card, bank, tax-ID, invoice-address, password,
   OTP, or other sensitive data to be copied into Git, a browser log, an
   observation, or chat;
@@ -32,8 +35,9 @@ Do not continue when any of the following is true:
 
 Only after the verified A/A completion is merged, obtain action-time user
 confirmation for this exact transaction: one GrowthBook Cloud Pro seat,
-`$40 USD` base price per month, recurring monthly subscription. Then run the
-offline recorder on a new branch:
+`$40 USD` base price per month, recurring monthly subscription. The supplied
+timestamp must be current within 15 minutes. Then run the offline recorder on a
+new branch:
 
 ```text
 python scripts/record_growthbook_pro_upgrade.py open-review --authorized-at-utc <UTC-Z> --confirm-paid-upgrade true --confirmed-seat-count 1 --confirmed-base-monthly-price 40 --confirmed-recurring-subscription true
@@ -52,7 +56,21 @@ or start CTA.
 From the reviewed state, reload GrowthBook Billing and re-read organization,
 plan, seats, currency, base price, billing period, and recurring status. Stop on
 any drift. Immediately before the final paid confirmation, request the required
-browser action-time confirmation again. Do not save or expose payment details.
+action-time confirmation again. Refresh the already-open review with the same
+`open-review` command on a new branch, using the new canonical UTC timestamp,
+and merge it through a reviewed PR. Refresh is accepted only while the bound
+A/A completion and pre-upgrade workspace hashes are unchanged.
+
+On the exact merged `main` commit, immediately run this read-only final gate:
+
+```text
+python scripts/record_growthbook_pro_upgrade.py assert-action-time
+```
+
+Proceed with the reviewed paid click only when it prints `OK`. If more than 15
+minutes have elapsed, stop and repeat the fresh confirmation, refresh, review,
+merge, and assertion. Do not edit timestamps by hand and do not save or expose
+payment details.
 
 After Billing reads `Pro`/active, create and query-test each exact Quantile
 metric twice: once against Preview `VEVO Performance Vitals v1` and once against
@@ -80,6 +98,11 @@ Create one canonical observation matching the strict schema enforced by
 the six new non-secret metric IDs, contract hashes, query/read-back booleans,
 the unchanged CTA draft and infrastructure boundaries, and no identity,
 credential, payment-method, invoice, customer, or order data.
+
+The canonical observation timestamp must be at or after the refreshed
+authorization timestamp and no more than four hours later. Complete the billing
+read-back and all six exact metric read-backs inside that bounded window. If the
+window expires, stop and escalate; never backdate or rewrite evidence.
 
 Record it on a new branch:
 

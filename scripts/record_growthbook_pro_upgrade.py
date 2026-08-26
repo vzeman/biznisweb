@@ -8,7 +8,7 @@ import hashlib
 import json
 import math
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -33,6 +33,9 @@ SORTED_METRIC_KEYS = sorted(METRIC_KEYS)
 CTA_GUARDRAILS = ["vevo_client_error_device_rate_24h", *METRIC_KEYS]
 HEX_64 = re.compile(r"[0-9a-f]{64}")
 METRIC_ID = re.compile(r"fact__[A-Za-z0-9]+")
+ACTION_TIME_FRESHNESS = timedelta(minutes=15)
+ACTION_TIME_CLOCK_SKEW = timedelta(seconds=60)
+MAX_VERIFIED_UPGRADE_DELAY = timedelta(hours=4)
 
 
 class ProUpgradeError(ValueError):
@@ -74,7 +77,34 @@ def _timestamp(value: Any, label: str) -> datetime:
     except ValueError as exc:
         raise ProUpgradeError(f"{label} is invalid") from exc
     _require(parsed.tzinfo is not None and parsed.utcoffset() == timezone.utc.utcoffset(parsed), f"{label} must be UTC")
+    _require(
+        parsed.isoformat(timespec="seconds").replace("+00:00", "Z") == value,
+        f"{label} must use canonical whole-second UTC Z",
+    )
     return parsed
+
+
+def _current_utc(now: datetime | None) -> datetime:
+    current = now or datetime.now(timezone.utc)
+    _require(
+        current.tzinfo is not None and current.utcoffset() is not None,
+        "current time must be timezone-aware",
+    )
+    return current.astimezone(timezone.utc)
+
+
+def _require_fresh_action_time(value: Any, *, now: datetime | None) -> datetime:
+    authorized = _timestamp(value, "authorization.authorized_at_utc")
+    current = _current_utc(now)
+    _require(
+        authorized <= current + ACTION_TIME_CLOCK_SKEW,
+        "GrowthBook Pro authorization timestamp is in the future",
+    )
+    _require(
+        authorized >= current - ACTION_TIME_FRESHNESS,
+        "GrowthBook Pro action-time confirmation is stale",
+    )
+    return authorized
 
 
 def _positive_number(value: Any, label: str) -> float:
@@ -198,7 +228,15 @@ def validate_observation(observation: Mapping[str, Any], manifest: Mapping[str, 
     )
     _exact(observation, {"schema_version", "observation_type", "observed_at_utc", "organization", "billing", "quantile_metrics", "cta_draft", "control", "safety"}, "observation")
     _require(observation["schema_version"] == 1 and observation["observation_type"] == "vevo_growthbook_pro_upgrade_observation", "GrowthBook Pro observation identity drift")
-    _timestamp(observation["observed_at_utc"], "observation.observed_at_utc")
+    observed_at = _timestamp(observation["observed_at_utc"], "observation.observed_at_utc")
+    authorized_at = _timestamp(
+        manifest["authorization"]["authorized_at_utc"],
+        "authorization.authorized_at_utc",
+    )
+    _require(
+        authorized_at <= observed_at <= authorized_at + MAX_VERIFIED_UPGRADE_DELAY,
+        "GrowthBook Pro observation is outside the authorized upgrade window",
+    )
     organization = _exact(observation["organization"], {"name", "id", "project_name", "project_id"}, "organization")
     _require(organization == {"name": "Vevo", "id": "org_19g6mmt1q79o1", "project_name": "VEVO SK Web", "project_id": "prj_2CeEJc6J9FwQFix9UhsnKr"}, "GrowthBook Pro organization/project drift")
     billing = _exact(observation["billing"], {"plan", "status", "seat_count", "currency", "base_monthly_price", "billing_period", "recurring_subscription"}, "billing")
@@ -256,25 +294,86 @@ def validate_observation(observation: Mapping[str, Any], manifest: Mapping[str, 
     _require(not any(safety.values()), "GrowthBook Pro observation contains unsafe data or unrelated mutation")
 
 
-def open_review(manifest: Mapping[str, Any], workspace: Mapping[str, Any], completion: Mapping[str, Any], *, authorized_at_utc: str, confirm_paid_upgrade: str, confirmed_seat_count: int, confirmed_base_monthly_price: float, confirmed_recurring_subscription: str) -> dict[str, Any]:
+def open_review(
+    manifest: Mapping[str, Any],
+    workspace: Mapping[str, Any],
+    completion: Mapping[str, Any],
+    *,
+    authorized_at_utc: str,
+    confirm_paid_upgrade: str,
+    confirmed_seat_count: int,
+    confirmed_base_monthly_price: float,
+    confirmed_recurring_subscription: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     validate_manifest(manifest, workspace)
-    _require(manifest["status"] == WAITING, "GrowthBook Pro review is already opened")
+    _require(
+        manifest["status"] in {WAITING, REVIEW_OPEN},
+        "GrowthBook Pro review cannot be opened or refreshed",
+    )
     _require(completion.get("status") == "production_aa_stopped_verified_cta_activation_blocked", "GrowthBook Pro requires verified A/A completion")
     _require(completion.get("aa_pass", {}).get("verdict") == "PASS" and completion.get("stop_readback", {}).get("status") == "verified_zero_allocation", "GrowthBook Pro requires A/A PASS and zero-allocation stop")
     _require(workspace.get("state") == POST_AA_BLOCKED and workspace.get("workspace", {}).get("production_allocation_percent") == 0, "GrowthBook Pro requires the post-A/A blocked workspace")
     _require(workspace["workspace"].get("plan_type") == "starter" and workspace["workspace"].get("subscription_or_trial_status") == "starter_active_no_paid_upgrade_accepted", "GrowthBook Pro source plan drift")
     _require(confirm_paid_upgrade == "true", "exact paid-upgrade confirmation is required")
     _require(confirmed_seat_count == 1 and _positive_number(confirmed_base_monthly_price, "confirmed_base_monthly_price") == 40 and confirmed_recurring_subscription == "true", "GrowthBook Pro confirmed offer differs from the reviewed monthly plan")
-    _timestamp(authorized_at_utc, "authorized_at_utc")
+    authorized_at = _require_fresh_action_time(authorized_at_utc, now=now)
+    stopped_at = _timestamp(
+        completion.get("stop_readback", {}).get("observed_at_utc"),
+        "completion.stop_readback.observed_at_utc",
+    )
+    _require(
+        authorized_at >= stopped_at,
+        "GrowthBook Pro authorization predates the verified A/A stop",
+    )
+    completion_sha256 = hashlib.sha256(canonical_json_bytes(completion)).hexdigest()
+    workspace_sha256 = hashlib.sha256(canonical_json_bytes(workspace)).hexdigest()
+    if manifest["status"] == REVIEW_OPEN:
+        _require(
+            manifest["source_bindings"]["aa_completion"]["sha256"] == completion_sha256,
+            "A/A completion changed before GrowthBook Pro authorization refresh",
+        )
+        _require(
+            manifest["source_bindings"]["workspace_before_upgrade"]["sha256"] == workspace_sha256,
+            "GrowthBook workspace changed before GrowthBook Pro authorization refresh",
+        )
     updated = copy.deepcopy(manifest)
-    updated["source_bindings"]["aa_completion"]["sha256"] = hashlib.sha256(canonical_json_bytes(completion)).hexdigest()
-    updated["source_bindings"]["workspace_before_upgrade"]["sha256"] = hashlib.sha256(canonical_json_bytes(workspace)).hexdigest()
+    updated["source_bindings"]["aa_completion"]["sha256"] = completion_sha256
+    updated["source_bindings"]["workspace_before_upgrade"]["sha256"] = workspace_sha256
     updated["authorization"].update({"status": "explicit_action_time_confirmation_recorded", "authorized_at_utc": authorized_at_utc, "confirmed_seat_count": 1, "confirmed_base_monthly_price": 40, "confirmed_recurring_subscription": True})
     updated["status"] = REVIEW_OPEN
     updated["release_boundaries"]["manual_paid_upgrade_allowed"] = True
     updated["next_gate"] = "manually_upgrade_then_create_and_query_test_six_quantile_metrics"
     validate_manifest(updated, workspace)
     return updated
+
+
+def assert_action_time(
+    manifest: Mapping[str, Any],
+    workspace: Mapping[str, Any],
+    completion: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+) -> None:
+    validate_manifest(manifest, workspace)
+    _require(
+        manifest["status"] == REVIEW_OPEN
+        and manifest["release_boundaries"]["manual_paid_upgrade_allowed"] is True,
+        "GrowthBook Pro paid action review is not open",
+    )
+    _require(
+        hashlib.sha256(canonical_json_bytes(completion)).hexdigest()
+        == manifest["source_bindings"]["aa_completion"]["sha256"],
+        "A/A completion changed after GrowthBook Pro authorization",
+    )
+    _require(
+        hashlib.sha256(canonical_json_bytes(workspace)).hexdigest()
+        == manifest["source_bindings"]["workspace_before_upgrade"]["sha256"],
+        "GrowthBook workspace changed after GrowthBook Pro authorization",
+    )
+    _require_fresh_action_time(
+        manifest["authorization"]["authorized_at_utc"], now=now
+    )
 
 
 def record_upgrade(manifest: Mapping[str, Any], workspace: Mapping[str, Any], completion: Mapping[str, Any], observation: Mapping[str, Any], *, expected_observation_sha256: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -345,6 +444,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     open_parser.add_argument("--confirmed-seat-count", required=True, type=int)
     open_parser.add_argument("--confirmed-base-monthly-price", required=True, type=float)
     open_parser.add_argument("--confirmed-recurring-subscription", required=True)
+    sub.add_parser("assert-action-time")
     record_parser = sub.add_parser("record")
     record_parser.add_argument("--observation", required=True, type=Path)
     record_parser.add_argument("--expected-observation-sha256", required=True)
@@ -354,8 +454,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         workspace = _load(WORKSPACE_PATH, "GrowthBook workspace")
         completion = _load(COMPLETION_PATH, "A/A completion")
         if args.command == "open-review":
-            updated = open_review(manifest, workspace, completion, authorized_at_utc=args.authorized_at_utc, confirm_paid_upgrade=args.confirm_paid_upgrade, confirmed_seat_count=args.confirmed_seat_count, confirmed_base_monthly_price=args.confirmed_base_monthly_price, confirmed_recurring_subscription=args.confirmed_recurring_subscription)
+            updated = open_review(
+                manifest,
+                workspace,
+                completion,
+                authorized_at_utc=args.authorized_at_utc,
+                confirm_paid_upgrade=args.confirm_paid_upgrade,
+                confirmed_seat_count=args.confirmed_seat_count,
+                confirmed_base_monthly_price=args.confirmed_base_monthly_price,
+                confirmed_recurring_subscription=args.confirmed_recurring_subscription,
+                now=datetime.now(timezone.utc),
+            )
             _write(MANIFEST_PATH, updated)
+        elif args.command == "assert-action-time":
+            assert_action_time(
+                manifest,
+                workspace,
+                completion,
+                now=datetime.now(timezone.utc),
+            )
         else:
             observation_bytes = args.observation.read_bytes()
             observation = _load(args.observation, "GrowthBook Pro observation")
