@@ -500,9 +500,13 @@ jobs:
                   or network_interface_value(cloudtrail_task)
               )
               runtime_source = 'cloudtrail_run_task_retention_recovery'
-          private_ip = ipaddress.ip_address(private_ip_text)
-          if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
-              raise SystemExit('scheduled reconciliation task private IP drift')
+
+          if private_ip_text:
+              private_ip = ipaddress.ip_address(private_ip_text)
+              if private_ip not in ipaddress.ip_network('172.31.0.0/16'):
+                  raise SystemExit('scheduled reconciliation task private IP drift')
+          elif exact_task is not None or cloudtrail_task is None:
+              raise SystemExit('scheduled reconciliation task private IP unexpectedly missing')
 
           if exact_task is not None:
               containers = exact_task.get('containers') or []
@@ -593,7 +597,7 @@ jobs:
           natural = json.load(open(root / 'natural-control.json', encoding='utf-8')) if post_run else {}
           task_definition = deploy['reconciliation']['task_definition'].rsplit('/', 1)[-1]
           evidence = {
-              'schema_version': 1,
+              'schema_version': 2,
               'evidence_type': 'vevo_growthbook_production_aa_infra_health',
               'environment': 'production',
               'observed_at_utc': datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z'),
@@ -612,12 +616,19 @@ jobs:
               'runtime': {
                   'instance_id': 'N/A:Fargate',
                   'task_id': os.environ.get('RECONCILIATION_TASK_ID') if post_run else None,
-                  'private_ip': os.environ.get('RECONCILIATION_PRIVATE_IP') if post_run else None,
+                  'private_ip': (
+                      os.environ.get('RECONCILIATION_PRIVATE_IP') or None
+                      if post_run else None
+                  ),
                   'service': os.environ['EXPECTED_SERVICE'],
                   'runtime_path': os.environ['EXPECTED_RUNTIME_PATH'],
                   'task_definition': task_definition,
                   'image_digest': deploy['reconciliation']['image_digest'],
                   'localhost_marker_source': 'hash_bound_deploy_evidence_host_gate',
+                  'identity_source': (
+                      os.environ.get('RECONCILIATION_RUNTIME_IDENTITY_SOURCE')
+                      if post_run else None
+                  ),
               },
               'control': {
                   'schedule_name': schedule['Name'],
@@ -635,6 +646,12 @@ jobs:
                   'source_schedule_state': source['State'],
                   'source_task_definition': deploy['source_runtime']['task_definition'].rsplit('/', 1)[-1],
                   'source_schedule_unchanged': True,
+                  'scheduler_run_task_verified': post_run,
+                  'runtime_state_retained': (
+                      os.environ.get('RECONCILIATION_RUNTIME_IDENTITY_SOURCE')
+                      == 'ecs_stopped_task'
+                      if post_run else None
+                  ),
               },
               'privacy': {
                   'experimental_population_read': False,

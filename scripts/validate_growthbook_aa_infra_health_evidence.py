@@ -89,7 +89,8 @@ def validate_health_evidence(
         },
         "evidence",
     )
-    _require(evidence["schema_version"] == 1, "schema version drift")
+    schema_version = evidence["schema_version"]
+    _require(schema_version in {1, 2}, "schema version drift")
     _require(
         evidence["evidence_type"]
         == "vevo_growthbook_production_aa_infra_health",
@@ -144,9 +145,7 @@ def validate_health_evidence(
     )
 
     runtime = evidence["runtime"]
-    _exact_keys(
-        runtime,
-        {
+    runtime_keys = {
             "image_digest",
             "instance_id",
             "localhost_marker_source",
@@ -155,9 +154,10 @@ def validate_health_evidence(
             "service",
             "task_definition",
             "task_id",
-        },
-        "runtime",
-    )
+    }
+    if schema_version == 2:
+        runtime_keys.add("identity_source")
+    _exact_keys(runtime, runtime_keys, "runtime")
     expected_task_definition = deploy_evidence["reconciliation"]["task_definition"].rsplit("/", 1)[-1]
     _require(runtime["instance_id"] == "N/A:Fargate", "instance marker drift")
     _require(runtime["service"] == EXPECTED_SCHEDULE, "runtime service drift")
@@ -174,9 +174,7 @@ def validate_health_evidence(
     )
 
     control = evidence["control"]
-    _exact_keys(
-        control,
-        {
+    control_keys = {
             "alarm_states",
             "alarms_clear",
             "dlq_empty",
@@ -192,9 +190,10 @@ def validate_health_evidence(
             "source_schedule_unchanged",
             "source_task_definition",
             "success_marker_sha256",
-        },
-        "control",
-    )
+    }
+    if schema_version == 2:
+        control_keys.update({"runtime_state_retained", "scheduler_run_task_verified"})
+    _exact_keys(control, control_keys, "control")
     _require(control["schedule_name"] == EXPECTED_SCHEDULE, "schedule name drift")
     _require(control["schedule_state"] == "ENABLED", "schedule state drift")
     _require(control["schedule_expression"] == "cron(45 3 * * ? *)", "schedule expression drift")
@@ -226,20 +225,31 @@ def validate_health_evidence(
             control["generated_published_parity_verified"] is None,
             "pre-first-run parity drift",
         )
+        if schema_version == 2:
+            _require(runtime["identity_source"] is None, "pre-first-run identity source drift")
+            _require(
+                control["scheduler_run_task_verified"] is False,
+                "pre-first-run Scheduler evidence drift",
+            )
+            _require(
+                control["runtime_state_retained"] is None,
+                "pre-first-run runtime retention drift",
+            )
     elif phase["status"] == "natural_reconciliation_verified":
         _parse_timestamp(phase["checked_due_local"], "checked_due_local")
         _require(
             TASK_ID_RE.fullmatch(str(runtime["task_id"] or "")) is not None,
             "scheduled task ID drift",
         )
-        try:
-            private_ip = ipaddress.ip_address(str(runtime["private_ip"] or ""))
-        except ValueError as exc:
-            raise InfraHealthEvidenceError("scheduled task private IP invalid") from exc
-        _require(
-            private_ip in ipaddress.ip_network("172.31.0.0/16"),
-            "scheduled task private IP drift",
-        )
+        if schema_version == 1 or runtime["private_ip"] is not None:
+            try:
+                private_ip = ipaddress.ip_address(str(runtime["private_ip"] or ""))
+            except ValueError as exc:
+                raise InfraHealthEvidenceError("scheduled task private IP invalid") from exc
+            _require(
+                private_ip in ipaddress.ip_network("172.31.0.0/16"),
+                "scheduled task private IP drift",
+            )
         _require(control["schedule_succeeded"] is True, "schedule success drift")
         _require(
             HEX_64_RE.fullmatch(str(control["success_marker_sha256"] or "")) is not None,
@@ -257,6 +267,26 @@ def validate_health_evidence(
             set(control["alarm_states"].values()) == {"OK"},
             "post-run alarms must all be OK",
         )
+        if schema_version == 2:
+            identity_source = runtime["identity_source"]
+            _require(
+                identity_source
+                in {"ecs_stopped_task", "cloudtrail_run_task_retention_recovery"},
+                "runtime identity source drift",
+            )
+            _require(
+                control["scheduler_run_task_verified"] is True,
+                "Scheduler RunTask evidence drift",
+            )
+            if identity_source == "ecs_stopped_task":
+                _require(runtime["private_ip"] is not None, "retained runtime IP missing")
+                _require(control["runtime_state_retained"] is True, "runtime retention drift")
+            else:
+                _require(runtime["private_ip"] is None, "expired runtime IP must be null")
+                _require(
+                    control["runtime_state_retained"] is False,
+                    "expired runtime retention drift",
+                )
     else:
         raise InfraHealthEvidenceError("phase status drift")
 
