@@ -197,6 +197,38 @@ Minimum assignment duration is 14 full local days. Safety guardrails may stop
 early, but a safety stop can never declare a winner. After assignment stops,
 wait the frozen 14-day lifecycle follow-up before the one final decision look.
 
+## Safety-only checkpoint contract
+
+`projects/vevo/growthbook_cta_safety_monitoring.json` freezes the separate
+early-safety evidence boundary. The offline
+`scripts/evaluate_growthbook_cta_safety.py` accepts only aggregate
+`control`/`brand_contrast` device, measured-page-load, client-error, and p75
+LCP/INP/CLS fields plus explicit unchanged-commerce and data-quality booleans.
+It rejects event/device identifiers, customer/order data, primary or business
+outcomes, Meta dimensions, winner fields, and any claimed automatic mutation.
+
+Performance checks become mature only at 200 measured page loads in each arm.
+The frozen stop thresholds are LCP degradation above the larger of 200 ms or
+10%, INP degradation above the larger of 20 ms or 10%, CLS degradation above
+20 milli, and client-error-rate degradation above 0.5 percentage points. A
+changed CTA commerce label or price, a cart/checkout/order mutation, or a
+reproducible cart/checkout runtime error returns `STOP_REQUIRED` immediately,
+even before performance maturity. The evaluator can only return `CONTINUE`,
+`CONTINUE_NOT_MATURE`, or `STOP_REQUIRED`; it cannot stop GrowthBook, call a
+winner, or mutate any external service.
+
+This checked-in contract is deliberately
+`waiting_for_verified_cta_start`: collection and recording are disabled, both
+start-source hashes are null, and `manual_growthbook_stop_allowed=false`.
+Operational checkpoint collection plus the reviewed manual-stop handoff must
+be implemented and merged separately before Gate 4 can be considered ready.
+Validate only the closed contract now:
+
+```text
+python scripts/validate_growthbook_cta_safety_monitoring.py
+python -m unittest tests.test_growthbook_cta_safety_evaluator
+```
+
 The executable source of truth for this rule is
 `projects/vevo/growthbook_cta_measurement_window.json`. It is deliberately
 `waiting_for_verified_cta_start` now. After Gate 4 is recorded on `main`, bind

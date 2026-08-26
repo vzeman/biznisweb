@@ -6215,3 +6215,31 @@ Known issues:
 Next exact step:
 
 - Continue result-blind infrastructure monitoring without duplicate manual runs. Before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results. At the first due boundary, use the earliest successful exact-main scheduled A/A checkpoint artifact, independently validate and record it through a reviewed PR, and resolve only at the earliest artifact that satisfies the frozen eligible-device threshold.
+
+## 2026-08-26 — VEVO CTA safety-only contract prepared
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-safety-contract`
+
+What changed:
+
+- Added the fail-closed `growthbook_cta_safety_monitoring.json` contract for the future CTA test. It freezes the 24-hour cadence, exact aggregate no-identity schema, 200 measured page loads per arm, existing LCP/INP/CLS and client-error thresholds, immediate commerce/runtime-error stop reasons, and zero primary/business/Meta/winner/automatic-mutation access.
+- Added the offline `evaluate_growthbook_cta_safety.py` evaluator with only `CONTINUE`, `CONTINUE_NOT_MATURE`, and `STOP_REQUIRED` decisions, plus a checked-in contract/hash validator and regression suite.
+- Integrated the waiting safety contract into the workspace and central security validators. Both CTA start-source hashes, collection permission, manual stop permission, and all external mutation boundaries remain null/false.
+- Updated the CTA plan, activation runbook, and workspace handoff without claiming that operational collection exists yet.
+
+What is verified:
+
+- `806` Python tests and all `9` storefront JavaScript tests pass. The focused safety evaluator suite passes `10` cases, including strict threshold boundaries, every immediate pre-maturity commerce stop, malformed/non-finite evidence, forbidden outcome/identity fields, canonical CLI output, and contract/hash drift.
+- The safety contract, full workspace validator, central security CI, scoped Ruff, Python compilation, JSON parsing, and `git diff --check` pass.
+- The versioned Production host boundary remains instance `N/A:Fargate`, recorded deployment private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, and runtime path `/app`. This repository-only change performs no deploy or infrastructure mutation and therefore does not claim a new live-host readback.
+- No A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read. No result workflow was dispatched and no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, cart, checkout, payment, stock, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- The immutable safety contract and evaluator now exist, but the protected checkpoint collector/recorder and the `STOP_REQUIRED` to reviewed manual GrowthBook stop/completion handoff are not implemented yet. Until that separate work is merged and verified, operational early-safety monitoring remains closed and Gate 4 is not launch-ready.
+
+Next exact step:
+
+- Merge this safety-contract change after CI, then implement the hash/run/commit-bound safety checkpoint collection/recording path and connect a verified `STOP_REQUIRED` decision to the existing reviewed manual CTA stop/completion lifecycle. Continue the result-blind A/A boundary: before `2026-09-02 03:45 Europe/Bratislava`, do not inspect experiment population or results or dispatch result workflows.

@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "monitoring_type": "vevo_growthbook_cta_safety_only",
+  "status": "waiting_for_verified_cta_start",
+  "experiment_id": "vevo-sk-product-cta-color-001",
+  "source_bindings": {
+    "activation": {
+      "path": "projects/vevo/growthbook_cta_activation.json",
+      "sha256": null
+    },
+    "start_observation": {
+      "path": "projects/vevo/growthbook_cta_activation_observation.json",
+      "sha256": null
+    },
+    "decision_contract": {
+      "path": "projects/vevo/growthbook_cta_decision_contract.json",
+      "sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183"
+    }
+  },
+  "checkpoint_policy": {
+    "timezone": "Europe/Bratislava",
+    "cadence_hours": 24,
+    "first_checkpoint_after_start_hours": 24,
+    "maximum_checkpoint_lateness_minutes": 60,
+    "performance_requires_minimum_sample": true,
+    "commerce_or_reproducible_runtime_error_stops_immediately": true,
+    "primary_or_business_outcome_read_allowed": false
+  },
+  "thresholds": {
+    "minimum_measured_page_loads_per_arm": 200,
+    "lcp_degradation_absolute_ms": 200,
+    "lcp_degradation_relative_percent": 10,
+    "inp_degradation_absolute_ms": 20,
+    "inp_degradation_relative_percent": 10,
+    "cls_degradation_absolute_milli": 20,
+    "client_error_rate_increase_max_percentage_points": 0.5
+  },
+  "evidence_contract": {
+    "variation_keys": [
+      "control",
+      "brand_contrast"
+    ],
+    "variation_fields": [
+      "eligible_devices",
+      "measured_page_loads",
+      "client_error_devices",
+      "lcp_p75_ms",
+      "inp_p75_ms",
+      "cls_p75_milli"
+    ],
+    "commerce_fields": [
+      "add_to_cart_text_unchanged",
+      "price_unchanged",
+      "cart_checkout_order_mutated",
+      "reproducible_cart_or_checkout_runtime_error"
+    ],
+    "forbidden_metric_families": [
+      "add_to_cart",
+      "purchase",
+      "conversion",
+      "revenue",
+      "cm1",
+      "average_order_value",
+      "cancelled_order",
+      "refunded_order",
+      "meta_dimension",
+      "winner"
+    ],
+    "contains_event_or_device_ids": false,
+    "contains_customer_or_order_data": false,
+    "contains_primary_or_business_outcomes": false
+  },
+  "latest_checkpoint": {
+    "status": "not_recorded",
+    "checkpoint_index": null,
+    "observed_at_utc": null,
+    "evidence_sha256": null,
+    "decision_sha256": null,
+    "verdict": null,
+    "stop_reasons": []
+  },
+  "release_boundaries": {
+    "safety_checkpoint_collection_allowed": false,
+    "manual_growthbook_stop_allowed": false,
+    "automatic_growthbook_mutation_allowed": false,
+    "automatic_gtm_mutation_allowed": false,
+    "automatic_meta_ads_mutation_allowed": false,
+    "automatic_biznisweb_mutation_allowed": false,
+    "automatic_collector_or_reporting_mutation_allowed": false,
+    "price_product_stock_cart_checkout_payment_or_order_mutation_allowed": false,
+    "primary_or_business_outcome_read_allowed": false,
+    "winner_calls_allowed": false
+  },
+  "next_gate": "after_verified_cta_start_initialize_safety_monitoring"
+}
