@@ -48,6 +48,58 @@ def inline_python_block_containing(marker: str) -> str:
 
 
 class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
+    def run_local_gate(
+        self,
+        *,
+        event_name: str,
+        now_utc: str,
+        event_schedule: str = "",
+        resolution_status: str | None = None,
+        checkpoint_history: list[dict[str, object]] | None = None,
+    ) -> tuple[int | None, str, str]:
+        source = inline_python_block_containing("expected_schedule =")
+        source = source.replace(
+            "now = datetime.now(UTC)",
+            "now = datetime.fromisoformat(os.environ['TEST_NOW_UTC'].replace('Z', '+00:00'))",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = pathlib.Path(temporary_directory)
+            snapshot = json.loads(
+                (ROOT / "projects/vevo/growthbook_aa_snapshot.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            if resolution_status is not None:
+                snapshot["measurement_window"]["resolution_status"] = resolution_status
+            if checkpoint_history is not None:
+                snapshot["measurement_window"]["checkpoint_history"] = checkpoint_history
+            snapshot_path = temporary / "snapshot.json"
+            snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+            github_env = temporary / "github.env"
+            github_env.write_text("", encoding="utf-8")
+            env = {
+                "SNAPSHOT_MANIFEST": str(snapshot_path),
+                "DEPLOY_EVIDENCE": str(
+                    ROOT
+                    / "projects/vevo/growthbook_production_reconciliation_deploy_evidence.json"
+                ),
+                "EVENT_NAME": event_name,
+                "EVENT_SCHEDULE": event_schedule,
+                "TEST_NOW_UTC": now_utc,
+                "RUNNER_TEMP": str(temporary),
+                "GITHUB_RUN_ID": "123456789",
+                "GITHUB_ENV": str(github_env),
+            }
+            output = io.StringIO()
+            exit_code: int | None = None
+            with mock.patch.dict(os.environ, env, clear=False):
+                with contextlib.chdir(ROOT), contextlib.redirect_stdout(output):
+                    try:
+                        exec(compile(source, "checkpoint-local-gate.py", "exec"))
+                    except SystemExit as exc:
+                        exit_code = exc.code if isinstance(exc.code, int) else 1
+            return exit_code, output.getvalue(), github_env.read_text(encoding="utf-8")
+
     def test_every_inline_python_block_compiles(self) -> None:
         blocks = inline_python_blocks()
         self.assertGreaterEqual(len(blocks), 8)
@@ -58,6 +110,14 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_checkpoint:",
+            "- cron: '30 2 * * *'",
+            "- cron: '30 3 * * *'",
+            "EVENT_NAME: ${{ github.event_name }}",
+            "EVENT_SCHEDULE: ${{ github.event.schedule }}",
+            "PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=wrong-dst-slot:aws=false",
+            "PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=before-first-due:aws=false",
+            "PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=already-recorded:aws=false",
+            "PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=window-resolved:aws=false",
             "validate_growthbook_aa_measurement_window.py",
             "outcome-blind A/A checkpoint is outside its daily gate",
             "snapshot build opened before A/A window resolution",
@@ -72,6 +132,124 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "uses: aws-actions/configure-aws-credentials@v6.1.0"
         )
         self.assertLess(gate, credentials)
+
+    def test_scheduled_gate_skips_before_due_wrong_dst_and_resolved_without_aws(self) -> None:
+        scenarios = (
+            {
+                "now_utc": "2026-08-26T02:30:00Z",
+                "event_schedule": "30 2 * * *",
+                "resolution_status": None,
+                "reason": "before-first-due",
+            },
+            {
+                "now_utc": "2026-09-02T03:30:00Z",
+                "event_schedule": "30 3 * * *",
+                "resolution_status": None,
+                "reason": "wrong-dst-slot",
+            },
+            {
+                "now_utc": "2026-09-02T02:30:00Z",
+                "event_schedule": "30 2 * * *",
+                "resolution_status": "resolved",
+                "reason": "window-resolved",
+            },
+        )
+        for scenario in scenarios:
+            with self.subTest(reason=scenario["reason"]):
+                exit_code, output, github_env = self.run_local_gate(
+                    event_name="schedule",
+                    now_utc=str(scenario["now_utc"]),
+                    event_schedule=str(scenario["event_schedule"]),
+                    resolution_status=scenario["resolution_status"],
+                )
+                self.assertEqual(0, exit_code)
+                self.assertIn(f"reason={scenario['reason']}:aws=false", output)
+                self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
+
+    def test_scheduled_gate_derives_frozen_index_from_local_date(self) -> None:
+        exit_code, output, github_env = self.run_local_gate(
+            event_name="schedule",
+            now_utc="2026-09-04T02:30:00Z",
+            event_schedule="30 2 * * *",
+            checkpoint_history=[],
+        )
+        self.assertIsNone(exit_code)
+        self.assertIn(
+            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:outcome-read=false:mutation=none",
+            output,
+        )
+        self.assertIn("RUN_CHECKPOINT=false\n", github_env)
+        self.assertIn("RUN_CHECKPOINT=true\n", github_env)
+        self.assertIn("CHECKPOINT_INDEX=3\n", github_env)
+        self.assertIn("CANDIDATE_THROUGH_UTC=2026-09-03T22:00:00Z\n", github_env)
+        self.assertIn("CHECKPOINT_DUE_LOCAL=2026-09-04T03:45:00+02:00\n", github_env)
+
+    def test_scheduled_gate_accepts_the_winter_utc_slot(self) -> None:
+        exit_code, output, github_env = self.run_local_gate(
+            event_name="schedule",
+            now_utc="2026-11-02T03:30:00Z",
+            event_schedule="30 3 * * *",
+            checkpoint_history=[],
+        )
+        self.assertIsNone(exit_code)
+        self.assertIn(
+            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:outcome-read=false:mutation=none",
+            output,
+        )
+        self.assertIn("CHECKPOINT_INDEX=62\n", github_env)
+        self.assertIn("CANDIDATE_THROUGH_UTC=2026-11-01T23:00:00Z\n", github_env)
+        self.assertIn("CHECKPOINT_DUE_LOCAL=2026-11-02T03:45:00+01:00\n", github_env)
+
+    def test_scheduled_gate_skips_an_index_already_recorded(self) -> None:
+        exit_code, output, github_env = self.run_local_gate(
+            event_name="schedule",
+            now_utc="2026-09-02T02:30:00Z",
+            event_schedule="30 2 * * *",
+            checkpoint_history=[
+                {"evidence": {"window": {"checkpoint_index": 1}}}
+            ],
+        )
+        self.assertEqual(0, exit_code)
+        self.assertIn("reason=already-recorded:aws=false", output)
+        self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
+
+    def test_manual_gate_remains_next_history_index_and_exact_daily_window(self) -> None:
+        exit_code, _, github_env = self.run_local_gate(
+            event_name="workflow_dispatch",
+            now_utc="2026-09-02T02:30:00Z",
+        )
+        self.assertIsNone(exit_code)
+        self.assertIn("CHECKPOINT_INDEX=1\n", github_env)
+        exit_code, _, github_env = self.run_local_gate(
+            event_name="workflow_dispatch",
+            now_utc="2026-09-04T02:30:00Z",
+        )
+        self.assertNotEqual(0, exit_code)
+        self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
+
+    def test_all_credential_and_post_gate_steps_require_run_checkpoint(self) -> None:
+        step_names = (
+            "Configure AWS credentials for bounded read-only checkpoint",
+            "Read exact stack schedule and reconciliation task identity",
+            "Verify exact scheduled success marker alarms and DLQ",
+            "Query only the cumulative eligible-device count",
+            "Build and independently validate sanitized checkpoint evidence",
+            "Upload only sanitized outcome-blind checkpoint evidence",
+            "Publish checkpoint summary",
+        )
+        for step_name in step_names:
+            start = WORKFLOW.index(f"- name: {step_name}")
+            next_step = WORKFLOW.find("\n      - name:", start + 1)
+            block = WORKFLOW[start:] if next_step == -1 else WORKFLOW[start:next_step]
+            self.assertIn("if: ${{ env.RUN_CHECKPOINT == 'true' }}", block)
+        cleanup_start = WORKFLOW.index(
+            "- name: Remove every temporary AWS response and query file"
+        )
+        cleanup_end = WORKFLOW.index("\n      - name:", cleanup_start + 1)
+        self.assertIn(
+            "if: ${{ always() && env.RUN_CHECKPOINT == 'true' }}",
+            WORKFLOW[cleanup_start:cleanup_end],
+        )
 
     def test_runtime_schedule_marker_alarm_and_dlq_gates_are_exact(self) -> None:
         for marker in (
@@ -252,7 +430,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         for marker in (
             "name: vevo-growthbook-aa-window-checkpoint",
             "path: vevo-growthbook-aa-window-checkpoint.json",
-            "retention-days: 14",
+            "retention-days: 90",
             "canonical_evidence_bytes(evidence)",
             "validate_checkpoint_evidence(evidence, expected, index)",
         ):

@@ -48,8 +48,10 @@ gate.
 
 ## Before The First Due Checkpoint
 
-Before `2026-09-02 03:45 Europe/Bratislava`, the automation must not dispatch
-the A/A checkpoint workflow and must not read or report any experimental
+Before `2026-09-02 03:45 Europe/Bratislava`, the scheduled A/A checkpoint may
+start only far enough to run its checked-in local gate; that gate must skip
+before AWS credentials and before the population query. No manual checkpoint
+may be dispatched, and no automation may read or report any experimental
 population or result. In particular, it must not read:
 
 - total or eligible device counts;
@@ -120,15 +122,36 @@ identity-free artifact is uploaded. A missing or failed daily run is an
 infrastructure-monitoring blocker; it does not authorize the A/A checkpoint or
 any live mutation.
 
+### PC-independent outcome-blind checkpoint capture
+
+The repository-owned checkpoint workflow also schedules both possible UTC
+equivalents of `04:30 Europe/Bratislava` (`30 2 * * *` and `30 3 * * *`). Its
+pre-credential timezone gate admits only the currently correct DST slot. Before
+the first due date, after a resolved window, on the wrong DST slot, or when the
+same checkpoint is already committed, it exits successfully with
+`RUN_CHECKPOINT=false`; every AWS, query, evidence, upload, cleanup, and summary
+step is separately conditioned on `RUN_CHECKPOINT=true`.
+
+For an admitted scheduled run, the checkpoint index comes from the frozen
+local calendar date relative to the pre-registered first due date, not from the
+length of the Git checkpoint history. Therefore GitHub can preserve each exact
+daily checkpoint artifact even while the desktop PC is off and earlier
+artifacts have not yet been recorded. The query and evidence contract is
+unchanged: one cumulative eligible-device count, no arms and no outcomes. Each
+artifact remains valid only inside its own existing due-to-due-plus-one-day
+gate and is retained for 90 days.
+
 ## Due A/A Checkpoint
 
-At the exact next due gate, and only then:
+At the exact next due gate, and only then, the admitted `04:30` cloud slot
+captures the checkpoint automatically. A manual dispatch with
+`confirm_checkpoint=true` remains a same-gate fallback:
 
 1. Synchronize clean `main` and re-run the checked-in workspace and measurement
    window validators.
-2. Dispatch only
-   `.github/workflows/check-vevo-growthbook-production-aa-window.yml` from
-   `main` with `confirm_checkpoint=true`.
+2. Use only `.github/workflows/check-vevo-growthbook-production-aa-window.yml`
+   from `main`; normally consume its scheduled artifact, or dispatch it manually
+   with `confirm_checkpoint=true` only inside the exact same daily gate.
 3. Let the protected workflow bind the exact reconciliation through the bounded
    success marker and Scheduler-authenticated CloudTrail `RunTask` event before
    its one permitted aggregate Athena query. It prefers retained ECS state; if
@@ -148,7 +171,12 @@ At the exact next due gate, and only then:
 python scripts/record_growthbook_aa_window_checkpoint.py --evidence <downloaded-artifact>/vevo-growthbook-aa-window-checkpoint.json --snapshot projects/vevo/growthbook_aa_snapshot.json --output projects/vevo/growthbook_aa_snapshot.json --expected-evidence-sha256 <sha256> --expected-workflow-run-id <run-id> --expected-main-commit <head-sha>
 ```
 
-7. Run the focused checkpoint, workspace, measurement-window, and security
+7. If the PC was offline across more than one checkpoint, process the retained
+   artifacts in ascending checkpoint-index order. Stop at the earliest artifact
+   whose count reaches `1,000`; ignore every later artifact after that qualifying
+   checkpoint, because the pre-registered stopping rule resolves at the first
+   qualifying boundary.
+8. Run the focused checkpoint, workspace, measurement-window, and security
    validation plus `git diff --check`, then commit, push, and merge through a
    reviewed pull request.
 

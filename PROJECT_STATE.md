@@ -5794,3 +5794,34 @@ What is verified:
 Next exact step:
 
 - Let the cloud monitor continue daily. Before `2026-09-02 03:45 Europe/Bratislava`, inspect only exact-main result-blind infrastructure evidence. At or after that frozen gate, dispatch the protected outcome-blind checkpoint once for its exact due boundary with `confirm_checkpoint=true`; use only its cumulative eligible-device count, never arms or outcomes, and record the canonical artifact through the offline recorder and reviewed PR.
+
+## 2026-08-26 — VEVO A/A checkpoint capture made PC-independent
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-cloud-checkpoints`
+
+What changed:
+
+- The protected A/A checkpoint workflow now has two GitHub UTC schedules for the DST alternatives of `04:30 Europe/Bratislava`, after the frozen `03:45` reconciliation.
+- A pre-AWS gate admits only the correct local-time slot. It skips before credentials and before the population query when the run is pre-due, on the wrong DST slot, after resolution, or for a checkpoint already recorded on `main`.
+- Scheduled checkpoint identity is derived from the frozen local calendar date rather than current Git history. This preserves exact daily checkpoint artifacts while the desktop PC is off or earlier artifacts are still waiting for offline recording.
+- Manual `confirm_checkpoint=true` remains limited to the next missing checkpoint and its original 24-hour due gate. Every credential, AWS, aggregate-query, evidence, cleanup, upload, and summary step is conditioned on `RUN_CHECKPOINT=true`.
+- Checkpoint artifacts are retained for 90 days. After multi-day downtime they must be recorded sequentially; the earliest artifact reaching `1,000` resolves the window and later captures are ignored.
+- Monitoring, activation, plan, and workspace runbooks now document the cloud capture and unchanged outcome-blind stopping rule.
+
+What is verified:
+
+- The versioned host boundary remains instance `N/A:Fargate`, private IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, runtime path `/app`; this change does not deploy or mutate that service.
+- `782` Python tests and all `9` storefront JavaScript tests passed, including pre-due, wrong-DST, already-recorded, resolved-window, summer-slot, winter-slot, multi-day calendar-index, manual-gate, and post-gate step-condition behavior.
+- GrowthBook workspace and A/A measurement-window validators, central security CI, focused Ruff, Python compilation, YAML parsing, and `git diff --check` passed.
+- The workflow still contains exactly one aggregate eligible-device query with no arm or outcome columns, one canonical identity-free artifact, no automatic stop/winner path, and no AWS-resource, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, or commerce mutation path.
+- No checkpoint was dispatched, no AWS query or deploy ran, no A/A population or result was read, and no browser/UI action or local server, worker, watcher, tunnel, Docker stack, or persistent runtime was started.
+
+Known issues:
+
+- None introduced. GitHub scheduled execution remains subject to GitHub availability; the explicit manual same-window fallback remains available.
+
+Next exact step:
+
+- Merge the cloud-checkpoint workflow after reviewed CI. Before `2026-09-02 03:45 Europe/Bratislava`, continue only result-blind infrastructure monitoring. Let the first admitted scheduled checkpoint capture at `2026-09-02 04:30 Europe/Bratislava`, then independently download/hash its one canonical artifact and record it through a separate reviewed PR; do not read arms, outcomes, Meta dimensions, conversion, revenue, CM1, or performance before the window resolves.

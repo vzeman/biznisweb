@@ -215,6 +215,16 @@ Acceptance: signed QA checklist and exact rollback test pass. Any checkout, cons
 
 Run the invisible, site-wide `vevo-sk-aa-001` with identical control and variant at 50/50 among eligible consented Slovak storefront visitors. Its broad eligibility is intentional so it validates assignment, consent, Meta dimensions, purchase joining, and reporting without waiting for a low-volume visual surface. Minimum duration is seven full calendar days and minimum sample is 1,000 unique eligible devices; both conditions must be met.
 
+The outcome-blind checkpoint is captured in GitHub at the correct
+`04:30 Europe/Bratislava` DST slot, after the frozen `03:45` reconciliation, so
+it does not depend on a powered-on local PC. Before the first due date and on
+the unused UTC slot it skips before AWS credentials. Each admitted run retains
+only one cumulative eligible-device count for its calendar-derived frozen
+checkpoint and never reads arms or outcomes. After offline time, retained
+90-day artifacts are recorded in order and the window resolves at the earliest
+checkpoint with at least 1,000 devices; later captures are ignored after that
+boundary.
+
 Pass gates:
 
 - no GrowthBook SRM warning; independently calculated SRM p-value is at least `0.001`;
