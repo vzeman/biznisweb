@@ -6407,3 +6407,29 @@ Known issues:
 Next exact step:
 
 - Open and merge the recovery PR after CI. Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`; at or after that time, use the earliest successful checkpoint artifact in index order, and use the explicit historical backfill only if that exact next artifact was never created.
+
+## 2026-08-26 — VEVO A/A missing-checkpoint recovery merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-backfill-state`
+
+What changed:
+
+- PR `#454` merged the fail-closed missing-checkpoint recovery into `main` as `cd0f1f7836ece75c2f3b039ac7a46c5ce44f62f9`.
+- This handoff records the completed merge and replaces the obsolete merge instruction with the exact time-gated A/A resolution step. It introduces no experiment, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#454` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` before merge.
+- `origin/main` and the local worktree both read back exact merge commit `cd0f1f7836ece75c2f3b039ac7a46c5ce44f62f9`.
+- Scheduled, same-window, and explicit next-missing historical checkpoint paths are now deterministic and sequential; all remain aggregate-only, outcome-blind, identity-free, winner-free, and externally read-only.
+- No A/A population or result was inspected, no workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The A/A result boundary remains time-locked. GrowthBook Pro has not been purchased and still requires verified A/A `PASS`, the reviewed zero-allocation stop, and fresh action-time confirmation.
+
+Next exact step:
+
+- Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful checkpoint artifact in index order; use schema-`3` historical backfill only if the exact next artifact was never created. Resolve the window without arm/outcome peeking, then process the protected A/A evidence path and continue only on an independently reproduced `PASS`.
