@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -17,6 +18,12 @@ DEFAULT_CONTRACT_PATH = (
 )
 
 WAITING = "waiting_for_verified_cta_start"
+MONITORING = "cta_running_safety_checkpoint_pending"
+STOP_REVIEW = "cta_safety_stop_review_open"
+STOPPED = "cta_safety_stop_recorded_followup_pending"
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 VARIATIONS = ("control", "brand_contrast")
 VARIATION_FIELDS = {
     "eligible_devices",
@@ -145,11 +152,13 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
             "monitoring_type",
             "status",
             "experiment_id",
+            "assignment_started_at_utc",
             "source_bindings",
             "checkpoint_policy",
             "thresholds",
             "evidence_contract",
             "latest_checkpoint",
+            "stop_handoff",
             "release_boundaries",
             "next_gate",
         },
@@ -160,7 +169,10 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         and root["monitoring_type"] == "vevo_growthbook_cta_safety_only",
         "CTA safety monitoring identity drift",
     )
-    _require(root["status"] == WAITING, "CTA safety monitoring opened early")
+    _require(
+        root["status"] in {WAITING, MONITORING, STOP_REVIEW, STOPPED},
+        "CTA safety monitoring status drift",
+    )
     _require(
         root["experiment_id"] == "vevo-sk-product-cta-color-001",
         "CTA safety experiment drift",
@@ -184,8 +196,13 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
                 == "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
                 "CTA safety decision contract hash drift",
             )
-        else:
+        elif root["status"] == WAITING:
             _require(binding["sha256"] is None, f"CTA safety source bound early: {name}")
+        else:
+            _require(
+                SHA256_RE.fullmatch(str(binding["sha256"])) is not None,
+                f"CTA safety source hash invalid: {name}",
+            )
     policy = _exact(
         root["checkpoint_policy"],
         {
@@ -277,30 +294,60 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
             "status",
             "checkpoint_index",
             "observed_at_utc",
+            "eligible_devices_seen",
             "evidence_sha256",
             "decision_sha256",
+            "provenance_sha256",
+            "workflow_run_id",
+            "main_commit",
             "verdict",
             "stop_reasons",
         },
         "CTA safety latest checkpoint",
     )
-    _require(
-        latest
-        == {
-            "status": "not_recorded",
-            "checkpoint_index": None,
-            "observed_at_utc": None,
-            "evidence_sha256": None,
-            "decision_sha256": None,
-            "verdict": None,
-            "stop_reasons": [],
+    empty_latest = {
+        "status": "not_recorded",
+        "checkpoint_index": None,
+        "observed_at_utc": None,
+        "eligible_devices_seen": None,
+        "evidence_sha256": None,
+        "decision_sha256": None,
+        "provenance_sha256": None,
+        "workflow_run_id": None,
+        "main_commit": None,
+        "verdict": None,
+        "stop_reasons": [],
+    }
+    handoff = _exact(
+        root["stop_handoff"],
+        {
+            "status",
+            "trigger_evidence_sha256",
+            "trigger_decision_sha256",
+            "trigger_provenance_sha256",
+            "trigger_observed_at_utc",
+            "stop_reasons",
+            "stop_observation_sha256",
+            "assignment_ended_at_utc",
         },
-        "CTA safety checkpoint recorded early",
+        "CTA safety stop handoff",
     )
+    empty_handoff = {
+        "status": "not_open",
+        "trigger_evidence_sha256": None,
+        "trigger_decision_sha256": None,
+        "trigger_provenance_sha256": None,
+        "trigger_observed_at_utc": None,
+        "stop_reasons": [],
+        "stop_observation_sha256": None,
+        "assignment_ended_at_utc": None,
+    }
     boundaries = _exact(
         root["release_boundaries"],
         {
             "safety_checkpoint_collection_allowed",
+            "safety_checkpoint_recording_allowed",
+            "protected_safety_collection_workflow_allowed",
             "manual_growthbook_stop_allowed",
             "automatic_growthbook_mutation_allowed",
             "automatic_gtm_mutation_allowed",
@@ -313,11 +360,170 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         },
         "CTA safety release boundaries",
     )
-    _require(not any(boundaries.values()), "CTA safety release boundary opened")
+    for field in (
+        "automatic_growthbook_mutation_allowed",
+        "automatic_gtm_mutation_allowed",
+        "automatic_meta_ads_mutation_allowed",
+        "automatic_biznisweb_mutation_allowed",
+        "automatic_collector_or_reporting_mutation_allowed",
+        "price_product_stock_cart_checkout_payment_or_order_mutation_allowed",
+        "primary_or_business_outcome_read_allowed",
+        "winner_calls_allowed",
+    ):
+        _require(boundaries[field] is False, f"CTA safety boundary opened: {field}")
+
+    if root["status"] == WAITING:
+        _require(root["assignment_started_at_utc"] is None, "CTA safety start bound early")
+        _require(latest == empty_latest, "CTA safety checkpoint recorded early")
+        _require(handoff == empty_handoff, "CTA safety stop handoff opened early")
+        _require(not any(boundaries.values()), "CTA safety release boundary opened")
+        _require(
+            root["next_gate"] == "after_verified_cta_start_initialize_safety_monitoring",
+            "CTA safety next gate drift",
+        )
+        return
+
+    _validate_timestamp(root["assignment_started_at_utc"], "assignment_started_at_utc")
     _require(
-        root["next_gate"] == "after_verified_cta_start_initialize_safety_monitoring",
-        "CTA safety next gate drift",
+        latest["status"] in {"not_recorded", "recorded"},
+        "CTA safety latest checkpoint status drift",
     )
+    if latest["status"] == "not_recorded":
+        _require(latest == empty_latest, "CTA safety empty checkpoint drift")
+    else:
+        _require(
+            isinstance(latest["checkpoint_index"], int)
+            and not isinstance(latest["checkpoint_index"], bool)
+            and latest["checkpoint_index"] >= 1,
+            "CTA safety checkpoint index invalid",
+        )
+        _validate_timestamp(latest["observed_at_utc"], "latest_checkpoint.observed_at_utc")
+        _require(
+            isinstance(latest["eligible_devices_seen"], int)
+            and not isinstance(latest["eligible_devices_seen"], bool)
+            and latest["eligible_devices_seen"] >= 1,
+            "CTA safety eligible-device total invalid",
+        )
+        for field in ("evidence_sha256", "decision_sha256", "provenance_sha256"):
+            _require(
+                SHA256_RE.fullmatch(str(latest[field])) is not None,
+                f"CTA safety latest {field} invalid",
+            )
+        _require(
+            RUN_ID_RE.fullmatch(str(latest["workflow_run_id"])) is not None,
+            "CTA safety workflow run ID invalid",
+        )
+        _require(
+            COMMIT_RE.fullmatch(str(latest["main_commit"])) is not None,
+            "CTA safety main commit invalid",
+        )
+        _require(
+            latest["verdict"] in {"CONTINUE", "CONTINUE_NOT_MATURE", "STOP_REQUIRED"},
+            "CTA safety verdict drift",
+        )
+        _require(
+            isinstance(latest["stop_reasons"], list)
+            and all(isinstance(reason, str) and reason for reason in latest["stop_reasons"]),
+            "CTA safety stop reasons drift",
+        )
+        _require(
+            (latest["verdict"] == "STOP_REQUIRED") == bool(latest["stop_reasons"]),
+            "CTA safety verdict/reason contradiction",
+        )
+
+    collection_fields = (
+        "safety_checkpoint_collection_allowed",
+        "safety_checkpoint_recording_allowed",
+        "protected_safety_collection_workflow_allowed",
+    )
+    if root["status"] == MONITORING:
+        _require(handoff == empty_handoff, "CTA safety monitoring stop handoff drift")
+        _require(
+            latest["verdict"] != "STOP_REQUIRED",
+            "CTA safety breach did not open stop review",
+        )
+        _require(boundaries["manual_growthbook_stop_allowed"] is False, "CTA safety stop opened without breach")
+        _require(
+            len({boundaries[field] for field in collection_fields}) == 1,
+            "CTA safety collection/recording gates disagree",
+        )
+        _require(
+            root["next_gate"]
+            in {
+                "implement_protected_safety_collection_before_recording",
+                "record_next_hash_bound_safety_checkpoint",
+            },
+            "CTA safety monitoring next gate drift",
+        )
+        return
+
+    _require(
+        all(boundaries[field] is False for field in collection_fields),
+        "CTA safety collection remains open after stop review",
+    )
+    if root["status"] == STOP_REVIEW:
+        _require(latest["status"] == "recorded" and latest["verdict"] == "STOP_REQUIRED", "CTA safety stop review lacks STOP_REQUIRED")
+        _require(
+            handoff
+            == {
+                "status": "manual_stop_review_open",
+                "trigger_evidence_sha256": latest["evidence_sha256"],
+                "trigger_decision_sha256": latest["decision_sha256"],
+                "trigger_provenance_sha256": latest["provenance_sha256"],
+                "trigger_observed_at_utc": latest["observed_at_utc"],
+                "stop_reasons": latest["stop_reasons"],
+                "stop_observation_sha256": None,
+                "assignment_ended_at_utc": None,
+            },
+            "CTA safety stop review handoff drift",
+        )
+        _require(boundaries["manual_growthbook_stop_allowed"] is True, "CTA safety manual stop gate closed")
+        _require(root["next_gate"] == "manually_stop_only_exact_cta_then_record_canonical_readback", "CTA safety stop next gate drift")
+        return
+
+    _require(boundaries["manual_growthbook_stop_allowed"] is False, "CTA safety manual stop gate remains open")
+    _require(handoff["status"] == "verified_manual_stop_readback", "CTA safety stop readback missing")
+    for field in ("stop_observation_sha256",):
+        _require(SHA256_RE.fullmatch(str(handoff[field])) is not None, f"CTA safety {field} invalid")
+    ended_at = _validate_timestamp(
+        handoff["assignment_ended_at_utc"],
+        "stop_handoff.assignment_ended_at_utc",
+    )
+    _require(
+        ended_at
+        >= _validate_timestamp(
+            root["assignment_started_at_utc"], "assignment_started_at_utc"
+        ),
+        "CTA safety stop predates assignment start",
+    )
+    if latest["verdict"] == "STOP_REQUIRED":
+        _require(
+            handoff["trigger_evidence_sha256"] == latest["evidence_sha256"]
+            and handoff["trigger_decision_sha256"] == latest["decision_sha256"]
+            and handoff["trigger_provenance_sha256"]
+            == latest["provenance_sha256"]
+            and handoff["trigger_observed_at_utc"] == latest["observed_at_utc"]
+            and handoff["stop_reasons"] == latest["stop_reasons"],
+            "CTA safety stopped trigger drift",
+        )
+        _require(
+            ended_at
+            >= _validate_timestamp(
+                handoff["trigger_observed_at_utc"],
+                "stop_handoff.trigger_observed_at_utc",
+            ),
+            "CTA safety stop predates safety trigger",
+        )
+    else:
+        _require(
+            handoff["trigger_evidence_sha256"] is None
+            and handoff["trigger_decision_sha256"] is None
+            and handoff["trigger_provenance_sha256"] is None
+            and handoff["trigger_observed_at_utc"] is None
+            and handoff["stop_reasons"] == [],
+            "CTA non-safety stop gained a safety trigger",
+        )
+    _require(root["next_gate"] == "wait_exact_14_day_followup_then_one_protected_final_look", "CTA safety stopped next gate drift")
 
 
 def validate_snapshot(snapshot: Mapping[str, Any]) -> None:

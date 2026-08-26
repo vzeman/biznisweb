@@ -21,6 +21,11 @@ from zoneinfo import ZoneInfo
 
 try:
     from scripts.evaluate_growthbook_cta import validate_contract
+    from scripts.evaluate_growthbook_cta_safety import (
+        STOP_REVIEW as SAFETY_STOP_REVIEW,
+        STOPPED as SAFETY_STOPPED,
+        validate_contract as validate_safety_contract,
+    )
     from scripts.freeze_growthbook_cta_sample import validate_plan
     from scripts.record_growthbook_cta_activation import (
         RUNNING as CTA_RUNNING_STATUS,
@@ -31,6 +36,11 @@ try:
     )
 except ModuleNotFoundError:  # pragma: no cover - direct script execution
     from evaluate_growthbook_cta import validate_contract
+    from evaluate_growthbook_cta_safety import (
+        STOP_REVIEW as SAFETY_STOP_REVIEW,
+        STOPPED as SAFETY_STOPPED,
+        validate_contract as validate_safety_contract,
+    )
     from freeze_growthbook_cta_sample import validate_plan
     from record_growthbook_cta_activation import (
         RUNNING as CTA_RUNNING_STATUS,
@@ -112,6 +122,7 @@ WINDOW_KEYS = {
     "outcome_blind",
     "whole_local_day_extensions_only",
     "resolution_status",
+    "resolution_trigger",
     "resolved_reason",
     "resolved_checkpoint_through_utc",
     "resolved_last_full_local_date",
@@ -125,6 +136,11 @@ STOP_KEYS = {
     "status",
     "manual_review_allowed",
     "automatic_stop_allowed",
+    "review_trigger_type",
+    "review_trigger_evidence_sha256",
+    "review_trigger_decision_sha256",
+    "review_trigger_provenance_sha256",
+    "review_trigger_observed_at_utc",
     "observation_path",
     "observation_sha256",
     "assignment_ended_at_utc",
@@ -349,6 +365,7 @@ def expected_measurement_window(
         "outcome_blind": True,
         "whole_local_day_extensions_only": True,
         "resolution_status": "pending_target_or_42_full_local_days",
+        "resolution_trigger": None,
         "resolved_reason": None,
         "resolved_checkpoint_through_utc": None,
         "resolved_last_full_local_date": None,
@@ -517,6 +534,8 @@ def validate_manifest(
     stop_observation: Mapping[str, Any] | None = None,
     *,
     source_hashes: Mapping[str, str] | None = None,
+    safety_monitoring: Mapping[str, Any] | None = None,
+    safety_monitoring_sha256: str | None = None,
 ) -> None:
     validate_activation_manifest(activation)
     validate_plan(sample_plan)
@@ -592,9 +611,30 @@ def validate_manifest(
             "waiting CTA population metric drift",
         )
         _require(window["outcome_blind"] is True and window["whole_local_day_extensions_only"] is True, "waiting CTA outcome-blind rule drift")
-        _require(window["resolution_status"] == WAITING and window["checkpoint_history"] == [], "waiting CTA resolution drift")
+        _require(
+            window["resolution_status"] == WAITING
+            and window["resolution_trigger"] is None
+            and window["checkpoint_history"] == [],
+            "waiting CTA resolution drift",
+        )
         _require(window["post_hoc_window_change_allowed"] is False, "waiting CTA post-hoc change opened")
-        _require(stop == {"status": "not_open", "manual_review_allowed": False, "automatic_stop_allowed": False, "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json", "observation_sha256": None, "assignment_ended_at_utc": None}, "waiting CTA stop state drift")
+        _require(
+            stop
+            == {
+                "status": "not_open",
+                "manual_review_allowed": False,
+                "automatic_stop_allowed": False,
+                "review_trigger_type": None,
+                "review_trigger_evidence_sha256": None,
+                "review_trigger_decision_sha256": None,
+                "review_trigger_provenance_sha256": None,
+                "review_trigger_observed_at_utc": None,
+                "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+                "observation_sha256": None,
+                "assignment_ended_at_utc": None,
+            },
+            "waiting CTA stop state drift",
+        )
         _require(boundaries["read_only_checkpoint_allowed"] is False, "waiting CTA checkpoint gate opened")
         _require(root["next_gate"] == "after_verified_cta_start_initialize_frozen_outcome_blind_window", "waiting CTA next gate drift")
         return
@@ -651,35 +691,150 @@ def validate_manifest(
             "running CTA history already contains a stop decision",
         )
         _require(window == expected_static, "running CTA measurement window drift")
-        _require(stop == {"status": "not_open", "manual_review_allowed": False, "automatic_stop_allowed": False, "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json", "observation_sha256": None, "assignment_ended_at_utc": None}, "running CTA stop state drift")
+        _require(
+            stop
+            == {
+                "status": "not_open",
+                "manual_review_allowed": False,
+                "automatic_stop_allowed": False,
+                "review_trigger_type": None,
+                "review_trigger_evidence_sha256": None,
+                "review_trigger_decision_sha256": None,
+                "review_trigger_provenance_sha256": None,
+                "review_trigger_observed_at_utc": None,
+                "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+                "observation_sha256": None,
+                "assignment_ended_at_utc": None,
+            },
+            "running CTA stop state drift",
+        )
         _require(boundaries["read_only_checkpoint_allowed"] is True, "running CTA checkpoint gate closed")
         _require(root["next_gate"] == "run_first_due_outcome_blind_checkpoint_without_arm_or_outcome_readback", "running CTA next gate drift")
         return
 
-    _require(bool(history), "resolved CTA has no checkpoint")
-    _require(
-        all(
-            row["evidence"]["decision"] == "extend_one_full_local_day"
-            for row in history[:-1]
-        ),
-        "resolved CTA has a stop decision before its final checkpoint",
-    )
-    final_evidence = history[-1]["evidence"]
-    _require(final_evidence["decision"] in {"open_manual_stop_review_target_reached", "open_manual_stop_review_maximum_duration_reached"}, "resolved CTA final checkpoint did not open stop")
-    expected_resolved = dict(expected_static)
-    final_window = final_evidence["window"]
-    expected_resolved.update({
-        "resolution_status": "resolved_waiting_for_manual_assignment_stop",
-        "resolved_reason": "target_total_sample_reached" if final_evidence["decision"].endswith("target_reached") else "maximum_duration_reached",
-        "resolved_checkpoint_through_utc": final_window["candidate_through_utc"],
-        "resolved_last_full_local_date": final_window["candidate_last_full_local_date"],
-        "resolved_full_calendar_days": final_window["full_calendar_days"],
-        "resolved_eligible_devices": final_evidence["population"]["eligible_devices"],
-        "resolved_at_utc": final_evidence["observed_at_utc"],
-    })
+    trigger_type = stop["review_trigger_type"]
+    expected_review: dict[str, Any]
+    if trigger_type == "outcome_blind_window_checkpoint":
+        _require(bool(history), "resolved CTA has no checkpoint")
+        _require(
+            all(
+                row["evidence"]["decision"] == "extend_one_full_local_day"
+                for row in history[:-1]
+            ),
+            "resolved CTA has a stop decision before its final checkpoint",
+        )
+        final_evidence = history[-1]["evidence"]
+        _require(
+            final_evidence["decision"]
+            in {
+                "open_manual_stop_review_target_reached",
+                "open_manual_stop_review_maximum_duration_reached",
+            },
+            "resolved CTA final checkpoint did not open stop",
+        )
+        final_window = final_evidence["window"]
+        expected_resolved = dict(expected_static)
+        expected_resolved.update(
+            {
+                "resolution_status": "resolved_waiting_for_manual_assignment_stop",
+                "resolution_trigger": "outcome_blind_window_checkpoint",
+                "resolved_reason": (
+                    "target_total_sample_reached"
+                    if final_evidence["decision"].endswith("target_reached")
+                    else "maximum_duration_reached"
+                ),
+                "resolved_checkpoint_through_utc": final_window[
+                    "candidate_through_utc"
+                ],
+                "resolved_last_full_local_date": final_window[
+                    "candidate_last_full_local_date"
+                ],
+                "resolved_full_calendar_days": final_window["full_calendar_days"],
+                "resolved_eligible_devices": final_evidence["population"][
+                    "eligible_devices"
+                ],
+                "resolved_at_utc": final_evidence["observed_at_utc"],
+            }
+        )
+        expected_review = {
+            "review_trigger_type": "outcome_blind_window_checkpoint",
+            "review_trigger_evidence_sha256": history[-1]["evidence_sha256"],
+            "review_trigger_decision_sha256": None,
+            "review_trigger_provenance_sha256": None,
+            "review_trigger_observed_at_utc": final_evidence["observed_at_utc"],
+        }
+    elif trigger_type == "safety_guardrail":
+        _require(safety_monitoring is not None, "CTA safety stop manifest missing")
+        try:
+            validate_safety_contract(safety_monitoring)
+        except ValueError as exc:
+            raise CtaMeasurementWindowError(
+                f"CTA safety stop manifest is invalid: {exc}"
+            ) from exc
+        expected_safety_status = (
+            SAFETY_STOPPED if root["status"] == STOPPED else SAFETY_STOP_REVIEW
+        )
+        _require(
+            safety_monitoring.get("status") == expected_safety_status,
+            "CTA safety/measurement lifecycle drift",
+        )
+        if safety_monitoring_sha256 is not None:
+            actual_safety_hash = hashlib.sha256(
+                (json.dumps(safety_monitoring, ensure_ascii=False, indent=2) + "\n").encode(
+                    "utf-8"
+                )
+            ).hexdigest()
+            _require(
+                safety_monitoring_sha256 == actual_safety_hash,
+                "CTA safety monitoring SHA-256 mismatch",
+            )
+        latest = safety_monitoring["latest_checkpoint"]
+        handoff = safety_monitoring["stop_handoff"]
+        _require(
+            latest["verdict"] == "STOP_REQUIRED"
+            and handoff["trigger_evidence_sha256"] == latest["evidence_sha256"]
+            and handoff["trigger_decision_sha256"] == latest["decision_sha256"]
+            and handoff["trigger_provenance_sha256"]
+            == latest["provenance_sha256"],
+            "CTA safety stop trigger drift",
+        )
+        expected_resolved = dict(expected_static)
+        expected_resolved.update(
+            {
+                "resolution_status": "resolved_waiting_for_manual_assignment_stop",
+                "resolution_trigger": "safety_guardrail",
+                "resolved_reason": "safety_guardrail_stop_required",
+                "resolved_checkpoint_through_utc": None,
+                "resolved_last_full_local_date": None,
+                "resolved_full_calendar_days": None,
+                "resolved_eligible_devices": latest["eligible_devices_seen"],
+                "resolved_at_utc": latest["observed_at_utc"],
+            }
+        )
+        expected_review = {
+            "review_trigger_type": "safety_guardrail",
+            "review_trigger_evidence_sha256": latest["evidence_sha256"],
+            "review_trigger_decision_sha256": latest["decision_sha256"],
+            "review_trigger_provenance_sha256": latest["provenance_sha256"],
+            "review_trigger_observed_at_utc": latest["observed_at_utc"],
+        }
+    else:
+        raise CtaMeasurementWindowError("CTA resolved stop trigger is invalid")
     _require(window == expected_resolved, "resolved CTA measurement window drift")
     if root["status"] == RESOLVED:
-        _require(stop == {"status": "manual_stop_review_open_assignment_still_running", "manual_review_allowed": True, "automatic_stop_allowed": False, "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json", "observation_sha256": None, "assignment_ended_at_utc": None}, "resolved CTA stop review drift")
+        _require(
+            stop
+            == {
+                "status": "manual_stop_review_open_assignment_still_running",
+                "manual_review_allowed": True,
+                "automatic_stop_allowed": False,
+                **expected_review,
+                "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+                "observation_sha256": None,
+                "assignment_ended_at_utc": None,
+            },
+            "resolved CTA stop review drift",
+        )
         _require(boundaries["read_only_checkpoint_allowed"] is False, "resolved CTA checkpoint gate remains open")
         _require(root["next_gate"] == "manually_stop_only_cta_assignment_then_record_canonical_readback", "resolved CTA next gate drift")
         return
@@ -707,6 +862,7 @@ def validate_manifest(
             "status": "verified_manual_stop_readback_followup_pending",
             "manual_review_allowed": False,
             "automatic_stop_allowed": False,
+            **expected_review,
             "observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
             "observation_sha256": observation_sha256,
             "assignment_ended_at_utc": _utc_text(ended),

@@ -683,6 +683,7 @@ def validate() -> None:
             cta_reconciliation_evidence,
             cta_activation_observation,
             cta_stop_observation,
+            safety_monitoring=cta_safety_monitoring,
         )
     except CtaMeasurementWindowError as exc:
         raise AssertionError(f"CTA measurement window is invalid: {exc}") from exc
@@ -694,6 +695,9 @@ def validate() -> None:
         "sample_plan": hashlib.sha256(CTA_SAMPLE_PLAN_PATH.read_bytes()).hexdigest(),
         "decision_contract": hashlib.sha256(
             CTA_DECISION_CONTRACT_PATH.read_bytes()
+        ).hexdigest(),
+        "safety_monitoring": hashlib.sha256(
+            CTA_SAFETY_MONITORING_PATH.read_bytes()
         ).hexdigest(),
         "lifecycle_reconciliation": hashlib.sha256(
             CTA_LIFECYCLE_RECONCILIATION_PATH.read_bytes()
@@ -717,6 +721,7 @@ def validate() -> None:
             cta_lifecycle_reconciliation,
             cta_reconciliation_evidence,
             lifecycle_observation=cta_lifecycle_observation,
+            safety_monitoring=cta_safety_monitoring,
             start_observation=cta_activation_observation,
             stop_observation=cta_stop_observation,
             workspace=(

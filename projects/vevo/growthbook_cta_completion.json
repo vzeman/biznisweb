@@ -12,6 +12,8 @@
     "sample_plan_sha256": null,
     "decision_contract_path": "projects/vevo/growthbook_cta_decision_contract.json",
     "decision_contract_sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+    "safety_monitoring_path": "projects/vevo/growthbook_cta_safety_monitoring.json",
+    "safety_monitoring_sha256": null,
     "lifecycle_reconciliation_path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
     "lifecycle_reconciliation_sha256": null
   },
@@ -45,5 +47,5 @@
     "outcome_metrics_read_outside_protected_final_snapshot_allowed": false,
     "winner_calls_outside_offline_final_evaluator_allowed": false
   },
-  "next_gate": "after_outcome_blind_window_resolution_manually_stop_only_exact_cta_then_record_canonical_readback"
+  "next_gate": "after_reviewed_window_or_safety_resolution_manually_stop_only_exact_cta_then_record_canonical_readback"
 }

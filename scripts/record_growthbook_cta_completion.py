@@ -26,6 +26,12 @@ try:
         validate_contract,
         validate_lifecycle_manifest,
     )
+    from scripts.evaluate_growthbook_cta_safety import (
+        MONITORING as SAFETY_MONITORING,
+        STOP_REVIEW as SAFETY_STOP_REVIEW,
+        STOPPED as SAFETY_STOPPED,
+        validate_contract as validate_safety_contract,
+    )
     from scripts.freeze_growthbook_cta_sample import validate_plan
     from scripts.record_growthbook_cta_activation import (
         RUNNING as CTA_RUNNING,
@@ -42,6 +48,12 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
     import build_growthbook_cta_final_snapshot as final_snapshot_builder
 
     from evaluate_growthbook_cta import validate_contract, validate_lifecycle_manifest
+    from evaluate_growthbook_cta_safety import (
+        MONITORING as SAFETY_MONITORING,
+        STOP_REVIEW as SAFETY_STOP_REVIEW,
+        STOPPED as SAFETY_STOPPED,
+        validate_contract as validate_safety_contract,
+    )
     from freeze_growthbook_cta_sample import validate_plan
     from record_growthbook_cta_activation import (
         RUNNING as CTA_RUNNING,
@@ -65,6 +77,7 @@ MEASUREMENT_PATH = VEVO / "growthbook_cta_measurement_window.json"
 STOP_OBSERVATION_PATH = VEVO / "growthbook_cta_assignment_stop_observation.json"
 SAMPLE_PLAN_PATH = VEVO / "growthbook_cta_sample_plan.json"
 DECISION_CONTRACT_PATH = VEVO / "growthbook_cta_decision_contract.json"
+SAFETY_MONITORING_PATH = VEVO / "growthbook_cta_safety_monitoring.json"
 LIFECYCLE_PATH = VEVO / "growthbook_cta_lifecycle_reconciliation.json"
 RECONCILIATION_PATH = VEVO / "growthbook_production_reconciliation_deploy_evidence.json"
 WORKSPACE_PATH = VEVO / "growthbook_workspace.json"
@@ -100,6 +113,8 @@ BINDING_KEYS = {
     "sample_plan_sha256",
     "decision_contract_path",
     "decision_contract_sha256",
+    "safety_monitoring_path",
+    "safety_monitoring_sha256",
     "lifecycle_reconciliation_path",
     "lifecycle_reconciliation_sha256",
 }
@@ -140,7 +155,7 @@ OBSERVATION_KEYS = {
     "feature_key",
     "observed_at_utc",
     "assignment_ended_at_utc",
-    "window_checkpoint_evidence_sha256",
+    "stop_trigger",
     "activation_start_observation_sha256",
     "growthbook",
     "gtm",
@@ -148,6 +163,13 @@ OBSERVATION_KEYS = {
     "collector",
     "mutation_boundaries",
     "safety",
+}
+STOP_TRIGGER_KEYS = {
+    "type",
+    "evidence_sha256",
+    "decision_sha256",
+    "provenance_sha256",
+    "observed_at_utc",
 }
 GROWTHBOOK_KEYS = {
     "build",
@@ -279,10 +301,12 @@ def _source_hashes(
     *,
     activation_bytes: bytes | None = None,
     measurement_bytes: bytes | None = None,
+    safety_monitoring_bytes: bytes | None = None,
     activation_path: Path = ACTIVATION_PATH,
     measurement_path: Path = MEASUREMENT_PATH,
     sample_plan_path: Path = SAMPLE_PLAN_PATH,
     decision_contract_path: Path = DECISION_CONTRACT_PATH,
+    safety_monitoring_path: Path = SAFETY_MONITORING_PATH,
     lifecycle_path: Path = LIFECYCLE_PATH,
     start_observation_path: Path = START_OBSERVATION_PATH,
     reconciliation_path: Path = RECONCILIATION_PATH,
@@ -292,6 +316,11 @@ def _source_hashes(
         "measurement_window": _hash_bytes(measurement_bytes) if measurement_bytes is not None else _hash_path(measurement_path),
         "sample_plan": _hash_path(sample_plan_path),
         "decision_contract": _hash_path(decision_contract_path),
+        "safety_monitoring": (
+            _hash_bytes(safety_monitoring_bytes)
+            if safety_monitoring_bytes is not None
+            else _hash_path(safety_monitoring_path)
+        ),
         "lifecycle_reconciliation": _hash_path(lifecycle_path),
         "start_observation": (
             _hash_path(start_observation_path)
@@ -306,6 +335,7 @@ def validate_stop_observation(
     observation: Mapping[str, Any],
     activation: Mapping[str, Any],
     measurement: Mapping[str, Any],
+    safety_monitoring: Mapping[str, Any] | None = None,
 ) -> None:
     root = _exact(observation, OBSERVATION_KEYS, "CTA stop observation")
     _require(root["schema_version"] == 1, "CTA stop observation schema drift")
@@ -318,14 +348,61 @@ def validate_stop_observation(
     window = measurement["measurement_window"]
     _require(
         _parse_utc(window["resolved_at_utc"], "measurement.resolved_at_utc") <= ended,
-        "CTA assignment ended before the outcome-blind stopping rule resolved",
+        "CTA assignment ended before the reviewed stopping rule resolved",
     )
-    history = window["checkpoint_history"]
-    _require(bool(history), "CTA stop observation has no resolved checkpoint")
+    assignment_stop = measurement["assignment_stop"]
+    trigger = _exact(root["stop_trigger"], STOP_TRIGGER_KEYS, "CTA stop trigger")
     _require(
-        root["window_checkpoint_evidence_sha256"] == history[-1]["evidence_sha256"],
-        "CTA stop checkpoint binding drift",
+        trigger
+        == {
+            "type": assignment_stop["review_trigger_type"],
+            "evidence_sha256": assignment_stop[
+                "review_trigger_evidence_sha256"
+            ],
+            "decision_sha256": assignment_stop[
+                "review_trigger_decision_sha256"
+            ],
+            "provenance_sha256": assignment_stop[
+                "review_trigger_provenance_sha256"
+            ],
+            "observed_at_utc": assignment_stop[
+                "review_trigger_observed_at_utc"
+            ],
+        },
+        "CTA stop trigger binding drift",
     )
+    _require(
+        _parse_utc(trigger["observed_at_utc"], "stop_trigger.observed_at_utc")
+        <= ended,
+        "CTA assignment ended before the stop trigger",
+    )
+    if trigger["type"] == "outcome_blind_window_checkpoint":
+        history = window["checkpoint_history"]
+        _require(bool(history), "CTA stop observation has no resolved checkpoint")
+        _require(
+            trigger["evidence_sha256"] == history[-1]["evidence_sha256"]
+            and trigger["decision_sha256"] is None
+            and trigger["provenance_sha256"] is None,
+            "CTA stop checkpoint binding drift",
+        )
+    elif trigger["type"] == "safety_guardrail":
+        _require(safety_monitoring is not None, "CTA safety stop manifest missing")
+        validate_safety_contract(safety_monitoring)
+        _require(
+            safety_monitoring.get("status")
+            in {SAFETY_STOP_REVIEW, SAFETY_STOPPED},
+            "CTA safety stop review is not open",
+        )
+        latest = safety_monitoring["latest_checkpoint"]
+        _require(
+            latest["verdict"] == "STOP_REQUIRED"
+            and trigger["evidence_sha256"] == latest["evidence_sha256"]
+            and trigger["decision_sha256"] == latest["decision_sha256"]
+            and trigger["provenance_sha256"] == latest["provenance_sha256"],
+            "CTA safety stop artifact binding drift",
+        )
+    else:
+        raise CtaCompletionRecordingError("CTA stop trigger type drift")
     _require(
         root["activation_start_observation_sha256"]
         == activation["start_readback"]["observation_sha256"],
@@ -461,6 +538,7 @@ def validate_manifest(
     reconciliation: Mapping[str, Any],
     *,
     lifecycle_observation: Mapping[str, Any] | None = None,
+    safety_monitoring: Mapping[str, Any] | None = None,
     start_observation: Mapping[str, Any] | None = None,
     stop_observation: Mapping[str, Any] | None = None,
     workspace: Mapping[str, Any] | None = None,
@@ -481,6 +559,7 @@ def validate_manifest(
         "measurement_window_path": "projects/vevo/growthbook_cta_measurement_window.json",
         "sample_plan_path": "projects/vevo/growthbook_cta_sample_plan.json",
         "decision_contract_path": "projects/vevo/growthbook_cta_decision_contract.json",
+        "safety_monitoring_path": "projects/vevo/growthbook_cta_safety_monitoring.json",
         "lifecycle_reconciliation_path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
     }
     for field, expected in expected_paths.items():
@@ -493,12 +572,20 @@ def validate_manifest(
             "measurement_window",
             "sample_plan",
             "decision_contract",
+            "safety_monitoring",
             "lifecycle_reconciliation",
         )
     }
     _require(
         set(actual_hashes)
-        == {"activation", "measurement_window", "sample_plan", "decision_contract", "lifecycle_reconciliation"},
+        == {
+            "activation",
+            "measurement_window",
+            "sample_plan",
+            "decision_contract",
+            "safety_monitoring",
+            "lifecycle_reconciliation",
+        },
         "CTA completion source hash set drift",
     )
     _require(bindings["decision_contract_sha256"] == actual_hashes["decision_contract"] == EXPECTED_DECISION_SHA256, "CTA completion decision hash drift")
@@ -516,6 +603,7 @@ def validate_manifest(
             "activation_sha256",
             "measurement_window_sha256",
             "sample_plan_sha256",
+            "safety_monitoring_sha256",
             "lifecycle_reconciliation_sha256",
         ):
             _require(bindings[field] is None, f"waiting CTA completion bound {field}")
@@ -549,7 +637,7 @@ def validate_manifest(
         _require(stop_observation is None and workspace is None, "waiting CTA completion has stopped-state evidence")
         _require(
             root["next_gate"]
-            == "after_outcome_blind_window_resolution_manually_stop_only_exact_cta_then_record_canonical_readback",
+            == "after_reviewed_window_or_safety_resolution_manually_stop_only_exact_cta_then_record_canonical_readback",
             "waiting CTA completion next gate drift",
         )
         return
@@ -559,7 +647,19 @@ def validate_manifest(
     _require(start_observation is not None, "CTA completion start observation missing")
     _require(stop_observation is not None, "CTA completion stop observation missing")
     _require(workspace is not None, "CTA completion stopped workspace missing")
-    for name in ("activation", "measurement_window", "sample_plan", "lifecycle_reconciliation"):
+    _require(safety_monitoring is not None, "CTA completion safety monitoring missing")
+    validate_safety_contract(safety_monitoring)
+    _require(
+        safety_monitoring.get("status") == SAFETY_STOPPED,
+        "CTA completion safety monitoring is not stopped",
+    )
+    for name in (
+        "activation",
+        "measurement_window",
+        "sample_plan",
+        "safety_monitoring",
+        "lifecycle_reconciliation",
+    ):
         _require(bindings[f"{name}_sha256"] == actual_hashes[name], f"CTA completion {name} hash drift")
     _require(sample.get("status") == "sample_frozen_activation_still_blocked", "CTA completion sample is not frozen")
     _require(lifecycle.get("verified") is True, "CTA completion lifecycle reconciliation is not verified")
@@ -579,8 +679,14 @@ def validate_manifest(
         start_observation,
         stop_observation,
         source_hashes=measurement_hashes,
+        safety_monitoring=safety_monitoring,
     )
-    validate_stop_observation(stop_observation, activation, measurement)
+    validate_stop_observation(
+        stop_observation,
+        activation,
+        measurement,
+        safety_monitoring,
+    )
     observation_sha256 = _hash_bytes(canonical_json_bytes(stop_observation))
     ended = _parse_utc(stop_observation["assignment_ended_at_utc"], "assignment_ended_at_utc")
     due = ended + timedelta(days=14)
@@ -661,10 +767,66 @@ def _stopped_workspace(
     return updated
 
 
+def _stopped_safety_monitoring(
+    safety_monitoring: Mapping[str, Any],
+    measurement: Mapping[str, Any],
+    stop_observation: Mapping[str, Any],
+) -> dict[str, Any]:
+    validate_safety_contract(safety_monitoring)
+    trigger_type = measurement["assignment_stop"]["review_trigger_type"]
+    if trigger_type == "safety_guardrail":
+        _require(
+            safety_monitoring.get("status") == SAFETY_STOP_REVIEW,
+            "CTA safety stop review is not open",
+        )
+        _require(
+            safety_monitoring["release_boundaries"][
+                "manual_growthbook_stop_allowed"
+            ]
+            is True,
+            "CTA safety manual stop gate is closed",
+        )
+    else:
+        _require(
+            trigger_type == "outcome_blind_window_checkpoint",
+            "CTA stop trigger type drift",
+        )
+        _require(
+            safety_monitoring.get("status") == SAFETY_MONITORING,
+            "CTA normal stop has conflicting safety state",
+        )
+    updated = copy.deepcopy(safety_monitoring)
+    updated["status"] = SAFETY_STOPPED
+    for field in (
+        "safety_checkpoint_collection_allowed",
+        "safety_checkpoint_recording_allowed",
+        "protected_safety_collection_workflow_allowed",
+    ):
+        updated["release_boundaries"][field] = False
+    updated["release_boundaries"]["manual_growthbook_stop_allowed"] = False
+    updated["stop_handoff"].update(
+        {
+            "status": "verified_manual_stop_readback",
+            "stop_observation_sha256": _hash_bytes(
+                canonical_json_bytes(stop_observation)
+            ),
+            "assignment_ended_at_utc": stop_observation[
+                "assignment_ended_at_utc"
+            ],
+        }
+    )
+    updated["next_gate"] = (
+        "wait_exact_14_day_followup_then_one_protected_final_look"
+    )
+    validate_safety_contract(updated)
+    return updated
+
+
 def record_stop(
     completion: Mapping[str, Any],
     activation: Mapping[str, Any],
     measurement: Mapping[str, Any],
+    safety_monitoring: Mapping[str, Any],
     sample: Mapping[str, Any],
     contract: Mapping[str, Any],
     lifecycle: Mapping[str, Any],
@@ -678,6 +840,7 @@ def record_stop(
     stop_observation_sha256: str,
     source_hashes: Mapping[str, str] | None = None,
 ) -> tuple[
+    dict[str, Any],
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
@@ -697,12 +860,25 @@ def record_stop(
     )
     _require(completion.get("status") == WAITING, "CTA stop is already recorded")
     _require(activation.get("status") == CTA_RUNNING, "CTA activation is not running")
-    _require(measurement.get("status") == WINDOW_RESOLVED, "CTA outcome-blind stop rule is unresolved")
+    _require(measurement.get("status") == WINDOW_RESOLVED, "CTA reviewed stop rule is unresolved")
     _require(measurement.get("assignment_stop", {}).get("manual_review_allowed") is True, "CTA manual stop review gate is closed")
+    validate_safety_contract(safety_monitoring)
     digest = str(stop_observation_sha256 or "").strip()
     _require(SHA256_RE.fullmatch(digest) is not None, "CTA stop observation SHA-256 is invalid")
     _require(_hash_bytes(canonical_json_bytes(stop_observation)) == digest, "CTA stop observation SHA-256 mismatch")
-    validate_stop_observation(stop_observation, activation, measurement)
+    validate_stop_observation(
+        stop_observation,
+        activation,
+        measurement,
+        safety_monitoring,
+    )
+
+    updated_safety = _stopped_safety_monitoring(
+        safety_monitoring,
+        measurement,
+        stop_observation,
+    )
+    safety_bytes = pretty_json_bytes(updated_safety)
 
     updated_activation = copy.deepcopy(activation)
     updated_activation["status"] = CTA_STOPPED
@@ -739,6 +915,7 @@ def record_stop(
         start_observation,
         stop_observation,
         source_hashes=measurement_source_hashes,
+        safety_monitoring=updated_safety,
     )
     measurement_bytes = pretty_json_bytes(updated_measurement)
     updated_workspace = _stopped_workspace(workspace, activation, stop_observation)
@@ -749,7 +926,14 @@ def record_stop(
     final_source_hashes = dict(all_hashes)
     final_source_hashes["activation"] = _hash_bytes(activation_bytes)
     final_source_hashes["measurement_window"] = _hash_bytes(measurement_bytes)
-    for name in ("activation", "measurement_window", "sample_plan", "lifecycle_reconciliation"):
+    final_source_hashes["safety_monitoring"] = _hash_bytes(safety_bytes)
+    for name in (
+        "activation",
+        "measurement_window",
+        "sample_plan",
+        "safety_monitoring",
+        "lifecycle_reconciliation",
+    ):
         bindings[f"{name}_sha256"] = final_source_hashes[name]
     ended = _parse_utc(stop_observation["assignment_ended_at_utc"], "assignment_ended_at_utc")
     updated_completion["stop_readback"].update(
@@ -781,6 +965,7 @@ def record_stop(
         lifecycle,
         reconciliation,
         lifecycle_observation=lifecycle_observation,
+        safety_monitoring=updated_safety,
         start_observation=start_observation,
         stop_observation=stop_observation,
         workspace=updated_workspace,
@@ -800,6 +985,7 @@ def record_stop(
         updated_completion,
         updated_activation,
         updated_measurement,
+        updated_safety,
         updated_workspace,
         updated_final_snapshot,
     )
@@ -827,6 +1013,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--completion", type=Path, default=COMPLETION_PATH)
     parser.add_argument("--activation", type=Path, default=ACTIVATION_PATH)
     parser.add_argument("--measurement-window", type=Path, default=MEASUREMENT_PATH)
+    parser.add_argument(
+        "--safety-monitoring", type=Path, default=SAFETY_MONITORING_PATH
+    )
     parser.add_argument("--sample-plan", type=Path, default=SAMPLE_PLAN_PATH)
     parser.add_argument("--decision-contract", type=Path, default=DECISION_CONTRACT_PATH)
     parser.add_argument("--lifecycle", type=Path, default=LIFECYCLE_PATH)
@@ -842,6 +1031,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--completion-output", type=Path, required=True)
     parser.add_argument("--activation-output", type=Path, required=True)
     parser.add_argument("--measurement-output", type=Path, required=True)
+    parser.add_argument("--safety-output", type=Path, required=True)
     parser.add_argument("--workspace-output", type=Path, required=True)
     parser.add_argument("--final-snapshot-output", type=Path, required=True)
     return parser
@@ -854,10 +1044,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.completion_output.resolve(),
             args.activation_output.resolve(),
             args.measurement_output.resolve(),
+            args.safety_output.resolve(),
             args.workspace_output.resolve(),
             args.final_snapshot_output.resolve(),
         }
-        _require(len(outputs) == 5, "CTA stop output paths must be distinct")
+        _require(len(outputs) == 6, "CTA stop output paths must be distinct")
         stop_observation = load_canonical(
             args.stop_observation,
             args.stop_observation_sha256,
@@ -877,6 +1068,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         source_hashes = _source_hashes(
             activation_path=args.activation,
             measurement_path=args.measurement_window,
+            safety_monitoring_path=args.safety_monitoring,
             sample_plan_path=args.sample_plan,
             decision_contract_path=args.decision_contract,
             lifecycle_path=args.lifecycle,
@@ -887,6 +1079,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _load(args.completion, "CTA completion"),
             _load(args.activation, "CTA activation"),
             _load(args.measurement_window, "CTA measurement window"),
+            _load(args.safety_monitoring, "CTA safety monitoring"),
             _load(args.sample_plan, "CTA sample plan"),
             _load(args.decision_contract, "CTA decision contract"),
             lifecycle,
@@ -904,6 +1097,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.completion_output,
                 args.activation_output,
                 args.measurement_output,
+                args.safety_output,
                 args.workspace_output,
                 args.final_snapshot_output,
             ),

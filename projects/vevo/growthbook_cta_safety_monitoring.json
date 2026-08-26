@@ -3,6 +3,7 @@
   "monitoring_type": "vevo_growthbook_cta_safety_only",
   "status": "waiting_for_verified_cta_start",
   "experiment_id": "vevo-sk-product-cta-color-001",
+  "assignment_started_at_utc": null,
   "source_bindings": {
     "activation": {
       "path": "projects/vevo/growthbook_cta_activation.json",
@@ -74,13 +75,29 @@
     "status": "not_recorded",
     "checkpoint_index": null,
     "observed_at_utc": null,
+    "eligible_devices_seen": null,
     "evidence_sha256": null,
     "decision_sha256": null,
+    "provenance_sha256": null,
+    "workflow_run_id": null,
+    "main_commit": null,
     "verdict": null,
     "stop_reasons": []
   },
+  "stop_handoff": {
+    "status": "not_open",
+    "trigger_evidence_sha256": null,
+    "trigger_decision_sha256": null,
+    "trigger_provenance_sha256": null,
+    "trigger_observed_at_utc": null,
+    "stop_reasons": [],
+    "stop_observation_sha256": null,
+    "assignment_ended_at_utc": null
+  },
   "release_boundaries": {
     "safety_checkpoint_collection_allowed": false,
+    "safety_checkpoint_recording_allowed": false,
+    "protected_safety_collection_workflow_allowed": false,
     "manual_growthbook_stop_allowed": false,
     "automatic_growthbook_mutation_allowed": false,
     "automatic_gtm_mutation_allowed": false,

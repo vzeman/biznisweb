@@ -224,6 +224,7 @@ def record_checkpoint(
         window.update(
             {
                 "resolution_status": "resolved_waiting_for_manual_assignment_stop",
+                "resolution_trigger": "outcome_blind_window_checkpoint",
                 "resolved_reason": (
                     "target_total_sample_reached"
                     if decision == "open_manual_stop_review_target_reached"
@@ -248,6 +249,11 @@ def record_checkpoint(
             {
                 "status": "manual_stop_review_open_assignment_still_running",
                 "manual_review_allowed": True,
+                "review_trigger_type": "outcome_blind_window_checkpoint",
+                "review_trigger_evidence_sha256": digest,
+                "review_trigger_decision_sha256": None,
+                "review_trigger_provenance_sha256": None,
+                "review_trigger_observed_at_utc": evidence["observed_at_utc"],
             }
         )
         recorded["release_boundaries"]["read_only_checkpoint_allowed"] = False
