@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Record VEVO Production A/A completion transitions offline.
 
-``record-pass`` accepts only an exact canonical snapshot and matching canonical
-decision from the protected snapshot workflow. It independently recomputes the
-decision and opens only the reviewed manual A/A stop gate.
+``record-pass`` accepts only an exact canonical snapshot, matching canonical
+decision, and workflow provenance from the protected snapshot workflow. It
+independently recomputes the decision and opens only the reviewed manual A/A
+stop gate.
 
 ``record-stop`` accepts only a canonical reviewed post-stop readback. It closes
 the stop gate and updates a supplied workspace copy to the post-A/A, zero-
@@ -71,6 +72,42 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 UTC_RE = re.compile(
     r"^20[2-9][0-9]-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 )
+PROVENANCE_TYPE = "vevo_growthbook_aa_snapshot_provenance"
+PROVENANCE_WORKFLOW = (
+    ".github/workflows/build-vevo-growthbook-production-aa-snapshot.yml"
+)
+PROVENANCE_ARTIFACT = "vevo-growthbook-aa-snapshot"
+SNAPSHOT_FILE_NAME = "vevo-growthbook-aa-snapshot.json"
+DECISION_FILE_NAME = "vevo-growthbook-aa-decision.json"
+PROVENANCE_FILE_NAME = "vevo-growthbook-aa-provenance.json"
+PROVENANCE_KEYS = {
+    "schema_version",
+    "evidence_type",
+    "repository",
+    "workflow",
+    "workflow_run_id",
+    "workflow_run_attempt",
+    "main_commit",
+    "artifact_name",
+    "files",
+    "source_components",
+    "safety",
+}
+PROVENANCE_SOURCE_KEYS = {
+    "workflow",
+    "workflow_run_id",
+    "main_commit",
+    "artifact_name",
+    "artifact_sha256",
+}
+PROVENANCE_SAFETY = {
+    "contains_component_artifacts": False,
+    "contains_raw_aws_payloads": False,
+    "contains_event_or_device_ids": False,
+    "contains_customer_or_order_data": False,
+    "external_or_automatic_mutation": False,
+    "winner_calls_allowed": False,
+}
 
 ROOT_KEYS = {
     "schema_version",
@@ -92,10 +129,12 @@ AA_PASS_KEYS = {
     "artifact_name",
     "snapshot_file",
     "decision_file",
+    "provenance_file",
     "workflow_run_id",
     "main_commit",
     "snapshot_sha256",
     "decision_sha256",
+    "provenance_sha256",
     "evaluated_at_utc",
     "verdict",
     "winner_calls_allowed",
@@ -136,6 +175,7 @@ OBSERVATION_KEYS = {
     "observed_at_utc",
     "aa_pass_snapshot_sha256",
     "aa_pass_decision_sha256",
+    "aa_pass_provenance_sha256",
     "growthbook",
     "gtm",
     "storefront",
@@ -250,6 +290,107 @@ def _activation_digest(activation: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical_json_bytes(activation)).hexdigest()
 
 
+def validate_provenance(
+    provenance: Mapping[str, Any],
+    snapshot_manifest: Mapping[str, Any],
+    *,
+    provenance_sha256: str,
+    snapshot_sha256: str,
+    decision_sha256: str,
+    workflow_run_id: str,
+    main_commit: str,
+) -> None:
+    root = _exact(provenance, PROVENANCE_KEYS, "A/A snapshot provenance")
+    _require(
+        root["schema_version"] == 1
+        and root["evidence_type"] == PROVENANCE_TYPE,
+        "A/A snapshot provenance identity drift",
+    )
+    _require(
+        root["repository"] == "vzeman/biznisweb"
+        and root["workflow"] == PROVENANCE_WORKFLOW,
+        "A/A snapshot provenance source drift",
+    )
+    _require(
+        root["workflow_run_id"] == workflow_run_id
+        and RUN_ID_RE.fullmatch(workflow_run_id) is not None,
+        "A/A snapshot provenance workflow run mismatch",
+    )
+    _require(
+        root["workflow_run_attempt"] == 1,
+        "A/A snapshot provenance must come from the first workflow attempt",
+    )
+    _require(
+        root["main_commit"] == main_commit
+        and COMMIT_RE.fullmatch(main_commit) is not None,
+        "A/A snapshot provenance main commit mismatch",
+    )
+    _require(
+        root["artifact_name"] == PROVENANCE_ARTIFACT,
+        "A/A snapshot provenance artifact drift",
+    )
+    files = _exact(
+        root["files"],
+        {SNAPSHOT_FILE_NAME, DECISION_FILE_NAME},
+        "A/A snapshot provenance files",
+    )
+    for file_name, expected_sha256 in (
+        (SNAPSHOT_FILE_NAME, snapshot_sha256),
+        (DECISION_FILE_NAME, decision_sha256),
+    ):
+        row = _exact(
+            files[file_name], {"sha256"}, f"A/A snapshot provenance {file_name}"
+        )
+        _require(
+            row["sha256"] == expected_sha256
+            and SHA256_RE.fullmatch(str(row["sha256"] or "")) is not None,
+            f"A/A snapshot provenance hash mismatch: {file_name}",
+        )
+
+    sources = _exact(
+        root["source_components"],
+        {"automated_evidence", "manual_qa_evidence"},
+        "A/A snapshot provenance source components",
+    )
+    for component_name in ("automated_evidence", "manual_qa_evidence"):
+        component = snapshot_manifest.get(component_name) or {}
+        expected = {
+            "workflow": component.get("workflow"),
+            "workflow_run_id": str(component.get("run_id") or ""),
+            "main_commit": component.get("main_commit"),
+            "artifact_name": component.get("artifact_name"),
+            "artifact_sha256": component.get("sha256"),
+        }
+        row = _exact(
+            sources[component_name],
+            PROVENANCE_SOURCE_KEYS,
+            f"A/A snapshot provenance {component_name}",
+        )
+        _require(
+            row == expected,
+            f"A/A snapshot provenance source mismatch: {component_name}",
+        )
+        _require(
+            RUN_ID_RE.fullmatch(str(row["workflow_run_id"] or "")) is not None
+            and COMMIT_RE.fullmatch(str(row["main_commit"] or "")) is not None
+            and SHA256_RE.fullmatch(str(row["artifact_sha256"] or "")) is not None,
+            f"A/A snapshot provenance source identity invalid: {component_name}",
+        )
+    _require(
+        _exact(
+            root["safety"], set(PROVENANCE_SAFETY), "A/A snapshot provenance safety"
+        )
+        == PROVENANCE_SAFETY,
+        "A/A snapshot provenance safety drift",
+    )
+    _require(
+        SHA256_RE.fullmatch(provenance_sha256) is not None
+        and hashlib.sha256(canonical_json_bytes(provenance)).hexdigest()
+        == provenance_sha256,
+        "A/A snapshot provenance SHA-256 mismatch",
+    )
+
+
 def _validate_snapshot_manifest(
     snapshot_manifest: Mapping[str, Any], activation: Mapping[str, Any]
 ) -> None:
@@ -283,6 +424,10 @@ def validate_observation(
     _require(
         row["aa_pass_decision_sha256"] == aa_pass["decision_sha256"],
         "A/A stop observation decision binding drift",
+    )
+    _require(
+        row["aa_pass_provenance_sha256"] == aa_pass["provenance_sha256"],
+        "A/A stop observation provenance binding drift",
     )
     _require(
         observed_at >= _parse_utc(aa_pass["evaluated_at_utc"], "aa_pass.evaluated_at_utc"),
@@ -398,6 +543,7 @@ def validate_manifest(
         "artifact_name": "vevo-growthbook-aa-snapshot",
         "snapshot_file": "vevo-growthbook-aa-snapshot.json",
         "decision_file": "vevo-growthbook-aa-decision.json",
+        "provenance_file": "vevo-growthbook-aa-provenance.json",
         "winner_calls_allowed": False,
     }
     _require(
@@ -439,6 +585,7 @@ def validate_manifest(
                     "main_commit",
                     "snapshot_sha256",
                     "decision_sha256",
+                    "provenance_sha256",
                     "evaluated_at_utc",
                     "verdict",
                 )
@@ -470,7 +617,7 @@ def validate_manifest(
     _require(aa_pass["status"] == "verified_pass", "A/A PASS binding is incomplete")
     _require(RUN_ID_RE.fullmatch(str(aa_pass["workflow_run_id"] or "")) is not None, "A/A PASS run ID is invalid")
     _require(COMMIT_RE.fullmatch(str(aa_pass["main_commit"] or "")) is not None, "A/A PASS main commit is invalid")
-    for field in ("snapshot_sha256", "decision_sha256"):
+    for field in ("snapshot_sha256", "decision_sha256", "provenance_sha256"):
         _require(SHA256_RE.fullmatch(str(aa_pass[field] or "")) is not None, f"A/A PASS {field} is invalid")
     _parse_utc(aa_pass["evaluated_at_utc"], "aa_pass.evaluated_at_utc")
     _require(aa_pass["verdict"] == "PASS", "A/A completion is not bound to PASS")
@@ -522,11 +669,13 @@ def record_pass(
     snapshot_manifest: Mapping[str, Any],
     snapshot: Mapping[str, Any],
     decision: Mapping[str, Any],
+    provenance: Mapping[str, Any],
     *,
     workflow_run_id: str,
     main_commit: str,
     snapshot_sha256: str,
     decision_sha256: str,
+    provenance_sha256: str,
 ) -> dict[str, Any]:
     validate_manifest(completion, activation, snapshot_manifest)
     _require(
@@ -538,8 +687,21 @@ def record_pass(
     _require(COMMIT_RE.fullmatch(str(main_commit or "")) is not None, "snapshot workflow main commit is invalid")
     _require(SHA256_RE.fullmatch(str(snapshot_sha256 or "")) is not None, "snapshot SHA-256 is invalid")
     _require(SHA256_RE.fullmatch(str(decision_sha256 or "")) is not None, "decision SHA-256 is invalid")
+    _require(
+        SHA256_RE.fullmatch(str(provenance_sha256 or "")) is not None,
+        "provenance SHA-256 is invalid",
+    )
     _require(hashlib.sha256(canonical_json_bytes(snapshot)).hexdigest() == snapshot_sha256, "snapshot SHA-256 mismatch")
     _require(hashlib.sha256(canonical_json_bytes(decision)).hexdigest() == decision_sha256, "decision SHA-256 mismatch")
+    validate_provenance(
+        provenance,
+        snapshot_manifest,
+        provenance_sha256=provenance_sha256,
+        snapshot_sha256=snapshot_sha256,
+        decision_sha256=decision_sha256,
+        workflow_run_id=workflow_run_id,
+        main_commit=main_commit,
+    )
     try:
         expected_decision = evaluate_aa(snapshot, load_aa_config(AA_CONFIG_PATH))
     except AaEvaluationError as exc:
@@ -553,6 +715,18 @@ def record_pass(
     _require(snapshot.get("full_allocation_started_at_utc") == window.get("from_utc"), "A/A snapshot start differs from the frozen window")
     _require(decision.get("evaluated_at_utc") == window.get("resolved_through_utc"), "A/A decision end differs from the frozen window")
 
+    if completion["status"] == "aa_pass_recorded_manual_stop_review_allowed":
+        existing = completion["aa_pass"]
+        _require(
+            existing["workflow_run_id"] == workflow_run_id
+            and existing["main_commit"] == main_commit
+            and existing["snapshot_sha256"] == snapshot_sha256
+            and existing["decision_sha256"] == decision_sha256
+            and existing["provenance_sha256"] == provenance_sha256,
+            "A/A PASS is already bound to a different artifact",
+        )
+        return copy.deepcopy(dict(completion))
+
     recorded = copy.deepcopy(completion)
     recorded["status"] = "aa_pass_recorded_manual_stop_review_allowed"
     recorded["aa_pass"].update(
@@ -562,6 +736,7 @@ def record_pass(
             "main_commit": main_commit,
             "snapshot_sha256": snapshot_sha256,
             "decision_sha256": decision_sha256,
+            "provenance_sha256": provenance_sha256,
             "evaluated_at_utc": decision["evaluated_at_utc"],
             "verdict": "PASS",
         }
@@ -706,8 +881,10 @@ def _parser() -> argparse.ArgumentParser:
     pass_parser = subparsers.add_parser("record-pass")
     pass_parser.add_argument("--snapshot", type=Path, required=True)
     pass_parser.add_argument("--decision", type=Path, required=True)
+    pass_parser.add_argument("--provenance", type=Path, required=True)
     pass_parser.add_argument("--snapshot-sha256", required=True)
     pass_parser.add_argument("--decision-sha256", required=True)
+    pass_parser.add_argument("--provenance-sha256", required=True)
     pass_parser.add_argument("--workflow-run-id", required=True)
     pass_parser.add_argument("--main-commit", required=True)
 
@@ -728,16 +905,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "record-pass":
             snapshot = load_canonical(args.snapshot, args.snapshot_sha256, "A/A snapshot")
             decision = load_canonical(args.decision, args.decision_sha256, "A/A decision")
+            provenance = load_canonical(
+                args.provenance, args.provenance_sha256, "A/A snapshot provenance"
+            )
             recorded = record_pass(
                 completion,
                 activation,
                 snapshot_manifest,
                 snapshot,
                 decision,
+                provenance,
                 workflow_run_id=args.workflow_run_id,
                 main_commit=args.main_commit,
                 snapshot_sha256=args.snapshot_sha256,
                 decision_sha256=args.decision_sha256,
+                provenance_sha256=args.provenance_sha256,
             )
             _write_json(args.output, recorded)
             print("VEVO_AA_PASS_RECORDED:manual_stop_review_allowed=true:automatic_mutation=false:cta=false")

@@ -60,6 +60,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         self.completion["aa_pass"]["snapshot_sha256"] = (
             self.snapshot_artifact_hash
         )
+        self.completion["aa_pass"]["provenance_sha256"] = "e" * 64
         self.completion["stop_readback"]["status"] = "verified_zero_allocation"
         self.snapshot["snapshot_build_allowed"] = True
         self.sample["status"] = "sample_frozen_activation_still_blocked"
@@ -198,6 +199,7 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
         observation = stop_observation(
             snapshot_sha256=self.snapshot_artifact_hash,
             decision_sha256=decision_hash,
+            provenance_sha256=self.completion["aa_pass"]["provenance_sha256"],
         )
         raw = aa_canonical_json_bytes(observation)
         self.completion["stop_readback"]["observation_sha256"] = hashlib.sha256(

@@ -95,8 +95,51 @@ def aa_snapshot() -> dict[str, object]:
     return value
 
 
+def snapshot_provenance(
+    snapshot_manifest: dict[str, object],
+    *,
+    snapshot_sha256: str,
+    decision_sha256: str,
+    workflow_run_id: str = SNAPSHOT_RUN_ID,
+    main_commit: str = SNAPSHOT_COMMIT,
+) -> dict[str, object]:
+    sources = {}
+    for component_name in ("automated_evidence", "manual_qa_evidence"):
+        component = snapshot_manifest[component_name]
+        sources[component_name] = {
+            "workflow": component["workflow"],
+            "workflow_run_id": str(component["run_id"]),
+            "main_commit": component["main_commit"],
+            "artifact_name": component["artifact_name"],
+            "artifact_sha256": component["sha256"],
+        }
+    return {
+        "artifact_name": "vevo-growthbook-aa-snapshot",
+        "evidence_type": "vevo_growthbook_aa_snapshot_provenance",
+        "files": {
+            "vevo-growthbook-aa-decision.json": {"sha256": decision_sha256},
+            "vevo-growthbook-aa-snapshot.json": {"sha256": snapshot_sha256},
+        },
+        "main_commit": main_commit,
+        "repository": "vzeman/biznisweb",
+        "safety": {
+            "contains_component_artifacts": False,
+            "contains_customer_or_order_data": False,
+            "contains_event_or_device_ids": False,
+            "contains_raw_aws_payloads": False,
+            "external_or_automatic_mutation": False,
+            "winner_calls_allowed": False,
+        },
+        "schema_version": 1,
+        "source_components": sources,
+        "workflow": ".github/workflows/build-vevo-growthbook-production-aa-snapshot.yml",
+        "workflow_run_attempt": 1,
+        "workflow_run_id": workflow_run_id,
+    }
+
+
 def stop_observation(
-    *, snapshot_sha256: str, decision_sha256: str
+    *, snapshot_sha256: str, decision_sha256: str, provenance_sha256: str
 ) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -105,6 +148,7 @@ def stop_observation(
         "observed_at_utc": "2026-09-02T08:15:00Z",
         "aa_pass_snapshot_sha256": snapshot_sha256,
         "aa_pass_decision_sha256": decision_sha256,
+        "aa_pass_provenance_sha256": provenance_sha256,
         "growthbook": {
             "build": "5.0.1+8f1db44",
             "project_id": "prj_2CeEJc6J9FwQFix9UhsnKr",
@@ -177,6 +221,25 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
         self.decision_sha = hashlib.sha256(
             canonical_json_bytes(self.decision)
         ).hexdigest()
+        self.provenance = self._provenance()
+        self.provenance_sha = hashlib.sha256(
+            canonical_json_bytes(self.provenance)
+        ).hexdigest()
+
+    def _provenance(
+        self,
+        *,
+        decision_sha256: str | None = None,
+        workflow_run_id: str = SNAPSHOT_RUN_ID,
+        main_commit: str = SNAPSHOT_COMMIT,
+    ) -> dict[str, object]:
+        return snapshot_provenance(
+            self.snapshot_manifest,
+            snapshot_sha256=self.snapshot_sha,
+            decision_sha256=decision_sha256 or self.decision_sha,
+            workflow_run_id=workflow_run_id,
+            main_commit=main_commit,
+        )
 
     def record_pass(self) -> dict[str, object]:
         return record_pass(
@@ -185,10 +248,12 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
             self.snapshot_manifest,
             self.snapshot,
             self.decision,
+            self.provenance,
             workflow_run_id=SNAPSHOT_RUN_ID,
             main_commit=SNAPSHOT_COMMIT,
             snapshot_sha256=self.snapshot_sha,
             decision_sha256=self.decision_sha,
+            provenance_sha256=self.provenance_sha,
         )
 
     def test_checked_in_contract_is_closed_and_valid(self) -> None:
@@ -223,16 +288,19 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
                 self.snapshot_manifest,
                 self.snapshot,
                 self.decision,
+                self.provenance,
                 workflow_run_id=SNAPSHOT_RUN_ID,
                 main_commit=SNAPSHOT_COMMIT,
                 snapshot_sha256=self.snapshot_sha,
                 decision_sha256=self.decision_sha,
+                provenance_sha256=self.provenance_sha,
             ),
         )
 
         tampered = copy.deepcopy(self.decision)
         tampered["gates"][0]["status"] = "fail"
         tampered_sha = hashlib.sha256(canonical_json_bytes(tampered)).hexdigest()
+        tampered_provenance = self._provenance(decision_sha256=tampered_sha)
         with self.assertRaisesRegex(
             AaCompletionRecordingError, "independent evaluation"
         ):
@@ -242,16 +310,92 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
                 self.snapshot_manifest,
                 self.snapshot,
                 tampered,
+                tampered_provenance,
                 workflow_run_id=SNAPSHOT_RUN_ID,
                 main_commit=SNAPSHOT_COMMIT,
                 snapshot_sha256=self.snapshot_sha,
                 decision_sha256=tampered_sha,
+                provenance_sha256=hashlib.sha256(
+                    canonical_json_bytes(tampered_provenance)
+                ).hexdigest(),
+            )
+
+    def test_rejects_swapped_provenance_run_commit_file_or_component(self) -> None:
+        cases = (
+            (
+                "workflow run mismatch",
+                lambda value: value.update({"workflow_run_id": "32850000002"}),
+            ),
+            (
+                "main commit mismatch",
+                lambda value: value.update({"main_commit": "6" * 40}),
+            ),
+            (
+                "hash mismatch: vevo-growthbook-aa-decision.json",
+                lambda value: value["files"][
+                    "vevo-growthbook-aa-decision.json"
+                ].update({"sha256": "f" * 64}),
+            ),
+            (
+                "source mismatch: automated_evidence",
+                lambda value: value["source_components"][
+                    "automated_evidence"
+                ].update({"artifact_sha256": "f" * 64}),
+            ),
+        )
+        for expected, mutate in cases:
+            with self.subTest(expected=expected):
+                provenance = self._provenance()
+                mutate(provenance)
+                with self.assertRaisesRegex(AaCompletionRecordingError, expected):
+                    record_pass(
+                        self.completion,
+                        self.activation,
+                        self.snapshot_manifest,
+                        self.snapshot,
+                        self.decision,
+                        provenance,
+                        workflow_run_id=SNAPSHOT_RUN_ID,
+                        main_commit=SNAPSHOT_COMMIT,
+                        snapshot_sha256=self.snapshot_sha,
+                        decision_sha256=self.decision_sha,
+                        provenance_sha256=hashlib.sha256(
+                            canonical_json_bytes(provenance)
+                        ).hexdigest(),
+                    )
+
+    def test_rejects_rebinding_an_already_recorded_pass(self) -> None:
+        recorded = self.record_pass()
+        replacement_run_id = "32850000002"
+        replacement_commit = "6" * 40
+        replacement = self._provenance(
+            workflow_run_id=replacement_run_id,
+            main_commit=replacement_commit,
+        )
+        with self.assertRaisesRegex(
+            AaCompletionRecordingError, "already bound to a different artifact"
+        ):
+            record_pass(
+                recorded,
+                self.activation,
+                self.snapshot_manifest,
+                self.snapshot,
+                self.decision,
+                replacement,
+                workflow_run_id=replacement_run_id,
+                main_commit=replacement_commit,
+                snapshot_sha256=self.snapshot_sha,
+                decision_sha256=self.decision_sha,
+                provenance_sha256=hashlib.sha256(
+                    canonical_json_bytes(replacement)
+                ).hexdigest(),
             )
 
     def test_rejects_stop_before_pass(self) -> None:
         observed = stop_observation(
             snapshot_sha256=self.snapshot_sha,
             decision_sha256=self.decision_sha,
+            provenance_sha256=self.provenance_sha,
         )
         with self.assertRaisesRegex(AaCompletionRecordingError, "before PASS"):
             record_stop(
@@ -270,6 +414,7 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
         observed = stop_observation(
             snapshot_sha256=self.snapshot_sha,
             decision_sha256=self.decision_sha,
+            provenance_sha256=self.provenance_sha,
         )
         digest = hashlib.sha256(canonical_json_bytes(observed)).hexdigest()
         recorded, workspace = record_stop(
@@ -317,6 +462,22 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
             ),
         )
 
+        wrong_provenance = copy.deepcopy(observed)
+        wrong_provenance["aa_pass_provenance_sha256"] = "f" * 64
+        with self.assertRaisesRegex(
+            AaCompletionRecordingError, "observation provenance binding drift"
+        ):
+            record_stop(
+                passed,
+                self.activation,
+                self.snapshot_manifest,
+                load("growthbook_workspace.json"),
+                wrong_provenance,
+                observation_sha256=hashlib.sha256(
+                    canonical_json_bytes(wrong_provenance)
+                ).hexdigest(),
+            )
+
         unsafe = copy.deepcopy(observed)
         unsafe["mutation_boundaries"]["meta_ads_mutation_performed"] = True
         with self.assertRaisesRegex(AaCompletionRecordingError, "unsafe mutation"):
@@ -344,6 +505,7 @@ class GrowthBookAaCompletionRecorderTests(unittest.TestCase):
         observed = stop_observation(
             snapshot_sha256=self.snapshot_sha,
             decision_sha256=self.decision_sha,
+            provenance_sha256=self.provenance_sha,
         )
         digest = hashlib.sha256(canonical_json_bytes(observed)).hexdigest()
         recorded, workspace = record_stop(
