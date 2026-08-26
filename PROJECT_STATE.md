@@ -6576,3 +6576,29 @@ Known issues:
 Next exact step:
 
 - Commit and push this hardening, open a PR, and merge only after all required CI checks pass. Then keep the A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`; at or after that time process only the protected outcome-blind A/A chain. Continue to the reviewed GrowthBook Pro purchase only after verified `PASS`, zero-allocation stop, and a fresh action-time confirmation that passes `assert-action-time` on exact `main`.
+
+## 2026-08-26 — VEVO GrowthBook Pro action-time hardening merge verified
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pro-action-gate-state`
+
+What changed:
+
+- PR `#460` merged the machine-enforced GrowthBook Pro paid action-time gate into `main` as `851ff0f268971c616fd07b226d20f2f896434439`.
+- This handoff records the completed merge and replaces the obsolete merge instruction with the exact time-gated A/A continuation. It introduces no experiment, billing, reporting, advertising, storefront, commerce, or infrastructure mutation.
+
+What is verified:
+
+- PR `#460` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` on exact head `61291b8ce9ddac2359c64e9cb8021fb660c4f1b9` before merge.
+- `origin/main` and this state branch read back exact merge commit `851ff0f268971c616fd07b226d20f2f896434439`.
+- The future paid GrowthBook Pro click now requires an unchanged hash-bound A/A/workspace state and a canonical confirmation no more than 15 minutes old; the canonical post-upgrade observation is bounded to the following four hours. GrowthBook Pro remains unpurchased and CTA remains draft at zero allocation.
+- No A/A population or result was inspected, no workflow was dispatched, and no production/external state or local runtime process changed.
+
+Known issues:
+
+- The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`. The current user acknowledgement is not the future action-time purchase confirmation.
+
+Next exact step:
+
+- Keep the frozen A/A boundary closed until `2026-09-02 03:45 Europe/Bratislava`. At or after that time, record the earliest successful outcome-blind checkpoint artifact in index order, resolve the window without arm/outcome peeking, and process only the protected A/A evidence path. Continue only on an independently reproduced `PASS`; after the reviewed zero-allocation stop, request a new confirmation immediately before the exact one-seat `$40 USD` monthly GrowthBook Pro action and require `assert-action-time` to pass on exact `main`.
