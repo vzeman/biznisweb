@@ -600,10 +600,11 @@ def main() -> int:
         )
         workspace_state = growthbook_workspace_config.get("state")
         aa_only_registry = {"vevo-sk-aa-001": preview_aa_registry}
-        cta_only_registry = {
-            "vevo-sk-product-cta-color-001": preview_cta_registry
-        }
-        if workspace_state == "production_aa_running_activation_verified_pro_quantiles_blocked":
+        cta_only_registry = {"vevo-sk-product-cta-color-001": preview_cta_registry}
+        if (
+            workspace_state
+            == "production_aa_running_activation_verified_pro_quantiles_blocked"
+        ):
             if production_registry != aa_only_registry:
                 raise AssertionError(
                     "GrowthBook Production registry must contain only the exact reviewed A/A contract while A/A is running."
@@ -2219,10 +2220,13 @@ def main() -> int:
                 f"{required_cta_safety_workflow_marker}",
             )
         if growthbook_cta_safety_workflow.count("curl --request GET") != 2:
-            raise AssertionError("GrowthBook CTA safety commerce probe must use two GETs.")
-        if growthbook_cta_safety_workflow.count(
-            "uses: actions/upload-artifact@v4.6.2"
-        ) != 1:
+            raise AssertionError(
+                "GrowthBook CTA safety commerce probe must use two GETs."
+            )
+        if (
+            growthbook_cta_safety_workflow.count("uses: actions/upload-artifact@v4.6.2")
+            != 1
+        ):
             raise AssertionError(
                 "GrowthBook CTA safety workflow must upload exactly one artifact."
             )
@@ -2948,7 +2952,9 @@ def main() -> int:
             "checkpoint_index = (now_local.date() - first_due.date()).days + 1",
             "if: ${{ env.RUN_CHECKPOINT == 'true' }}",
             "if: ${{ always() && env.RUN_CHECKPOINT == 'true' }}",
-            "outcome-blind A/A checkpoint is outside its daily gate",
+            "exact historical backfill confirmation is required after the daily gate",
+            "confirm_historical_backfill:",
+            "manual_historical_backfill",
             "snapshot build opened before A/A window resolution",
             "producer opened before A/A window resolution",
             "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:",
@@ -2959,7 +2965,8 @@ def main() -> int:
             "cloudtrail_run_task_retention_recovery",
             "RECONCILIATION_RUNTIME_STATE_RETAINED",
             "'scheduler_run_task_verified': True",
-            "'schema_version': 2",
+            "'schema_version': 3",
+            "'collection_mode': os.environ['CHECKPOINT_COLLECTION_MODE']",
             "SELECT COUNT(DISTINCT device_id) AS eligible_devices",
             "header != ['eligible_devices']",
             "arm_counts_read': False",
@@ -3249,9 +3256,7 @@ def main() -> int:
                 "GrowthBook CTA final workflow must run exactly one aggregate Athena query."
             )
         if (
-            growthbook_cta_final_workflow.count(
-                "uses: actions/upload-artifact@v4.6.2"
-            )
+            growthbook_cta_final_workflow.count("uses: actions/upload-artifact@v4.6.2")
             != 1
         ):
             raise AssertionError(

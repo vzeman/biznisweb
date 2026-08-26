@@ -302,11 +302,16 @@ def validate_checkpoint_evidence(
     expected: Mapping[str, Any],
     checkpoint_index: int,
 ) -> None:
-    root = _exact_object(evidence, CHECKPOINT_ROOT_KEYS, "checkpoint evidence")
-    schema_version = root["schema_version"]
+    schema_version = (
+        evidence.get("schema_version") if isinstance(evidence, dict) else None
+    )
+    root_keys = set(CHECKPOINT_ROOT_KEYS)
+    if schema_version == 3:
+        root_keys.add("collection_mode")
+    root = _exact_object(evidence, root_keys, "checkpoint evidence")
     if (
         type(schema_version) is not int
-        or schema_version not in {1, 2}
+        or schema_version not in {1, 2, 3}
         or root["evidence_type"] != "vevo_growthbook_aa_window_checkpoint"
         or root["status"] != "passed"
         or root["experiment_id"] != "vevo-sk-aa-001"
@@ -321,12 +326,27 @@ def validate_checkpoint_evidence(
     candidate_through, due, last_full_date, full_days = _checkpoint_boundaries(
         expected, checkpoint_index
     )
-    if (
-        not due.astimezone(UTC)
-        <= observed_at
-        < (due + timedelta(days=1)).astimezone(UTC)
-    ):
-        raise MeasurementWindowError("checkpoint observation is outside its daily gate")
+    due_utc = due.astimezone(UTC)
+    daily_gate_end_utc = (due + timedelta(days=1)).astimezone(UTC)
+    if schema_version in {1, 2}:
+        if not due_utc <= observed_at < daily_gate_end_utc:
+            raise MeasurementWindowError(
+                "checkpoint observation is outside its daily gate"
+            )
+    else:
+        collection_mode = root["collection_mode"]
+        if collection_mode in {"scheduled_daily", "manual_same_window"}:
+            if not due_utc <= observed_at < daily_gate_end_utc:
+                raise MeasurementWindowError(
+                    "same-window checkpoint observation is outside its daily gate"
+                )
+        elif collection_mode == "manual_historical_backfill":
+            if observed_at < daily_gate_end_utc:
+                raise MeasurementWindowError(
+                    "historical backfill was recorded before its daily gate closed"
+                )
+        else:
+            raise MeasurementWindowError("checkpoint collection mode drift")
 
     window = _exact_object(root["window"], CHECKPOINT_WINDOW_KEYS, "checkpoint window")
     if window != {
@@ -341,7 +361,7 @@ def validate_checkpoint_evidence(
         raise MeasurementWindowError("checkpoint window drift")
 
     runtime_keys = set(CHECKPOINT_RUNTIME_KEYS)
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         runtime_keys.add("identity_source")
     runtime = _exact_object(root["runtime"], runtime_keys, "checkpoint runtime")
     if (
@@ -360,9 +380,11 @@ def validate_checkpoint_evidence(
         raise MeasurementWindowError("checkpoint runtime hard gate drift")
 
     control_keys = set(CHECKPOINT_CONTROL_KEYS)
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         control_keys.update({"runtime_state_retained", "scheduler_run_task_verified"})
-    control = _exact_object(root["control_plane"], control_keys, "checkpoint control plane")
+    control = _exact_object(
+        root["control_plane"], control_keys, "checkpoint control plane"
+    )
     expected_control = {
         "schedule_name": "vevo-growthbook-reconcile-production",
         "schedule_due_local": due.isoformat(timespec="seconds"),
@@ -375,12 +397,10 @@ def validate_checkpoint_evidence(
         "source_schedule_name": "vevo-daily-report-email",
         "source_schedule_unchanged": True,
     }
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         expected_control.update(
             {
-                "scheduler_run_task_verified": control[
-                    "scheduler_run_task_verified"
-                ],
+                "scheduler_run_task_verified": control["scheduler_run_task_verified"],
                 "runtime_state_retained": control["runtime_state_retained"],
             }
         )
@@ -412,7 +432,9 @@ def validate_checkpoint_evidence(
         }:
             raise MeasurementWindowError("checkpoint runtime identity source drift")
         if control["scheduler_run_task_verified"] is not True:
-            raise MeasurementWindowError("checkpoint Scheduler RunTask verification drift")
+            raise MeasurementWindowError(
+                "checkpoint Scheduler RunTask verification drift"
+            )
         if identity_source == "ecs_stopped_task":
             validate_private_ip()
             if control["runtime_state_retained"] is not True:

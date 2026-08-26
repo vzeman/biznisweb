@@ -13,10 +13,7 @@ from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
-    ROOT
-    / ".github"
-    / "workflows"
-    / "check-vevo-growthbook-production-aa-window.yml"
+    ROOT / ".github" / "workflows" / "check-vevo-growthbook-production-aa-window.yml"
 ).read_text(encoding="utf-8")
 
 
@@ -56,6 +53,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         event_schedule: str = "",
         resolution_status: str | None = None,
         checkpoint_history: list[dict[str, object]] | None = None,
+        historical_backfill: str = "false",
     ) -> tuple[int | None, str, str]:
         source = inline_python_block_containing("expected_schedule =")
         source = source.replace(
@@ -72,7 +70,9 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             if resolution_status is not None:
                 snapshot["measurement_window"]["resolution_status"] = resolution_status
             if checkpoint_history is not None:
-                snapshot["measurement_window"]["checkpoint_history"] = checkpoint_history
+                snapshot["measurement_window"]["checkpoint_history"] = (
+                    checkpoint_history
+                )
             snapshot_path = temporary / "snapshot.json"
             snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
             github_env = temporary / "github.env"
@@ -85,6 +85,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
                 ),
                 "EVENT_NAME": event_name,
                 "EVENT_SCHEDULE": event_schedule,
+                "CONFIRM_HISTORICAL_BACKFILL": historical_backfill,
                 "TEST_NOW_UTC": now_utc,
                 "RUNNER_TEMP": str(temporary),
                 "GITHUB_RUN_ID": "123456789",
@@ -110,6 +111,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         for marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
             "confirm_checkpoint:",
+            "confirm_historical_backfill:",
             "- cron: '30 2 * * *'",
             "- cron: '30 3 * * *'",
             "EVENT_NAME: ${{ github.event_name }}",
@@ -119,11 +121,12 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=already-recorded:aws=false",
             "PRODUCTION_AA_WINDOW_SCHEDULE_SKIP:reason=window-resolved:aws=false",
             "validate_growthbook_aa_measurement_window.py",
-            "outcome-blind A/A checkpoint is outside its daily gate",
+            "exact historical backfill confirmation is required after the daily gate",
             "snapshot build opened before A/A window resolution",
             "producer opened before A/A window resolution",
             "CTA must remain unstarted during A/A checkpointing",
-            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:outcome-read=false:mutation=none",
+            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:",
+            "collection={collection_mode}:outcome-read=false:mutation=none",
             "uses: aws-actions/configure-aws-credentials@v6.1.0",
         ):
             self.assertIn(marker, WORKFLOW)
@@ -133,7 +136,9 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         )
         self.assertLess(gate, credentials)
 
-    def test_scheduled_gate_skips_before_due_wrong_dst_and_resolved_without_aws(self) -> None:
+    def test_scheduled_gate_skips_before_due_wrong_dst_and_resolved_without_aws(
+        self,
+    ) -> None:
         scenarios = (
             {
                 "now_utc": "2026-08-26T02:30:00Z",
@@ -175,7 +180,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         )
         self.assertIsNone(exit_code)
         self.assertIn(
-            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:outcome-read=false:mutation=none",
+            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:collection=scheduled_daily:outcome-read=false:mutation=none",
             output,
         )
         self.assertIn("RUN_CHECKPOINT=false\n", github_env)
@@ -193,7 +198,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         )
         self.assertIsNone(exit_code)
         self.assertIn(
-            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:outcome-read=false:mutation=none",
+            "PRODUCTION_AA_WINDOW_LOCAL_GATE_OK:collection=scheduled_daily:outcome-read=false:mutation=none",
             output,
         )
         self.assertIn("CHECKPOINT_INDEX=62\n", github_env)
@@ -205,24 +210,49 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             event_name="schedule",
             now_utc="2026-09-02T02:30:00Z",
             event_schedule="30 2 * * *",
-            checkpoint_history=[
-                {"evidence": {"window": {"checkpoint_index": 1}}}
-            ],
+            checkpoint_history=[{"evidence": {"window": {"checkpoint_index": 1}}}],
         )
         self.assertEqual(0, exit_code)
         self.assertIn("reason=already-recorded:aws=false", output)
         self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
 
-    def test_manual_gate_remains_next_history_index_and_exact_daily_window(self) -> None:
+    def test_manual_gate_remains_next_history_index_and_requires_explicit_late_backfill(
+        self,
+    ) -> None:
         exit_code, _, github_env = self.run_local_gate(
             event_name="workflow_dispatch",
             now_utc="2026-09-02T02:30:00Z",
         )
         self.assertIsNone(exit_code)
         self.assertIn("CHECKPOINT_INDEX=1\n", github_env)
+        self.assertIn("CHECKPOINT_COLLECTION_MODE=manual_same_window\n", github_env)
         exit_code, _, github_env = self.run_local_gate(
             event_name="workflow_dispatch",
             now_utc="2026-09-04T02:30:00Z",
+        )
+        self.assertNotEqual(0, exit_code)
+        self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
+
+        exit_code, output, github_env = self.run_local_gate(
+            event_name="workflow_dispatch",
+            now_utc="2026-09-04T02:30:00Z",
+            historical_backfill="true",
+        )
+        self.assertIsNone(exit_code)
+        self.assertIn("collection=manual_historical_backfill", output)
+        self.assertIn("CHECKPOINT_INDEX=1\n", github_env)
+        self.assertIn("CANDIDATE_THROUGH_UTC=2026-09-01T22:00:00Z\n", github_env)
+        self.assertIn(
+            "CHECKPOINT_COLLECTION_MODE=manual_historical_backfill\n", github_env
+        )
+
+    def test_manual_gate_rejects_backfill_confirmation_inside_original_window(
+        self,
+    ) -> None:
+        exit_code, _, github_env = self.run_local_gate(
+            event_name="workflow_dispatch",
+            now_utc="2026-09-02T02:30:00Z",
+            historical_backfill="true",
         )
         self.assertNotEqual(0, exit_code)
         self.assertEqual("RUN_CHECKPOINT=false\n", github_env)
@@ -284,9 +314,12 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
         self.assertNotIn("aws ecs list-tasks", WORKFLOW)
 
-    def test_expired_runtime_state_is_not_misrepresented_as_a_live_ip_gate(self) -> None:
+    def test_expired_runtime_state_is_not_misrepresented_as_a_live_ip_gate(
+        self,
+    ) -> None:
         for marker in (
-            "'schema_version': 2",
+            "'schema_version': 3",
+            "'collection_mode': os.environ['CHECKPOINT_COLLECTION_MODE']",
             "'private_ip': os.environ['RECONCILIATION_PRIVATE_IP'] or None",
             "'identity_source': os.environ['RECONCILIATION_RUNTIME_IDENTITY_SOURCE']",
             "runtime_source = 'cloudtrail_run_task_retention_recovery'",
@@ -308,9 +341,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "arn:aws:ecs:eu-central-1:919341186960:task-definition/"
             "vevo-growthbook-reconcile-production:3"
         )
-        task_arn = (
-            "arn:aws:ecs:eu-central-1:919341186960:task/cluster/" + task_id
-        )
+        task_arn = "arn:aws:ecs:eu-central-1:919341186960:task/cluster/" + task_id
         digest = "sha256:" + "c" * 64
         cloudtrail = {
             "responseElements": {
@@ -361,9 +392,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
                                     ]
                                 }
                             ],
-                            "containers": [
-                                {"exitCode": 0, "imageDigest": digest}
-                            ],
+                            "containers": [{"exitCode": 0, "imageDigest": digest}],
                         }
                     ]
                 },
@@ -388,13 +417,19 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
                     env = {**base_env, "TEMP_CHECKPOINT_DIR": temporary_directory}
                     with mock.patch.dict(os.environ, env, clear=False):
                         with contextlib.redirect_stdout(output):
-                            exec(compile(source, "checkpoint-runtime-selection.py", "exec"))
+                            exec(
+                                compile(
+                                    source, "checkpoint-runtime-selection.py", "exec"
+                                )
+                            )
                     actual_lines = output.getvalue().splitlines()
                     for expected_line in expected_lines:
                         self.assertIn(expected_line, actual_lines)
 
     def test_population_query_returns_only_one_outcome_blind_aggregate(self) -> None:
-        query_start = WORKFLOW.index("SELECT COUNT(DISTINCT device_id) AS eligible_devices")
+        query_start = WORKFLOW.index(
+            "SELECT COUNT(DISTINCT device_id) AS eligible_devices"
+        )
         query_end = WORKFLOW.index('""".strip()', query_start)
         query = WORKFLOW[query_start:query_end]
         self.assertIn("FROM experiment_device_facts", query)
@@ -425,7 +460,9 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
     def test_uploads_only_one_canonical_sanitized_artifact_after_cleanup(self) -> None:
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))
         cleanup = WORKFLOW.index("Remove every temporary AWS response and query file")
-        upload = WORKFLOW.index("Upload only sanitized outcome-blind checkpoint evidence")
+        upload = WORKFLOW.index(
+            "Upload only sanitized outcome-blind checkpoint evidence"
+        )
         self.assertLess(cleanup, upload)
         for marker in (
             "name: vevo-growthbook-aa-window-checkpoint",
