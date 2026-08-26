@@ -19,8 +19,8 @@ Do not start the CTA experiment when any one of these is true:
 - the protected A/A decision is not exactly `PASS`;
 - the A/A experiment or its Production live rule is still active;
 - Production A/A or CTA allocation is not exactly `0%` before the start;
-- the A/A stop/readback, frozen CTA sample, or 14-day lifecycle value
-  reconciliation is missing or hash-mismatched;
+- the A/A stop/readback, frozen CTA sample, or completed-A/A 21-day
+  order-attribution plus lifecycle preflight is missing or hash-mismatched;
 - the verified GrowthBook Pro transition manifest or its canonical billing/
   six-metric observation is missing, non-canonical, hash-mismatched, or no
   longer validates against the current workspace;
@@ -60,10 +60,58 @@ state must prove all of the following before CTA runtime preparation:
    query-tested Preview/Production p75 metric IDs while CTA remains at `0%`.
 7. The A/A product-page baseline completed its 24-hour follow-up and the final
    CTA sample was frozen offline.
-8. The 14-day refund/credit-note lifecycle reconciliation passed exact value
-   parity and was recorded without identities.
+8. The completed-A/A source cohort has reached the full 7-day order-attribution
+   plus 14-day lifecycle boundary, and its protected lifecycle preflight passed
+   exact direct-curated-versus-Athena value/count parity without CTA outcomes or
+   identities.
 
 An A/A `PASS` is not a CTA winner and does not start the CTA automatically.
+
+### Protected prelaunch lifecycle preflight
+
+`growthbook_cta_lifecycle_reconciliation.json` is source-explicit: its target is
+the future CTA, but its only evidence cohort is the completed and stopped
+Production A/A `vevo-sk-aa-001`. This avoids the impossible circular requirement
+to observe CTA orders before the CTA has started. The gate remains closed until
+the protected A/A decision is verified `PASS`, the zero-allocation stop is
+recorded, the A/A window is resolved, and 21 days have elapsed after its exact
+end (7-day purchase attribution plus 14-day per-order lifecycle maturity).
+
+The main-only `.github/workflows/collect-vevo-growthbook-cta-lifecycle-preflight.yml`
+runs once daily at `05:20 UTC`, independently of the local PC. Before the A/A
+PASS/stop/window and exact 21-day due boundary are recorded it exits successfully
+before AWS credentials. During the first 24-hour due interval it collects the
+preflight once; later scheduled runs skip and require an explicitly confirmed
+manual recovery. `workflow_dispatch` with `confirm_collection=true` is the exact
+manual fallback.
+Before AWS credentials every admitted run revalidates all repository gates and
+the due time. It then confirms account
+`919341186960`, instance `N/A:Fargate`, the exact collector private IP, service
+`vevo-growthbook-collector-production`, path `/app`, task definition, image and
+inherited localhost markers. Its only data paths are temporary canonical curated
+A/A device facts and one aggregate Athena query for the same frozen A/A cohort.
+It binds the retained quality object from the exact generation recorded on the
+direct frozen cohort rather than selecting an unrelated newer quality report.
+It requires zero immature orders, at least one mature cancellation/refund/
+credit-note case, exact lifecycle counts, one facts generation, and cent-exact
+CM1 parity. CTA arms and CTA outcomes are never queried. All raw AWS responses
+and identity-bearing fact files are shredded before the workflow uploads the
+single canonical identity-free artifact.
+
+Download that artifact independently, verify its successful run, exact `main`
+commit and SHA-256, then record the byte-identical evidence on a reviewed branch:
+
+```text
+python scripts/record_growthbook_cta_lifecycle_reconciliation.py --observation <downloaded-vevo-growthbook-cta-lifecycle-preflight.json> --observation-sha256 <independent-sha256> --workflow-run-id <successful-run-id> --main-commit <exact-main-commit> --verified-at-utc <whole-second-UTC-Z>
+python scripts/validate_growthbook_workspace.py
+python scripts/security_ci.py
+git diff --check
+```
+
+The recorder may update only its allowlisted manifest fields and the canonical
+observation file. It cannot activate CTA, mutate GrowthBook/GTM/Meta Ads/
+BiznisWeb/reporting/commerce, or copy event, device, customer, or order identity
+into repository evidence.
 
 ## Gate 2 — prepare and host-verify the CTA-only collector
 
@@ -121,7 +169,7 @@ file at its versioned path
 reformat or manually reconstruct it. On a new branch, run:
 
 ```text
-python scripts/record_growthbook_cta_activation.py --output projects/vevo/growthbook_cta_activation.json open-review --pro-upgrade projects/vevo/growthbook_pro_upgrade.json --pro-observation projects/vevo/growthbook_pro_upgrade_observation.json --runtime-observation projects/vevo/growthbook_cta_runtime_readiness_observation.json --runtime-observation-sha256 <independent-sha256>
+python scripts/record_growthbook_cta_activation.py --output projects/vevo/growthbook_cta_activation.json open-review --pro-upgrade projects/vevo/growthbook_pro_upgrade.json --pro-observation projects/vevo/growthbook_pro_upgrade_observation.json --lifecycle projects/vevo/growthbook_cta_lifecycle_reconciliation.json --lifecycle-observation projects/vevo/growthbook_cta_lifecycle_observation.json --runtime-observation projects/vevo/growthbook_cta_runtime_readiness_observation.json --runtime-observation-sha256 <independent-sha256>
 python scripts/validate_growthbook_meta_reporting_contract.py
 python scripts/validate_growthbook_workspace.py
 python -m unittest tests.test_growthbook_meta_reporting_contract tests.test_growthbook_cta_activation_recorder tests.test_growthbook_workspace
@@ -131,7 +179,8 @@ git diff --check
 
 Review the diff and merge it through a PR. The recorder must bind the exact A/A
 completion, snapshot manifest, verified Pro transition manifest and canonical
-Pro observation, frozen sample, lifecycle reconciliation, design, decision
+Pro observation, frozen sample, lifecycle manifest and canonical observation,
+their exact A/A completion/snapshot source hashes, design, decision
 contract, immutable Meta/reporting contract, checked-in collector registry,
 runtime artifact, workflow run, and main commit. The Pro files are validated
 again against the current workspace and both hashes must remain unchanged
@@ -195,7 +244,8 @@ only the cumulative count of eligible first-exposed devices:
 
 Minimum assignment duration is 14 full local days. Safety guardrails may stop
 early, but a safety stop can never declare a winner. After assignment stops,
-wait the frozen 14-day lifecycle follow-up before the one final decision look.
+wait the full 21-day final follow-up (7-day attribution plus 14-day per-order
+lifecycle maturity) before the one final decision look.
 
 ## Safety-only checkpoint contract
 
@@ -229,7 +279,7 @@ safety collection/recording gates. It independently re-evaluates each
 canonical checkpoint and requires separately supplied evidence, decision, and
 provenance hashes plus the exact successful workflow run and main commit.
 `CONTINUE` leaves the stop lifecycle unchanged. `STOP_REQUIRED` can only close
-further checkpoints and open the same reviewed manual CTA stop and 14-day
+further checkpoints and open the same reviewed manual CTA stop and 21-day
 follow-up path used by the outcome-blind first-`N`/day-42 rule; it never
 performs the stop itself.
 
@@ -369,7 +419,7 @@ git diff --check
 The offline recorder first builds and validates the completion, historical
 activation, measurement-window, safety-monitoring, workspace, and
 final-snapshot outputs before it writes any of them. It then records zero Production allocation, freezes
-`final_snapshot_due_utc` at exactly 14 days after `assignment_ended_at_utc`, and
+`final_snapshot_due_utc` at exactly 21 days after `assignment_ended_at_utc`, and
 opens only the hash-bound protected final-snapshot workflow. The current
 completion and final-snapshot manifests are deliberately waiting; therefore no
 manual stop, follow-up, arm read, outcome read, winner call, or external
@@ -381,7 +431,7 @@ At or after the exact recorded `final_snapshot_due_utc`, dispatch
 `.github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml` from
 the exact reviewed `main` commit with `confirm_final_snapshot=true`. Never run
 it early or a second time. Before AWS credentials it validates the source hashes,
-complete 14-day follow-up, main-only one-look gate, and absence of any prior
+complete 21-day follow-up, main-only one-look gate, and absence of any prior
 outcome-query attempt in any earlier workflow, including a failed or cancelled
 run whose query step had already started. It then applies the infrastructure
 hard gate in this order:

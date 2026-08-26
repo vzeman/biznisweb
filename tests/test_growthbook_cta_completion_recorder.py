@@ -50,21 +50,16 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
                 self.activation,
                 self.start_observation,
                 (
-                    ROOT
-                    / "projects/vevo/growthbook_cta_decision_contract.json"
+                    ROOT / "projects/vevo/growthbook_cta_decision_contract.json"
                 ).read_bytes(),
             ),
         )
-        evaluator = evaluator_fixtures.GrowthBookCtaEvaluatorTests(
-            methodName="runTest"
-        )
+        evaluator = evaluator_fixtures.GrowthBookCtaEvaluatorTests(methodName="runTest")
         evaluator.setUp()
         self.lifecycle = evaluator.lifecycle
         self.lifecycle_observation = evaluator.lifecycle_observation
         self.completion = load("projects/vevo/growthbook_cta_completion.json")
-        self.final_snapshot = load(
-            "projects/vevo/growthbook_cta_final_snapshot.json"
-        )
+        self.final_snapshot = load("projects/vevo/growthbook_cta_final_snapshot.json")
         self.stop_observation = self._stop_observation()
         self.stop_hash = hashlib.sha256(
             recorder.canonical_json_bytes(self.stop_observation)
@@ -80,7 +75,9 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
                 recorder.pretty_json_bytes(self.sample)
             ).hexdigest(),
             "decision_contract": hashlib.sha256(
-                (ROOT / "projects/vevo/growthbook_cta_decision_contract.json").read_bytes()
+                (
+                    ROOT / "projects/vevo/growthbook_cta_decision_contract.json"
+                ).read_bytes()
             ).hexdigest(),
             "safety_monitoring": hashlib.sha256(
                 recorder.pretty_json_bytes(self.safety)
@@ -110,22 +107,16 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             "assignment_ended_at_utc": "2026-09-19T02:00:00Z",
             "stop_trigger": {
                 "type": assignment_stop["review_trigger_type"],
-                "evidence_sha256": assignment_stop[
-                    "review_trigger_evidence_sha256"
-                ],
-                "decision_sha256": assignment_stop[
-                    "review_trigger_decision_sha256"
-                ],
+                "evidence_sha256": assignment_stop["review_trigger_evidence_sha256"],
+                "decision_sha256": assignment_stop["review_trigger_decision_sha256"],
                 "provenance_sha256": assignment_stop[
                     "review_trigger_provenance_sha256"
                 ],
-                "observed_at_utc": assignment_stop[
-                    "review_trigger_observed_at_utc"
-                ],
+                "observed_at_utc": assignment_stop["review_trigger_observed_at_utc"],
             },
-            "activation_start_observation_sha256": self.activation[
-                "start_readback"
-            ]["observation_sha256"],
+            "activation_start_observation_sha256": self.activation["start_readback"][
+                "observation_sha256"
+            ],
             "growthbook": {
                 "build": "5.0.1+8f1db44",
                 "project_id": "prj_2CeEJc6J9FwQFix9UhsnKr",
@@ -237,7 +228,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
         self.assertEqual(window_validator.STOPPED, measurement["status"])
         self.assertEqual(SAFETY_STOPPED, safety["status"])
         self.assertEqual(
-            "2026-10-03T02:00:00Z",
+            "2026-10-10T02:00:00Z",
             completion["followup"]["final_snapshot_due_utc"],
         )
         self.assertTrue(
@@ -254,16 +245,12 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             final_snapshot["status"],
         )
         self.assertEqual(
-            "2026-10-03T02:00:00Z",
+            "2026-10-10T02:00:00Z",
             final_snapshot["final_look"]["snapshot_due_utc"],
         )
+        self.assertTrue(final_snapshot["final_look"]["protected_workflow_allowed"])
         self.assertTrue(
-            final_snapshot["final_look"]["protected_workflow_allowed"]
-        )
-        self.assertTrue(
-            final_snapshot["release_boundaries"][
-                "diagnostic_host_gate_task_allowed"
-            ]
+            final_snapshot["release_boundaries"]["diagnostic_host_gate_task_allowed"]
         )
 
     def test_updated_measurement_binds_stopped_activation_hash(self) -> None:
@@ -295,9 +282,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             methodName="runTest"
         )
         safety_case.setUp()
-        safety, measurement = safety_case.record(
-            safety_case.evidence(stop="commerce")
-        )
+        safety, measurement = safety_case.record(safety_case.evidence(stop="commerce"))
         self.assertEqual(self.activation, safety_case.activation)
         stop_observation = copy.deepcopy(self.stop_observation)
         trigger = measurement["assignment_stop"]
@@ -349,9 +334,7 @@ class GrowthBookCtaCompletionRecorderTests(unittest.TestCase):
             stopped_measurement["assignment_stop"]["review_trigger_type"],
         )
         self.assertEqual(recorder.FOLLOWUP, completion["status"])
-        self.assertTrue(
-            final_snapshot["final_look"]["protected_workflow_allowed"]
-        )
+        self.assertTrue(final_snapshot["final_look"]["protected_workflow_allowed"])
 
     def test_rejects_stop_before_reviewed_resolution(self) -> None:
         unresolved = copy.deepcopy(self.measurement)

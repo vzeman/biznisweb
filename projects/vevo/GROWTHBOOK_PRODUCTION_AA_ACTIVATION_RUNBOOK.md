@@ -175,7 +175,7 @@ python scripts/security_ci.py
 git diff --check
 ```
 
-This second transition closes the manual stop gate and records the workspace at zero Production allocation. It prepares only the CTA draft/sample-freeze state; CTA activation remains false. Next, produce the identity-free product-page baseline bound to the same A/A snapshot, freeze the final CTA sample through `freeze_growthbook_cta_sample.py`, and independently finish the 14-day lifecycle reconciliation before any CTA launch review.
+This second transition closes the manual stop gate and records the workspace at zero Production allocation. It prepares only the CTA draft/sample-freeze state; CTA activation remains false. Next, produce the identity-free product-page baseline bound to the same A/A snapshot, freeze the final CTA sample through `freeze_growthbook_cta_sample.py`, and independently finish the source-explicit completed-A/A lifecycle preflight after the full 7 + 14 = 21-day boundary before any CTA launch review.
 
 ### Protected CTA baseline and offline sample freeze
 

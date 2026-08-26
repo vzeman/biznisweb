@@ -88,8 +88,9 @@ FOLLOWUP = "cta_assignment_stopped_verified_followup_pending"
 EXPERIMENT_ID = "vevo-sk-product-cta-color-001"
 FEATURE_KEY = "vevo-sk-product-cta-color"
 EXPECTED_DECISION_SHA256 = (
-    "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183"
+    "62d9eb905a05b6273a7395905bc73f815e130155af1a32d896195facd442a07a"
 )
+FINAL_FOLLOWUP_DAYS = 21
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 UTC_RE = re.compile(r"^20[2-9][0-9]-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 
@@ -312,8 +313,12 @@ def _source_hashes(
     reconciliation_path: Path = RECONCILIATION_PATH,
 ) -> dict[str, str]:
     return {
-        "activation": _hash_bytes(activation_bytes) if activation_bytes is not None else _hash_path(activation_path),
-        "measurement_window": _hash_bytes(measurement_bytes) if measurement_bytes is not None else _hash_path(measurement_path),
+        "activation": _hash_bytes(activation_bytes)
+        if activation_bytes is not None
+        else _hash_path(activation_path),
+        "measurement_window": _hash_bytes(measurement_bytes)
+        if measurement_bytes is not None
+        else _hash_path(measurement_path),
         "sample_plan": _hash_path(sample_plan_path),
         "decision_contract": _hash_path(decision_contract_path),
         "safety_monitoring": (
@@ -339,7 +344,10 @@ def validate_stop_observation(
 ) -> None:
     root = _exact(observation, OBSERVATION_KEYS, "CTA stop observation")
     _require(root["schema_version"] == 1, "CTA stop observation schema drift")
-    _require(root["evidence_type"] == "vevo_growthbook_cta_assignment_stop_readback", "CTA stop evidence type drift")
+    _require(
+        root["evidence_type"] == "vevo_growthbook_cta_assignment_stop_readback",
+        "CTA stop evidence type drift",
+    )
     _require(root["experiment_id"] == EXPERIMENT_ID, "CTA stop experiment drift")
     _require(root["feature_key"] == FEATURE_KEY, "CTA stop feature drift")
     observed = _parse_utc(root["observed_at_utc"], "observed_at_utc")
@@ -356,24 +364,15 @@ def validate_stop_observation(
         trigger
         == {
             "type": assignment_stop["review_trigger_type"],
-            "evidence_sha256": assignment_stop[
-                "review_trigger_evidence_sha256"
-            ],
-            "decision_sha256": assignment_stop[
-                "review_trigger_decision_sha256"
-            ],
-            "provenance_sha256": assignment_stop[
-                "review_trigger_provenance_sha256"
-            ],
-            "observed_at_utc": assignment_stop[
-                "review_trigger_observed_at_utc"
-            ],
+            "evidence_sha256": assignment_stop["review_trigger_evidence_sha256"],
+            "decision_sha256": assignment_stop["review_trigger_decision_sha256"],
+            "provenance_sha256": assignment_stop["review_trigger_provenance_sha256"],
+            "observed_at_utc": assignment_stop["review_trigger_observed_at_utc"],
         },
         "CTA stop trigger binding drift",
     )
     _require(
-        _parse_utc(trigger["observed_at_utc"], "stop_trigger.observed_at_utc")
-        <= ended,
+        _parse_utc(trigger["observed_at_utc"], "stop_trigger.observed_at_utc") <= ended,
         "CTA assignment ended before the stop trigger",
     )
     if trigger["type"] == "outcome_blind_window_checkpoint":
@@ -389,8 +388,7 @@ def validate_stop_observation(
         _require(safety_monitoring is not None, "CTA safety stop manifest missing")
         validate_safety_contract(safety_monitoring)
         _require(
-            safety_monitoring.get("status")
-            in {SAFETY_STOP_REVIEW, SAFETY_STOPPED},
+            safety_monitoring.get("status") in {SAFETY_STOP_REVIEW, SAFETY_STOPPED},
             "CTA safety stop review is not open",
         )
         latest = safety_monitoring["latest_checkpoint"]
@@ -410,25 +408,61 @@ def validate_stop_observation(
     )
 
     growthbook = _exact(root["growthbook"], GROWTHBOOK_KEYS, "GrowthBook stop readback")
-    _require(isinstance(growthbook["build"], str) and growthbook["build"], "GrowthBook build is missing")
-    _require(growthbook["project_id"] == "prj_2CeEJc6J9FwQFix9UhsnKr", "GrowthBook project drift")
-    _require(growthbook["environment"] == "production", "GrowthBook stop environment drift")
-    _require(growthbook["experiment_id"] == "exp_19g6mmt1qxzrp", "GrowthBook CTA ID drift")
-    _require(growthbook["experiment_status"] == "stopped", "CTA experiment is not stopped")
-    _require(growthbook["production_live_rule_count"] == 0, "CTA Production rule remains live")
-    _require(growthbook["production_allocation_percent"] == 0, "CTA Production allocation is nonzero")
+    _require(
+        isinstance(growthbook["build"], str) and growthbook["build"],
+        "GrowthBook build is missing",
+    )
+    _require(
+        growthbook["project_id"] == "prj_2CeEJc6J9FwQFix9UhsnKr",
+        "GrowthBook project drift",
+    )
+    _require(
+        growthbook["environment"] == "production", "GrowthBook stop environment drift"
+    )
+    _require(
+        growthbook["experiment_id"] == "exp_19g6mmt1qxzrp", "GrowthBook CTA ID drift"
+    )
+    _require(
+        growthbook["experiment_status"] == "stopped", "CTA experiment is not stopped"
+    )
+    _require(
+        growthbook["production_live_rule_count"] == 0,
+        "CTA Production rule remains live",
+    )
+    _require(
+        growthbook["production_allocation_percent"] == 0,
+        "CTA Production allocation is nonzero",
+    )
     revision = growthbook["feature_revision"]
-    _require(type(revision) is int and revision > activation["start_readback"]["feature_revision"], "CTA feature revision was not advanced")
-    _require(growthbook["feature_revision_status"] == "live", "CTA stop feature revision is not live")
-    _require(growthbook["feature_production_enabled"] is False, "CTA feature remains enabled in Production")
-    _require(growthbook["feature_staging_enabled"] is True, "CTA staging rule was not preserved")
+    _require(
+        type(revision) is int
+        and revision > activation["start_readback"]["feature_revision"],
+        "CTA feature revision was not advanced",
+    )
+    _require(
+        growthbook["feature_revision_status"] == "live",
+        "CTA stop feature revision is not live",
+    )
+    _require(
+        growthbook["feature_production_enabled"] is False,
+        "CTA feature remains enabled in Production",
+    )
+    _require(
+        growthbook["feature_staging_enabled"] is True,
+        "CTA staging rule was not preserved",
+    )
     _require(
         growthbook["feature_live_rule_count_by_environment"]
         == {"production": 0, "staging": 1},
         "CTA feature environment rule counts drift",
     )
-    _require(growthbook["active_production_experiments"] == [], "another Production experiment is active")
-    _require(growthbook["aa_status"] == "stopped_zero_allocation", "A/A stop state drift")
+    _require(
+        growthbook["active_production_experiments"] == [],
+        "another Production experiment is active",
+    )
+    _require(
+        growthbook["aa_status"] == "stopped_zero_allocation", "A/A stop state drift"
+    )
 
     gtm = _exact(root["gtm"], GTM_KEYS, "GTM stop readback")
     _require(
@@ -443,7 +477,9 @@ def validate_stop_observation(
         },
         "CTA stop GTM readback drift",
     )
-    storefront = _exact(root["storefront"], STOREFRONT_KEYS, "CTA stop storefront readback")
+    storefront = _exact(
+        root["storefront"], STOREFRONT_KEYS, "CTA stop storefront readback"
+    )
     _require(
         storefront["product_path"]
         == "/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
@@ -458,17 +494,39 @@ def validate_stop_observation(
         "cart_mutated",
         "checkout_or_order_mutated",
     ):
-        _require(storefront[field] is False, f"CTA stop storefront {field} must be false")
-    _require(storefront["console_error_count"] == 0, "CTA stop storefront console errors observed")
+        _require(
+            storefront[field] is False, f"CTA stop storefront {field} must be false"
+        )
+    _require(
+        storefront["console_error_count"] == 0,
+        "CTA stop storefront console errors observed",
+    )
 
     collector = _exact(root["collector"], COLLECTOR_KEYS, "CTA stop collector boundary")
-    _require(collector["post_stop_observation_window_seconds"] >= 300, "CTA post-stop observation window is too short")
-    _require(collector["post_stop_cta_exposure_count"] == 0, "CTA exposures continued after stop")
-    _require(collector["post_stop_assignment_count"] == 0, "CTA assignments continued after stop")
-    _require(collector["stop_boundary_verified"] is True, "CTA collector stop boundary is unverified")
+    _require(
+        collector["post_stop_observation_window_seconds"] >= 300,
+        "CTA post-stop observation window is too short",
+    )
+    _require(
+        collector["post_stop_cta_exposure_count"] == 0,
+        "CTA exposures continued after stop",
+    )
+    _require(
+        collector["post_stop_assignment_count"] == 0,
+        "CTA assignments continued after stop",
+    )
+    _require(
+        collector["stop_boundary_verified"] is True,
+        "CTA collector stop boundary is unverified",
+    )
 
-    mutations = _exact(root["mutation_boundaries"], MUTATION_KEYS, "CTA stop mutation boundaries")
-    _require(mutations["growthbook_manual_mutation_performed"] is True, "manual CTA stop was not recorded")
+    mutations = _exact(
+        root["mutation_boundaries"], MUTATION_KEYS, "CTA stop mutation boundaries"
+    )
+    _require(
+        mutations["growthbook_manual_mutation_performed"] is True,
+        "manual CTA stop was not recorded",
+    )
     _require(
         mutations["growthbook_manual_mutation_scope"]
         == "stop_exact_cta_experiment_remove_only_production_rule_preserve_staging",
@@ -478,9 +536,14 @@ def validate_stop_observation(
         "growthbook_manual_mutation_performed",
         "growthbook_manual_mutation_scope",
     }:
-        _require(mutations[field] is False, f"unsafe CTA stop mutation observed: {field}")
+        _require(
+            mutations[field] is False, f"unsafe CTA stop mutation observed: {field}"
+        )
     safety = _exact(root["safety"], SAFETY_KEYS, "CTA stop safety")
-    _require(not any(safety.values()), "CTA stop evidence contains unsafe data or winner call")
+    _require(
+        not any(safety.values()),
+        "CTA stop evidence contains unsafe data or winner call",
+    )
 
 
 def _validate_stopped_workspace(
@@ -493,23 +556,54 @@ def _validate_stopped_workspace(
         == "production_cta_stopped_followup_pro_quantiles_verified",
         "CTA stopped workspace state drift",
     )
-    _require(workspace.get("workspace", {}).get("production_allocation_percent") == 0, "CTA stopped workspace allocation drift")
-    _require(workspace.get("decision_gates", {}).get("production_activation_allowed") is False, "CTA stopped workspace activation gate remains open")
+    _require(
+        workspace.get("workspace", {}).get("production_allocation_percent") == 0,
+        "CTA stopped workspace allocation drift",
+    )
+    _require(
+        workspace.get("decision_gates", {}).get("production_activation_allowed")
+        is False,
+        "CTA stopped workspace activation gate remains open",
+    )
     experiments = {
         row.get("tracking_key"): row
         for row in workspace.get("experiments", [])
         if isinstance(row, dict)
     }
-    _require(set(experiments) == {"vevo-sk-aa-001", EXPERIMENT_ID}, "CTA stopped workspace experiment set drift")
+    _require(
+        set(experiments) == {"vevo-sk-aa-001", EXPERIMENT_ID},
+        "CTA stopped workspace experiment set drift",
+    )
     aa = experiments["vevo-sk-aa-001"]
     cta = experiments[EXPERIMENT_ID]
-    _require(aa.get("status") == "stopped_production_aa_pass_verified", "A/A is not stopped after CTA")
-    _require(aa.get("production_allocation_percent") == 0, "A/A allocation changed after CTA")
-    _require(cta.get("status") == "stopped_production_cta_followup_pending", "CTA workspace is not stopped")
-    _require(cta.get("feature_rule_status") == "staging_only", "CTA Production feature rule remains live")
-    _require(cta.get("feature_rule_environments") == ["staging"], "CTA staging preservation drift")
-    _require(cta.get("production_allocation_percent") == 0, "CTA stopped allocation is nonzero")
-    _require(cta.get("feature_rule_revision") == observation["growthbook"]["feature_revision"], "CTA stopped feature revision drift")
+    _require(
+        aa.get("status") == "stopped_production_aa_pass_verified",
+        "A/A is not stopped after CTA",
+    )
+    _require(
+        aa.get("production_allocation_percent") == 0, "A/A allocation changed after CTA"
+    )
+    _require(
+        cta.get("status") == "stopped_production_cta_followup_pending",
+        "CTA workspace is not stopped",
+    )
+    _require(
+        cta.get("feature_rule_status") == "staging_only",
+        "CTA Production feature rule remains live",
+    )
+    _require(
+        cta.get("feature_rule_environments") == ["staging"],
+        "CTA staging preservation drift",
+    )
+    _require(
+        cta.get("production_allocation_percent") == 0,
+        "CTA stopped allocation is nonzero",
+    )
+    _require(
+        cta.get("feature_rule_revision")
+        == observation["growthbook"]["feature_revision"],
+        "CTA stopped feature revision drift",
+    )
     evidence = cta.get("completion_evidence")
     _require(
         evidence
@@ -517,15 +611,19 @@ def _validate_stopped_workspace(
             "stop_observation_sha256": _hash_bytes(canonical_json_bytes(observation)),
             "assignment_ended_at_utc": observation["assignment_ended_at_utc"],
             "followup_due_utc": _utc_text(
-                _parse_utc(observation["assignment_ended_at_utc"], "assignment_ended_at_utc")
-                + timedelta(days=14)
+                _parse_utc(
+                    observation["assignment_ended_at_utc"], "assignment_ended_at_utc"
+                )
+                + timedelta(days=FINAL_FOLLOWUP_DAYS)
             ),
             "winner_called": False,
             "commerce_unchanged": True,
         },
         "CTA workspace completion evidence drift",
     )
-    _require(activation.get("status") == CTA_STOPPED, "CTA stopped activation state drift")
+    _require(
+        activation.get("status") == CTA_STOPPED, "CTA stopped activation state drift"
+    )
 
 
 def validate_manifest(
@@ -550,10 +648,15 @@ def validate_manifest(
     validate_lifecycle_manifest(lifecycle, lifecycle_observation)
     root = _exact(completion, ROOT_KEYS, "CTA completion manifest")
     _require(root["schema_version"] == 1, "CTA completion schema drift")
-    _require(root["completion_type"] == "vevo_growthbook_product_cta_assignment_completion", "CTA completion type drift")
+    _require(
+        root["completion_type"] == "vevo_growthbook_product_cta_assignment_completion",
+        "CTA completion type drift",
+    )
     _require(root["experiment_id"] == EXPERIMENT_ID, "CTA completion experiment drift")
     _require(root["status"] in {WAITING, FOLLOWUP}, "CTA completion status drift")
-    bindings = _exact(root["source_bindings"], BINDING_KEYS, "CTA completion source bindings")
+    bindings = _exact(
+        root["source_bindings"], BINDING_KEYS, "CTA completion source bindings"
+    )
     expected_paths = {
         "activation_path": "projects/vevo/growthbook_cta_activation.json",
         "measurement_window_path": "projects/vevo/growthbook_cta_measurement_window.json",
@@ -563,7 +666,9 @@ def validate_manifest(
         "lifecycle_reconciliation_path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
     }
     for field, expected in expected_paths.items():
-        _require(bindings[field] == expected, f"CTA completion source path drift: {field}")
+        _require(
+            bindings[field] == expected, f"CTA completion source path drift: {field}"
+        )
     all_hashes = dict(source_hashes or _source_hashes())
     actual_hashes = {
         key: all_hashes[key]
@@ -588,15 +693,35 @@ def validate_manifest(
         },
         "CTA completion source hash set drift",
     )
-    _require(bindings["decision_contract_sha256"] == actual_hashes["decision_contract"] == EXPECTED_DECISION_SHA256, "CTA completion decision hash drift")
+    _require(
+        bindings["decision_contract_sha256"]
+        == actual_hashes["decision_contract"]
+        == EXPECTED_DECISION_SHA256,
+        "CTA completion decision hash drift",
+    )
     stop = _exact(root["stop_readback"], STOP_KEYS, "CTA completion stop readback")
-    _require(stop["observation_path"] == "projects/vevo/growthbook_cta_assignment_stop_observation.json", "CTA completion observation path drift")
+    _require(
+        stop["observation_path"]
+        == "projects/vevo/growthbook_cta_assignment_stop_observation.json",
+        "CTA completion observation path drift",
+    )
     followup = _exact(root["followup"], FOLLOWUP_KEYS, "CTA completion follow-up")
-    _require(followup["timezone"] == "Europe/Bratislava", "CTA completion timezone drift")
-    _require(followup["required_days_after_assignment_stop"] == 14, "CTA completion follow-up duration drift")
-    _require(followup["one_final_look_only"] is True, "CTA completion final-look rule drift")
-    boundaries = _exact(root["release_boundaries"], BOUNDARY_KEYS, "CTA completion boundaries")
-    _require(not any(boundaries.values()), "CTA completion forbidden release boundary opened")
+    _require(
+        followup["timezone"] == "Europe/Bratislava", "CTA completion timezone drift"
+    )
+    _require(
+        followup["required_days_after_assignment_stop"] == FINAL_FOLLOWUP_DAYS,
+        "CTA completion follow-up duration drift",
+    )
+    _require(
+        followup["one_final_look_only"] is True, "CTA completion final-look rule drift"
+    )
+    boundaries = _exact(
+        root["release_boundaries"], BOUNDARY_KEYS, "CTA completion boundaries"
+    )
+    _require(
+        not any(boundaries.values()), "CTA completion forbidden release boundary opened"
+    )
 
     if root["status"] == WAITING:
         for field in (
@@ -625,7 +750,7 @@ def validate_manifest(
             followup
             == {
                 "timezone": "Europe/Bratislava",
-                "required_days_after_assignment_stop": 14,
+                "required_days_after_assignment_stop": FINAL_FOLLOWUP_DAYS,
                 "assignment_ended_at_utc": None,
                 "final_snapshot_due_utc": None,
                 "status": "not_started",
@@ -634,7 +759,10 @@ def validate_manifest(
             },
             "waiting CTA completion follow-up drift",
         )
-        _require(stop_observation is None and workspace is None, "waiting CTA completion has stopped-state evidence")
+        _require(
+            stop_observation is None and workspace is None,
+            "waiting CTA completion has stopped-state evidence",
+        )
         _require(
             root["next_gate"]
             == "after_reviewed_window_or_safety_resolution_manually_stop_only_exact_cta_then_record_canonical_readback",
@@ -642,8 +770,14 @@ def validate_manifest(
         )
         return
 
-    _require(activation.get("status") == CTA_STOPPED, "CTA completion activation is not stopped")
-    _require(measurement.get("status") == WINDOW_STOPPED, "CTA completion measurement is not stopped")
+    _require(
+        activation.get("status") == CTA_STOPPED,
+        "CTA completion activation is not stopped",
+    )
+    _require(
+        measurement.get("status") == WINDOW_STOPPED,
+        "CTA completion measurement is not stopped",
+    )
     _require(start_observation is not None, "CTA completion start observation missing")
     _require(stop_observation is not None, "CTA completion stop observation missing")
     _require(workspace is not None, "CTA completion stopped workspace missing")
@@ -660,9 +794,18 @@ def validate_manifest(
         "safety_monitoring",
         "lifecycle_reconciliation",
     ):
-        _require(bindings[f"{name}_sha256"] == actual_hashes[name], f"CTA completion {name} hash drift")
-    _require(sample.get("status") == "sample_frozen_activation_still_blocked", "CTA completion sample is not frozen")
-    _require(lifecycle.get("verified") is True, "CTA completion lifecycle reconciliation is not verified")
+        _require(
+            bindings[f"{name}_sha256"] == actual_hashes[name],
+            f"CTA completion {name} hash drift",
+        )
+    _require(
+        sample.get("status") == "sample_frozen_activation_still_blocked",
+        "CTA completion sample is not frozen",
+    )
+    _require(
+        lifecycle.get("verified") is True,
+        "CTA completion lifecycle reconciliation is not verified",
+    )
     measurement_hashes = {
         "activation": actual_hashes["activation"],
         "start_observation": all_hashes["start_observation"],
@@ -688,8 +831,10 @@ def validate_manifest(
         safety_monitoring,
     )
     observation_sha256 = _hash_bytes(canonical_json_bytes(stop_observation))
-    ended = _parse_utc(stop_observation["assignment_ended_at_utc"], "assignment_ended_at_utc")
-    due = ended + timedelta(days=14)
+    ended = _parse_utc(
+        stop_observation["assignment_ended_at_utc"], "assignment_ended_at_utc"
+    )
+    due = ended + timedelta(days=FINAL_FOLLOWUP_DAYS)
     _require(
         stop
         == {
@@ -708,10 +853,10 @@ def validate_manifest(
         followup
         == {
             "timezone": "Europe/Bratislava",
-            "required_days_after_assignment_stop": 14,
+            "required_days_after_assignment_stop": FINAL_FOLLOWUP_DAYS,
             "assignment_ended_at_utc": _utc_text(ended),
             "final_snapshot_due_utc": _utc_text(due),
-            "status": "waiting_for_complete_14_day_outcome_maturity",
+            "status": "waiting_for_complete_21_day_outcome_maturity",
             "protected_final_snapshot_workflow_allowed": True,
             "one_final_look_only": True,
         },
@@ -742,12 +887,21 @@ def _stopped_workspace(
         if isinstance(row, dict)
     }
     cta = experiments.get(EXPERIMENT_ID)
-    _require(isinstance(cta, dict) and cta.get("status") == "running_production_cta_only", "CTA workspace is not running")
-    _require(cta.get("feature_rule_revision") == activation["start_readback"]["feature_revision"], "CTA running revision drift")
+    _require(
+        isinstance(cta, dict) and cta.get("status") == "running_production_cta_only",
+        "CTA workspace is not running",
+    )
+    _require(
+        cta.get("feature_rule_revision")
+        == activation["start_readback"]["feature_revision"],
+        "CTA running revision drift",
+    )
     updated["state"] = "production_cta_stopped_followup_pro_quantiles_verified"
     updated["workspace"]["production_allocation_percent"] = 0
     updated["decision_gates"]["production_activation_allowed"] = False
-    ended = _parse_utc(observation["assignment_ended_at_utc"], "assignment_ended_at_utc")
+    ended = _parse_utc(
+        observation["assignment_ended_at_utc"], "assignment_ended_at_utc"
+    )
     cta.update(
         {
             "status": "stopped_production_cta_followup_pending",
@@ -756,9 +910,13 @@ def _stopped_workspace(
             "feature_rule_environments": ["staging"],
             "production_allocation_percent": 0,
             "completion_evidence": {
-                "stop_observation_sha256": _hash_bytes(canonical_json_bytes(observation)),
+                "stop_observation_sha256": _hash_bytes(
+                    canonical_json_bytes(observation)
+                ),
                 "assignment_ended_at_utc": _utc_text(ended),
-                "followup_due_utc": _utc_text(ended + timedelta(days=14)),
+                "followup_due_utc": _utc_text(
+                    ended + timedelta(days=FINAL_FOLLOWUP_DAYS)
+                ),
                 "winner_called": False,
                 "commerce_unchanged": True,
             },
@@ -780,9 +938,7 @@ def _stopped_safety_monitoring(
             "CTA safety stop review is not open",
         )
         _require(
-            safety_monitoring["release_boundaries"][
-                "manual_growthbook_stop_allowed"
-            ]
+            safety_monitoring["release_boundaries"]["manual_growthbook_stop_allowed"]
             is True,
             "CTA safety manual stop gate is closed",
         )
@@ -810,14 +966,10 @@ def _stopped_safety_monitoring(
             "stop_observation_sha256": _hash_bytes(
                 canonical_json_bytes(stop_observation)
             ),
-            "assignment_ended_at_utc": stop_observation[
-                "assignment_ended_at_utc"
-            ],
+            "assignment_ended_at_utc": stop_observation["assignment_ended_at_utc"],
         }
     )
-    updated["next_gate"] = (
-        "wait_exact_14_day_followup_then_one_protected_final_look"
-    )
+    updated["next_gate"] = "wait_exact_21_day_followup_then_one_protected_final_look"
     validate_safety_contract(updated)
     return updated
 
@@ -860,12 +1012,24 @@ def record_stop(
     )
     _require(completion.get("status") == WAITING, "CTA stop is already recorded")
     _require(activation.get("status") == CTA_RUNNING, "CTA activation is not running")
-    _require(measurement.get("status") == WINDOW_RESOLVED, "CTA reviewed stop rule is unresolved")
-    _require(measurement.get("assignment_stop", {}).get("manual_review_allowed") is True, "CTA manual stop review gate is closed")
+    _require(
+        measurement.get("status") == WINDOW_RESOLVED,
+        "CTA reviewed stop rule is unresolved",
+    )
+    _require(
+        measurement.get("assignment_stop", {}).get("manual_review_allowed") is True,
+        "CTA manual stop review gate is closed",
+    )
     validate_safety_contract(safety_monitoring)
     digest = str(stop_observation_sha256 or "").strip()
-    _require(SHA256_RE.fullmatch(digest) is not None, "CTA stop observation SHA-256 is invalid")
-    _require(_hash_bytes(canonical_json_bytes(stop_observation)) == digest, "CTA stop observation SHA-256 mismatch")
+    _require(
+        SHA256_RE.fullmatch(digest) is not None,
+        "CTA stop observation SHA-256 is invalid",
+    )
+    _require(
+        _hash_bytes(canonical_json_bytes(stop_observation)) == digest,
+        "CTA stop observation SHA-256 mismatch",
+    )
     validate_stop_observation(
         stop_observation,
         activation,
@@ -882,13 +1046,17 @@ def record_stop(
 
     updated_activation = copy.deepcopy(activation)
     updated_activation["status"] = CTA_STOPPED
-    updated_activation["next_gate"] = "use_growthbook_cta_completion_for_followup_and_one_final_look"
+    updated_activation["next_gate"] = (
+        "use_growthbook_cta_completion_for_followup_and_one_final_look"
+    )
     validate_activation_manifest(updated_activation)
     activation_bytes = pretty_json_bytes(updated_activation)
 
     updated_measurement = copy.deepcopy(measurement)
     updated_measurement["status"] = WINDOW_STOPPED
-    updated_measurement["source_bindings"]["activation_sha256"] = _hash_bytes(activation_bytes)
+    updated_measurement["source_bindings"]["activation_sha256"] = _hash_bytes(
+        activation_bytes
+    )
     updated_measurement["assignment_stop"].update(
         {
             "status": "verified_manual_stop_readback_followup_pending",
@@ -897,7 +1065,9 @@ def record_stop(
             "assignment_ended_at_utc": stop_observation["assignment_ended_at_utc"],
         }
     )
-    updated_measurement["next_gate"] = "wait_exact_14_day_followup_then_run_one_protected_final_snapshot"
+    updated_measurement["next_gate"] = (
+        "wait_exact_21_day_followup_then_run_one_protected_final_snapshot"
+    )
     all_hashes = dict(source_hashes or _source_hashes())
     measurement_source_hashes = {
         "activation": _hash_bytes(activation_bytes),
@@ -935,7 +1105,9 @@ def record_stop(
         "lifecycle_reconciliation",
     ):
         bindings[f"{name}_sha256"] = final_source_hashes[name]
-    ended = _parse_utc(stop_observation["assignment_ended_at_utc"], "assignment_ended_at_utc")
+    ended = _parse_utc(
+        stop_observation["assignment_ended_at_utc"], "assignment_ended_at_utc"
+    )
     updated_completion["stop_readback"].update(
         {
             "status": "verified_zero_production_allocation",
@@ -950,12 +1122,16 @@ def record_stop(
     updated_completion["followup"].update(
         {
             "assignment_ended_at_utc": _utc_text(ended),
-            "final_snapshot_due_utc": _utc_text(ended + timedelta(days=14)),
-            "status": "waiting_for_complete_14_day_outcome_maturity",
+            "final_snapshot_due_utc": _utc_text(
+                ended + timedelta(days=FINAL_FOLLOWUP_DAYS)
+            ),
+            "status": "waiting_for_complete_21_day_outcome_maturity",
             "protected_final_snapshot_workflow_allowed": True,
         }
     )
-    updated_completion["next_gate"] = "after_final_snapshot_due_run_one_protected_outcome_read_and_offline_evaluation"
+    updated_completion["next_gate"] = (
+        "after_final_snapshot_due_run_one_protected_outcome_read_and_offline_evaluation"
+    )
     validate_manifest(
         updated_completion,
         updated_activation,
@@ -1017,7 +1193,9 @@ def _parser() -> argparse.ArgumentParser:
         "--safety-monitoring", type=Path, default=SAFETY_MONITORING_PATH
     )
     parser.add_argument("--sample-plan", type=Path, default=SAMPLE_PLAN_PATH)
-    parser.add_argument("--decision-contract", type=Path, default=DECISION_CONTRACT_PATH)
+    parser.add_argument(
+        "--decision-contract", type=Path, default=DECISION_CONTRACT_PATH
+    )
     parser.add_argument("--lifecycle", type=Path, default=LIFECYCLE_PATH)
     parser.add_argument("--lifecycle-observation", type=Path)
     parser.add_argument("--reconciliation", type=Path, default=RECONCILIATION_PATH)
@@ -1025,7 +1203,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--final-snapshot-manifest", type=Path, default=FINAL_SNAPSHOT_PATH
     )
-    parser.add_argument("--start-observation", type=Path, default=START_OBSERVATION_PATH)
+    parser.add_argument(
+        "--start-observation", type=Path, default=START_OBSERVATION_PATH
+    )
     parser.add_argument("--stop-observation", type=Path, default=STOP_OBSERVATION_PATH)
     parser.add_argument("--stop-observation-sha256", required=True)
     parser.add_argument("--completion-output", type=Path, required=True)
@@ -1105,7 +1285,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             strict=True,
         ):
             _write_atomic(path, value)
-        print("VEVO_CTA_STOP_RECORDED:allocation=0:followup=14d:final-look=protected:mutation=manual-growthbook-only")
+        print(
+            "VEVO_CTA_STOP_RECORDED:allocation=0:final-maturity=21d:final-look=protected:mutation=manual-growthbook-only"
+        )
         return 0
     except Exception as exc:  # pragma: no cover - CLI failure path
         print(f"record_growthbook_cta_completion.py: FAIL: {exc}")

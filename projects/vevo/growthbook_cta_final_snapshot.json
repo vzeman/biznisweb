@@ -15,7 +15,7 @@
     "sample_plan_path": "projects/vevo/growthbook_cta_sample_plan.json",
     "sample_plan_sha256": null,
     "decision_contract_path": "projects/vevo/growthbook_cta_decision_contract.json",
-    "decision_contract_sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+    "decision_contract_sha256": "62d9eb905a05b6273a7395905bc73f815e130155af1a32d896195facd442a07a",
     "lifecycle_reconciliation_path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
     "lifecycle_reconciliation_sha256": null,
     "stop_observation_path": "projects/vevo/growthbook_cta_assignment_stop_observation.json",
@@ -23,7 +23,7 @@
   },
   "final_look": {
     "timezone": "Europe/Bratislava",
-    "required_followup_days": 14,
+    "required_followup_days": 21,
     "assignment_started_at_utc": null,
     "assignment_ended_at_utc": null,
     "snapshot_due_utc": null,
@@ -94,5 +94,5 @@
     "price_product_cart_checkout_order_mutation_allowed": false,
     "automatic_winner_application_allowed": false
   },
-  "next_gate": "after_verified_manual_cta_stop_wait_exact_14_day_followup_then_open_one_protected_final_look"
+  "next_gate": "after_verified_manual_cta_stop_wait_exact_21_day_followup_then_open_one_protected_final_look"
 }

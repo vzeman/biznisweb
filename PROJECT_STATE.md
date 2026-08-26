@@ -6488,3 +6488,34 @@ Known issues:
 Next exact step:
 
 - On a clean branch from this merge, replace the circular pre-start lifecycle dependency with a source-explicit protected reconciliation path, then verify the complete activation-to-final-snapshot chain. Keep the A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava` and do not dispatch result workflows before then.
+
+## 2026-08-26 — VEVO CTA lifecycle launch gate repaired and final maturity corrected
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-lifecycle-gate-repair`
+
+What changed:
+
+- Replaced the circular pre-start CTA lifecycle requirement with a source-explicit protected preflight over the completed and stopped Production A/A `vevo-sk-aa-001`. The preflight cannot read future CTA outcomes and requires the exact A/A completion/snapshot hashes, verified `PASS`, reviewed zero Production allocation, a resolved source window, 7-day order attribution, and 14-day per-order lifecycle maturity.
+- Added a main-only daily GitHub workflow and offline builder. Before the gate is due it exits successfully before AWS credentials. It admits automatic collection only during the first 24-hour due interval; later recovery requires exact manual confirmation. An admitted run verifies the Production account, Fargate instance identity/private IP, service, `/app` path, task definition/image and inherited localhost markers, then compares the frozen cohort through temporary direct curated S3 facts and one aggregate Athena query.
+- Bound the reporting-quality object to the exact retained `facts_generated_at` generation present on the direct frozen cohort, with no object listing or arbitrary latest-object selection. The canonical artifact requires one generation, zero immature orders, at least one mature cancellation/refund/credit-note case, exact lifecycle-count parity, cent-exact CM1 parity, no identities, no CTA outcomes and no external mutation; every raw AWS response and identity-bearing fact is removed before the one artifact upload.
+- Strengthened the offline lifecycle recorder, CTA activation recorder and runtime-release validator with canonical observation validation plus exact workflow-run, main-commit, observation SHA-256, source-completion SHA-256 and source-snapshot SHA-256 binding.
+- Corrected the CTA final observation boundary from stop plus 14 days to stop plus 21 days everywhere: 7 days in which an attributed order may arrive plus 14 days for that last order to mature. Contracts, hashes, manifests, workflows, evaluators, validators, tests, runbooks and log markers now agree.
+
+What is verified:
+
+- The full repository suite passes `855` Python tests; the focused CTA suite passes `169` tests, the protected lifecycle preflight/recorder/activation group passes `36` tests, and all `9` storefront JavaScript tests pass.
+- Central security validation, GrowthBook workspace/completion/final-snapshot/measurement/safety/design/hypothesis/Pro/reporting validators, scoped Ruff lint/format, Python compilation, workflow YAML plus inline-Python parsing, and `git diff --check` pass. The runtime-release command remains intentionally fail-closed because the future protected A/A observation file does not yet exist.
+- The current scheduled gate was executed only against checked-in pending contracts and returned `RUN_COLLECTION=false`, reason `aa-pass-stop-window-not-ready`, with `aws=false`.
+- No A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance or result was inspected. No workflow was dispatched; no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, product, price, cart, checkout, payment, stock or order state changed. No browser or local runtime process was started.
+
+Known issues:
+
+- Core repair commit `714180eeb53da5ee6e17fa2813f68521c2d2b634` is pushed to `origin/codex/vevo-cta-lifecycle-gate-repair`, but is not yet reviewed or merged.
+- The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`. GrowthBook Pro remains unpurchased and still requires an independently reproduced A/A `PASS`, reviewed zero Production allocation and fresh action-time confirmation.
+- The lifecycle preflight can run only after the eventual resolved A/A window end plus 21 days. Until its canonical artifact is recorded, CTA activation and runtime release remain fail-closed.
+
+Next exact step:
+
+- Commit and push this handoff, open the repair PR and merge only after all required CI checks pass. Keep the A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava`; at or after that time process only the protected A/A evidence chain. Continue toward GrowthBook Pro and the first non-price CTA A/B test only after an independently verified `PASS`, reviewed zero-allocation stop and fresh purchase confirmation.

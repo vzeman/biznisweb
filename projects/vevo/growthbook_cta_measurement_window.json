@@ -10,7 +10,7 @@
     "sample_plan_path": "projects/vevo/growthbook_cta_sample_plan.json",
     "sample_plan_sha256": null,
     "decision_contract_path": "projects/vevo/growthbook_cta_decision_contract.json",
-    "decision_contract_sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+    "decision_contract_sha256": "62d9eb905a05b6273a7395905bc73f815e130155af1a32d896195facd442a07a",
     "reconciliation_evidence_path": "projects/vevo/growthbook_production_reconciliation_deploy_evidence.json",
     "reconciliation_evidence_sha256": "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb"
   },

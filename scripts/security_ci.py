@@ -58,6 +58,9 @@ def main() -> int:
         from scripts.evaluate_growthbook_cta_safety import (
             validate_contract as validate_cta_safety_contract,
         )
+        from scripts.evaluate_growthbook_cta import (
+            validate_lifecycle_manifest as validate_cta_lifecycle_manifest,
+        )
         from scripts.validate_growthbook_cta_safety_monitoring import (
             main as validate_cta_safety_monitoring,
         )
@@ -240,6 +243,22 @@ def main() -> int:
         )
         growthbook_cta_baseline_manifest = json.loads(
             read("projects/vevo/growthbook_cta_baseline.json")
+        )
+        growthbook_cta_lifecycle_builder = read(
+            "scripts/build_growthbook_cta_lifecycle_preflight.py"
+        )
+        growthbook_cta_lifecycle_recorder = read(
+            "scripts/record_growthbook_cta_lifecycle_reconciliation.py"
+        )
+        growthbook_cta_evaluator = read("scripts/evaluate_growthbook_cta.py")
+        growthbook_cta_lifecycle_workflow = read(
+            ".github/workflows/collect-vevo-growthbook-cta-lifecycle-preflight.yml"
+        )
+        growthbook_cta_lifecycle_sql = read(
+            "projects/vevo/growthbook_sql/cta_lifecycle_preflight_production.sql"
+        )
+        growthbook_cta_lifecycle_manifest = json.loads(
+            read("projects/vevo/growthbook_cta_lifecycle_reconciliation.json")
         )
         growthbook_cta_activation_recorder = read(
             "scripts/record_growthbook_cta_activation.py"
@@ -2150,6 +2169,7 @@ def main() -> int:
         if validate_pro_upgrade() != 0:
             raise AssertionError("GrowthBook Pro upgrade state is invalid.")
         validate_cta_baseline_manifest(growthbook_cta_baseline_manifest)
+        validate_cta_lifecycle_manifest(growthbook_cta_lifecycle_manifest)
         validate_meta_reporting_contract(growthbook_meta_reporting_contract)
         validate_cta_activation_manifest(growthbook_cta_activation_manifest)
         validate_cta_measurement_manifest(
@@ -2788,6 +2808,180 @@ def main() -> int:
                 "GrowthBook CTA baseline workflow mutation path detected: "
                 f"{forbidden_cta_baseline_workflow_marker}",
             )
+        for offline_cta_lifecycle_marker in (
+            "import boto3",
+            "import requests",
+            "import httpx",
+            "import socket",
+            "import subprocess",
+            "urllib",
+            "facebook_ads",
+            "tagmanager",
+            "playwright",
+            "selenium",
+        ):
+            for source, label in (
+                (growthbook_cta_lifecycle_builder, "preflight builder"),
+                (growthbook_cta_lifecycle_recorder, "offline recorder"),
+                (growthbook_cta_evaluator, "offline evaluator"),
+            ):
+                forbid(
+                    source.lower(),
+                    offline_cta_lifecycle_marker.lower(),
+                    "GrowthBook CTA lifecycle "
+                    f"{label} must remain offline: {offline_cta_lifecycle_marker}",
+                )
+        actual_cta_lifecycle_query_sha256 = hashlib.sha256(
+            growthbook_cta_lifecycle_sql.encode("utf-8")
+        ).hexdigest()
+        if (
+            actual_cta_lifecycle_query_sha256
+            != growthbook_cta_lifecycle_manifest["query_template_sha256"]
+        ):
+            raise AssertionError("GrowthBook CTA lifecycle SQL SHA-256 drift.")
+        for required_cta_lifecycle_marker in (
+            'SOURCE_EXPERIMENT = "vevo-sk-aa-001"',
+            'TARGET_EXPERIMENT = "vevo-sk-product-cta-color-001"',
+            "MINIMUM_FOLLOWUP_DAYS = ORDER_WINDOW_DAYS + LIFECYCLE_DAYS",
+            "A/A order plus lifecycle follow-up is incomplete",
+            "frozen A/A cohort still contains immature orders",
+            "no mature cancelled/refunded/creditnoted case exists",
+            "direct/Athena CM1 parity failed",
+            '"cta_outcome_data_read": False',
+            '"contains_event_or_device_identity": False',
+            '"source_read_only": True',
+            '"no_external_mutation": True',
+            "verified_completed_aa_21d_lifecycle_preflight",
+            "lifecycle workflow run ID mismatch",
+            "lifecycle main commit mismatch",
+        ):
+            require(
+                growthbook_cta_lifecycle_builder + growthbook_cta_lifecycle_recorder,
+                required_cta_lifecycle_marker,
+                "GrowthBook CTA lifecycle contract lost safety marker: "
+                f"{required_cta_lifecycle_marker}",
+            )
+        for required_cta_lifecycle_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "- cron: '20 5 * * *'",
+            "Admit only a confirmed manual run or the first due scheduled window",
+            "VEVO_CTA_LIFECYCLE_SCHEDULE_GATE:",
+            "reason = 'aa-pass-stop-window-not-ready'",
+            "run_collection = due <= current < due + timedelta(days=1)",
+            "reason = 'scheduled-window-missed-manual-confirmation-required'",
+            "Require completed A/A and full order plus lifecycle maturity before AWS",
+            "VEVO_CTA_LIFECYCLE_LOCAL_GATE_OK:source=completed-aa:followup=21d:cta-outcomes=false:mutation=false",
+            "VEVO_CTA_LIFECYCLE_HOST_GATE_OK:",
+            "instance-id=N/A:Fargate:private-ip=",
+            "f\"service={os.environ['EXPECTED_SERVICE']}:path={os.environ['EXPECTED_RUNTIME_PATH']}:\"",
+            "localhost-marker=inherited-verified",
+            "VEVO_CTA_LIFECYCLE_SCHEMA_OK:identity=temporary-only:customer-fields=absent",
+            "SOURCE_EXPERIMENT_ID: vevo-sk-aa-001",
+            "experiment_id=${SOURCE_EXPERIMENT_ID}",
+            "aws s3 sync",
+            "Bind the exact retained quality object to the direct cohort generation",
+            "select-quality-context",
+            "aws athena start-query-execution",
+            "--max-results 2",
+            "Build one canonical source-explicit identity-free observation",
+            "Remove every raw AWS response, identity-bearing fact and query file",
+            "name: vevo-growthbook-cta-lifecycle-preflight",
+            "Order attribution plus lifecycle maturity: `7 + 14 = 21 days`",
+            "CTA outcome data: `not read`",
+            "retention-days: 90",
+        ):
+            require(
+                growthbook_cta_lifecycle_workflow,
+                required_cta_lifecycle_workflow_marker,
+                "GrowthBook CTA lifecycle workflow lost safety marker: "
+                f"{required_cta_lifecycle_workflow_marker}",
+            )
+        if (
+            growthbook_cta_lifecycle_workflow.count(
+                "if: ${{ env.RUN_COLLECTION == 'true' }}"
+            )
+            != 10
+            or growthbook_cta_lifecycle_workflow.count(
+                "if: ${{ always() && env.RUN_COLLECTION == 'true' }}"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook CTA lifecycle scheduled skip must gate every post-admission step."
+            )
+        if (
+            growthbook_cta_lifecycle_workflow.count(
+                "uses: actions/upload-artifact@v4.6.2"
+            )
+            != 1
+        ):
+            raise AssertionError(
+                "GrowthBook CTA lifecycle workflow must upload exactly one artifact."
+            )
+        for forbidden_cta_lifecycle_workflow_marker in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "ecs stop-task",
+            "register-task-definition",
+            "scheduler update-schedule",
+            "scheduler create-schedule",
+            "s3api put-object",
+            "s3api delete-object",
+            "s3api list-objects-v2",
+            "glue create-",
+            "glue update-",
+            "glue delete-",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+            "curl ",
+            "wget ",
+        ):
+            forbid(
+                growthbook_cta_lifecycle_workflow.lower(),
+                forbidden_cta_lifecycle_workflow_marker.lower(),
+                "GrowthBook CTA lifecycle workflow mutation path detected: "
+                f"{forbidden_cta_lifecycle_workflow_marker}",
+            )
+        for required_cta_lifecycle_query_marker in (
+            "experiment_id = 'vevo-sk-aa-001'",
+            "eligible_device_count",
+            "joined_order_count",
+            "mature_joined_order_count",
+            "immature_order_count",
+            "cm1_sum_eur",
+            "cancelled_order_count",
+            "refunded_or_creditnoted_order_count",
+            "facts_generation_count",
+            "facts_generated_at",
+        ):
+            require(
+                growthbook_cta_lifecycle_sql,
+                required_cta_lifecycle_query_marker,
+                "GrowthBook CTA lifecycle SQL lost aggregate marker: "
+                f"{required_cta_lifecycle_query_marker}",
+            )
+        for forbidden_cta_lifecycle_query_marker in (
+            "vevo-sk-product-cta-color-001",
+            "device_id",
+            "variation_id",
+            "meta_campaign",
+            "meta_adset",
+            "meta_ad_id",
+            "customer",
+            "order_id",
+            "winner",
+        ):
+            forbid(
+                growthbook_cta_lifecycle_sql.lower(),
+                forbidden_cta_lifecycle_query_marker.lower(),
+                "GrowthBook CTA lifecycle SQL gained identity/CTA result field: "
+                f"{forbidden_cta_lifecycle_query_marker}",
+            )
         for offline_cta_activation_marker in (
             "import boto3",
             "import requests",
@@ -2811,6 +3005,9 @@ def main() -> int:
             "CTA activation requires verified GrowthBook Pro metrics",
             "GrowthBook Pro observation is not canonical or hash-bound",
             '"pro_upgrade_observation"',
+            "CTA lifecycle evidence is invalid",
+            "CTA lifecycle source completion changed after preflight",
+            "CTA lifecycle source A/A snapshot changed after preflight",
             "collector Production registry is not CTA-only",
             "CTA localhost marker is not verified",
             "CTA events exist before activation",
@@ -2860,6 +3057,7 @@ def main() -> int:
             "CTA activation manifest is not waiting",
             "GrowthBook Pro manifest file/hash binding drift",
             "GrowthBook Pro observation file/hash binding drift",
+            "CTA lifecycle observation file/hash binding drift",
             "A/A stop observation file/hash binding drift",
             "A/A stop observation is not canonical JSON",
             "CTA design contract SHA-256 drift",
@@ -3215,7 +3413,7 @@ def main() -> int:
             )
         for required_cta_final_workflow_marker in (
             "if: ${{ github.ref == 'refs/heads/main' }}",
-            "CTA 14-day outcome maturity is not complete",
+            "CTA 21-day outcome maturity is not complete",
             "a prior CTA final outcome-query attempt already exists",
             "CTA_FINAL_PREQUERY_CONTEXT_OK:instance-id=N/A:Fargate:private-ip=",
             "source reporting schedule drift",
@@ -3381,6 +3579,7 @@ def main() -> int:
             "scripts/record_growthbook_pro_upgrade.py",
             "scripts/validate_growthbook_pro_upgrade.py",
             "scripts/build_growthbook_cta_baseline_observation.py",
+            "scripts/build_growthbook_cta_lifecycle_preflight.py",
             "scripts/record_growthbook_cta_activation.py",
             "scripts/validate_growthbook_meta_reporting_contract.py",
             "scripts/validate_growthbook_cta_runtime_release.py",

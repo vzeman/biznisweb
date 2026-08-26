@@ -55,30 +55,44 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
 
     def _verified_lifecycle_observation(self) -> dict:
         observation = {
-            "schema_version": 1,
-            "evidence_type": "vevo_growthbook_cta_lifecycle_reconciliation_observation",
-            "experiment_id": "vevo-sk-product-cta-color-001",
+            "schema_version": 2,
+            "evidence_type": "vevo_growthbook_cta_prelaunch_lifecycle_reconciliation",
+            "target_experiment_id": "vevo-sk-product-cta-color-001",
+            "source_experiment_id": "vevo-sk-aa-001",
             "metric_contract_version": "vevo_cm1_v1_2026-08-20",
-            "observed_at_utc": "2026-07-29T22:30:00Z",
+            "workflow_run_id": "12345678901",
+            "main_commit": "d" * 40,
+            "observed_at_utc": "2026-09-24T03:45:00Z",
+            "source_from_utc": "2026-08-25T22:00:00Z",
+            "source_through_utc": "2026-09-02T22:00:00Z",
+            "order_window_days": 7,
             "lifecycle_checkpoint_days": 14,
+            "minimum_followup_days_after_source_end": 21,
+            "source_completion_sha256": "a" * 64,
+            "source_aa_snapshot_sha256": "b" * 64,
+            "query_template_sha256": "5a3548fa877d206e666c369fd19c4c4da121ccd2059354da55361fae86ecf9d5",
             "reporting_quality_object_key": (
                 "experiment-events/curated/quality/experiment_id="
-                "vevo-sk-product-cta-color-001/reconciliation.json"
+                "vevo-sk-aa-001/facts_generated_at=20260924T034500Z.json"
             ),
             "reporting_quality_object_sha256": "c" * 64,
-            "experiment_cm1_sum_eur": 1192.4,
-            "reporting_cm1_sum_eur": 1192.4,
+            "eligible_devices_checked": 75,
+            "joined_orders_checked": 75,
             "cm1_absolute_difference_eur": 0,
             "mature_orders_checked": 75,
+            "immature_orders_checked": 0,
             "cancelled_orders_checked": 2,
-            "refunded_orders_checked": 1,
-            "creditnote_rows_checked": 1,
+            "refunded_or_creditnoted_orders_checked": 1,
+            "direct_curated_cm1_sum_eur": 1192.4,
+            "athena_reporting_cm1_sum_eur": 1192.4,
             "lifecycle_counts_match": True,
             "refund_creditnote_value_parity_verified": True,
             "non_realized_value_policy": (
                 "zero_value_until_realized_with_explicit_lifecycle_counts"
             ),
             "non_realized_value_policy_verified": True,
+            "cta_outcome_data_read": False,
+            "contains_event_or_device_identity": False,
             "customer_or_order_identity_in_evidence": False,
             "source_read_only": True,
             "no_external_mutation": True,
@@ -90,20 +104,22 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
         manifest = copy.deepcopy(self.pending_lifecycle)
         manifest.update(
             {
-                "status": "verified_production_14d_refund_creditnote_value_reconciliation",
+                "status": "verified_completed_aa_21d_lifecycle_preflight",
                 "verified": True,
                 "observation_path": (
                     "projects/vevo/growthbook_cta_lifecycle_observation.json"
                 ),
-                "observation_sha256": evaluator._sha256(
-                    self.lifecycle_observation
-                ),
+                "observation_sha256": evaluator._sha256(self.lifecycle_observation),
+                "workflow_run_id": "12345678901",
+                "main_commit": "d" * 40,
+                "source_completion_sha256": "a" * 64,
+                "source_aa_snapshot_sha256": "b" * 64,
                 "reporting_quality_object_key": (
                     "experiment-events/curated/quality/experiment_id="
-                    "vevo-sk-product-cta-color-001/reconciliation.json"
+                    "vevo-sk-aa-001/facts_generated_at=20260924T034500Z.json"
                 ),
                 "reporting_quality_object_sha256": "c" * 64,
-                "verified_at_utc": "2026-07-29T23:00:00Z",
+                "verified_at_utc": "2026-09-24T04:00:00Z",
                 "refund_creditnote_value_parity_verified": True,
                 "non_realized_value_policy_verified": True,
             }
@@ -131,13 +147,9 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
             "purchase_devices": purchases,
             "joined_order_count": purchases,
             "net_revenue_sum_eur": revenue_total,
-            "net_revenue_sum_squares_eur2": _sum_squares(
-                revenue_total, devices, 100.0
-            ),
+            "net_revenue_sum_squares_eur2": _sum_squares(revenue_total, devices, 100.0),
             "cm1_sum_eur": cm1_total,
-            "cm1_sum_squares_eur2": _sum_squares(
-                cm1_total, devices, cm1_variance
-            ),
+            "cm1_sum_squares_eur2": _sum_squares(cm1_total, devices, cm1_variance),
             "cancelled_order_count": 1,
             "refunded_order_count": 0,
             "client_error_devices": 5,
@@ -166,7 +178,7 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
         ).hexdigest()
         started = datetime(2026, 7, 1, 22, tzinfo=timezone.utc)
         ended = started + timedelta(days=assignment_days)
-        evaluated = ended + timedelta(days=14)
+        evaluated = ended + timedelta(days=21)
         return {
             "schema_version": 1,
             "evidence_type": "vevo_growthbook_cta_aggregate_snapshot",
@@ -174,9 +186,7 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
             "metric_contract_version": "vevo_cm1_v1_2026-08-20",
             "sample_plan_sha256": sample_hash,
             "aa_snapshot_sha256": "a" * 64,
-            "lifecycle_reconciliation_sha256": self.lifecycle[
-                "observation_sha256"
-            ],
+            "lifecycle_reconciliation_sha256": self.lifecycle["observation_sha256"],
             "assignment_started_at_utc": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "assignment_ended_at_utc": ended.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "evaluated_at_utc": evaluated.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -241,7 +251,9 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
         evaluator.validate_contract(self.contract)
         evaluator.validate_lifecycle_manifest(self.pending_lifecycle)
 
-    def test_declares_win_only_at_the_fixed_final_look_with_safe_guardrails(self) -> None:
+    def test_declares_win_only_at_the_fixed_final_look_with_safe_guardrails(
+        self,
+    ) -> None:
         result = self._evaluate(self._snapshot())
 
         self.assertEqual("WIN", result["verdict"])
@@ -263,7 +275,9 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
         )
         self.assertEqual("control", result["recommended_variation"])
 
-    def test_declares_inconclusive_at_fixed_sample_without_primary_evidence(self) -> None:
+    def test_declares_inconclusive_at_fixed_sample_without_primary_evidence(
+        self,
+    ) -> None:
         result = self._evaluate(self._snapshot(variant_carts=180))
 
         self.assertEqual("INCONCLUSIVE", result["verdict"])
@@ -369,7 +383,7 @@ class GrowthBookCtaEvaluatorTests(unittest.TestCase):
 
     def test_lifecycle_observation_rejects_sub_cent_parity(self) -> None:
         observation = copy.deepcopy(self.lifecycle_observation)
-        observation["experiment_cm1_sum_eur"] = 1192.401
+        observation["direct_curated_cm1_sum_eur"] = 1192.401
         observation["cm1_absolute_difference_eur"] = 0
 
         with self.assertRaisesRegex(evaluator.CtaEvaluationError, "cent precision"):

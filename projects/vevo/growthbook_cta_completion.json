@@ -11,7 +11,7 @@
     "sample_plan_path": "projects/vevo/growthbook_cta_sample_plan.json",
     "sample_plan_sha256": null,
     "decision_contract_path": "projects/vevo/growthbook_cta_decision_contract.json",
-    "decision_contract_sha256": "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
+    "decision_contract_sha256": "62d9eb905a05b6273a7395905bc73f815e130155af1a32d896195facd442a07a",
     "safety_monitoring_path": "projects/vevo/growthbook_cta_safety_monitoring.json",
     "safety_monitoring_sha256": null,
     "lifecycle_reconciliation_path": "projects/vevo/growthbook_cta_lifecycle_reconciliation.json",
@@ -29,7 +29,7 @@
   },
   "followup": {
     "timezone": "Europe/Bratislava",
-    "required_days_after_assignment_stop": 14,
+    "required_days_after_assignment_stop": 21,
     "assignment_ended_at_utc": null,
     "final_snapshot_due_utc": null,
     "status": "not_started",

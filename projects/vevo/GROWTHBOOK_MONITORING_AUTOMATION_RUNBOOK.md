@@ -207,7 +207,8 @@ this order:
    start.
 8. During CTA collection, use only the separate outcome-blind CTA checkpoint
    path. Stop assignment only at its pre-registered sample/day-42 boundary.
-9. Wait through the exact stop plus 14-day follow-up and execute exactly one
+9. Wait through the exact stop plus 21-day follow-up (7-day attribution plus
+   14-day per-order lifecycle maturity) and execute exactly one
    protected final snapshot. Record the offline decision without applying it.
 
 The full operational detail remains in

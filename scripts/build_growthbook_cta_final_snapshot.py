@@ -424,7 +424,7 @@ def validate_manifest(
         _require(boundaries[field] is False, f"CTA final mutation boundary opened: {field}")
     final = _exact(root["final_look"], FINAL_LOOK_KEYS, "CTA final look")
     _require(final["timezone"] == "Europe/Bratislava", "CTA final timezone drift")
-    _require(final["required_followup_days"] == 14, "CTA final follow-up drift")
+    _require(final["required_followup_days"] == 21, "CTA final follow-up drift")
     _require(final["one_final_look_only"] is True, "CTA final one-look rule drift")
 
     if root["status"] == WAITING:
@@ -458,7 +458,7 @@ def validate_manifest(
         )
         _require(
             root["next_gate"]
-            == "after_verified_manual_cta_stop_wait_exact_14_day_followup_then_open_one_protected_final_look",
+            == "after_verified_manual_cta_stop_wait_exact_21_day_followup_then_open_one_protected_final_look",
             "CTA final waiting next gate drift",
         )
         return
@@ -539,8 +539,8 @@ def validate_manifest(
     )
     _require(
         _parse_utc(due, "final_look.snapshot_due_utc")
-        == _parse_utc(ended, "final_look.assignment_ended_at_utc") + timedelta(days=14),
-        "CTA final due time is not stop plus 14 days",
+        == _parse_utc(ended, "final_look.assignment_ended_at_utc") + timedelta(days=21),
+        "CTA final due time is not stop plus 21 days",
     )
     target = sample.get("final", {}).get("total_sample")
     seen = measurement.get("measurement_window", {}).get("resolved_eligible_devices")
