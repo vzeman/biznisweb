@@ -31,6 +31,11 @@ except ModuleNotFoundError:  # Direct execution from scripts/.
     import record_growthbook_pro_upgrade as pro_upgrade_recorder  # type: ignore
 
 try:
+    from scripts import record_growthbook_aa_completion as aa_completion_recorder
+except ModuleNotFoundError:  # Direct execution from scripts/.
+    import record_growthbook_aa_completion as aa_completion_recorder  # type: ignore
+
+try:
     from scripts.evaluate_growthbook_cta import (
         CtaEvaluationError,
         validate_lifecycle_manifest,
@@ -70,6 +75,9 @@ DEFAULT_META_REPORTING_PATH = (
 )
 DEFAULT_REGISTRY_PATH = ROOT / "growthbook_collector" / "experiments.json"
 DEFAULT_WORKSPACE_PATH = ROOT / "projects" / "vevo" / "growthbook_workspace.json"
+DEFAULT_RUNTIME_OBSERVATION_PATH = (
+    ROOT / "projects" / "vevo" / "growthbook_cta_runtime_readiness_observation.json"
+)
 
 WAITING = "waiting_for_verified_aa_completion_sample_lifecycle_and_runtime"
 REVIEW_OPEN = "manual_cta_start_review_allowed"
@@ -1163,6 +1171,98 @@ def open_review(
     return updated
 
 
+def validate_start_readiness(
+    manifest: Mapping[str, Any],
+    *,
+    completion: Mapping[str, Any],
+    snapshot: Mapping[str, Any],
+    pro_upgrade: Mapping[str, Any],
+    pro_observation: Mapping[str, Any],
+    sample: Mapping[str, Any],
+    lifecycle: Mapping[str, Any],
+    lifecycle_observation: Mapping[str, Any],
+    workspace: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    runtime_observation: Mapping[str, Any],
+    stop_observation: Mapping[str, Any],
+    source_hashes: Mapping[str, str],
+) -> None:
+    """Revalidate every reviewed file immediately before the manual CTA start."""
+
+    validate_manifest(manifest)
+    _require(
+        manifest["status"] == REVIEW_OPEN
+        and manifest["release_boundaries"]["manual_growthbook_start_allowed"]
+        is True,
+        "CTA manual start review is not open",
+    )
+    for name in EXPECTED_PATHS:
+        _validate_hash(source_hashes.get(name), f"{name} SHA-256")
+        _require(
+            source_hashes[name] == manifest["source_bindings"][name]["sha256"],
+            f"{name} changed after CTA start review",
+        )
+    _validate_post_aa_sources(
+        completion,
+        snapshot,
+        pro_upgrade,
+        pro_observation,
+        sample,
+        lifecycle,
+        lifecycle_observation,
+        workspace,
+        registry,
+    )
+    try:
+        aa_completion_recorder.validate_observation(stop_observation, completion)
+    except aa_completion_recorder.AaCompletionRecordingError as exc:
+        raise CtaActivationRecordingError(
+            f"A/A stop observation is invalid: {exc}"
+        ) from exc
+    _require(
+        hashlib.sha256(
+            aa_completion_recorder.canonical_json_bytes(stop_observation)
+        ).hexdigest()
+        == completion.get("stop_readback", {}).get("observation_sha256"),
+        "A/A stop observation file/hash binding drift",
+    )
+    _require(
+        hashlib.sha256(canonical_json_bytes(lifecycle_observation)).hexdigest()
+        == lifecycle.get("observation_sha256"),
+        "CTA lifecycle observation file/hash binding drift",
+    )
+    validate_runtime_observation(runtime_observation, manifest)
+    runtime_binding = manifest["source_bindings"]["runtime_readiness"]
+    _require(
+        hashlib.sha256(canonical_json_bytes(runtime_observation)).hexdigest()
+        == runtime_binding["observation_sha256"],
+        "CTA runtime readiness observation file/hash binding drift",
+    )
+    _require(
+        runtime_observation["workflow"]["run_id"]
+        == runtime_binding["workflow_run_id"]
+        and runtime_observation["workflow"]["main_commit"]
+        == runtime_binding["main_commit"],
+        "CTA runtime readiness workflow provenance drift",
+    )
+    _require(
+        runtime_observation["control_plane"]["registry_sha256"]
+        == source_hashes["collector_registry"],
+        "CTA runtime/checked-in registry SHA-256 drift",
+    )
+    _require(
+        sample["final"]["aa_snapshot_sha256"]
+        == completion["aa_pass"]["snapshot_sha256"],
+        "CTA sample/A/A PASS snapshot artifact SHA-256 drift",
+    )
+    _require(
+        lifecycle["source_completion_sha256"] == source_hashes["aa_completion"]
+        and lifecycle["source_aa_snapshot_sha256"]
+        == source_hashes["aa_snapshot"],
+        "CTA lifecycle source binding changed after start review",
+    )
+
+
 def _running_workspace(
     workspace: Mapping[str, Any],
     observation: Mapping[str, Any],
@@ -1241,20 +1341,33 @@ def record_start(
     registry: Mapping[str, Any],
     observation: Mapping[str, Any],
     *,
+    completion: Mapping[str, Any],
+    snapshot: Mapping[str, Any],
+    pro_upgrade: Mapping[str, Any],
+    pro_observation: Mapping[str, Any],
+    sample: Mapping[str, Any],
+    lifecycle: Mapping[str, Any],
+    lifecycle_observation: Mapping[str, Any],
+    runtime_observation: Mapping[str, Any],
+    stop_observation: Mapping[str, Any],
     observation_sha256: str,
     source_hashes: Mapping[str, str],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    validate_manifest(manifest)
-    _require(
-        manifest["status"] == REVIEW_OPEN,
-        "CTA start cannot be recorded before reviewed release",
+    validate_start_readiness(
+        manifest,
+        completion=completion,
+        snapshot=snapshot,
+        pro_upgrade=pro_upgrade,
+        pro_observation=pro_observation,
+        sample=sample,
+        lifecycle=lifecycle,
+        lifecycle_observation=lifecycle_observation,
+        workspace=workspace,
+        registry=registry,
+        runtime_observation=runtime_observation,
+        stop_observation=stop_observation,
+        source_hashes=source_hashes,
     )
-    for name in EXPECTED_PATHS:
-        _validate_hash(source_hashes.get(name), f"{name} SHA-256")
-        _require(
-            source_hashes[name] == manifest["source_bindings"][name]["sha256"],
-            f"{name} changed after CTA start review",
-        )
     _validate_hash(observation_sha256, "CTA start observation SHA-256")
     _require(
         hashlib.sha256(canonical_json_bytes(observation)).hexdigest()
@@ -1416,10 +1529,34 @@ def _write_json(path: Path, value: Mapping[str, Any]) -> None:
     os.replace(temporary, path)
 
 
+def _load_checked_in_aa_stop_observation(
+    completion: Mapping[str, Any],
+) -> dict[str, Any]:
+    relative = completion.get("stop_readback", {}).get("observation_file")
+    _require(
+        isinstance(relative, str)
+        and relative == "projects/vevo/growthbook_aa_completion_observation.json",
+        "A/A stop observation path drift",
+    )
+    path = ROOT / relative
+    value = _load(path, "A/A stop observation")
+    raw = path.read_bytes()
+    _require(
+        raw == aa_completion_recorder.canonical_json_bytes(value),
+        "A/A stop observation is not canonical JSON",
+    )
+    _require(
+        hashlib.sha256(raw).hexdigest()
+        == completion.get("stop_readback", {}).get("observation_sha256"),
+        "A/A stop observation file/hash binding drift",
+    )
+    return value
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--activation", type=Path, default=DEFAULT_ACTIVATION_PATH)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
     commands = parser.add_subparsers(dest="command", required=True)
 
     open_parser = commands.add_parser("open-review")
@@ -1452,6 +1589,8 @@ def _parser() -> argparse.ArgumentParser:
     open_parser.add_argument("--runtime-observation", type=Path, required=True)
     open_parser.add_argument("--runtime-observation-sha256", required=True)
 
+    commands.add_parser("assert-start-ready")
+
     start_parser = commands.add_parser("record-start")
     start_parser.add_argument("--workspace", type=Path, default=DEFAULT_WORKSPACE_PATH)
     start_parser.add_argument("--workspace-output", type=Path, required=True)
@@ -1471,12 +1610,22 @@ def _parser() -> argparse.ArgumentParser:
         "--sample-plan", type=Path, default=DEFAULT_SAMPLE_PLAN_PATH
     )
     start_parser.add_argument("--lifecycle", type=Path, default=DEFAULT_LIFECYCLE_PATH)
+    start_parser.add_argument(
+        "--lifecycle-observation",
+        type=Path,
+        default=DEFAULT_LIFECYCLE_OBSERVATION_PATH,
+    )
     start_parser.add_argument("--design", type=Path, default=DEFAULT_DESIGN_PATH)
     start_parser.add_argument("--decision", type=Path, default=DEFAULT_DECISION_PATH)
     start_parser.add_argument(
         "--meta-reporting", type=Path, default=DEFAULT_META_REPORTING_PATH
     )
     start_parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY_PATH)
+    start_parser.add_argument(
+        "--runtime-observation",
+        type=Path,
+        default=DEFAULT_RUNTIME_OBSERVATION_PATH,
+    )
     start_parser.add_argument("--observation", type=Path, required=True)
     start_parser.add_argument("--observation-sha256", required=True)
     return parser
@@ -1487,6 +1636,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         manifest = _load(args.activation, "CTA activation manifest")
         if args.command == "open-review":
+            _require(args.output is not None, "--output is required for open-review")
             lifecycle = _load(args.lifecycle, "CTA lifecycle manifest")
             lifecycle_observation = _load_canonical(
                 args.lifecycle_observation,
@@ -1535,9 +1685,72 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
 
+        if args.command == "assert-start-ready":
+            validate_manifest(manifest)
+            _require(
+                manifest["status"] == REVIEW_OPEN
+                and manifest["release_boundaries"][
+                    "manual_growthbook_start_allowed"
+                ]
+                is True,
+                "CTA manual start review is not open",
+            )
+            completion = _load(DEFAULT_COMPLETION_PATH, "A/A completion")
+            lifecycle = _load(DEFAULT_LIFECYCLE_PATH, "CTA lifecycle manifest")
+            lifecycle_observation = _load_canonical(
+                DEFAULT_LIFECYCLE_OBSERVATION_PATH,
+                lifecycle.get("observation_sha256"),
+                "CTA lifecycle observation",
+            )
+            runtime_binding = manifest["source_bindings"]["runtime_readiness"]
+            runtime = _load_canonical(
+                DEFAULT_RUNTIME_OBSERVATION_PATH,
+                runtime_binding.get("observation_sha256"),
+                "CTA runtime observation",
+            )
+            validate_start_readiness(
+                manifest,
+                completion=completion,
+                snapshot=_load(DEFAULT_AA_SNAPSHOT_PATH, "A/A snapshot manifest"),
+                pro_upgrade=_load(DEFAULT_PRO_UPGRADE_PATH, "GrowthBook Pro manifest"),
+                pro_observation=_load(
+                    DEFAULT_PRO_OBSERVATION_PATH, "GrowthBook Pro observation"
+                ),
+                sample=_load(DEFAULT_SAMPLE_PLAN_PATH, "CTA sample plan"),
+                lifecycle=lifecycle,
+                lifecycle_observation=lifecycle_observation,
+                workspace=_load(DEFAULT_WORKSPACE_PATH, "GrowthBook workspace"),
+                registry=_load(DEFAULT_REGISTRY_PATH, "collector registry"),
+                runtime_observation=runtime,
+                stop_observation=_load_checked_in_aa_stop_observation(completion),
+                source_hashes={
+                    name: _file_sha256(ROOT / path)
+                    for name, path in EXPECTED_PATHS.items()
+                },
+            )
+            print(
+                "VEVO_CTA_START_READY:manual_growthbook_start=true:"
+                "sources=hash-bound:automatic_mutation=false"
+            )
+            return 0
+
+        _require(args.output is not None, "--output is required for record-start")
         _require(
             args.output.resolve() != args.workspace_output.resolve(),
             "activation and workspace output paths must differ",
+        )
+        completion = _load(args.completion, "A/A completion")
+        lifecycle = _load(args.lifecycle, "CTA lifecycle manifest")
+        lifecycle_observation = _load_canonical(
+            args.lifecycle_observation,
+            lifecycle.get("observation_sha256"),
+            "CTA lifecycle observation",
+        )
+        runtime_binding = manifest["source_bindings"]["runtime_readiness"]
+        runtime_observation = _load_canonical(
+            args.runtime_observation,
+            runtime_binding.get("observation_sha256"),
+            "CTA runtime observation",
         )
         observation = _load_canonical(
             args.observation, args.observation_sha256, "CTA start observation"
@@ -1547,6 +1760,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             _load(args.workspace, "GrowthBook workspace"),
             _load(args.registry, "collector registry"),
             observation,
+            completion=completion,
+            snapshot=_load(args.aa_snapshot, "A/A snapshot manifest"),
+            pro_upgrade=_load(args.pro_upgrade, "GrowthBook Pro manifest"),
+            pro_observation=_load(
+                args.pro_observation, "GrowthBook Pro observation"
+            ),
+            sample=_load(args.sample_plan, "CTA sample plan"),
+            lifecycle=lifecycle,
+            lifecycle_observation=lifecycle_observation,
+            runtime_observation=runtime_observation,
+            stop_observation=_load_checked_in_aa_stop_observation(completion),
             observation_sha256=args.observation_sha256,
             source_hashes={
                 "aa_completion": _file_sha256(args.completion),
