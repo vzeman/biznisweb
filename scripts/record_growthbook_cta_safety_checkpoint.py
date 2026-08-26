@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -223,7 +224,7 @@ def initialize_monitoring(
     *,
     source_hashes: Mapping[str, str],
 ) -> dict[str, Any]:
-    """Bind the verified CTA start while leaving collection hard-disabled."""
+    """Bind the verified CTA start and open only the protected collector."""
 
     try:
         validate_contract(manifest)
@@ -260,7 +261,30 @@ def initialize_monitoring(
     recorded["assignment_started_at_utc"] = started
     for name in ("activation", "start_observation", "decision_contract"):
         recorded["source_bindings"][name]["sha256"] = source_hashes[name]
-    recorded["next_gate"] = "implement_protected_safety_collection_before_recording"
+    start_probe = start_observation["commerce"]["probe"]
+    _require(
+        {
+            "product_url": start_probe["product_url"],
+            "product_code": start_probe["product_code"],
+            "cart_url": start_probe["cart_url"],
+            "cta_text": start_probe["cta_text"],
+        }
+        == {
+            "product_url": recorded["commerce_probe"]["product_url"],
+            "product_code": recorded["commerce_probe"]["product_code"],
+            "cart_url": recorded["commerce_probe"]["cart_url"],
+            "cta_text": recorded["commerce_probe"]["cta_text"],
+        },
+        "CTA safety commerce probe target drift",
+    )
+    recorded["commerce_probe"]["price_text"] = start_probe["price_text"]
+    for field in (
+        "safety_checkpoint_collection_allowed",
+        "safety_checkpoint_recording_allowed",
+        "protected_safety_collection_workflow_allowed",
+    ):
+        recorded["release_boundaries"][field] = True
+    recorded["next_gate"] = "record_next_hash_bound_safety_checkpoint"
     validate_contract(recorded)
     return recorded
 
@@ -434,15 +458,38 @@ def record_checkpoint(
         "CTA safety provenance main commit mismatch",
     )
     _require(_sha256_bytes(canonical_json_bytes(provenance)) == hashes["provenance"], "CTA safety provenance SHA-256 mismatch")
-    expected_index = (
-        1
+    previous_index = (
+        0
         if manifest["latest_checkpoint"]["status"] == "not_recorded"
-        else manifest["latest_checkpoint"]["checkpoint_index"] + 1
+        else manifest["latest_checkpoint"]["checkpoint_index"]
     )
-    _require(evidence["checkpoint_index"] == expected_index, "CTA safety checkpoint sequence drift")
+    _require(
+        evidence["checkpoint_index"] > previous_index,
+        "CTA safety checkpoint sequence did not advance",
+    )
     _require(
         evidence["assignment_started_at_utc"] == manifest["assignment_started_at_utc"],
         "CTA safety checkpoint start binding drift",
+    )
+    assignment_started = datetime.fromisoformat(
+        evidence["assignment_started_at_utc"].replace("Z", "+00:00")
+    )
+    observed_at = datetime.fromisoformat(
+        evidence["observed_at_utc"].replace("Z", "+00:00")
+    )
+    due_at = assignment_started + timedelta(
+        hours=(
+            manifest["checkpoint_policy"]["first_checkpoint_after_start_hours"]
+            + (evidence["checkpoint_index"] - 1)
+            * manifest["checkpoint_policy"]["cadence_hours"]
+        )
+    )
+    maximum_observed_at = due_at + timedelta(
+        minutes=manifest["checkpoint_policy"]["maximum_checkpoint_lateness_minutes"]
+    )
+    _require(
+        due_at <= observed_at <= maximum_observed_at,
+        "CTA safety checkpoint outside exact timing gate",
     )
     _require(
         decision["checkpoint_index"] == evidence["checkpoint_index"]

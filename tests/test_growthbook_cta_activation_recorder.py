@@ -384,6 +384,13 @@ class GrowthBookCtaActivationRecorderTests(unittest.TestCase):
                 "cta_dimensions_layout_placement_unchanged": True,
                 "price_unchanged": True,
                 "cart_checkout_order_mutated": False,
+                "probe": {
+                    "product_url": "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+                    "product_code": "07500",
+                    "cart_url": "https://www.vevo.sk/e/cart/index",
+                    "cta_text": "Pridať do košíka",
+                    "price_text": "25,90 €",
+                },
             },
             "safety": {
                 "contains_credentials": False,

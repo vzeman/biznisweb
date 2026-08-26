@@ -24,6 +24,7 @@ STOPPED = "cta_safety_stop_recorded_followup_pending"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 RUN_ID_RE = re.compile(r"^[1-9][0-9]*$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+PRICE_RE = re.compile(r"^[0-9]{1,3}(?: [0-9]{3})*,[0-9]{2} €$")
 VARIATIONS = ("control", "brand_contrast")
 VARIATION_FIELDS = {
     "eligible_devices",
@@ -157,6 +158,7 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
             "checkpoint_policy",
             "thresholds",
             "evidence_contract",
+            "commerce_probe",
             "latest_checkpoint",
             "stop_handoff",
             "release_boundaries",
@@ -179,13 +181,14 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
     )
     sources = _exact(
         root["source_bindings"],
-        {"activation", "start_observation", "decision_contract"},
+        {"activation", "start_observation", "decision_contract", "safety_query"},
         "CTA safety source bindings",
     )
     expected_sources = {
         "activation": "projects/vevo/growthbook_cta_activation.json",
         "start_observation": "projects/vevo/growthbook_cta_activation_observation.json",
         "decision_contract": "projects/vevo/growthbook_cta_decision_contract.json",
+        "safety_query": "projects/vevo/growthbook_sql/cta_safety_checkpoint_production.sql",
     }
     for name, path in expected_sources.items():
         binding = _exact(sources[name], {"path", "sha256"}, f"source {name}")
@@ -195,6 +198,12 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
                 binding["sha256"]
                 == "ced267f0152a97e8a25c3cf70e23cbdcebec2ecd6761f05134bf2c9507518183",
                 "CTA safety decision contract hash drift",
+            )
+        elif name == "safety_query":
+            _require(
+                binding["sha256"]
+                == "b6be6c5a19c16a6b6e802b8c6dc83885458d63b8b0799e5f4eb98919e88c3adf",
+                "CTA safety query hash drift",
             )
         elif root["status"] == WAITING:
             _require(binding["sha256"] is None, f"CTA safety source bound early: {name}")
@@ -288,6 +297,29 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         and evidence["contains_primary_or_business_outcomes"] is False,
         "CTA safety evidence boundary opened",
     )
+    commerce_probe = _exact(
+        root["commerce_probe"],
+        {"product_url", "product_code", "cart_url", "cta_text", "price_text"},
+        "CTA safety commerce probe",
+    )
+    _require(
+        commerce_probe["product_url"]
+        == "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute"
+        and commerce_probe["product_code"] == "07500"
+        and commerce_probe["cart_url"] == "https://www.vevo.sk/e/cart/index"
+        and commerce_probe["cta_text"] == "Pridať do košíka",
+        "CTA safety commerce probe target drift",
+    )
+    if root["status"] == WAITING:
+        _require(
+            commerce_probe["price_text"] is None,
+            "CTA safety commerce price bound before verified start",
+        )
+    else:
+        _require(
+            PRICE_RE.fullmatch(str(commerce_probe["price_text"])) is not None,
+            "CTA safety commerce price baseline invalid",
+        )
     latest = _exact(
         root["latest_checkpoint"],
         {
@@ -401,7 +433,7 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         _require(
             isinstance(latest["eligible_devices_seen"], int)
             and not isinstance(latest["eligible_devices_seen"], bool)
-            and latest["eligible_devices_seen"] >= 1,
+            and latest["eligible_devices_seen"] >= 0,
             "CTA safety eligible-device total invalid",
         )
         for field in ("evidence_sha256", "decision_sha256", "provenance_sha256"):
@@ -444,15 +476,11 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         )
         _require(boundaries["manual_growthbook_stop_allowed"] is False, "CTA safety stop opened without breach")
         _require(
-            len({boundaries[field] for field in collection_fields}) == 1,
-            "CTA safety collection/recording gates disagree",
+            all(boundaries[field] is True for field in collection_fields),
+            "CTA safety collection/recording gate closed while monitoring",
         )
         _require(
-            root["next_gate"]
-            in {
-                "implement_protected_safety_collection_before_recording",
-                "record_next_hash_bound_safety_checkpoint",
-            },
+            root["next_gate"] == "record_next_hash_bound_safety_checkpoint",
             "CTA safety monitoring next gate drift",
         )
         return
@@ -607,14 +635,8 @@ def validate_snapshot(snapshot: Mapping[str, Any]) -> None:
         "data_quality",
     )
     _require(
-        quality
-        == {
-            "query_complete": True,
-            "exact_two_variations": True,
-            "assignment_source_match": True,
-            "duplicate_or_conflicting_assignment_detected": False,
-        },
-        "CTA safety data quality is not exact",
+        all(isinstance(value, bool) for value in quality.values()),
+        "CTA safety data quality values must be booleans",
     )
     safety = _exact(
         root["safety"],
@@ -663,6 +685,15 @@ def evaluate(
         "client_error_rate_increase_percentage_points": None,
     }
     reasons: list[str] = []
+    quality = snapshot["data_quality"]
+    if not quality["query_complete"]:
+        reasons.append("query_incomplete")
+    if not quality["exact_two_variations"]:
+        reasons.append("variation_set_invalid")
+    if not quality["assignment_source_match"]:
+        reasons.append("assignment_source_mismatch")
+    if quality["duplicate_or_conflicting_assignment_detected"]:
+        reasons.append("duplicate_or_conflicting_assignment")
     commerce = snapshot["commerce_readback"]
     if not commerce["add_to_cart_text_unchanged"]:
         reasons.append("add_to_cart_text_changed")

@@ -219,25 +219,46 @@ winner, or mutate any external service.
 
 This checked-in contract is deliberately
 `waiting_for_verified_cta_start`: collection and recording are disabled, both
-start-source hashes are null, and `manual_growthbook_stop_allowed=false`.
-The offline `record_growthbook_cta_safety_checkpoint.py` lifecycle recorder is
-prepared. After a future verified CTA start it can bind the exact activation,
-canonical start observation, and frozen decision contract while still leaving
-collection disabled. It independently re-evaluates a canonical checkpoint and
-requires separately supplied evidence, decision, and provenance hashes plus
-the exact successful workflow run and main commit. `CONTINUE` leaves the stop
-lifecycle unchanged. `STOP_REQUIRED` can only close further checkpoints and
-open the same reviewed manual CTA stop and 14-day follow-up path used by the
-outcome-blind first-`N`/day-42 rule; it never performs the stop itself.
+start-source hashes and the commerce price baseline are null, and
+`manual_growthbook_stop_allowed=false`. The canonical CTA start observation
+must additionally capture the exact product URL/code, cart URL, CTA text, and
+normalized displayed EUR price. The offline
+`record_growthbook_cta_safety_checkpoint.py initialize` transition binds those
+start sources and the price baseline, then opens only the three protected
+safety collection/recording gates. It independently re-evaluates each
+canonical checkpoint and requires separately supplied evidence, decision, and
+provenance hashes plus the exact successful workflow run and main commit.
+`CONTINUE` leaves the stop lifecycle unchanged. `STOP_REQUIRED` can only close
+further checkpoints and open the same reviewed manual CTA stop and 14-day
+follow-up path used by the outcome-blind first-`N`/day-42 rule; it never
+performs the stop itself.
 
-The protected PC-independent collection workflow does not exist yet, and all
-three collection/recording gates remain false. It must be implemented and
-merged separately before Gate 4 can be considered launch-ready. Validate the
-closed contract and lifecycle now:
+The PC-independent main-only workflow is
+`.github/workflows/check-vevo-growthbook-production-cta-safety.yml`. It runs at
+minute `05` of every UTC hour, but before AWS credentials it derives the exact
+checkpoint index from the verified assignment start and admits only the first
+60 minutes after each 24-hour boundary. Waiting, pre-due, late, closed, and
+already-recorded states skip without AWS. Missed prior days do not block a
+later due checkpoint. An admitted run verifies the exact checked-in Production
+Fargate host gate (`N/A:Fargate`, deployment IP `172.31.39.76`, service
+`vevo-growthbook-reconcile-production`, path `/app`), inherited localhost
+health/marker evidence, current task definition/image/schedules, a recent
+scheduled success marker, clear alarms, and an empty DLQ.
+
+The hash-bound SQL reads only aggregate variation-level eligible-device,
+measured-page-load, client-error and p75 LCP/INP/CLS fields plus aggregate
+assignment-quality counts. It reads no primary/business outcome or Meta
+dimension. The storefront probe performs only two idempotent HTTP GETs—product
+and cart—and never adds an item or submits checkout. Query/data-quality drift,
+duplicate assignments, changed CTA text/price, or reproducible product/cart
+failure becomes `STOP_REQUIRED`; no automatic external action follows. Every
+raw AWS/Athena/HTML response is removed before the exact canonical
+evidence/decision/provenance bundle is retained for 90 days. Validate the
+closed contract, builder, workflow, and lifecycle now:
 
 ```text
 python scripts/validate_growthbook_cta_safety_monitoring.py
-python -m unittest tests.test_growthbook_cta_safety_evaluator tests.test_growthbook_cta_safety_recorder
+python -m unittest tests.test_growthbook_cta_safety_evaluator tests.test_growthbook_cta_safety_recorder tests.test_growthbook_cta_safety_checkpoint_builder tests.test_growthbook_cta_safety_workflow
 ```
 
 The executable source of truth for this rule is

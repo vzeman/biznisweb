@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VEVO = ROOT / "projects" / "vevo"
 CONTRACT_PATH = VEVO / "growthbook_cta_safety_monitoring.json"
 DECISION_PATH = VEVO / "growthbook_cta_decision_contract.json"
+SAFETY_QUERY_PATH = VEVO / "growthbook_sql" / "cta_safety_checkpoint_production.sql"
 
 
 def main() -> int:
@@ -35,12 +36,18 @@ def main() -> int:
             raise CtaSafetyEvaluationError(
                 "CTA safety checked-in decision contract SHA-256 drift"
             )
+        expected_query = contract["source_bindings"]["safety_query"]["sha256"]
+        actual_query = hashlib.sha256(SAFETY_QUERY_PATH.read_bytes()).hexdigest()
+        if actual_query != expected_query:
+            raise CtaSafetyEvaluationError(
+                "CTA safety checked-in SQL SHA-256 drift"
+            )
     except (OSError, json.JSONDecodeError, CtaSafetyEvaluationError, KeyError) as exc:
         print(f"validate_growthbook_cta_safety_monitoring.py: FAIL: {exc}")
         return 2
     print(
-        "VEVO_CTA_SAFETY_CONTRACT_OK:waiting=true:primary=false:"
-        "winner=false:automatic=false"
+        "VEVO_CTA_SAFETY_CONTRACT_OK:waiting=true:query=hash-bound:"
+        "primary=false:winner=false:automatic=false"
     )
     return 0
 

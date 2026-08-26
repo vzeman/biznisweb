@@ -275,6 +275,13 @@ CTA_DECISION_CONTRACT_PATH = (
 CTA_SAFETY_MONITORING_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_safety_monitoring.json"
 )
+CTA_SAFETY_QUERY_PATH = (
+    ROOT
+    / "projects"
+    / "vevo"
+    / "growthbook_sql"
+    / "cta_safety_checkpoint_production.sql"
+)
 CTA_LIFECYCLE_RECONCILIATION_PATH = (
     ROOT / "projects" / "vevo" / "growthbook_cta_lifecycle_reconciliation.json"
 )
@@ -665,6 +672,11 @@ def validate() -> None:
         != cta_safety_monitoring["source_bindings"]["decision_contract"]["sha256"]
     ):
         raise AssertionError("CTA safety decision contract SHA-256 drift")
+    if (
+        hashlib.sha256(CTA_SAFETY_QUERY_PATH.read_bytes()).hexdigest()
+        != cta_safety_monitoring["source_bindings"]["safety_query"]["sha256"]
+    ):
+        raise AssertionError("CTA safety SQL SHA-256 drift")
     cta_reconciliation_evidence_path = (
         ROOT
         / "projects"

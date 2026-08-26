@@ -391,8 +391,29 @@ def validate_start_observation(observation: Mapping[str, Any], manifest: Mapping
     _require(collector["sticky_consistent_repeat_device_count"] == collector["repeat_exposed_device_count"], "CTA sticky repeat parity drift")
     _require(collector["sticky_inconsistent_device_count"] == 0, "CTA sticky assignment is inconsistent")
     _require(collector["observed_variations"] == ["brand_contrast", "control"], "CTA observed variation set drift")
-    commerce = _exact_object(root["commerce"], {"cta_text_unchanged", "cta_dimensions_layout_placement_unchanged", "price_unchanged", "cart_checkout_order_mutated"}, "commerce")
-    _require(commerce == {"cta_text_unchanged": True, "cta_dimensions_layout_placement_unchanged": True, "price_unchanged": True, "cart_checkout_order_mutated": False}, "CTA commerce readback failed")
+    commerce = _exact_object(root["commerce"], {"cta_text_unchanged", "cta_dimensions_layout_placement_unchanged", "price_unchanged", "cart_checkout_order_mutated", "probe"}, "commerce")
+    _require(
+        {key: commerce[key] for key in ("cta_text_unchanged", "cta_dimensions_layout_placement_unchanged", "price_unchanged", "cart_checkout_order_mutated")}
+        == {"cta_text_unchanged": True, "cta_dimensions_layout_placement_unchanged": True, "price_unchanged": True, "cart_checkout_order_mutated": False},
+        "CTA commerce readback failed",
+    )
+    probe = _exact_object(
+        commerce["probe"],
+        {"product_url", "product_code", "cart_url", "cta_text", "price_text"},
+        "commerce.probe",
+    )
+    _require(
+        probe["product_url"] == "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute"
+        and probe["product_code"] == "07500"
+        and probe["cart_url"] == "https://www.vevo.sk/e/cart/index"
+        and probe["cta_text"] == "Pridať do košíka",
+        "CTA commerce probe target drift",
+    )
+    _require(
+        isinstance(probe["price_text"], str)
+        and re.fullmatch(r"[0-9]{1,3}(?: [0-9]{3})*,[0-9]{2} €", probe["price_text"]),
+        "CTA commerce probe price baseline invalid",
+    )
     safety = _exact_object(root["safety"], {"contains_credentials", "contains_event_or_device_ids", "contains_customer_or_order_data", "meta_ads_mutated", "biznisweb_mutated", "collector_or_reporting_mutated"}, "safety")
     _require(not any(safety.values()), "CTA start observation contains unsafe data or mutation")
 

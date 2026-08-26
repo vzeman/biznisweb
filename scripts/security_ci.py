@@ -277,6 +277,15 @@ def main() -> int:
         growthbook_cta_safety_validator = read(
             "scripts/validate_growthbook_cta_safety_monitoring.py"
         )
+        growthbook_cta_safety_builder = read(
+            "scripts/build_growthbook_cta_safety_checkpoint.py"
+        )
+        growthbook_cta_safety_workflow = read(
+            ".github/workflows/check-vevo-growthbook-production-cta-safety.yml"
+        )
+        growthbook_cta_safety_sql = read(
+            "projects/vevo/growthbook_sql/cta_safety_checkpoint_production.sql"
+        )
         growthbook_cta_final_builder = read(
             "scripts/build_growthbook_cta_final_snapshot.py"
         )
@@ -2158,6 +2167,7 @@ def main() -> int:
             (growthbook_cta_safety_evaluator, "CTA safety evaluator"),
             (growthbook_cta_safety_recorder, "CTA safety recorder"),
             (growthbook_cta_safety_validator, "CTA safety validator"),
+            (growthbook_cta_safety_builder, "CTA safety builder"),
         ):
             for forbidden_safety_marker in (
                 "import boto3",
@@ -2173,6 +2183,92 @@ def main() -> int:
                     f"{safety_name} gained an external or mutation client: "
                     f"{forbidden_safety_marker}",
                 )
+        actual_cta_safety_query_sha256 = hashlib.sha256(
+            growthbook_cta_safety_sql.encode("utf-8")
+        ).hexdigest()
+        if (
+            actual_cta_safety_query_sha256
+            != growthbook_cta_safety_manifest["source_bindings"]["safety_query"][
+                "sha256"
+            ]
+        ):
+            raise AssertionError("GrowthBook CTA safety SQL SHA-256 drift.")
+        for required_cta_safety_workflow_marker in (
+            "if: ${{ github.ref == 'refs/heads/main' }}",
+            "- cron: '5 * * * *'",
+            "build_growthbook_cta_safety_checkpoint.py prepare",
+            "if: ${{ env.RUN_CHECKPOINT == 'true' }}",
+            "if: ${{ always() && env.RUN_CHECKPOINT == 'true' }}",
+            "PRODUCTION_CTA_SAFETY_HOST_GATE_OK:instance-id=N/A:Fargate",
+            "'private_ip': '172.31.39.76'",
+            "'service': 'vevo-growthbook-reconcile-production'",
+            "'runtime_path': '/app'",
+            "'localhost_health_verified': True",
+            "'localhost_marker_verified': True",
+            "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
+            "aws athena start-query-execution",
+            "curl --request GET",
+            "Remove every temporary AWS query and storefront response",
+            "name: vevo-growthbook-cta-safety-checkpoint",
+            "retention-days: 90",
+        ):
+            require(
+                growthbook_cta_safety_workflow,
+                required_cta_safety_workflow_marker,
+                "GrowthBook CTA safety workflow lost safety marker: "
+                f"{required_cta_safety_workflow_marker}",
+            )
+        if growthbook_cta_safety_workflow.count("curl --request GET") != 2:
+            raise AssertionError("GrowthBook CTA safety commerce probe must use two GETs.")
+        if growthbook_cta_safety_workflow.count(
+            "uses: actions/upload-artifact@v4.6.2"
+        ) != 1:
+            raise AssertionError(
+                "GrowthBook CTA safety workflow must upload exactly one artifact."
+            )
+        for forbidden_cta_safety_workflow_marker in (
+            "cloudformation create-",
+            "cloudformation update-",
+            "cloudformation delete-",
+            "ecs run-task",
+            "ecs update-service",
+            "ecs stop-task",
+            "register-task-definition",
+            "scheduler update-schedule",
+            "scheduler create-schedule",
+            "s3api put-object",
+            "s3api delete-object",
+            "--request post",
+            "--request put",
+            "--request patch",
+            "--request delete",
+            "tagmanager",
+            "ads_update",
+            "adcreatives_create",
+            "biznisweb_api_token",
+        ):
+            forbid(
+                growthbook_cta_safety_workflow.lower(),
+                forbidden_cta_safety_workflow_marker.lower(),
+                "GrowthBook CTA safety workflow mutation path detected: "
+                f"{forbidden_cta_safety_workflow_marker}",
+            )
+        for forbidden_cta_safety_query_marker in (
+            "add_to_cart_devices",
+            "purchase_devices",
+            "conversion_rate",
+            "revenue_eur",
+            "cm1_eur",
+            "meta_campaign",
+            "meta_adset",
+            "winner",
+        ):
+            forbid(
+                growthbook_cta_safety_sql.lower(),
+                forbidden_cta_safety_query_marker.lower(),
+                "GrowthBook CTA safety SQL gained an outcome field: "
+                f"{forbidden_cta_safety_query_marker}",
+            )
         validate_cta_final_snapshot_manifest(growthbook_cta_final_manifest)
         validate_hypothesis_registry(
             growthbook_hypothesis_registry,
@@ -3287,6 +3383,7 @@ def main() -> int:
             "scripts/evaluate_growthbook_cta_safety.py",
             "scripts/record_growthbook_cta_safety_checkpoint.py",
             "scripts/validate_growthbook_cta_safety_monitoring.py",
+            "scripts/build_growthbook_cta_safety_checkpoint.py",
             "scripts/build_growthbook_cta_final_snapshot.py",
             "scripts/validate_growthbook_cta_final_snapshot.py",
             "scripts/record_growthbook_cta_final_snapshot.py",

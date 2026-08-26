@@ -6324,3 +6324,31 @@ Known issues:
 Next exact step:
 
 - Implement the protected main-only safety collection workflow with the exact Production Fargate identity/localhost hard gate, aggregate identity-free performance/client-error and commerce evidence, independently hash-bound decision/provenance, and no primary/business/Meta/winner or mutation access. Keep the A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava`.
+
+## 2026-08-26 — VEVO CTA protected safety checkpoint collection prepared
+
+Date: 2026-08-26
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cta-safety-collection`
+
+What changed:
+
+- Added the main-only hourly `check-vevo-growthbook-production-cta-safety.yml` workflow and deterministic offline `build_growthbook_cta_safety_checkpoint.py` builder. Waiting, closed, pre-due, late, and already-recorded states skip before AWS; a due checkpoint is derived from the verified CTA start and admitted only within the frozen 60-minute window.
+- Added the SHA-bound `cta_safety_checkpoint_production.sql`. It emits only two aggregate variation-health rows with eligible-device, measured-page-load, client-error, p75 LCP/INP/CLS, and aggregate assignment-quality fields. It has no primary/business outcome, Meta dimension, raw identity, or winner output.
+- The admitted workflow verifies the checked-in Fargate host target (`N/A:Fargate`, recorded deployment IP `172.31.39.76`, service `vevo-growthbook-reconcile-production`, path `/app`), inherited localhost health/marker evidence, current stack/scheduler/task-image invariants, a recent scheduled success marker, clear alarms, and empty DLQ. It probes only the public product and cart URLs with HTTP GET and deletes every raw AWS/Athena/HTML response before uploading the exact canonical evidence/decision/provenance bundle for 90 days.
+- Extended the future canonical CTA-start readback with the exact product URL/code, cart URL, CTA text, and normalized EUR price baseline. Initialization now opens only the three protected safety collection/recording gates. Bad query/variation/assignment-quality evidence becomes `STOP_REQUIRED` rather than an unrecordable validation failure; the offline recorder enforces the exact due/lateness window and accepts a later due index even if a prior day was not recorded.
+- Strengthened workspace and central security validation, workflow/builder regression coverage, and the CTA plan/runbook/workspace handoff. No workflow was dispatched and the checked-in manifest remains waiting with all gates false.
+
+What is verified:
+
+- The full repository suite passes `832` Python tests and all `9` storefront JavaScript tests. The focused activation/safety evaluator/recorder/builder/workflow suite passes `48` tests. CTA safety contract/hash validation, full workspace validation, central security CI, scoped Ruff, workflow YAML/JSON parsing, Python compilation, and `git diff --check` pass.
+- The workflow contains no infrastructure deploy/update/delete, GrowthBook/GTM/Meta Ads/BiznisWeb client, commerce POST, automatic stop, or winner path. Exactly two storefront GET calls are allowed, and only the canonical three-file bundle leaves the runner.
+- Before `2026-09-02 03:45 Europe/Bratislava`, no A/A population, eligible count, arm, split, SRM, outcome, conversion, revenue, CM1, Meta dimension, performance, or result was read. No result or safety workflow was dispatched; no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, traffic, price, product, cart, checkout, payment, stock, or order state changed. No local runtime process was started.
+
+Known issues:
+
+- This change is prepared but not yet merged. The checked-in safety manifest deliberately stays `waiting_for_verified_cta_start`; schedule invocations stop before AWS until the future verified CTA start is recorded and the offline initializer opens the protected gates.
+
+Next exact step:
+
+- Merge this protected collection change after CI. Keep the frozen A/A result boundary closed until `2026-09-02 03:45 Europe/Bratislava`; only then process the protected A/A evidence, and require the verified A/A PASS plus reviewed zero-allocation stop before requesting fresh confirmation for the paid GrowthBook Pro action.
