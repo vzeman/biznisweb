@@ -1,0 +1,27 @@
+VEVO batch 50 candidate scan
+Date: 2026-08-27
+Scope checked: Blog block 765, FAQ block 774, glossary block 1905, public RSS, local batch records and content plan.
+
+SELECT
+- Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť
+  Distinct system: pronounced crosswise ribs in a woven fabric. No title or canonical-definition match found.
+- Čo je vatelín: objemová výplň, zliehanie a bezpečné pranie
+  Distinct system: lofty filling/batting. The article must separate removable washable covers from a whole filled product.
+- Čo je 3D sieťovina: dištančný úplet, prúdenie vzduchu a pranie
+  Distinct system: two faces connected by spacer yarns. The article must not treat every mesh or foam-backed object as machine washable.
+- Čo je batist: jemná plátnová tkanina, priesvitnosť a pranie
+  Distinct system: lightweight plain-weave fabric. The article must distinguish construction from fibre composition.
+
+BLOCK
+- Čo je ripstop: spevnená mriežková tkanina, trhliny a starostlivosť
+  Existing canonical post 3174: Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia
+  Existing URL: /n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia
+  The exploratory title passed the old token guard. Batch 50 adds a regression-tested canonical-definition-head gate before publication.
+
+DEFER
+- Abaka and nettle fibre: reserve for a later plant-fibre batch with a clear comparison boundary after kapok and sisal.
+- Filc and plsť: first define the terminology boundary between wool felt, needle-punched craft felt and nonwoven sheet products.
+- Kordura: first resolve trademark/product-family wording and coating-specific care boundaries.
+- Chambray, matelassé, chenille and panama weave: suitable for a later woven-construction batch.
+
+Final decision: publish four articles only. No existing title or URL will be edited.

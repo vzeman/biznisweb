@@ -212,6 +212,16 @@ def slugify(value):
     return re.sub(r"-+", "-", value).strip("-")
 
 
+def canonical_definition_head(value):
+    """Return the subject from an encyclopedic ``Co je X: ...`` title."""
+    prefix, separator, _ = str(value).partition(":")
+    if not separator:
+        return ""
+    normalized = norm(prefix)
+    match = re.fullmatch(r"co je (.+)", normalized)
+    return match.group(1).strip() if match else ""
+
+
 def tokens(value):
     return {token for token in norm(value).split() if token not in STOPWORDS and len(token) > 2}
 
@@ -422,6 +432,11 @@ def canonical_intents(title):
 def analyze(candidates, existing, similarity_threshold):
     existing_by_slug = {row["slug"]: row for row in existing}
     existing_by_title = {norm(row["title"]): row for row in existing}
+    existing_by_definition_head = {}
+    for row in existing:
+        definition_head = canonical_definition_head(row["title"])
+        if definition_head:
+            existing_by_definition_head.setdefault(definition_head, []).append(row)
     existing_by_intent = {}
     for row in existing:
         for intent in canonical_intents(row["title"]):
@@ -440,6 +455,22 @@ def analyze(candidates, existing, similarity_threshold):
             issues.append({"type": "exact_slug", "severity": "block", "match": exact_slug})
         if exact_title and (not exact_slug or exact_title["link"] != exact_slug.get("link")):
             issues.append({"type": "exact_title", "severity": "block", "match": exact_title})
+        definition_head = canonical_definition_head(candidate)
+        definition_matches = existing_by_definition_head.get(definition_head, []) if definition_head else []
+        if definition_matches:
+            issues.append({
+                "type": "canonical_definition_head",
+                "severity": "block",
+                "definition_head": definition_head,
+                "note": (
+                    "VEVO already has an encyclopedic article for the same subject. "
+                    "Expand the canonical URL instead of changing only the subtitle."
+                ),
+                "matches": [
+                    {"title": match["title"], "link": match["link"], "slug": match["slug"]}
+                    for match in definition_matches[:8]
+                ],
+            })
         for intent in canonical_intents(candidate):
             matches = existing_by_intent.get(intent, [])
             if matches:
@@ -519,6 +550,12 @@ def analyze(candidates, existing, similarity_threshold):
             if result["slug"] == other["slug"] or norm(result["title"]) == norm(other["title"]):
                 severity = "block"
                 issue_type = "candidate_exact_duplicate"
+            elif (
+                canonical_definition_head(result["title"])
+                and canonical_definition_head(result["title"]) == canonical_definition_head(other["title"])
+            ):
+                severity = "block"
+                issue_type = "candidate_definition_head_duplicate"
             elif overlap["same_head"] or score >= similarity_threshold:
                 severity = "review"
                 issue_type = "candidate_batch_overlap"
