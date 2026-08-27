@@ -269,6 +269,90 @@ class DuplicateGuardTests(unittest.TestCase):
             {issue["type"] for issue in results[0]["issues"]},
         )
 
+    def test_herringbone_alias_is_blocked_by_rybia_kost_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie",
+                "https://www.vevo.sk/n/co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je herringbone weave: lomený vzor a údržba"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_voile_alias_is_blocked_by_voalova_zaclona_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia",
+                "https://www.vevo.sk/n/co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrčenia",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je voile: jemná priesvitná látka a pranie"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_taffeta_alias_is_blocked_by_taft_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie",
+                "https://www.vevo.sk/n/co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je taffeta: lesklá spoločenská látka a údržba"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_boiled_wool_and_felt_aliases_share_loden_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie",
+                "https://www.vevo.sk/n/co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+                "rss",
+            )
+        ]
+
+        for candidate in (
+            "Čo je boiled wool: zrazená vlna a pranie",
+            "Čo je plsť: valchované vlákna a starostlivosť",
+        ):
+            with self.subTest(candidate=candidate):
+                results = duplicate_guard.analyze([candidate], existing, 0.28)
+                self.assertEqual(results[0]["status"], "block")
+                self.assertIn(
+                    "canonical_definition_head",
+                    {issue["type"] for issue in results[0]["issues"]},
+                )
+
     def test_cross_section_title_tokens_remove_template_words(self):
         left = cross_section_audit.title_tokens(
             "Ako umyt okna bez smuh - Kompletny sprievodca"

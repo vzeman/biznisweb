@@ -1,0 +1,104 @@
+{
+  "batch": "batch-53",
+  "checked_at": "2026-08-27T12:25:31.9817774Z",
+  "requested_viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "effective_content_viewport_width": 375,
+  "screenshot_available": false,
+  "screenshot_note": "Browser screenshot capture was unavailable; rendered DOM and computed-layout checks completed.",
+  "viewport_reset": true,
+  "temporary_tab_closed": true,
+  "all_ok": true,
+  "articles": [
+    {
+      "url": "https://www.vevo.sk/n/co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+      "title": "Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie - Vevo.sk",
+      "h1": "Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie",
+      "viewportWidth": 375,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "escapedHtmlVisible": false,
+      "oneCharacterParagraphs": 0,
+      "responsiveTableCount": 2,
+      "tables": [
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true},
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true}
+      ],
+      "actionButtonCount": 2,
+      "buttons": [
+        {"text": "Pozrieť produkt", "href": "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l", "width": 123, "contained": true},
+        {"text": "Pozrieť kategóriu", "href": "/c/vevo-home-care/pranie/praci-gel", "width": 135, "contained": true}
+      ]
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrcenia",
+      "title": "Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia - Vevo.sk",
+      "h1": "Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia",
+      "viewportWidth": 375,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "escapedHtmlVisible": false,
+      "oneCharacterParagraphs": 0,
+      "responsiveTableCount": 2,
+      "tables": [
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true},
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true}
+      ],
+      "actionButtonCount": 2,
+      "buttons": [
+        {"text": "Pozrieť produkt", "href": "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l", "width": 123, "contained": true},
+        {"text": "Pozrieť kategóriu", "href": "/c/vevo-home-care/pranie/praci-gel", "width": 135, "contained": true}
+      ]
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "title": "Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie - Vevo.sk",
+      "h1": "Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie",
+      "viewportWidth": 375,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "escapedHtmlVisible": false,
+      "oneCharacterParagraphs": 0,
+      "responsiveTableCount": 2,
+      "tables": [
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true},
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true}
+      ],
+      "actionButtonCount": 2,
+      "buttons": [
+        {"text": "Pozrieť produkt", "href": "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l", "width": 123, "contained": true},
+        {"text": "Pozrieť kategóriu", "href": "/c/vevo-home-care/pranie/praci-gel", "width": 135, "contained": true}
+      ]
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+      "title": "Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie - Vevo.sk",
+      "h1": "Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie",
+      "viewportWidth": 375,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "escapedHtmlVisible": false,
+      "oneCharacterParagraphs": 0,
+      "responsiveTableCount": 2,
+      "tables": [
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true},
+        {"tableWidth": 680, "wrapperWidth": 351, "wrapperOverflowX": "auto", "wrapperContained": true}
+      ],
+      "actionButtonCount": 2,
+      "buttons": [
+        {"text": "Pozrieť produkt", "href": "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l", "width": 123, "contained": true},
+        {"text": "Pozrieť kategóriu", "href": "/c/vevo-home-care/pranie/praci-gel", "width": 135, "contained": true}
+      ]
+    }
+  ]
+}

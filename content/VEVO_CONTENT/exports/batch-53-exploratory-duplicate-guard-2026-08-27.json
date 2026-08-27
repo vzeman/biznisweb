@@ -1,0 +1,158 @@
+{
+  "existing_count": 863,
+  "excluded_batch": 53,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie",
+      "slug": "co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je matracový ticking: hustá tkanina, prach a čistenie poťahu",
+      "slug": "co-je-matracovy-ticking-husta-tkanina-prach-a-cistenie-potahu",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je žihľavové vlákno: pevná lyková priadza, krčivosť a pranie",
+      "slug": "co-je-zihlavove-vlakno-pevna-lykova-priadza-krcivost-a-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je ramia: pevné rastlinné vlákno, krčivosť a pranie",
+              "link": "https://www.vevo.sk/n/co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+              "slug": "co-je-ramia-pevne-rastlinne-vlakno-krcivost-a-pranie",
+              "sources": [
+                "local:batch-48-2026-08-25-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je voál na záclony: priesvitná tkanina, prach a pranie bez zrážania",
+      "slug": "co-je-voal-na-zaclony-priesvitna-tkanina-prach-a-pranie-bez-zrazania",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie",
+      "slug": "co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie",
+      "slug": "co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je buckram: vystužená tkanina v klobúkoch a knihách, prach a vlhkosť",
+      "slug": "co-je-buckram-vystuzena-tkanina-v-klobukoch-a-knihach-prach-a-vlhkost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je melton: hustá valchovaná vlna, žmolky a čistenie kabáta",
+      "slug": "co-je-melton-husta-valchovana-vlna-zmolky-a-cistenie-kabata",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je pepito: dvojfarebný vzor, posun línií a starostlivosť",
+      "slug": "co-je-pepito-dvojfarebny-vzor-posun-linii-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je glenček: károvaný vzor, oblek a profesionálne čistenie",
+      "slug": "co-je-glencek-karovany-vzor-oblek-a-profesionalne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je barchet: počesaná bavlnená tkanina, žmolky a pranie",
+      "slug": "co-je-barchet-pocesana-bavlnena-tkanina-zmolky-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je madras: károvaná košeľovina, púšťanie farby a pranie",
+      "slug": "co-je-madras-karovana-koselovina-pustanie-farby-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je šantán: nepravidelný povrch, hodvábne a zmesové varianty",
+      "slug": "co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je biliardové súkno: vlas, krieda a bezpečné čistenie stola",
+      "slug": "co-je-biliardove-sukno-vlas-krieda-a-bezpecne-cistenie-stola",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je challis: mäkká splývavá tkanina, zrážanie a pranie",
+      "slug": "co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je fustian: hustá česaná tkanina, oder a starostlivosť",
+      "slug": "co-je-fustian-husta-cesana-tkanina-oder-a-starostlivost",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+              "link": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+              "slug": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+              "sources": [
+                "local:batch-50-2026-08-27-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

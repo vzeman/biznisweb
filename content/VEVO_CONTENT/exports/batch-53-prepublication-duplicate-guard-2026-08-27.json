@@ -1,0 +1,40 @@
+{
+  "existing_count": 863,
+  "excluded_batch": 53,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie",
+      "slug": "co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia",
+      "slug": "co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrcenia",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie",
+      "slug": "co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie",
+      "slug": "co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

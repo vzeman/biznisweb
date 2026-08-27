@@ -1,0 +1,428 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-08-27T12:26:19.061272+00:00",
+  "repo": "D:\\CodexWorktrees\\Playground-vevo-b53",
+  "branch": "codex/vevo-content-batch-53",
+  "latest_batch": 53,
+  "latest_publication_verify": {
+    "status": "present",
+    "files": [
+      {
+        "file": "content\\VEVO_CONTENT\\exports\\batch-53-2026-08-27-mcp-publication.json",
+        "status": "checked",
+        "article_count": 4,
+        "ok_count": 4,
+        "all_ok": true
+      },
+      {
+        "file": "content\\VEVO_CONTENT\\exports\\batch-53-2026-08-27-publication-verify.json",
+        "status": "checked",
+        "article_count": 4,
+        "ok_count": 4,
+        "all_ok": true
+      }
+    ]
+  },
+  "local_mcp_registration": {
+    "config_path": "C:\\Users\\Patrik jankech\\.codex\\config.toml",
+    "configured": true,
+    "command_exists": true,
+    "script_exists": false,
+    "script_matches_repo": false,
+    "env_file_configured": true,
+    "env_file_exists": true
+  },
+  "live_mutation_entrypoint_count": 39,
+  "live_mutation_entrypoints": [
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\create_batch_33_hidden_drafts.py",
+      "explicit_flags": [
+        "--execute-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\publish_batch_35_via_mcp.py",
+      "explicit_flags": [
+        "--publish",
+        "--allow-unsafe-mcp-publish"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\publish_vevo_batch_via_content_mcp.py",
+      "explicit_flags": [
+        "--publish"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_01_washer_care_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_02_core_laundry_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_03_laundry_programs_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_04_laundry_decisions_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_05_laundry_residue_load_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_06_mixed_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_07_odor_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_08_bedding_stains_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_09_material_cosmetic_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_10_functional_materials_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_11_natural_materials_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_12_materials_outdoor_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_13_materials_stain_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_14_kids_school_stains_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_15_kids_cosmetic_stains_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_16_cosmetic_haircraft_stains_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_17_mixed_stains_travel_five_2026_06_16.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_18_materials_food_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_19_food_elastic_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_20_delicates_soot_cashmere_rust_tulle_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_21_embellished_water_suit_denim_balsamic_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_22_repellent_linen_formal_crayons_zippers_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_23_pets_paprika_hair_residue_holes_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_24_childcare_costume_cosmetic_sticky_food_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_25_workwear_hygiene_heat_beach_masks_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_26_car_glitter_insoles_rack_pollen_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_27_cycling_pollen_wax_tissue_glue_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_28_ski_socks_thermal_rain_mat_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_29_sports_glue_color_salt_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\retrofit_wave_30_expert_material_symbols_new_membrane_microplastics_five_2026_06_17.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\update_batch_27_rich_html.py",
+      "explicit_flags": [
+        "--execute-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\imports\\update_batch_32_rich_html.py",
+      "explicit_flags": [
+        "--execute-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\scripts\\add_laundry_perfume_links_2026_06_29.py",
+      "explicit_flags": [
+        "--update-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\scripts\\recover_laundry_perfume_link_visibility_2026_06_29.py",
+      "explicit_flags": [
+        "--execute-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\scripts\\update_public_internal_terms_cleanup.py",
+      "explicit_flags": [
+        "--execute-live"
+      ],
+      "guarded": true,
+      "guard_type": "cli",
+      "missing_guards": []
+    },
+    {
+      "path": "content\\VEVO_CONTENT\\tools\\biznisweb_vevo_content_mcp.py",
+      "explicit_flags": [
+        "mcp-hidden-first-and-confirmation-guards"
+      ],
+      "guarded": true,
+      "guard_type": "mcp_server",
+      "missing_guards": []
+    }
+  ],
+  "live_catalog": {
+    "status": "checked",
+    "record_count": 864,
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "finding_count": 2,
+  "block_count": 0,
+  "warn_count": 1,
+  "findings": [
+    {
+      "severity": "info",
+      "code": "vevo_worktree_not_clean",
+      "status": "?? content/VEVO_CONTENT/imports/verify_batch_53_public.py"
+    },
+    {
+      "severity": "warn",
+      "code": "local_vevo_content_mcp_registration_invalid",
+      "registration": {
+        "config_path": "C:\\Users\\Patrik jankech\\.codex\\config.toml",
+        "configured": true,
+        "command_exists": true,
+        "script_exists": false,
+        "script_matches_repo": false,
+        "env_file_configured": true,
+        "env_file_exists": true
+      }
+    }
+  ],
+  "recommendations": [
+    "Keep README_DEV.md aligned with PROJECT_STATE.md after every publishing workflow change.",
+    "Keep the legacy remote VEVO MCP add/update tools blocked; use only the repo-local biznisweb-vevo-content helper after its hidden smoke passes.",
+    "For every new batch, require duplicate guard, link preflight, public wording guard, depth guard, HTML safety guard, and public URL verification.",
+    "Consider archiving old import/export artifacts with legacy mojibake or superseded workflows under a clearly named legacy folder after verifying they are no longer operational inputs.",
+    "Keep every script that can mutate live news behind an explicit opt-in flag and prefer read-only verification as its default behavior."
+  ]
+}
