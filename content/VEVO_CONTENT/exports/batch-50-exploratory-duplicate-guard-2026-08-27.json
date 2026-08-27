@@ -1,0 +1,124 @@
+{
+  "existing_count": 851,
+  "excluded_batch": 50,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+      "slug": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je vatelín: objemová výplň, zliehanie a bezpečné pranie",
+      "slug": "co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je 3D sieťovina: dištančný úplet, prúdenie vzduchu a pranie",
+      "slug": "co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je abaka: pevné listové vlákno, ohyb a starostlivosť",
+      "slug": "co-je-abaka-pevne-listove-vlakno-ohyb-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je žihľavové vlákno: vlastnosti, zmesi a pranie",
+      "slug": "co-je-zihlavove-vlakno-vlastnosti-zmesi-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je filc: netkaná textília, žmolky a čistenie",
+      "slug": "co-je-filc-netkana-textilia-zmolky-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je plsť: vlnená štruktúra, zrážanie a šetrné čistenie",
+      "slug": "co-je-plst-vlnena-struktura-zrazanie-a-setrne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je kordura: odolná tkanina, povrchové úpravy a čistenie",
+      "slug": "co-je-kordura-odolna-tkanina-povrchove-upravy-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je batist: jemná plátnová tkanina, priesvitnosť a pranie",
+      "slug": "co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je chambray: farebná osnova, svetlý útok a pranie",
+      "slug": "co-je-chambray-farebna-osnova-svetly-utok-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je matelassé: reliéfna tkanina, zrážanie a starostlivosť",
+      "slug": "co-je-matelasse-reliefna-tkanina-zrazanie-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je ženilka: vlasová priadza, žmolky a čistenie",
+      "slug": "co-je-zenilka-vlasova-priadza-zmolky-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je ripstop: spevnená mriežková tkanina, trhliny a starostlivosť",
+      "slug": "co-je-ripstop-spevnena-mriezkova-tkanina-trhliny-a-starostlivost",
+      "status": "block",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "canonical_definition_head",
+          "severity": "block",
+          "definition_head": "ripstop",
+          "note": "VEVO already has an encyclopedic article for the same subject. Expand the canonical URL instead of changing only the subtitle.",
+          "matches": [
+            {
+              "title": "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+              "link": "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+              "slug": "co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je panamová väzba: košíková štruktúra, posun nití a pranie",
+      "slug": "co-je-panamova-vazba-kosikova-struktura-posun-niti-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

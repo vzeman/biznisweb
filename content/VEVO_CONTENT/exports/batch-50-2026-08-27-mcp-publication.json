@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-08-27T11:44:42+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "D:\\CodexWorktrees\\Playground-vevo-b50\\content\\VEVO_CONTENT\\imports\\batch-50-2026-08-27-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+      "slug": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+      "post_id": "3201",
+      "create": {
+        "post_id": "3201",
+        "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+        "link": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+        "active": "0",
+        "short_length": 205,
+        "long_length": 32206,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3201",
+        "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+        "link": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+        "active": "1",
+        "short_length": 205,
+        "long_length": 32206,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+        "status_code": 200,
+        "location": null,
+        "body_length": 148811
+      }
+    },
+    {
+      "title": "Čo je vatelín: objemová výplň, zliehanie a bezpečné pranie",
+      "slug": "co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+      "url": "https://www.vevo.sk/n/co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+      "post_id": "3202",
+      "create": {
+        "post_id": "3202",
+        "title": "Čo je vatelín: objemová výplň, zliehanie a bezpečné pranie",
+        "link": "co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+        "active": "0",
+        "short_length": 227,
+        "long_length": 32500,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3202",
+        "title": "Čo je vatelín: objemová výplň, zliehanie a bezpečné pranie",
+        "link": "co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+        "active": "1",
+        "short_length": 227,
+        "long_length": 32500,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 149071
+      }
+    },
+    {
+      "title": "Čo je 3D sieťovina: dištančný úplet, prúdenie vzduchu a pranie",
+      "slug": "co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+      "post_id": "3203",
+      "create": {
+        "post_id": "3203",
+        "title": "Čo je 3D sieťovina: dištančný úplet, prúdenie vzduchu a pranie",
+        "link": "co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+        "active": "0",
+        "short_length": 244,
+        "long_length": 32594,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3203",
+        "title": "Čo je 3D sieťovina: dištančný úplet, prúdenie vzduchu a pranie",
+        "link": "co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+        "active": "1",
+        "short_length": 244,
+        "long_length": 32594,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 149235
+      }
+    },
+    {
+      "title": "Čo je batist: jemná plátnová tkanina, priesvitnosť a pranie",
+      "slug": "co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+      "post_id": "3204",
+      "create": {
+        "post_id": "3204",
+        "title": "Čo je batist: jemná plátnová tkanina, priesvitnosť a pranie",
+        "link": "co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+        "active": "0",
+        "short_length": 250,
+        "long_length": 32431,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3204",
+        "title": "Čo je batist: jemná plátnová tkanina, priesvitnosť a pranie",
+        "link": "co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+        "active": "1",
+        "short_length": 250,
+        "long_length": 32431,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 149046
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-08-27T11:45:40+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 598,
+  "preflight": [
+    {
+      "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+      "slug": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124973
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je vatelín: objemová výplň, zliehanie a bezpečné pranie",
+      "slug": "co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124955
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je 3D sieťovina: dištančný úplet, prúdenie vzduchu a pranie",
+      "slug": "co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124963
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je batist: jemná plátnová tkanina, priesvitnosť a pranie",
+      "slug": "co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124957
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-08-27T11:44:49+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-08-27T11:47:12+02:00"
+}

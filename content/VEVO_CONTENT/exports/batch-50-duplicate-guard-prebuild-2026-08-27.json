@@ -1,0 +1,40 @@
+{
+  "existing_count": 851,
+  "excluded_batch": 50,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+      "slug": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je vatelín: objemová výplň, zliehanie a bezpečné pranie",
+      "slug": "co-je-vatelin-objemova-vypln-zliehanie-a-bezpecne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je 3D sieťovina: dištančný úplet, prúdenie vzduchu a pranie",
+      "slug": "co-je-3d-sietovina-distancny-uplet-prudenie-vzduchu-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je batist: jemná plátnová tkanina, priesvitnosť a pranie",
+      "slug": "co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
