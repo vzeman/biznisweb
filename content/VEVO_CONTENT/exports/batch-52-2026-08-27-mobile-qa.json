@@ -1,0 +1,182 @@
+{
+  "batch": "batch-52",
+  "checked_at": "2026-08-27T11:12:01.135Z",
+  "requested_viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "effective_content_viewport_width": 375,
+  "screenshot_available": false,
+  "screenshot_note": "Browser screenshot capture was unavailable; rendered DOM and computed-layout checks completed.",
+  "all_ok": true,
+  "articles": [
+    {
+      "url": "https://www.vevo.sk/n/co-je-oxfordska-tkanina-koselova-vazba-golier-a-spravne-pranie",
+      "actionButtonCount": 2,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "buttons": [
+        {
+          "contained": true,
+          "href": "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "text": "Pozrieť produkt",
+          "width": 123
+        },
+        {
+          "contained": true,
+          "href": "/c/vevo-home-care/pranie/praci-gel",
+          "text": "Pozrieť kategóriu",
+          "width": 135
+        }
+      ],
+      "escapedHtmlVisible": false,
+      "h1": "Čo je oxfordská tkanina: košeľová väzba, golier a správne pranie",
+      "oneCharacterParagraphs": 0,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "responsiveTableCount": 2,
+      "tables": [
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        },
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        }
+      ],
+      "title": "Čo je oxfordská tkanina: košeľová väzba, golier a správne pranie - Vevo.sk",
+      "viewportWidth": 375
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-sypkovina-preco-unika-perie-kontrola-svov-a-bezpecne-cistenie",
+      "actionButtonCount": 2,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "buttons": [
+        {
+          "contained": true,
+          "href": "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "text": "Pozrieť produkt",
+          "width": 123
+        },
+        {
+          "contained": true,
+          "href": "/c/vevo-home-care/pranie/praci-gel",
+          "text": "Pozrieť kategóriu",
+          "width": 135
+        }
+      ],
+      "escapedHtmlVisible": false,
+      "h1": "Čo je sypkovina: prečo uniká perie, kontrola švov a bezpečné čistenie",
+      "oneCharacterParagraphs": 0,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "responsiveTableCount": 2,
+      "tables": [
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        },
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        }
+      ],
+      "title": "Čo je sypkovina: prečo uniká perie, kontrola švov a bezpečné čistenie - Vevo.sk",
+      "viewportWidth": 375
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-abaka-pevne-listove-vlakno-vlhkost-a-starostlivost",
+      "actionButtonCount": 2,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "buttons": [
+        {
+          "contained": true,
+          "href": "/p-649/the-pink-stuff-odstranovac-skvrn-na-koberce-500-ml",
+          "text": "Pozrieť produkt",
+          "width": 123
+        },
+        {
+          "contained": true,
+          "href": "/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+          "text": "Pozrieť kategóriu",
+          "width": 135
+        }
+      ],
+      "escapedHtmlVisible": false,
+      "h1": "Čo je abaka: pevné listové vlákno, vlhkosť a starostlivosť",
+      "oneCharacterParagraphs": 0,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "responsiveTableCount": 2,
+      "tables": [
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        },
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        }
+      ],
+      "title": "Čo je abaka: pevné listové vlákno, vlhkosť a starostlivosť - Vevo.sk",
+      "viewportWidth": 375
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-moleskin-husta-brusena-bavlna-lesk-a-spravne-pranie",
+      "actionButtonCount": 2,
+      "articleColumnWidth": 351,
+      "bodyScrollWidth": 375,
+      "buttons": [
+        {
+          "contained": true,
+          "href": "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "text": "Pozrieť produkt",
+          "width": 123
+        },
+        {
+          "contained": true,
+          "href": "/c/vevo-home-care/pranie/praci-gel",
+          "text": "Pozrieť kategóriu",
+          "width": 135
+        }
+      ],
+      "escapedHtmlVisible": false,
+      "h1": "Čo je moleskin: hustá brúsená bavlna, lesk a správne pranie",
+      "oneCharacterParagraphs": 0,
+      "pageNoHorizontalOverflow": true,
+      "quickAnswerVisible": true,
+      "responsiveTableCount": 2,
+      "tables": [
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        },
+        {
+          "tableWidth": 680,
+          "wrapperContained": true,
+          "wrapperOverflowX": "auto",
+          "wrapperWidth": 351
+        }
+      ],
+      "title": "Čo je moleskin: hustá brúsená bavlna, lesk a správne pranie - Vevo.sk",
+      "viewportWidth": 375
+    }
+  ]
+}

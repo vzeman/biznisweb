@@ -1,0 +1,248 @@
+{
+  "existing_count": 859,
+  "excluded_batch": null,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je voál: ľahká priesvitná tkanina, záhyby a šetrné pranie",
+      "slug": "co-je-voal-lahka-priesvitna-tkanina-zahyby-a-setrne-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+              "link": "https://www.vevo.sk/n/co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "sources": [
+                "local:batch-47-2026-08-24-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je žoržet: zrnitá priesvitná tkanina, záhyby a pranie",
+              "slug": "co-je-zorzet-zrnita-priesvitna-tkanina-zahyby-a-pranie",
+              "score": 0.444
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je oxfordská tkanina: košeľová väzba, golier a správne pranie",
+      "slug": "co-je-oxfordska-tkanina-koselova-vazba-golier-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je rybia kosť: lomený keper, záhyby a starostlivosť",
+      "slug": "co-je-rybia-kost-lomeny-keper-zahyby-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je sypkovina: hustá tkanina na perie, škvrny a pranie",
+      "slug": "co-je-sypkovina-husta-tkanina-na-perie-skvrny-a-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+              "link": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+              "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+              "sources": [
+                "local:batch-44-2026-08-20-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je loden: valchovaná vlnená tkanina, vlhkosť a čistenie",
+      "slug": "co-je-loden-valchovana-vlnena-tkanina-vlhkost-a-cistenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+              "link": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+              "slug": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+              "sources": [
+                "local:batch-48-2026-08-25-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je abaka: pevné listové vlákno, vlhkosť a starostlivosť",
+      "slug": "co-je-abaka-pevne-listove-vlakno-vlhkost-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je žihľavové vlákno: pevnosť, zmesi a správne pranie",
+      "slug": "co-je-zihlavove-vlakno-pevnost-zmesi-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je plsť: netkaný materiál, žmolky a šetrné čistenie",
+      "slug": "co-je-plst-netkany-material-zmolky-a-setrne-cistenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je buklé: slučkový povrch, žmolky a šetrné čistenie",
+              "link": "https://www.vevo.sk/n/co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+              "slug": "co-je-bukle-sluckovy-povrch-zmolky-a-setrne-cistenie",
+              "sources": [
+                "local:batch-46-2026-08-24-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je taft: hladká šuštiaca tkanina, záhyby a starostlivosť",
+      "slug": "co-je-taft-hladka-sustiaca-tkanina-zahyby-a-starostlivost",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je popelín: hladká košeľová tkanina, vlastnosti a starostlivosť",
+              "link": "https://www.vevo.sk/n/co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+              "slug": "co-je-popelin-hladka-koselova-tkanina-vlastnosti-a-starostlivost",
+              "sources": [
+                "local:batch-44-2026-08-20-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je brokát: reliéfny vzor, kovové nite a bezpečné čistenie",
+      "slug": "co-je-brokat-reliefny-vzor-kovove-nite-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je lamé: kovový efekt, delaminácia a starostlivosť",
+      "slug": "co-je-lame-kovovy-efekt-delaminacia-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je gabardén: hustý keper, lesklé hrany a čistenie",
+      "slug": "co-je-gabarden-husty-keper-leskle-hrany-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je varená vlna: zrazený úplet, žmolky a starostlivosť",
+      "slug": "co-je-varena-vlna-zrazeny-uplet-zmolky-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je ticking: poťahová tkanina matraca, pruhy a čistenie",
+      "slug": "co-je-ticking-potahova-tkanina-matraca-pruhy-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je moleskin: hustá brúsená bavlna, lesk a správne pranie",
+      "slug": "co-je-moleskin-husta-brusena-bavlna-lesk-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je žoržet: zrnitá priesvitná tkanina, záhyby a pranie",
+      "slug": "co-je-zorzet-zrnita-priesvitna-tkanina-zahyby-a-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+              "link": "https://www.vevo.sk/n/co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "sources": [
+                "local:batch-47-2026-08-24-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je voál: ľahká priesvitná tkanina, záhyby a šetrné pranie",
+              "slug": "co-je-voal-lahka-priesvitna-tkanina-zahyby-a-setrne-pranie",
+              "score": 0.444
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
