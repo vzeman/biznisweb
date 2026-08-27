@@ -6796,3 +6796,30 @@ Known issues:
 Next exact step:
 
 - Validate this sanitized diagnostic hardening, commit and push it, and merge only after required CI passes. Then inspect only a subsequent exact-main infrastructure monitor run; do not dispatch the A/A checkpoint or read any A/A population/result before the frozen due boundary. If the cardinality gate fails again, use only the sanitized marker-line and summary-line counts to identify the producer/observer mismatch without opening raw logs or outcomes.
+
+## 2026-08-27 — VEVO sanitized infrastructure cardinality diagnostic merged
+
+Date: 2026-08-27
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-infra-marker-diagnostic-state`
+
+What changed:
+
+- PR `#469` merged the fail-closed sanitized marker/publish-summary cardinality diagnostic into `main` as `f9cae982b184fdd8aa9ee1e3ca911762fdf45256`.
+- This state handoff supersedes the preceding pre-merge instruction. It does not weaken the one-marker/one-summary gate and introduces no AWS, GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, experiment, traffic, or commerce mutation.
+
+What is verified:
+
+- PR `#469` passed `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` on exact head `b3a78659cf36ffbf517336deb1ac2006142e381c` before merge.
+- The focused infrastructure workflow/evidence suite passed `15` tests, central security validation passed, and `git diff --check` passed.
+- A future cardinality failure can disclose only the marker-line and publish-summary-line counts plus `raw-messages-emitted=false`; underlying log messages, reporting row counts, identities, and A/A data remain suppressed.
+- No second same-day fallback was dispatched after failed run `33048015114`, and no canonical artifact exists for that run.
+
+Known issues:
+
+- The 2026-08-27 daily infrastructure-health gate remains unproven because the only permitted fallback failed closed before evidence construction. Scheduled-event delivery for both repository-owned VEVO workflows was not observed at the daily readback.
+- The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava`. Do not use the infrastructure blocker to dispatch or inspect an A/A checkpoint early.
+
+Next exact step:
+
+- At the next daily post-reconciliation readback, first inspect the scheduled exact-main infrastructure run. Do not dispatch a duplicate while one is queued or in progress. If no relevant run exists after its slot, dispatch exactly one `confirm_health=true` fallback from current exact `main`; accept only a successful run with one canonical sanitized artifact. If the marker/summary gate fails again, use only the new cardinality diagnostic to identify the producer/observer mismatch and continue fail-closed without raw-log or outcome access.
