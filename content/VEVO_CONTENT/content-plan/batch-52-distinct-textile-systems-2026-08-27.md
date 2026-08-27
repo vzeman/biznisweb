@@ -14,7 +14,7 @@ This batch deliberately mixes four different decision systems instead of repeati
    - Explain the usual 2 x 1 basket-derived shirting weave and the basic, pinpoint and royal Oxford boundary.
    - Separate cotton shirting from coated polyester products sold under the same broad retail term.
    - Cover collar and cuff soil, seam movement, shrinkage, drying and ironing.
-2. `co-je-sypkovina-husta-tkanina-na-perie-skvrny-a-pranie`
+2. `co-je-sypkovina-preco-unika-perie-kontrola-svov-a-bezpecne-cistenie`
    - Explain why a dense shell, seams and finishing retain down or feather filling.
    - Separate a protruding quill, escaped fibre, open seam and structurally worn shell.
    - Cover label reading, air permeability, drying, repairs and professional re-filling without duplicating a feather-pillow washing guide.
