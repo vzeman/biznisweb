@@ -1,0 +1,479 @@
+{
+  "batch": "batch-49",
+  "verified_at": "2026-08-27T03:51:30.865595+00:00",
+  "article_count": 4,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky",
+      "slug": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "url": "https://www.vevo.sk/n/co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3634,
+      "h2_count": 32,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 11,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://members.aatcc.org/store/tm61/495/",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.vam.ac.uk/blog/museum-life/cataloguing-the-courtaulds-textiles-design-library-spotlight-on-10-objects"
+      ],
+      "body_length": 33595,
+      "ok": true
+    },
+    {
+      "title": "Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť",
+      "slug": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3646,
+      "h2_count": 32,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 11,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC12926875/",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC8876852/",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC9699385/",
+        "https://www.ginetex.net/share/article/4201/care-symbols"
+      ],
+      "body_length": 33763,
+      "ok": true
+    },
+    {
+      "title": "Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov",
+      "slug": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "url": "https://www.vevo.sk/n/co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3670,
+      "h2_count": 33,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 11,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-649/the-pink-stuff-odstranovac-skvrn-na-koberce-500-ml"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky"
+      ],
+      "external_links": [
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://members.aatcc.org/store/tm215/3848/",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC12926875/",
+        "https://www.fao.org/4/Y1873E/y1873e09.htm",
+        "https://www.fao.org/UNfao/bodies/ccp/hfj/98/x0129e.htm",
+        "https://www.fao.org/markets-and-trade/commodities-overview/fibres/jute-and-hard-fibres/en"
+      ],
+      "body_length": 34521,
+      "ok": true
+    },
+    {
+      "title": "Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie",
+      "slug": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "url": "https://www.vevo.sk/n/co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3777,
+      "h2_count": 33,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 11,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://store.astm.org/standards/d2724",
+        "https://www.freudenberg-pm.com/-/media/Files/Global%20files%20for%20all%20sites/Brochures/Vlieseline_Gesamtbroschuere_2023_EN.pdf",
+        "https://www.freudenberg-pm.com/en/markets-solutions/kidswear",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/90537.html?browse=tc",
+        "https://www.vlieseline.com/Producten/fusible-interlinings/H-180"
+      ],
+      "body_length": 35125,
+      "ok": true
+    }
+  ],
+  "link_checks": [
+    {
+      "url": "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+      "status": 200,
+      "final_url": "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+      "status": 200,
+      "final_url": "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm135/543/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm135/543/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm215/3848/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm215/3848/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm61/495/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm61/495/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12926875/",
+      "status": 200,
+      "final_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12926875/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8876852/",
+      "status": 200,
+      "final_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8876852/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9699385/",
+      "status": 200,
+      "final_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9699385/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/standards/d2724",
+      "status": 200,
+      "final_url": "https://store.astm.org/standards/d2724",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.fao.org/4/Y1873E/y1873e09.htm",
+      "status": 200,
+      "final_url": "https://www.fao.org/4/Y1873E/y1873e09.htm",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.fao.org/UNfao/bodies/ccp/hfj/98/x0129e.htm",
+      "status": 200,
+      "final_url": "https://www.fao.org/UNfao/bodies/ccp/hfj/98/x0129e.htm",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.fao.org/markets-and-trade/commodities-overview/fibres/jute-and-hard-fibres/en",
+      "status": 200,
+      "final_url": "https://www.fao.org/markets-and-trade/commodities-overview/fibres/jute-and-hard-fibres/en",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.freudenberg-pm.com/-/media/Files/Global%20files%20for%20all%20sites/Brochures/Vlieseline_Gesamtbroschuere_2023_EN.pdf",
+      "status": 200,
+      "final_url": "https://www.freudenberg-pm.com:443/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.freudenberg-pm.com/en/markets-solutions/kidswear",
+      "status": 200,
+      "final_url": "https://www.freudenberg-pm.com/en/markets-solutions/kidswear",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/90537.html?browse=tc",
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/90537.html?browse=tc",
+      "allowed_automation_block": true,
+      "automation_note": "Official ISO page blocks the automated link checker",
+      "ok": true
+    },
+    {
+      "url": "https://www.vam.ac.uk/blog/museum-life/cataloguing-the-courtaulds-textiles-design-library-spotlight-on-10-objects",
+      "status": 200,
+      "final_url": "https://www.vam.ac.uk/blog/museum-life/cataloguing-the-courtaulds-textiles-design-library-spotlight-on-10-objects",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-cestovny-vankus-a-navleky-po-dovolenke",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-cestovny-vankus-a-navleky-po-dovolenke",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-koberce-v-pracke-casto-kladene-otazky-a-odpovede",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-koberce-v-pracke-casto-kladene-otazky-a-odpovede",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-koberec-kompletny-sprievodca-cistenim-a-udrzbou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-koberec-kompletny-sprievodca-cistenim-a-udrzbou",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vyprat-paperovy-vankus-kompletny-sprievodca",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-paperovy-vankus-kompletny-sprievodca",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-649/the-pink-stuff-odstranovac-skvrn-na-koberce-500-ml",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-649/the-pink-stuff-odstranovac-skvrn-na-koberce-500-ml",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vlieseline.com/Producten/fusible-interlinings/H-180",
+      "status": 200,
+      "final_url": "https://www.vlieseline.com/en/product/378/H-180",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    }
+  ]
+}

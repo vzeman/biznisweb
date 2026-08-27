@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-08-27T05:48:33+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "D:\\CodexWorktrees\\Playground-vevo-b49\\content\\VEVO_CONTENT\\imports\\batch-49-2026-08-27-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky",
+      "slug": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "url": "https://www.vevo.sk/n/co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "post_id": "3196",
+      "create": {
+        "post_id": "3196",
+        "title": "Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky",
+        "link": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+        "active": "0",
+        "short_length": 206,
+        "long_length": 33564,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3196",
+        "title": "Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky",
+        "link": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+        "active": "1",
+        "short_length": 206,
+        "long_length": 33564,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+        "status_code": 200,
+        "location": null,
+        "body_length": 150213
+      }
+    },
+    {
+      "title": "Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť",
+      "slug": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "post_id": "3197",
+      "create": {
+        "post_id": "3197",
+        "title": "Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť",
+        "link": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+        "active": "0",
+        "short_length": 229,
+        "long_length": 33732,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3197",
+        "title": "Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť",
+        "link": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+        "active": "1",
+        "short_length": 229,
+        "long_length": 33732,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+        "status_code": 200,
+        "location": null,
+        "body_length": 150313
+      }
+    },
+    {
+      "title": "Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov",
+      "slug": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "url": "https://www.vevo.sk/n/co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "post_id": "3198",
+      "create": {
+        "post_id": "3198",
+        "title": "Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov",
+        "link": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+        "active": "0",
+        "short_length": 267,
+        "long_length": 34490,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3198",
+        "title": "Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov",
+        "link": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+        "active": "1",
+        "short_length": 267,
+        "long_length": 34490,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+        "status_code": 200,
+        "location": null,
+        "body_length": 151287
+      }
+    },
+    {
+      "title": "Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie",
+      "slug": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "url": "https://www.vevo.sk/n/co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "post_id": "3199",
+      "create": {
+        "post_id": "3199",
+        "title": "Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie",
+        "link": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+        "active": "0",
+        "short_length": 261,
+        "long_length": 35086,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3199",
+        "title": "Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie",
+        "link": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+        "active": "1",
+        "short_length": 261,
+        "long_length": 35094,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 151767
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-08-27T05:49:40+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 594,
+  "preflight": [
+    {
+      "title": "Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky",
+      "slug": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124985
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť",
+      "slug": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124957
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov",
+      "slug": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124977
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie",
+      "slug": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124953
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-08-27T05:48:40+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-08-27T05:51:10+02:00"
+}

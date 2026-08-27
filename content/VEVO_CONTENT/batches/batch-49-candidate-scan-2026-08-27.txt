@@ -1,0 +1,45 @@
+Exploratory VEVO batch 49 material scan, 2026-08-27
+
+OK / SELECTED - Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky
+Distinct intent: woven reversible pattern, satin/twill effects, table linen, bedding, snagging, ironing and stain treatment.
+
+OK - Čo je rips: priečne rebrovaná tkanina, oder a starostlivosť
+Reason not selected: useful later construction topic, but this batch needs a wider spread of household uses.
+
+OK - Čo je kordura: odolná tkanina na tašky a outdoorové vybavenie
+Reason not selected: trademark and coating boundaries need a separate brand-versus-construction brief.
+
+BLOCK - Čo je netkaná textília: vrstvy, pevnosť a prečo sa nemusí dať prať
+Reason: the current same-head guard blocked this wording; do not bypass the guard by silently changing only the slug.
+
+OK - Čo je vatelín: objemová výplň, zliehanie a starostlivosť
+Reason not selected: retain for a later filling comparison with polyester batting and wool wadding.
+
+OK / SELECTED - Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie
+Distinct intent: sew-in versus fusible interlining, woven/knit/nonwoven carriers, adhesive delamination, collars, cuffs and tailored garments.
+
+OK / SELECTED - Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť
+Distinct intent: Ceiba fruit fibre, hollow lumen, waxy surface, fill migration, pillow construction, moisture and complete drying.
+
+OK / SELECTED - Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov
+Distinct intent: Agave leaf fibre, woven and backed rugs, water rings, browning, dry soil removal and controlled low-moisture cleaning.
+
+OK - Čo je kokosové vlákno: rohožky, prach a správne čistenie
+Reason not selected: close to the published entrance-mat cleaning intent; needs a narrower fibre-comparison angle.
+
+REVIEW - Čo je korková textília: povrch, ohyb a šetrné čistenie
+Reason: title similarity to the published boucle surface-care guide; keep outside this batch.
+
+OK - Čo je abaka: pevné listové vlákno, ohyb a starostlivosť
+Reason not selected: technically distinct but less directly connected to common VEVO household use than sisal.
+
+OK - Čo je žihľavové vlákno: vlastnosti, zmesi a pranie
+Reason not selected: retain for a later bast-fibre comparison with ramie, flax and hemp.
+
+OK - Čo je filc a plsť: netkaná štruktúra, žmolky a čistenie
+Reason not selected: wool-felt and synthetic-craft-felt intents need to be separated before publication.
+
+OK - Čo je 3D sieťovina: prúdenie vzduchu, deformácia a pranie
+Reason not selected: retain for a later technical-knit batch with spacer fabrics and mesh structures.
+
+Final selection rule: all four selected titles must pass the exact guard again immediately before publication. Excluded and deferred titles are not publication candidates for batch 49.

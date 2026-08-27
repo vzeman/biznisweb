@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky",
+      "slug": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "body_length": 33564,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-49-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť",
+      "slug": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "body_length": 33732,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-49-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov",
+      "slug": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "body_length": 34490,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-49-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie",
+      "slug": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "body_length": 35094,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-49-2026-08-27-articles.json"
+    }
+  ]
+}
