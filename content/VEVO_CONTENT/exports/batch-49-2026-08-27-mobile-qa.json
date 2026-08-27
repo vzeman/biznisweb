@@ -1,0 +1,63 @@
+{
+  "batch": "batch-49",
+  "verified_at": "2026-08-27T05:52:00+02:00",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "article_count": 4,
+  "all_ok": true,
+  "shared_metrics": {
+    "article_x": 12,
+    "article_width": 351,
+    "article_right": 363,
+    "page_scroll_width": 375,
+    "page_horizontal_overflow": false,
+    "styled_blocks": 11,
+    "bad_styled_blocks": 0,
+    "tables_per_article": 2,
+    "table_width": 680,
+    "table_wrapper_width": 351,
+    "table_wrapper_overflow_x": "auto",
+    "table_wrappers_contained": true,
+    "product_button_contained": true,
+    "category_button_contained": true,
+    "one_character_paragraphs": 0
+  },
+  "articles": [
+    {
+      "post_id": "3196",
+      "slug": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "h2_count": 32,
+      "ok": true
+    },
+    {
+      "post_id": "3197",
+      "slug": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "h2_count": 32,
+      "ok": true
+    },
+    {
+      "post_id": "3198",
+      "slug": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "h2_count": 33,
+      "ok": true
+    },
+    {
+      "post_id": "3199",
+      "slug": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "h2_count": 33,
+      "ok": true
+    }
+  ],
+  "visual_check": {
+    "cookie_dialog_dismissed": true,
+    "article_text_readable": true,
+    "heading_wrap_clean": true,
+    "visible_content_overlap": false
+  },
+  "cleanup": {
+    "viewport_reset": true,
+    "temporary_tab_closed": true
+  }
+}
