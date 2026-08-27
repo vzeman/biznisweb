@@ -2150,7 +2150,7 @@ Branch: codex/vevo-content-batch-53
 - Independent public verification measured `3561`, `3583`, `3638` and `4117` visible words, retained `30-33` H2 headings, both responsive tables, `10-11` styled blocks, both product/category action buttons and zero short paragraphs. All `45` unique outgoing destinations passed.
 - Mobile QA at requested `390x844` produced an effective `375px` content viewport and confirmed a `351px` article column for every URL, both `680px` tables contained by `overflow-x:auto` wrappers, both action buttons contained, zero one-character paragraphs, no escaped HTML and no page-level horizontal overflow. Screenshot capture was unavailable, so the durable report records DOM and computed-layout verification; the viewport override was reset and the temporary tab was closed.
 - Final postpublication project audit reports live catalog `record_count=864`, zero duplicate-title groups, zero invalid slugs, both publication reports green and `block_count=0`. The stale global MCP registration remains a warning only; this batch used the explicit repo-local MCP script.
-- Planning commit `bdb19b6b` and prepared-content commit `75b1507f` are pushed on `codex/vevo-content-batch-53`.
+- Planning commit `bdb19b6b`, prepared-content commit `75b1507f` and publication commit `ef5ae252` are pushed on `codex/vevo-content-batch-53`. Stacked PR `#474` targets `codex/vevo-content-batch-52`.
 - Durable prepared and verification artifacts:
   - `content-plan/batch-53-weaves-curtains-formal-and-fulled-wool-2026-08-27.md`;
   - exploratory, candidate-scan and final candidate records under `batches/`;
