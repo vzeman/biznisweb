@@ -554,7 +554,11 @@ jobs:
           markers = [row for row in messages if 'GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:' in row]
           summaries = [json.loads(row) for row in messages if row.startswith('{') and '"mode":"publish"' in row]
           if len(markers) != 1 or len(summaries) != 1:
-              raise SystemExit('scheduled reconciliation marker/summary drift')
+              raise SystemExit(
+                  'scheduled reconciliation marker/summary drift:'
+                  f'marker-lines={len(markers)}:summary-lines={len(summaries)}:'
+                  'raw-messages-emitted=false'
+              )
           summary = summaries[0]
           published = summary.get('published') or {}
           expected = {key: summary.get(key) for key in ('device_facts', 'performance_facts', 'quality_reports')}

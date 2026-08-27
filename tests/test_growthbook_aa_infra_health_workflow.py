@@ -75,6 +75,8 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
             "scheduled reconciliation image differs from localhost-gated deploy evidence",
             'source "${TEMP_HEALTH_DIR}/selected-task.env"',
             "GROWTHBOOK_SCHEDULED_RECONCILIATION_OK:",
+            "marker-lines={len(markers)}:summary-lines={len(summaries)}:",
+            "raw-messages-emitted=false",
             "scheduled reconciliation generated/published parity drift",
             "Production reconciliation alarm gate failed",
             "Production reconciliation DLQ is not empty",
@@ -82,6 +84,7 @@ class GrowthBookAaInfraHealthWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, WORKFLOW)
         self.assertNotIn("collector_outputs['CollectorClusterArn']", WORKFLOW)
+        self.assertNotIn("print(messages)", WORKFLOW)
 
     def test_recovers_exact_runtime_identity_after_stopped_task_retention_expires(self) -> None:
         for marker in (

@@ -6768,3 +6768,31 @@ Known issues:
 Next exact step:
 
 - Keep the frozen A/A boundary closed. Monitor only repository-owned infra-health and exact checkpoint workflow run metadata; do not dispatch the result workflow or open an artifact before the due boundary. At or after `2026-09-02 03:45 Europe/Bratislava`, use the earliest successful outcome-blind checkpoint in index order and continue only through the versioned PASS, A/A stop, fresh Pro action-time confirmation, lifecycle, runtime, CTA start, CTA stop, follow-up, and one final-look gates.
+
+## 2026-08-27 — VEVO daily infrastructure monitor failed closed before canonical evidence
+
+Date: 2026-08-27
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-infra-marker-diagnostic`
+
+What changed:
+
+- At the daily `09:00 Europe/Bratislava` readback, neither repository-owned VEVO workflow had a new scheduled-event run for 2026-08-27. Both workflows remained active on the default `main` branch.
+- With no queued or in-progress infrastructure run, exactly one authorized fallback of `.github/workflows/monitor-vevo-growthbook-production-aa-infra.yml` was dispatched with `confirm_health=true` on exact `main` commit `0701486c6a1c0559b90efe7d684bb3a9165f6091` as run `33048015114`.
+- The fallback selected the exact successful natural reconciliation task but failed closed before evidence construction because the expected success-marker/publish-summary log cardinality was not exactly one-to-one. It uploaded no artifact.
+- The workflow now reports only the two sanitized log-line cardinalities plus `raw-messages-emitted=false` on that failure path. It still rejects every mismatch and never emits the underlying messages, reporting row counts, identities, or A/A data.
+
+What is verified:
+
+- The failed run reached only the result-blind infrastructure path and stopped at `Verify natural success marker and generated published parity without emitting counts`.
+- The failure was classified offline as `marker_summary_cardinality_drift`; the raw failed log was not printed or stored in Git, and its local in-memory SHA-256 was `3a49c96f63077f20a204cd4b8ce25c734ee7712bc1af210fec6e9433638255c7`.
+- GitHub reports zero artifacts for the failed fallback. No second fallback, A/A checkpoint dispatch, AWS query outside the managed workflow, GrowthBook action, GTM/Meta/BiznisWeb change, reporting mutation, or commerce mutation occurred.
+
+Known issues:
+
+- The 2026-08-27 daily infrastructure-health gate is not proven. Do not accept this day as healthy until one successful exact-main run produces the single canonical sanitized artifact and it passes independent offline verification.
+- Scheduled-event delivery for both repository-owned workflows has not yet been observed for 2026-08-27. The A/A result boundary remains closed until `2026-09-02 03:45 Europe/Bratislava` regardless of this operational blocker.
+
+Next exact step:
+
+- Validate this sanitized diagnostic hardening, commit and push it, and merge only after required CI passes. Then inspect only a subsequent exact-main infrastructure monitor run; do not dispatch the A/A checkpoint or read any A/A population/result before the frozen due boundary. If the cardinality gate fails again, use only the sanitized marker-line and summary-line counts to identify the producer/observer mismatch without opening raw logs or outcomes.
