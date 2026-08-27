@@ -1,0 +1,42 @@
+VEVO batch 52 candidate scan - 2026-08-27
+
+Scope checked:
+- merged Blog, FAQ, glossary, RSS and local catalog: 859 records;
+- live admin Blog block 765: 606 records;
+- live admin FAQ block 774: 177 records;
+- live admin glossary block 1905: 95 records;
+- exact subject-token scan across all three admin blocks: zero matches;
+- current VEVO, PuellaVone, Giovani and Slovak-language search results;
+- Modrý koník discussions about feather pillows, drying failure and replacing old sypkovina;
+- authoritative CottonWorks, IDFL, FAO, PhilFIDA, ASTM, AATCC, GINETEX, EU and museum sources.
+
+Selected:
+1. Čo je oxfordská tkanina: košeľová väzba, golier a správne pranie
+   - Distinct from the existing poplin, chambray and panama-weave articles.
+   - The article must explain 2 x 1 Oxford weave, basic versus pinpoint Oxford, yarn-dyed colour, collar/cuff soil and the separate coated-polyester retail meaning used for bags.
+2. Čo je sypkovina: hustá tkanina na perie, škvrny a pranie
+   - Distinct from the existing guides for washing a feather pillow, a duvet and synthetic filling.
+   - The article must focus on the casing system: downproofness, air permeability, seams, quill holes, leakage diagnosis and the boundary between cleaning a surface and opening or replacing the shell.
+3. Čo je abaka: pevné listové vlákno, vlhkosť a starostlivosť
+   - Distinct from the existing sisal, ramie and kapok articles.
+   - The article must distinguish Musa textilis from hemp and ordinary banana marketing, explain sinamay and rigid home accessories, and avoid promising that salt-water resistance makes a finished item washable.
+4. Čo je moleskin: hustá brúsená bavlna, lesk a správne pranie
+   - Distinct from flannel, corduroy, velvet, canvas and ordinary cotton guides.
+   - The article must distinguish dense weft-faced construction and a mechanically raised or suede-like face from animal skin and adhesive medical moleskin, then cover nap direction, polishing, lint and trouser care.
+
+Blocked or not selected:
+- Gabardine: repeatedly documented as too close to the canonical twill guide.
+- Lamé and brocade: too close to the existing Lurex and damask coverage for this batch.
+- Georgette: already covered in depth inside the chiffon and crepe articles.
+- Voile: title and reader problem remain close to organza, chiffon and batiste; defer until a sharper curtain-specific intent exists.
+- Loden, boiled wool and felt: keep together for one future wool-finish terminology plan rather than publish one in isolation.
+- Taffeta: still under manual review because the proposed title overlaps the poplin pattern and its care varies strongly by fibre and garment structure.
+- Herringbone: viable only after a stronger broken-twill boundary review.
+- Ticking: do not use as a synonym automatically; English usage includes mattress-cover cloth beyond feather-proof sypkovina.
+- Nettle fibre: reserve for a later plant-fibre batch so abaca can receive a full comparison with sisal and ramie without duplicating the same section framework.
+
+Duplicate-prevention change:
+- Oxford cloth, Oxford fabric, Oxford weave and oxfordská tkanina fold to one canonical definition family;
+- abaca, abaka, Manila hemp and manilské konope fold to one canonical definition family;
+- sypkovina, perová sypkovina, inlet and downproof fabric fold to one canonical definition family;
+- moleskin, moleskin tkanina and mollskin fold to one canonical definition family.

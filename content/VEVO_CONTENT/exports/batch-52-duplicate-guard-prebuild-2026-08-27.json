@@ -1,0 +1,57 @@
+{
+  "existing_count": 859,
+  "excluded_batch": 52,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je oxfordská tkanina: košeľová väzba, golier a správne pranie",
+      "slug": "co-je-oxfordska-tkanina-koselova-vazba-golier-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je sypkovina: hustá tkanina na perie, škvrny a pranie",
+      "slug": "co-je-sypkovina-husta-tkanina-na-perie-skvrny-a-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+              "link": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+              "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+              "sources": [
+                "local:batch-44-2026-08-20-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je abaka: pevné listové vlákno, vlhkosť a starostlivosť",
+      "slug": "co-je-abaka-pevne-listove-vlakno-vlhkost-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je moleskin: hustá brúsená bavlna, lesk a správne pranie",
+      "slug": "co-je-moleskin-husta-brusena-bavlna-lesk-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
